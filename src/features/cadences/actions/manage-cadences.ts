@@ -3,7 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
 
-import { createCadenceSchema, createCadenceStepSchema } from '../cadence.schemas';
+import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
 
 export async function createCadence(
@@ -23,6 +23,10 @@ export async function createCadence(
       name: parsed.data.name,
       description: parsed.data.description ?? null,
       type: parsed.data.type,
+      priority: parsed.data.priority,
+      origin: parsed.data.origin,
+      auto_loss_after_days: parsed.data.auto_loss_after_days ?? null,
+      auto_loss_reason_id: parsed.data.auto_loss_reason_id ?? null,
       status: 'draft',
       total_steps: 0,
       created_by: userId,
@@ -41,11 +45,16 @@ export async function updateCadence(
   cadenceId: string,
   input: Record<string, unknown>,
 ): Promise<ActionResult<CadenceRow>> {
+  const parsed = updateCadenceSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
+  }
+
   const { orgId, supabase } = await getAuthOrgId();
 
   const { data, error } = (await (supabase
     .from('cadences') as ReturnType<typeof supabase.from>)
-    .update(input as Record<string, unknown>)
+    .update(parsed.data as Record<string, unknown>)
     .eq('id', cadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)

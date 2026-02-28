@@ -11,11 +11,21 @@ export const interactionTypeSchema = z.enum([
 // Cadence type schema
 export const cadenceTypeSchema = z.enum(['standard', 'auto_email']);
 
+// Cadence priority schema
+export const cadencePrioritySchema = z.enum(['high', 'medium', 'low']);
+
+// Cadence origin schema
+export const cadenceOriginSchema = z.enum(['inbound_active', 'inbound_passive', 'outbound']);
+
 // Cadence creation schema
 export const createCadenceSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(200),
   description: z.string().max(1000).nullable().optional(),
   type: cadenceTypeSchema.default('standard'),
+  priority: cadencePrioritySchema.default('medium'),
+  origin: cadenceOriginSchema.default('outbound'),
+  auto_loss_after_days: z.number().int().positive().nullable().optional(),
+  auto_loss_reason_id: z.string().uuid().nullable().optional(),
 });
 
 // Cadence update schema
@@ -23,6 +33,10 @@ export const updateCadenceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).nullable().optional(),
   status: cadenceStatusSchema.optional(),
+  priority: cadencePrioritySchema.optional(),
+  origin: cadenceOriginSchema.optional(),
+  auto_loss_after_days: z.number().int().positive().nullable().optional(),
+  auto_loss_reason_id: z.string().uuid().nullable().optional(),
 });
 
 // Cadence step creation schema

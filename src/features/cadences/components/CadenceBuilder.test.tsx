@@ -13,8 +13,34 @@ vi.mock('../actions/manage-cadences', () => ({
   createCadence: vi.fn(),
   updateCadence: vi.fn(),
   activateCadence: vi.fn(),
-  addCadenceStep: vi.fn(),
-  removeCadenceStep: vi.fn(),
+}));
+
+vi.mock('../actions/save-timeline-steps', () => ({
+  saveTimelineSteps: vi.fn(),
+}));
+
+vi.mock('./CadenceTimeline', () => ({
+  CadenceTimeline: ({ days, sidebarSlot }: { days: { day: number; steps: unknown[] }[]; sidebarSlot?: React.ReactNode }) => (
+    <div data-testid="cadence-timeline">
+      Timeline ({days.reduce((sum, d) => sum + d.steps.length, 0)} steps)
+      {sidebarSlot}
+    </div>
+  ),
+}));
+
+vi.mock('./ActivityTypeSidebar', () => ({
+  ActivityTypeSidebar: () => <div data-testid="activity-sidebar">Sidebar</div>,
+  channelConfig: {
+    email: { icon: () => null, color: 'text-blue-500', bgColor: 'bg-blue-50', label: 'E-mail' },
+    whatsapp: { icon: () => null, color: 'text-green-600', bgColor: 'bg-green-50', label: 'WhatsApp' },
+    phone: { icon: () => null, color: 'text-green-500', bgColor: 'bg-green-50', label: 'Ligação' },
+    linkedin: { icon: () => null, color: 'text-purple-500', bgColor: 'bg-purple-50', label: 'LinkedIn' },
+    research: { icon: () => null, color: 'text-orange-500', bgColor: 'bg-orange-50', label: 'Pesquisa' },
+  },
+}));
+
+vi.mock('./EnrollmentsList', () => ({
+  EnrollmentsList: () => <div data-testid="enrollments-list">Enrollments</div>,
 }));
 
 function createTemplate(overrides: Partial<MessageTemplateRow> = {}): MessageTemplateRow {
@@ -45,6 +71,8 @@ function createCadence(overrides: Partial<CadenceDetail> = {}): CadenceDetail {
     origin: 'outbound',
     type: 'standard',
     total_steps: 0,
+    auto_loss_after_days: null,
+    auto_loss_reason_id: null,
     created_by: 'user-1',
     created_at: '2026-02-15T10:00:00Z',
     updated_at: '2026-02-15T10:00:00Z',
@@ -73,29 +101,24 @@ describe('CadenceBuilder', () => {
 
   it('should show name input with cadence name', () => {
     render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
-    const input = screen.getByLabelText('Nome');
-    expect(input).toHaveValue('Follow Up Inicial');
+    const input = screen.getByDisplayValue('Follow Up Inicial');
+    expect(input).toBeInTheDocument();
   });
 
   it('should show description textarea', () => {
     render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
-    const textarea = screen.getByLabelText('Descrição');
-    expect(textarea).toHaveValue('Cadência de primeiro contato');
+    const textarea = screen.getByDisplayValue('Cadência de primeiro contato');
+    expect(textarea).toBeInTheDocument();
   });
 
-  it('should show empty steps message', () => {
+  it('should render timeline for existing draft cadence', () => {
     render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
-    expect(screen.getByText(/Nenhum passo adicionado/)).toBeInTheDocument();
+    expect(screen.getByTestId('cadence-timeline')).toBeInTheDocument();
   });
 
-  it('should show step count', () => {
+  it('should render activity sidebar for editable cadence', () => {
     render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
-    expect(screen.getByText('Passos (0)')).toBeInTheDocument();
-  });
-
-  it('should show "Adicionar Passo" button for editable cadence', () => {
-    render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
-    expect(screen.getByText('Adicionar Passo')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-sidebar')).toBeInTheDocument();
   });
 
   it('should show "Criar Cadência" button for new cadence', () => {
@@ -108,7 +131,7 @@ describe('CadenceBuilder', () => {
     expect(screen.getByText('Salvar')).toBeInTheDocument();
   });
 
-  it('should show steps when cadence has steps', () => {
+  it('should render timeline with steps when cadence has steps', () => {
     const cadence = createCadence({
       total_steps: 2,
       steps: [
@@ -139,10 +162,8 @@ describe('CadenceBuilder', () => {
       ],
     });
     render(<CadenceBuilder cadence={cadence} templates={[createTemplate()]} />);
-    expect(screen.getByText('Passos (2)')).toBeInTheDocument();
-    expect(screen.getByText('— Primeiro Contato')).toBeInTheDocument();
-    expect(screen.getByText('Enviar imediatamente')).toBeInTheDocument();
-    expect(screen.getByText(/Esperar 2d/)).toBeInTheDocument();
+    expect(screen.getByTestId('cadence-timeline')).toBeInTheDocument();
+    expect(screen.getByText('Timeline (2 steps)')).toBeInTheDocument();
   });
 
   it('should show activate button for draft with >= 2 steps', () => {
@@ -177,5 +198,53 @@ describe('CadenceBuilder', () => {
     });
     render(<CadenceBuilder cadence={cadence} templates={[createTemplate()]} />);
     expect(screen.getByText('Ativar')).toBeInTheDocument();
+  });
+
+  it('should show priority select with default value', () => {
+    render(<CadenceBuilder cadence={createCadence({ priority: 'high' })} templates={[createTemplate()]} />);
+    expect(screen.getByText('Alta')).toBeInTheDocument();
+  });
+
+  it('should show origin toggle buttons', () => {
+    render(<CadenceBuilder cadence={createCadence()} templates={[createTemplate()]} />);
+    expect(screen.getByText('Outbound')).toBeInTheDocument();
+    expect(screen.getByText('Inbound ativo')).toBeInTheDocument();
+    expect(screen.getByText('Inbound passivo')).toBeInTheDocument();
+  });
+
+  it('should show tabs for active cadence', () => {
+    const cadence = createCadence({
+      status: 'active',
+      total_steps: 2,
+      steps: [
+        {
+          id: 'step-1',
+          cadence_id: 'cad-1',
+          step_order: 1,
+          channel: 'email',
+          template_id: null,
+          delay_days: 0,
+          delay_hours: 0,
+          ai_personalization: false,
+          created_at: '2026-02-15T10:00:00Z',
+          template: null,
+        },
+        {
+          id: 'step-2',
+          cadence_id: 'cad-1',
+          step_order: 2,
+          channel: 'email',
+          template_id: null,
+          delay_days: 1,
+          delay_hours: 0,
+          ai_personalization: false,
+          created_at: '2026-02-15T10:00:00Z',
+          template: null,
+        },
+      ],
+    });
+    render(<CadenceBuilder cadence={cadence} templates={[createTemplate()]} />);
+    expect(screen.getByText('Passos (2)')).toBeInTheDocument();
+    expect(screen.getByText('Inscritos (0)')).toBeInTheDocument();
   });
 });

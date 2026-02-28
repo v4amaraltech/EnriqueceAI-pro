@@ -29,6 +29,8 @@ function createCadence(overrides: Partial<CadenceRow> = {}): CadenceRow {
     origin: 'outbound',
     type: 'standard',
     total_steps: 3,
+    auto_loss_after_days: null,
+    auto_loss_reason_id: null,
     created_by: 'user-1',
     created_at: '2026-02-15T10:00:00Z',
     updated_at: '2026-02-15T10:00:00Z',

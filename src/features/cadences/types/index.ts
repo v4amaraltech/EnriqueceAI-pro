@@ -38,6 +38,8 @@ export interface CadenceRow {
   origin: CadenceOrigin;
   type: CadenceType;
   total_steps: number;
+  auto_loss_after_days: number | null;
+  auto_loss_reason_id: string | null;
   created_by: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -113,6 +115,8 @@ export interface CadenceInsert {
   origin?: CadenceOrigin;
   type?: CadenceType;
   total_steps?: number;
+  auto_loss_after_days?: number | null;
+  auto_loss_reason_id?: string | null;
   created_by?: string | null;
 }
 

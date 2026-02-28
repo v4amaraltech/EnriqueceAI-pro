@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, Mail, Play, Plus, Save } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Mail, Play, Plus, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { cn } from '@/lib/utils';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -19,9 +20,11 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+
 import type { CadenceDetail, CadenceMetrics } from '../cadences.contract';
 import type { AutoEmailStep } from '../cadence.schemas';
 import type { CadenceOrigin, CadencePriority } from '../types';
+import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, createCadence, updateCadence } from '../actions/manage-cadences';
 import { saveAutoEmailSteps } from '../actions/save-auto-email-steps';
 import { AutoEmailStepEditor } from './AutoEmailStepEditor';
@@ -29,6 +32,7 @@ import { AutoEmailStepEditor } from './AutoEmailStepEditor';
 interface AutoEmailBuilderProps {
   cadence?: CadenceDetail;
   metrics?: CadenceMetrics;
+  lossReasons?: LossReasonOption[];
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -51,13 +55,17 @@ function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
   }));
 }
 
-export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
+export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEmailBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(cadence?.name ?? '');
   const [description, setDescription] = useState(cadence?.description ?? '');
   const [priority, setPriority] = useState<CadencePriority>(cadence?.priority ?? 'medium');
   const [origin, setOrigin] = useState<CadenceOrigin>(cadence?.origin ?? 'outbound');
+  const [autoLossEnabled, setAutoLossEnabled] = useState(cadence?.auto_loss_after_days != null);
+  const [autoLossAfterDays, setAutoLossAfterDays] = useState(cadence?.auto_loss_after_days ?? 30);
+  const [autoLossReasonId, setAutoLossReasonId] = useState(cadence?.auto_loss_reason_id ?? '');
+  const [generalCollapsed, setGeneralCollapsed] = useState(false);
   const [steps, setSteps] = useState<AutoEmailStep[]>(buildInitialSteps(cadence));
 
   const isEditing = !!cadence;
@@ -105,11 +113,19 @@ export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
     startTransition(async () => {
       let cadenceId = cadence?.id;
 
+      const metadata = {
+        name,
+        description: description || null,
+        priority,
+        origin,
+        auto_loss_after_days: autoLossEnabled ? autoLossAfterDays : null,
+        auto_loss_reason_id: autoLossEnabled && autoLossReasonId ? autoLossReasonId : null,
+      };
+
       if (!isEditing) {
         // Create cadence first
         const createResult = await createCadence({
-          name,
-          description: description || null,
+          ...metadata,
           type: 'auto_email',
         });
         if (!createResult.success) {
@@ -119,10 +135,7 @@ export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
         cadenceId = createResult.data.id;
       } else {
         // Update cadence metadata
-        const updateResult = await updateCadence(cadence.id, {
-          name,
-          description: description || null,
-        });
+        const updateResult = await updateCadence(cadence.id, metadata);
         if (!updateResult.success) {
           toast.error(updateResult.error);
           return;
@@ -187,93 +200,159 @@ export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
-        {/* Sidebar — Config */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Configuração</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="cadence-name">Nome</Label>
-                <Input
-                  id="cadence-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Prospecção Outbound Q1"
-                  disabled={!isEditable}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cadence-desc">Descrição</Label>
-                <Textarea
-                  id="cadence-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrição opcional..."
-                  rows={3}
-                  disabled={!isEditable}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Prioridade</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as CadencePriority)} disabled={!isEditable}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
-                    <SelectItem value="low">Baixa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Origem</Label>
-                <Select value={origin} onValueChange={(v) => setOrigin(v as CadenceOrigin)} disabled={!isEditable}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="outbound">Outbound</SelectItem>
-                    <SelectItem value="inbound_active">Inbound Ativo</SelectItem>
-                    <SelectItem value="inbound_passive">Inbound Passivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Configuração — table-style horizontal rows */}
+      <Card>
+        <CardHeader className="cursor-pointer select-none" onClick={() => setGeneralCollapsed(!generalCollapsed)}>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Geral</CardTitle>
+            <ChevronDown className={cn('h-5 w-5 text-[var(--muted-foreground)] transition-transform', generalCollapsed && '-rotate-90')} />
+          </div>
+        </CardHeader>
+        {!generalCollapsed && <CardContent className="space-y-0 divide-y">
+          {/* Nome */}
+          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4 first:pt-0">
+            <Label htmlFor="cadence-name" className="text-sm text-[var(--muted-foreground)]">Nome:</Label>
+            <Input
+              id="cadence-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Prospecção Outbound Q1"
+              disabled={!isEditable}
+            />
+          </div>
 
-          {/* Metrics (edit mode only) */}
+          {/* Descrição */}
+          <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-4">
+            <Label htmlFor="cadence-desc" className="pt-2 text-sm text-[var(--muted-foreground)]">Descrição:</Label>
+            <Textarea
+              id="cadence-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Descreva o objetivo desta cadência..."
+              rows={3}
+              disabled={!isEditable}
+            />
+          </div>
+
+          {/* Foco / Origem */}
+          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
+            <Label className="text-sm text-[var(--muted-foreground)]">Foco:</Label>
+            <div className="flex flex-wrap gap-1">
+              {([
+                { value: 'inbound_active', label: 'Inbound ativo' },
+                { value: 'inbound_passive', label: 'Inbound passivo' },
+                { value: 'outbound', label: 'Outbound' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={!isEditable}
+                  onClick={() => setOrigin(opt.value)}
+                  className={cn(
+                    'rounded-md border px-4 py-1.5 text-sm transition-colors',
+                    origin === opt.value
+                      ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
+                      : 'border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--muted)]',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prioridade */}
+          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
+            <Label className="text-sm text-[var(--muted-foreground)]">Prioridade:</Label>
+            <Select value={priority} onValueChange={(v) => setPriority(v as CadencePriority)} disabled={!isEditable}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">Alta</SelectItem>
+                <SelectItem value="medium">Média</SelectItem>
+                <SelectItem value="low">Baixa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Perda Automática por Inatividade */}
+          <div className="py-4">
+            <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+              <Label className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+                Perda automática por inatividade
+              </Label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoLossEnabled}
+                  onClick={() => setAutoLossEnabled(!autoLossEnabled)}
+                  disabled={!isEditable}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${autoLossEnabled ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${autoLossEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+                <span className="text-sm text-[var(--muted-foreground)]">
+                  {autoLossEnabled ? 'Ativado' : 'Desativado'}
+                </span>
+              </div>
+            </div>
+            {autoLossEnabled && (
+              <div className="mt-4 space-y-4 pl-[196px]">
+                <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+                  <Label className="text-sm text-[var(--muted-foreground)]">Dias de inatividade:</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={autoLossAfterDays}
+                    onChange={(e) => setAutoLossAfterDays(parseInt(e.target.value) || 30)}
+                    disabled={!isEditable}
+                    className="w-[200px]"
+                  />
+                </div>
+                <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+                  <Label className="text-sm text-[var(--muted-foreground)]">Motivo de perda:</Label>
+                  <Select value={autoLossReasonId} onValueChange={setAutoLossReasonId} disabled={!isEditable}>
+                    <SelectTrigger className="w-[300px]">
+                      <SelectValue placeholder="Selecione um motivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lossReasons.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Metrics inline (edit mode only) */}
           {metrics && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Métricas</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Inscritos</p>
-                  <p className="text-lg font-semibold">{metrics.total_enrolled}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Em progresso</p>
-                  <p className="text-lg font-semibold">{metrics.in_progress}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Responderam</p>
-                  <p className="text-lg font-semibold text-green-600">{metrics.replied}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Completaram</p>
-                  <p className="text-lg font-semibold">{metrics.completed}</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-6 py-4 text-sm">
+              <div>
+                <span className="text-xs text-[var(--muted-foreground)]">Inscritos</span>
+                <p className="text-lg font-semibold">{metrics.total_enrolled}</p>
+              </div>
+              <div>
+                <span className="text-xs text-[var(--muted-foreground)]">Em progresso</span>
+                <p className="text-lg font-semibold">{metrics.in_progress}</p>
+              </div>
+              <div>
+                <span className="text-xs text-[var(--muted-foreground)]">Responderam</span>
+                <p className="text-lg font-semibold text-green-600">{metrics.replied}</p>
+              </div>
+              <div>
+                <span className="text-xs text-[var(--muted-foreground)]">Completaram</span>
+                <p className="text-lg font-semibold">{metrics.completed}</p>
+              </div>
+            </div>
           )}
 
           {/* Actions */}
-          <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 pt-4">
             {isEditable && (
               <Button onClick={handleSave} disabled={isPending}>
                 <Save className="mr-2 h-4 w-4" />
@@ -287,35 +366,35 @@ export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
               </Button>
             )}
           </div>
+        </CardContent>}
+      </Card>
+
+      {/* Steps — full width */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            Sequência de Emails ({steps.length} step{steps.length !== 1 ? 's' : ''})
+          </h2>
         </div>
 
-        {/* Main — Steps */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              Sequência de Emails ({steps.length} step{steps.length !== 1 ? 's' : ''})
-            </h2>
-          </div>
+        {steps.map((step, index) => (
+          <AutoEmailStepEditor
+            key={index}
+            step={step}
+            stepNumber={index + 1}
+            isFirst={index === 0}
+            onChange={(updated) => updateStep(index, updated)}
+            onRemove={() => removeStep(index)}
+            cadenceId={cadence?.id}
+          />
+        ))}
 
-          {steps.map((step, index) => (
-            <AutoEmailStepEditor
-              key={index}
-              step={step}
-              stepNumber={index + 1}
-              isFirst={index === 0}
-              onChange={(updated) => updateStep(index, updated)}
-              onRemove={() => removeStep(index)}
-              cadenceId={cadence?.id}
-            />
-          ))}
-
-          {isEditable && (
-            <Button variant="outline" className="w-full" onClick={addStep}>
-              <Plus className="mr-2 h-4 w-4" />
-              Adicionar Step
-            </Button>
-          )}
-        </div>
+        {isEditable && (
+          <Button variant="outline" className="w-full" onClick={addStep}>
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar Step
+          </Button>
+        )}
       </div>
     </div>
   );
