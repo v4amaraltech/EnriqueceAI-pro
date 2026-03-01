@@ -61,23 +61,23 @@ export function InviteMemberDialog({
         </DialogHeader>
 
         {state.success && (
-          <div className="space-y-3 rounded-md bg-green-50 p-4">
-            <p className="text-sm font-medium text-green-700">Membro adicionado com sucesso!</p>
+          <div className="space-y-3 rounded-md border border-green-600/30 bg-green-600/10 p-4">
+            <p className="text-sm font-medium text-green-500">Membro adicionado com sucesso!</p>
             {state.tempPassword ? (
-              <div className="space-y-2 rounded border bg-white p-3">
-                <p className="text-sm text-gray-600">Senha temporária:</p>
+              <div className="space-y-2 rounded-md border border-border bg-muted p-3">
+                <p className="text-sm text-muted-foreground">Senha temporária:</p>
                 <div className="flex items-center gap-2">
-                  <code className="text-lg font-bold">{state.tempPassword}</code>
+                  <code className="text-lg font-bold text-foreground">{state.tempPassword}</code>
                   <Button type="button" variant="ghost" size="sm" onClick={copyPassword}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Compartilhe esta senha com o membro. Ele poderá alterá-la depois.
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-green-600">
+              <p className="text-sm text-green-500">
                 O usuário já possui conta e foi adicionado à organização. Ele pode acessar com suas
                 credenciais existentes.
               </p>
