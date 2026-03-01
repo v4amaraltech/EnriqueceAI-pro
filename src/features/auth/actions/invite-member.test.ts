@@ -16,15 +16,30 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
-const mockInviteUserByEmail = vi.fn();
+const mockCreateUser = vi.fn();
 const mockListUsers = vi.fn().mockResolvedValue({ data: { users: [] } });
 const mockAdminInsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminUpsert = vi.fn().mockResolvedValue({ error: null });
-const mockAdminFrom = vi.fn().mockReturnValue({ insert: mockAdminInsert, upsert: mockAdminUpsert });
+const mockAdminDelete = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+const mockAdminSelect = vi.fn().mockReturnValue({
+  eq: vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } }),
+      }),
+    }),
+  }),
+});
+const mockAdminFrom = vi.fn().mockImplementation((table: string) => {
+  if (table === 'organizations') {
+    return { delete: mockAdminDelete };
+  }
+  return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: mockAdminSelect };
+});
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminSupabaseClient: vi.fn(() => ({
-    auth: { admin: { inviteUserByEmail: mockInviteUserByEmail, listUsers: mockListUsers } },
+    auth: { admin: { createUser: mockCreateUser, listUsers: mockListUsers } },
     from: mockAdminFrom,
   })),
 }));
@@ -95,11 +110,17 @@ function setupManagerWithOrg() {
 describe('inviteMember', () => {
   beforeEach(() => {
     resetMocks();
-    mockInviteUserByEmail.mockReset();
+    mockCreateUser.mockReset();
     mockListUsers.mockReset().mockResolvedValue({ data: { users: [] } });
     mockAdminInsert.mockReset().mockResolvedValue({ error: null });
     mockAdminUpsert.mockReset().mockResolvedValue({ error: null });
-    mockAdminFrom.mockReset().mockReturnValue({ insert: mockAdminInsert, upsert: mockAdminUpsert });
+    mockAdminDelete.mockReset().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    mockAdminFrom.mockReset().mockImplementation((table: string) => {
+      if (table === 'organizations') {
+        return { delete: mockAdminDelete };
+      }
+      return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: mockAdminSelect };
+    });
   });
 
   it('should return validation error for invalid email', async () => {
@@ -138,9 +159,9 @@ describe('inviteMember', () => {
     }
   });
 
-  it('should succeed when inviting a new user', async () => {
+  it('should create new user with temp password', async () => {
     setupManagerWithOrg();
-    mockInviteUserByEmail.mockResolvedValue({
+    mockCreateUser.mockResolvedValue({
       data: { user: { id: 'new-user-id' } },
       error: null,
     });
@@ -148,33 +169,27 @@ describe('inviteMember', () => {
     const result = await inviteMember(makeFormData({ email: 'new@email.com', role: 'sdr' }));
 
     expect(result.success).toBe(true);
-    expect(mockInviteUserByEmail).toHaveBeenCalledWith(
-      'new@email.com',
-      expect.objectContaining({
-        data: expect.objectContaining({
-          invited_to_org: 'org-abc',
-          invited_role: 'sdr',
-        }),
-      }),
-    );
+    if (result.success) {
+      expect(result.data.tempPassword).toBe('Enriqueceai123');
+    }
+    expect(mockCreateUser).toHaveBeenCalledWith({
+      email: 'new@email.com',
+      password: 'Enriqueceai123',
+      email_confirm: true,
+    });
     expect(mockAdminFrom).toHaveBeenCalledWith('organization_members');
     expect(mockAdminInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         org_id: 'org-abc',
         user_id: 'new-user-id',
         role: 'sdr',
-        status: 'invited',
+        status: 'active',
       }),
     );
   });
 
-  it('should fall back to OTP for existing users', async () => {
+  it('should add existing user to org without temp password', async () => {
     setupManagerWithOrg();
-    mockInviteUserByEmail.mockResolvedValue({
-      data: null,
-      error: { message: 'User has already been registered', code: 'email_exists' },
-    });
-    mockSupabaseAuth.signInWithOtp.mockResolvedValue({ error: null });
     mockListUsers.mockResolvedValue({
       data: { users: [{ id: 'existing-user-id', email: 'existing@email.com' }] },
     });
@@ -182,13 +197,16 @@ describe('inviteMember', () => {
     const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
 
     expect(result.success).toBe(true);
-    expect(mockSupabaseAuth.signInWithOtp).toHaveBeenCalled();
+    if (result.success) {
+      expect(result.data.tempPassword).toBeNull();
+    }
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockAdminUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         org_id: 'org-abc',
         user_id: 'existing-user-id',
         role: 'sdr',
-        status: 'invited',
+        status: 'active',
       }),
       expect.objectContaining({ onConflict: 'org_id,user_id' }),
     );
