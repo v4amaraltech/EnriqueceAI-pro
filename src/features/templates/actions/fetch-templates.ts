@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { TemplateListResult } from '../index';
@@ -18,19 +18,8 @@ interface FetchTemplatesParams {
 export async function fetchTemplates(
   params: FetchTemplatesParams = {},
 ): Promise<ActionResult<TemplateListResult>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
 
   const page = params.page ?? 1;
   const per_page = params.per_page ?? 20;
@@ -40,7 +29,12 @@ export async function fetchTemplates(
   let query = (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
     .select('*', { count: 'exact' })
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
+
+  // SDR isolation: only see own templates + system templates
+  if (role === 'sdr') {
+    query = query.or(`created_by.eq.${userId},is_system.eq.true`);
+  }
 
   if (params.channel) {
     query = query.eq('channel', params.channel);
@@ -80,26 +74,24 @@ export async function fetchTemplates(
 export async function fetchTemplate(
   templateId: string,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  const { data, error } = (await (supabase
+  let query = (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
     .select('*')
     .eq('id', templateId)
-    .eq('org_id', member.org_id)
-    .single()) as { data: MessageTemplateRow | null; error: { message: string } | null };
+    .eq('org_id', orgId);
+
+  // SDR isolation: can only access own templates + system templates
+  if (role === 'sdr') {
+    query = query.or(`created_by.eq.${userId},is_system.eq.true`);
+  }
+
+  const { data, error } = (await query.single()) as {
+    data: MessageTemplateRow | null;
+    error: { message: string } | null;
+  };
 
   if (error || !data) {
     return { success: false, error: 'Template não encontrado' };

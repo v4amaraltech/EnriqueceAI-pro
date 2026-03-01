@@ -1,7 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { createTemplateSchema, updateTemplateSchema, TEMPLATE_VARIABLE_REGEX } from '../index';
 import type { MessageTemplateRow } from '../../cadences/types';
@@ -18,7 +19,8 @@ export async function createTemplate(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, userId, supabase } = await getAuthOrgId();
+  const { orgId, userId } = await requireAuthWithMember();
+  const supabase = await createServerSupabaseClient();
 
   const { name, channel, subject, body } = parsed.data;
   const allText = `${subject ?? ''} ${body}`;
@@ -55,15 +57,16 @@ export async function updateTemplate(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, supabase } = await getAuthOrgId();
+  const { orgId, userId, role } = await requireAuthWithMember();
+  const supabase = await createServerSupabaseClient();
 
-  // Check template is not system
+  // Check template exists and ownership
   const { data: existing } = (await (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
-    .select('is_system')
+    .select('is_system, created_by')
     .eq('id', templateId)
     .eq('org_id', orgId)
-    .single()) as { data: { is_system: boolean } | null };
+    .single()) as { data: { is_system: boolean; created_by: string | null } | null };
 
   if (!existing) {
     return { success: false, error: 'Template não encontrado' };
@@ -71,6 +74,11 @@ export async function updateTemplate(
 
   if (existing.is_system) {
     return { success: false, error: 'Templates de sistema não podem ser editados' };
+  }
+
+  // SDR can only edit own templates
+  if (role === 'sdr' && existing.created_by !== userId) {
+    return { success: false, error: 'Você só pode editar seus próprios templates' };
   }
 
   const updates: Record<string, unknown> = { ...parsed.data };
@@ -109,15 +117,16 @@ export async function updateTemplate(
 export async function deleteTemplate(
   templateId: string,
 ): Promise<ActionResult<{ deleted: boolean }>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const { orgId, userId, role } = await requireAuthWithMember();
+  const supabase = await createServerSupabaseClient();
 
-  // Check not system
+  // Check exists and ownership
   const { data: existing } = (await (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
-    .select('is_system')
+    .select('is_system, created_by')
     .eq('id', templateId)
     .eq('org_id', orgId)
-    .single()) as { data: { is_system: boolean } | null };
+    .single()) as { data: { is_system: boolean; created_by: string | null } | null };
 
   if (!existing) {
     return { success: false, error: 'Template não encontrado' };
@@ -125,6 +134,11 @@ export async function deleteTemplate(
 
   if (existing.is_system) {
     return { success: false, error: 'Templates de sistema não podem ser deletados' };
+  }
+
+  // SDR can only delete own templates
+  if (role === 'sdr' && existing.created_by !== userId) {
+    return { success: false, error: 'Você só pode deletar seus próprios templates' };
   }
 
   const { error } = await (supabase
@@ -143,7 +157,8 @@ export async function deleteTemplate(
 export async function duplicateTemplate(
   templateId: string,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const { orgId, userId, supabase } = await getAuthOrgId();
+  const { orgId, userId, role } = await requireAuthWithMember();
+  const supabase = await createServerSupabaseClient();
 
   const { data: source } = (await (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
@@ -154,6 +169,11 @@ export async function duplicateTemplate(
 
   if (!source) {
     return { success: false, error: 'Template não encontrado' };
+  }
+
+  // SDR can only duplicate own templates or system templates
+  if (role === 'sdr' && !source.is_system && source.created_by !== userId) {
+    return { success: false, error: 'Você só pode duplicar seus próprios templates' };
   }
 
   const { data, error } = (await (supabase
