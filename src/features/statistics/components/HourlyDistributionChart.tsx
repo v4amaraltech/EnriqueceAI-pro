@@ -38,17 +38,17 @@ export function HourlyDistributionChart({ data }: HourlyDistributionChartProps) 
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 11 }}
-          className="text-muted-foreground"
+          tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
           interval={1}
         />
-        <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" allowDecimals={false} />
+        <YAxis tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} allowDecimals={false} />
         <Tooltip
           contentStyle={{
             backgroundColor: 'var(--popover)',
             border: '1px solid var(--border)',
             borderRadius: '8px',
             fontSize: '12px',
+            color: 'var(--foreground)',
           }}
           formatter={((value: number) => [value, 'Ligações']) as never}
         />

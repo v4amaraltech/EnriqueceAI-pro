@@ -41,14 +41,12 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
           <XAxis
             type="number"
-            tick={{ fontSize: 12 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <YAxis
             type="category"
             dataKey="reason"
-            tick={{ fontSize: 12 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
             width={120}
           />
           <Tooltip
@@ -57,6 +55,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
               border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
+              color: 'var(--foreground)',
             }}
             formatter={((value: number, _name: string, props: { payload: LossReasonEntry }) =>
               [`${value} (${props.payload.percent}%)`, 'Perdas']

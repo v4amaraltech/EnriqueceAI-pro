@@ -41,14 +41,15 @@ export function ChannelVolumeChart({ data }: ChannelVolumeChartProps) {
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="name" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-        <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" allowDecimals={false} />
+        <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
+        <YAxis tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} allowDecimals={false} />
         <Tooltip
           contentStyle={{
             backgroundColor: 'var(--popover)',
             border: '1px solid var(--border)',
             borderRadius: '8px',
             fontSize: '12px',
+            color: 'var(--foreground)',
           }}
         />
         <Legend />

@@ -121,15 +121,13 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fontSize: 11 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 11, fill: 'var(--foreground)' }}
                   tickFormatter={(day: number) => formatXAxis(day, kpi.daysInMonth)}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
-                  className="text-muted-foreground"
+                  tick={{ fontSize: 11, fill: 'var(--foreground)' }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -139,12 +137,13 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     fontSize: '12px',
+                    color: 'var(--foreground)',
                   }}
                   labelFormatter={(day) => `Dia ${day}`}
                 />
                 <Legend
                   iconType="plainline"
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px', color: 'var(--foreground)' }}
                 />
                 <Area
                   type="monotone"
@@ -160,10 +159,11 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   type="monotone"
                   dataKey="target"
                   name="Meta"
-                  stroke="var(--muted-foreground)"
+                  stroke="var(--foreground)"
                   strokeWidth={1.5}
                   strokeDasharray="5 5"
                   dot={false}
+                  strokeOpacity={0.5}
                 />
               </AreaChart>
             </ResponsiveContainer>

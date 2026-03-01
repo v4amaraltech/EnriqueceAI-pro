@@ -45,12 +45,10 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
             dataKey="day"
-            tick={{ fontSize: 12 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 12, fill: 'var(--foreground)' }}
           />
           <YAxis
-            tick={{ fontSize: 12 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 12, fill: 'var(--foreground)' }}
           />
           <Tooltip
             contentStyle={{
@@ -58,10 +56,11 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
               border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
+              color: 'var(--foreground)',
             }}
             labelFormatter={(day) => `Dia ${day}`}
           />
-          <Legend />
+          <Legend wrapperStyle={{ color: 'var(--foreground)' }} />
           <Line
             type="monotone"
             dataKey="actual"
@@ -75,10 +74,11 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
             type="monotone"
             dataKey="target"
             name="Meta"
-            stroke="var(--muted-foreground)"
+            stroke="var(--foreground)"
             strokeWidth={1.5}
             strokeDasharray="5 5"
             dot={false}
+            strokeOpacity={0.5}
           />
         </LineChart>
       </ResponsiveContainer>

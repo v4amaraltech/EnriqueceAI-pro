@@ -40,20 +40,17 @@ export function CallsPerSdrChart({ data }: CallsPerSdrChartProps) {
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11 }}
-          className="text-muted-foreground"
+          tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
         />
         <YAxis
           yAxisId="left"
-          tick={{ fontSize: 12 }}
-          className="text-muted-foreground"
+          tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           allowDecimals={false}
         />
         <YAxis
           yAxisId="right"
           orientation="right"
-          tick={{ fontSize: 12 }}
-          className="text-muted-foreground"
+          tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           domain={[0, 100]}
           unit="%"
         />
@@ -63,6 +60,7 @@ export function CallsPerSdrChart({ data }: CallsPerSdrChartProps) {
             border: '1px solid var(--border)',
             borderRadius: '8px',
             fontSize: '12px',
+            color: 'var(--foreground)',
           }}
         />
         <Legend />

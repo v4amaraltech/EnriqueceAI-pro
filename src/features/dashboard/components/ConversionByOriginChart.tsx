@@ -38,14 +38,12 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
             dataKey="origin"
-            tick={{ fontSize: 11 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             interval={0}
             height={40}
           />
           <YAxis
-            tick={{ fontSize: 12 }}
-            className="text-muted-foreground"
+            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <Tooltip
             contentStyle={{
@@ -53,6 +51,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
               border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
+              color: 'var(--foreground)',
             }}
           />
           <Legend />
