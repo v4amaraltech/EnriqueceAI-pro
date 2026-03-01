@@ -4,7 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, ThreeCPlusConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
@@ -12,6 +12,7 @@ export interface ConnectionsOverview {
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
+  threecplus: ThreeCPlusConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
 }
 
@@ -33,7 +34,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
   // Fetch Gmail connection (per user) — exclude encrypted tokens
   const { data: gmailRow } = (await (supabase
     .from('gmail_connections') as ReturnType<typeof supabase.from>)
-    .select('id, email_address, status, created_at, updated_at')
+    .select('id, email_address, custom_signature, status, created_at, updated_at')
     .eq('org_id', member.org_id)
     .eq('user_id', user.id)
     .maybeSingle()) as { data: GmailConnectionSafe | null };
@@ -69,6 +70,14 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', user.id)
     .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
+  // Fetch 3CPlus connection (per user) — exclude encrypted token
+  const { data: threecplusRaw } = (await (supabase
+    .from('threecplus_connections' as never) as ReturnType<typeof supabase.from>)
+    .select('id, extension, base_url, api_token_encrypted, status, created_at, updated_at')
+    .eq('org_id', member.org_id)
+    .eq('user_id', user.id)
+    .maybeSingle()) as { data: { id: string; extension: string; base_url: string; api_token_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
+
   // Fetch WhatsApp Evolution instance (per org)
   const { data: evolutionRow } = (await (supabase
     .from('whatsapp_instances' as never) as ReturnType<typeof supabase.from>)
@@ -88,6 +97,18 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       }
     : null;
 
+  const threecplusRow: ThreeCPlusConnectionSafe | null = threecplusRaw
+    ? {
+        id: threecplusRaw.id,
+        extension: threecplusRaw.extension,
+        base_url: threecplusRaw.base_url,
+        has_api_token: !!threecplusRaw.api_token_encrypted,
+        status: threecplusRaw.status as ThreeCPlusConnectionSafe['status'],
+        created_at: threecplusRaw.created_at,
+        updated_at: threecplusRaw.updated_at,
+      }
+    : null;
+
   return {
     success: true,
     data: {
@@ -96,6 +117,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       crm: crmRow ?? null,
       calendar: calendarRow ?? null,
       api4com: api4comRow ?? null,
+      threecplus: threecplusRow ?? null,
       evolutionInstance: evolutionRow ?? null,
     },
   };

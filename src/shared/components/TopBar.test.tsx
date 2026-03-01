@@ -22,6 +22,10 @@ vi.mock('./MobileNav', () => ({
   MobileNav: () => <div data-testid="mobile-nav">MobileNav</div>,
 }));
 
+vi.mock('./HelpCenter/HelpCenter', () => ({
+  HelpCenter: () => <button data-testid="help-center" aria-label="Ajuda">Help</button>,
+}));
+
 import { TopBar, navSections } from './TopBar';
 
 describe('TopBar', () => {
@@ -60,7 +64,7 @@ describe('TopBar', () => {
     expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
     expect(screen.getByTestId('user-menu')).toBeInTheDocument();
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ajuda' })).toBeInTheDocument();
+    expect(screen.getByTestId('help-center')).toBeInTheDocument();
   });
 
   it('renders MobileNav component', () => {
@@ -106,7 +110,7 @@ describe('TopBar', () => {
     expect(navSections).toHaveLength(4);
     expect(navSections[0]?.label).toBe('Dashboard');
     expect(navSections[1]?.label).toBe('Prospecção');
-    expect(navSections[1]?.items).toHaveLength(5);
+    expect(navSections[1]?.items).toHaveLength(6);
     expect(navSections[2]?.label).toBe('Ligações');
     expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');

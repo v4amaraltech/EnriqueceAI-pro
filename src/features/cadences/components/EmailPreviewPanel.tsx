@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { Monitor, RefreshCw, Search, Smartphone } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+
+import { fetchGmailSignature } from '@/features/activities/actions/fetch-gmail-signature';
 
 import { fetchVendorVariables, type VendorVariables } from '../actions/fetch-vendor-variables';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
@@ -28,11 +30,11 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
   const [leads, setLeads] = useState<PreviewLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string>('');
   const [vendorVars, setVendorVars] = useState<VendorVariables>({ nome_vendedor: null, email_vendedor: null });
+  const [signature, setSignature] = useState('');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const initialLoadDone = useRef<true | null>(null);
 
   function loadLeads(searchTerm?: string) {
     startTransition(async () => {
@@ -47,14 +49,16 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
     });
   }
 
-  // Load leads + vendor data on first render (React-safe ref initialization pattern)
-  if (initialLoadDone.current === null) {
-    initialLoadDone.current = true;
+  // Load leads + vendor data on mount
+  useEffect(() => {
     loadLeads();
     fetchVendorVariables().then((r) => {
       if (r.success) setVendorVars(r.data);
     });
-  }
+    fetchGmailSignature().then((r) => {
+      if (r.success && r.data) setSignature(r.data);
+    });
+  }, []);
 
   function handleSearchChange(value: string) {
     setSearch(value);
@@ -170,9 +174,20 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
 
             {/* Email body */}
             <div
-              className="prose prose-sm max-w-none [&_p]:my-1"
+              className="prose prose-sm max-w-none [&_p]:my-3"
               dangerouslySetInnerHTML={{ __html: renderedBody || '<p class="text-muted-foreground">(corpo vazio)</p>' }}
             />
+
+            {/* Signature */}
+            {signature && (
+              <>
+                <div className="my-4 border-t border-dashed" />
+                <div
+                  className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
+                  dangerouslySetInnerHTML={{ __html: signature }}
+                />
+              </>
+            )}
           </div>
         )}
       </div>

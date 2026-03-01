@@ -19,6 +19,7 @@ export default async function IntegrationsPage() {
       crm={result.data.crm}
       calendar={result.data.calendar}
       api4com={result.data.api4com}
+      threecplus={result.data.threecplus}
       evolutionInstance={result.data.evolutionInstance}
     />
   );

@@ -161,6 +161,8 @@ export async function fetchActivityLog(
         ...enrollment.lead,
         primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
       },
+      activityName: currentStep.activity_name ?? null,
+      callScript: currentStep.instructions ?? null,
     };
 
     // Search filter

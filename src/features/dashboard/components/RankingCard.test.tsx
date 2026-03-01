@@ -50,7 +50,7 @@ describe('RankingCard', () => {
     render(
       <RankingCard title="Test" icon={Users} data={createCardData()} />,
     );
-    expect(screen.getByText(/20% abaixo do previsto/)).toBeInTheDocument();
+    expect(screen.getByText(/20% do previsto/)).toBeInTheDocument();
   });
 
   it('should render percent above indicator', () => {
@@ -61,7 +61,7 @@ describe('RankingCard', () => {
         data={createCardData({ percentOfTarget: 15 })}
       />,
     );
-    expect(screen.getByText(/15% acima do previsto/)).toBeInTheDocument();
+    expect(screen.getByText(/15% do previsto/)).toBeInTheDocument();
   });
 
   it('should show "Sem meta" when no target', () => {

@@ -50,6 +50,8 @@ interface ActivityPhonePanelProps {
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
+  activityName?: string | null;
+  callScript?: string | null;
 }
 
 function formatTimer(seconds: number): string {
@@ -66,6 +68,8 @@ export function ActivityPhonePanel({
   isSending,
   onMarkDone,
   onSkip,
+  activityName,
+  callScript,
 }: ActivityPhonePanelProps) {
   // Use first resolved phone or fallback to lead.telefone
   const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
@@ -193,6 +197,16 @@ export function ActivityPhonePanel({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Call script / Roteiro */}
+      {callScript && (
+        <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            {activityName ?? 'Roteiro da Ligação'}
+          </p>
+          <p className="whitespace-pre-wrap text-sm">{callScript}</p>
         </div>
       )}
 

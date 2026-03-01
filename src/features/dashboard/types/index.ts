@@ -63,7 +63,7 @@ export interface LossReasonEntry {
 }
 
 export interface ConversionByOriginEntry {
-  origin: string; // cadence name
+  origin: string; // 'Inbound Ativo' | 'Inbound Passivo' | 'Outbound'
   converted: number;
   lost: number;
 }

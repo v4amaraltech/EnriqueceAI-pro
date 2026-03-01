@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, ChevronDown, Mail, Play, Plus, Save } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronDown, Mail, Pencil, Play, Plus, Save, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -55,6 +55,14 @@ function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
   }));
 }
 
+function getDelayLabel(step: AutoEmailStep, isFirst: boolean): string {
+  if (isFirst || (step.delay_days === 0 && step.delay_hours === 0)) return 'Enviar email imediatamente';
+  const parts: string[] = [];
+  if (step.delay_days > 0) parts.push(`${step.delay_days} dia${step.delay_days !== 1 ? 's' : ''}`);
+  if (step.delay_hours > 0) parts.push(`${step.delay_hours} hora${step.delay_hours !== 1 ? 's' : ''}`);
+  return `Enviar e-mail em ${parts.join(' e ')}`;
+}
+
 export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEmailBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -67,6 +75,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   const [autoLossReasonId, setAutoLossReasonId] = useState(cadence?.auto_loss_reason_id ?? '');
   const [generalCollapsed, setGeneralCollapsed] = useState(false);
   const [steps, setSteps] = useState<AutoEmailStep[]>(buildInitialSteps(cadence));
+  const [editingDelayIndex, setEditingDelayIndex] = useState<number | null>(null);
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
@@ -180,7 +189,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/cadences?type=auto_email')}>
@@ -370,27 +379,87 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
       </Card>
 
       {/* Steps — full width */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div>
+        <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">
             Sequência de Emails ({steps.length} step{steps.length !== 1 ? 's' : ''})
           </h2>
         </div>
 
-        {steps.map((step, index) => (
-          <AutoEmailStepEditor
-            key={index}
-            step={step}
-            stepNumber={index + 1}
-            isFirst={index === 0}
-            onChange={(updated) => updateStep(index, updated)}
-            onRemove={() => removeStep(index)}
-            cadenceId={cadence?.id}
-          />
-        ))}
+        <div className="flex flex-col items-center">
+          {steps.map((step, index) => (
+            <div key={index} className="w-full">
+              {/* Timing pill above step */}
+              <div className="flex flex-col items-center">
+                {/* Connector from previous step */}
+                {index > 0 && (
+                  <>
+                    <div className="h-2 w-2 rounded-full border-2 border-[var(--muted-foreground)]/40 bg-[var(--background)]" />
+                    <div className="h-5 w-px bg-[var(--border)]" />
+                    <ArrowDown className="h-4 w-4 text-[var(--muted-foreground)]/60" />
+                    <div className="h-2" />
+                  </>
+                )}
+
+                {/* Timing pill */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (index > 0) setEditingDelayIndex(editingDelayIndex === index ? null : index);
+                  }}
+                  className={cn(
+                    'mb-3 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors',
+                    index > 0
+                      ? 'cursor-pointer border-[var(--border)] bg-[var(--muted)] text-[var(--foreground)] hover:border-[var(--primary)]/40 hover:bg-[var(--accent)]'
+                      : 'cursor-default border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)]',
+                  )}
+                >
+                  <Timer className="h-4 w-4" />
+                  <span>{getDelayLabel(step, index === 0)}</span>
+                  {index > 0 && <Pencil className="h-3 w-3 text-[var(--muted-foreground)]" />}
+                </button>
+
+                {/* Inline delay editor */}
+                {editingDelayIndex === index && (
+                  <div className="mb-3 flex items-center gap-3 rounded-lg border bg-[var(--background)] px-4 py-3 shadow-sm">
+                    <span className="text-sm text-[var(--muted-foreground)]">Esperar</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={step.delay_days}
+                      onChange={(e) => updateStep(index, { ...step, delay_days: parseInt(e.target.value, 10) || 0 })}
+                      className="w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span className="text-sm text-[var(--muted-foreground)]">dias</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={step.delay_hours}
+                      onChange={(e) => updateStep(index, { ...step, delay_hours: parseInt(e.target.value, 10) || 0 })}
+                      className="w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span className="text-sm text-[var(--muted-foreground)]">horas</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Step editor card */}
+              <AutoEmailStepEditor
+                step={step}
+                stepNumber={index + 1}
+                isFirst={index === 0}
+                hideDelay
+                onChange={(updated) => updateStep(index, updated)}
+                onRemove={() => removeStep(index)}
+                cadenceId={cadence?.id}
+              />
+            </div>
+          ))}
+        </div>
 
         {isEditable && (
-          <Button variant="outline" className="w-full" onClick={addStep}>
+          <Button variant="outline" className="mt-4 w-full" onClick={addStep}>
             <Plus className="mr-2 h-4 w-4" />
             Adicionar Step
           </Button>

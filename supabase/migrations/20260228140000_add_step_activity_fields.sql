@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE cadence_steps
+  ADD COLUMN IF NOT EXISTS activity_name TEXT,
+  ADD COLUMN IF NOT EXISTS instructions TEXT;
+
+COMMIT;

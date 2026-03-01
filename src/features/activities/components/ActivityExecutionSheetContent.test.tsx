@@ -22,6 +22,20 @@ vi.mock('../actions/fetch-whatsapp-templates', () => ({
   }),
 }));
 
+vi.mock('@/features/cadences/actions/fetch-vendor-variables', () => ({
+  fetchVendorVariables: vi.fn().mockResolvedValue({
+    success: true,
+    data: { nome_vendedor: 'Test User', email_vendedor: 'test@test.com' },
+  }),
+}));
+
+vi.mock('../actions/fetch-gmail-signature', () => ({
+  fetchGmailSignature: vi.fn().mockResolvedValue({
+    success: true,
+    data: null,
+  }),
+}));
+
 import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
 
 const baseLead = {
@@ -64,6 +78,8 @@ function makeActivity(channel: string, overrides: Partial<PendingActivity> = {})
     nextStepDue: new Date().toISOString(),
     isCurrentStep: true,
     lead: baseLead,
+    activityName: null,
+    callScript: null,
     ...overrides,
   };
 }

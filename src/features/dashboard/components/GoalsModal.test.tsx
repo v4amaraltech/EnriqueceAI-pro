@@ -40,7 +40,8 @@ describe('GoalsModal', () => {
 
   it('renders title with month name', async () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
-    expect(await screen.findByText('Metas Fevereiro')).toBeInTheDocument();
+    const titles = await screen.findAllByText('Metas Fevereiro');
+    expect(titles.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows loading state initially', () => {

@@ -113,8 +113,19 @@ export function DialerCallPanel({
         </Badge>
         <span className="text-xs text-[var(--muted-foreground)]">
           Passo {item.stepOrder} de {item.totalSteps}
+          {item.activityName ? ` · ${item.activityName}` : ''}
         </span>
       </div>
+
+      {/* Call script / Roteiro */}
+      {item.callScript && (
+        <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            Roteiro da Ligação
+          </p>
+          <p className="whitespace-pre-wrap text-sm">{item.callScript}</p>
+        </div>
+      )}
 
       {/* Call section — centered */}
       <div className="flex flex-col items-center py-6">

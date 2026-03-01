@@ -63,6 +63,8 @@ export interface CallSettingsRow {
   default_call_type: CallType;
   significant_threshold_seconds: number;
   daily_call_target: number;
+  dialer_simultaneous_phones: number;
+  dialer_daily_limit_per_lead: number;
   created_at: string;
   updated_at: string;
 }

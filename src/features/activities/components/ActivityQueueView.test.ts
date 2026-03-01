@@ -71,6 +71,8 @@ function makeActivity(overrides: Partial<PendingActivity> = {}): PendingActivity
     nextStepDue: new Date(Date.now() - 30 * 60000).toISOString(), // 30 min ago (not overdue)
     isCurrentStep: true,
     lead: baseLead,
+    activityName: null,
+    callScript: null,
     ...overrides,
   };
 }

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, ThreeCPlusConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
@@ -32,6 +32,7 @@ vi.mock('../hooks/useEvolutionWhatsApp', () => ({
 const gmailConnected: GmailConnectionSafe = {
   id: 'gmail-1',
   email_address: 'user@gmail.com',
+  custom_signature: null,
   status: 'connected',
   created_at: '2026-02-15T10:00:00Z',
   updated_at: '2026-02-15T10:00:00Z',
@@ -64,7 +65,17 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null, evolutionInstance: null };
+const threecplusConnected: ThreeCPlusConnectionSafe = {
+  id: 'voip-2',
+  extension: '1001',
+  base_url: 'https://3c.fluxoti.com/api/v1',
+  has_api_token: true,
+  status: 'connected',
+  created_at: '2026-02-15T10:00:00Z',
+  updated_at: '2026-02-15T10:00:00Z',
+};
+
+const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null, threecplus: null, evolutionInstance: null };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {
@@ -75,13 +86,12 @@ describe('IntegrationsView', () => {
   it('should show unified Google card with description', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('Google')).toBeInTheDocument();
-    expect(screen.getByText('Email e Agenda')).toBeInTheDocument();
+    expect(screen.getByText(/sincronizar e gerenciar seus compromissos/)).toBeInTheDocument();
   });
 
   it('should show single "Conectar Google" button when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('Conectar Google')).toBeInTheDocument();
-    expect(screen.getByText(/enviar e ler emails.*agendar reuniões/)).toBeInTheDocument();
   });
 
   it('should show WhatsApp card', () => {
@@ -91,7 +101,7 @@ describe('IntegrationsView', () => {
 
   it('should show email address when Gmail connected', () => {
     render(<IntegrationsView {...defaultProps} gmail={gmailConnected} />);
-    expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText(/user@gmail\.com/)).toBeInTheDocument();
   });
 
   it('should show connected status for Google', () => {
@@ -104,9 +114,9 @@ describe('IntegrationsView', () => {
     expect(screen.getAllByText('Desconectar').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show WhatsApp subtitle when not connected', () => {
+  it('should show WhatsApp description when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Envio via WhatsApp API')).toBeInTheDocument();
+    expect(screen.getByText(/Integre o WhatsApp para acessar/)).toBeInTheDocument();
   });
 
   it('should show error status for Google when Gmail has error', () => {
@@ -121,7 +131,7 @@ describe('IntegrationsView', () => {
 
   it('should show connected status when only calendar connected', () => {
     render(<IntegrationsView {...defaultProps} calendar={calendarConnected} />);
-    expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText(/user@gmail\.com/)).toBeInTheDocument();
     expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -133,7 +143,7 @@ describe('IntegrationsView', () => {
         calendar={calendarConnected}
       />,
     );
-    expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText(/user@gmail\.com/)).toBeInTheDocument();
     expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -150,18 +160,20 @@ describe('IntegrationsView', () => {
   it('should show API4Com card with description', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('API4Com')).toBeInTheDocument();
-    expect(screen.getByText('Discador VoIP')).toBeInTheDocument();
+    expect(screen.getByText(/Integração automática com sistema de ligações/)).toBeInTheDocument();
   });
 
-  it('should show connect button for API4Com when not connected', () => {
+  it('should show connect buttons when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    // Both WhatsApp and API4Com show "Conectar" when not connected
-    expect(screen.getAllByText('Conectar').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Conectar WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('Conectar API4Com')).toBeInTheDocument();
+    expect(screen.getByText('Conectar 3CPlus')).toBeInTheDocument();
+    expect(screen.getByText('Conectar Google')).toBeInTheDocument();
   });
 
   it('should show ramal and Gerenciar button when API4Com connected', () => {
     render(<IntegrationsView {...defaultProps} api4com={api4comConnected} />);
-    expect(screen.getByText('Ramal 1014')).toBeInTheDocument();
+    expect(screen.getByText(/Ramal 1014/)).toBeInTheDocument();
     expect(screen.getByText('Gerenciar')).toBeInTheDocument();
   });
 
@@ -175,6 +187,32 @@ describe('IntegrationsView', () => {
       <IntegrationsView
         {...defaultProps}
         api4com={{ ...api4comConnected, status: 'error' }}
+      />,
+    );
+    expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show 3CPlus card with description', () => {
+    render(<IntegrationsView {...defaultProps} />);
+    expect(screen.getByText('3CPlus')).toBeInTheDocument();
+  });
+
+  it('should show extension and Gerenciar button when 3CPlus connected', () => {
+    render(<IntegrationsView {...defaultProps} threecplus={threecplusConnected} />);
+    expect(screen.getByText(/Extensão 1001/)).toBeInTheDocument();
+    expect(screen.getAllByText('Gerenciar').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show connected status for 3CPlus', () => {
+    render(<IntegrationsView {...defaultProps} threecplus={threecplusConnected} />);
+    expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show error status for 3CPlus when error', () => {
+    render(
+      <IntegrationsView
+        {...defaultProps}
+        threecplus={{ ...threecplusConnected, status: 'error' }}
       />,
     );
     expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);

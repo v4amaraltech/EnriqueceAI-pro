@@ -97,4 +97,6 @@ export interface TimelineEntry {
   created_at: string;
   cadence_name?: string;
   step_order?: number;
+  step_activity_name?: string;
+  step_instructions?: string;
 }

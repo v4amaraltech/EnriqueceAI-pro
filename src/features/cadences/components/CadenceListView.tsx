@@ -230,7 +230,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
               Criar nova
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuItem onClick={() => router.push('/cadences/new')}>
               <Zap className="mr-2 h-4 w-4 text-blue-500" />
               Cadência Padrão

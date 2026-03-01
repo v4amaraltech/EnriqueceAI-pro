@@ -27,6 +27,36 @@ interface TemplateEditorProps {
   template?: MessageTemplateRow;
 }
 
+/**
+ * Strips HTML tags and converts block elements to newlines for plain-text editing.
+ */
+function stripHtml(html: string): string {
+  // Replace closing block tags with newlines, then strip all remaining tags
+  return html
+    .replace(/<\/p>\s*<p>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Converts plain text with newlines to HTML for email rendering.
+ */
+function plainTextToHtml(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line ? `<p>${line}</p>` : '<br/>'))
+    .join('');
+}
+
 const sampleLeadData: Record<string, string> = {
   nome_fantasia: 'Acme Corp',
   razao_social: 'Acme Corporation LTDA',
@@ -47,14 +77,14 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
   const [name, setName] = useState(template?.name ?? '');
   const [channel, setChannel] = useState<ChannelType>(template?.channel ?? 'email');
   const [subject, setSubject] = useState(template?.subject ?? '');
-  const [body, setBody] = useState(template?.body ?? '');
+  const [body, setBody] = useState(() => stripHtml(template?.body ?? ''));
 
   const isEditing = !!template;
   const isSystem = template?.is_system ?? false;
 
   const detectedVars = extractVariables(`${subject} ${body}`);
   const previewSubject = renderTemplate(subject, sampleLeadData);
-  const previewBody = renderTemplate(body, sampleLeadData);
+  const previewBody = renderTemplate(plainTextToHtml(body), sampleLeadData);
 
   function insertVariable(varName: string) {
     const insertion = `{{${varName}}}`;
@@ -63,18 +93,22 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
 
   function handleSave() {
     startTransition(async () => {
-      const data = { name, channel, subject: channel === 'email' ? subject : null, body };
+      try {
+        const htmlBody = channel === 'email' ? plainTextToHtml(body) : body;
+        const data = { name, channel, subject: channel === 'email' ? subject : null, body: htmlBody };
 
-      const result = isEditing
-        ? await updateTemplate(template.id, data)
-        : await createTemplate(data);
+        const result = isEditing
+          ? await updateTemplate(template.id, data)
+          : await createTemplate(data);
 
-      if (result.success) {
-        toast.success(isEditing ? 'Template atualizado' : 'Template criado');
-        router.push('/templates');
-        router.refresh();
-      } else {
-        toast.error(result.error);
+        if (result.success) {
+          toast.success(isEditing ? 'Template atualizado' : 'Template criado');
+          router.push('/templates');
+        } else {
+          toast.error(result.error);
+        }
+      } catch {
+        toast.error('Erro inesperado ao salvar template');
       }
     });
   }
@@ -100,25 +134,26 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
             <CardTitle className="text-base">Configuração</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do template</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Primeiro Contato"
-                disabled={isSystem}
-              />
-            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do template</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Primeiro Contato"
+                  disabled={isSystem}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="channel">Canal</Label>
+              <div className="space-y-2">
+                <Label htmlFor="channel">Canal</Label>
               <Select
                 value={channel}
                 onValueChange={(v) => setChannel(v as ChannelType)}
                 disabled={isSystem || isEditing}
               >
-                <SelectTrigger id="channel">
+                <SelectTrigger id="channel" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -126,6 +161,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
             </div>
 
             {channel === 'email' && (
@@ -224,9 +260,10 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
               )}
               <div>
                 <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Mensagem:</p>
-                <div className="whitespace-pre-wrap rounded-md border bg-[var(--muted)] p-4 text-sm">
-                  {previewBody || <span className="text-[var(--muted-foreground)]">Corpo vazio</span>}
-                </div>
+                <div
+                  className="prose prose-sm max-w-none rounded-md border bg-[var(--muted)] p-4 [&_p]:my-3"
+                  dangerouslySetInnerHTML={{ __html: previewBody || '<span class="text-muted-foreground">Corpo vazio</span>' }}
+                />
               </div>
               <div>
                 <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Dados do lead de exemplo:</p>

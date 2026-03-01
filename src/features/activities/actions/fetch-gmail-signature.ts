@@ -10,6 +10,7 @@ interface GmailConnection {
   refresh_token_encrypted: string;
   token_expires_at: string;
   email_address: string;
+  custom_signature: string | null;
   status: string;
 }
 
@@ -82,6 +83,11 @@ export async function fetchGmailSignature(): Promise<ActionResult<string>> {
 
   if (!connection) {
     return { success: true, data: '' };
+  }
+
+  // Priority: custom signature > Gmail API
+  if (connection.custom_signature) {
+    return { success: true, data: connection.custom_signature };
   }
 
   let accessToken = connection.access_token_encrypted;

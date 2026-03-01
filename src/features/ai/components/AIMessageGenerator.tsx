@@ -109,7 +109,7 @@ export function AIMessageGenerator({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className={`max-h-[85vh] overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl ring-1 ring-white/10 ${isGenerated ? '!max-w-[900px]' : 'max-w-2xl'}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[var(--primary)]" />
@@ -117,80 +117,82 @@ export function AIMessageGenerator({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Config row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Canal</Label>
-              <Select
-                value={channel}
-                onValueChange={(v) => { setChannel(v as ChannelTarget); handleReset(); }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(CHANNEL_LABELS) as ChannelTarget[]).map((ch) => (
-                    <SelectItem key={ch} value={ch}>
-                      {CHANNEL_LABELS[ch]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className={isGenerated ? 'grid min-h-0 grid-cols-[340px_1fr] gap-6' : 'space-y-4'}>
+          {/* Left column: config */}
+          <div className="space-y-3">
+            {/* Config row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Canal</Label>
+                <Select
+                  value={channel}
+                  onValueChange={(v) => { setChannel(v as ChannelTarget); handleReset(); }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(CHANNEL_LABELS) as ChannelTarget[]).map((ch) => (
+                      <SelectItem key={ch} value={ch}>
+                        {CHANNEL_LABELS[ch]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Tom</Label>
+                <Select
+                  value={tone}
+                  onValueChange={(v) => { setTone(v as ToneOption); handleReset(); }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(TONE_LABELS) as ToneOption[]).map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {TONE_LABELS[t]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Tom</Label>
-              <Select
-                value={tone}
-                onValueChange={(v) => { setTone(v as ToneOption); handleReset(); }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TONE_LABELS) as ToneOption[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {TONE_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            {/* Lead context preview */}
+            <div className="rounded-md border bg-[var(--muted)] p-2.5">
+              <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Contexto do Lead</p>
+              <p className="text-sm font-medium">
+                {leadContext.nome_fantasia ?? leadContext.razao_social}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {leadContext.porte && <Badge variant="outline" className="text-xs">{leadContext.porte}</Badge>}
+                {leadContext.cnae && <Badge variant="outline" className="text-xs">{leadContext.cnae}</Badge>}
+                {leadContext.endereco?.cidade && (
+                  <Badge variant="outline" className="text-xs">
+                    {leadContext.endereco.cidade}/{leadContext.endereco.uf}
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Lead context preview */}
-          <div className="rounded-md border bg-[var(--muted)] p-3">
-            <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Contexto do Lead</p>
-            <p className="text-sm font-medium">
-              {leadContext.nome_fantasia ?? leadContext.razao_social}
-            </p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {leadContext.porte && <Badge variant="outline" className="text-xs">{leadContext.porte}</Badge>}
-              {leadContext.cnae && <Badge variant="outline" className="text-xs">{leadContext.cnae}</Badge>}
-              {leadContext.endereco?.cidade && (
-                <Badge variant="outline" className="text-xs">
-                  {leadContext.endereco.cidade}/{leadContext.endereco.uf}
-                </Badge>
-              )}
+            {/* Additional context */}
+            <div className="space-y-1">
+              <Label htmlFor="ai-context">Contexto adicional (opcional)</Label>
+              <Textarea
+                id="ai-context"
+                value={additionalContext}
+                onChange={(e) => setAdditionalContext(e.target.value)}
+                placeholder="Ex: Oferecer desconto de 20%, mencionar evento do setor..."
+                rows={2}
+              />
             </div>
-          </div>
 
-          {/* Additional context */}
-          <div className="space-y-2">
-            <Label htmlFor="ai-context">Contexto adicional (opcional)</Label>
-            <Textarea
-              id="ai-context"
-              value={additionalContext}
-              onChange={(e) => setAdditionalContext(e.target.value)}
-              placeholder="Ex: Oferecer desconto de 20%, mencionar evento do setor..."
-              rows={2}
-            />
-          </div>
-
-          {/* Generate button */}
-          {!isGenerated && (
+            {/* Generate / Regenerate button */}
             <Button
               className="w-full"
+              variant={isGenerated ? 'outline' : 'default'}
               onClick={handleGenerate}
               disabled={isPending}
             >
@@ -199,6 +201,11 @@ export function AIMessageGenerator({
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   Gerando...
                 </>
+              ) : isGenerated ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Regenerar
+                </>
               ) : (
                 <>
                   <Wand2 className="mr-2 h-4 w-4" />
@@ -206,17 +213,36 @@ export function AIMessageGenerator({
                 </>
               )}
             </Button>
-          )}
 
-          {/* Generated preview */}
+            {/* Usage counter */}
+            {usage && (
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Uso hoje: {usage.used} / {usage.limit === -1 ? '∞' : usage.limit} gerações
+                {usage.remaining !== -1 && ` (${usage.remaining} restantes)`}
+              </p>
+            )}
+          </div>
+
+          {/* Right column: generated preview */}
           {isGenerated && (
-            <div className="space-y-3">
+            <div className="flex min-h-0 flex-col gap-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Mensagem Gerada</p>
-                <Badge variant="secondary" className="text-xs">
-                  <Sparkles className="mr-1 h-3 w-3" />
-                  IA
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCopy}>
+                    {copied ? (
+                      <><Check className="mr-1 h-3.5 w-3.5" /> Copiado</>
+                    ) : (
+                      <><Copy className="mr-1 h-3.5 w-3.5" /> Copiar</>
+                    )}
+                  </Button>
+                  {onSaveAsTemplate && (
+                    <Button size="sm" onClick={handleSaveAsTemplate}>
+                      <Save className="mr-1 h-3.5 w-3.5" />
+                      Usar no Template
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {channel === 'email' && (
@@ -231,48 +257,18 @@ export function AIMessageGenerator({
                 </div>
               )}
 
-              <div className="space-y-1">
+              <div className="flex min-h-0 flex-1 flex-col gap-1">
                 <Label htmlFor="ai-body">Corpo</Label>
                 <Textarea
                   id="ai-body"
+                  className="min-h-0 flex-1 resize-none"
                   value={generatedBody}
                   onChange={(e) => setGeneratedBody(e.target.value)}
-                  rows={8}
                 />
               </div>
             </div>
           )}
-
-          {/* Usage counter */}
-          {usage && (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Uso hoje: {usage.used} / {usage.limit === -1 ? '∞' : usage.limit} gerações
-              {usage.remaining !== -1 && ` (${usage.remaining} restantes)`}
-            </p>
-          )}
         </div>
-
-        {isGenerated && (
-          <DialogFooter className="flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isPending}>
-              <RefreshCw className={`mr-1 h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
-              Regenerar
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleCopy}>
-              {copied ? (
-                <><Check className="mr-1 h-4 w-4" /> Copiado</>
-              ) : (
-                <><Copy className="mr-1 h-4 w-4" /> Copiar</>
-              )}
-            </Button>
-            {onSaveAsTemplate && (
-              <Button variant="outline" size="sm" onClick={handleSaveAsTemplate}>
-                <Save className="mr-1 h-4 w-4" />
-                Salvar como Template
-              </Button>
-            )}
-          </DialogFooter>
-        )}
       </DialogContent>
     </Dialog>
   );

@@ -127,18 +127,19 @@ export function getMockRankingData(): RankingData {
 export function getMockInsightsData(): InsightsData {
   return {
     lossReasons: [
-      { reason: 'Sem orçamento', count: 23, percent: 29 },
-      { reason: 'Já usa concorrente', count: 18, percent: 23 },
+      { reason: 'Sem interesse', count: 23, percent: 29 },
+      { reason: 'Sem budget', count: 18, percent: 23 },
       { reason: 'Sem resposta', count: 15, percent: 19 },
       { reason: 'Timing ruim', count: 11, percent: 14 },
-      { reason: 'Não é decisor', count: 8, percent: 10 },
+      { reason: 'Concorrente escolhido', count: 8, percent: 10 },
       { reason: 'Outros', count: 4, percent: 5 },
     ],
     conversionByOrigin: [
-      { origin: 'Prospecção Fria - SaaS', converted: 18, lost: 42 },
-      { origin: 'Follow-up Inbound', converted: 12, lost: 8 },
-      { origin: 'Reativação Q4', converted: 7, lost: 15 },
-      { origin: 'ABM Enterprise', converted: 5, lost: 3 },
+      { origin: 'Outbound', converted: 18, lost: 42 },
+      { origin: 'Inbound Marketing', converted: 12, lost: 8 },
+      { origin: 'LinkedIn', converted: 7, lost: 5 },
+      { origin: 'Indicação', converted: 5, lost: 1 },
+      { origin: 'Site', converted: 3, lost: 2 },
     ],
   };
 }

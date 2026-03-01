@@ -123,7 +123,7 @@ describe('fetchConversionByOrigin', () => {
     expect(result).toEqual([]);
   });
 
-  it('should group by cadence and count qualified vs lost', async () => {
+  it('should group by lead_source and count qualified vs lost', async () => {
     const enrollmentChain = createChainMock({
       data: [
         { lead_id: 'l1', cadence_id: 'c1' },
@@ -133,22 +133,15 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'qualified' },
-        { id: 'l2', status: 'unqualified' },
-        { id: 'l3', status: 'qualified' },
-      ],
-    });
-    const cadencesChain = createChainMock({
-      data: [
-        { id: 'c1', name: 'Inbound' },
-        { id: 'c2', name: 'Outbound' },
+        { id: 'l1', status: 'qualified', lead_source: 'cold_outbound' },
+        { id: 'l2', status: 'unqualified', lead_source: 'cold_outbound' },
+        { id: 'l3', status: 'qualified', lead_source: 'linkedin' },
       ],
     });
 
     const supabase = createMockSupabase((table) => {
       if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'leads') return leadsChain;
-      if (table === 'cadences') return cadencesChain;
       return createChainMock();
     });
 
@@ -156,13 +149,13 @@ describe('fetchConversionByOrigin', () => {
 
     expect(result).toHaveLength(2);
 
-    const inbound = result.find((e) => e.origin === 'Inbound');
-    expect(inbound?.converted).toBe(1);
-    expect(inbound?.lost).toBe(1);
+    const coldOutbound = result.find((e) => e.origin === 'Outbound');
+    expect(coldOutbound?.converted).toBe(1);
+    expect(coldOutbound?.lost).toBe(1);
 
-    const outbound = result.find((e) => e.origin === 'Outbound');
-    expect(outbound?.converted).toBe(1);
-    expect(outbound?.lost).toBe(0);
+    const linkedin = result.find((e) => e.origin === 'LinkedIn');
+    expect(linkedin?.converted).toBe(1);
+    expect(linkedin?.lost).toBe(0);
   });
 
   it('should skip leads with non-terminal status (new, contacted)', async () => {
@@ -174,24 +167,19 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'new' },
-        { id: 'l2', status: 'contacted' },
+        { id: 'l1', status: 'new', lead_source: 'cold_outbound' },
+        { id: 'l2', status: 'contacted', lead_source: 'linkedin' },
       ],
-    });
-    const cadencesChain = createChainMock({
-      data: [{ id: 'c1', name: 'Cadence 1' }],
     });
 
     const supabase = createMockSupabase((table) => {
       if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'leads') return leadsChain;
-      if (table === 'cadences') return cadencesChain;
       return createChainMock();
     });
 
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
-    // No terminal statuses, so no entries with converted/lost > 0
     expect(result).toHaveLength(0);
   });
 
@@ -206,51 +194,42 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'qualified' },
-        { id: 'l2', status: 'qualified' },
-        { id: 'l3', status: 'unqualified' },
-        { id: 'l4', status: 'archived' },
-      ],
-    });
-    const cadencesChain = createChainMock({
-      data: [
-        { id: 'c1', name: 'Small' },
-        { id: 'c2', name: 'Big' },
+        { id: 'l1', status: 'qualified', lead_source: 'indicacao' },
+        { id: 'l2', status: 'qualified', lead_source: 'cold_outbound' },
+        { id: 'l3', status: 'unqualified', lead_source: 'cold_outbound' },
+        { id: 'l4', status: 'archived', lead_source: 'cold_outbound' },
       ],
     });
 
     const supabase = createMockSupabase((table) => {
       if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'leads') return leadsChain;
-      if (table === 'cadences') return cadencesChain;
       return createChainMock();
     });
 
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
-    expect(result[0]?.origin).toBe('Big'); // 3 total
-    expect(result[1]?.origin).toBe('Small'); // 1 total
+    expect(result[0]?.origin).toBe('Outbound'); // 3 total
+    expect(result[1]?.origin).toBe('Indicação'); // 1 total
   });
 
-  it('should use "Desconhecida" for unknown cadence ids', async () => {
+  it('should fallback to "Outro" for leads without lead_source', async () => {
     const enrollmentChain = createChainMock({
-      data: [{ lead_id: 'l1', cadence_id: 'c-unknown' }],
+      data: [{ lead_id: 'l1', cadence_id: 'c1' }],
     });
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', status: 'qualified' }],
+      data: [{ id: 'l1', status: 'qualified', lead_source: null }],
     });
-    const cadencesChain = createChainMock({ data: [] });
 
     const supabase = createMockSupabase((table) => {
       if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'leads') return leadsChain;
-      if (table === 'cadences') return cadencesChain;
       return createChainMock();
     });
 
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
-    expect(result[0]?.origin).toBe('Desconhecida');
+    expect(result[0]?.origin).toBe('Outro');
   });
 });
 

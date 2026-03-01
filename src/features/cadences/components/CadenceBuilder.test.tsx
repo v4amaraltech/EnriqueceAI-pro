@@ -20,7 +20,7 @@ vi.mock('../actions/save-timeline-steps', () => ({
 }));
 
 vi.mock('./CadenceTimeline', () => ({
-  CadenceTimeline: ({ days, sidebarSlot }: { days: { day: number; steps: unknown[] }[]; sidebarSlot?: React.ReactNode }) => (
+  CadenceTimeline: ({ days, sidebarSlot, onStepClick: _onStepClick }: { days: { day: number; steps: unknown[] }[]; sidebarSlot?: React.ReactNode; onStepClick?: (step: unknown) => void }) => (
     <div data-testid="cadence-timeline">
       Timeline ({days.reduce((sum, d) => sum + d.steps.length, 0)} steps)
       {sidebarSlot}
@@ -41,6 +41,10 @@ vi.mock('./ActivityTypeSidebar', () => ({
 
 vi.mock('./EnrollmentsList', () => ({
   EnrollmentsList: () => <div data-testid="enrollments-list">Enrollments</div>,
+}));
+
+vi.mock('./StepEditorDialog', () => ({
+  StepEditorDialog: () => null,
 }));
 
 function createTemplate(overrides: Partial<MessageTemplateRow> = {}): MessageTemplateRow {
@@ -144,6 +148,8 @@ describe('CadenceBuilder', () => {
           delay_days: 0,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: { id: 'tmpl-1', name: 'Primeiro Contato', org_id: 'org-1', channel: 'email', subject: 'Olá', body: 'Corpo', variables_used: [], is_system: false, created_by: 'user-1', created_at: '2026-02-15T10:00:00Z', updated_at: '2026-02-15T10:00:00Z' },
         },
@@ -156,6 +162,8 @@ describe('CadenceBuilder', () => {
           delay_days: 2,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: null,
         },
@@ -179,6 +187,8 @@ describe('CadenceBuilder', () => {
           delay_days: 0,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: null,
         },
@@ -191,6 +201,8 @@ describe('CadenceBuilder', () => {
           delay_days: 1,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: null,
         },
@@ -226,6 +238,8 @@ describe('CadenceBuilder', () => {
           delay_days: 0,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: null,
         },
@@ -238,6 +252,8 @@ describe('CadenceBuilder', () => {
           delay_days: 1,
           delay_hours: 0,
           ai_personalization: false,
+          activity_name: null,
+          instructions: null,
           created_at: '2026-02-15T10:00:00Z',
           template: null,
         },

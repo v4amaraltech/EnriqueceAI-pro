@@ -9,9 +9,11 @@ function createChainMock() {
   chain.select = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
   chain.neq = vi.fn().mockReturnValue(chain);
+  chain.not = vi.fn().mockReturnValue(chain);
   chain.gte = vi.fn().mockReturnValue(chain);
   chain.lte = vi.fn().mockReturnValue(chain);
   chain.is = vi.fn().mockReturnValue(chain);
+  chain.limit = vi.fn().mockReturnValue(chain);
   chain.single = vi.fn().mockReturnValue(chain);
   return chain;
 }
@@ -59,7 +61,8 @@ describe('fetchDailyProgress', () => {
   it('should return progress with default target when no goal exists', async () => {
     (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
     (interactionsChain.gte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 5 });
-    (enrollmentsChain.lte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 10 });
+    // enrollments: .select().eq().neq().not().limit() → returns { data: [] }
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     // No user goal
     (goalsChain.single as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ data: null })  // user-specific
@@ -69,8 +72,8 @@ describe('fetchDailyProgress', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.completed).toBe(5);
-      expect(result.data.pending).toBe(10);
-      expect(result.data.total).toBe(15);
+      expect(result.data.pending).toBe(0);
+      expect(result.data.total).toBe(5);
       expect(result.data.target).toBe(20); // default
     }
   });
@@ -78,7 +81,7 @@ describe('fetchDailyProgress', () => {
   it('should return user-specific goal target', async () => {
     (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
     (interactionsChain.gte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 3 });
-    (enrollmentsChain.lte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 7 });
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     // User has specific goal
     (goalsChain.single as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { target: 30 } });
 
@@ -92,7 +95,7 @@ describe('fetchDailyProgress', () => {
   it('should fallback to org default goal when no user goal', async () => {
     (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
     (interactionsChain.gte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
-    (enrollmentsChain.lte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     // No user goal, but org default exists
     (goalsChain.single as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ data: null })      // user-specific

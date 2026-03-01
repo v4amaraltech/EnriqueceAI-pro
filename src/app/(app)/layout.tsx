@@ -62,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NotificationProvider userId={user.id}>
             <div className="flex h-screen flex-col">
               <TopBar />
-              <main className="flex-1 overflow-auto p-6">
+              <main className="flex-1 overflow-auto p-6" data-tour="main-content">
                 <Breadcrumbs />
                 <Suspense fallback={<PageSkeleton />}>
                   {children}

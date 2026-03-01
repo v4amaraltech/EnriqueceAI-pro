@@ -121,7 +121,7 @@ describe('AIMessageGenerator', () => {
 
     expect(await screen.findByText('Regenerar')).toBeInTheDocument();
     expect(screen.getByText('Copiar')).toBeInTheDocument();
-    expect(screen.getByText('Salvar como Template')).toBeInTheDocument();
+    expect(screen.getByText('Usar no Template')).toBeInTheDocument();
   });
 
   it('should show usage info after generation', async () => {

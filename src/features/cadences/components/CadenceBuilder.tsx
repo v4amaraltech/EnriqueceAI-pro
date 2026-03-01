@@ -30,6 +30,7 @@ import { saveTimelineSteps } from '../actions/save-timeline-steps';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
 import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
 import { EnrollmentsList } from './EnrollmentsList';
+import { StepEditorDialog } from './StepEditorDialog';
 
 interface CadenceBuilderProps {
   cadence?: CadenceDetail;
@@ -55,6 +56,8 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
       label: config?.label ?? step.channel,
       templateId: step.template_id,
       aiPersonalization: step.ai_personalization,
+      activityName: step.activity_name,
+      instructions: step.instructions,
     });
   }
 
@@ -69,7 +72,7 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
 
 // Convert DayData back to flat step inputs for saving
 function daysToStepInputs(days: DayData[]) {
-  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean }[] = [];
+  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean; activity_name?: string | null; instructions?: string | null }[] = [];
   let globalOrder = 1;
 
   for (const day of days) {
@@ -81,6 +84,8 @@ function daysToStepInputs(days: DayData[]) {
         step_order: globalOrder,
         template_id: step.templateId,
         ai_personalization: step.aiPersonalization,
+        activity_name: step.activityName,
+        instructions: step.instructions,
       });
       globalOrder++;
     }
@@ -101,6 +106,8 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
   const [autoLossReasonId, setAutoLossReasonId] = useState(cadence?.auto_loss_reason_id ?? '');
   const [generalCollapsed, setGeneralCollapsed] = useState(false);
   const [days, setDays] = useState<DayData[]>(() => stepsToDays(cadence?.steps ?? []));
+  const [editingStep, setEditingStep] = useState<TimelineStep | null>(null);
+  const [stepEditorOpen, setStepEditorOpen] = useState(false);
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
@@ -165,8 +172,24 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
     });
   }
 
+  function handleStepClick(step: TimelineStep) {
+    setEditingStep(step);
+    setStepEditorOpen(true);
+  }
+
+  function handleStepEditorSave(stepId: string, activityName: string | null, instructions: string | null) {
+    setDays((prev) =>
+      prev.map((d) => ({
+        ...d,
+        steps: d.steps.map((s) =>
+          s.id === stepId ? { ...s, activityName, instructions } : s,
+        ),
+      })),
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/cadences')}>
@@ -339,7 +362,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
           </TabsList>
           <TabsContent value="steps">
             <div className="flex gap-6 overflow-auto">
-              <CadenceTimeline days={days} onDaysChange={setDays} />
+              <CadenceTimeline days={days} onDaysChange={setDays} onStepClick={handleStepClick} />
             </div>
           </TabsContent>
           <TabsContent value="enrollments">
@@ -356,9 +379,17 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
             days={days}
             onDaysChange={setDays}
             sidebarSlot={isEditable ? <ActivityTypeSidebar /> : undefined}
+            onStepClick={handleStepClick}
           />
         </div>
       ) : null}
+
+      <StepEditorDialog
+        open={stepEditorOpen}
+        onOpenChange={setStepEditorOpen}
+        step={editingStep}
+        onSave={handleStepEditorSave}
+      />
 
       {/* Metrics */}
       {metrics && metrics.total_enrolled > 0 && (

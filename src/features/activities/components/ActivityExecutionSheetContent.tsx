@@ -203,6 +203,8 @@ export function ActivityExecutionSheetContent({
         isSending={isSending}
         onMarkDone={onMarkDone}
         onSkip={onSkip}
+        activityName={activity.activityName}
+        callScript={activity.callScript}
       />
     );
   }

@@ -24,6 +24,7 @@ interface AutoEmailStepEditorProps {
   step: AutoEmailStep;
   stepNumber: number;
   isFirst: boolean;
+  hideDelay?: boolean;
   onChange: (step: AutoEmailStep) => void;
   onRemove: () => void;
   cadenceId?: string;
@@ -45,6 +46,7 @@ export function AutoEmailStepEditor({
   step,
   stepNumber,
   isFirst,
+  hideDelay,
   onChange,
   onRemove,
 }: AutoEmailStepEditorProps) {
@@ -165,11 +167,11 @@ export function AutoEmailStepEditor({
 
       {/* Content */}
       {!collapsed && (
-        <div className={`grid ${showPreview ? 'grid-cols-[1fr_380px]' : 'grid-cols-1'}`}>
+        <div className={`grid ${showPreview ? 'grid-cols-2 gap-4' : 'grid-cols-1'}`}>
           {/* Editor column */}
-          <div className="space-y-4 p-4">
-            {/* Delay (hidden for first step) */}
-            {!isFirst && (
+          <div className="space-y-4 p-4 border-r">
+            {/* Delay (hidden for first step or when managed externally) */}
+            {!isFirst && !hideDelay && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Label htmlFor={`delay-days-${stepNumber}`} className="text-xs whitespace-nowrap">
@@ -247,7 +249,7 @@ export function AutoEmailStepEditor({
 
           {/* Preview column */}
           {showPreview && (
-            <div className="border-l">
+            <div className="overflow-y-auto">
               <EmailPreviewPanel subject={step.subject} body={step.body} />
             </div>
           )}

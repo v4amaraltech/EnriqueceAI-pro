@@ -56,6 +56,8 @@ export interface CadenceStepRow {
   delay_days: number;
   delay_hours: number;
   ai_personalization: boolean;
+  activity_name: string | null;
+  instructions: string | null;
   created_at: string;
 }
 
@@ -128,6 +130,8 @@ export interface CadenceStepInsert {
   delay_days?: number;
   delay_hours?: number;
   ai_personalization?: boolean;
+  activity_name?: string | null;
+  instructions?: string | null;
 }
 
 export interface CadenceEnrollmentInsert {

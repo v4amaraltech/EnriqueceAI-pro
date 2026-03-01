@@ -696,6 +696,7 @@ export type Database = {
         Row: {
           access_token_encrypted: string
           created_at: string
+          custom_signature: string | null
           email_address: string
           id: string
           org_id: string
@@ -708,6 +709,7 @@ export type Database = {
         Insert: {
           access_token_encrypted: string
           created_at?: string
+          custom_signature?: string | null
           email_address: string
           id?: string
           org_id: string
@@ -720,6 +722,7 @@ export type Database = {
         Update: {
           access_token_encrypted?: string
           created_at?: string
+          custom_signature?: string | null
           email_address?: string
           id?: string
           org_id?: string

@@ -10,6 +10,7 @@ export interface GmailConnectionRow {
   refresh_token_encrypted: string;
   token_expires_at: string;
   email_address: string;
+  custom_signature: string | null;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
@@ -45,6 +46,7 @@ export interface CalendarConnectionRow {
 export interface GmailConnectionSafe {
   id: string;
   email_address: string;
+  custom_signature: string | null;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
@@ -127,6 +129,16 @@ export interface EvolutionQrResponse {
   phone?: string;
   message?: string;
 }
+
+// 3CPlus (VoIP) connection types
+export type {
+  ThreeCPlusConnectionRow,
+  ThreeCPlusConnectionSafe,
+  ThreeCPlusClick2CallResponse,
+  ThreeCPlusHangupResponse,
+  ThreeCPlusCallRecord,
+  ThreeCPlusCallListResponse,
+} from './threecplus';
 
 // Re-export CRM types
 export type {

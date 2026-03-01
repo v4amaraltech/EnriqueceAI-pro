@@ -56,6 +56,8 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
       notes: null,
       fit_score: null,
     },
+    activityName: null,
+    callScript: null,
     ...overrides,
   };
 }
@@ -121,7 +123,8 @@ describe('ActivityLogView', () => {
   });
 
   it('should render table column headers', () => {
-    render(<ActivityLogView activities={[]} total={0} hasFilters={false} />);
+    const activities = [createMockActivity()];
+    render(<ActivityLogView activities={activities} total={1} hasFilters={false} />);
 
     expect(screen.getByText('Atividade')).toBeInTheDocument();
     expect(screen.getByText('Cadência')).toBeInTheDocument();

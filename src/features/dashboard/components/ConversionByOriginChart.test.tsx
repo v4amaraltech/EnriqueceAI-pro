@@ -33,7 +33,7 @@ describe('ConversionByOriginChart', () => {
       { origin: 'Inbound', converted: 5, lost: 2 },
     ];
     render(<ConversionByOriginChart data={data} />);
-    expect(screen.getByText('Conversão por Cadência')).toBeInTheDocument();
+    expect(screen.getByText('Conversão por Origem')).toBeInTheDocument();
   });
 
   it('should render bar chart component', () => {

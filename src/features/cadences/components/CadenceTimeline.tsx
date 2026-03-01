@@ -28,6 +28,8 @@ export interface TimelineStep {
   label: string;
   templateId?: string | null;
   aiPersonalization?: boolean;
+  activityName?: string | null;
+  instructions?: string | null;
 }
 
 export interface DayData {
@@ -39,6 +41,7 @@ interface CadenceTimelineProps {
   days: DayData[];
   onDaysChange: (days: DayData[]) => void;
   sidebarSlot?: React.ReactNode;
+  onStepClick?: (step: TimelineStep) => void;
 }
 
 // ── Helper: renumber steps globally ──────────────────────────────────────
@@ -57,10 +60,12 @@ function SortableStepItem({
   step,
   globalNumber,
   onRemove,
+  onStepClick,
 }: {
   step: TimelineStep;
   globalNumber: number;
   onRemove: () => void;
+  onStepClick?: (step: TimelineStep) => void;
 }) {
   const {
     attributes,
@@ -96,10 +101,16 @@ function SortableStepItem({
       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${config.bgColor}`}>
         <span className={`text-xs font-bold ${config.color}`}>{globalNumber}</span>
       </div>
-      <div className={`flex h-6 w-6 items-center justify-center rounded ${config.bgColor}`}>
-        <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-      </div>
-      <span className="flex-1 text-sm">{step.label}</span>
+      <button
+        type="button"
+        onClick={() => onStepClick?.(step)}
+        className="flex flex-1 items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-[var(--muted)] transition-colors text-left"
+      >
+        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${config.bgColor}`}>
+          <Icon className={`h-3.5 w-3.5 ${config.color}`} />
+        </div>
+        <span className="flex-1 text-sm">{step.activityName || step.label}</span>
+      </button>
       <button
         type="button"
         onClick={onRemove}
@@ -121,6 +132,7 @@ function DayContainer({
   onToggle,
   onRemoveStep,
   onDayNumberChange,
+  onStepClick,
 }: {
   dayData: DayData;
   dayIndex: number;
@@ -129,6 +141,7 @@ function DayContainer({
   onToggle: () => void;
   onRemoveStep: (stepId: string) => void;
   onDayNumberChange: (newDay: number) => void;
+  onStepClick?: (step: TimelineStep) => void;
 }) {
   const { setNodeRef } = useSortable({
     id: `day-${dayData.day}`,
@@ -175,6 +188,7 @@ function DayContainer({
                 step={step}
                 globalNumber={getGlobalStepNumber(days, dayIndex, stepIndex)}
                 onRemove={() => onRemoveStep(step.id)}
+                onStepClick={onStepClick}
               />
             ))}
           </SortableContext>
@@ -209,7 +223,7 @@ function generateStepId(): string {
   return `step-${Date.now()}-${nextStepId++}`;
 }
 
-export function CadenceTimeline({ days, onDaysChange, sidebarSlot }: CadenceTimelineProps) {
+export function CadenceTimeline({ days, onDaysChange, sidebarSlot, onStepClick }: CadenceTimelineProps) {
   const [collapsedDays, setCollapsedDays] = useState<Record<number, boolean>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeDragData, setActiveDragData] = useState<{ channel: ChannelType; label: string } | null>(null);
@@ -414,6 +428,7 @@ export function CadenceTimeline({ days, onDaysChange, sidebarSlot }: CadenceTime
             onToggle={() => toggleDay(dayData.day)}
             onRemoveStep={removeStep}
             onDayNumberChange={(newDay) => changeDayNumber(dayIndex, newDay)}
+            onStepClick={onStepClick}
           />
         ))}
 

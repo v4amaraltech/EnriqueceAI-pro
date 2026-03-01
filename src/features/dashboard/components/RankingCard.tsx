@@ -101,7 +101,7 @@ export function RankingCard({
       {data.sdrBreakdown.length > 0 && (
         <>
           {/* Column Headers */}
-          <div className="mx-6 mt-4 border-t pt-4">
+          <div className="mx-6 mt-4 border-t pb-2 pt-4">
             <div className="mb-3 flex items-center text-[11px] font-medium text-muted-foreground">
               <span className="flex-1" />
               {secondaryColumnLabel && (

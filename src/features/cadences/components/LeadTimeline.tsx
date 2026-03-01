@@ -66,16 +66,46 @@ function formatFullDate(dateStr: string): string {
   });
 }
 
-function TimelineMessageContent({ entry }: { entry: TimelineEntry }) {
+function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; isShortForm: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const hasHtml = !!entry.html_body;
   const hasContent = hasHtml || !!entry.message_content;
 
   if (!hasContent) {
+    if (entry.step_instructions) {
+      return (
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] italic">
+          {entry.step_instructions}
+        </p>
+      );
+    }
     return (
       <p className="mt-2 text-sm text-[var(--muted-foreground)] italic">
         Nenhuma anotação
       </p>
+    );
+  }
+
+  // Research, notes, phone — show full content without truncation
+  if (isShortForm) {
+    return (
+      <div className="mt-2">
+        {entry.subject && (
+          <p className="text-sm font-semibold text-[var(--foreground)]">
+            {entry.subject}
+          </p>
+        )}
+        {hasHtml ? (
+          <div
+            className="prose prose-sm max-w-none mt-1 text-sm text-[var(--muted-foreground)] [&_p]:my-1 [&_br]:block"
+            dangerouslySetInnerHTML={{ __html: entry.html_body! }}
+          />
+        ) : (
+          <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)]">
+            {entry.message_content}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -149,7 +179,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                 const channel = isNote ? noteConfig : (channelConfig[entry.channel] ?? defaultChannel);
                 const ChannelIcon = channel.icon;
                 const stepLabel = !isNote && entry.step_order != null ? ` ${entry.step_order}` : '';
-                const title = `${channel.label}${stepLabel}`;
+                const title = entry.step_activity_name || `${channel.label}${stepLabel}`;
 
                 return (
                   <div key={entry.id} className="relative flex gap-4">
@@ -176,7 +206,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                       </div>
 
                       {/* Message content */}
-                      <TimelineMessageContent entry={entry} />
+                      <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
                     </div>
                   </div>
                 );

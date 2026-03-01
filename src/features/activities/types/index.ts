@@ -43,6 +43,8 @@ export interface PendingActivity {
   nextStepDue: string;
   isCurrentStep: boolean;
   lead: ActivityLead;
+  activityName: string | null;
+  callScript: string | null;
 }
 
 // Prepared email ready for review/send

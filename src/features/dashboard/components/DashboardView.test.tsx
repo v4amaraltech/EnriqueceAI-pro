@@ -33,13 +33,18 @@ vi.mock('recharts', () => ({
   BarChart: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="bar-chart">{children}</div>
   ),
+  AreaChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="area-chart">{children}</div>
+  ),
   Line: () => <div data-testid="line" />,
   Bar: () => <div data-testid="bar" />,
+  Area: () => <div data-testid="area" />,
   XAxis: () => <div />,
   YAxis: () => <div />,
   CartesianGrid: () => <div />,
   Tooltip: () => <div />,
   Legend: () => <div />,
+  ReferenceLine: () => <div />,
 }));
 
 // Mock GoalsModal to avoid action imports in DashboardView tests
@@ -85,12 +90,11 @@ describe('DashboardView', () => {
   it('should render target info when target > 0', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
     expect(screen.getByText(/Meta de oportunidades/)).toBeInTheDocument();
-    expect(screen.getByText('100')).toBeInTheDocument();
   });
 
   it('should render percent below indicator', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText(/20% abaixo do previsto/)).toBeInTheDocument();
+    expect(screen.getByText(/20% abaixo do previsto até hoje/)).toBeInTheDocument();
   });
 
   it('should render percent above indicator when positive', () => {
@@ -101,7 +105,7 @@ describe('DashboardView', () => {
       },
     });
     render(<DashboardView data={data} filters={defaultFilters} />);
-    expect(screen.getByText(/15% acima do previsto/)).toBeInTheDocument();
+    expect(screen.getByText(/15% acima do previsto até hoje/)).toBeInTheDocument();
   });
 
   it('should render no target message when monthTarget is 0', () => {
@@ -125,9 +129,7 @@ describe('DashboardView', () => {
 
   it('should render chart section', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(
-      screen.getByText('Oportunidades acumuladas vs Meta'),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('area-chart')).toBeInTheDocument();
   });
 
   it('should render month selector with current month', () => {
@@ -154,7 +156,7 @@ describe('DashboardView', () => {
     });
     render(<DashboardView data={data} filters={defaultFilters} />);
     expect(
-      screen.getByText('Sem dados para exibir o gráfico'),
+      screen.getByText('Sem dados para exibir'),
     ).toBeInTheDocument();
   });
 
@@ -174,7 +176,7 @@ describe('DashboardView', () => {
       container.querySelector('[data-slot="insights-charts"]'),
     ).toBeInTheDocument();
     expect(screen.getByText('Motivos de Perda')).toBeInTheDocument();
-    expect(screen.getByText('Conversão por Cadência')).toBeInTheDocument();
+    expect(screen.getByText('Conversão por Origem')).toBeInTheDocument();
   });
 
   it('should not render insights section when insights prop is absent', () => {

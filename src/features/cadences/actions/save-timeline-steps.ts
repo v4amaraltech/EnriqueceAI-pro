@@ -12,6 +12,8 @@ export interface TimelineStepInput {
   step_order: number;
   template_id?: string | null;
   ai_personalization?: boolean;
+  activity_name?: string | null;
+  instructions?: string | null;
 }
 
 export async function saveTimelineSteps(
@@ -70,6 +72,8 @@ export async function saveTimelineSteps(
       delay_hours: 0,
       template_id: s.template_id ?? null,
       ai_personalization: s.ai_personalization ?? false,
+      activity_name: s.activity_name ?? null,
+      instructions: s.instructions ?? null,
     }));
 
     const { error: insertError } = await (supabase

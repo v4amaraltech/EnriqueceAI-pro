@@ -56,19 +56,20 @@ export async function fetchLeadTimeline(
     (interactions ?? []).map((i) => i.step_id).filter((id): id is string => id != null),
   )];
 
-  let stepMap: Record<string, number> = {};
+  let stepMap: Record<string, { step_order: number; activity_name: string | null; instructions: string | null }> = {};
   if (stepIds.length > 0) {
     const { data: steps } = (await (supabase
       .from('cadence_steps') as ReturnType<typeof supabase.from>)
-      .select('id, step_order')
-      .in('id', stepIds)) as { data: { id: string; step_order: number }[] | null };
+      .select('id, step_order, activity_name, instructions')
+      .in('id', stepIds)) as { data: { id: string; step_order: number; activity_name: string | null; instructions: string | null }[] | null };
     for (const s of steps ?? []) {
-      stepMap[s.id] = s.step_order;
+      stepMap[s.id] = { step_order: s.step_order, activity_name: s.activity_name, instructions: s.instructions };
     }
   }
 
   const timeline: TimelineEntry[] = (interactions ?? []).map((i) => {
     const meta = i.metadata as Record<string, unknown> | null;
+    const stepData = i.step_id ? stepMap[i.step_id] : undefined;
     return {
       id: i.id,
       type: i.type,
@@ -80,7 +81,9 @@ export async function fetchLeadTimeline(
       is_note: (meta?.is_note as boolean) ?? false,
       created_at: i.created_at,
       cadence_name: i.cadence_id ? cadenceMap[i.cadence_id] : undefined,
-      step_order: i.step_id ? stepMap[i.step_id] : undefined,
+      step_order: stepData?.step_order,
+      step_activity_name: stepData?.activity_name ?? undefined,
+      step_instructions: stepData?.instructions ?? undefined,
     };
   });
 

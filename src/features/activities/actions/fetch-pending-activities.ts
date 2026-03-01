@@ -166,6 +166,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
           nextStepDue: enrollment.next_step_due,
           isCurrentStep,
           lead: leadData,
+          activityName: step.activity_name ?? null,
+          callScript: step.instructions ?? null,
         },
       });
     }

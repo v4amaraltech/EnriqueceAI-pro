@@ -23,6 +23,7 @@ export interface GmailConnection {
   refresh_token_encrypted: string;
   token_expires_at: string;
   email_address: string;
+  custom_signature: string | null;
   status: string;
 }
 
@@ -175,21 +176,25 @@ export class EmailService {
       accessToken = refreshResult.accessToken;
     }
 
-    // Fetch Gmail signature and append to body
+    // Fetch signature: priority custom > Gmail API
     let signature = '';
-    try {
-      const sigResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/${encodeURIComponent(connection.email_address)}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      if (sigResponse.ok) {
-        const sigData = (await sigResponse.json()) as { signature?: string };
-        if (sigData.signature) {
-          signature = sigData.signature;
+    if (connection.custom_signature) {
+      signature = connection.custom_signature;
+    } else {
+      try {
+        const sigResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/${encodeURIComponent(connection.email_address)}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        if (sigResponse.ok) {
+          const sigData = (await sigResponse.json()) as { signature?: string };
+          if (sigData.signature) {
+            signature = sigData.signature;
+          }
         }
+      } catch {
+        // Signature fetch failed — send without it
       }
-    } catch {
-      // Signature fetch failed — send without it
     }
 
     // Apply tracking

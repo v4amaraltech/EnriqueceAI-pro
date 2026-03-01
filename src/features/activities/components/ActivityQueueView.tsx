@@ -9,6 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import type { PendingCallLead } from '../actions/fetch-pending-calls';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
+import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { PendingActivity } from '../types';
 
 import { ActivityEmptyState } from './ActivityEmptyState';
@@ -22,7 +23,7 @@ import { ActivityPagination } from './ActivityPagination';
 import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 import { DailyGoalCard } from './DailyGoalCard';
 import { PendingCallsSection } from './PendingCallsSection';
-import { PowerDialerTab } from './PowerDialerTab';
+import { PowerDialerTab, type CallProvider } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
 
 interface ActivityQueueViewProps {
@@ -30,6 +31,9 @@ interface ActivityQueueViewProps {
   progress: DailyProgress;
   pendingCalls: PendingCallLead[];
   dialerQueue?: DialerQueueItem[];
+  dialerStats?: DialerStats;
+  dialerPreferences?: DialerPreferences;
+  callProvider?: CallProvider;
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
 }
@@ -77,7 +81,10 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
   });
 }
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true, availableLeadsCount = 0 }: ActivityQueueViewProps) {
+const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
+const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
+
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, callProvider, showPowerDialer = true, availableLeadsCount = 0 }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
@@ -213,7 +220,12 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       </div>
 
       {activeTab === 'dialer' && showPowerDialer ? (
-        <PowerDialerTab initialQueue={dialerQueue} />
+        <PowerDialerTab
+          initialQueue={dialerQueue}
+          stats={dialerStats ?? defaultStats}
+          preferences={dialerPreferences ?? defaultPrefs}
+          callProvider={callProvider}
+        />
       ) : (
         <>
           {/* Pending calls section */}

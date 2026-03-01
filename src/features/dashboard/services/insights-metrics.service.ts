@@ -83,9 +83,19 @@ export async function fetchLossReasons(
   return entries.sort((a, b) => b.count - a.count);
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  cold_outbound: 'Outbound',
+  inbound_marketing: 'Inbound Marketing',
+  indicacao: 'Indicação',
+  linkedin: 'LinkedIn',
+  evento: 'Evento',
+  site: 'Site',
+  outro: 'Outro',
+};
+
 /**
- * Chart 2: Conversion by origin (cadence) — stacked bar chart
- * Groups leads by the cadence they were enrolled in, counts converted vs lost
+ * Chart 2: Conversion by lead source — stacked bar chart
+ * Groups leads by their lead_source field, counts converted vs lost
  */
 export async function fetchConversionByOrigin(
   supabase: SupabaseClient,
@@ -94,7 +104,7 @@ export async function fetchConversionByOrigin(
 ): Promise<ConversionByOriginEntry[]> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get enrollments with lead status in the period
+  // Get enrollments in the period (to filter leads by cadence/user if needed)
   let enrollmentQuery = supabase
     .from('cadence_enrollments')
     .select('lead_id, cadence_id')
@@ -116,61 +126,40 @@ export async function fetchConversionByOrigin(
 
   if (rows.length === 0) return [];
 
-  // Get unique lead IDs and their statuses
+  // Get unique lead IDs with status and lead_source
   const leadIds = [...new Set(rows.map((e) => e.lead_id))];
 
   const { data: leads } = (await supabase
     .from('leads')
-    .select('id, status')
+    .select('id, status, lead_source')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .in('id', leadIds)) as {
-    data: Array<{ id: string; status: string }> | null;
+    data: Array<{ id: string; status: string; lead_source: string | null }> | null;
   };
 
-  const leadStatusMap = new Map<string, string>();
-  for (const l of leads ?? []) {
-    leadStatusMap.set(l.id, l.status);
-  }
+  // Group by lead_source: count converted (qualified) vs lost (unqualified/archived)
+  const sourceStats = new Map<string, { converted: number; lost: number }>();
 
-  // Get cadence names
-  const cadenceIds = [...new Set(rows.map((e) => e.cadence_id))];
+  for (const lead of leads ?? []) {
+    const source = lead.lead_source || 'outro';
 
-  const { data: cadences } = (await supabase
-    .from('cadences')
-    .select('id, name')
-    .in('id', cadenceIds)) as {
-    data: Array<{ id: string; name: string }> | null;
-  };
-
-  const cadenceNameMap = new Map<string, string>();
-  for (const c of cadences ?? []) {
-    cadenceNameMap.set(c.id, c.name);
-  }
-
-  // Group by cadence: count converted (qualified) vs lost (unqualified/archived)
-  const cadenceStats = new Map<string, { converted: number; lost: number }>();
-
-  for (const enrollment of rows) {
-    const status = leadStatusMap.get(enrollment.lead_id);
-    if (!status) continue;
-
-    const stats = cadenceStats.get(enrollment.cadence_id) ?? { converted: 0, lost: 0 };
-
-    if (status === 'qualified') {
+    if (lead.status === 'qualified') {
+      const stats = sourceStats.get(source) ?? { converted: 0, lost: 0 };
       stats.converted++;
-    } else if (status === 'unqualified' || status === 'archived') {
+      sourceStats.set(source, stats);
+    } else if (lead.status === 'unqualified' || lead.status === 'archived') {
+      const stats = sourceStats.get(source) ?? { converted: 0, lost: 0 };
       stats.lost++;
+      sourceStats.set(source, stats);
     }
-
-    cadenceStats.set(enrollment.cadence_id, stats);
   }
 
   const entries: ConversionByOriginEntry[] = [];
-  for (const [cadenceId, stats] of cadenceStats) {
+  for (const [source, stats] of sourceStats) {
     if (stats.converted === 0 && stats.lost === 0) continue;
     entries.push({
-      origin: cadenceNameMap.get(cadenceId) ?? 'Desconhecida',
+      origin: SOURCE_LABELS[source] ?? source,
       converted: stats.converted,
       lost: stats.lost,
     });

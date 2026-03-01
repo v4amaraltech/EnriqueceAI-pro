@@ -4,13 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { ChevronDown, HelpCircle } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/features/auth/components/UserMenu';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
-import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
+import { HelpCenter } from './HelpCenter/HelpCenter';
 import { MobileNav } from './MobileNav';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -45,6 +45,7 @@ export const navSections: NavSection[] = [
       { label: 'Execução', href: '/atividades' },
       { label: 'Atividades', href: '/activities' },
       { label: 'Cadências', href: '/cadences' },
+      { label: 'Templates', href: '/templates' },
       { label: 'Leads', href: '/leads' },
       { label: 'Ajustes', href: '/settings/prospecting' },
     ],
@@ -128,13 +129,13 @@ export function TopBar() {
         <MobileNav />
 
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-2" data-tour="logo">
           <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" unoptimized />
           <span className="text-xl font-bold text-primary">Enriquece AI</span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="ml-6 hidden items-center gap-1 md:flex">
+        <nav className="ml-6 hidden items-center gap-1 md:flex" data-tour="nav">
           {navSections.map((section) =>
             section.href ? (
               <Link
@@ -157,11 +158,9 @@ export function TopBar() {
         </nav>
 
         {/* Right area */}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1" data-tour="toolbar">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" aria-label="Ajuda">
-            <HelpCircle className="h-4 w-4" />
-          </Button>
+          <HelpCenter />
           <NotificationBell />
           <UserMenu />
         </div>

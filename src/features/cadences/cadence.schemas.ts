@@ -47,6 +47,8 @@ export const createCadenceStepSchema = z.object({
   delay_days: z.number().int().min(0, 'Dias de delay não podem ser negativos').default(0),
   delay_hours: z.number().int().min(0, 'Horas de delay não podem ser negativas').default(0),
   ai_personalization: z.boolean().default(false),
+  activity_name: z.string().max(200).nullable().optional(),
+  instructions: z.string().max(5000).nullable().optional(),
 });
 
 // Cadence step update schema
@@ -57,6 +59,8 @@ export const updateCadenceStepSchema = z.object({
   delay_days: z.number().int().min(0).optional(),
   delay_hours: z.number().int().min(0).optional(),
   ai_personalization: z.boolean().optional(),
+  activity_name: z.string().max(200).nullable().optional(),
+  instructions: z.string().max(5000).nullable().optional(),
 });
 
 // Enrollment creation schema
@@ -78,6 +82,8 @@ export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 export const AVAILABLE_TEMPLATE_VARIABLES = [
   'primeiro_nome',
   'empresa',
+  'nome_fantasia',
+  'razao_social',
   'telefone',
 ] as const;
 

@@ -34,7 +34,7 @@ export const leadAddressSchema = z.object({
 });
 
 export const LEAD_SOURCE_OPTIONS = [
-  { value: 'cold_outbound', label: 'Cold Outbound' },
+  { value: 'cold_outbound', label: 'Outbound' },
   { value: 'inbound_marketing', label: 'Inbound Marketing' },
   { value: 'indicacao', label: 'Indicação' },
   { value: 'linkedin', label: 'LinkedIn' },

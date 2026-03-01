@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 
-import { Pause, Phone, Play, SkipForward } from 'lucide-react';
+import { Pause, Phone, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -14,30 +14,42 @@ import {
 } from '@/shared/components/ui/tooltip';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
+import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import { completeDialerCall } from '../actions/complete-dialer-call';
 import {
   initiateApi4ComCall,
   hangupApi4ComCall,
 } from '@/features/calls/actions/initiate-api4com-call';
+import {
+  initiateThreeCPlusCall,
+  hangupThreeCPlusCall,
+} from '@/features/calls/actions/initiate-threecplus-call';
 
 import { DialerCallPanel, type CallState } from './DialerCallPanel';
 import { DialerProgressBar } from './DialerProgressBar';
 import { DialerQueueList, type DialerItemStatus } from './DialerQueueList';
+import { PowerDialerIdleLayout } from './PowerDialerIdleLayout';
+
+export type CallProvider = 'api4com' | 'threecplus' | null;
 
 interface PowerDialerTabProps {
   initialQueue: DialerQueueItem[];
+  stats: DialerStats;
+  preferences: DialerPreferences;
+  callProvider?: CallProvider;
 }
 
-export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
+export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, callProvider = 'api4com' }: PowerDialerTabProps) {
   const [queue] = useState<DialerQueueItem[]>(initialQueue);
+  const [currentPreferences, setCurrentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [itemStatuses, setItemStatuses] = useState<Map<string, DialerItemStatus>>(new Map());
   const [isPending, startTransition] = useTransition();
 
-  // API4COM call state
+  // Call state (works for both API4COM and 3CPlus)
   const [callState, setCallState] = useState<CallState>('idle');
-  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
+  const [providerCallId, setProviderCallId] = useState<string | null>(null);
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -58,7 +70,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
 
   function resetCallState() {
     setCallState('idle');
-    setApi4comCallId(null);
+    setProviderCallId(null);
   }
 
   function handleStart() {
@@ -92,38 +104,63 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
 
   function handleInitiateCall() {
     if (!currentItem?.phone) return;
+    if (!callProvider) {
+      toast.error('Nenhum provedor de telefonia conectado. Configure em Integrações.');
+      return;
+    }
 
     startTransition(async () => {
       setCallState('calling');
 
-      const result = await initiateApi4ComCall({
-        phone: currentItem.phone ?? '',
-        leadId: currentItem.leadId,
-      });
+      if (callProvider === 'threecplus') {
+        const result = await initiateThreeCPlusCall({
+          phone: currentItem.phone ?? '',
+          leadId: currentItem.leadId,
+        });
 
-      if (!result.success) {
-        toast.error(result.error);
-        setCallState('idle');
-        return;
+        if (!result.success) {
+          toast.error(result.error);
+          setCallState('idle');
+          return;
+        }
+
+        setProviderCallId(result.data.threecplusCallId);
+      } else {
+        const result = await initiateApi4ComCall({
+          phone: currentItem.phone ?? '',
+          leadId: currentItem.leadId,
+        });
+
+        if (!result.success) {
+          toast.error(result.error);
+          setCallState('idle');
+          return;
+        }
+
+        setProviderCallId(result.data.api4comId);
       }
 
-      setApi4comCallId(result.data.api4comId);
-      // Transition to connected — API4COM rings the ramal first, then the lead
-      // We consider "connected" once the API accepted the call
       setCallState('connected');
     });
   }
 
   function handleHangup() {
-    if (!api4comCallId) {
+    if (!providerCallId) {
       setCallState('ended');
       return;
     }
 
     startTransition(async () => {
-      const result = await hangupApi4ComCall(api4comCallId);
-      if (!result.success) {
-        toast.error(result.error);
+      if (callProvider === 'threecplus') {
+        const result = await hangupThreeCPlusCall(providerCallId);
+        if (!result.success) {
+          toast.error(result.error);
+        }
+      } else {
+        const result = await hangupApi4ComCall(providerCallId);
+        if (!result.success) {
+          toast.error(result.error);
+        }
       }
       setCallState('ended');
     });
@@ -170,21 +207,20 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
     if (!isActive) setIsActive(true);
   }
 
-  // Empty state
-  if (queue.length === 0) {
+  // Idle state: show Meetime-style layout
+  if (!isActive) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--muted)]">
-          <Phone className="h-8 w-8 text-[var(--muted-foreground)]" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold">Nenhuma ligacao pendente</h3>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-          Nao ha leads com passo de ligacao pendente nas suas cadencias.
-        </p>
-      </div>
+      <PowerDialerIdleLayout
+        queue={queue}
+        stats={initialStats}
+        preferences={currentPreferences}
+        onStart={handleStart}
+        onPreferencesSaved={setCurrentPreferences}
+      />
     );
   }
 
+  // Active state: existing call flow
   return (
     <div className="space-y-4">
       {/* Progress bar */}
@@ -198,28 +234,17 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
           <Badge variant="secondary" className="text-xs">{queue.length} leads</Badge>
         </div>
         <div className="flex items-center gap-2">
-          {!isActive ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="default" size="icon" onClick={handleStart} aria-label="Iniciar">
-                  <Play className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Iniciar</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={handlePause} aria-label="Pausar">
-                  <Pause className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Pausar</TooltipContent>
-            </Tooltip>
-          )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" disabled={!isActive} onClick={handleSkip} aria-label="Pular">
+              <Button variant="outline" size="icon" onClick={handlePause} aria-label="Pausar">
+                <Pause className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Pausar</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleSkip} aria-label="Pular">
                 <SkipForward className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -248,7 +273,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
 
         {/* Right: Call panel */}
         <div className="lg:col-span-8">
-          {isActive && currentItem ? (
+          {currentItem ? (
             <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
               <DialerCallPanel
                 item={currentItem}
@@ -264,12 +289,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
             <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)] p-12">
               <div className="text-center">
                 <Phone className="mx-auto h-10 w-10 text-[var(--muted-foreground)]" />
-                <p className="mt-3 text-sm font-medium">
-                  {isActive ? 'Selecione um lead na fila' : 'Clique em Iniciar para comecar'}
-                </p>
-                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                  O Power Dialer apresenta os leads em sequencia para agilizar suas ligacoes.
-                </p>
+                <p className="mt-3 text-sm font-medium">Selecione um lead na fila</p>
               </div>
             </div>
           )}
