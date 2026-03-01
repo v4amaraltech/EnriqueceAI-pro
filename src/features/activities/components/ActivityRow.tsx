@@ -102,7 +102,10 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
           {activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj}
         </p>
         <p className="truncate text-xs text-[var(--muted-foreground)]">
-          {activity.lead.email ?? 'Sem email'}
+          {activity.lead.email
+            ?? (activity.lead.socios as Array<{ emails?: Array<{ email: string; ranking: number }> }> | null)
+              ?.[0]?.emails?.sort((a, b) => a.ranking - b.ranking)[0]?.email
+            ?? 'Sem email'}
         </p>
       </div>
 
