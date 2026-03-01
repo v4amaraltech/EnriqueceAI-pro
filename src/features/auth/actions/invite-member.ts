@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
@@ -49,34 +50,65 @@ export async function inviteMember(formData: FormData): Promise<ActionResult<voi
       };
     }
 
-    // Check if user already a member
-    const { data: existingMember } = (await supabase
-      .from('organization_members')
-      .select('id, status')
-      .eq('org_id', currentMember.org_id)
-      .eq('user_id', (await supabase.auth.getUser()).data.user!.id)
-      .single()) as { data: { id: string; status: string } | null };
+    // Build redirect URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const redirectTo = `${appUrl}/api/auth/callback`;
 
-    // Use signInWithOtp as invite mechanism for MVP
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: parsed.data.email,
-      options: {
+    // Use admin client to invite user (creates user if new, sends invite email)
+    const admin = createAdminSupabaseClient();
+    const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
+      parsed.data.email,
+      {
+        redirectTo,
         data: {
           invited_to_org: currentMember.org_id,
           invited_role: parsed.data.role,
         },
       },
-    });
+    );
 
-    if (otpError) {
-      return { success: false, error: otpError.message, code: otpError.code };
-    }
+    if (inviteError) {
+      // User already exists and is confirmed — send magic link instead
+      if (inviteError.message?.includes('already been registered') || inviteError.code === 'email_exists') {
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: parsed.data.email,
+          options: { emailRedirectTo: redirectTo },
+        });
+        if (otpError) {
+          return { success: false, error: otpError.message, code: otpError.code };
+        }
 
-    // Insert member record as invited (if not already exists)
-    if (!existingMember) {
-      // We need to insert with a placeholder user_id - will be updated on accept
-      // For MVP, insert only after user actually signs up
-      // Store the invite intent for now
+        // Look up existing user ID
+        const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 });
+        const existingUser = usersData?.users?.find((u) => u.email === parsed.data.email);
+
+        if (existingUser) {
+          // Create invited member record for existing user
+          await admin.from('organization_members').upsert(
+            {
+              org_id: currentMember.org_id,
+              user_id: existingUser.id,
+              role: parsed.data.role,
+              status: 'invited',
+            },
+            { onConflict: 'org_id,user_id' },
+          );
+        }
+      } else {
+        return { success: false, error: inviteError.message, code: inviteError.code };
+      }
+    } else if (inviteData?.user) {
+      // New user created — create organization_members record with status='invited'
+      const { error: memberError } = await admin.from('organization_members').insert({
+        org_id: currentMember.org_id,
+        user_id: inviteData.user.id,
+        role: parsed.data.role,
+        status: 'invited',
+      });
+
+      if (memberError && !memberError.message?.includes('duplicate')) {
+        console.error('Error creating invited member record:', memberError);
+      }
     }
 
     // Notify org managers about the invite

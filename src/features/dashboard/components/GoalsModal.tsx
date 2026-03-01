@@ -59,6 +59,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
   const [opportunityTarget, setOpportunityTarget] = useState(0);
+  const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
 
@@ -75,6 +76,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
       if (cancelled) return;
       if (result.success) {
         setOpportunityTarget(result.data.opportunityTarget);
+        setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
         setUserGoals(result.data.userGoals);
       } else {
@@ -97,6 +99,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
       const result = await saveGoals({
         month,
         opportunityTarget,
+        activitiesTarget,
         conversionTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
@@ -136,16 +139,20 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--foreground)] opacity-70" />
           </div>
         ) : (
           <div className="min-h-[60vh] max-h-[80vh] space-y-6 overflow-y-auto px-6 py-6">
+            <p className="text-xs text-[var(--foreground)] opacity-50">
+              Estas metas mensais são exibidas nos cards do Dashboard. Para metas diárias individuais, acesse Configurações &gt; Prospecção.
+            </p>
+
             {/* Meta de Oportunidades */}
             <div className="rounded-lg border bg-[var(--card)] p-5">
               <div className="flex items-center justify-between gap-6">
                 <div>
                   <p className="font-semibold text-[var(--foreground)]">Meta de Oportunidades</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
                     Número total de oportunidades para o mês
                   </p>
                 </div>
@@ -163,12 +170,35 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
               </div>
             </div>
 
+            {/* Meta de Atividades Realizadas */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Atividades</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Total de atividades (emails, ligações, etc.) que a equipe deve realizar no mês
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="activities-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={activitiesTarget}
+                    onChange={(e) => setActivitiesTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Atividades"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Meta de Taxa de Conversão */}
             <div className="rounded-lg border bg-[var(--card)] p-5">
               <div className="flex items-center justify-between gap-6">
                 <div>
                   <p className="font-semibold text-[var(--foreground)]">Meta de Taxa de Conversão</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
                     Percentual dos leads finalizados no mês que a empresa espera transformar em oportunidades
                   </p>
                 </div>
@@ -184,7 +214,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     onChange={(e) => setConversionTarget(Number(e.target.value) || 0)}
                     aria-label="Taxa de Conversão"
                   />
-                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-[var(--muted-foreground)]">
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-[var(--foreground)] opacity-70">
                     %
                   </span>
                 </div>
@@ -199,7 +229,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                 </h3>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--muted-foreground)] shadow-sm hover:bg-[var(--accent)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] opacity-70 shadow-sm hover:bg-[var(--accent)]"
                   aria-label="Adicionar vendedor"
                 >
                   <Plus className="h-4 w-4" />
@@ -226,15 +256,15 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
                       {/* Mês anterior */}
                       <div className="text-center">
-                        <p className="text-xs text-[var(--muted-foreground)]">{prevMonthName}</p>
-                        <p className="text-sm text-[var(--muted-foreground)]">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">{prevMonthName}</p>
+                        <p className="text-sm text-[var(--foreground)] opacity-70">
                           {ug.previousTarget !== null ? ug.previousTarget : '–'}
                         </p>
                       </div>
 
                       {/* Meta atual */}
                       <div className="text-center">
-                        <p className="text-xs text-[var(--muted-foreground)]">{currentMonthLabel}</p>
+                        <p className="text-xs text-[var(--foreground)] opacity-70">{currentMonthLabel}</p>
                         <Input
                           type="number"
                           min={0}
@@ -248,7 +278,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                       </div>
 
                       {/* Lock icon */}
-                      <Lock className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                      <Lock className="h-4 w-4 shrink-0 text-[var(--foreground)] opacity-70" />
                     </div>
                   ))}
                 </div>

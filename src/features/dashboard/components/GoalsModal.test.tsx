@@ -24,6 +24,7 @@ import { GoalsModal } from './GoalsModal';
 const goalsData: GoalsData = {
   month: '2026-02',
   opportunityTarget: 50,
+  activitiesTarget: 200,
   conversionTarget: 25,
   userGoals: [
     { userId: 'u1', userName: 'alice', opportunityTarget: 20, previousTarget: 15 },
@@ -87,6 +88,7 @@ describe('GoalsModal', () => {
       expect(mockSaveGoals).toHaveBeenCalledWith({
         month: '2026-02',
         opportunityTarget: 50,
+        activitiesTarget: 200,
         conversionTarget: 25,
         userGoals: [
           { userId: 'u1', opportunityTarget: 20 },

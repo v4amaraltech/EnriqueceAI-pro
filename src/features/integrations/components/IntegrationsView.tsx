@@ -23,14 +23,12 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, ThreeCPlusConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
-import { disconnectThreeCPlus } from '../actions/manage-threecplus';
 import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
 import { Api4ComConfigModal } from './Api4ComConfigModal';
-import { ThreeCPlusConfigModal } from './ThreeCPlusConfigModal';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 
@@ -40,7 +38,6 @@ interface IntegrationsViewProps {
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
-  threecplus: ThreeCPlusConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
 }
 
@@ -51,15 +48,13 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
-export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, threecplus, evolutionInstance }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | null>(null);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
-  const [showThreeCPlusConfig, setShowThreeCPlusConfig] = useState(false);
-  const [showDisconnectThreeCPlus, setShowDisconnectThreeCPlus] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const evolution = useEvolutionWhatsApp();
 
@@ -194,53 +189,6 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
               ) : (
                 <Button onClick={() => setShowApi4ComConfig(true)}>
                   Conectar API4Com
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3CPlus VoIP Card */}
-        <Card className="flex flex-col">
-          <CardContent className="flex flex-1 flex-col p-6">
-            <Image src="/logos/3cplus-logo.png" alt="3CPlus" width={48} height={48} className="rounded-lg" />
-            <CardTitle className="mt-4 text-xl">3CPlus</CardTitle>
-            <div className="min-h-[3.5rem] flex-1">
-              {threecplus ? (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Extensão {threecplus.extension} &middot; Conectado em {new Date(threecplus.created_at).toLocaleDateString('pt-BR')}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Discador VoIP 3CPlus integrado. Realize chamadas click-to-call diretamente da plataforma.
-                </p>
-              )}
-            </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-4">
-              {threecplus ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusConfig[threecplus.status].className}>
-                      {threecplus.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                      {threecplus.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                      {statusConfig[threecplus.status].label}
-                    </Badge>
-                    <Button variant="outline" size="sm" onClick={() => setShowThreeCPlusConfig(true)}>
-                      Gerenciar
-                    </Button>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnectThreeCPlus(true)}
-                  >
-                    <Unplug className="mr-1 h-3 w-3" />
-                    Desconectar
-                  </button>
-                </div>
-              ) : (
-                <Button onClick={() => setShowThreeCPlusConfig(true)}>
-                  Conectar 3CPlus
                 </Button>
               )}
             </div>
@@ -389,51 +337,6 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                     toast.error(result.error);
                   }
                   setShowDisconnectApi4Com(false);
-                  router.refresh();
-                });
-              }}
-            >
-              {isPending ? 'Desconectando...' : 'Desconectar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 3CPlus config modal */}
-      <ThreeCPlusConfigModal
-        open={showThreeCPlusConfig}
-        onOpenChange={setShowThreeCPlusConfig}
-        onSuccess={() => router.refresh()}
-        defaultExtension={threecplus?.extension ?? ''}
-        defaultBaseUrl={threecplus?.base_url ?? ''}
-        hasExistingApiToken={threecplus?.has_api_token ?? false}
-      />
-
-      {/* Disconnect 3CPlus dialog */}
-      <Dialog open={showDisconnectThreeCPlus} onOpenChange={setShowDisconnectThreeCPlus}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Desconectar 3CPlus</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja desconectar a 3CPlus? As configurações de extensão e token serão removidas.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDisconnectThreeCPlus(false)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={isPending}
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await disconnectThreeCPlus();
-                  if (result.success) {
-                    toast.success('3CPlus desconectado');
-                  } else {
-                    toast.error(result.error);
-                  }
-                  setShowDisconnectThreeCPlus(false);
                   router.refresh();
                 });
               }}

@@ -9,12 +9,6 @@ import { getInsightsData } from '@/features/dashboard/actions/get-insights-data'
 import { getRankingData } from '@/features/dashboard/actions/get-ranking-data';
 import { DashboardView } from '@/features/dashboard/components/DashboardView';
 import type { DashboardFilters } from '@/features/dashboard/types';
-import {
-  USE_MOCK_DATA,
-  getMockDashboardData,
-  getMockInsightsData,
-  getMockRankingData,
-} from '@/features/dashboard/utils/mock-data';
 
 interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -39,21 +33,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ? params.userIds.split(',').filter(Boolean)
       : [],
   };
-
-  // Use mock data for demo visualization
-  if (USE_MOCK_DATA) {
-    return (
-      <div>
-        <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
-        <DashboardView
-          data={getMockDashboardData()}
-          filters={filters}
-          ranking={getMockRankingData()}
-          insights={getMockInsightsData()}
-        />
-      </div>
-    );
-  }
 
   const [result, rankingResult, insightsResult] = await Promise.all([
     getDashboardData(filters),

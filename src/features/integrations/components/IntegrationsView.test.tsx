@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, ThreeCPlusConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
@@ -65,17 +65,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const threecplusConnected: ThreeCPlusConnectionSafe = {
-  id: 'voip-2',
-  extension: '1001',
-  base_url: 'https://3c.fluxoti.com/api/v1',
-  has_api_token: true,
-  status: 'connected',
-  created_at: '2026-02-15T10:00:00Z',
-  updated_at: '2026-02-15T10:00:00Z',
-};
-
-const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null, threecplus: null, evolutionInstance: null };
+const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null, evolutionInstance: null };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {
@@ -167,7 +157,6 @@ describe('IntegrationsView', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('Conectar WhatsApp')).toBeInTheDocument();
     expect(screen.getByText('Conectar API4Com')).toBeInTheDocument();
-    expect(screen.getByText('Conectar 3CPlus')).toBeInTheDocument();
     expect(screen.getByText('Conectar Google')).toBeInTheDocument();
   });
 
@@ -192,29 +181,4 @@ describe('IntegrationsView', () => {
     expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show 3CPlus card with description', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('3CPlus')).toBeInTheDocument();
-  });
-
-  it('should show extension and Gerenciar button when 3CPlus connected', () => {
-    render(<IntegrationsView {...defaultProps} threecplus={threecplusConnected} />);
-    expect(screen.getByText(/Extensão 1001/)).toBeInTheDocument();
-    expect(screen.getAllByText('Gerenciar').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should show connected status for 3CPlus', () => {
-    render(<IntegrationsView {...defaultProps} threecplus={threecplusConnected} />);
-    expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should show error status for 3CPlus when error', () => {
-    render(
-      <IntegrationsView
-        {...defaultProps}
-        threecplus={{ ...threecplusConnected, status: 'error' }}
-      />,
-    );
-    expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
-  });
 });

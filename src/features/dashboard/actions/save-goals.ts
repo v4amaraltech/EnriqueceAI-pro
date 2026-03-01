@@ -16,7 +16,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { month, opportunityTarget, conversionTarget, userGoals } = parsed.data;
+  const { month, opportunityTarget, activitiesTarget, conversionTarget, userGoals } = parsed.data;
   const monthDate = `${month}-01`;
 
   // Get user's org
@@ -39,6 +39,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
         org_id: member.org_id,
         month: monthDate,
         opportunity_target: opportunityTarget,
+        activities_target: activitiesTarget,
         conversion_target: conversionTarget,
         created_by: user.id,
       },

@@ -65,6 +65,9 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
           <p className="text-sm text-[var(--muted-foreground)]">
             Configure o objetivo diário de atividades para cada membro da equipe.
           </p>
+          <p className="text-xs text-[var(--muted-foreground)] opacity-70 mt-0.5">
+            Esta meta é para acompanhamento diário individual. A meta mensal exibida nos cards do Dashboard é configurada em Editar Metas no Dashboard.
+          </p>
         </div>
       </div>
 

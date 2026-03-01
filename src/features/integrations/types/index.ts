@@ -130,18 +130,6 @@ export interface EvolutionQrResponse {
   message?: string;
 }
 
-// 3CPlus (VoIP) connection types
-export type {
-  ThreeCPlusConnectionRow,
-  ThreeCPlusConnectionSafe,
-  ThreeCPlusConnectResponse,
-  ThreeCPlusManualCallResponse,
-  ThreeCPlusHangupResponse,
-  ThreeCPlusQualifyResponse,
-  ThreeCPlusCallRecord,
-  ThreeCPlusCallListResponse,
-} from './threecplus';
-
 // Re-export CRM types
 export type {
   CrmProvider,

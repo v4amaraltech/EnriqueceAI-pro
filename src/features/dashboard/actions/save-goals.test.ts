@@ -28,6 +28,7 @@ function createChainMock(finalResult: unknown = { data: null, error: null }) {
 const validInput = {
   month: '2026-02',
   opportunityTarget: 50,
+  activitiesTarget: 200,
   conversionTarget: 25,
   userGoals: [
     { userId: '00000000-0000-0000-0000-000000000001', opportunityTarget: 20 },
