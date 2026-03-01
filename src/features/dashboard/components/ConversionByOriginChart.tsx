@@ -30,7 +30,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+      <h3 className="mb-4 text-sm font-medium">
         Conversão por Origem
       </h3>
       <ResponsiveContainer width="100%" height={280}>
@@ -46,6 +46,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <Tooltip
+            cursor={false}
             contentStyle={{
               backgroundColor: 'var(--card)',
               border: '1px solid var(--border)',

@@ -138,6 +138,17 @@
   }
 }
 
+/* Recharts SVG elements: oklch vars don't resolve as SVG attributes */
+.recharts-cartesian-axis-tick-value {
+  fill: var(--foreground) !important;
+}
+.recharts-legend-item-text {
+  color: var(--foreground) !important;
+}
+.recharts-default-tooltip {
+  color: var(--foreground) !important;
+}
+
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }

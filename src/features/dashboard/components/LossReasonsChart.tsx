@@ -29,7 +29,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+      <h3 className="mb-4 text-sm font-medium">
         Motivos de Perda
       </h3>
       <ResponsiveContainer width="100%" height={Math.max(200, data.length * 40)}>
@@ -50,6 +50,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
             width={120}
           />
           <Tooltip
+            cursor={false}
             contentStyle={{
               backgroundColor: 'var(--card)',
               border: '1px solid var(--border)',

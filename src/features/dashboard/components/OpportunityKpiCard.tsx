@@ -61,7 +61,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
         <div className="flex flex-col justify-center">
           {/* Big number */}
           <p className="text-5xl font-bold">{kpi.totalOpportunities}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm">
             Oportunidades em {monthName}
           </p>
 
@@ -71,9 +71,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <CalendarDays className="h-4 w-4 text-primary" />
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm leading-relaxed">
                 Meta de oportunidades para {monthNameLower}:{' '}
-                <span className="font-semibold text-foreground">{kpi.monthTarget}</span>
+                <span className="font-semibold">{kpi.monthTarget}</span>
               </p>
             </div>
           )}
@@ -101,7 +101,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
           )}
 
           {kpi.monthTarget === 0 && (
-            <p className="mt-4 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm">
               Nenhuma meta definida para {monthNameLower}
             </p>
           )}
