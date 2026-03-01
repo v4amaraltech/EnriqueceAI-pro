@@ -73,7 +73,8 @@ export function InviteMemberDialog({
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Compartilhe esta senha com o membro. Ele poderá alterá-la depois.
+                  Compartilhe esta senha com o membro. Ele deve acessar{' '}
+                  <strong>{window.location.origin}/login</strong> com o email e esta senha.
                 </p>
               </div>
             ) : (
