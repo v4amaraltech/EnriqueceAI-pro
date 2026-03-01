@@ -17,8 +17,15 @@ export default async function LoginPage({
   if (user) redirect('/dashboard');
 
   const { error } = await searchParams;
-  const errorMessage =
-    error === 'auth' ? 'Falha na autenticação. Tente novamente.' : undefined;
+
+  const errorMessages: Record<string, string> = {
+    auth: 'Falha na autenticação. Tente novamente.',
+    otp_expired: 'O link expirou. Faça login com seu email e senha.',
+    access_denied: 'Acesso negado. Faça login com seu email e senha.',
+    missing_code: 'Link inválido. Faça login com seu email e senha.',
+  };
+
+  const errorMessage = error ? (errorMessages[error] ?? 'Erro na autenticação. Tente novamente.') : undefined;
 
   return <LoginForm error={errorMessage} />;
 }
