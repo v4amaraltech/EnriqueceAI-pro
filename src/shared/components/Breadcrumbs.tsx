@@ -40,6 +40,7 @@ const pathLabels: Record<string, string> = {
   calls: 'Ligações',
   statistics: 'Estatísticas',
   history: 'Histórico',
+  ajustes: 'Ajustes',
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

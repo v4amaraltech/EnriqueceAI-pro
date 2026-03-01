@@ -27,7 +27,7 @@ interface ThreeCPlusConfigModalProps {
   hasExistingApiToken?: boolean;
 }
 
-const DEFAULT_BASE_URL = 'https://3c.fluxoti.com/api/v1';
+const DEFAULT_BASE_URL = 'https://app.3c.plus/api/v1';
 
 export function ThreeCPlusConfigModal({
   open,

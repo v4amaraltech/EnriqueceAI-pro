@@ -46,8 +46,8 @@ export default async function CallSettingsPage() {
     data: Array<{ user_id: string; role: string }> | null;
   };
 
-  // Get emails via admin client
-  const emailMap = new Map<string, string>();
+  // Get display names via admin client
+  const nameMap = new Map<string, string>();
   try {
     const adminClient = createAdminSupabaseClient();
     const userIds = members?.map((m) => m.user_id) ?? [];
@@ -55,7 +55,10 @@ export default async function CallSettingsPage() {
     if (usersData?.users) {
       for (const u of usersData.users) {
         if (userIds.includes(u.id)) {
-          emailMap.set(u.id, u.email ?? '');
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+          const email = u.email ?? '';
+          nameMap.set(u.id, fullName || email);
         }
       }
     }
@@ -64,10 +67,9 @@ export default async function CallSettingsPage() {
   }
 
   const memberInfos = (members ?? []).map((m) => {
-    const email = emailMap.get(m.user_id);
     return {
       userId: m.user_id,
-      name: email ? email.split('@')[0]! : m.user_id.slice(0, 8),
+      name: nameMap.get(m.user_id) ?? m.user_id.slice(0, 8),
       role: m.role,
     };
   });

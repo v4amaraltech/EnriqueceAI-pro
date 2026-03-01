@@ -24,17 +24,31 @@ export interface ThreeCPlusConnectionSafe {
   updated_at: string;
 }
 
-// Response from POST /click2call
-export interface ThreeCPlusClick2CallResponse {
-  id: string;
+// Response from POST /agent/connect
+export interface ThreeCPlusConnectResponse {
+  id: number;
   status: string;
-  message?: string;
+  [key: string]: unknown;
+}
+
+// Response from POST /agent/manual_call/dial
+export interface ThreeCPlusManualCallResponse {
+  id: number;
+  status: string;
+  phone: string;
+  [key: string]: unknown;
 }
 
 // Response from POST /agent/call/{id}/hangup
 export interface ThreeCPlusHangupResponse {
   status: string;
   message?: string;
+}
+
+// Response from POST /agent/manual_call/{id}/qualify
+export interface ThreeCPlusQualifyResponse {
+  status: string;
+  [key: string]: unknown;
 }
 
 // Call record from GET /calls

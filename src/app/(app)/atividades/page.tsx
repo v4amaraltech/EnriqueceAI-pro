@@ -11,13 +11,12 @@ import { fetchDialerQueue } from '@/features/activities/actions/fetch-dialer-que
 import { fetchDialerStats } from '@/features/activities/actions/fetch-dialer-stats';
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
 import { fetchPendingCalls } from '@/features/activities/actions/fetch-pending-calls';
-import { fetchConnections } from '@/features/integrations/actions/fetch-connections';
 import { ActivityQueueView } from '@/features/activities';
 
 export default async function AtividadesPage() {
   await requireAuth();
 
-  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, connectionsResult] = await Promise.all([
+  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
     fetchPendingCalls(),
@@ -25,7 +24,6 @@ export default async function AtividadesPage() {
     fetchAvailableLeadsCount(),
     fetchDialerStats(),
     fetchDialerPreferences(),
-    fetchConnections(),
   ]);
 
   if (!activitiesResult.success) {
@@ -62,16 +60,6 @@ export default async function AtividadesPage() {
   const dialerStats = statsResult.success ? statsResult.data : undefined;
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
 
-  // Detect call provider: prefer 3CPlus if connected, fallback to API4COM
-  let callProvider: 'api4com' | 'threecplus' | null = null;
-  if (connectionsResult.success) {
-    if (connectionsResult.data.threecplus?.status === 'connected') {
-      callProvider = 'threecplus';
-    } else if (connectionsResult.data.api4com?.status === 'connected') {
-      callProvider = 'api4com';
-    }
-  }
-
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Atividades</h1>
@@ -82,7 +70,6 @@ export default async function AtividadesPage() {
         dialerQueue={dialerQueue}
         dialerStats={dialerStats}
         dialerPreferences={dialerPreferences}
-        callProvider={callProvider}
         availableLeadsCount={availableLeads.count}
       />
     </div>

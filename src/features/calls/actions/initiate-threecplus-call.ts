@@ -4,7 +4,12 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import { click2call } from '@/features/integrations/services/threecplus.service';
+import {
+  connectAgent,
+  loginToManualMode,
+  enterManualMode,
+  dialManualCall,
+} from '@/features/integrations/services/threecplus.service';
 
 interface InitiateCallInput {
   phone: string;
@@ -34,9 +39,33 @@ export async function initiateThreeCPlusCall(
   }
 
   try {
-    const { data: threecplusResponse, extension } = await click2call(user.id, input.phone);
+    // Step 1: Connect agent (ignore errors — agent may already be connected)
+    try { await connectAgent(user.id); } catch { /* ok */ }
 
-    // Create call record with threecplus_call_id in metadata for correlation
+    // Step 2: Login to campaign in manual mode (ignore if already logged in)
+    try {
+      await loginToManualMode(user.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (!msg.includes('já está') && !msg.includes('already') && !msg.includes('logged')) {
+        console.error('[3cplus] loginToManualMode failed:', msg);
+      }
+    }
+
+    // Step 3: Enter manual call mode
+    try {
+      await enterManualMode(user.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (!msg.includes('já está') && !msg.includes('already')) {
+        console.error('[3cplus] enterManualMode failed:', msg);
+      }
+    }
+
+    // Step 4: Dial
+    const { data: threecplusResponse, extension } = await dialManualCall(user.id, input.phone);
+
+    // Create call record in our DB
     const { data: call, error: callError } = (await supabase
       .from('calls')
       .insert({
@@ -48,23 +77,22 @@ export async function initiateThreeCPlusCall(
         duration_seconds: 0,
         status: 'not_connected',
         type: 'outbound',
-        metadata: { threecplus_call_id: threecplusResponse.id },
+        metadata: { threecplus_call_id: String(threecplusResponse.id) },
       })
       .select('id')
       .single()) as { data: { id: string } | null; error: { message: string } | null };
 
     if (callError || !call) {
-      console.error('[3cplus] Failed to create call record:', callError?.message);
       return { success: false, error: 'Erro ao registrar chamada' };
     }
 
     return {
       success: true,
-      data: { callId: call.id, threecplusCallId: threecplusResponse.id },
+      data: { callId: call.id, threecplusCallId: String(threecplusResponse.id) },
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao iniciar chamada';
-    console.error('[3cplus] click2call failed:', message);
+    console.error('[3cplus] call flow failed:', message);
     return { success: false, error: message };
   }
 }
@@ -80,7 +108,6 @@ export async function hangupThreeCPlusCall(
     return { success: true, data: undefined };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao desligar chamada';
-    console.error('[3cplus] hangupCall failed:', message);
     return { success: false, error: message };
   }
 }

@@ -26,21 +26,21 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  // Active enrollments where next step is due
+  // Active enrollments (all due, regardless of step type)
   const { data: enrollments, error } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name), cadence:cadences(id, name)')
+    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios), cadence:cadences(id, name)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString())
     .order('next_step_due', { ascending: true })
-    .limit(50)) as {
+    .limit(100)) as {
       data: Array<{
         id: string;
         cadence_id: string;
         lead_id: string;
         current_step: number;
         next_step_due: string;
-        lead: { id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string; telefone: string | null; first_name: string | null; last_name: string | null } | null;
+        lead: { id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string; telefone: string | null; first_name: string | null; last_name: string | null; socios: Array<{ celulares?: Array<{ ddd: number; numero: string; ranking: number }> }> | null } | null;
         cadence: { id: string; name: string } | null;
       }> | null;
       error: { message: string } | null;
@@ -89,16 +89,41 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
 
   const dailyLimit = settings?.dialer_daily_limit_per_lead ?? 3;
 
-  // Filter enrollments where current step is a phone step
-  const phoneEnrollments: Array<{ enrollment: typeof enrollments[number]; stepInfo: PhoneStepInfo }> = [];
+  // Helper: resolve phone from lead.telefone or socios[0].celulares
+  type EnrollmentLead = { telefone: string | null; socios: Array<{ celulares?: Array<{ ddd: number; numero: string; ranking: number }> }> | null };
+  function resolvePhone(lead: EnrollmentLead): string | null {
+    if (lead.telefone) return lead.telefone;
+    const celulares = lead.socios?.[0]?.celulares;
+    if (!celulares || celulares.length === 0) return null;
+    const best = [...celulares].sort((a, b) => a.ranking - b.ranking)[0];
+    if (!best) return null;
+    return `(${best.ddd}) ${best.numero}`;
+  }
+
+  // Filter enrollments from cadences that have ANY phone step
+  // (not just enrollments whose current step is phone)
+  type Enrollment = (typeof enrollments)[0];
+  const phoneEnrollments: Array<{ enrollment: Enrollment; stepInfo: PhoneStepInfo; phone: string }> = [];
   for (const e of enrollments) {
     if (!e.lead || !e.cadence) continue;
     const phoneMap = phoneSteps.get(e.cadence_id);
-    const stepInfo = phoneMap?.get(e.current_step);
+    if (!phoneMap || phoneMap.size === 0) continue; // cadence has no phone steps at all
+
+    // Resolve phone — skip if lead has no phone at all
+    const phone = resolvePhone(e.lead);
+    if (!phone) continue;
+
+    // Pick the nearest phone step >= current_step for context (script/activity name)
+    // If none ahead, pick the first phone step in the cadence
+    let stepInfo: PhoneStepInfo | undefined;
+    const sortedOrders = [...phoneMap.keys()].sort((a, b) => a - b);
+    for (const order of sortedOrders) {
+      if (order >= e.current_step) { stepInfo = phoneMap.get(order); break; }
+    }
+    if (!stepInfo) stepInfo = phoneMap.get(sortedOrders[0]!);
     if (!stepInfo) continue;
-    // Exclude leads without phone
-    if (!e.lead.telefone) continue;
-    phoneEnrollments.push({ enrollment: e, stepInfo });
+
+    phoneEnrollments.push({ enrollment: e, stepInfo, phone });
   }
 
   // Check daily call limits for these leads
@@ -123,7 +148,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   }
 
   const result: DialerQueueItem[] = [];
-  for (const { enrollment: e, stepInfo } of phoneEnrollments) {
+  for (const { enrollment: e, stepInfo, phone } of phoneEnrollments) {
     if (!e.lead || !e.cadence) continue;
     // Exclude leads at daily limit
     const callCount = callsPerLead.get(e.lead_id) ?? 0;
@@ -136,7 +161,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       firstName: e.lead.first_name,
       lastName: e.lead.last_name,
       companyName: e.lead.razao_social ?? e.lead.cnpj,
-      phone: e.lead.telefone,
+      phone,
       cadenceName: e.cadence.name,
       cadenceId: e.cadence_id,
       stepId: stepInfo.id,

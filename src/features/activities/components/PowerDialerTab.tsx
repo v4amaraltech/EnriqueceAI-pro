@@ -20,26 +20,19 @@ import {
   initiateApi4ComCall,
   hangupApi4ComCall,
 } from '@/features/calls/actions/initiate-api4com-call';
-import {
-  initiateThreeCPlusCall,
-  hangupThreeCPlusCall,
-} from '@/features/calls/actions/initiate-threecplus-call';
 
 import { DialerCallPanel, type CallState } from './DialerCallPanel';
 import { DialerProgressBar } from './DialerProgressBar';
 import { DialerQueueList, type DialerItemStatus } from './DialerQueueList';
 import { PowerDialerIdleLayout } from './PowerDialerIdleLayout';
 
-export type CallProvider = 'api4com' | 'threecplus' | null;
-
 interface PowerDialerTabProps {
   initialQueue: DialerQueueItem[];
   stats: DialerStats;
   preferences: DialerPreferences;
-  callProvider?: CallProvider;
 }
 
-export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, callProvider = 'api4com' }: PowerDialerTabProps) {
+export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences }: PowerDialerTabProps) {
   const [queue] = useState<DialerQueueItem[]>(initialQueue);
   const [currentPreferences, setCurrentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,9 +40,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   const [itemStatuses, setItemStatuses] = useState<Map<string, DialerItemStatus>>(new Map());
   const [isPending, startTransition] = useTransition();
 
-  // Call state (works for both API4COM and 3CPlus)
   const [callState, setCallState] = useState<CallState>('idle');
-  const [providerCallId, setProviderCallId] = useState<string | null>(null);
+  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -70,7 +62,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   function resetCallState() {
     setCallState('idle');
-    setProviderCallId(null);
+    setApi4comCallId(null);
   }
 
   function handleStart() {
@@ -104,63 +96,36 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   function handleInitiateCall() {
     if (!currentItem?.phone) return;
-    if (!callProvider) {
-      toast.error('Nenhum provedor de telefonia conectado. Configure em Integrações.');
-      return;
-    }
 
     startTransition(async () => {
       setCallState('calling');
 
-      if (callProvider === 'threecplus') {
-        const result = await initiateThreeCPlusCall({
-          phone: currentItem.phone ?? '',
-          leadId: currentItem.leadId,
-        });
+      const result = await initiateApi4ComCall({
+        phone: currentItem.phone ?? '',
+        leadId: currentItem.leadId,
+      });
 
-        if (!result.success) {
-          toast.error(result.error);
-          setCallState('idle');
-          return;
-        }
-
-        setProviderCallId(result.data.threecplusCallId);
-      } else {
-        const result = await initiateApi4ComCall({
-          phone: currentItem.phone ?? '',
-          leadId: currentItem.leadId,
-        });
-
-        if (!result.success) {
-          toast.error(result.error);
-          setCallState('idle');
-          return;
-        }
-
-        setProviderCallId(result.data.api4comId);
+      if (!result.success) {
+        toast.error(result.error);
+        setCallState('idle');
+        return;
       }
 
+      setApi4comCallId(result.data.api4comId);
       setCallState('connected');
     });
   }
 
   function handleHangup() {
-    if (!providerCallId) {
+    if (!api4comCallId) {
       setCallState('ended');
       return;
     }
 
     startTransition(async () => {
-      if (callProvider === 'threecplus') {
-        const result = await hangupThreeCPlusCall(providerCallId);
-        if (!result.success) {
-          toast.error(result.error);
-        }
-      } else {
-        const result = await hangupApi4ComCall(providerCallId);
-        if (!result.success) {
-          toast.error(result.error);
-        }
+      const result = await hangupApi4ComCall(api4comCallId);
+      if (!result.success) {
+        toast.error(result.error);
       }
       setCallState('ended');
     });

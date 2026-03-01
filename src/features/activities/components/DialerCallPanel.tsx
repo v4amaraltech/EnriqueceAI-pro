@@ -148,7 +148,7 @@ export function DialerCallPanel({
                 <button
                   onClick={onInitiateCall}
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95"
-                  title="Ligar via API4COM"
+                  title="Clique para ligar"
                 >
                   <Phone className="h-7 w-7" />
                 </button>
@@ -187,7 +187,7 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-              {callState === 'idle' && 'Clique para ligar via API4COM'}
+              {callState === 'idle' && 'Clique para ligar'}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
@@ -200,58 +200,70 @@ export function DialerCallPanel({
         )}
       </div>
 
-      {/* Call status */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-          Status da Ligacao
-        </Label>
-        <Select value={callStatus} onValueChange={setCallStatus}>
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione o resultado..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
-            <SelectItem value="gatekeeper">Conectou — falou com intermediario</SelectItem>
-            <SelectItem value="voicemail">Caixa postal</SelectItem>
-            <SelectItem value="no_answer">Nao atendeu</SelectItem>
-            <SelectItem value="busy">Ocupado</SelectItem>
-            <SelectItem value="wrong_number">Numero errado</SelectItem>
-            <SelectItem value="meeting_scheduled">Reuniao agendada</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Post-call: status + notes + actions — only after call ends */}
+      {callState === 'ended' && (
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              Status da Ligacao
+            </Label>
+            <Select value={callStatus} onValueChange={setCallStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o resultado..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
+                <SelectItem value="gatekeeper">Conectou — falou com intermediario</SelectItem>
+                <SelectItem value="voicemail">Caixa postal</SelectItem>
+                <SelectItem value="no_answer">Nao atendeu</SelectItem>
+                <SelectItem value="busy">Ocupado</SelectItem>
+                <SelectItem value="wrong_number">Numero errado</SelectItem>
+                <SelectItem value="meeting_scheduled">Reuniao agendada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      {/* Notes */}
-      <div className="mt-4 flex-1 space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-            Bloco de Notas
-          </Label>
+          <div className="mt-4 flex-1 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Bloco de Notas
+              </Label>
+            </div>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Faca anotacoes que possam auxiliar a sua comunicacao com o cliente."
+              className="min-h-[100px] resize-y"
+            />
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
+            <Button variant="outline" onClick={onSkip} disabled={isSending}>
+              <SkipForward className="mr-2 h-4 w-4" />
+              Pular
+            </Button>
+            <Button onClick={handleComplete} disabled={isSending || !callStatus}>
+              {isSending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Concluir e avancar
+            </Button>
+          </div>
+        </>
+      )}
+
+      {/* Skip button when idle (before call) */}
+      {callState === 'idle' && (
+        <div className="mt-4 flex items-center justify-end border-t border-[var(--border)] pt-4">
+          <Button variant="outline" onClick={onSkip} disabled={isSending}>
+            <SkipForward className="mr-2 h-4 w-4" />
+            Pular
+          </Button>
         </div>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Faca anotacoes que possam auxiliar a sua comunicacao com o cliente."
-          className="min-h-[100px] resize-y"
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-        <Button variant="outline" onClick={onSkip} disabled={isSending || isInCall}>
-          <SkipForward className="mr-2 h-4 w-4" />
-          Pular
-        </Button>
-        <Button onClick={handleComplete} disabled={isSending || !callStatus || isInCall}>
-          {isSending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-          )}
-          Concluir e avancar
-        </Button>
-      </div>
+      )}
     </div>
   );
 }

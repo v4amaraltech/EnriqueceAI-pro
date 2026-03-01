@@ -134,8 +134,10 @@ export interface EvolutionQrResponse {
 export type {
   ThreeCPlusConnectionRow,
   ThreeCPlusConnectionSafe,
-  ThreeCPlusClick2CallResponse,
+  ThreeCPlusConnectResponse,
+  ThreeCPlusManualCallResponse,
   ThreeCPlusHangupResponse,
+  ThreeCPlusQualifyResponse,
   ThreeCPlusCallRecord,
   ThreeCPlusCallListResponse,
 } from './threecplus';

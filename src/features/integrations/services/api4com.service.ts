@@ -81,6 +81,7 @@ export async function originateCall(
 
 /**
  * Hangup an active call.
+ * Returns gracefully if the call already ended (404).
  */
 export async function hangupCall(
   userId: string,
@@ -89,11 +90,27 @@ export async function hangupCall(
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
-  return api4comFetch<Api4ComHangupResponse>(
-    creds,
-    'POST',
-    `/calls/${api4comCallId}/hangup`,
-  );
+  const url = `${creds.baseUrl}/calls/${api4comCallId}/hangup`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: creds.apiKey,
+    },
+  });
+
+  // 404 = call already ended — not an error
+  if (response.status === 404) {
+    return { status: 'ended', message: 'Chamada já encerrada', id: api4comCallId };
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API4COM POST /calls/${api4comCallId}/hangup failed (${response.status}): ${text}`);
+  }
+
+  return response.json() as Promise<Api4ComHangupResponse>;
 }
 
 /**
