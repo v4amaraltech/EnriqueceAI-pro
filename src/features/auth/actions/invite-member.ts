@@ -93,9 +93,10 @@ export async function inviteMember(
       }
 
       if (inviteData?.user) {
-        // Set temp password so user can also log in directly via /login
+        // Set temp password + confirm email so user can log in directly via /login
         await admin.auth.admin.updateUserById(inviteData.user.id, {
           password: TEMP_PASSWORD,
+          email_confirm: true,
         });
 
         // handle_new_user trigger already created an auto-org + auto-member
