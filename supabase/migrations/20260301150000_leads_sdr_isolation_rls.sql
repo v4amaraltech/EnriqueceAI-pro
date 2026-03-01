@@ -1,9 +1,10 @@
 BEGIN;
 
--- SDR Isolation: SDRs can only see leads assigned to them or unassigned leads.
--- Managers continue to see all leads in the organization.
+-- SDR Isolation: SDRs see ONLY leads explicitly assigned to them.
+-- Managers see all leads in the organization (including unassigned).
+-- Unassigned leads (assigned_to IS NULL) are only visible to managers.
 
--- SELECT: Manager sees all org leads, SDR sees assigned_to=uid OR unassigned
+-- SELECT: Manager sees all org leads, SDR sees only assigned_to=uid
 DROP POLICY IF EXISTS "leads_org_read" ON leads;
 CREATE POLICY "leads_org_read" ON leads FOR SELECT
   USING (
@@ -11,7 +12,6 @@ CREATE POLICY "leads_org_read" ON leads FOR SELECT
     AND (
       public.is_manager()
       OR assigned_to = auth.uid()
-      OR assigned_to IS NULL
     )
   );
 
