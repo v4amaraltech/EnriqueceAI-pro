@@ -36,7 +36,7 @@ export async function resetPassword(formData: FormData): Promise<ActionResult<vo
   const supabase = await createServerSupabaseClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${appUrl}/api/auth/callback?type=recovery`,
+    redirectTo: `${appUrl}/api/auth/confirm?type=recovery`,
   });
 
   if (error) {

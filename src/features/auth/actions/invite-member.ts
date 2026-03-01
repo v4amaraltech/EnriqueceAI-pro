@@ -60,7 +60,7 @@ export async function inviteMember(
       (process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
         : 'http://localhost:3000');
-    const redirectTo = `${appUrl}/api/auth/callback`;
+    const redirectTo = `${appUrl}/api/auth/confirm`;
 
     // Check if user already exists
     const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });

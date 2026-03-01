@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
-const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback'];
+const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
