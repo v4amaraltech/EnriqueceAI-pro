@@ -97,11 +97,13 @@ export async function inviteMember(
       }
 
       if (inviteData?.user) {
-        // Step 2: Set temp password WITHOUT email_confirm (keeps invite token valid)
-        // The invite link will confirm the email when clicked.
-        // The temp password allows direct login at /login as a fallback.
+        // Step 2: Set temp password + confirm email so password login works immediately.
+        // The invite email was already sent above, so it still arrives.
+        // The magic link in the email may not work (token invalidated), but the
+        // primary login method is the temp password shared by the manager.
         await admin.auth.admin.updateUserById(inviteData.user.id, {
           password: TEMP_PASSWORD,
+          email_confirm: true,
         });
 
         // handle_new_user trigger already created an auto-org + auto-member
