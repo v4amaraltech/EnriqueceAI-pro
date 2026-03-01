@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchInsightsData } from '../services/insights-metrics.service';
@@ -20,7 +20,7 @@ const filtersSchema = z.object({
 export async function getInsightsData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<InsightsData>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   const parsed = filtersSchema.safeParse(rawFilters);
@@ -30,19 +30,13 @@ export async function getInsightsData(
 
   const filters = parsed.data;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
+  // SDR isolation: force insights to show only their own data
+  if (role === 'sdr') {
+    filters.userIds = [userId];
   }
 
   try {
-    const insights = await fetchInsightsData(supabase, member.org_id, filters);
+    const insights = await fetchInsightsData(supabase, orgId, filters);
     return { success: true, data: insights };
   } catch {
     return { success: false, error: 'Erro ao buscar dados de insights' };

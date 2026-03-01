@@ -67,6 +67,7 @@ export const leadFiltersSchema = z.object({
   cnae: z.string().optional(),
   uf: z.string().max(2).optional(),
   search: z.string().optional(),
+  assigned_to: z.string().uuid().optional(),
   sort_by: z.enum(['created_at', 'fit_score']).default('created_at'),
   sort_dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),

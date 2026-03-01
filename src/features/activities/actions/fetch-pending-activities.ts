@@ -49,9 +49,11 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   const supabase = await createServerSupabaseClient();
 
   // 1. Fetch ALL active enrollments with due steps (no time window — show everything pending)
+  // RLS on leads table filters by assigned_to for SDRs: leads not visible to this
+  // user will come back as null in the join, and are filtered out below.
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by, type)')
+    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .order('next_step_due', { ascending: true })

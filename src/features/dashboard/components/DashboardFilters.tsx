@@ -49,7 +49,7 @@ export function DashboardFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { members } = useOrganization();
+  const { members, isManager } = useOrganization();
 
   const months = getLast12Months();
   const currentMonthLabel =
@@ -142,8 +142,8 @@ export function DashboardFilters({
         </DropdownMenu>
       )}
 
-      {/* User filter */}
-      {sdrMembers.length > 1 && (
+      {/* User filter — only visible to managers */}
+      {isManager && sdrMembers.length > 1 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5">

@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import {
@@ -23,7 +23,7 @@ const filtersSchema = z.object({
 export async function getDashboardData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<DashboardData>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   // Validate filters
@@ -34,22 +34,15 @@ export async function getDashboardData(
 
   const filters = parsed.data;
 
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
+  // SDR isolation: force dashboard to show only their own data
+  if (role === 'sdr') {
+    filters.userIds = [userId];
   }
 
   try {
     const [kpi, availableCadences] = await Promise.all([
-      fetchOpportunityKpi(supabase, member.org_id, filters),
-      fetchAvailableCadences(supabase, member.org_id),
+      fetchOpportunityKpi(supabase, orgId, filters),
+      fetchAvailableCadences(supabase, orgId),
     ]);
 
     return {

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { LeadImportErrorRow } from '../types';
@@ -19,20 +19,8 @@ export interface ImportLeadsResult {
 }
 
 export async function importLeads(formData: FormData): Promise<ActionResult<ImportLeadsResult>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
 
   // Get file from form
   const file = formData.get('file') as File | null;
@@ -57,14 +45,14 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   const { data: importRecord, error: importError } = (await (supabase
     .from('lead_imports') as ReturnType<typeof supabase.from>)
     .insert({
-      org_id: member.org_id,
+      org_id: orgId,
       file_name: file.name,
       total_rows: parsed.totalRows,
       processed_rows: 0,
       success_count: 0,
       error_count: 0,
       status: 'processing',
-      created_by: user.id,
+      created_by: userId,
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -78,19 +66,23 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   let duplicateCount = 0;
   const importErrors: LeadImportErrorRow[] = [];
 
+  // SDR auto-assign: when an SDR imports leads, auto-assign to themselves
+  const autoAssignTo = role === 'sdr' ? userId : null;
+
   // Insert valid rows
   for (const row of parsed.rows) {
     const { error: insertError } = await (supabase
       .from('leads') as ReturnType<typeof supabase.from>)
       .insert({
-        org_id: member.org_id,
+        org_id: orgId,
         cnpj: row.cnpj,
         status: 'new',
         enrichment_status: 'pending',
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
         lead_source: row.lead_source ?? null,
-        created_by: user.id,
+        created_by: userId,
+        assigned_to: autoAssignTo,
         import_id: importId,
       } as Record<string, unknown>);
 
@@ -102,7 +94,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         const { data: existingLead } = (await (supabase
           .from('leads') as ReturnType<typeof supabase.from>)
           .select('id, deleted_at')
-          .eq('org_id', member.org_id)
+          .eq('org_id', orgId)
           .eq('cnpj', row.cnpj)
           .single()) as { data: { id: string; deleted_at: string | null } | null };
 

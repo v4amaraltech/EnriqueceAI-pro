@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -21,7 +21,7 @@ const filtersSchema = z.object({
 export async function getRankingData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<RankingData>> {
-  const user = await requireAuth();
+  const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   const parsed = filtersSchema.safeParse(rawFilters);
@@ -31,19 +31,13 @@ export async function getRankingData(
 
   const filters = parsed.data;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
+  // SDR isolation: force ranking to show only their own data
+  if (role === 'sdr') {
+    filters.userIds = [userId];
   }
 
   try {
-    const ranking = await fetchRankingData(supabase, member.org_id, filters);
+    const ranking = await fetchRankingData(supabase, orgId, filters);
 
     // Resolve user IDs to display names
     const allUserIds = new Set<string>();

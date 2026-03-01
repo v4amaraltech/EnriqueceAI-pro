@@ -27,9 +27,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   const supabase = await createServerSupabaseClient();
 
   // Active enrollments (all due, regardless of step type)
+  // RLS on leads filters by assigned_to for SDRs — !inner excludes enrollments for invisible leads
   const { data: enrollments, error } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios), cadence:cadences(id, name)')
+    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios), cadence:cadences(id, name)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString())
     .order('next_step_due', { ascending: true })

@@ -58,6 +58,9 @@ export async function fetchLeads(
   if (filters.uf) {
     query = query.eq('endereco->>uf', filters.uf);
   }
+  if (filters.assigned_to) {
+    query = query.eq('assigned_to', filters.assigned_to);
+  }
 
   // Full-text search
   if (filters.search) {
