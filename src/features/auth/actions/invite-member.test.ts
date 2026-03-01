@@ -16,7 +16,8 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
-const mockCreateUser = vi.fn();
+const mockInviteUserByEmail = vi.fn();
+const mockUpdateUserById = vi.fn().mockResolvedValue({ error: null });
 const mockListUsers = vi.fn().mockResolvedValue({ data: { users: [] } });
 const mockAdminInsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -39,7 +40,13 @@ const mockAdminFrom = vi.fn().mockImplementation((table: string) => {
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminSupabaseClient: vi.fn(() => ({
-    auth: { admin: { createUser: mockCreateUser, listUsers: mockListUsers } },
+    auth: {
+      admin: {
+        inviteUserByEmail: mockInviteUserByEmail,
+        updateUserById: mockUpdateUserById,
+        listUsers: mockListUsers,
+      },
+    },
     from: mockAdminFrom,
   })),
 }));
@@ -110,7 +117,8 @@ function setupManagerWithOrg() {
 describe('inviteMember', () => {
   beforeEach(() => {
     resetMocks();
-    mockCreateUser.mockReset();
+    mockInviteUserByEmail.mockReset();
+    mockUpdateUserById.mockReset().mockResolvedValue({ error: null });
     mockListUsers.mockReset().mockResolvedValue({ data: { users: [] } });
     mockAdminInsert.mockReset().mockResolvedValue({ error: null });
     mockAdminUpsert.mockReset().mockResolvedValue({ error: null });
@@ -159,9 +167,9 @@ describe('inviteMember', () => {
     }
   });
 
-  it('should create new user with temp password', async () => {
+  it('should invite new user with email and set temp password', async () => {
     setupManagerWithOrg();
-    mockCreateUser.mockResolvedValue({
+    mockInviteUserByEmail.mockResolvedValue({
       data: { user: { id: 'new-user-id' } },
       error: null,
     });
@@ -172,11 +180,16 @@ describe('inviteMember', () => {
     if (result.success) {
       expect(result.data.tempPassword).toBe('Enriqueceai123');
     }
-    expect(mockCreateUser).toHaveBeenCalledWith({
-      email: 'new@email.com',
-      password: 'Enriqueceai123',
-      email_confirm: true,
-    });
+    expect(mockInviteUserByEmail).toHaveBeenCalledWith(
+      'new@email.com',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          invited_to_org: 'org-abc',
+          invited_role: 'sdr',
+        }),
+      }),
+    );
+    expect(mockUpdateUserById).toHaveBeenCalledWith('new-user-id', { password: 'Enriqueceai123' });
     expect(mockAdminFrom).toHaveBeenCalledWith('organization_members');
     expect(mockAdminInsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -200,7 +213,7 @@ describe('inviteMember', () => {
     if (result.success) {
       expect(result.data.tempPassword).toBeNull();
     }
-    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockInviteUserByEmail).not.toHaveBeenCalled();
     expect(mockAdminUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         org_id: 'org-abc',

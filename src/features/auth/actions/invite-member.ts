@@ -55,6 +55,8 @@ export async function inviteMember(
     }
 
     const admin = createAdminSupabaseClient();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const redirectTo = `${appUrl}/api/auth/callback`;
 
     // Check if user already exists
     const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -74,24 +76,34 @@ export async function inviteMember(
         { onConflict: 'org_id,user_id' },
       );
     } else {
-      // New user — create with temp password (email_confirm: true skips email verification)
-      const { data: newUserData, error: createError } = await admin.auth.admin.createUser({
-        email: parsed.data.email,
-        password: TEMP_PASSWORD,
-        email_confirm: true,
-      });
+      // New user — send invite email (creates user + sends email)
+      const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
+        parsed.data.email,
+        {
+          redirectTo,
+          data: {
+            invited_to_org: currentMember.org_id,
+            invited_role: parsed.data.role,
+          },
+        },
+      );
 
-      if (createError) {
-        return { success: false, error: createError.message };
+      if (inviteError) {
+        return { success: false, error: inviteError.message };
       }
 
-      if (newUserData?.user) {
+      if (inviteData?.user) {
+        // Set temp password so user can also log in directly via /login
+        await admin.auth.admin.updateUserById(inviteData.user.id, {
+          password: TEMP_PASSWORD,
+        });
+
         // handle_new_user trigger already created an auto-org + auto-member
         // Delete the auto-created org (CASCADE will delete the auto-member + subscription)
         const { data: autoOrgMember } = (await admin
           .from('organization_members')
           .select('org_id')
-          .eq('user_id', newUserData.user.id)
+          .eq('user_id', inviteData.user.id)
           .eq('role', 'manager')
           .eq('status', 'active')
           .single()) as { data: { org_id: string } | null };
@@ -103,7 +115,7 @@ export async function inviteMember(
         // Create org member in the invited org with active status
         const { error: memberError } = await admin.from('organization_members').insert({
           org_id: currentMember.org_id,
-          user_id: newUserData.user.id,
+          user_id: inviteData.user.id,
           role: parsed.data.role,
           status: 'active',
         });
