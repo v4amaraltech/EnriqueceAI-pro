@@ -55,6 +55,12 @@ export async function inviteMember(
     }
 
     const admin = createAdminSupabaseClient();
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : 'http://localhost:3000');
+    const redirectTo = `${appUrl}/api/auth/callback`;
 
     // Check if user already exists
     const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -74,30 +80,36 @@ export async function inviteMember(
         { onConflict: 'org_id,user_id' },
       );
     } else {
-      // New user — create directly with confirmed email + temp password
-      // We use createUser instead of inviteUserByEmail to avoid sending an
-      // invite email with a magic link that gets invalidated by email_confirm.
-      const { data: createData, error: createError } = await admin.auth.admin.createUser({
-        email: parsed.data.email,
-        password: TEMP_PASSWORD,
-        email_confirm: true,
-        user_metadata: {
-          invited_to_org: currentMember.org_id,
-          invited_role: parsed.data.role,
+      // Step 1: Send invite email via Supabase (sends email with magic link)
+      const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
+        parsed.data.email,
+        {
+          redirectTo,
+          data: {
+            invited_to_org: currentMember.org_id,
+            invited_role: parsed.data.role,
+          },
         },
-      });
+      );
 
-      if (createError) {
-        return { success: false, error: createError.message };
+      if (inviteError) {
+        return { success: false, error: inviteError.message };
       }
 
-      if (createData?.user) {
+      if (inviteData?.user) {
+        // Step 2: Set temp password WITHOUT email_confirm (keeps invite token valid)
+        // The invite link will confirm the email when clicked.
+        // The temp password allows direct login at /login as a fallback.
+        await admin.auth.admin.updateUserById(inviteData.user.id, {
+          password: TEMP_PASSWORD,
+        });
+
         // handle_new_user trigger already created an auto-org + auto-member
         // Delete the auto-created org (CASCADE will delete the auto-member + subscription)
         const { data: autoOrgMember } = (await admin
           .from('organization_members')
           .select('org_id')
-          .eq('user_id', createData.user.id)
+          .eq('user_id', inviteData.user.id)
           .eq('role', 'manager')
           .eq('status', 'active')
           .single()) as { data: { org_id: string } | null };
@@ -109,7 +121,7 @@ export async function inviteMember(
         // Create org member in the invited org with active status
         const { error: memberError } = await admin.from('organization_members').insert({
           org_id: currentMember.org_id,
-          user_id: createData.user.id,
+          user_id: inviteData.user.id,
           role: parsed.data.role,
           status: 'active',
         });
