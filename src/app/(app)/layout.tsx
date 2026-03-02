@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 
 import { ThemeProvider } from 'next-themes';
+import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -32,6 +33,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <p className="text-muted-foreground">Organização não encontrada.</p>
       </div>
     );
+  }
+
+  // Redirect to onboarding if org name looks like a domain (not yet configured)
+  const orgName = memberData.organization.name;
+  if (orgName && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(orgName)) {
+    redirect('/onboarding');
   }
 
   const { data: members } = (await supabase

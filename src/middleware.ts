@@ -81,21 +81,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Authenticated, not on onboarding, not on API → check if needs onboarding
-  if (user && !isOnboarding && !pathname.startsWith('/api/')) {
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select('organization:organizations(name)')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .single();
-
-    const orgName = (member as { organization?: { name?: string } } | null)?.organization?.name;
-    if (orgName && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(orgName)) {
-      return NextResponse.redirect(new URL('/onboarding', request.url));
-    }
-  }
-
   return response;
 }
 
