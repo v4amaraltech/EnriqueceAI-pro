@@ -12,6 +12,14 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
 
 import { getGoals } from '../actions/get-goals';
@@ -62,6 +70,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
+  const [visibleUserIds, setVisibleUserIds] = useState<Set<string>>(new Set());
 
   const monthName = getMonthName(month);
   const prevMonthName = getPreviousMonthName(month);
@@ -79,6 +88,14 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
         setUserGoals(result.data.userGoals);
+
+        // Show SDRs that already have goals or had goals last month; fallback to all
+        const qualified = result.data.userGoals
+          .filter((ug) => ug.opportunityTarget > 0 || ug.previousTarget !== null)
+          .map((ug) => ug.userId);
+        setVisibleUserIds(
+          new Set(qualified.length > 0 ? qualified : result.data.userGoals.map((ug) => ug.userId)),
+        );
       } else {
         toast.error(result.error);
       }
@@ -87,6 +104,13 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
     return () => { cancelled = true; };
   }, [open, month]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const visibleGoals = userGoals.filter((ug) => visibleUserIds.has(ug.userId));
+  const availableGoals = userGoals.filter((ug) => !visibleUserIds.has(ug.userId));
+
+  function addSdrToList(userId: string) {
+    setVisibleUserIds((prev) => new Set([...prev, userId]));
+  }
 
   function updateUserGoal(userId: string, value: number) {
     setUserGoals((prev) =>
@@ -225,20 +249,45 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-[var(--foreground)]">
-                  Vendedores ({userGoals.length})
+                  Vendedores ({visibleGoals.length})
                 </h3>
-                <button
-                  type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] opacity-70 shadow-sm hover:bg-[var(--accent)]"
-                  aria-label="Adicionar vendedor"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
+                {availableGoals.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] opacity-70 shadow-sm hover:bg-[var(--accent)]"
+                        aria-label="Adicionar vendedor"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Adicionar vendedor</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {availableGoals.map((ug) => (
+                        <DropdownMenuItem
+                          key={ug.userId}
+                          onClick={() => addSdrToList(ug.userId)}
+                          className="gap-3"
+                        >
+                          <Avatar className="h-6 w-6">
+                            {ug.avatarUrl && <AvatarImage src={ug.avatarUrl} alt={ug.userName} />}
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                              {ug.userName.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {ug.userName}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
 
-              {userGoals.length > 0 && (
+              {visibleGoals.length > 0 && (
                 <div className="space-y-2">
-                  {userGoals.map((ug) => (
+                  {visibleGoals.map((ug) => (
                     <div
                       key={ug.userId}
                       className="flex items-center gap-4 rounded-lg border bg-[var(--card)] px-4 py-3"
