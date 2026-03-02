@@ -1,13 +1,27 @@
-import { TrendingUp } from 'lucide-react';
+import { requireManager } from '@/lib/auth/require-manager';
 
-export default function ProspectingPerformancePage() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <TrendingUp className="mb-4 h-12 w-12 text-[var(--muted-foreground)] opacity-40" />
-      <h1 className="text-2xl font-bold">Desempenho</h1>
-      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-        Métricas de desempenho individual e da equipe estarão disponíveis em breve.
-      </p>
-    </div>
-  );
+import { fetchPerformanceAnalytics } from '@/features/statistics/actions/fetch-performance-analytics';
+import { PerformanceAnalyticsView } from '@/features/statistics/components/PerformanceAnalyticsView';
+
+interface PageProps {
+  searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
+}
+
+export default async function ProspectingPerformancePage({ searchParams }: PageProps) {
+  await requireManager();
+  const params = await searchParams;
+  const userIds = params.user ? [params.user] : undefined;
+  const cadenceId = params.cadence || undefined;
+
+  const dateRange = params.from && params.to
+    ? { from: params.from, to: params.to }
+    : undefined;
+
+  const result = await fetchPerformanceAnalytics('30d', userIds, cadenceId, dateRange);
+
+  if (!result.success) {
+    return <p className="text-[var(--destructive)]">Erro: {result.error}</p>;
+  }
+
+  return <PerformanceAnalyticsView data={result.data} />;
 }

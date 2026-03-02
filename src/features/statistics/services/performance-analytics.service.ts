@@ -1,0 +1,195 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import type {
+  DailySdrPerformanceEntry,
+  PerformanceAnalyticsData,
+  SdrActivityComparisonEntry,
+  SdrPerformanceRow,
+} from '../types/performance-analytics.types';
+import { safeRate } from '../types/shared';
+
+interface InteractionRow {
+  type: string;
+  lead_id: string;
+  performed_by: string | null;
+  cadence_id: string | null;
+  created_at: string;
+}
+
+interface LeadRow {
+  id: string;
+  status: string;
+  created_by: string | null;
+}
+
+interface MemberRow {
+  user_id: string;
+  user_email: string;
+}
+
+export async function fetchPerformanceAnalyticsData(
+  supabase: SupabaseClient,
+  orgId: string,
+  periodStart: string,
+  periodEnd: string,
+  userIds?: string[],
+  cadenceId?: string,
+): Promise<PerformanceAnalyticsData> {
+  // Fetch org members
+  const { data: rawMembers } = (await (supabase.from('organization_members') as ReturnType<typeof supabase.from>)
+    .select('user_id, user_email')
+    .eq('org_id', orgId)
+    .eq('status', 'active')) as { data: MemberRow[] | null };
+  const members = rawMembers ?? [];
+
+  if (members.length === 0) {
+    return emptyData();
+  }
+
+  const memberIds = userIds && userIds.length > 0
+    ? userIds
+    : members.map((m) => m.user_id);
+
+  // Fetch interactions
+  let intQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+    .select('type, lead_id, performed_by, cadence_id, created_at')
+    .eq('org_id', orgId)
+    .gte('created_at', periodStart)
+    .lte('created_at', periodEnd)
+    .in('performed_by', memberIds);
+
+  if (cadenceId) {
+    intQuery = intQuery.eq('cadence_id', cadenceId);
+  }
+
+  const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
+  const interactions = rawInteractions ?? [];
+
+  // Fetch leads created in period
+  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    .select('id, status, created_by')
+    .eq('org_id', orgId)
+    .gte('created_at', periodStart)
+    .lte('created_at', periodEnd)
+    .in('created_by', memberIds);
+
+  const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
+  const leads = rawLeads ?? [];
+
+  const memberLookup = new Map(members.map((m) => [m.user_id, m.user_email]));
+
+  const totalActivities = interactions.length;
+  const totalLeadsCreated = leads.length;
+  const totalQualified = leads.filter((l) => l.status === 'qualified').length;
+
+  const sdrTable = buildSdrTable(memberIds, memberLookup, interactions, leads);
+  const sdrComparison = buildSdrComparison(sdrTable);
+  const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
+
+  return {
+    totalActivities,
+    totalLeadsCreated,
+    totalQualified,
+    qualificationRate: safeRate(totalQualified, totalLeadsCreated),
+    sdrTable,
+    sdrComparison,
+    dailySdrTrend,
+    dailySdrKeys,
+  };
+}
+
+function buildSdrTable(
+  memberIds: string[],
+  memberLookup: Map<string, string>,
+  interactions: InteractionRow[],
+  leads: LeadRow[],
+): SdrPerformanceRow[] {
+  return memberIds
+    .map((userId) => {
+      const userEmail = memberLookup.get(userId) ?? userId;
+      const userInteractions = interactions.filter((i) => i.performed_by === userId);
+      const userLeads = leads.filter((l) => l.created_by === userId);
+      const qualified = userLeads.filter((l) => l.status === 'qualified').length;
+      const meetings = userInteractions.filter((i) => i.type === 'meeting_scheduled').length;
+
+      return {
+        userId,
+        userEmail,
+        activities: userInteractions.length,
+        leadsCreated: userLeads.length,
+        qualified,
+        qualificationRate: safeRate(qualified, userLeads.length),
+        meetings,
+      };
+    })
+    .filter((s) => s.activities > 0 || s.leadsCreated > 0)
+    .sort((a, b) => b.activities - a.activities);
+}
+
+function buildSdrComparison(sdrTable: SdrPerformanceRow[]): SdrActivityComparisonEntry[] {
+  return sdrTable.map((s) => ({
+    userEmail: s.userEmail.split('@')[0] ?? s.userEmail,
+    activities: s.activities,
+  }));
+}
+
+function buildDailySdrTrend(
+  interactions: InteractionRow[],
+  memberLookup: Map<string, string>,
+): { dailySdrTrend: DailySdrPerformanceEntry[]; dailySdrKeys: string[] } {
+  // Count activities per SDR per day
+  const sdrDayMap = new Map<string, Map<string, number>>();
+  const sdrTotals = new Map<string, number>();
+
+  for (const interaction of interactions) {
+    if (!interaction.performed_by) continue;
+    const email = memberLookup.get(interaction.performed_by);
+    if (!email) continue;
+
+    const shortEmail = email.split('@')[0] ?? email;
+    const dateStr = interaction.created_at.slice(0, 10);
+
+    sdrTotals.set(shortEmail, (sdrTotals.get(shortEmail) ?? 0) + 1);
+
+    if (!sdrDayMap.has(dateStr)) {
+      sdrDayMap.set(dateStr, new Map());
+    }
+    const dayMap = sdrDayMap.get(dateStr)!;
+    dayMap.set(shortEmail, (dayMap.get(shortEmail) ?? 0) + 1);
+  }
+
+  // Get top 5 SDRs by total activity
+  const topSdrs = Array.from(sdrTotals.entries())
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([email]) => email);
+
+  const dailySdrTrend: DailySdrPerformanceEntry[] = Array.from(sdrDayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, dayMap]) => {
+      const [, month, day] = date.split('-');
+      const entry: DailySdrPerformanceEntry = {
+        date,
+        label: `${day}/${month}`,
+      };
+      for (const sdr of topSdrs) {
+        entry[sdr] = dayMap.get(sdr) ?? 0;
+      }
+      return entry;
+    });
+
+  return { dailySdrTrend, dailySdrKeys: topSdrs };
+}
+
+function emptyData(): PerformanceAnalyticsData {
+  return {
+    totalActivities: 0,
+    totalLeadsCreated: 0,
+    totalQualified: 0,
+    qualificationRate: 0,
+    sdrTable: [],
+    sdrComparison: [],
+    dailySdrTrend: [],
+    dailySdrKeys: [],
+  };
+}

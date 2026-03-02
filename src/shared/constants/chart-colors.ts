@@ -94,5 +94,25 @@ export const CHART_ACCENT = {
   peakHighlight: '#f97316',
 } as const;
 
+/** Enrollment status colors for cadence/loss analytics */
+export const ENROLLMENT_STATUS_COLORS: Record<string, string> = {
+  active: '#3b82f6',
+  paused: '#f59e0b',
+  completed: '#22c55e',
+  replied: '#8b5cf6',
+  bounced: '#ef4444',
+  unsubscribed: '#6b7280',
+};
+
+/** Enrollment status labels (pt-BR) */
+export const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
+  active: 'Ativo',
+  paused: 'Pausado',
+  completed: 'Concluído',
+  replied: 'Respondido',
+  bounced: 'Bounced',
+  unsubscribed: 'Cancelado',
+};
+
 /** Fallback color when a key is not found in any color map */
 export const CHART_FALLBACK_COLOR = '#6b7280';
