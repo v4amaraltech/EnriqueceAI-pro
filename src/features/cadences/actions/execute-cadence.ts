@@ -157,6 +157,25 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
+      // Auto-stop: check if lead's email bounced in this cadence
+      const { data: bounceInteraction } = (await (supabase
+        .from('interactions') as ReturnType<typeof supabase.from>)
+        .select('id')
+        .eq('cadence_id', enrollment.cadence_id)
+        .eq('lead_id', enrollment.lead_id)
+        .eq('type', 'bounced')
+        .limit(1)
+        .maybeSingle()) as { data: { id: string } | null };
+
+      if (bounceInteraction) {
+        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+          .update({ status: 'bounced' } as Record<string, unknown>)
+          .eq('id', enrollment.id);
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} status=bounced reason=auto_stop duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
+
       let messageContent = '';
       let subject: string | null = null;
       let aiGenerated = false;

@@ -59,8 +59,8 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   const cadenceLeadPairs = sentInteractions.map((i) => `${i.cadence_id}:${i.lead_id}`);
   const uniquePairs = [...new Set(cadenceLeadPairs)];
 
-  const repliedMap = new Set<string>();
-  // Check in batches of unique cadence+lead pairs
+  const alreadyProcessedMap = new Set<string>();
+  // Check in batches of unique cadence+lead pairs for existing replies or bounces
   for (const pair of uniquePairs) {
     const [cadenceId, leadId] = pair.split(':');
     const { data: existing } = (await (supabase
@@ -68,17 +68,17 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       .select('id')
       .eq('cadence_id', cadenceId!)
       .eq('lead_id', leadId!)
-      .eq('type', 'replied')
+      .in('type', ['replied', 'bounced'])
       .limit(1)
       .maybeSingle()) as { data: { id: string } | null };
 
     if (existing) {
-      repliedMap.add(pair);
+      alreadyProcessedMap.add(pair);
     }
   }
 
   const toCheck = sentInteractions.filter(
-    (i) => !repliedMap.has(`${i.cadence_id}:${i.lead_id}`),
+    (i) => !alreadyProcessedMap.has(`${i.cadence_id}:${i.lead_id}`),
   );
 
   if (!toCheck.length) {
@@ -125,13 +125,18 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       const threadId = await getThreadId(supabase, interaction, accessToken);
       if (!threadId) continue;
 
-      const hasReply = await checkThreadForReply(threadId, accessToken);
-      if (!hasReply) continue;
+      const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
+      if (!detection) continue;
 
-      // Reply found — create replied interaction + update enrollment
-      await recordReply(supabase, interaction);
-      found++;
-      console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+      if (detection === 'bounce') {
+        await recordBounce(supabase, interaction);
+        found++;
+        console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+      } else {
+        await recordReply(supabase, interaction);
+        found++;
+        console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+      }
     }
   }
 
@@ -213,23 +218,50 @@ async function getThreadId(
   }
 }
 
-/** Check if a Gmail thread has more than 1 message (indicating a reply) */
-async function checkThreadForReply(
+/** Bounce indicator patterns in email From header */
+const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster'];
+
+interface GmailThreadMessage {
+  id: string;
+  payload?: {
+    headers?: Array<{ name: string; value: string }>;
+  };
+}
+
+/** Check if a Gmail thread contains a reply or a bounce */
+async function checkThreadForReplyOrBounce(
   threadId: string,
   accessToken: string,
-): Promise<boolean> {
+): Promise<'reply' | 'bounce' | null> {
   try {
     const response = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id)`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id,payload(headers))`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
-    if (!response.ok) return false;
+    if (!response.ok) return null;
 
-    const data = (await response.json()) as { messages?: { id: string }[] };
-    return (data.messages?.length ?? 0) > 1;
+    const data = (await response.json()) as { messages?: GmailThreadMessage[] };
+    const messages = data.messages ?? [];
+    if (messages.length <= 1) return null;
+
+    // Check if any message (beyond the first) is a bounce
+    for (let i = 1; i < messages.length; i++) {
+      const msg = messages[i];
+      const fromHeader = msg?.payload?.headers?.find(
+        (h) => h.name.toLowerCase() === 'from',
+      );
+      if (fromHeader) {
+        const fromLower = fromHeader.value.toLowerCase();
+        if (BOUNCE_SENDERS.some((sender) => fromLower.includes(sender))) {
+          return 'bounce';
+        }
+      }
+    }
+
+    return 'reply';
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -265,6 +297,43 @@ async function recordReply(
   await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
     .update({ status: 'replied' } as Record<string, unknown>)
+    .eq('lead_id', sentInteraction.lead_id)
+    .eq('cadence_id', sentInteraction.cadence_id)
+    .eq('status', 'active');
+}
+
+/** Record a bounce: create bounced interaction + update enrollment status */
+async function recordBounce(
+  supabase: SupabaseClient,
+  sentInteraction: SentInteraction,
+): Promise<void> {
+  // Get org_id from the lead
+  const { data: lead } = (await (supabase
+    .from('leads') as ReturnType<typeof supabase.from>)
+    .select('org_id')
+    .eq('id', sentInteraction.lead_id)
+    .single()) as { data: { org_id: string } | null };
+
+  if (!lead) return;
+
+  // Create bounced interaction
+  await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .insert({
+      org_id: lead.org_id,
+      lead_id: sentInteraction.lead_id,
+      cadence_id: sentInteraction.cadence_id,
+      step_id: null,
+      channel: 'email',
+      type: 'bounced',
+      message_content: null,
+      metadata: { detected_by: 'gmail_thread_poll', sent_interaction_id: sentInteraction.id },
+    } as Record<string, unknown>);
+
+  // Update active enrollment to bounced
+  await (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .update({ status: 'bounced' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
