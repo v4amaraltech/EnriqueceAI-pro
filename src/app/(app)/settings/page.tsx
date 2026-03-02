@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Building2, CreditCard, Plug, Target, User, Users } from 'lucide-react';
+import { Building2, CreditCard, Plug, User, Users } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -13,7 +13,6 @@ const settingsLinks = [
   { label: 'Usuários', href: '/settings/users', icon: Users, description: 'Gerenciar membros da equipe' },
   { label: 'Integrações', href: '/settings/integrations', icon: Plug, description: 'Gmail, WhatsApp, CRM' },
   { label: 'Faturamento', href: '/settings/billing', icon: CreditCard, description: 'Plano e pagamento' },
-  { label: 'Prospecção', href: '/settings/prospecting', icon: Target, description: 'Metas e ajustes de prospecção' },
 ];
 
 export default async function SettingsPage() {
