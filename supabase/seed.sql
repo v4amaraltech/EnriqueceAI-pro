@@ -1,15 +1,42 @@
 -- ============================================================================
 -- Flux Sales Engagement — Seed Data for Development
 -- ============================================================================
--- Run after initial_schema migration with a test organization already created.
--- These leads use fictional but valid CNPJs for development/testing only.
+-- Run after initial_schema migration.
+-- Creates a dev user + organization, then seeds 20 sample leads.
+-- Login: dev@flux.local / dev123456
 -- ============================================================================
 
--- Note: This seed assumes an organization and user exist.
--- The handle_new_user trigger auto-creates an org on user signup.
--- For local dev, create a user via Supabase Dashboard first.
+-- ── Step 1: Create dev user in auth.users ──
+-- The handle_new_user trigger will auto-create org + membership.
+INSERT INTO auth.users (
+  id, instance_id, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  raw_app_meta_data, raw_user_meta_data, aud, role,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+) VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000000',
+  'dev@flux.local',
+  crypt('dev123456', gen_salt('bf')),
+  now(), now(), now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"full_name":"Dev User"}'::jsonb,
+  'authenticated', 'authenticated',
+  '', '', '', ''
+) ON CONFLICT (id) DO NOTHING;
 
--- Helper: Insert leads for the first organization found
+INSERT INTO auth.identities (
+  id, user_id, provider_id, provider, identity_data,
+  last_sign_in_at, created_at, updated_at
+) VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'dev@flux.local', 'email',
+  '{"sub":"a0000000-0000-0000-0000-000000000001","email":"dev@flux.local"}'::jsonb,
+  now(), now(), now()
+) ON CONFLICT (provider_id, provider) DO NOTHING;
+
+-- ── Step 2: Insert sample leads for the dev user's organization ──
 DO $$
 DECLARE
   v_org_id UUID;
