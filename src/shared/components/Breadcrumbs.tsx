@@ -39,6 +39,11 @@ const pathLabels: Record<string, string> = {
   execution: 'Execução',
   calls: 'Ligações',
   statistics: 'Estatísticas',
+  activities: 'Atividades',
+  conversion: 'Conversão',
+  team: 'Equipe',
+  performance: 'Desempenho',
+  emails: 'E-mails',
   history: 'Histórico',
   ajustes: 'Ajustes',
 };
