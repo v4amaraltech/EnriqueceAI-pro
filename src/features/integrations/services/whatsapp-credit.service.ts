@@ -159,6 +159,6 @@ async function fireThresholdAlert(orgId: string, used: number, limit: number): P
     body: `Sua organização já usou ${used} de ${limit} mensagens WhatsApp neste mês. Considere fazer upgrade do plano para evitar interrupções.`,
     resourceType: 'integration',
     metadata: { channel: 'whatsapp', used, limit, percentage: pct },
-    roleFilter: 'owner',
+    roleFilter: 'manager',
   });
 }

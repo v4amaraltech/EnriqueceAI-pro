@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+const WHATSAPP_RATE_LIMIT = 80; // msgs per second (Meta API limit)
+const WHATSAPP_RATE_WINDOW_MS = 1_000;
 
 interface SendWhatsAppParams {
   to: string;
@@ -104,6 +108,12 @@ export class WhatsAppService {
           type: 'text',
           text: { body: params.body },
         };
+
+    // Rate limit: 80 msgs/sec per org (Meta API limit)
+    const rateCheck = checkRateLimit(`whatsapp:${orgId}`, WHATSAPP_RATE_LIMIT, WHATSAPP_RATE_WINDOW_MS);
+    if (!rateCheck.allowed) {
+      return { success: false, error: `Rate limit excedido. Tente novamente em ${Math.ceil((rateCheck.retryAfterMs ?? 1000) / 1000)}s` };
+    }
 
     const response = await fetch(
       `${WhatsAppService.META_API_URL}/${connection.phone_number_id}/messages`,
