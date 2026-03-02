@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { isEventProcessed, markEventProcessed } from './idempotency';
+import { isEventProcessed, markEventProcessed, markEventReceived } from './idempotency';
 
 function createMockSupabase(selectResult: unknown = null, upsertResult: unknown = null) {
   const chain: Record<string, unknown> = {};
@@ -79,6 +79,39 @@ describe('markEventProcessed', () => {
 
     expect(chain.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ payload: null }),
+      expect.any(Object),
+    );
+  });
+});
+
+describe('markEventReceived', () => {
+  it('should upsert with status pending and retry_count 0', async () => {
+    const { client, from, chain } = createMockSupabase();
+
+    await markEventReceived(client, 'stripe', 'evt_recv_1', 'checkout.session.completed');
+
+    expect(from).toHaveBeenCalledWith('webhook_events');
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'stripe',
+        event_id: 'evt_recv_1',
+        event_type: 'checkout.session.completed',
+        status: 'pending',
+        retry_count: 0,
+        payload: null,
+      }),
+      { onConflict: 'provider,event_id', ignoreDuplicates: true },
+    );
+  });
+
+  it('should include payload when provided', async () => {
+    const { client, chain } = createMockSupabase();
+    const payload = { session_id: 'cs_123' };
+
+    await markEventReceived(client, 'stripe', 'evt_recv_2', 'checkout.session.completed', payload);
+
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { session_id: 'cs_123' } }),
       expect.any(Object),
     );
   });

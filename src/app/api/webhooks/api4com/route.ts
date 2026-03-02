@@ -1,14 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   createWebhookLogger,
   isEventProcessed,
-  markEventProcessed,
+  markEventReceived,
+  processWithRetry,
 } from '@/lib/webhooks';
 
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import type { CallStatus } from '@/features/calls/types';
+
+export const maxDuration = 60;
 
 const logger = createWebhookLogger('api4com');
 
@@ -22,6 +25,50 @@ const hangupCauseToStatus: Record<string, CallStatus> = {
   INVALID_NUMBER_FORMAT: 'not_connected',
   // NORMAL_CLEARING and ORIGINATOR_CANCEL keep the existing status
 };
+
+/** Process an API4COM event (runs in background via after()) */
+async function processApi4ComEvent(
+  body: Api4ComWebhookPayload,
+  supabase: ReturnType<typeof createServiceRoleClient>,
+): Promise<void> {
+  // Correlate with our calls table via metadata->api4com_call_id
+  const { data: call } = (await (
+    supabase.from('calls') as ReturnType<typeof supabase.from>
+  )
+    .select('id, status')
+    .eq('metadata->>api4com_call_id', body.id)
+    .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
+
+  if (!call) {
+    // Fallback: try matching by caller (ramal) + called (phone)
+    const calledNormalized = body.called.replace(/\D/g, '');
+    const { data: fallbackCall } = (await (
+      supabase.from('calls') as ReturnType<typeof supabase.from>
+    )
+      .select('id, status')
+      .eq('origin', body.caller)
+      .like('destination', `%${calledNormalized.slice(-8)}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
+
+    if (!fallbackCall) {
+      logger.warn('No matching call found', {
+        api4comId: body.id,
+        caller: body.caller,
+        called: body.called,
+      });
+      return;
+    }
+
+    await updateCallFromWebhook(supabase, fallbackCall.id, fallbackCall.status, body);
+    logger.info('Call updated via fallback', { callId: fallbackCall.id, api4comId: body.id });
+    return;
+  }
+
+  await updateCallFromWebhook(supabase, call.id, call.status, body);
+  logger.info('Call updated', { callId: call.id, api4comId: body.id });
+}
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -47,47 +94,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  // Correlate with our calls table via metadata->api4com_call_id
-  const { data: call } = (await (supabase
-    .from('calls') as ReturnType<typeof supabase.from>)
-    .select('id, status')
-    .eq('metadata->>api4com_call_id', body.id)
-    .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
+  // Mark as received (pending) before returning response
+  await markEventReceived(supabase, 'api4com', body.id, 'channel-hangup');
 
-  if (!call) {
-    // Fallback: try matching by caller (ramal) + called (phone)
-    const calledNormalized = body.called.replace(/\D/g, '');
-    const { data: fallbackCall } = (await (supabase
-      .from('calls') as ReturnType<typeof supabase.from>)
-      .select('id, status')
-      .eq('origin', body.caller)
-      .like('destination', `%${calledNormalized.slice(-8)}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
+  // Process in background after response is sent
+  after(() =>
+    processWithRetry({
+      supabase,
+      provider: 'api4com',
+      eventId: body.id,
+      eventType: 'channel-hangup',
+      process: () => processApi4ComEvent(body, supabase),
+    }),
+  );
 
-    if (!fallbackCall) {
-      logger.warn('No matching call found', {
-        api4comId: body.id,
-        caller: body.caller,
-        called: body.called,
-      });
-      // Still mark as processed to avoid re-processing
-      await markEventProcessed(supabase, 'api4com', body.id, 'channel-hangup.no_match');
-      return NextResponse.json({ received: true });
-    }
-
-    await updateCallFromWebhook(supabase, fallbackCall.id, fallbackCall.status, body);
-    await markEventProcessed(supabase, 'api4com', body.id, 'channel-hangup.fallback');
-
-    logger.info('Call updated via fallback', { callId: fallbackCall.id, api4comId: body.id });
-    return NextResponse.json({ received: true });
-  }
-
-  await updateCallFromWebhook(supabase, call.id, call.status, body);
-  await markEventProcessed(supabase, 'api4com', body.id, 'channel-hangup');
-
-  logger.info('Call updated', { callId: call.id, api4comId: body.id });
   return NextResponse.json({ received: true });
 }
 
@@ -119,8 +139,7 @@ async function updateCallFromWebhook(
     updates.status = 'significant';
   }
 
-  await (supabase
-    .from('calls') as ReturnType<typeof supabase.from>)
+  await (supabase.from('calls') as ReturnType<typeof supabase.from>)
     .update(updates)
     .eq('id', callId);
 }

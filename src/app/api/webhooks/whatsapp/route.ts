@@ -1,12 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   createWebhookLogger,
   isEventProcessed,
-  markEventProcessed,
+  markEventReceived,
+  processWithRetry,
   verifyHmacSignature,
 } from '@/lib/webhooks';
+
+export const maxDuration = 60;
 
 interface WhatsAppWebhookPayload {
   object: string;
@@ -29,6 +32,12 @@ interface WhatsAppWebhookPayload {
       };
     }[];
   }[];
+}
+
+interface SubEvent {
+  eventId: string;
+  eventType: string;
+  process: (supabase: ReturnType<typeof createServiceRoleClient>) => Promise<void>;
 }
 
 const logger = createWebhookLogger('whatsapp');
@@ -73,12 +82,15 @@ export async function POST(request: Request) {
 
   const supabase = createServiceRoleClient();
 
+  // Collect all sub-events that need processing
+  const subEvents: SubEvent[] = [];
+
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value;
       if (!value) continue;
 
-      // Process delivery status updates
+      // Delivery status updates
       for (const status of value.statuses ?? []) {
         const statusEventId = `status_${status.id}_${status.status}`;
         if (await isEventProcessed(supabase, 'whatsapp', statusEventId)) continue;
@@ -93,26 +105,54 @@ export async function POST(request: Request) {
         const interactionType = typeMap[status.status];
         if (!interactionType) continue;
 
-        await (supabase
-          .from('interactions') as ReturnType<typeof supabase.from>)
-          .update({
-            type: interactionType,
-            metadata: status.errors ? { errors: status.errors } : null,
-          } as Record<string, unknown>)
-          .eq('external_id', status.id);
-
-        await markEventProcessed(supabase, 'whatsapp', statusEventId, `status.${status.status}`);
+        subEvents.push({
+          eventId: statusEventId,
+          eventType: `status.${status.status}`,
+          process: async (sb) => {
+            await (sb.from('interactions') as ReturnType<typeof sb.from>)
+              .update({
+                type: interactionType,
+                metadata: status.errors ? { errors: status.errors } : null,
+              } as Record<string, unknown>)
+              .eq('external_id', status.id);
+          },
+        });
       }
 
-      // Process incoming messages (reply detection)
+      // Incoming messages (reply detection)
       for (const message of value.messages ?? []) {
         const msgEventId = `msg_${message.id}`;
         if (await isEventProcessed(supabase, 'whatsapp', msgEventId)) continue;
 
-        await processIncomingMessage(supabase, message);
-        await markEventProcessed(supabase, 'whatsapp', msgEventId, `message.${message.type}`);
+        subEvents.push({
+          eventId: msgEventId,
+          eventType: `message.${message.type}`,
+          process: (sb) => processIncomingMessage(sb, message),
+        });
       }
     }
+  }
+
+  // Mark all sub-events as received before returning response
+  for (const sub of subEvents) {
+    await markEventReceived(supabase, 'whatsapp', sub.eventId, sub.eventType);
+  }
+
+  // Process each sub-event in background with independent retry + DLQ
+  if (subEvents.length > 0) {
+    after(() =>
+      Promise.all(
+        subEvents.map((sub) =>
+          processWithRetry({
+            supabase,
+            provider: 'whatsapp',
+            eventId: sub.eventId,
+            eventType: sub.eventType,
+            process: () => sub.process(supabase),
+          }),
+        ),
+      ),
+    );
   }
 
   return NextResponse.json({ received: true });
@@ -132,8 +172,9 @@ async function processIncomingMessage(
     phonesToMatch.push(phone.slice(2));
   }
 
-  const { data: lead } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead } = (await (
+    supabase.from('leads') as ReturnType<typeof supabase.from>
+  )
     .select('id, org_id')
     .in('telefone', phonesToMatch)
     .limit(1)
@@ -145,14 +186,17 @@ async function processIncomingMessage(
   }
 
   // Find active enrollment with whatsapp channel for this lead
-  const { data: enrollment } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollment } = (await (
+    supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>
+  )
     .select('id, cadence_id, current_step')
     .eq('lead_id', lead.id)
     .eq('status', 'active')
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()) as { data: { id: string; cadence_id: string; current_step: number } | null };
+    .maybeSingle()) as {
+    data: { id: string; cadence_id: string; current_step: number } | null;
+  };
 
   if (!enrollment) {
     logger.warn('No active enrollment for lead', { lead_id: lead.id });
@@ -160,8 +204,9 @@ async function processIncomingMessage(
   }
 
   // Find current step to verify it's a whatsapp step
-  const { data: step } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: step } = (await (
+    supabase.from('cadence_steps') as ReturnType<typeof supabase.from>
+  )
     .select('id')
     .eq('cadence_id', enrollment.cadence_id)
     .eq('step_order', enrollment.current_step)
@@ -171,23 +216,20 @@ async function processIncomingMessage(
   const messageText = message.text?.body ?? '';
 
   // Create interaction for the reply
-  await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
-    .insert({
-      org_id: lead.org_id,
-      lead_id: lead.id,
-      cadence_id: enrollment.cadence_id,
-      step_id: step?.id ?? null,
-      channel: 'whatsapp',
-      type: 'replied',
-      message_content: messageText,
-      external_id: message.id,
-      metadata: { from: phone, message_type: message.type },
-    } as Record<string, unknown>);
+  await (supabase.from('interactions') as ReturnType<typeof supabase.from>).insert({
+    org_id: lead.org_id,
+    lead_id: lead.id,
+    cadence_id: enrollment.cadence_id,
+    step_id: step?.id ?? null,
+    channel: 'whatsapp',
+    type: 'replied',
+    message_content: messageText,
+    external_id: message.id,
+    metadata: { from: phone, message_type: message.type },
+  } as Record<string, unknown>);
 
   // Mark enrollment as replied
-  await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('id', enrollment.id);
 

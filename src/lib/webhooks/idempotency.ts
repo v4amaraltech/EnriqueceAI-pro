@@ -20,6 +20,31 @@ export async function isEventProcessed(
 }
 
 /**
+ * Mark a webhook event as received (pending processing).
+ * Inserts with status='pending' and retry_count=0.
+ * Uses upsert with ignoreDuplicates for race-safety.
+ */
+export async function markEventReceived(
+  supabase: SupabaseClient,
+  provider: string,
+  eventId: string,
+  eventType: string,
+  payload?: unknown,
+): Promise<void> {
+  await supabase.from('webhook_events').upsert(
+    {
+      provider,
+      event_id: eventId,
+      event_type: eventType,
+      payload: payload ?? null,
+      status: 'pending',
+      retry_count: 0,
+    },
+    { onConflict: 'provider,event_id', ignoreDuplicates: true },
+  );
+}
+
+/**
  * Mark a webhook event as processed by inserting into `webhook_events`.
  * Uses ON CONFLICT DO NOTHING to safely handle race conditions.
  */

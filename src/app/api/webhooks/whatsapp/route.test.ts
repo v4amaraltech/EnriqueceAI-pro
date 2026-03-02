@@ -10,13 +10,23 @@ vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
 }));
 
-// Mock webhook utilities — keep real verifyHmacSignature and logger, stub idempotency
+// Mock next/server after() to execute callback synchronously
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return { ...actual, after: vi.fn((cb: () => unknown) => cb()) };
+});
+
+// Mock webhook utilities — keep real verifyHmacSignature and logger, stub idempotency + retry
 vi.mock('@/lib/webhooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/webhooks')>();
   return {
     ...actual,
     isEventProcessed: vi.fn().mockResolvedValue(false),
     markEventProcessed: vi.fn().mockResolvedValue(undefined),
+    markEventReceived: vi.fn().mockResolvedValue(undefined),
+    processWithRetry: vi.fn().mockImplementation(async (opts: { process: () => Promise<void> }) => {
+      await opts.process();
+    }),
   };
 });
 
@@ -172,6 +182,8 @@ describe('WhatsApp Webhook POST — Status Updates', () => {
     };
 
     const response = await POST(makeRequest(body));
+    // Flush floating promises from after() background processing
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(response.status).toBe(200);
     expect(mockFrom).toHaveBeenCalledWith('interactions');
@@ -234,6 +246,8 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
     };
 
     const response = await POST(makeRequest(body));
+    // Flush floating promises from after() background processing
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(response.status).toBe(200);
     // Should have queried leads, enrollments, steps, then inserted interaction and updated enrollment
@@ -266,6 +280,8 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
     };
 
     const response = await POST(makeRequest(body));
+    // Flush floating promises from after() background processing
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(response.status).toBe(200);
     expect(consoleSpy).toHaveBeenCalledWith(
