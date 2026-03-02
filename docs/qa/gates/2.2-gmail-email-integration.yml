@@ -1,0 +1,57 @@
+schema: 1
+story: '2.2'
+gate: PASS
+status_reason: 'All 10 ACs met. Code follows existing patterns, tests cover all modified features (146 passing), no regressions, no security issues.'
+reviewer: 'Quinn'
+updated: '2026-03-01T23:25:00Z'
+top_issues: []
+waiver: { active: false }
+
+# --- 7 Quality Checks ---
+#
+# 1. Code Review
+#    - check-email-replies.ts: Clean refactor of checkThreadForReply → checkThreadForReplyOrBounce.
+#      Bounce detection via From header (mailer-daemon/postmaster) is industry-standard.
+#      recordBounce() mirrors recordReply() — consistent pattern.
+#      alreadyProcessedMap correctly filters both replied AND bounced to avoid re-processing.
+#    - execute-cadence.ts: Bounce auto-stop block (lines 160-177) mirrors reply auto-stop (lines 141-158) — consistent pattern.
+#    - Tracking tests: Follow established mock patterns (createChainMock, mockFrom). Good coverage of happy path, edge cases, and error resilience.
+#    Status: PASS
+#
+# 2. Unit Tests
+#    - 146 tests passing across cadences + integrations/email + tracking endpoints.
+#    - email.service.test.ts: 7 tests (pre-existing, still passing)
+#    - route.test.ts (open): 5 tests — GIF response, open_count increment, missing interaction, DB error resilience
+#    - route.test.ts (click): 7 tests — 302 redirect, click recording, append clicks, missing url, invalid url, protocol validation, DB error resilience
+#    - No test gaps for modified code paths.
+#    Status: PASS
+#
+# 3. Acceptance Criteria
+#    - AC1-7: Implemented in Tasks 1-4 (pre-existing, verified)
+#    - AC8 (Reply detection): checkEmailReplies cron polls Gmail threads, detects replies (>1 message), records interaction type=replied. PASS
+#    - AC9 (Bounce handling): Bounce detected via mailer-daemon/postmaster in From header, enrollment marked bounced, cadence engine auto-stops bounced enrollments. PASS
+#    - AC10 (Unit tests): 19 total tests for Gmail service (7) + tracking (12). PASS
+#    Status: PASS
+#
+# 4. No Regressions
+#    - 5 pre-existing test failures in auth/invite-member and dashboard/* — NOT related to Story 2.2 changes.
+#    - All cadence/integration/tracking tests pass (146/146).
+#    - typecheck passes cleanly.
+#    Status: PASS
+#
+# 5. Performance
+#    - Bounce detection adds minimal overhead: one additional header field in Gmail API response (payload.headers).
+#    - No N+1 queries introduced. Batching pattern preserved (BATCH_SIZE=100).
+#    - Auto-stop in execute-cadence adds one DB query per enrollment — same pattern as reply check.
+#    Status: PASS
+#
+# 6. Security
+#    - No new external inputs exposed to end users.
+#    - Click tracking endpoint validates URL protocol (http/https only) — prevents open redirect via javascript: URIs. PASS
+#    - Service role client used correctly for cron operations (no RLS bypass in user-facing code).
+#    - No hardcoded secrets or sensitive data in code.
+#    Status: PASS
+#
+# 7. Documentation
+#    - Story file updated: all tasks checked [x], File List complete, Change Log entries added (v1.2 + v1.3).
+#    Status: PASS
