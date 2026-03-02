@@ -1,24 +1,16 @@
-import { AuthErrorRedirect } from '@/features/auth/components/AuthErrorRedirect';
+import { redirect } from 'next/navigation';
 
-import { FeaturesSection } from './_landing/FeaturesSection';
-import { HeroWithForm } from './_landing/HeroWithForm';
-import { LandingFooter } from './_landing/LandingFooter';
-import { LogoBar } from './_landing/LogoBar';
-import { MetricsSection } from './_landing/MetricsSection';
-import { SalesEngagementSection } from './_landing/SalesEngagementSection';
-import { SmoothScroll } from './_landing/SmoothScroll';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-export default function Home() {
-  return (
-    <main>
-      <AuthErrorRedirect />
-      <SmoothScroll />
-      <HeroWithForm />
-      <LogoBar />
-      <SalesEngagementSection />
-      <MetricsSection />
-      <FeaturesSection />
-      <LandingFooter />
-    </main>
-  );
+export default async function Home() {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect('/dashboard');
+  }
+
+  redirect('/login');
 }

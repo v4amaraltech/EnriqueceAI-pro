@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
   // Refresh session — this keeps the auth token alive
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname === '/';
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
   const isOnboarding = pathname === '/onboarding';
 
   // Not authenticated → redirect to login (unless already on public route)
