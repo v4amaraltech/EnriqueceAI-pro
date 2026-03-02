@@ -15,9 +15,10 @@ import { StatisticsFilters } from './StatisticsFilters';
 interface ActivityAnalyticsViewProps {
   data: ActivityAnalyticsData;
   members: OrgMember[];
+  hideFilters?: boolean;
 }
 
-export function ActivityAnalyticsView({ data, members }: ActivityAnalyticsViewProps) {
+export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAnalyticsViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -28,11 +29,13 @@ export function ActivityAnalyticsView({ data, members }: ActivityAnalyticsViewPr
             Análise de volume e performance de atividades.
           </p>
         </div>
-        <StatisticsFilters
-          basePath="/statistics/activities"
-          members={members}
-          periods={['7d', '30d', '90d']}
-        />
+        {!hideFilters && (
+          <StatisticsFilters
+            basePath="/statistics/activities"
+            members={members}
+            periods={['7d', '30d', '90d']}
+          />
+        )}
       </div>
 
       {/* KPI Cards */}

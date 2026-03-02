@@ -11,9 +11,10 @@ import { StatisticsFilters } from './StatisticsFilters';
 interface ConversionAnalyticsViewProps {
   data: ConversionAnalyticsData;
   members: OrgMember[];
+  hideFilters?: boolean;
 }
 
-export function ConversionAnalyticsView({ data, members }: ConversionAnalyticsViewProps) {
+export function ConversionAnalyticsView({ data, members, hideFilters }: ConversionAnalyticsViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -24,7 +25,9 @@ export function ConversionAnalyticsView({ data, members }: ConversionAnalyticsVi
             Funil de conversão e análise por cadência.
           </p>
         </div>
-        <StatisticsFilters basePath="/statistics/conversion" members={members} />
+        {!hideFilters && (
+          <StatisticsFilters basePath="/statistics/conversion" members={members} />
+        )}
       </div>
 
       {/* Funnel */}

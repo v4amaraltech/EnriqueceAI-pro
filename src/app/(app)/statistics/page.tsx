@@ -19,7 +19,7 @@ const statisticsPages = [
   {
     title: 'Prospecção',
     description: 'Volume e performance de atividades por canal e tipo.',
-    href: '/statistics/activities',
+    href: '/statistics/prospecting/activities',
     icon: Activity,
   },
   {
