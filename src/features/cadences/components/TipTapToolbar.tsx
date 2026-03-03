@@ -33,14 +33,6 @@ interface TipTapToolbarProps {
   disabled?: boolean;
 }
 
-const VARIABLE_LABELS: Record<string, string> = {
-  primeiro_nome: 'Primeiro nome',
-  empresa: 'Empresa',
-  telefone: 'Telefone',
-  nome_vendedor: 'Nome vendedor',
-  email_vendedor: 'E-mail vendedor',
-};
-
 export function TipTapToolbar({
   editor,
   onInsertVariable,
@@ -173,16 +165,13 @@ export function TipTapToolbar({
             <span className="text-xs">Variáveis</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuContent align="start">
           <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)]">
             Lead
           </DropdownMenuLabel>
           {AVAILABLE_TEMPLATE_VARIABLES.map((v) => (
             <DropdownMenuItem key={v} onClick={() => onInsertVariable(v)}>
-              <code className="mr-2 text-xs text-purple-600">{`{{${v}}}`}</code>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                {VARIABLE_LABELS[v] ?? v}
-              </span>
+              <code className="text-xs text-red-600">{`{{${v}}}`}</code>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
@@ -191,10 +180,7 @@ export function TipTapToolbar({
           </DropdownMenuLabel>
           {VENDOR_TEMPLATE_VARIABLES.map((v) => (
             <DropdownMenuItem key={v} onClick={() => onInsertVariable(v)}>
-              <code className="mr-2 text-xs text-purple-600">{`{{${v}}}`}</code>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                {VARIABLE_LABELS[v] ?? v}
-              </span>
+              <code className="text-xs text-red-600">{`{{${v}}}`}</code>
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

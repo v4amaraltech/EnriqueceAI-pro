@@ -5,12 +5,19 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import LinkExtension from '@tiptap/extension-link';
-import { ChevronDown, ChevronRight, Eye, EyeOff, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, Reply, Sparkles, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import { Switch } from '@/shared/components/ui/switch';
 
 import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
@@ -141,8 +148,16 @@ export function AutoEmailStepEditor({
             IA
           </Badge>
         )}
+        {!isFirst && step.reply_type === 'reply' && (
+          <Badge variant="secondary" className="gap-1 text-xs">
+            <Reply className="h-3 w-3" />
+            Resposta
+          </Badge>
+        )}
         <span className="flex-1 truncate text-xs text-[var(--muted-foreground)]">
-          {step.subject || 'Sem assunto'}
+          {step.reply_type === 'reply' && !isFirst
+            ? 'Re: (assunto do email anterior)'
+            : step.subject || 'Sem assunto'}
         </span>
         <Button
           type="button"
@@ -205,19 +220,44 @@ export function AutoEmailStepEditor({
               </div>
             )}
 
+            {/* Reply Type (hidden for first step) */}
+            {!isFirst && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Tipo</Label>
+                <Select
+                  value={step.reply_type ?? 'new_conversation'}
+                  onValueChange={(v) => onChange({ ...step, reply_type: v as 'new_conversation' | 'reply' })}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new_conversation">Nova conversa</SelectItem>
+                    <SelectItem value="reply">Responder</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Subject */}
             <div className="space-y-1.5">
               <Label htmlFor={`subject-${stepNumber}`} className="text-sm">
                 Assunto
               </Label>
-              <Input
-                ref={subjectRef}
-                id={`subject-${stepNumber}`}
-                value={step.subject}
-                onChange={(e) => onChange({ ...step, subject: e.target.value })}
-                onFocus={() => setFocusedField('subject')}
-                placeholder="Ex: {{nome_fantasia}}, temos uma oportunidade para você"
-              />
+              {!isFirst && step.reply_type === 'reply' ? (
+                <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                  Re: (assunto do email anterior)
+                </p>
+              ) : (
+                <Input
+                  ref={subjectRef}
+                  id={`subject-${stepNumber}`}
+                  value={step.subject}
+                  onChange={(e) => onChange({ ...step, subject: e.target.value })}
+                  onFocus={() => setFocusedField('subject')}
+                  placeholder="Ex: {{nome_fantasia}}, temos uma oportunidade para você"
+                />
+              )}
             </div>
 
             {/* Body (TipTap) with integrated toolbar */}

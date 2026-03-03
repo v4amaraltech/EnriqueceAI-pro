@@ -126,6 +126,7 @@ export async function saveAutoEmailSteps(
         delay_days: i === 0 ? 0 : step.delay_days,
         delay_hours: i === 0 ? 0 : step.delay_hours,
         ai_personalization: step.ai_personalization,
+        reply_type: i === 0 ? 'new_conversation' : (step.reply_type ?? 'new_conversation'),
       } as Record<string, unknown>);
 
     if (stepError) {

@@ -8,6 +8,9 @@ export const interactionTypeSchema = z.enum([
   'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'failed', 'meeting_scheduled',
 ]);
 
+// Reply type schema for auto email steps
+export const replyTypeSchema = z.enum(['new_conversation', 'reply']);
+
 // Cadence type schema
 export const cadenceTypeSchema = z.enum(['standard', 'auto_email']);
 
@@ -154,12 +157,21 @@ export const templateFiltersSchema = z.object({
 
 // Auto email step schema
 export const autoEmailStepSchema = z.object({
-  subject: z.string().min(1, 'Assunto é obrigatório').max(500),
+  subject: z.string().max(500).default(''),
   body: z.string().min(1, 'Corpo do email é obrigatório').max(10000),
   delay_days: z.number().int().min(0).default(0),
   delay_hours: z.number().int().min(0).default(0),
   ai_personalization: z.boolean().default(false),
-});
+  reply_type: replyTypeSchema.default('new_conversation'),
+}).refine(
+  (data) => {
+    if (data.reply_type !== 'reply' && (!data.subject || data.subject.trim() === '')) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'Assunto é obrigatório para nova conversa', path: ['subject'] },
+);
 
 // Save auto email cadence schema
 export const saveAutoEmailCadenceSchema = z.object({

@@ -15,7 +15,7 @@ import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations
 
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
-import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../types';
+import type { CadenceStepRow, InteractionRow, MessageTemplateRow, ReplyType } from '../types';
 
 const BATCH_SIZE = 50;
 
@@ -291,6 +291,36 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           continue;
         }
 
+        // Reply threading: fetch previous thread info when reply_type is 'reply'
+        let replyThreadId: string | undefined;
+        const stepReplyType = (step as CadenceStepRow & { reply_type?: ReplyType }).reply_type;
+        if (stepReplyType === 'reply') {
+          const { data: prevInteraction } = (await (supabase
+            .from('interactions') as ReturnType<typeof supabase.from>)
+            .select('metadata, external_id')
+            .eq('cadence_id', enrollment.cadence_id)
+            .eq('lead_id', enrollment.lead_id)
+            .eq('type', 'sent')
+            .eq('channel', 'email')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()) as { data: { metadata: Record<string, unknown> | null; external_id: string | null } | null };
+
+          if (prevInteraction?.metadata) {
+            const prevThreadId = prevInteraction.metadata.thread_id as string | undefined;
+            const prevSubject = prevInteraction.metadata.subject as string | undefined;
+            if (prevThreadId) {
+              replyThreadId = prevThreadId;
+            }
+            if (prevSubject && subject) {
+              subject = subject.startsWith('Re:') ? subject : `Re: ${prevSubject}`;
+            } else if (prevSubject) {
+              subject = `Re: ${prevSubject}`;
+            }
+          }
+          // Fallback: if no previous interaction found, send as new conversation
+        }
+
         const emailResult = await EmailService.sendEmail(
           cadence.created_by,
           enrollment.lead.org_id,
@@ -298,6 +328,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             to: enrollment.lead.email,
             subject: subject ?? '',
             htmlBody: messageContent,
+            threadId: replyThreadId,
           },
           interaction.id,
           supabase,

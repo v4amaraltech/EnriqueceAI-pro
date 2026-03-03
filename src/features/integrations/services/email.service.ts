@@ -7,6 +7,7 @@ interface SendEmailParams {
   to: string;
   subject: string;
   htmlBody: string;
+  threadId?: string;
   trackOpens?: boolean;
   trackClicks?: boolean;
 }
@@ -215,13 +216,18 @@ export class EmailService {
     const raw = buildRawEmail(connection.email_address, params.to, params.subject, html);
 
     // Send via Gmail API
+    const requestBody: Record<string, string> = { raw };
+    if (params.threadId) {
+      requestBody.threadId = params.threadId;
+    }
+
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ raw }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

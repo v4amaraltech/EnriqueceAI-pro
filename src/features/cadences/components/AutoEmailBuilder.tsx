@@ -44,7 +44,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
   if (!cadence?.steps.length) {
-    return [{ subject: '', body: '', delay_days: 0, delay_hours: 0, ai_personalization: false }];
+    return [{ subject: '', body: '', delay_days: 0, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const }];
   }
   return cadence.steps.map((s) => ({
     subject: s.template?.subject ?? '',
@@ -52,6 +52,7 @@ function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
     delay_days: s.delay_days,
     delay_hours: s.delay_hours,
     ai_personalization: s.ai_personalization,
+    reply_type: s.reply_type ?? ('new_conversation' as const),
   }));
 }
 
@@ -96,7 +97,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   function addStep() {
     setSteps((prev) => [
       ...prev,
-      { subject: '', body: '', delay_days: 2, delay_hours: 0, ai_personalization: false },
+      { subject: '', body: '', delay_days: 2, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const },
     ]);
   }
 
@@ -109,7 +110,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
     // Validate steps
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i]!;
-      if (!s.subject.trim()) {
+      if (s.reply_type !== 'reply' && !s.subject.trim()) {
         toast.error(`Step ${i + 1}: Assunto é obrigatório`);
         return;
       }

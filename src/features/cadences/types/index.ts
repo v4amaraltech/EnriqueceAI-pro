@@ -16,6 +16,9 @@ export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'replied' | '
 // Channel type enum matching database
 export type ChannelType = 'email' | 'whatsapp' | 'phone' | 'linkedin' | 'research';
 
+// Reply type for auto email steps
+export type ReplyType = 'new_conversation' | 'reply';
+
 // Interaction type enum matching database
 export type InteractionType =
   | 'sent'
@@ -58,6 +61,7 @@ export interface CadenceStepRow {
   ai_personalization: boolean;
   activity_name: string | null;
   instructions: string | null;
+  reply_type: ReplyType;
   created_at: string;
 }
 
@@ -132,6 +136,7 @@ export interface CadenceStepInsert {
   ai_personalization?: boolean;
   activity_name?: string | null;
   instructions?: string | null;
+  reply_type?: ReplyType;
 }
 
 export interface CadenceEnrollmentInsert {
