@@ -1,3 +1,4 @@
+import { decrypt, encrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
@@ -62,9 +63,9 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
   const expiresAt = new Date(connection.token_expires_at);
   const now = new Date();
 
-  // If token still valid (with 5-min buffer), return it
+  // If token still valid (with 5-min buffer), return decrypted token
   if (expiresAt.getTime() - now.getTime() > 5 * 60 * 1000) {
-    return connection.access_token_encrypted;
+    return decrypt(connection.access_token_encrypted);
   }
 
   // Refresh the token
@@ -77,7 +78,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: connection.refresh_token_encrypted,
+      refresh_token: decrypt(connection.refresh_token_encrypted),
       grant_type: 'refresh_token',
     }),
   });
@@ -98,11 +99,11 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
 
   const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  // Update stored token
+  // Update stored token (encrypted)
   const supabase = await createServerSupabaseClient();
   await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
     .update({
-      access_token_encrypted: tokens.access_token,
+      access_token_encrypted: encrypt(tokens.access_token),
       token_expires_at: newExpiresAt,
       status: 'connected',
     } as Record<string, unknown>)

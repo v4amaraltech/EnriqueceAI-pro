@@ -1,8 +1,10 @@
+import { decryptJson, encryptJson } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type {
   CrmConnectionRow,
   CrmContact,
+  CrmCredentials,
   FieldMapping,
   SyncResult,
 } from '../types/crm';
@@ -137,8 +139,8 @@ export class CrmSyncService {
     connection: CrmConnectionRow,
     adapter: ReturnType<typeof CRMRegistry.getAdapter>,
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  ) {
-    let credentials = connection.credentials_encrypted;
+  ): Promise<CrmCredentials> {
+    let credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
 
     // Check token expiration
     if (
@@ -147,7 +149,7 @@ export class CrmSyncService {
     ) {
       credentials = await adapter.refreshToken(credentials);
       await (supabase.from('crm_connections') as ReturnType<typeof supabase.from>)
-        .update({ credentials_encrypted: credentials } as Record<string, unknown>)
+        .update({ credentials_encrypted: encryptJson(credentials) } as Record<string, unknown>)
         .eq('id', connection.id);
     }
 
@@ -161,7 +163,7 @@ export class CrmSyncService {
   private static async pullContacts(
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     adapter: ReturnType<typeof CRMRegistry.getAdapter>,
-    credentials: CrmConnectionRow['credentials_encrypted'],
+    credentials: CrmCredentials,
     connection: CrmConnectionRow,
     fieldMapping: FieldMapping,
   ): Promise<SyncResult> {
@@ -262,7 +264,7 @@ export class CrmSyncService {
   private static async pushLeads(
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     adapter: ReturnType<typeof CRMRegistry.getAdapter>,
-    credentials: CrmConnectionRow['credentials_encrypted'],
+    credentials: CrmCredentials,
     connection: CrmConnectionRow,
     fieldMapping: FieldMapping,
   ): Promise<SyncResult> {
@@ -341,7 +343,7 @@ export class CrmSyncService {
   private static async pushActivities(
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     adapter: ReturnType<typeof CRMRegistry.getAdapter>,
-    credentials: CrmConnectionRow['credentials_encrypted'],
+    credentials: CrmCredentials,
     connection: CrmConnectionRow,
   ): Promise<SyncResult> {
     const result: SyncResult = { synced: 0, errors: 0, errorDetails: [] };

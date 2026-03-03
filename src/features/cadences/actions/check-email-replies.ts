@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { decrypt } from '@/lib/security/encryption';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import {
@@ -177,7 +178,7 @@ async function getValidAccessToken(
     return refreshResult.accessToken;
   }
 
-  return connection.access_token_encrypted;
+  return decrypt(connection.access_token_encrypted);
 }
 
 /** Get the threadId for an interaction, from metadata cache or Gmail API */

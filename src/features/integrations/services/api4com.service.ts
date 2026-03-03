@@ -1,3 +1,4 @@
+import { decrypt } from '@/lib/security/encryption';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type {
@@ -27,7 +28,7 @@ async function getCredentials(userId: string): Promise<Api4ComCredentials | null
   if (!data?.api_key_encrypted) return null;
 
   return {
-    apiKey: data.api_key_encrypted,
+    apiKey: decrypt(data.api_key_encrypted),
     baseUrl: data.base_url.replace(/\/$/, ''),
     ramal: data.ramal,
   };

@@ -4,6 +4,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { decrypt, encrypt } from '@/lib/security/encryption';
+
 import type { GmailConnectionSafe } from '../types';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
@@ -109,8 +111,12 @@ export async function handleGmailCallback(
       .eq('org_id', member.org_id)
       .eq('user_id', user.id)
       .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
+    // Existing value may already be encrypted — keep as-is for storage
     refreshToken = existing?.refresh_token_encrypted ?? '';
   }
+
+  const encryptedAccessToken = encrypt(tokens.access_token);
+  const encryptedRefreshToken = refreshToken ? encrypt(refreshToken) : '';
 
   // Upsert connection
   const { data, error } = (await (supabase
@@ -119,8 +125,8 @@ export async function handleGmailCallback(
       {
         org_id: member.org_id,
         user_id: user.id,
-        access_token_encrypted: tokens.access_token,
-        refresh_token_encrypted: refreshToken,
+        access_token_encrypted: encryptedAccessToken,
+        refresh_token_encrypted: encryptedRefreshToken,
         token_expires_at: expiresAt,
         email_address: userInfo.email,
         status: 'connected',
@@ -141,8 +147,8 @@ export async function handleGmailCallback(
       {
         org_id: member.org_id,
         user_id: user.id,
-        access_token_encrypted: tokens.access_token,
-        refresh_token_encrypted: refreshToken,
+        access_token_encrypted: encryptedAccessToken,
+        refresh_token_encrypted: encryptedRefreshToken,
         token_expires_at: expiresAt,
         calendar_email: userInfo.email,
         status: 'connected',
@@ -216,7 +222,7 @@ export async function refreshGmailToken(
     body: new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: connection.refresh_token_encrypted,
+      refresh_token: decrypt(connection.refresh_token_encrypted),
       grant_type: 'refresh_token',
     }),
   });
@@ -235,10 +241,11 @@ export async function refreshGmailToken(
   };
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+  const encryptedNewAccessToken = encrypt(tokens.access_token);
 
   await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
     .update({
-      access_token_encrypted: tokens.access_token,
+      access_token_encrypted: encryptedNewAccessToken,
       token_expires_at: expiresAt,
       status: 'connected',
     } as Record<string, unknown>)
@@ -247,7 +254,7 @@ export async function refreshGmailToken(
   // Also refresh calendar token (unified OAuth)
   await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
     .update({
-      access_token_encrypted: tokens.access_token,
+      access_token_encrypted: encryptedNewAccessToken,
       token_expires_at: expiresAt,
       status: 'connected',
     } as Record<string, unknown>)

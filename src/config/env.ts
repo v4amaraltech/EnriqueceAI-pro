@@ -18,6 +18,11 @@ const envSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   LEMIT_API_URL: z.string().url().optional(),
   LEMIT_API_TOKEN: z.string().min(1).optional(),
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .length(64)
+    .regex(/^[0-9a-f]+$/i)
+    .optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

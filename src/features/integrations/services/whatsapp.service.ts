@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { decrypt } from '@/lib/security/encryption';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -120,7 +121,7 @@ export class WhatsAppService {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${connection.access_token_encrypted}`,
+          Authorization: `Bearer ${decrypt(connection.access_token_encrypted)}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),

@@ -28,7 +28,7 @@ const BASE_CONNECTION: CrmConnectionRow = {
   id: 'conn-1',
   org_id: 'org-1',
   crm_provider: 'hubspot',
-  credentials_encrypted: BASE_CREDENTIALS,
+  credentials_encrypted: JSON.stringify(BASE_CREDENTIALS),
   field_mapping: { leads: { nome_fantasia: 'company', email: 'email', telefone: 'phone' } },
   status: 'connected',
   last_sync_at: '2026-02-18T00:00:00Z',
@@ -300,7 +300,7 @@ describe('CrmSyncService.syncConnection', () => {
 
     const connectionWithExpiredToken: CrmConnectionRow = {
       ...BASE_CONNECTION,
-      credentials_encrypted: expiredCredentials,
+      credentials_encrypted: JSON.stringify(expiredCredentials),
     };
 
     const mockAdapter = buildMockAdapter({

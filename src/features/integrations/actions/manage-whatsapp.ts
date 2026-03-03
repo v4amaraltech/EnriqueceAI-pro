@@ -4,6 +4,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { encrypt } from '@/lib/security/encryption';
+
 import type { WhatsAppConnectionSafe } from '../types';
 
 interface WhatsAppConfig {
@@ -45,7 +47,7 @@ export async function connectWhatsApp(
         org_id: member.org_id,
         phone_number_id: config.phone_number_id,
         business_account_id: config.business_account_id,
-        access_token_encrypted: config.access_token,
+        access_token_encrypted: encrypt(config.access_token),
         status: 'connected',
       } as Record<string, unknown>,
       { onConflict: 'org_id' },

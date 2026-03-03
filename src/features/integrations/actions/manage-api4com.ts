@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { encrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SaveApi4ComInput {
@@ -54,7 +55,7 @@ export async function saveApi4ComConfig(
 
     // Only update api_key if a new one was provided
     if (input.apiToken && input.apiToken.trim()) {
-      updates.api_key_encrypted = input.apiToken.trim();
+      updates.api_key_encrypted = encrypt(input.apiToken.trim());
     }
 
     const { error } = await (supabase
@@ -74,7 +75,7 @@ export async function saveApi4ComConfig(
         user_id: user.id,
         ramal,
         base_url: baseUrl,
-        api_key_encrypted: input.apiToken?.trim() || null,
+        api_key_encrypted: input.apiToken?.trim() ? encrypt(input.apiToken.trim()) : null,
         status: 'connected',
       } as Record<string, unknown>);
 

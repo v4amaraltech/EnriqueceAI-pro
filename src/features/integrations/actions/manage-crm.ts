@@ -3,6 +3,8 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId, getManagerOrgId } from '@/lib/auth/get-org-id';
 
+import { encryptJson } from '@/lib/security/encryption';
+
 import type {
   CrmConnectionRow,
   CrmConnectionSafe,
@@ -68,7 +70,7 @@ export async function handleCrmCallback(
         {
           org_id: orgId,
           crm_provider: provider,
-          credentials_encrypted: credentials,
+          credentials_encrypted: encryptJson(credentials),
           field_mapping: fieldMapping,
           status: 'connected',
         } as Record<string, unknown>,

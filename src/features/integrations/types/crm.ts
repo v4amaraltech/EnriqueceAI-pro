@@ -13,7 +13,7 @@ export interface CrmConnectionRow {
   id: string;
   org_id: string;
   crm_provider: CrmProvider;
-  credentials_encrypted: CrmCredentials;
+  credentials_encrypted: string;
   field_mapping: FieldMapping | null;
   status: ConnectionStatus;
   last_sync_at: string | null;
