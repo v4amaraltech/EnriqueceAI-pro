@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/execute-cadence-steps",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/check-email-replies",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
