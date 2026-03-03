@@ -11,12 +11,12 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
 
-const mockCalculateUsageLimits = vi.fn(() => ({
+const mockCalculateUsageLimits = vi.fn().mockReturnValue({
   leads: { current: 1200, max: 5000, exceeded: false },
   aiPerDay: { current: 42, max: 100, exceeded: false, unlimited: false },
   whatsappPerMonth: { current: 350, max: 2000, exceeded: false },
   users: { current: 3, included: 5, additional: 0 },
-}));
+});
 
 vi.mock('../services/feature-flags', () => ({
   calculateUsageLimits: (...args: unknown[]) => mockCalculateUsageLimits(...args),
