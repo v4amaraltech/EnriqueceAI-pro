@@ -8,6 +8,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
+import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGuard';
+import { TrialBanner } from '@/features/billing/components/TrialBanner';
+import type { SubscriptionStatus } from '@/features/billing/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
@@ -41,6 +44,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/onboarding');
   }
 
+  // Fetch subscription status for trial banner and canceled guard
+  const { data: subscriptionData } = (await (
+    supabase.from('subscriptions') as ReturnType<typeof supabase.from>
+  )
+    .select('status, current_period_end')
+    .eq('org_id', memberData.organization.id)
+    .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };
+
+  const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'trialing';
+  const trialDaysRemaining = (() => {
+    if (subscriptionStatus !== 'trialing' || !subscriptionData?.current_period_end) return null;
+    const end = new Date(subscriptionData.current_period_end).getTime();
+    const now = new Date().getTime();
+    return Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+  })();
+
   const { data: members } = (await supabase
     .from('organization_members')
     .select('*')
@@ -67,15 +86,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           initialMember={currentMember}
         >
           <NotificationProvider userId={user.id}>
-            <div className="flex h-screen flex-col">
-              <TopBar />
-              <main className="flex-1 overflow-auto p-6" data-tour="main-content">
-                <Breadcrumbs />
-                <Suspense fallback={<PageSkeleton />}>
-                  {children}
-                </Suspense>
-              </main>
-            </div>
+            <SubscriptionGuard status={subscriptionStatus}>
+              <div className="flex h-screen flex-col">
+                <TopBar />
+                {trialDaysRemaining !== null && trialDaysRemaining > 0 && (
+                  <TrialBanner daysRemaining={trialDaysRemaining} />
+                )}
+                <main className="flex-1 overflow-auto p-6" data-tour="main-content">
+                  <Breadcrumbs />
+                  <Suspense fallback={<PageSkeleton />}>
+                    {children}
+                  </Suspense>
+                </main>
+              </div>
+            </SubscriptionGuard>
             <Toaster />
           </NotificationProvider>
         </OrganizationProvider>
