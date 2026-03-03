@@ -18,6 +18,7 @@ export interface OrganizationMemberRow {
   status: MemberStatus;
   invited_at: string;
   accepted_at: string | null;
+  invited_expires_at: string | null;
   created_at: string;
   updated_at: string;
   name?: string;

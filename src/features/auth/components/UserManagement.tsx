@@ -1,9 +1,14 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
+
+import { RotateCw, UserX } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 
+import { resendInvite } from '../actions/resend-invite';
+import { revokeInvite } from '../actions/revoke-invite';
 import { updateMemberRole } from '../actions/update-member-role';
 import { updateMemberStatus } from '../actions/update-member-status';
 import type { OrganizationMemberRow } from '../types';
@@ -22,6 +27,14 @@ const ROLE_LABELS: Record<string, string> = {
   manager: 'Gerente',
   sdr: 'SDR',
 };
+
+function formatDaysRemaining(expiresAt: string | null): string | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'Expirado';
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return days === 1 ? 'Expira em 1 dia' : `Expira em ${days} dias`;
+}
 
 export function UserManagement({
   members,
@@ -58,6 +71,9 @@ export function UserManagement({
     {} as FormState,
   );
 
+  const activeMembers = members.filter((m) => m.status !== 'invited' && m.status !== 'removed');
+  const pendingInvites = members.filter((m) => m.status === 'invited');
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -82,6 +98,7 @@ export function UserManagement({
         </div>
       )}
 
+      {/* Active members table */}
       <div className="rounded-md border">
         <table className="w-full">
           <thead>
@@ -93,7 +110,7 @@ export function UserManagement({
             </tr>
           </thead>
           <tbody>
-            {members.map((member) => {
+            {activeMembers.map((member) => {
               const isOwner = member.user_id === ownerId;
               const isSelf = member.user_id === currentUserId;
               const canEdit = !isOwner && !isSelf;
@@ -166,7 +183,104 @@ export function UserManagement({
         </table>
       </div>
 
+      {/* Pending invites section */}
+      {pendingInvites.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">Convites Pendentes</h3>
+          <div className="rounded-md border">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="p-3 text-left text-sm font-medium">Email</th>
+                  <th className="p-3 text-left text-sm font-medium">Cargo</th>
+                  <th className="p-3 text-left text-sm font-medium">Expira</th>
+                  <th className="p-3 text-right text-sm font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingInvites.map((member) => (
+                  <PendingInviteRow
+                    key={member.id}
+                    member={member}
+                    name={nameMap[member.user_id] ?? member.user_id}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <InviteMemberDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
+  );
+}
+
+function PendingInviteRow({
+  member,
+  name,
+}: {
+  member: OrganizationMemberRow;
+  name: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const expiryText = formatDaysRemaining(member.invited_expires_at);
+
+  function handleResend() {
+    startTransition(async () => {
+      const result = await resendInvite(member.id);
+      if (result.success) {
+        toast.success(`Convite reenviado para ${result.data.email}`);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleRevoke() {
+    startTransition(async () => {
+      const result = await revokeInvite(member.id);
+      if (result.success) {
+        toast.success('Convite revogado');
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <tr className="border-b last:border-0">
+      <td className="p-3 text-sm">{name}</td>
+      <td className="p-3 text-sm">{ROLE_LABELS[member.role] ?? member.role}</td>
+      <td className="p-3">
+        {expiryText && (
+          <span className={`text-xs ${expiryText === 'Expirado' ? 'text-red-600' : 'text-muted-foreground'}`}>
+            {expiryText}
+          </span>
+        )}
+      </td>
+      <td className="p-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResend}
+            disabled={isPending}
+            title="Reenviar convite"
+          >
+            <RotateCw className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRevoke}
+            disabled={isPending}
+            title="Revogar convite"
+          >
+            <UserX className="size-4" />
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }

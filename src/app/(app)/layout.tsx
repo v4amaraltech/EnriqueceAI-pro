@@ -23,12 +23,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  const { data: memberData } = (await supabase
+  let { data: memberData } = (await supabase
     .from('organization_members')
     .select('*, organization:organizations(*)')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .single()) as { data: MemberWithOrganization | null };
+
+  // Auto-activate invited members who logged in (clicked magic link)
+  if (!memberData) {
+    const { data: invitedData } = (await supabase
+      .from('organization_members')
+      .select('*, organization:organizations(*)')
+      .eq('user_id', user.id)
+      .eq('status', 'invited')
+      .single()) as { data: MemberWithOrganization | null };
+
+    if (invitedData) {
+      await supabase
+        .from('organization_members')
+        .update({ status: 'active', accepted_at: new Date().toISOString() })
+        .eq('id', invitedData.id);
+      memberData = { ...invitedData, status: 'active' };
+    }
+  }
 
   if (!memberData?.organization) {
     return (
@@ -88,6 +106,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     status: memberData.status,
     invited_at: memberData.invited_at,
     accepted_at: memberData.accepted_at,
+    invited_expires_at: memberData.invited_expires_at ?? null,
     created_at: memberData.created_at,
     updated_at: memberData.updated_at,
     name: nameMap.get(memberData.user_id),

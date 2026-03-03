@@ -26,10 +26,19 @@ export default async function UsersPage() {
     );
   }
 
+  // Expire stale invites on-demand (invited_expires_at < now)
+  await supabase
+    .from('organization_members')
+    .update({ status: 'removed' })
+    .eq('org_id', currentMember.org_id)
+    .eq('status', 'invited')
+    .lt('invited_expires_at', new Date().toISOString());
+
   const { data: members } = (await supabase
     .from('organization_members')
     .select('*')
     .eq('org_id', currentMember.org_id)
+    .in('status', ['active', 'invited', 'suspended'])
     .order('created_at', { ascending: true })) as { data: OrganizationMemberRow[] | null };
 
   const { data: org } = (await supabase

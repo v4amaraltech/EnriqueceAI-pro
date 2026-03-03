@@ -12,11 +12,11 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 import { inviteMemberSchema } from '../schemas/member.schemas';
 import { checkMemberLimit } from '../services/member-limits.service';
 
-const TEMP_PASSWORD = 'Enriqueceai123';
+const INVITE_EXPIRY_DAYS = 7;
 
 export async function inviteMember(
   formData: FormData,
-): Promise<ActionResult<{ tempPassword: string | null }>> {
+): Promise<ActionResult<{ email: string }>> {
   try {
     const user = await requireManager();
 
@@ -66,8 +66,6 @@ export async function inviteMember(
     const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const existingUser = usersData?.users?.find((u) => u.email === parsed.data.email);
 
-    let tempPassword: string | null = null;
-
     if (existingUser) {
       // User already exists — just add to org with active status
       await admin.from('organization_members').upsert(
@@ -80,7 +78,7 @@ export async function inviteMember(
         { onConflict: 'org_id,user_id' },
       );
     } else {
-      // Step 1: Send invite email via Supabase (sends email with magic link)
+      // Send invite email via Supabase Auth (magic link)
       const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
         parsed.data.email,
         {
@@ -97,17 +95,8 @@ export async function inviteMember(
       }
 
       if (inviteData?.user) {
-        // Step 2: Set temp password + confirm email so password login works immediately.
-        // The invite email was already sent above, so it still arrives.
-        // The magic link in the email may not work (token invalidated), but the
-        // primary login method is the temp password shared by the manager.
-        await admin.auth.admin.updateUserById(inviteData.user.id, {
-          password: TEMP_PASSWORD,
-          email_confirm: true,
-        });
-
-        // handle_new_user trigger already created an auto-org + auto-member
-        // Delete the auto-created org (CASCADE will delete the auto-member + subscription)
+        // handle_new_user trigger created an auto-org + auto-member
+        // Delete the auto-created org (CASCADE will delete auto-member + subscription)
         const { data: autoOrgMember } = (await admin
           .from('organization_members')
           .select('org_id')
@@ -120,19 +109,21 @@ export async function inviteMember(
           await admin.from('organizations').delete().eq('id', autoOrgMember.org_id);
         }
 
-        // Create org member in the invited org with active status
+        // Create org member with 'invited' status and expiry
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
+
         const { error: memberError } = await admin.from('organization_members').insert({
           org_id: currentMember.org_id,
           user_id: inviteData.user.id,
           role: parsed.data.role,
-          status: 'active',
+          status: 'invited',
+          invited_expires_at: expiresAt.toISOString(),
         });
 
         if (memberError && !memberError.message?.includes('duplicate')) {
           console.error('Error creating member record:', memberError);
         }
-
-        tempPassword = TEMP_PASSWORD;
       }
     }
 
@@ -140,8 +131,8 @@ export async function inviteMember(
     createNotificationsForOrgMembers({
       orgId: currentMember.org_id,
       type: 'member_invited',
-      title: 'Novo membro adicionado',
-      body: `${parsed.data.email} foi adicionado como ${parsed.data.role}`,
+      title: 'Novo membro convidado',
+      body: `${parsed.data.email} foi convidado como ${parsed.data.role}`,
       resourceType: 'member',
       metadata: { email: parsed.data.email, role: parsed.data.role },
       roleFilter: 'manager',
@@ -149,7 +140,7 @@ export async function inviteMember(
     }).catch((err) => console.error('Failed to create invite notification:', err));
 
     revalidatePath('/settings/users');
-    return { success: true, data: { tempPassword } };
+    return { success: true, data: { email: parsed.data.email } };
   } catch (error) {
     // Re-throw Next.js redirects
     if (error instanceof Error && error.message?.includes('NEXT_REDIRECT')) throw error;

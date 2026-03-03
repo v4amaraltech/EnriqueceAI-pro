@@ -17,7 +17,6 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const mockInviteUserByEmail = vi.fn();
-const mockUpdateUserById = vi.fn().mockResolvedValue({ error: null });
 const mockListUsers = vi.fn().mockResolvedValue({ data: { users: [] } });
 const mockAdminInsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -43,7 +42,6 @@ vi.mock('@/lib/supabase/admin', () => ({
     auth: {
       admin: {
         inviteUserByEmail: mockInviteUserByEmail,
-        updateUserById: mockUpdateUserById,
         listUsers: mockListUsers,
       },
     },
@@ -118,7 +116,6 @@ describe('inviteMember', () => {
   beforeEach(() => {
     resetMocks();
     mockInviteUserByEmail.mockReset();
-    mockUpdateUserById.mockReset().mockResolvedValue({ error: null });
     mockListUsers.mockReset().mockResolvedValue({ data: { users: [] } });
     mockAdminInsert.mockReset().mockResolvedValue({ error: null });
     mockAdminUpsert.mockReset().mockResolvedValue({ error: null });
@@ -167,7 +164,7 @@ describe('inviteMember', () => {
     }
   });
 
-  it('should invite new user with email and set temp password', async () => {
+  it('should invite new user via magic link without temp password', async () => {
     setupManagerWithOrg();
     mockInviteUserByEmail.mockResolvedValue({
       data: { user: { id: 'new-user-id' } },
@@ -178,7 +175,7 @@ describe('inviteMember', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.tempPassword).toBe('Enriqueceai123');
+      expect(result.data.email).toBe('new@email.com');
     }
     expect(mockInviteUserByEmail).toHaveBeenCalledWith(
       'new@email.com',
@@ -189,19 +186,18 @@ describe('inviteMember', () => {
         }),
       }),
     );
-    expect(mockUpdateUserById).toHaveBeenCalledWith('new-user-id', { password: 'Enriqueceai123' });
-    expect(mockAdminFrom).toHaveBeenCalledWith('organization_members');
     expect(mockAdminInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         org_id: 'org-abc',
         user_id: 'new-user-id',
         role: 'sdr',
-        status: 'active',
+        status: 'invited',
+        invited_expires_at: expect.any(String),
       }),
     );
   });
 
-  it('should add existing user to org without temp password', async () => {
+  it('should add existing user to org with active status', async () => {
     setupManagerWithOrg();
     mockListUsers.mockResolvedValue({
       data: { users: [{ id: 'existing-user-id', email: 'existing@email.com' }] },
@@ -211,7 +207,7 @@ describe('inviteMember', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.tempPassword).toBeNull();
+      expect(result.data.email).toBe('existing@email.com');
     }
     expect(mockInviteUserByEmail).not.toHaveBeenCalled();
     expect(mockAdminUpsert).toHaveBeenCalledWith(
