@@ -17,6 +17,15 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(),
+}));
+
+const mockCreateNotifications = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/features/notifications/services/notification.service', () => ({
+  createNotificationsForOrgMembers: (...args: unknown[]) => mockCreateNotifications(...args),
+}));
+
 const mockEnrollLeads = vi.fn();
 vi.mock('@/features/cadences/actions/manage-cadences', () => ({
   enrollLeads: (...args: unknown[]) => mockEnrollLeads(...args),
@@ -28,6 +37,7 @@ vi.mock('./enrich-lead', () => ({
 }));
 
 import { revalidatePath } from 'next/cache';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createLead } from './create-lead';
 
 // --- Chain helpers ---
@@ -97,6 +107,7 @@ const validInput = {
 describe('createLead', () => {
   beforeEach(() => {
     resetMocks();
+    mockCreateNotifications.mockClear();
     mockEnrollLeads.mockResolvedValue({ success: true, data: { enrolled: 1, errors: [] } });
     mockEnrichLeadAction.mockResolvedValue({ success: true, data: undefined });
   });
@@ -314,5 +325,129 @@ describe('createLead', () => {
     const result = await createLead({ ...validInput, is_inbound: true });
 
     expect(result.success).toBe(true);
+  });
+
+  describe('lead threshold alerts', () => {
+    function makeServiceSupabase(existingNotification: unknown) {
+      const maybeSingleMock = vi.fn().mockResolvedValue({ data: existingNotification });
+      const limitMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+      const containsMock = vi.fn().mockReturnValue({ limit: limitMock });
+      const ltMock = vi.fn().mockReturnValue({ contains: containsMock });
+      const gteMock = vi.fn().mockReturnValue({ lt: ltMock });
+      const eqTypeMock = vi.fn().mockReturnValue({ gte: gteMock });
+      const eqOrgMock = vi.fn().mockReturnValue({ eq: eqTypeMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
+      return { from: vi.fn().mockReturnValue({ select: selectMock }) };
+    }
+
+    it('should fire 80% threshold alert when crossing threshold', async () => {
+      // 79 leads, max 100 → threshold=80. After creation: 80 → crosses
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return makeOrgMemberChain('org-1');
+        if (callCount === 2) return makeSubscriptionChain('plan-1');
+        if (callCount === 3) return makePlanChain(100);
+        if (callCount === 4) return makeLeadCountChain(79);
+        if (callCount === 5) return makeAssigneeChain(true);
+        return makeInsertChain('new-lead-id');
+      });
+
+      // Dedup: no existing notification
+      vi.mocked(createServiceRoleClient).mockReturnValue(
+        makeServiceSupabase(null) as never,
+      );
+
+      await createLead(validInput);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: 'org-1',
+          type: 'usage_limit_alert',
+          metadata: expect.objectContaining({ channel: 'leads', used: 80, limit: 100 }),
+          roleFilter: 'manager',
+        }),
+      );
+    });
+
+    it('should NOT fire alert when below threshold', async () => {
+      // 50 leads, max 100 → threshold=80. After creation: 51 < 80 → no alert
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return makeOrgMemberChain('org-1');
+        if (callCount === 2) return makeSubscriptionChain('plan-1');
+        if (callCount === 3) return makePlanChain(100);
+        if (callCount === 4) return makeLeadCountChain(50);
+        if (callCount === 5) return makeAssigneeChain(true);
+        return makeInsertChain('new-lead-id');
+      });
+
+      await createLead(validInput);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire alert when already above threshold', async () => {
+      // 85 leads, max 100 → threshold=80. 85 >= 80 already → no crossing
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return makeOrgMemberChain('org-1');
+        if (callCount === 2) return makeSubscriptionChain('plan-1');
+        if (callCount === 3) return makePlanChain(100);
+        if (callCount === 4) return makeLeadCountChain(85);
+        if (callCount === 5) return makeAssigneeChain(true);
+        return makeInsertChain('new-lead-id');
+      });
+
+      await createLead(validInput);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should deduplicate: skip alert if already sent today', async () => {
+      // Crosses threshold
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return makeOrgMemberChain('org-1');
+        if (callCount === 2) return makeSubscriptionChain('plan-1');
+        if (callCount === 3) return makePlanChain(100);
+        if (callCount === 4) return makeLeadCountChain(79);
+        if (callCount === 5) return makeAssigneeChain(true);
+        return makeInsertChain('new-lead-id');
+      });
+
+      // Dedup: notification already exists
+      vi.mocked(createServiceRoleClient).mockReturnValue(
+        makeServiceSupabase({ id: 'existing-notif' }) as never,
+      );
+
+      await createLead(validInput);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire alert when no subscription found', async () => {
+      // No subscription → hasLimitInfo stays false → no alert
+      let callCount = 0;
+      mockFrom.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return makeOrgMemberChain('org-1');
+        if (callCount === 2) return makeSubscriptionChain(null);
+        if (callCount === 3) return makeAssigneeChain(true);
+        return makeInsertChain('new-lead-id');
+      });
+
+      await createLead(validInput);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
   });
 });

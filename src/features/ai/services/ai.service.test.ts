@@ -4,7 +4,17 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(),
+}));
+
+const mockCreateNotifications = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/features/notifications/services/notification.service', () => ({
+  createNotificationsForOrgMembers: (...args: unknown[]) => mockCreateNotifications(...args),
+}));
+
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { AIService } from './ai.service';
 import type { GenerateMessageRequest, LeadContext } from '../types';
@@ -37,6 +47,22 @@ function createMockSupabase() {
   };
 }
 
+function createMockServiceSupabase() {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lt: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+  };
+  return {
+    from: vi.fn(() => chain),
+    _chain: chain,
+  };
+}
+
 function mockFetchResponse(body: string, subject?: string) {
   const responseBody = subject
     ? `{"subject": "${subject}", "body": "${body}"}`
@@ -53,6 +79,7 @@ describe('AIService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateNotifications.mockClear();
     supabase = createMockSupabase();
     vi.mocked(createServerSupabaseClient).mockResolvedValue(supabase as never);
     process.env.ANTHROPIC_API_KEY = 'test-key';
@@ -261,7 +288,7 @@ describe('AIService', () => {
 
     it('should update existing record', async () => {
       supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 5 },
+        data: { id: 'usage-1', generation_count: 5, daily_limit: 50 },
       });
 
       await AIService.incrementUsage('org-1');
@@ -269,6 +296,99 @@ describe('AIService', () => {
       expect(supabase._chain.update).toHaveBeenCalledWith(
         expect.objectContaining({ generation_count: 6 }),
       );
+    });
+  });
+
+  describe('incrementUsage — threshold alerts', () => {
+    let serviceSupabase: ReturnType<typeof createMockServiceSupabase>;
+
+    beforeEach(() => {
+      serviceSupabase = createMockServiceSupabase();
+      vi.mocked(createServiceRoleClient).mockReturnValue(serviceSupabase as never);
+    });
+
+    it('should fire 80% threshold alert when crossing threshold', async () => {
+      // count=39, limit=50 → threshold=40. After increment: 40 >= 40 → fires
+      supabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'usage-1', generation_count: 39, daily_limit: 50 },
+      });
+
+      // Service role dedup check: no existing notification
+      serviceSupabase._chain.maybeSingle.mockResolvedValueOnce({ data: null });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: 'org-1',
+          type: 'usage_limit_alert',
+          metadata: expect.objectContaining({ channel: 'ai', used: 40, limit: 50 }),
+          roleFilter: 'manager',
+        }),
+      );
+    });
+
+    it('should NOT fire alert when not crossing threshold', async () => {
+      // count=10, limit=50 → threshold=40. After increment: 11 < 40 → no alert
+      supabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'usage-1', generation_count: 10, daily_limit: 50 },
+      });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire alert when already above threshold', async () => {
+      // count=45, limit=50 → threshold=40. 45 >= 40 already → no crossing
+      supabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'usage-1', generation_count: 45, daily_limit: 50 },
+      });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire alert when limit is unlimited', async () => {
+      supabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'usage-1', generation_count: 100, daily_limit: -1 },
+      });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should deduplicate: skip alert if already sent today', async () => {
+      // Crosses threshold
+      supabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'usage-1', generation_count: 39, daily_limit: 50 },
+      });
+
+      // Dedup: notification already exists today
+      serviceSupabase._chain.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'existing-notification' },
+      });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire alert when creating new record (count=1)', async () => {
+      // No existing record → insert with count=1
+      supabase._chain.maybeSingle.mockResolvedValueOnce({ data: null });
+
+      await AIService.incrementUsage('org-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
     });
   });
 });
