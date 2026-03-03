@@ -76,7 +76,7 @@ export async function processStripeEvent(
           active: 'active',
           past_due: 'past_due',
           canceled: 'canceled',
-          trialing: 'trialing',
+          trialing: 'active',
           incomplete: 'past_due',
           incomplete_expired: 'canceled',
           unpaid: 'past_due',

@@ -101,7 +101,7 @@ async function createAndDeduct(
     .from('subscriptions') as ReturnType<typeof supabase.from>)
     .select('plan:plans(max_whatsapp_per_month)')
     .eq('org_id', orgId)
-    .in('status', ['active', 'trialing'])
+    .eq('status', 'active')
     .maybeSingle()) as {
       data: { plan: { max_whatsapp_per_month: number } } | null;
     };

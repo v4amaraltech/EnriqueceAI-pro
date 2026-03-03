@@ -20,6 +20,7 @@ export interface OrganizationMemberRow {
   accepted_at: string | null;
   created_at: string;
   updated_at: string;
+  name?: string;
 }
 
 export interface OrganizationWithMembers extends OrganizationRow {

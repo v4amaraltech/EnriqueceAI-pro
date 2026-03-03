@@ -88,15 +88,6 @@ describe('BillingView', () => {
       expect(screen.getByText('Ativa')).toBeInTheDocument();
     });
 
-    it('renders trialing status badge', () => {
-      const data = makeBillingData({
-        subscription: makeSubscription({ status: 'trialing' }),
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('Trial')).toBeInTheDocument();
-    });
-
     it('renders past_due status badge', () => {
       const data = makeBillingData({
         subscription: makeSubscription({ status: 'past_due' }),

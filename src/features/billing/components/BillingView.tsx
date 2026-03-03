@@ -20,8 +20,6 @@ function statusLabel(status: string): { label: string; variant: 'default' | 'sec
   switch (status) {
     case 'active':
       return { label: 'Ativa', variant: 'default' };
-    case 'trialing':
-      return { label: 'Trial', variant: 'secondary' };
     case 'past_due':
       return { label: 'Pagamento pendente', variant: 'destructive' };
     case 'canceled':
@@ -31,20 +29,11 @@ function statusLabel(status: string): { label: string; variant: 'default' | 'sec
   }
 }
 
-function trialDaysRemaining(periodEnd: string): number | null {
-  const end = new Date(periodEnd);
-  const now = new Date();
-  const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  return diff > 0 ? diff : null;
-}
-
 export function BillingView({ data }: BillingViewProps) {
   const { plan, subscription, memberCount, additionalUsers, monthlyTotal } = data;
   const status = statusLabel(subscription.status);
   const aiUnlimited = plan.max_ai_per_day === -1;
-  const isTrial = subscription.status === 'trialing';
   const hasStripeSubscription = !!subscription.stripe_subscription_id;
-  const trialDays = isTrial ? trialDaysRemaining(subscription.current_period_end) : null;
 
   const [isPending, startTransition] = useTransition();
 
@@ -81,12 +70,7 @@ export function BillingView({ data }: BillingViewProps) {
                 )}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {isTrial && trialDays !== null && (
-                <Badge variant="secondary">{trialDays} dias restantes</Badge>
-              )}
-              <Badge variant={status.variant}>{status.label}</Badge>
-            </div>
+            <Badge variant={status.variant}>{status.label}</Badge>
           </div>
 
           <div className="rounded-lg bg-[var(--muted)] p-3">

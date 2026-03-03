@@ -171,7 +171,7 @@ export function DashboardFilters({
                   )
                 }
               >
-                {m.user_id.slice(0, 8)}... ({m.role})
+                {m.name ?? m.user_id.slice(0, 8)}
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuContent>

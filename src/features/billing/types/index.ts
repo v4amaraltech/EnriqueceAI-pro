@@ -21,7 +21,7 @@ export interface PlanFeatures {
   [key: string]: unknown;
 }
 
-export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled';
 
 export interface SubscriptionRow {
   id: string;

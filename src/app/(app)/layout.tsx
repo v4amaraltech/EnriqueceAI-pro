@@ -4,12 +4,12 @@ import { ThemeProvider } from 'next-themes';
 import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
 import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGuard';
-import { TrialBanner } from '@/features/billing/components/TrialBanner';
 import type { SubscriptionStatus } from '@/features/billing/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
@@ -44,26 +44,41 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/onboarding');
   }
 
-  // Fetch subscription status for trial banner and canceled guard
+  // Fetch subscription status for canceled guard
   const { data: subscriptionData } = (await (
     supabase.from('subscriptions') as ReturnType<typeof supabase.from>
   )
-    .select('status, current_period_end')
+    .select('status')
     .eq('org_id', memberData.organization.id)
-    .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };
+    .maybeSingle()) as { data: { status: SubscriptionStatus } | null };
 
-  const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'trialing';
-  const trialDaysRemaining = (() => {
-    if (subscriptionStatus !== 'trialing' || !subscriptionData?.current_period_end) return null;
-    const end = new Date(subscriptionData.current_period_end).getTime();
-    const now = new Date().getTime();
-    return Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
-  })();
+  const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
 
   const { data: members } = (await supabase
     .from('organization_members')
     .select('*')
     .eq('org_id', memberData.organization.id)) as { data: OrganizationMemberRow[] | null };
+
+  // Enrich members with user names from auth.users
+  const nameMap = new Map<string, string>();
+  try {
+    const adminClient = createAdminSupabaseClient();
+    const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
+    if (usersData?.users) {
+      for (const u of usersData.users) {
+        const meta = u.user_metadata as Record<string, unknown> | undefined;
+        const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+        nameMap.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
+      }
+    }
+  } catch {
+    // Fallback: names will be undefined, consumers use user_id slice
+  }
+
+  const enrichedMembers = (members ?? []).map((m) => ({
+    ...m,
+    name: nameMap.get(m.user_id),
+  }));
 
   const currentMember: OrganizationMemberRow = {
     id: memberData.id,
@@ -75,6 +90,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     accepted_at: memberData.accepted_at,
     created_at: memberData.created_at,
     updated_at: memberData.updated_at,
+    name: nameMap.get(memberData.user_id),
   };
 
   return (
@@ -82,16 +98,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <TooltipProvider>
         <OrganizationProvider
           initialOrg={memberData.organization}
-          initialMembers={members ?? []}
+          initialMembers={enrichedMembers}
           initialMember={currentMember}
         >
           <NotificationProvider userId={user.id}>
             <SubscriptionGuard status={subscriptionStatus}>
               <div className="flex h-screen flex-col">
                 <TopBar />
-                {trialDaysRemaining !== null && trialDaysRemaining > 0 && (
-                  <TrialBanner daysRemaining={trialDaysRemaining} />
-                )}
                 <main className="flex-1 overflow-auto p-6" data-tour="main-content">
                   <Breadcrumbs />
                   <Suspense fallback={<PageSkeleton />}>

@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Bell,
-  Clock,
   Mail,
   MailOpen,
   MousePointerClick,
@@ -27,7 +26,6 @@ const ICON_MAP: Record<NotificationType, React.ElementType> = {
   member_invited: UserPlus,
   member_joined: UserCheck,
   usage_limit_alert: Bell,
-  trial_expiring: Clock,
 };
 
 function formatRelativeTime(dateStr: string): string {
