@@ -59,6 +59,27 @@ function makeInsertChain(leadId: string | null, error: { message: string } | nul
   return { insert: insertMock };
 }
 
+function makeSubscriptionChain(planId: string | null) {
+  const maybeSingleMock = vi.fn().mockResolvedValue({ data: planId ? { plan_id: planId } : null });
+  const eqOrgMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
+  return { select: selectMock };
+}
+
+function makePlanChain(maxLeads: number) {
+  const singleMock = vi.fn().mockResolvedValue({ data: { max_leads: maxLeads } });
+  const eqIdMock = vi.fn().mockReturnValue({ single: singleMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqIdMock });
+  return { select: selectMock };
+}
+
+function makeLeadCountChain(count: number) {
+  const isMock = vi.fn().mockResolvedValue({ count });
+  const eqOrgMock = vi.fn().mockReturnValue({ is: isMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
+  return { select: selectMock };
+}
+
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const CADENCE_UUID = '660e8400-e29b-41d4-a716-446655440000';
 
@@ -85,7 +106,8 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null); // skip limit check
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain('new-lead-id');
     });
 
@@ -105,7 +127,8 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain('new-lead-id');
     });
 
@@ -131,9 +154,10 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeInsertChain('new-lead-id');
-      // 4th call: update enrollment next_step_due
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeInsertChain('new-lead-id');
+      // 5th call: update enrollment next_step_due
       return { update: updateMock };
     });
 
@@ -165,6 +189,7 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeSubscriptionChain(null);
       return makeAssigneeChain(false);
     });
 
@@ -192,7 +217,8 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain('new-lead-id');
     });
 
@@ -211,7 +237,8 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain('new-lead-id');
     });
 
@@ -225,7 +252,8 @@ describe('createLead', () => {
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain(null, { message: 'Insert failed' });
     });
 
@@ -237,12 +265,49 @@ describe('createLead', () => {
     }
   });
 
+  it('should return LEAD_LIMIT_REACHED when max_leads exceeded', async () => {
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeSubscriptionChain('plan-1');
+      if (callCount === 3) return makePlanChain(100);
+      return makeLeadCountChain(100); // at limit
+    });
+
+    const result = await createLead(validInput);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('LEAD_LIMIT_REACHED');
+      expect(result.error).toContain('100/100');
+    }
+  });
+
+  it('should allow creation when under lead limit', async () => {
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeSubscriptionChain('plan-1');
+      if (callCount === 3) return makePlanChain(100);
+      if (callCount === 4) return makeLeadCountChain(50); // under limit
+      if (callCount === 5) return makeAssigneeChain(true);
+      return makeInsertChain('new-lead-id');
+    });
+
+    const result = await createLead(validInput);
+
+    expect(result.success).toBe(true);
+  });
+
   it('should pass is_inbound flag through', async () => {
     let callCount = 0;
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
       return makeInsertChain('new-lead-id');
     });
 

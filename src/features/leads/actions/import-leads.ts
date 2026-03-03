@@ -41,6 +41,47 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     return { success: false, error: parsed.errors[0].errorMessage };
   }
 
+  // Check lead limit before importing
+  const { data: sub } = (await (supabase
+    .from('subscriptions') as ReturnType<typeof supabase.from>)
+    .select('plan_id')
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: { plan_id: string } | null };
+
+  if (sub) {
+    const { data: plan } = (await (supabase
+      .from('plans') as ReturnType<typeof supabase.from>)
+      .select('max_leads')
+      .eq('id', sub.plan_id)
+      .single()) as { data: { max_leads: number } | null };
+
+    if (plan) {
+      const { count: leadCount } = (await (supabase
+        .from('leads') as ReturnType<typeof supabase.from>)
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .is('deleted_at', null)) as { count: number | null };
+
+      const currentLeads = leadCount ?? 0;
+      if (currentLeads >= plan.max_leads) {
+        return {
+          success: false,
+          error: `Limite de leads atingido (${currentLeads}/${plan.max_leads}). Faça upgrade para adicionar mais.`,
+          code: 'LEAD_LIMIT_REACHED',
+        };
+      }
+
+      const availableSlots = plan.max_leads - currentLeads;
+      if (parsed.rows.length > availableSlots) {
+        return {
+          success: false,
+          error: `Você tem espaço para ${availableSlots} leads, mas o CSV tem ${parsed.rows.length} linhas. Reduza o arquivo ou faça upgrade.`,
+          code: 'LEAD_LIMIT_EXCEEDED',
+        };
+      }
+    }
+  }
+
   // Create import record
   const { data: importRecord, error: importError } = (await (supabase
     .from('lead_imports') as ReturnType<typeof supabase.from>)

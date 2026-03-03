@@ -23,6 +23,10 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
+import type { PlanFeatures } from '@/features/billing/types';
+import { checkFeature } from '@/features/billing/services/feature-flags';
+import { UpgradePrompt } from '@/shared/components/UpgradePrompt';
+
 import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
@@ -39,6 +43,7 @@ interface IntegrationsViewProps {
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
+  planFeatures: PlanFeatures;
 }
 
 const statusConfig = {
@@ -48,7 +53,7 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
-export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | null>(null);
@@ -199,7 +204,14 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
         <Card className="flex flex-col">
           <CardContent className="flex flex-1 flex-col p-6">
             <Image src="/logos/google-logo.png" alt="Google" width={48} height={48} className="rounded-lg" />
-            <CardTitle className="mt-4 text-xl">Google</CardTitle>
+            <div className="mt-4 flex items-center gap-2">
+              <CardTitle className="text-xl">Google</CardTitle>
+              {!checkFeature(planFeatures, 'calendar') && (
+                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                  Calendar: Pro
+                </Badge>
+              )}
+            </div>
             <div className="min-h-[3.5rem] flex-1">
               {gmail || calendar ? (
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">
@@ -207,7 +219,9 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Integre com sua conta Google para sincronizar e gerenciar seus compromissos na plataforma.
+                  {checkFeature(planFeatures, 'calendar')
+                    ? 'Integre com sua conta Google para sincronizar e gerenciar seus compromissos na plataforma.'
+                    : 'Integre com sua conta Google para enviar e-mails. Sincronização de Calendar disponível no plano Pro.'}
                 </p>
               )}
             </div>
@@ -243,7 +257,18 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </CardContent>
         </Card>
 
-        {/* CRM Card — hidden until CRM integrations are configured */}
+        {/* CRM Card */}
+        {!checkFeature(planFeatures, 'crm') && (
+          <Card className="flex flex-col">
+            <CardContent className="flex flex-1 flex-col p-6">
+              <UpgradePrompt
+                featureName="Integrações CRM"
+                requiredPlan="Pro"
+                description="Conecte HubSpot, Pipedrive ou RD Station para sincronizar seus leads automaticamente."
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Disconnect Google dialog */}

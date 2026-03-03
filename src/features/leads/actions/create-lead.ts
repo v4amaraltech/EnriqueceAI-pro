@@ -34,6 +34,38 @@ export async function createLead(
     return { success: false, error: 'Organização não encontrada' };
   }
 
+  // Check lead limit
+  const { data: sub } = (await (supabase
+    .from('subscriptions') as ReturnType<typeof supabase.from>)
+    .select('plan_id')
+    .eq('org_id', member.org_id)
+    .maybeSingle()) as { data: { plan_id: string } | null };
+
+  if (sub) {
+    const { data: plan } = (await (supabase
+      .from('plans') as ReturnType<typeof supabase.from>)
+      .select('max_leads')
+      .eq('id', sub.plan_id)
+      .single()) as { data: { max_leads: number } | null };
+
+    if (plan) {
+      const { count: leadCount } = (await (supabase
+        .from('leads') as ReturnType<typeof supabase.from>)
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', member.org_id)
+        .is('deleted_at', null)) as { count: number | null };
+
+      const currentLeads = leadCount ?? 0;
+      if (currentLeads >= plan.max_leads) {
+        return {
+          success: false,
+          error: `Limite de leads atingido (${currentLeads}/${plan.max_leads}). Faça upgrade para adicionar mais.`,
+          code: 'LEAD_LIMIT_REACHED',
+        };
+      }
+    }
+  }
+
   // Validate assigned_to belongs to same org
   const { data: assignee } = (await supabase
     .from('organization_members')
