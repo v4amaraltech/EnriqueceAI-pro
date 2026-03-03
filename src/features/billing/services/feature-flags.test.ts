@@ -7,6 +7,7 @@ import {
   calculateUsageLimits,
   checkFeature,
   formatCents,
+  getPlanDiff,
   isNearLimit,
 } from './feature-flags';
 
@@ -131,5 +132,108 @@ describe('formatCents', () => {
     const result = formatCents(0);
     expect(result).toContain('0');
     expect(result).toContain('R$');
+  });
+});
+
+describe('getPlanDiff', () => {
+  const starterPlan = makePlan({
+    slug: 'starter',
+    name: 'Starter',
+    price_cents: 14900,
+    max_leads: 1000,
+    max_ai_per_day: 30,
+    max_whatsapp_per_month: 500,
+    included_users: 2,
+    features: { enrichment: 'basic', crm: false, calendar: false },
+  });
+
+  const proPlan = makePlan({
+    slug: 'pro',
+    name: 'Pro',
+    price_cents: 34900,
+    max_leads: 5000,
+    max_ai_per_day: 100,
+    max_whatsapp_per_month: 2000,
+    included_users: 5,
+    features: { enrichment: 'lemit', crm: true, calendar: true },
+  });
+
+  const scalePlan = makePlan({
+    slug: 'scale',
+    name: 'Scale',
+    price_cents: 69900,
+    max_leads: 20000,
+    max_ai_per_day: -1,
+    max_whatsapp_per_month: 10000,
+    included_users: 10,
+    features: { enrichment: 'full', crm: true, calendar: true },
+  });
+
+  it('detects gained features on upgrade (starter → pro)', () => {
+    const diff = getPlanDiff(starterPlan, proPlan);
+
+    expect(diff.gained).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'CRM' }),
+        expect.objectContaining({ name: 'Calendário' }),
+        expect.objectContaining({ name: expect.stringContaining('Enriquecimento') }),
+      ]),
+    );
+    expect(diff.lost).toHaveLength(0);
+  });
+
+  it('detects lost features on downgrade (pro → starter)', () => {
+    const diff = getPlanDiff(proPlan, starterPlan);
+
+    expect(diff.lost).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'CRM' }),
+        expect.objectContaining({ name: 'Calendário' }),
+        expect.objectContaining({ name: expect.stringContaining('Enriquecimento') }),
+      ]),
+    );
+    expect(diff.gained).toHaveLength(0);
+  });
+
+  it('detects limit changes on upgrade', () => {
+    const diff = getPlanDiff(starterPlan, proPlan);
+
+    expect(diff.limitsChanged).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Leads' }),
+        expect.objectContaining({ name: 'IA por dia' }),
+        expect.objectContaining({ name: 'WhatsApp/mês' }),
+        expect.objectContaining({ name: 'Usuários inclusos' }),
+      ]),
+    );
+  });
+
+  it('returns empty diff for identical plans', () => {
+    const diff = getPlanDiff(proPlan, proPlan);
+
+    expect(diff.gained).toHaveLength(0);
+    expect(diff.lost).toHaveLength(0);
+    expect(diff.limitsChanged).toHaveLength(0);
+  });
+
+  it('handles unlimited AI diff correctly (pro → scale)', () => {
+    const diff = getPlanDiff(proPlan, scalePlan);
+
+    const aiChange = diff.limitsChanged.find((l) => l.name === 'IA por dia');
+    expect(aiChange).toBeDefined();
+    expect(aiChange!.to).toBe('Ilimitado');
+  });
+
+  it('detects enrichment upgrade without boolean feature changes (pro → scale)', () => {
+    const diff = getPlanDiff(proPlan, scalePlan);
+
+    expect(diff.gained).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: expect.stringContaining('Enriquecimento') }),
+      ]),
+    );
+    // CRM and Calendar don't change (both already true)
+    expect(diff.gained.find((g) => g.name === 'CRM')).toBeUndefined();
+    expect(diff.gained.find((g) => g.name === 'Calendário')).toBeUndefined();
   });
 });

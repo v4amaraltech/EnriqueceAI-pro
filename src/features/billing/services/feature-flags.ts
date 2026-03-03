@@ -65,6 +65,104 @@ export function isNearLimit(current: number, max: number, threshold = 0.8): bool
   return current / max >= threshold;
 }
 
+export interface PlanDiffItem {
+  name: string;
+  description: string;
+}
+
+export interface PlanLimitChange {
+  name: string;
+  from: number | string;
+  to: number | string;
+}
+
+export interface PlanDiff {
+  gained: PlanDiffItem[];
+  lost: PlanDiffItem[];
+  limitsChanged: PlanLimitChange[];
+}
+
+const ENRICHMENT_LABELS: Record<string, string> = {
+  basic: 'Básico',
+  lemit: 'Intermediário',
+  full: 'Completo',
+};
+
+function formatLimit(value: number, suffix: string): string {
+  if (value === -1) return 'Ilimitado';
+  return `${value.toLocaleString('pt-BR')} ${suffix}`;
+}
+
+export function getPlanDiff(currentPlan: PlanRow, targetPlan: PlanRow): PlanDiff {
+  const gained: PlanDiffItem[] = [];
+  const lost: PlanDiffItem[] = [];
+  const limitsChanged: PlanLimitChange[] = [];
+
+  // Boolean features
+  if (!currentPlan.features.crm && targetPlan.features.crm) {
+    gained.push({ name: 'CRM', description: 'Integração com HubSpot, Pipedrive e RD Station' });
+  } else if (currentPlan.features.crm && !targetPlan.features.crm) {
+    lost.push({ name: 'CRM', description: 'Integração com HubSpot, Pipedrive e RD Station' });
+  }
+
+  if (!currentPlan.features.calendar && targetPlan.features.calendar) {
+    gained.push({ name: 'Calendário', description: 'Integração com Google Calendar' });
+  } else if (currentPlan.features.calendar && !targetPlan.features.calendar) {
+    lost.push({ name: 'Calendário', description: 'Integração com Google Calendar' });
+  }
+
+  // Enrichment level
+  const enrichmentOrder = ['basic', 'lemit', 'full'];
+  const currentIdx = enrichmentOrder.indexOf(currentPlan.features.enrichment);
+  const targetIdx = enrichmentOrder.indexOf(targetPlan.features.enrichment);
+  if (targetIdx > currentIdx) {
+    gained.push({
+      name: `Enriquecimento ${ENRICHMENT_LABELS[targetPlan.features.enrichment] ?? targetPlan.features.enrichment}`,
+      description: `Upgrade de ${ENRICHMENT_LABELS[currentPlan.features.enrichment] ?? currentPlan.features.enrichment} para ${ENRICHMENT_LABELS[targetPlan.features.enrichment] ?? targetPlan.features.enrichment}`,
+    });
+  } else if (targetIdx < currentIdx) {
+    lost.push({
+      name: `Enriquecimento ${ENRICHMENT_LABELS[currentPlan.features.enrichment] ?? currentPlan.features.enrichment}`,
+      description: `Downgrade de ${ENRICHMENT_LABELS[currentPlan.features.enrichment] ?? currentPlan.features.enrichment} para ${ENRICHMENT_LABELS[targetPlan.features.enrichment] ?? targetPlan.features.enrichment}`,
+    });
+  }
+
+  // Numeric limits
+  if (currentPlan.max_leads !== targetPlan.max_leads) {
+    limitsChanged.push({
+      name: 'Leads',
+      from: currentPlan.max_leads.toLocaleString('pt-BR'),
+      to: targetPlan.max_leads.toLocaleString('pt-BR'),
+    });
+  }
+
+  if (currentPlan.max_ai_per_day !== targetPlan.max_ai_per_day) {
+    limitsChanged.push({
+      name: 'IA por dia',
+      from: formatLimit(currentPlan.max_ai_per_day, ''),
+      to: formatLimit(targetPlan.max_ai_per_day, ''),
+    });
+  }
+
+  if (currentPlan.max_whatsapp_per_month !== targetPlan.max_whatsapp_per_month) {
+    limitsChanged.push({
+      name: 'WhatsApp/mês',
+      from: currentPlan.max_whatsapp_per_month.toLocaleString('pt-BR'),
+      to: targetPlan.max_whatsapp_per_month.toLocaleString('pt-BR'),
+    });
+  }
+
+  if (currentPlan.included_users !== targetPlan.included_users) {
+    limitsChanged.push({
+      name: 'Usuários inclusos',
+      from: String(currentPlan.included_users),
+      to: String(targetPlan.included_users),
+    });
+  }
+
+  return { gained, lost, limitsChanged };
+}
+
 export function formatCents(cents: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

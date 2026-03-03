@@ -1,16 +1,17 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
-import { createCheckoutSession } from '../actions/create-checkout';
 import { formatCents } from '../services/feature-flags';
 import type { PlanComparison as PlanComparisonData, PlanRow } from '../types';
+
+import { DowngradeConfirmModal } from './DowngradeConfirmModal';
+import { UpgradeConfirmModal } from './UpgradeConfirmModal';
 
 interface PlanComparisonProps {
   data: PlanComparisonData;
@@ -18,6 +19,20 @@ interface PlanComparisonProps {
 
 export function PlanComparisonView({ data }: PlanComparisonProps) {
   const { plans, currentPlanSlug } = data;
+  const currentPlan = plans.find((p) => p.slug === currentPlanSlug);
+
+  const [upgradeTarget, setUpgradeTarget] = useState<PlanRow | null>(null);
+  const [downgradeTarget, setDowngradeTarget] = useState<PlanRow | null>(null);
+
+  function handlePlanClick(plan: PlanRow) {
+    if (!currentPlan || plan.slug === currentPlanSlug) return;
+
+    if (plan.price_cents > currentPlan.price_cents) {
+      setUpgradeTarget(plan);
+    } else {
+      setDowngradeTarget(plan);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -34,9 +49,29 @@ export function PlanComparisonView({ data }: PlanComparisonProps) {
             key={plan.id}
             plan={plan}
             isCurrent={plan.slug === currentPlanSlug}
+            onSelect={() => handlePlanClick(plan)}
+            isUpgrade={currentPlan ? plan.price_cents > currentPlan.price_cents : false}
           />
         ))}
       </div>
+
+      {currentPlan && upgradeTarget && (
+        <UpgradeConfirmModal
+          open
+          onOpenChange={(open) => { if (!open) setUpgradeTarget(null); }}
+          currentPlan={currentPlan}
+          targetPlan={upgradeTarget}
+        />
+      )}
+
+      {currentPlan && downgradeTarget && (
+        <DowngradeConfirmModal
+          open
+          onOpenChange={(open) => { if (!open) setDowngradeTarget(null); }}
+          currentPlan={currentPlan}
+          targetPlan={downgradeTarget}
+        />
+      )}
     </div>
   );
 }
@@ -44,20 +79,12 @@ export function PlanComparisonView({ data }: PlanComparisonProps) {
 interface PlanCardProps {
   plan: PlanRow;
   isCurrent: boolean;
+  onSelect: () => void;
+  isUpgrade: boolean;
 }
 
-function PlanCard({ plan, isCurrent }: PlanCardProps) {
+function PlanCard({ plan, isCurrent, onSelect, isUpgrade }: PlanCardProps) {
   const aiUnlimited = plan.max_ai_per_day === -1;
-  const [isPending, startTransition] = useTransition();
-
-  function handleUpgrade() {
-    startTransition(async () => {
-      const result = await createCheckoutSession(plan.id);
-      if (!result.success) {
-        toast.error(result.error);
-      }
-    });
-  }
 
   return (
     <Card className={isCurrent ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]' : ''}>
@@ -102,10 +129,14 @@ function PlanCard({ plan, isCurrent }: PlanCardProps) {
         <Button
           variant={isCurrent ? 'outline' : 'default'}
           className="w-full"
-          disabled={isCurrent || isPending}
-          onClick={isCurrent ? undefined : handleUpgrade}
+          disabled={isCurrent}
+          onClick={isCurrent ? undefined : onSelect}
         >
-          {isCurrent ? 'Plano atual' : isPending ? 'Redirecionando...' : 'Fazer upgrade'}
+          {isCurrent
+            ? 'Plano atual'
+            : isUpgrade
+              ? 'Fazer upgrade'
+              : 'Mudar plano'}
         </Button>
       </CardContent>
     </Card>
