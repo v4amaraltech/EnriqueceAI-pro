@@ -5,11 +5,15 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { createLeadSchema } from '../schemas/lead.schemas';
 import { enrichLeadAction } from './enrich-lead';
+
+const ALERT_THRESHOLD = 0.8;
 
 export async function createLead(
   rawData: Record<string, unknown>,
@@ -35,6 +39,10 @@ export async function createLead(
   }
 
   // Check lead limit
+  let currentLeads = 0;
+  let maxLeads = 0;
+  let hasLimitInfo = false;
+
   const { data: sub } = (await (supabase
     .from('subscriptions') as ReturnType<typeof supabase.from>)
     .select('plan_id')
@@ -49,17 +57,20 @@ export async function createLead(
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
+      maxLeads = plan.max_leads;
       const { count: leadCount } = (await (supabase
         .from('leads') as ReturnType<typeof supabase.from>)
         .select('id', { count: 'exact', head: true })
         .eq('org_id', member.org_id)
         .is('deleted_at', null)) as { count: number | null };
 
-      const currentLeads = leadCount ?? 0;
-      if (currentLeads >= plan.max_leads) {
+      currentLeads = leadCount ?? 0;
+      hasLimitInfo = true;
+
+      if (currentLeads >= maxLeads) {
         return {
           success: false,
-          error: `Limite de leads atingido (${currentLeads}/${plan.max_leads}). Faça upgrade para adicionar mais.`,
+          error: `Limite de leads atingido (${currentLeads}/${maxLeads}). Faça upgrade para adicionar mais.`,
           code: 'LEAD_LIMIT_REACHED',
         };
       }
@@ -128,7 +139,47 @@ export async function createLead(
     // Enrichment failure should not fail lead creation
   });
 
+  // 4. Fire 80% lead threshold alert (fire-and-forget)
+  if (hasLimitInfo && maxLeads > 0) {
+    const newCount = currentLeads + 1;
+    const threshold = Math.floor(maxLeads * ALERT_THRESHOLD);
+    if (currentLeads < threshold && newCount >= threshold) {
+      fireLeadThresholdAlert(member.org_id, newCount, maxLeads).catch((err) =>
+        console.error('[leads] Failed to send threshold alert:', err),
+      );
+    }
+  }
+
   revalidatePath('/leads');
 
   return { success: true, data: { id: leadId } };
+}
+
+async function fireLeadThresholdAlert(orgId: string, used: number, limit: number): Promise<void> {
+  // Deduplicate: check if alert already sent today
+  const supabase = createServiceRoleClient();
+  const today = new Date().toISOString().split('T')[0]!;
+
+  const { data: existing } = (await (supabase
+    .from('notifications') as ReturnType<typeof supabase.from>)
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('type', 'usage_limit_alert')
+    .gte('created_at', `${today}T00:00:00`)
+    .lt('created_at', `${today}T23:59:59.999`)
+    .contains('metadata', { channel: 'leads' } as unknown as Record<string, unknown>)
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+
+  if (existing) return;
+
+  const pct = Math.round((used / limit) * 100);
+  await createNotificationsForOrgMembers({
+    orgId,
+    type: 'usage_limit_alert',
+    title: `Leads: ${pct}% do limite utilizado`,
+    body: `Sua organização já tem ${used} de ${limit} leads. Considere fazer upgrade do plano.`,
+    metadata: { channel: 'leads', used, limit, percentage: pct },
+    roleFilter: 'manager',
+  });
 }

@@ -7,7 +7,6 @@ import { BillingView } from './BillingView';
 
 vi.mock('../services/feature-flags', () => ({
   formatCents: vi.fn((cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`),
-  isNearLimit: vi.fn((current: number, max: number) => current >= max * 0.8),
 }));
 
 vi.mock('../actions/create-portal', () => ({
@@ -117,63 +116,6 @@ describe('BillingView', () => {
     });
   });
 
-  describe('usage bars', () => {
-    it('shows AI usage bar with current and max', () => {
-      const data = makeBillingData({
-        aiUsageToday: { used: 20, limit: 100 },
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('IA (hoje)')).toBeInTheDocument();
-      expect(screen.getByText('20 / 100')).toBeInTheDocument();
-    });
-
-    it('shows WhatsApp usage bar with current and max', () => {
-      const data = makeBillingData({
-        whatsappUsage: { used: 500, limit: 2000, period: '2026-02' },
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('WhatsApp (mês)')).toBeInTheDocument();
-      expect(screen.getByText('500 / 2000')).toBeInTheDocument();
-    });
-
-    it('shows users usage bar with current and included', () => {
-      const data = makeBillingData({
-        memberCount: 3,
-        plan: makePlan({ included_users: 5 }),
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('Usuários')).toBeInTheDocument();
-      expect(screen.getByText('3 / 5')).toBeInTheDocument();
-    });
-  });
-
-  describe('near limit alert', () => {
-    it('shows alert icon when AI usage is near limit', () => {
-      const data = makeBillingData({
-        aiUsageToday: { used: 85, limit: 100 },
-      });
-      render(<BillingView data={data} />);
-
-      // isNearLimit mock returns true when current >= max * 0.8 → 85 >= 80
-      // AlertTriangle is rendered when nearLimit or exceeded is true
-      // The progress bar area should contain the warning indicator
-      expect(screen.getByText('IA (hoje)')).toBeInTheDocument();
-      expect(screen.getByText('85 / 100')).toBeInTheDocument();
-    });
-
-    it('shows alert icon when WhatsApp usage is near limit', () => {
-      const data = makeBillingData({
-        whatsappUsage: { used: 1900, limit: 2000, period: '2026-02' },
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('1900 / 2000')).toBeInTheDocument();
-    });
-  });
-
   describe('features list', () => {
     it('renders leads limit feature', () => {
       render(<BillingView data={makeBillingData()} />);
@@ -239,16 +181,6 @@ describe('BillingView', () => {
   });
 
   describe('unlimited AI', () => {
-    it('shows ilimitado label when max_ai_per_day is -1', () => {
-      const data = makeBillingData({
-        plan: makePlan({ max_ai_per_day: -1 }),
-        aiUsageToday: { used: 42, limit: -1 },
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('42 (ilimitado)')).toBeInTheDocument();
-    });
-
     it('shows Ilimitado in features list when max_ai_per_day is -1', () => {
       const data = makeBillingData({
         plan: makePlan({ max_ai_per_day: -1 }),
@@ -257,19 +189,6 @@ describe('BillingView', () => {
       render(<BillingView data={data} />);
 
       expect(screen.getByText('Ilimitado')).toBeInTheDocument();
-    });
-
-    it('does not render progress bar for unlimited AI', () => {
-      const data = makeBillingData({
-        plan: makePlan({ max_ai_per_day: -1 }),
-        aiUsageToday: { used: 9999, limit: -1 },
-      });
-      render(<BillingView data={data} />);
-
-      // When unlimited, the Progress element is not rendered at all for AI row.
-      // We verify the unlimited label is shown and there is no "9999 / -1" text.
-      expect(screen.queryByText('9999 / -1')).not.toBeInTheDocument();
-      expect(screen.getByText('9999 (ilimitado)')).toBeInTheDocument();
     });
   });
 
@@ -294,22 +213,11 @@ describe('BillingView', () => {
       expect(screen.getByText(/1 usuário adicional/)).toBeInTheDocument();
     });
 
-    it('shows overage label on users bar when there are additional users', () => {
-      const data = makeBillingData({
-        memberCount: 7,
-        additionalUsers: 2,
-        plan: makePlan({ included_users: 5 }),
-      });
-      render(<BillingView data={data} />);
-
-      expect(screen.getByText('(+2 adicional)')).toBeInTheDocument();
-    });
-
-    it('does not show additional users info when additionalUsers is 0', () => {
+    it('does not show additional users price info when additionalUsers is 0', () => {
       const data = makeBillingData({ additionalUsers: 0 });
       render(<BillingView data={data} />);
 
-      expect(screen.queryByText(/adicional/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/usuários? adicional/)).not.toBeInTheDocument();
     });
   });
 

@@ -1,16 +1,15 @@
 'use client';
 
 import { useTransition } from 'react';
-import { AlertTriangle, Check, CreditCard, ExternalLink, Users, Zap } from 'lucide-react';
+import { Check, CreditCard, ExternalLink, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { Progress } from '@/shared/components/ui/progress';
 
 import { createPortalSession } from '../actions/create-portal';
-import { formatCents, isNearLimit } from '../services/feature-flags';
+import { formatCents } from '../services/feature-flags';
 import type { BillingOverview } from '../types';
 
 interface BillingViewProps {
@@ -40,7 +39,7 @@ function trialDaysRemaining(periodEnd: string): number | null {
 }
 
 export function BillingView({ data }: BillingViewProps) {
-  const { plan, subscription, memberCount, additionalUsers, monthlyTotal, aiUsageToday, whatsappUsage } = data;
+  const { plan, subscription, memberCount, additionalUsers, monthlyTotal } = data;
   const status = statusLabel(subscription.status);
   const aiUnlimited = plan.max_ai_per_day === -1;
   const isTrial = subscription.status === 'trialing';
@@ -127,40 +126,6 @@ export function BillingView({ data }: BillingViewProps) {
         </CardContent>
       </Card>
 
-      {/* Usage Limits */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Zap className="size-4" />
-            Uso do Plano
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* AI Usage */}
-          <UsageBar
-            label="IA (hoje)"
-            current={aiUsageToday.used}
-            max={aiUsageToday.limit}
-            unlimited={aiUnlimited}
-          />
-
-          {/* WhatsApp Usage */}
-          <UsageBar
-            label="WhatsApp (mês)"
-            current={whatsappUsage.used}
-            max={whatsappUsage.limit}
-          />
-
-          {/* Users */}
-          <UsageBar
-            label="Usuários"
-            current={memberCount}
-            max={plan.included_users}
-            overageLabel={additionalUsers > 0 ? `+${additionalUsers} adicional` : undefined}
-          />
-        </CardContent>
-      </Card>
-
       {/* Features */}
       <Card>
         <CardHeader>
@@ -193,49 +158,6 @@ export function BillingView({ data }: BillingViewProps) {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-interface UsageBarProps {
-  label: string;
-  current: number;
-  max: number;
-  unlimited?: boolean;
-  overageLabel?: string;
-}
-
-function UsageBar({ label, current, max, unlimited, overageLabel }: UsageBarProps) {
-  const percentage = unlimited ? 0 : max > 0 ? Math.min((current / max) * 100, 100) : 0;
-  const nearLimit = !unlimited && isNearLimit(current, max);
-  const exceeded = !unlimited && max > 0 && current >= max;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="text-[var(--muted-foreground)]">
-          {unlimited ? (
-            `${current} (ilimitado)`
-          ) : (
-            <>
-              {current} / {max}
-              {overageLabel && <span className="ml-1 text-amber-600">({overageLabel})</span>}
-            </>
-          )}
-        </span>
-      </div>
-      {!unlimited && (
-        <div className="flex items-center gap-2">
-          <Progress
-            value={percentage}
-            className={exceeded ? '[&>[data-slot=progress-indicator]]:bg-red-500' : nearLimit ? '[&>[data-slot=progress-indicator]]:bg-amber-500' : ''}
-          />
-          {(nearLimit || exceeded) && (
-            <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-          )}
-        </div>
-      )}
     </div>
   );
 }

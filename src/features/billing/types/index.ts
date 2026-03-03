@@ -66,3 +66,14 @@ export interface PlanComparison {
   plans: PlanRow[];
   currentPlanSlug: string;
 }
+
+export interface AiDailyUsage {
+  date: string; // YYYY-MM-DD
+  count: number;
+}
+
+export interface UsageDashboardData {
+  limits: import('../services/feature-flags').UsageLimits;
+  plan: PlanRow;
+  aiHistory: AiDailyUsage[];
+}

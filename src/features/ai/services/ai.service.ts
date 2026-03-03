@@ -1,4 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
+
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { buildPersonalizationPrompt, buildPrompt } from '../prompts';
 import type {
@@ -11,6 +14,7 @@ import type {
 } from '../types';
 
 const DEFAULT_DAILY_LIMIT = 50;
+const ALERT_THRESHOLD = 0.8;
 const MODEL = 'claude-sonnet-4-20250514';
 const MAX_TOKENS = 1024;
 
@@ -179,15 +183,28 @@ export class AIService {
     // Try to update existing row
     const { data: existing } = (await (supabase
       .from('ai_usage') as ReturnType<typeof supabase.from>)
-      .select('id, generation_count')
+      .select('id, generation_count, daily_limit')
       .eq('org_id', orgId)
       .eq('usage_date', today)
-      .maybeSingle()) as { data: { id: string; generation_count: number } | null };
+      .maybeSingle()) as { data: { id: string; generation_count: number; daily_limit: number } | null };
 
     if (existing) {
+      const oldCount = existing.generation_count;
+      const newCount = oldCount + 1;
+
       await (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
-        .update({ generation_count: existing.generation_count + 1 } as Record<string, unknown>)
+        .update({ generation_count: newCount } as Record<string, unknown>)
         .eq('id', existing.id);
+
+      // Fire 80% threshold alert
+      if (existing.daily_limit > 0) {
+        const threshold = Math.floor(existing.daily_limit * ALERT_THRESHOLD);
+        if (oldCount < threshold && newCount >= threshold) {
+          fireAiThresholdAlert(orgId, newCount, existing.daily_limit).catch((err) =>
+            console.error('[ai-usage] Failed to send threshold alert:', err),
+          );
+        }
+      }
     } else {
       await (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
         .insert({
@@ -198,4 +215,33 @@ export class AIService {
         } as Record<string, unknown>);
     }
   }
+}
+
+async function fireAiThresholdAlert(orgId: string, used: number, limit: number): Promise<void> {
+  // Deduplicate: check if alert already sent today
+  const supabase = createServiceRoleClient();
+  const today = new Date().toISOString().split('T')[0]!;
+
+  const { data: existing } = (await (supabase
+    .from('notifications') as ReturnType<typeof supabase.from>)
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('type', 'usage_limit_alert')
+    .gte('created_at', `${today}T00:00:00`)
+    .lt('created_at', `${today}T23:59:59.999`)
+    .contains('metadata', { channel: 'ai' } as unknown as Record<string, unknown>)
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+
+  if (existing) return;
+
+  const pct = Math.round((used / limit) * 100);
+  await createNotificationsForOrgMembers({
+    orgId,
+    type: 'usage_limit_alert',
+    title: `IA: ${pct}% do limite diário utilizado`,
+    body: `Sua organização já usou ${used} de ${limit} gerações de IA hoje. Considere fazer upgrade do plano.`,
+    metadata: { channel: 'ai', used, limit, percentage: pct },
+    roleFilter: 'manager',
+  });
 }
