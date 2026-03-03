@@ -85,8 +85,6 @@ export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 export const AVAILABLE_TEMPLATE_VARIABLES = [
   'primeiro_nome',
   'empresa',
-  'nome_fantasia',
-  'razao_social',
   'telefone',
 ] as const;
 
