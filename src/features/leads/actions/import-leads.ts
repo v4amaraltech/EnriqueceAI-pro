@@ -22,6 +22,9 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
+  // Get lead source override from form
+  const leadSource = (formData.get('lead_source') as string) || null;
+
   // Get file from form
   const file = formData.get('file') as File | null;
   if (!file || !(file instanceof File)) {
@@ -93,6 +96,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       success_count: 0,
       error_count: 0,
       status: 'processing',
+      lead_source: leadSource,
       created_by: userId,
     } as Record<string, unknown>)
     .select('id')
@@ -121,7 +125,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         enrichment_status: 'pending',
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
-        lead_source: row.lead_source ?? null,
+        lead_source: leadSource ?? row.lead_source ?? null,
         created_by: userId,
         assigned_to: autoAssignTo,
         import_id: importId,
@@ -148,7 +152,8 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           // Only overwrite fields if the CSV actually provides them
           if (row.razao_social) restoreFields.razao_social = row.razao_social;
           if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
-          if (row.lead_source) restoreFields.lead_source = row.lead_source;
+          const effectiveSource = leadSource ?? row.lead_source;
+          if (effectiveSource) restoreFields.lead_source = effectiveSource;
 
           const { error: restoreError } = await (supabase
             .from('leads') as ReturnType<typeof supabase.from>)

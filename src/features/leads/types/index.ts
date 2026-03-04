@@ -76,6 +76,7 @@ export interface LeadImportRow {
   success_count: number;
   error_count: number;
   status: ImportStatus;
+  lead_source: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -141,6 +142,7 @@ export interface LeadImportInsert {
   org_id: string;
   file_name: string;
   total_rows: number;
+  lead_source?: string | null;
   created_by?: string | null;
 }
 

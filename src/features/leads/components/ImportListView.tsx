@@ -16,6 +16,7 @@ import {
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import type { ImportListResult } from '../actions/fetch-imports';
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { ImportStatus } from '../types';
 
 interface ImportListViewProps {
@@ -27,6 +28,12 @@ const statusConfig: Record<ImportStatus, { label: string; variant: 'default' | '
   completed: { label: 'Concluído', variant: 'default' },
   failed: { label: 'Falhou', variant: 'destructive' },
 };
+
+function getSourceLabel(value: string | null): string {
+  if (!value) return '—';
+  const opt = LEAD_SOURCE_OPTIONS.find((o) => o.value === value);
+  return opt?.label ?? value;
+}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -99,6 +106,7 @@ export function ImportListView({ result }: ImportListViewProps) {
               <TableHead className="text-right">Importados</TableHead>
               <TableHead className="text-right">Erros</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Origem</TableHead>
               <TableHead>Importado por</TableHead>
             </TableRow>
           </TableHeader>
@@ -131,6 +139,9 @@ export function ImportListView({ result }: ImportListViewProps) {
                   </TableCell>
                   <TableCell>
                     <Badge variant={config.variant}>{config.label}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                    {getSourceLabel(row.lead_source)}
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)]">
                     {row.created_by_name}

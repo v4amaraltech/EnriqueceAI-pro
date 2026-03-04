@@ -6,9 +6,18 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import { Label } from '@/shared/components/ui/label';
 import { Progress } from '@/shared/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 
 import { importLeads, type ImportLeadsResult } from '../actions/import-leads';
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { CsvParseResult } from '../utils/csv-parser';
 import { parseCsv } from '../utils/csv-parser';
 import { CsvDropzone } from './CsvDropzone';
@@ -22,6 +31,7 @@ export function ImportView() {
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<CsvParseResult | null>(null);
   const [importResult, setImportResult] = useState<ImportLeadsResult | null>(null);
+  const [leadSource, setLeadSource] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
@@ -49,6 +59,7 @@ export function ImportView() {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (leadSource) formData.append('lead_source', leadSource);
 
     const result = await importLeads(formData);
     if (result.success) {
@@ -58,13 +69,14 @@ export function ImportView() {
       setError(result.error);
       setStep('preview');
     }
-  }, [file]);
+  }, [file, leadSource]);
 
   const handleReset = useCallback(() => {
     setStep('upload');
     setFile(null);
     setParseResult(null);
     setImportResult(null);
+    setLeadSource('');
     setError(null);
   }, []);
 
@@ -85,6 +97,29 @@ export function ImportView() {
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
           {error}
+        </div>
+      )}
+
+      {/* Lead source selector */}
+      {(step === 'upload' || step === 'preview') && (
+        <div className="space-y-2">
+          <Label htmlFor="lead-source">Origem dos leads</Label>
+          <Select value={leadSource || 'none'} onValueChange={(v) => setLeadSource(v === 'none' ? '' : v)}>
+            <SelectTrigger id="lead-source" className="w-64">
+              <SelectValue placeholder="Selecione a origem" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">—</SelectItem>
+              {LEAD_SOURCE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Se selecionada, será aplicada a todos os leads importados.
+          </p>
         </div>
       )}
 

@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE lead_imports ADD COLUMN IF NOT EXISTS lead_source TEXT;
+
+COMMIT;
