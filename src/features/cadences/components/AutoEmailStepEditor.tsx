@@ -281,7 +281,7 @@ export function AutoEmailStepEditor({
                 onCheckedChange={(checked: boolean) => onChange({ ...step, ai_personalization: checked })}
               />
               <Label htmlFor={`ai-${stepNumber}`} className="flex items-center gap-1.5 text-sm">
-                <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                <Sparkles className="h-3.5 w-3.5 text-red-500" />
                 Personalização com IA
               </Label>
             </div>

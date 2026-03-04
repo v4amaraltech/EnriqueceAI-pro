@@ -64,7 +64,7 @@ export function TipTapToolbar({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-8 gap-1.5 px-2 text-purple-600 hover:text-purple-700"
+        className="h-8 gap-1.5 px-2 text-red-600 hover:text-red-700"
         onClick={onOpenAI}
         disabled={disabled}
       >
