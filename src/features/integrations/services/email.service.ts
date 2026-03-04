@@ -224,7 +224,7 @@ export class EmailService {
 
     // Apply tracking
     let html = signature
-      ? `${params.htmlBody}<br/><div class="gmail_signature">${signature}</div>`
+      ? `${params.htmlBody}<div style="margin-top:16px" class="gmail_signature">${signature}</div>`
       : params.htmlBody;
     if (interactionId) {
       if (params.trackOpens !== false) {
