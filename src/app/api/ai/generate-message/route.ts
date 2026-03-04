@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { AIService } from '@/features/ai/services/ai.service';
@@ -12,6 +13,16 @@ const VALID_CHANNELS: ChannelTarget[] = ['email', 'whatsapp'];
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
+
+    // Per-user rate limit: 10 requests per minute
+    const rl = checkRateLimit(`ai:${user.id}`, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Muitas requisições. Tente novamente em alguns segundos.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 0) / 1000)) } },
+      );
+    }
+
     const supabase = await createServerSupabaseClient();
 
     const { data: member } = (await supabase

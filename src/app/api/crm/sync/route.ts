@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
+import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { CrmConnectionRow } from '@/features/integrations/types/crm';
 import { CrmSyncService } from '@/features/integrations/services/crm-sync.service';
@@ -9,20 +11,27 @@ interface SyncRequestBody {
   connectionId?: string;
 }
 
+function verifyCronAuth(request: Request): boolean {
+  const authHeader = request.headers.get('authorization');
+  const expectedToken = process.env.CRON_SECRET;
+  return !!expectedToken && authHeader === `Bearer ${expectedToken}`;
+}
+
 /**
  * POST /api/crm/sync
  * Triggers CRM sync. Can sync a specific connection or all active connections.
  * Called by:
- * - Manual sync button (with connectionId)
- * - pg_cron every 30 minutes (without connectionId = sync all)
+ * - Manual sync button (with connectionId) — requires user auth
+ * - pg_cron every 30 minutes (without connectionId = sync all) — requires CRON_SECRET
  */
 export async function POST(request: Request) {
   try {
+    const isCron = verifyCronAuth(request);
     const body = (await request.json()) as SyncRequestBody;
-    const supabase = await createServerSupabaseClient();
 
     if (body.connectionId) {
-      // Sync specific connection
+      // Manual sync: require authenticated user
+      await requireAuth();
       const result = await CrmSyncService.syncConnection(body.connectionId);
       return NextResponse.json({
         success: true,
@@ -30,7 +39,13 @@ export async function POST(request: Request) {
       });
     }
 
-    // Sync all active connections
+    // Batch sync: require CRON_SECRET
+    if (!isCron) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Sync all active connections using service role (no cookies in cron)
+    const supabase = createServiceRoleClient();
     const { data: connections } = (await (supabase
       .from('crm_connections') as ReturnType<typeof supabase.from>)
       .select('id')
