@@ -51,7 +51,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline">
-            <Link href="/leads/import">
+            <Link href="/leads/imports">
               <FileUp className="mr-2 h-4 w-4" />
               Listas de importação
             </Link>
