@@ -152,6 +152,50 @@ export async function restartInstance(
   }
 }
 
+/** Delete an instance from Evolution API */
+export async function deleteInstance(
+  instanceName: string,
+): Promise<ApiResult<Record<string, unknown>>> {
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, error: `Evolution API ${res.status}: ${body}` };
+    }
+
+    const data = await res.json();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Logout/disconnect an instance from Evolution API */
+export async function logoutInstance(
+  instanceName: string,
+): Promise<ApiResult<Record<string, unknown>>> {
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, error: `Evolution API ${res.status}: ${body}` };
+    }
+
+    const data = await res.json();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /** Check if Evolution API is healthy */
 export async function checkHealth(): Promise<boolean> {
   try {

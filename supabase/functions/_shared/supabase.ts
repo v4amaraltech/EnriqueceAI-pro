@@ -124,6 +124,37 @@ export async function markInstancesAsEvolutionDown(): Promise<number> {
   return data?.length || 0;
 }
 
+/** Get stale instances (not connected) older than the given threshold */
+export async function getStaleInstances(thresholdMinutes: number = 30) {
+  const threshold = new Date(Date.now() - thresholdMinutes * 60 * 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_instances')
+    .select('*')
+    .in('status', ['connecting', 'error', 'disconnected'])
+    .lt('updated_at', threshold);
+
+  if (error) {
+    console.error('[supabase] Error fetching stale instances:', error);
+    return [];
+  }
+  return data || [];
+}
+
+/** Delete a WhatsApp instance row by id */
+export async function deleteWhatsAppInstance(id: string) {
+  const { error } = await supabaseAdmin
+    .from('whatsapp_instances')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[supabase] Error deleting instance:', error);
+    return false;
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // provider_events (idempotency)
 // ---------------------------------------------------------------------------
