@@ -378,7 +378,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>
-                    Fonte do lead <span className="text-red-500">*</span>
+                    Origem <span className="text-red-500">*</span>
                   </Label>
                   <Select
                     value={form.lead_source || 'none'}
