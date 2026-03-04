@@ -148,6 +148,14 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       const isCurrentStep = step.step_order === currentStepOrder;
       const template = step.template_id ? templateMap.get(step.template_id) : null;
 
+      // Calculate actual due date for future steps based on cumulative delay
+      let stepDueDate = enrollment.next_step_due;
+      if (!isCurrentStep && enrollment.next_step_due) {
+        const baseDue = new Date(enrollment.next_step_due);
+        baseDue.setHours(baseDue.getHours() + cumulativeHours);
+        stepDueDate = baseDue.toISOString();
+      }
+
       candidates.push({
         cadenceId: enrollment.cadence_id,
         stepId: step.id,
@@ -165,7 +173,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
           templateSubject: template?.subject ?? null,
           templateBody: template?.body ?? null,
           aiPersonalization: step.ai_personalization,
-          nextStepDue: enrollment.next_step_due,
+          nextStepDue: stepDueDate,
           isCurrentStep,
           lead: leadData,
           activityName: step.activity_name ?? null,

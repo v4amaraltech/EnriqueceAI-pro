@@ -64,8 +64,26 @@ function encodeSubject(subject: string): string {
 /**
  * Builds a raw RFC 2822 email message for Gmail API.
  */
+/** Strip HTML to plain text for the text/plain MIME part */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildRawEmail(from: string, to: string, subject: string, htmlBody: string): string {
   const boundary = `boundary_${Date.now()}`;
+  const plainText = htmlToPlainText(htmlBody);
   const message = [
     `From: ${from}`,
     `To: ${to}`,
@@ -73,6 +91,11 @@ function buildRawEmail(from: string, to: string, subject: string, htmlBody: stri
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(plainText).toString('base64'),
     `--${boundary}`,
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',

@@ -56,26 +56,24 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     return { success: true, data: { found: 0 } };
   }
 
-  // 2. Filter out interactions that already have a 'replied' counterpart
+  // 2. Filter out interactions that already have a 'replied' or 'bounced' counterpart (batch query)
   const cadenceLeadPairs = sentInteractions.map((i) => `${i.cadence_id}:${i.lead_id}`);
   const uniquePairs = [...new Set(cadenceLeadPairs)];
 
   const alreadyProcessedMap = new Set<string>();
-  // Check in batches of unique cadence+lead pairs for existing replies or bounces
-  for (const pair of uniquePairs) {
-    const [cadenceId, leadId] = pair.split(':');
-    const { data: existing } = (await (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
-      .select('id')
-      .eq('cadence_id', cadenceId!)
-      .eq('lead_id', leadId!)
-      .in('type', ['replied', 'bounced'])
-      .limit(1)
-      .maybeSingle()) as { data: { id: string } | null };
 
-    if (existing) {
-      alreadyProcessedMap.add(pair);
-    }
+  const uniqueCadenceIds = [...new Set(sentInteractions.map((i) => i.cadence_id))];
+  const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
+
+  const { data: processedInteractions } = (await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .select('cadence_id, lead_id')
+    .in('cadence_id', uniqueCadenceIds)
+    .in('lead_id', uniqueLeadIds)
+    .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
+
+  for (const pi of processedInteractions ?? []) {
+    alreadyProcessedMap.add(`${pi.cadence_id}:${pi.lead_id}`);
   }
 
   const toCheck = sentInteractions.filter(
@@ -122,21 +120,33 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       continue;
     }
 
-    for (const interaction of interactions) {
-      const threadId = await getThreadId(supabase, interaction, accessToken);
-      if (!threadId) continue;
+    // Process interactions in parallel batches of 5 to avoid Gmail rate limits
+    const PARALLEL_BATCH = 5;
+    for (let i = 0; i < interactions.length; i += PARALLEL_BATCH) {
+      const batch = interactions.slice(i, i + PARALLEL_BATCH);
+      const results = await Promise.allSettled(
+        batch.map(async (interaction) => {
+          const threadId = await getThreadId(supabase, interaction, accessToken);
+          if (!threadId) return;
 
-      const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
-      if (!detection) continue;
+          const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
+          if (!detection) return;
 
-      if (detection === 'bounce') {
-        await recordBounce(supabase, interaction);
-        found++;
-        console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
-      } else {
-        await recordReply(supabase, interaction);
-        found++;
-        console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+          if (detection === 'bounce') {
+            await recordBounce(supabase, interaction);
+            found++;
+            console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+          } else {
+            await recordReply(supabase, interaction);
+            found++;
+            console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+          }
+        }),
+      );
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          console.error('[reply-check] Batch item failed:', r.reason);
+        }
       }
     }
   }
@@ -220,7 +230,28 @@ async function getThreadId(
 }
 
 /** Bounce indicator patterns in email From header */
-const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster'];
+const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster', 'mail delivery', 'delivery status'];
+
+/** Auto-reply indicator patterns in Subject header */
+const AUTO_REPLY_SUBJECTS = [
+  'out of office',
+  'fora do escritório',
+  'fora do escritorio',
+  'automatic reply',
+  'resposta automática',
+  'resposta automatica',
+  'auto-reply',
+  'autoreply',
+  'vacation',
+  'férias',
+  'ferias',
+  'away from office',
+  'ausência',
+  'ausencia',
+];
+
+/** Auto-reply indicator headers */
+const AUTO_REPLY_HEADERS = ['x-autoreply', 'x-autorespond', 'auto-submitted'];
 
 interface GmailThreadMessage {
   id: string;
@@ -246,21 +277,46 @@ async function checkThreadForReplyOrBounce(
     const messages = data.messages ?? [];
     if (messages.length <= 1) return null;
 
-    // Check if any message (beyond the first) is a bounce
+    let hasGenuineReply = false;
+
+    // Check each reply message (beyond the first sent message)
     for (let i = 1; i < messages.length; i++) {
       const msg = messages[i];
-      const fromHeader = msg?.payload?.headers?.find(
-        (h) => h.name.toLowerCase() === 'from',
-      );
+      const headers = msg?.payload?.headers ?? [];
+
+      const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
+      const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+
+      // Check bounce
       if (fromHeader) {
         const fromLower = fromHeader.value.toLowerCase();
         if (BOUNCE_SENDERS.some((sender) => fromLower.includes(sender))) {
           return 'bounce';
         }
       }
+
+      // Check auto-reply headers (X-Autoreply, Auto-Submitted, etc.)
+      const isAutoReplyHeader = headers.some((h) => {
+        const name = h.name.toLowerCase();
+        if (AUTO_REPLY_HEADERS.includes(name)) return true;
+        if (name === 'auto-submitted' && h.value.toLowerCase() !== 'no') return true;
+        if (name === 'x-auto-response-suppress') return true;
+        return false;
+      });
+      if (isAutoReplyHeader) continue;
+
+      // Check auto-reply subject patterns
+      if (subjectHeader) {
+        const subjectLower = subjectHeader.value.toLowerCase();
+        const isAutoReplySubject = AUTO_REPLY_SUBJECTS.some((pattern) => subjectLower.includes(pattern));
+        if (isAutoReplySubject) continue;
+      }
+
+      // This message looks like a genuine reply
+      hasGenuineReply = true;
     }
 
-    return 'reply';
+    return hasGenuineReply ? 'reply' : null;
   } catch {
     return null;
   }

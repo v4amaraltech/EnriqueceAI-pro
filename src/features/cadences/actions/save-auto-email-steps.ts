@@ -130,6 +130,11 @@ export async function saveAutoEmailSteps(
       } as Record<string, unknown>);
 
     if (stepError) {
+      // Clean up orphaned template
+      await (supabase
+        .from('message_templates') as ReturnType<typeof supabase.from>)
+        .delete()
+        .eq('id', template.id);
       return { success: false, error: `Erro ao criar step ${i + 1}` };
     }
   }

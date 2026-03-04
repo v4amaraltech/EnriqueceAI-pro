@@ -9,6 +9,7 @@ import type { ChannelType } from '../types';
 export interface TimelineStepInput {
   channel: ChannelType;
   delay_days: number;
+  delay_hours?: number;
   step_order: number;
   template_id?: string | null;
   ai_personalization?: boolean;
@@ -69,7 +70,7 @@ export async function saveTimelineSteps(
       step_order: s.step_order,
       channel: s.channel,
       delay_days: s.delay_days,
-      delay_hours: 0,
+      delay_hours: s.delay_hours ?? 0,
       template_id: s.template_id ?? null,
       ai_personalization: s.ai_personalization ?? false,
       activity_name: s.activity_name ?? null,

@@ -273,8 +273,8 @@ describe('EmailService', () => {
     const body = JSON.parse(fetchCall[1]?.body as string) as { raw: string };
     // Decode the outer base64url to get the MIME message
     const mimeMessage = Buffer.from(body.raw.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
-    // The MIME message contains a base64-encoded HTML body — extract and decode it
-    const base64Match = mimeMessage.match(/\r\n\r\n([A-Za-z0-9+/=]+)\r\n--/);
+    // The MIME message contains two base64 parts: text/plain then text/html — extract the HTML one
+    const base64Match = mimeMessage.match(/Content-Type: text\/html[^\r]*\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=]+)\r\n--/);
     expect(base64Match).toBeTruthy();
     const htmlBody = Buffer.from(base64Match![1]!, 'base64').toString();
     expect(htmlBody).toContain('/api/track/open/interaction-123');

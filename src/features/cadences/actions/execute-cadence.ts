@@ -186,6 +186,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       let messageContent = '';
       let subject: string | null = null;
       let aiGenerated = false;
+      let cadenceCreatedBy: string | null = null;
 
       if (step.template_id) {
         const { data: template } = (await (supabase
@@ -201,8 +202,6 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             nome_vendedor: null,
             email_vendedor: null,
           };
-
-          // Fetch vendor (cadence creator) data for template variables
           try {
             const { data: cadenceForVendor } = (await (supabase
               .from('cadences') as ReturnType<typeof supabase.from>)
@@ -210,9 +209,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
               .eq('id', enrollment.cadence_id)
               .single()) as { data: { created_by: string | null } | null };
 
-            if (cadenceForVendor?.created_by) {
+            cadenceCreatedBy = cadenceForVendor?.created_by ?? null;
+
+            if (cadenceCreatedBy) {
               const adminClient = createAdminSupabaseClient();
-              const { data: vendorUser } = await adminClient.auth.admin.getUserById(cadenceForVendor.created_by);
+              const { data: vendorUser } = await adminClient.auth.admin.getUserById(cadenceCreatedBy);
               if (vendorUser?.user) {
                 const meta = vendorUser.user.user_metadata as { full_name?: string } | undefined;
                 variables.nome_vendedor = meta?.full_name ?? null;
@@ -283,14 +284,18 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           continue;
         }
 
-        // Fetch cadence.created_by to know which user's Gmail to use
-        const { data: cadence } = (await (supabase
-          .from('cadences') as ReturnType<typeof supabase.from>)
-          .select('created_by')
-          .eq('id', enrollment.cadence_id)
-          .single()) as { data: { created_by: string | null } | null };
+        // Use cached cadenceCreatedBy (fetched earlier for vendor vars)
+        if (!cadenceCreatedBy) {
+          // Fallback: fetch if template block was skipped
+          const { data: cadenceFallback } = (await (supabase
+            .from('cadences') as ReturnType<typeof supabase.from>)
+            .select('created_by')
+            .eq('id', enrollment.cadence_id)
+            .single()) as { data: { created_by: string | null } | null };
+          cadenceCreatedBy = cadenceFallback?.created_by ?? null;
+        }
 
-        if (!cadence?.created_by) {
+        if (!cadenceCreatedBy) {
           await markInteractionFailed(supabase, interaction.id, 'no_cadence_creator');
           result.failed++;
           result.errors.push(`Cadência ${enrollment.cadence_id} sem created_by`);
@@ -329,7 +334,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         }
 
         const emailResult = await EmailService.sendEmail(
-          cadence.created_by,
+          cadenceCreatedBy,
           enrollment.lead.org_id,
           {
             to: enrollment.lead.email,
@@ -342,10 +347,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         );
 
         if (emailResult.success && emailResult.messageId) {
-          // Save messageId and threadId for reply tracking
+          // Save messageId, threadId and subject for reply tracking
           const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
-          if (emailResult.threadId) {
-            updateData.metadata = { ...(subject ? { subject } : {}), thread_id: emailResult.threadId };
+          const metaUpdate: Record<string, unknown> = {};
+          if (subject) metaUpdate.subject = subject;
+          if (emailResult.threadId) metaUpdate.thread_id = emailResult.threadId;
+          if (Object.keys(metaUpdate).length > 0) {
+            updateData.metadata = metaUpdate;
           }
           await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
             .update(updateData)

@@ -97,21 +97,19 @@ export async function completeDialerCall(
 
   const { data: nextStep } = (await (supabase
     .from('cadence_steps') as ReturnType<typeof supabase.from>)
-    .select('step_order, delay_days')
+    .select('step_order')
     .eq('cadence_id', cadenceId)
     .gt('step_order', currentOrder)
     .order('step_order', { ascending: true })
     .limit(1)
-    .maybeSingle()) as { data: { step_order: number; delay_days: number } | null };
+    .maybeSingle()) as { data: { step_order: number } | null };
 
   if (nextStep) {
-    const nextDue = new Date();
-    nextDue.setDate(nextDue.getDate() + (nextStep.delay_days ?? 0));
-
+    // Only update current_step — the DB trigger calculate_next_step_due
+    // automatically sets next_step_due based on the new step's delay
     await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
       .update({
         current_step: nextStep.step_order,
-        next_step_due: nextDue.toISOString(),
       } as Record<string, unknown>)
       .eq('id', enrollmentId);
   } else {
