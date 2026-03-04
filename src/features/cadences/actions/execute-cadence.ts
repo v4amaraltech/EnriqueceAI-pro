@@ -70,11 +70,28 @@ export interface ExecutionResult {
   errors: string[];
 }
 
+/** Check if current time is within business hours (8h-18h BRT, Mon-Fri) */
+function isBusinessHours(): boolean {
+  const now = new Date();
+  // BRT = UTC-3
+  const brtHour = (now.getUTCHours() - 3 + 24) % 24;
+  const brtDay = now.getUTCDay(); // 0=Sun, 6=Sat
+  // Adjust day if UTC-3 crosses midnight
+  const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const adjustedDay = brtDate.getUTCDay();
+  return adjustedDay >= 1 && adjustedDay <= 5 && brtHour >= 8 && brtHour < 18;
+}
+
 /**
  * Core execution logic — processes pending cadence enrollments.
  * Accepts any Supabase client (cookie-based or service-role).
  */
 async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<ExecutionResult>> {
+  // Guard: only send during business hours (8h-18h BRT, Mon-Fri)
+  if (!isBusinessHours()) {
+    return { success: true, data: { processed: 0, sent: 0, failed: 0, completed: 0, skipped: 0, errors: [] } };
+  }
+
   const startTime = Date.now();
 
   const { data: enrollments, error: enrollError } = (await (supabase

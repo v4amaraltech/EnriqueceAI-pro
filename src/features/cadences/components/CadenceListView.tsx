@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   Archive,
   Copy,
@@ -95,7 +95,14 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
+  const [pendingTab, setPendingTab] = useState<CadenceType | null>(null);
+  const displayTab = pendingTab ?? activeTab;
   const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin'));
+
+  // Clear optimistic tab when URL catches up
+  useEffect(() => {
+    setPendingTab(null);
+  }, [activeTab]);
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -107,10 +114,13 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
       }
     }
     params.set('page', '1');
-    router.push(`/cadences?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/cadences?${params.toString()}`);
+    });
   }
 
   function handleTabChange(type: CadenceType) {
+    setPendingTab(type);
     updateParams({ type: type === 'standard' ? '' : type });
   }
 
@@ -196,7 +206,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             type="button"
             onClick={() => handleTabChange('standard')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'standard'
+              displayTab === 'standard'
                 ? 'border-[var(--primary)] text-[var(--foreground)]'
                 : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
@@ -210,7 +220,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             type="button"
             onClick={() => handleTabChange('auto_email')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'auto_email'
+              displayTab === 'auto_email'
                 ? 'border-[var(--primary)] text-[var(--foreground)]'
                 : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
@@ -314,6 +324,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
       </div>
 
       {/* Cadence list */}
+      <div className={isPending ? 'pointer-events-none opacity-50 transition-opacity' : ''}>
       {cadences.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-muted p-4">
@@ -475,6 +486,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           </div>
         </TooltipProvider>
       )}
+
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
