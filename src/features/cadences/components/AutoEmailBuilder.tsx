@@ -198,7 +198,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           Voltar
         </Button>
         <div className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-purple-500" />
+          <Mail className="h-5 w-5 text-red-500" />
           <h1 className="text-2xl font-bold">
             {isEditing ? 'Editar E-mail Automático' : 'Novo E-mail Automático'}
           </h1>
