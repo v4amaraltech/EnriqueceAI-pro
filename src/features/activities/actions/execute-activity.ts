@@ -34,7 +34,7 @@ function toPlainText(html: string): string {
 export async function executeActivity(
   input: ExecuteActivityInput,
 ): Promise<ActionResult<{ interactionId: string }>> {
-  await requireAuth();
+  const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -83,6 +83,7 @@ export async function executeActivity(
       },
       ai_generated: aiGenerated,
       original_template_id: templateId,
+      performed_by: user.id,
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: Pick<InteractionRow, 'id'> | null };
@@ -96,6 +97,10 @@ export async function executeActivity(
     // Check and deduct credit
     const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
     if (!creditResult.allowed) {
+      // Mark interaction as failed before returning
+      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
+        .eq('id', interaction.id);
       return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
     }
 
@@ -110,7 +115,10 @@ export async function executeActivity(
         .update({ external_id: waResult.messageId } as Record<string, unknown>)
         .eq('id', interaction.id);
     } else {
-      console.error(`[activities] WhatsApp send failed for enrollment=${enrollmentId}: ${waResult.error}`);
+      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        .update({ type: 'failed', metadata: { error: waResult.error ?? 'whatsapp_send_error' } } as Record<string, unknown>)
+        .eq('id', interaction.id);
+      return { success: false, error: waResult.error ?? 'Falha ao enviar WhatsApp' };
     }
   } else {
     // Email flow (default)
@@ -127,11 +135,23 @@ export async function executeActivity(
     );
 
     if (emailResult.success && emailResult.messageId) {
+      // Store messageId and threadId for reply tracking
+      const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
+      if (emailResult.threadId) {
+        updateData.metadata = {
+          ...(subject ? { subject } : {}),
+          ...(body ? { html_body: body } : {}),
+          thread_id: emailResult.threadId,
+        };
+      }
       await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
-        .update({ external_id: emailResult.messageId } as Record<string, unknown>)
+        .update(updateData)
         .eq('id', interaction.id);
     } else {
-      console.error(`[activities] Email send failed for enrollment=${enrollmentId}: ${emailResult.error}`);
+      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        .update({ type: 'failed', metadata: { error: emailResult.error ?? 'email_send_error' } } as Record<string, unknown>)
+        .eq('id', interaction.id);
+      return { success: false, error: emailResult.error ?? 'Falha ao enviar email' };
     }
   }
 

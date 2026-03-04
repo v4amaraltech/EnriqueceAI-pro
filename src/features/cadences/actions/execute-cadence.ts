@@ -122,6 +122,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
+      // Skip manual channels — only auto-send email and whatsapp
+      if (step.channel !== 'email' && step.channel !== 'whatsapp') {
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped reason=manual_channel channel=${step.channel} duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
+
       // Idempotency check: skip if interaction already exists for this enrollment + step
       const { data: existingInteraction } = (await (supabase
         .from('interactions') as ReturnType<typeof supabase.from>)
@@ -402,17 +409,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
-      // Check if there's a next step
+      // Check if there's a next step (handles non-contiguous step_order)
       const { data: nextStep } = (await (supabase
         .from('cadence_steps') as ReturnType<typeof supabase.from>)
         .select('step_order')
         .eq('cadence_id', enrollment.cadence_id)
-        .eq('step_order', enrollment.current_step + 1)
+        .gt('step_order', enrollment.current_step)
+        .order('step_order', { ascending: true })
+        .limit(1)
         .maybeSingle()) as { data: { step_order: number } | null };
 
       if (nextStep) {
         await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-          .update({ current_step: enrollment.current_step + 1 } as Record<string, unknown>)
+          .update({ current_step: nextStep.step_order } as Record<string, unknown>)
           .eq('id', enrollment.id);
       } else {
         await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
