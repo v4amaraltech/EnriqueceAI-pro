@@ -168,7 +168,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
               </TableCell>
 
               {/* Created by */}
-              <TableCell className="max-w-[120px] truncate text-xs text-muted-foreground">
+              <TableCell className="max-w-[120px] truncate text-xs">
                 {getCreatorName(cadence.created_by, userMap)}
               </TableCell>
 

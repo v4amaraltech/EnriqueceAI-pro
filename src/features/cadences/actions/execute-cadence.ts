@@ -94,10 +94,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   const startTime = Date.now();
 
+  // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('*, lead:leads(*)')
+    .select('*, lead:leads(*), cadence:cadences!inner(status)')
     .eq('status', 'active')
+    .eq('cadence.status', 'active')
+    .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString())
     .limit(BATCH_SIZE)) as { data: EnrollmentWithLead[] | null; error: { message: string } | null };
 
@@ -139,10 +142,29 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
-      // Skip manual channels — only auto-send email and whatsapp
+      // Skip manual channels — advance to next step so enrollment doesn't get stuck
       if (step.channel !== 'email' && step.channel !== 'whatsapp') {
+        const { data: nextManualStep } = (await (supabase
+          .from('cadence_steps') as ReturnType<typeof supabase.from>)
+          .select('step_order')
+          .eq('cadence_id', enrollment.cadence_id)
+          .gt('step_order', enrollment.current_step)
+          .order('step_order', { ascending: true })
+          .limit(1)
+          .maybeSingle()) as { data: { step_order: number } | null };
+
+        if (nextManualStep) {
+          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+            .update({ current_step: nextManualStep.step_order } as Record<string, unknown>)
+            .eq('id', enrollment.id);
+        } else {
+          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+            .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+            .eq('id', enrollment.id);
+          result.completed++;
+        }
         result.skipped++;
-        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped reason=manual_channel channel=${step.channel} duration_ms=${Date.now() - stepStart}`);
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped_and_advanced reason=manual_channel channel=${step.channel} duration_ms=${Date.now() - stepStart}`);
         continue;
       }
 
@@ -157,8 +179,28 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { id: string } | null };
 
       if (existingInteraction) {
+        // Already executed this step — advance to next so enrollment doesn't get stuck
+        const { data: nextIdempStep } = (await (supabase
+          .from('cadence_steps') as ReturnType<typeof supabase.from>)
+          .select('step_order')
+          .eq('cadence_id', enrollment.cadence_id)
+          .gt('step_order', enrollment.current_step)
+          .order('step_order', { ascending: true })
+          .limit(1)
+          .maybeSingle()) as { data: { step_order: number } | null };
+
+        if (nextIdempStep) {
+          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+            .update({ current_step: nextIdempStep.step_order } as Record<string, unknown>)
+            .eq('id', enrollment.id);
+        } else {
+          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+            .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+            .eq('id', enrollment.id);
+          result.completed++;
+        }
         result.skipped++;
-        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped reason=idempotent duration_ms=${Date.now() - stepStart}`);
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped_and_advanced reason=idempotent duration_ms=${Date.now() - stepStart}`);
         continue;
       }
 

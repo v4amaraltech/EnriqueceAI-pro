@@ -194,7 +194,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   return (
     <div className="space-y-4">
       {/* Status line */}
-      <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+      <div className="flex items-center gap-2 text-sm text-[var(--foreground)]">
         <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
         Exibindo {total === 1 ? '1 cadência' : `todas as ${total} cadências`}.
       </div>
@@ -353,7 +353,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
         <TooltipProvider>
           <div className="overflow-hidden rounded-lg border border-[var(--border)]">
             {/* Table header */}
-            <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--muted)]/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">
+            <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--muted)]/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-[var(--foreground)]">
               <div className="w-7 shrink-0" />
               <div className="w-6 shrink-0" />
               <div className="w-48 shrink-0">Nome</div>
@@ -409,7 +409,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
 
                   {/* Description */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm italic text-[var(--muted-foreground)]">
+                    <p className="truncate text-sm italic text-[var(--foreground)]/80">
                       {cadence.description || ''}
                     </p>
                   </div>
@@ -422,7 +422,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   </div>
 
                   {/* Steps count */}
-                  <div className="w-16 shrink-0 text-center text-xs text-[var(--muted-foreground)]">
+                  <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
                     {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
                   </div>
 
