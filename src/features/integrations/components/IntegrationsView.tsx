@@ -25,8 +25,6 @@ import {
 
 import type { PlanFeatures } from '@/features/billing/types';
 import { checkFeature } from '@/features/billing/services/feature-flags';
-import { UpgradePrompt } from '@/shared/components/UpgradePrompt';
-
 import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
@@ -257,18 +255,6 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </CardContent>
         </Card>
 
-        {/* CRM Card */}
-        {!checkFeature(planFeatures, 'crm') && (
-          <Card className="flex flex-col">
-            <CardContent className="flex flex-1 flex-col p-6">
-              <UpgradePrompt
-                featureName="Integrações CRM"
-                requiredPlan="Pro"
-                description="Conecte HubSpot, Pipedrive ou RD Station para sincronizar seus leads automaticamente."
-              />
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       {/* Disconnect Google dialog */}
