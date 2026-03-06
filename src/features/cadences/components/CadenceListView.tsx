@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Archive,
+  BarChart3,
   Copy,
   Info,
   Mail,
@@ -361,6 +362,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
               <div className="w-20 shrink-0 text-center">Status</div>
               <div className="w-16 shrink-0 text-center">Passos</div>
               <div className="w-8 shrink-0" />
+              <div className="w-8 shrink-0" />
             </div>
 
             {/* Table rows */}
@@ -424,6 +426,19 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   {/* Steps count */}
                   <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
                     {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
+                  </div>
+
+                  {/* Performance link */}
+                  <div className="w-8 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={() => router.push(`/cadences/${cadence.id}/performance`)}
+                      aria-label={`Performance de ${cadence.name}`}
+                    >
+                      <BarChart3 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
 
                   {/* Actions menu */}

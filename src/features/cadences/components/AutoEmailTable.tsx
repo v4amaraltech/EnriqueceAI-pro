@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import {
   Archive,
+  BarChart3,
   Copy,
   ExternalLink,
   MoreHorizontal,
@@ -167,6 +168,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
           <TableHead className="w-20 text-right">Respondido</TableHead>
           <TableHead className="w-20 text-right">Responder %</TableHead>
           <TableHead className="w-24 text-right">Interessados %</TableHead>
+          <TableHead className="w-12"></TableHead>
           <TableHead className="w-16">Fluxo</TableHead>
           <TableHead className="w-12">Ações</TableHead>
         </TableRow>
@@ -237,6 +239,19 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
               <MetricCell value={m?.replied ?? 0} />
               <MetricCell value={m?.replyRate ?? 0} isPercent />
               <MetricCell value={m?.openRate ?? 0} isPercent />
+
+              {/* Performance link */}
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => router.push(`/cadences/${cadence.id}/performance`)}
+                  aria-label={`Performance de ${cadence.name}`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                </Button>
+              </TableCell>
 
               {/* Workflow link */}
               <TableCell>
