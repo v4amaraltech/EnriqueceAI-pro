@@ -153,6 +153,7 @@ interface EnrollmentWithLead {
   cadence: {
     status: string;
     name: string;
+    type: string;
   };
 }
 
@@ -190,9 +191,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('*, lead:leads(*), cadence:cadences!inner(status, name)')
+    .select('*, lead:leads(*), cadence:cadences!inner(status, name, type)')
     .eq('status', 'active')
     .eq('cadence.status', 'active')
+    .eq('cadence.type', 'auto_email')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString())
     .limit(BATCH_SIZE)) as { data: EnrollmentWithLead[] | null; error: { message: string } | null };
