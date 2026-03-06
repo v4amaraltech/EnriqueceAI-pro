@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { BarChart3 } from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
 import type { CadenceMetrics } from '../reports.contract';
@@ -41,6 +44,7 @@ export function CadenceReport({ metrics }: CadenceReportProps) {
                   <th className="pb-2 pr-4 text-right font-medium">Abertura</th>
                   <th className="pb-2 pr-4 text-right font-medium">Resposta</th>
                   <th className="pb-2 text-right font-medium">Conversão</th>
+                  <th className="pb-2 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -56,6 +60,15 @@ export function CadenceReport({ metrics }: CadenceReportProps) {
                     <td className="py-2 pr-4 text-right">{m.openRate}%</td>
                     <td className="py-2 pr-4 text-right">{m.replyRate}%</td>
                     <td className="py-2 text-right font-medium">{m.conversionRate}%</td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/cadences/${m.cadenceId}/performance`}
+                        className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                        title="Ver performance detalhada"
+                      >
+                        <BarChart3 className="h-3.5 w-3.5" />
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

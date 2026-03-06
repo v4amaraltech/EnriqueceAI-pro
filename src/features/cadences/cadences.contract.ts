@@ -92,6 +92,50 @@ export interface StepAbMetrics {
   variant_b: { sent: number; opened: number; replied: number; bounced: number };
 }
 
+// Performance dashboard types
+export type PerformancePeriod = '7d' | '30d' | '90d' | 'all';
+
+export interface StepPerformanceMetrics {
+  stepId: string;
+  stepOrder: number;
+  channel: string;
+  activityName: string | null;
+  abEnabled: boolean;
+  sent: number;
+  opened: number;
+  replied: number;
+  bounced: number;
+  openRate: number;
+  replyRate: number;
+  bounceRate: number;
+}
+
+export interface CadencePerformanceData {
+  cadenceId: string;
+  cadenceName: string;
+  summary: {
+    sent: number;
+    opened: number;
+    replied: number;
+    bounced: number;
+    meetings: number;
+    openRate: number;
+    replyRate: number;
+    bounceRate: number;
+    conversionRate: number;
+  };
+  enrollments: {
+    active: number;
+    paused: number;
+    completed: number;
+    replied: number;
+    bounced: number;
+    unsubscribed: number;
+    total: number;
+  };
+  steps: StepPerformanceMetrics[];
+}
+
 // Interaction timeline entry
 export interface TimelineEntry {
   id: string;
