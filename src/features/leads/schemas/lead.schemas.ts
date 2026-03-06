@@ -40,6 +40,7 @@ export const LEAD_SOURCE_OPTIONS = [
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'evento', label: 'Evento' },
   { value: 'site', label: 'Site' },
+  { value: 'apollo', label: 'Apollo.io' },
   { value: 'outro', label: 'Outro' },
 ] as const;
 

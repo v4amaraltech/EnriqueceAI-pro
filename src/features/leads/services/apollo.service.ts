@@ -1,0 +1,143 @@
+/**
+ * Apollo.io REST API client.
+ * Endpoints:
+ *   POST /api/v1/mixed_people/api_search — search people (obfuscated results)
+ *   POST /api/v1/people/match — enrich a single person (full data, consumes 1 credit)
+ */
+
+const APOLLO_BASE_URL = 'https://api.apollo.io/api/v1';
+
+export interface ApolloSearchParams {
+  personTitles?: string[];
+  personLocations?: string[];
+  organizationLocations?: string[];
+  organizationKeywords?: string[];
+  organizationDomains?: string[];
+  employeeRanges?: string[];
+  page?: number;
+  perPage?: number;
+}
+
+// Search returns obfuscated data (last_name_obfuscated, no email, boolean flags)
+export interface ApolloSearchOrganization {
+  name: string;
+  has_industry: boolean;
+  has_phone: boolean;
+  has_city: boolean;
+  has_state: boolean;
+  has_country: boolean;
+  has_employee_count: boolean;
+}
+
+export interface ApolloSearchPerson {
+  id: string;
+  first_name: string | null;
+  last_name_obfuscated: string | null;
+  title: string | null;
+  has_email: boolean;
+  has_city: boolean;
+  has_state: boolean;
+  has_country: boolean;
+  has_direct_phone: string | null;
+  organization: ApolloSearchOrganization | null;
+}
+
+// Enrichment returns full data
+export interface ApolloOrganization {
+  name: string;
+  website_url: string | null;
+  primary_domain: string | null;
+  industry: string | null;
+  estimated_num_employees: number | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+}
+
+export interface ApolloPhoneNumber {
+  raw_number: string;
+  type: string;
+}
+
+export interface ApolloPersonFull {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  name: string | null;
+  title: string | null;
+  headline: string | null;
+  linkedin_url: string | null;
+  organization: ApolloOrganization | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  email: string | null;
+  phone_numbers: ApolloPhoneNumber[] | null;
+}
+
+export interface ApolloSearchResult {
+  people: ApolloSearchPerson[];
+  totalEntries: number;
+  page: number;
+}
+
+async function apolloFetch<T>(apiKey: string, path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${APOLLO_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Apollo API ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function searchPeople(apiKey: string, params: ApolloSearchParams): Promise<ApolloSearchResult> {
+  const body: Record<string, unknown> = {
+    page: params.page ?? 1,
+    per_page: params.perPage ?? 25,
+  };
+
+  if (params.personTitles?.length) body.person_titles = params.personTitles;
+  if (params.personLocations?.length) body.person_locations = params.personLocations;
+  if (params.organizationLocations?.length) body.organization_locations = params.organizationLocations;
+  if (params.organizationKeywords?.length) body.q_organization_keyword_tags = params.organizationKeywords;
+  if (params.organizationDomains?.length) body.q_organization_domains_list = params.organizationDomains;
+  if (params.employeeRanges?.length) body.organization_num_employees_ranges = params.employeeRanges;
+
+  const data = await apolloFetch<{
+    people: ApolloSearchPerson[];
+    total_entries: number;
+  }>(apiKey, '/mixed_people/api_search', body);
+
+  return {
+    people: data.people ?? [],
+    totalEntries: data.total_entries ?? 0,
+    page: params.page ?? 1,
+  };
+}
+
+export async function enrichPerson(
+  apiKey: string,
+  params: { id?: string; firstName?: string; lastName?: string; domain?: string; linkedinUrl?: string },
+): Promise<{ person: ApolloPersonFull | null }> {
+  const body: Record<string, unknown> = {};
+
+  if (params.id) body.id = params.id;
+  if (params.firstName) body.first_name = params.firstName;
+  if (params.lastName) body.last_name = params.lastName;
+  if (params.domain) body.domain = params.domain;
+  if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
+
+  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
+
+  return { person: data.person ?? null };
+}
