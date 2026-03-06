@@ -66,9 +66,13 @@ function formatFullDate(dateStr: string): string {
   });
 }
 
+const HTML_TAG_RE = /<\/?[a-z][\s\S]*?>/i;
+
 function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; isShortForm: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const hasHtml = !!entry.html_body;
+  // Use html_body if available; fallback to message_content when it contains HTML tags
+  const htmlContent = entry.html_body ?? (entry.message_content && HTML_TAG_RE.test(entry.message_content) ? entry.message_content : null);
+  const hasHtml = !!htmlContent;
   const hasContent = hasHtml || !!entry.message_content;
 
   if (!hasContent) {
@@ -98,7 +102,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
         {hasHtml ? (
           <div
             className="prose prose-sm max-w-none mt-1 text-sm text-[var(--muted-foreground)] [&_p]:my-1 [&_br]:block"
-            dangerouslySetInnerHTML={{ __html: entry.html_body! }}
+            dangerouslySetInnerHTML={{ __html: htmlContent! }}
           />
         ) : (
           <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)]">
@@ -125,7 +129,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
           >
             <div
               className="prose prose-sm max-w-none text-sm text-[var(--muted-foreground)] [&_p]:my-1 [&_br]:block"
-              dangerouslySetInnerHTML={{ __html: entry.html_body! }}
+              dangerouslySetInnerHTML={{ __html: htmlContent! }}
             />
           </div>
           <button
