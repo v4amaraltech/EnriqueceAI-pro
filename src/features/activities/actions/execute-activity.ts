@@ -120,8 +120,8 @@ export async function executeActivity(
         .eq('id', interaction.id);
       return { success: false, error: waResult.error ?? 'Falha ao enviar WhatsApp' };
     }
-  } else {
-    // Email flow (default)
+  } else if (channel === 'email') {
+    // Email flow
     const emailResult = await EmailService.sendEmail(
       cadenceCreatedBy,
       orgId,
@@ -154,6 +154,7 @@ export async function executeActivity(
       return { success: false, error: emailResult.error ?? 'Falha ao enviar email' };
     }
   }
+  // Manual channels (phone, linkedin, research) — interaction already recorded above, no external send needed
 
   // Advance step or mark enrollment completed
   const { data: nextStep } = (await (supabase
