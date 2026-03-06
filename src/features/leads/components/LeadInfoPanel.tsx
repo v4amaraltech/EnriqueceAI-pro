@@ -840,7 +840,7 @@ export function LeadInfoPanel({
 
       {/* FAB — sticky, only on Dados tab */}
       {activeTab === 'dados' && (
-        <div className="sticky bottom-0 flex justify-end gap-2 pt-3 pb-1 bg-[var(--background)]">
+        <div className="sticky bottom-0 flex justify-end gap-2 pt-3 pb-1 pointer-events-none [&>*]:pointer-events-auto">
           {isEditing ? (
             <>
               <Button
