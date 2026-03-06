@@ -10,8 +10,6 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
 import { EmailService } from '@/features/integrations/services/email.service';
-import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
-import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
 import { createNotification } from '@/features/notifications/services/notification.service';
 
@@ -22,7 +20,7 @@ import type { CadenceStepRow, InteractionRow, MessageTemplateRow, ReplyType } fr
 
 const BATCH_SIZE = 25;
 const MAX_SEND_RETRIES = 3;
-/** Delay between successful sends (ms) to avoid Gmail/WhatsApp rate limits */
+/** Delay between successful sends (ms) to avoid Gmail rate limits */
 const SEND_DELAY_MS = 2000;
 
 /** Patterns that indicate a permanent (non-retryable) email error */
@@ -39,18 +37,9 @@ const PERMANENT_EMAIL_ERRORS = [
   'reconexão necessária',
 ];
 
-/** Patterns that indicate a permanent WhatsApp error */
-const PERMANENT_WHATSAPP_ERRORS = [
-  'not on whatsapp',
-  'invalid number',
-  'blocked',
-  'banned',
-];
-
-function isPermanentError(error: string, channel: 'email' | 'whatsapp'): boolean {
+function isPermanentError(error: string): boolean {
   const lower = error.toLowerCase();
-  const patterns = channel === 'email' ? PERMANENT_EMAIL_ERRORS : PERMANENT_WHATSAPP_ERRORS;
-  return patterns.some((p) => lower.includes(p));
+  return PERMANENT_EMAIL_ERRORS.some((p) => lower.includes(p));
 }
 
 /** Count failed interactions for a specific enrollment + step (retry tracking) */
@@ -259,29 +248,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
-      // Skip manual channels — advance to next step so enrollment doesn't get stuck
-      if (step.channel !== 'email' && step.channel !== 'whatsapp') {
-        const { data: nextManualStep } = (await (supabase
-          .from('cadence_steps') as ReturnType<typeof supabase.from>)
-          .select('step_order')
-          .eq('cadence_id', enrollment.cadence_id)
-          .gt('step_order', enrollment.current_step)
-          .order('step_order', { ascending: true })
-          .limit(1)
-          .maybeSingle()) as { data: { step_order: number } | null };
-
-        if (nextManualStep) {
-          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-            .update({ current_step: nextManualStep.step_order } as Record<string, unknown>)
-            .eq('id', enrollment.id);
-        } else {
-          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-            .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-            .eq('id', enrollment.id);
-          result.completed++;
-        }
+      // Only auto-execute email steps — all other channels (whatsapp, phone, linkedin, etc.)
+      // are handled manually by SDRs through the activities queue
+      if (step.channel !== 'email') {
         result.skipped++;
-        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped_and_advanced reason=manual_channel channel=${step.channel} duration_ms=${Date.now() - stepStart}`);
         continue;
       }
 
@@ -598,7 +568,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           result.errors.push(`Email falhou para lead ${enrollment.lead_id}: ${emailError}`);
 
           // Classify error: permanent → pause immediately, transient → pause after MAX_SEND_RETRIES
-          if (isPermanentError(emailError, 'email')) {
+          if (isPermanentError(emailError)) {
             await autoPauseEnrollment(supabase, enrollment.id, `permanent_email_error: ${emailError}`, { ...pauseNotifyCtx, channel: 'email' });
             result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado (erro permanente)`);
           } else {
@@ -613,76 +583,6 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=email_send_error error="${emailError}" duration_ms=${Date.now() - stepStart}`);
           continue;
         }
-      } else if (step.channel === 'whatsapp') {
-        const phone = enrollment.lead.telefone;
-        if (!phone || !validateBrazilianPhone(phone)) {
-          await markInteractionFailed(supabase, interaction.id, 'invalid_phone');
-          await autoPauseEnrollment(supabase, enrollment.id, 'invalid_phone', { ...pauseNotifyCtx, channel: 'whatsapp' });
-          result.failed++;
-          result.errors.push(`Lead ${enrollment.lead_id} sem telefone válido — enrollment pausado automaticamente`);
-          continue;
-        }
-
-        // Check and deduct WhatsApp credit
-        const creditResult = await WhatsAppCreditService.checkAndDeductCredit(enrollment.lead.org_id, supabase);
-        if (!creditResult.allowed) {
-          await markInteractionFailed(supabase, interaction.id, creditResult.error ?? 'no_credits');
-          result.failed++;
-          result.errors.push(`Org ${enrollment.lead.org_id} sem créditos WhatsApp: ${creditResult.error}`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_credits duration_ms=${Date.now() - stepStart}`);
-          continue;
-        }
-
-        if (creditResult.isOverage) {
-          console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp overage: used=${creditResult.used} limit=${creditResult.limit}`);
-        }
-
-        const waResult = await WhatsAppService.sendMessage(
-          enrollment.lead.org_id,
-          { to: phone, body: messageContent },
-          supabase,
-        );
-
-        if (waResult.success && waResult.messageId) {
-          await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
-            .update({ external_id: waResult.messageId } as Record<string, unknown>)
-            .eq('id', interaction.id);
-          sendSuccess = true;
-          dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'email.sent', {
-            lead_id: enrollment.lead_id,
-            cadence_id: enrollment.cadence_id,
-            step_order: step.step_order,
-            phone,
-            channel: 'whatsapp',
-            message_id: waResult.messageId,
-          });
-          console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp sent messageId=${waResult.messageId}`);
-        } else {
-          const waError = waResult.error ?? 'unknown_whatsapp_error';
-          await markInteractionFailed(supabase, interaction.id, waError);
-          result.failed++;
-          result.errors.push(`WhatsApp falhou para lead ${enrollment.lead_id}: ${waError}`);
-
-          if (isPermanentError(waError, 'whatsapp')) {
-            await autoPauseEnrollment(supabase, enrollment.id, `permanent_whatsapp_error: ${waError}`, { ...pauseNotifyCtx, channel: 'whatsapp' });
-            result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado (erro permanente)`);
-          } else {
-            const attempts = await getFailedAttemptCount(supabase, enrollment.cadence_id, enrollment.lead_id, step.id);
-            if (attempts >= MAX_SEND_RETRIES) {
-              await autoPauseEnrollment(supabase, enrollment.id, `max_retries_whatsapp (${attempts}/${MAX_SEND_RETRIES})`, { ...pauseNotifyCtx, channel: 'whatsapp' });
-              result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado após ${attempts} tentativas`);
-            } else {
-              console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp transient error, attempt ${attempts}/${MAX_SEND_RETRIES} — will retry`);
-            }
-          }
-          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=whatsapp_send_error error="${waError}" duration_ms=${Date.now() - stepStart}`);
-          continue;
-        }
-      }
-
-      if (!sendSuccess) {
-        // Unknown channel or no send attempted
-        continue;
       }
 
       // Check if there's a next step (handles non-contiguous step_order)
