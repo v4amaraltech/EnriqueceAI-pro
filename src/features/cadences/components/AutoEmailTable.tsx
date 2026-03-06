@@ -33,6 +33,14 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { Badge } from '@/shared/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/tooltip';
+
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 import { activateCadence, createCadence, updateCadence } from '../actions/manage-cadences';
 import type { CadenceRow } from '../types';
@@ -48,6 +56,31 @@ function getCreatorName(userId: string | null, userMap: Record<string, string>):
   if (!userId) return '-';
   return userMap[userId] ?? userId.substring(0, 2).toUpperCase();
 }
+
+type HealthLevel = 'green' | 'yellow' | 'red' | 'gray';
+
+function getCadenceHealth(m: AutoEmailCadenceMetrics | undefined): { level: HealthLevel; label: string; detail: string } {
+  if (!m || m.sent === 0) {
+    return { level: 'gray', label: 'Sem dados', detail: 'Nenhum envio registrado' };
+  }
+  const totalAttempts = m.sent + m.failed + m.bounced;
+  const failRate = ((m.failed + m.bounced) / totalAttempts) * 100;
+
+  if (failRate > 25) {
+    return { level: 'red', label: 'Crítico', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+  }
+  if (failRate > 10) {
+    return { level: 'yellow', label: 'Atenção', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+  }
+  return { level: 'green', label: 'Saudável', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+}
+
+const HEALTH_STYLES: Record<HealthLevel, string> = {
+  green: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  yellow: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  red: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  gray: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+};
 
 function MetricCell({ value, isPercent = false }: { value: number; isPercent?: boolean }) {
   const display = isPercent ? `${value.toFixed(1)}%` : value;
@@ -123,6 +156,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
         <TableRow className="bg-[var(--muted)]/50">
           <TableHead className="w-12">Ativar</TableHead>
           <TableHead className="min-w-[200px]">Nome</TableHead>
+          <TableHead className="w-20">Saúde</TableHead>
           <TableHead className="w-16">Criador</TableHead>
           <TableHead className="w-16 text-right">Ativo</TableHead>
           <TableHead className="w-16 text-right">Pausado</TableHead>
@@ -165,6 +199,27 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
                 >
                   {cadence.name}
                 </button>
+              </TableCell>
+
+              {/* Health badge */}
+              <TableCell>
+                {(() => {
+                  const health = getCadenceHealth(m);
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className={`text-xs ${HEALTH_STYLES[health.level]}`}>
+                            {health.label}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">{health.detail}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })()}
               </TableCell>
 
               {/* Created by */}

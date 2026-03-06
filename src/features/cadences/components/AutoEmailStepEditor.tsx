@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import LinkExtension from '@tiptap/extension-link';
-import { ChevronDown, ChevronRight, Eye, EyeOff, Reply, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, FlaskConical, Reply, Sparkles, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -19,11 +19,19 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Switch } from '@/shared/components/ui/switch';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/shared/components/ui/tabs';
 
 import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
 import type { LeadContext } from '@/features/ai/types';
 
 import type { AutoEmailStep } from '../cadence.schemas';
+import type { StepAbMetrics } from '../cadences.contract';
+import { fetchStepAbMetrics } from '../actions/fetch-step-ab-metrics';
 import { TipTapToolbar } from './TipTapToolbar';
 import { EmailPreviewPanel } from './EmailPreviewPanel';
 
@@ -35,6 +43,7 @@ interface AutoEmailStepEditorProps {
   onChange: (step: AutoEmailStep) => void;
   onRemove: () => void;
   cadenceId?: string;
+  stepId?: string;
 }
 
 const PLACEHOLDER_LEAD_CONTEXT: LeadContext = {
@@ -56,14 +65,29 @@ export function AutoEmailStepEditor({
   hideDelay,
   onChange,
   onRemove,
+  stepId,
 }: AutoEmailStepEditorProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [focusedField, setFocusedField] = useState<'subject' | 'body'>('body');
+  const [activeVariant, setActiveVariant] = useState<'A' | 'B'>('A');
   const [showPreview, setShowPreview] = useState(false);
   const [showAIDialog, setShowAIDialog] = useState(false);
+  const [abMetrics, setAbMetrics] = useState<StepAbMetrics | null>(null);
+  const [_isMetricsPending, startMetricsTransition] = useTransition();
   const subjectRef = useRef<HTMLInputElement>(null);
+  const subjectBRef = useRef<HTMLInputElement>(null);
 
-  const editor = useEditor({
+  // Load A/B metrics when step has an ID and A/B is enabled
+  useEffect(() => {
+    if (stepId && step.ab_enabled) {
+      startMetricsTransition(async () => {
+        const result = await fetchStepAbMetrics(stepId);
+        if (result.success) setAbMetrics(result.data);
+      });
+    }
+  }, [stepId, step.ab_enabled]);
+
+  const editorA = useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit,
@@ -89,34 +113,66 @@ export function AutoEmailStepEditor({
     },
   });
 
+  const editorB = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder: 'Escreva o corpo do email (Variante B)...',
+      }),
+      LinkExtension.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-blue-600 underline cursor-pointer',
+        },
+      }),
+    ],
+    content: step.body_b ?? '',
+    onUpdate: ({ editor: e }) => {
+      onChange({ ...step, body_b: e.getHTML() });
+    },
+    onFocus: () => setFocusedField('body'),
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none min-h-[120px] p-3 focus:outline-none [&_p]:my-1',
+      },
+    },
+  });
+
   const handleInsertVariable = useCallback(
     (variable: string) => {
       const insertion = `{{${variable}}}`;
-      if (focusedField === 'subject' && subjectRef.current) {
-        const input = subjectRef.current;
+      const currentSubjectRef = activeVariant === 'A' ? subjectRef : subjectBRef;
+      const currentEditor = activeVariant === 'A' ? editorA : editorB;
+
+      if (focusedField === 'subject' && currentSubjectRef.current) {
+        const input = currentSubjectRef.current;
         const start = input.selectionStart ?? input.value.length;
         const end = input.selectionEnd ?? start;
         const newValue = input.value.slice(0, start) + insertion + input.value.slice(end);
-        onChange({ ...step, subject: newValue });
+        if (activeVariant === 'A') {
+          onChange({ ...step, subject: newValue });
+        } else {
+          onChange({ ...step, subject_b: newValue });
+        }
         requestAnimationFrame(() => {
           input.focus();
           input.setSelectionRange(start + insertion.length, start + insertion.length);
         });
-      } else if (focusedField === 'body' && editor) {
-        editor.chain().focus().insertContent(insertion).run();
+      } else if (focusedField === 'body' && currentEditor) {
+        currentEditor.chain().focus().insertContent(insertion).run();
       }
     },
-    [focusedField, editor, onChange, step],
+    [focusedField, editorA, editorB, activeVariant, onChange, step],
   );
 
   function handleAISave(body: string, subject?: string) {
-    if (subject) {
-      onChange({ ...step, subject, body });
+    if (activeVariant === 'A') {
+      onChange({ ...step, ...(subject ? { subject } : {}), body });
+      if (editorA) editorA.commands.setContent(body);
     } else {
-      onChange({ ...step, body });
-    }
-    if (editor) {
-      editor.commands.setContent(body);
+      onChange({ ...step, ...(subject ? { subject_b: subject } : {}), body_b: body });
+      if (editorB) editorB.commands.setContent(body);
     }
     setShowAIDialog(false);
   }
@@ -142,6 +198,12 @@ export function AutoEmailStepEditor({
         <Badge variant="outline" className="text-xs">
           {delayLabel}
         </Badge>
+        {step.ab_enabled && (
+          <Badge variant="secondary" className="gap-1 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <FlaskConical className="h-3 w-3" />
+            A/B
+          </Badge>
+        )}
         {step.ai_personalization && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Sparkles className="h-3 w-3" />
@@ -239,39 +301,192 @@ export function AutoEmailStepEditor({
               </div>
             )}
 
-            {/* Subject */}
-            <div className="space-y-1.5">
-              <Label htmlFor={`subject-${stepNumber}`} className="text-sm">
-                Assunto
+            {/* A/B Toggle */}
+            <div className="flex items-center gap-2">
+              <Switch
+                id={`ab-${stepNumber}`}
+                checked={step.ab_enabled}
+                onCheckedChange={(checked: boolean) => onChange({ ...step, ab_enabled: checked })}
+              />
+              <Label htmlFor={`ab-${stepNumber}`} className="flex items-center gap-1.5 text-sm">
+                <FlaskConical className="h-3.5 w-3.5 text-purple-500" />
+                Teste A/B
               </Label>
-              {!isFirst && step.reply_type === 'reply' ? (
-                <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
-                  Re: (assunto do email anterior)
-                </p>
-              ) : (
-                <Input
-                  ref={subjectRef}
-                  id={`subject-${stepNumber}`}
-                  value={step.subject}
-                  onChange={(e) => onChange({ ...step, subject: e.target.value })}
-                  onFocus={() => setFocusedField('subject')}
-                  placeholder="Ex: {{nome_fantasia}}, temos uma oportunidade para você"
-                />
-              )}
             </div>
 
-            {/* Body (TipTap) with integrated toolbar */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Corpo do Email</Label>
-              <div className="rounded-md border focus-within:ring-1 focus-within:ring-[var(--ring)]">
-                <EditorContent editor={editor} />
-                <TipTapToolbar
-                  editor={editor}
-                  onInsertVariable={handleInsertVariable}
-                  onOpenAI={() => setShowAIDialog(true)}
+            {/* A/B Distribution slider */}
+            {step.ab_enabled && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">A: {step.ab_distribution ?? 50}%</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={99}
+                  value={step.ab_distribution ?? 50}
+                  onChange={(e) => onChange({ ...step, ab_distribution: parseInt(e.target.value, 10) })}
+                  className="h-1.5 w-40 cursor-pointer accent-purple-500"
                 />
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">B: {100 - (step.ab_distribution ?? 50)}%</span>
               </div>
-            </div>
+            )}
+
+            {step.ab_enabled ? (
+              <Tabs defaultValue="A" onValueChange={(v) => setActiveVariant(v as 'A' | 'B')}>
+                <TabsList>
+                  <TabsTrigger value="A">Variante A</TabsTrigger>
+                  <TabsTrigger value="B">Variante B</TabsTrigger>
+                </TabsList>
+
+                {/* Variant A */}
+                <TabsContent value="A" className="space-y-4 mt-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`subject-a-${stepNumber}`} className="text-sm">Assunto</Label>
+                    {!isFirst && step.reply_type === 'reply' ? (
+                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                        Re: (assunto do email anterior)
+                      </p>
+                    ) : (
+                      <Input
+                        ref={subjectRef}
+                        id={`subject-a-${stepNumber}`}
+                        value={step.subject}
+                        onChange={(e) => onChange({ ...step, subject: e.target.value })}
+                        onFocus={() => setFocusedField('subject')}
+                        placeholder="Assunto da Variante A"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Corpo do Email</Label>
+                    <div className="rounded-md border focus-within:ring-1 focus-within:ring-[var(--ring)]">
+                      <EditorContent editor={editorA} />
+                      <TipTapToolbar
+                        editor={editorA}
+                        onInsertVariable={handleInsertVariable}
+                        onOpenAI={() => setShowAIDialog(true)}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Variant B */}
+                <TabsContent value="B" className="space-y-4 mt-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`subject-b-${stepNumber}`} className="text-sm">Assunto</Label>
+                    {!isFirst && step.reply_type === 'reply' ? (
+                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                        Re: (assunto do email anterior)
+                      </p>
+                    ) : (
+                      <Input
+                        ref={subjectBRef}
+                        id={`subject-b-${stepNumber}`}
+                        value={step.subject_b ?? ''}
+                        onChange={(e) => onChange({ ...step, subject_b: e.target.value })}
+                        onFocus={() => setFocusedField('subject')}
+                        placeholder="Assunto da Variante B"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Corpo do Email</Label>
+                    <div className="rounded-md border focus-within:ring-1 focus-within:ring-[var(--ring)]">
+                      <EditorContent editor={editorB} />
+                      <TipTapToolbar
+                        editor={editorB}
+                        onInsertVariable={handleInsertVariable}
+                        onOpenAI={() => setShowAIDialog(true)}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <>
+                {/* Single variant (original behavior) */}
+                <div className="space-y-1.5">
+                  <Label htmlFor={`subject-${stepNumber}`} className="text-sm">
+                    Assunto
+                  </Label>
+                  {!isFirst && step.reply_type === 'reply' ? (
+                    <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                      Re: (assunto do email anterior)
+                    </p>
+                  ) : (
+                    <Input
+                      ref={subjectRef}
+                      id={`subject-${stepNumber}`}
+                      value={step.subject}
+                      onChange={(e) => onChange({ ...step, subject: e.target.value })}
+                      onFocus={() => setFocusedField('subject')}
+                      placeholder="Ex: {{nome_fantasia}}, temos uma oportunidade para você"
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Corpo do Email</Label>
+                  <div className="rounded-md border focus-within:ring-1 focus-within:ring-[var(--ring)]">
+                    <EditorContent editor={editorA} />
+                    <TipTapToolbar
+                      editor={editorA}
+                      onInsertVariable={handleInsertVariable}
+                      onOpenAI={() => setShowAIDialog(true)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* A/B Metrics panel */}
+            {step.ab_enabled && abMetrics && (abMetrics.variant_a.sent > 0 || abMetrics.variant_b.sent > 0) && (
+              <div className="rounded-lg border bg-[var(--muted)]/30 p-4">
+                <h4 className="mb-3 text-sm font-medium">Resultados do Teste A/B</h4>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[var(--muted-foreground)]">
+                      <th className="pb-2 text-left font-medium">Métrica</th>
+                      <th className="pb-2 text-center font-medium">Variante A</th>
+                      <th className="pb-2 text-center font-medium">Variante B</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    <tr>
+                      <td className="py-1.5">Enviados</td>
+                      <td className="py-1.5 text-center tabular-nums">{abMetrics.variant_a.sent}</td>
+                      <td className="py-1.5 text-center tabular-nums">{abMetrics.variant_b.sent}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5">Abertos</td>
+                      <td className="py-1.5 text-center tabular-nums">
+                        {abMetrics.variant_a.opened}
+                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_a.opened / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
+                      </td>
+                      <td className="py-1.5 text-center tabular-nums">
+                        {abMetrics.variant_b.opened}
+                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_b.opened / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5">Respondidos</td>
+                      <td className="py-1.5 text-center tabular-nums">
+                        {abMetrics.variant_a.replied}
+                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_a.replied / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
+                      </td>
+                      <td className="py-1.5 text-center tabular-nums">
+                        {abMetrics.variant_b.replied}
+                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_b.replied / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5">Bounced</td>
+                      <td className="py-1.5 text-center tabular-nums">{abMetrics.variant_a.bounced}</td>
+                      <td className="py-1.5 text-center tabular-nums">{abMetrics.variant_b.bounced}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* AI toggle */}
             <div className="flex items-center gap-2">
@@ -290,7 +505,10 @@ export function AutoEmailStepEditor({
           {/* Preview column */}
           {showPreview && (
             <div className="overflow-y-auto">
-              <EmailPreviewPanel subject={step.subject} body={step.body} />
+              <EmailPreviewPanel
+                subject={activeVariant === 'B' && step.ab_enabled ? (step.subject_b ?? '') : step.subject}
+                body={activeVariant === 'B' && step.ab_enabled ? (step.body_b ?? '') : step.body}
+              />
             </div>
           )}
         </div>

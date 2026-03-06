@@ -13,11 +13,111 @@ import { EmailService } from '@/features/integrations/services/email.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
+import { createNotification } from '@/features/notifications/services/notification.service';
+
+import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow, ReplyType } from '../types';
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 25;
+const MAX_SEND_RETRIES = 3;
+/** Delay between successful sends (ms) to avoid Gmail/WhatsApp rate limits */
+const SEND_DELAY_MS = 2000;
+
+/** Patterns that indicate a permanent (non-retryable) email error */
+const PERMANENT_EMAIL_ERRORS = [
+  'invalid',
+  'not found',
+  'not exist',
+  'disabled',
+  'suspended',
+  'blocked',
+  'bounce',
+  'spam',
+  'abuse',
+  'reconexão necessária',
+];
+
+/** Patterns that indicate a permanent WhatsApp error */
+const PERMANENT_WHATSAPP_ERRORS = [
+  'not on whatsapp',
+  'invalid number',
+  'blocked',
+  'banned',
+];
+
+function isPermanentError(error: string, channel: 'email' | 'whatsapp'): boolean {
+  const lower = error.toLowerCase();
+  const patterns = channel === 'email' ? PERMANENT_EMAIL_ERRORS : PERMANENT_WHATSAPP_ERRORS;
+  return patterns.some((p) => lower.includes(p));
+}
+
+/** Count failed interactions for a specific enrollment + step (retry tracking) */
+async function getFailedAttemptCount(
+  supabase: SupabaseClient,
+  cadenceId: string,
+  leadId: string,
+  stepId: string,
+): Promise<number> {
+  const { count } = (await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .select('id', { count: 'exact', head: true })
+    .eq('cadence_id', cadenceId)
+    .eq('lead_id', leadId)
+    .eq('step_id', stepId)
+    .eq('type', 'failed')) as { count: number | null };
+  return count ?? 0;
+}
+
+/** Auto-pause an enrollment, log the reason, and notify the SDR */
+async function autoPauseEnrollment(
+  supabase: SupabaseClient,
+  enrollmentId: string,
+  reason: string,
+  notifyCtx?: {
+    orgId: string;
+    userId: string | null;
+    leadName: string;
+    leadId: string;
+    cadenceName: string;
+    cadenceId: string;
+    channel: 'email' | 'whatsapp';
+  },
+): Promise<void> {
+  await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .update({ status: 'paused' } as Record<string, unknown>)
+    .eq('id', enrollmentId);
+  console.error(`[cadence-engine] enrollment=${enrollmentId} status=auto_paused reason=${reason}`);
+
+  if (notifyCtx) {
+    dispatchWebhookEvent(supabase, notifyCtx.orgId, 'enrollment.paused', {
+      lead_id: notifyCtx.leadId,
+      cadence_id: notifyCtx.cadenceId,
+      enrollment_id: enrollmentId,
+      reason,
+    });
+  }
+
+  // Notify SDR (assigned_to) or skip if no user assigned
+  if (notifyCtx?.userId) {
+    const channelLabel = notifyCtx.channel === 'email' ? 'sem email' : 'sem telefone válido';
+    try {
+      await createNotification({
+        org_id: notifyCtx.orgId,
+        user_id: notifyCtx.userId,
+        type: 'integration_error',
+        title: `Cadência pausada — lead ${channelLabel}`,
+        body: `"${notifyCtx.leadName}" foi pausado na cadência "${notifyCtx.cadenceName}" porque o lead está ${channelLabel}. Atualize o cadastro do lead para retomar.`,
+        resource_type: 'lead',
+        resource_id: notifyCtx.leadId,
+        metadata: { reason, cadence_id: notifyCtx.cadenceId, enrollment_id: enrollmentId },
+      });
+    } catch (notifErr) {
+      console.error(`[cadence-engine] Failed to create notification for enrollment=${enrollmentId}:`, notifErr);
+    }
+  }
+}
 
 /** Mark an interaction as failed with error metadata */
 async function markInteractionFailed(
@@ -57,7 +157,13 @@ interface EnrollmentWithLead {
     uf: string | null;
     porte: string | null;
     primeiro_nome: string | null;
+    assigned_to: string | null;
+    email_bounced_at: string | null;
     socios: Array<{ nome: string; qualificacao?: string }> | null;
+  };
+  cadence: {
+    status: string;
+    name: string;
   };
 }
 
@@ -74,12 +180,10 @@ export interface ExecutionResult {
 function isBusinessHours(): boolean {
   const now = new Date();
   // BRT = UTC-3
-  const brtHour = (now.getUTCHours() - 3 + 24) % 24;
-  const brtDay = now.getUTCDay(); // 0=Sun, 6=Sat
-  // Adjust day if UTC-3 crosses midnight
   const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  const adjustedDay = brtDate.getUTCDay();
-  return adjustedDay >= 1 && adjustedDay <= 5 && brtHour >= 8 && brtHour < 18;
+  const brtHour = brtDate.getUTCHours();
+  const brtDay = brtDate.getUTCDay();
+  return brtDay >= 1 && brtDay <= 5 && brtHour >= 8 && brtHour < 18;
 }
 
 /**
@@ -97,7 +201,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('*, lead:leads(*), cadence:cadences!inner(status)')
+    .select('*, lead:leads(*), cadence:cadences!inner(status, name)')
     .eq('status', 'active')
     .eq('cadence.status', 'active')
     .not('next_step_due', 'is', null)
@@ -119,6 +223,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   };
 
   console.warn(`[cadence-engine] Found ${enrollments?.length ?? 0} due enrollments`);
+
+  // Load blacklisted email domains for all orgs in this batch
+  const orgIds = [...new Set((enrollments ?? []).map((e) => e.lead.org_id))];
+  const blacklistedDomains = new Set<string>();
+  if (orgIds.length > 0) {
+    const { data: blacklistRows } = (await (supabase
+      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+      .select('domain, org_id')
+      .in('org_id', orgIds)) as { data: Array<{ domain: string; org_id: string }> | null };
+    for (const row of blacklistRows ?? []) {
+      blacklistedDomains.add(`${row.org_id}:${row.domain}`);
+    }
+  }
 
   for (const enrollment of enrollments ?? []) {
     const stepStart = Date.now();
@@ -168,13 +285,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
-      // Idempotency check: skip if interaction already exists for this enrollment + step
+      // Idempotency check: skip if a *successful* interaction already exists for this enrollment + step
+      // Only checks for 'sent' type so that failed interactions can be retried on the next batch
       const { data: existingInteraction } = (await (supabase
         .from('interactions') as ReturnType<typeof supabase.from>)
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('step_id', step.id)
         .eq('lead_id', enrollment.lead_id)
+        .eq('type', 'sent')
         .limit(1)
         .maybeSingle()) as { data: { id: string } | null };
 
@@ -247,11 +366,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       let aiGenerated = false;
       let cadenceCreatedBy: string | null = null;
 
-      if (step.template_id) {
+      // A/B variant selection
+      let selectedTemplateId = step.template_id;
+      let abVariant: 'A' | 'B' | null = null;
+      if (step.ab_enabled && step.template_id_b) {
+        abVariant = Math.random() * 100 < step.ab_distribution ? 'A' : 'B';
+        selectedTemplateId = abVariant === 'A' ? step.template_id : step.template_id_b;
+      }
+
+      if (selectedTemplateId) {
         const { data: template } = (await (supabase
           .from('message_templates') as ReturnType<typeof supabase.from>)
           .select('*')
-          .eq('id', step.template_id)
+          .eq('id', selectedTemplateId)
           .single()) as { data: MessageTemplateRow | null };
 
         if (template) {
@@ -308,6 +435,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Record interaction
+      const interactionMeta: Record<string, unknown> = {};
+      if (subject) interactionMeta.subject = subject;
+      if (abVariant) interactionMeta.ab_variant = abVariant;
+
       const { data: interaction } = (await (supabase
         .from('interactions') as ReturnType<typeof supabase.from>)
         .insert({
@@ -318,8 +449,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           channel: step.channel,
           type: 'sent',
           message_content: messageContent || null,
-          metadata: subject ? { subject } : null,
+          metadata: Object.keys(interactionMeta).length > 0 ? interactionMeta : null,
           ai_generated: aiGenerated,
+          original_template_id: selectedTemplateId,
         } as Record<string, unknown>)
         .select('id')
         .single()) as { data: Pick<InteractionRow, 'id'> | null };
@@ -334,12 +466,43 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       // Send via the appropriate channel
       let sendSuccess = false;
 
+      // Build notification context once per enrollment (reused by all auto-pause calls)
+      const leadName = enrollment.lead.nome_fantasia || enrollment.lead.razao_social || enrollment.lead.cnpj;
+      const pauseNotifyCtx = {
+        orgId: enrollment.lead.org_id,
+        userId: enrollment.lead.assigned_to,
+        leadName,
+        leadId: enrollment.lead_id,
+        cadenceName: enrollment.cadence.name,
+        cadenceId: enrollment.cadence_id,
+      };
+
       if (step.channel === 'email') {
         if (!enrollment.lead.email) {
           await markInteractionFailed(supabase, interaction.id, 'no_lead_email');
+          await autoPauseEnrollment(supabase, enrollment.id, 'no_lead_email', { ...pauseNotifyCtx, channel: 'email' });
           result.failed++;
-          result.errors.push(`Lead ${enrollment.lead_id} sem email — não é possível enviar`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=no_lead_email duration_ms=${Date.now() - stepStart}`);
+          result.errors.push(`Lead ${enrollment.lead_id} sem email — enrollment pausado automaticamente`);
+          continue;
+        }
+
+        // Skip leads with bounced email
+        if (enrollment.lead.email_bounced_at) {
+          await markInteractionFailed(supabase, interaction.id, 'email_bounced');
+          await autoPauseEnrollment(supabase, enrollment.id, 'email_bounced', { ...pauseNotifyCtx, channel: 'email' });
+          result.failed++;
+          result.errors.push(`Lead ${enrollment.lead_id} com email bounce — enrollment pausado`);
+          continue;
+        }
+
+        // Skip leads whose email domain is blacklisted
+        const emailDomain = enrollment.lead.email.split('@')[1]?.toLowerCase();
+        if (emailDomain && blacklistedDomains.has(`${enrollment.lead.org_id}:${emailDomain}`)) {
+          await markInteractionFailed(supabase, interaction.id, 'domain_blacklisted');
+          await autoPauseEnrollment(supabase, enrollment.id, 'domain_blacklisted', { ...pauseNotifyCtx, channel: 'email' });
+          result.failed++;
+          result.errors.push(`Lead ${enrollment.lead_id} com domínio bloqueado (${emailDomain}) — enrollment pausado`);
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=paused reason=domain_blacklisted domain=${emailDomain}`);
           continue;
         }
 
@@ -411,6 +574,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           const metaUpdate: Record<string, unknown> = {};
           if (subject) metaUpdate.subject = subject;
           if (emailResult.threadId) metaUpdate.thread_id = emailResult.threadId;
+          if (abVariant) metaUpdate.ab_variant = abVariant;
           if (Object.keys(metaUpdate).length > 0) {
             updateData.metadata = metaUpdate;
           }
@@ -418,21 +582,44 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             .update(updateData)
             .eq('id', interaction.id);
           sendSuccess = true;
+          dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'email.sent', {
+            lead_id: enrollment.lead_id,
+            cadence_id: enrollment.cadence_id,
+            step_order: step.step_order,
+            email: enrollment.lead.email,
+            subject: subject ?? '',
+            message_id: emailResult.messageId,
+          });
           console.warn(`[cadence-engine] enrollment=${enrollment.id} email sent messageId=${emailResult.messageId} threadId=${emailResult.threadId ?? 'n/a'}`);
         } else {
-          await markInteractionFailed(supabase, interaction.id, emailResult.error ?? 'unknown_email_error');
+          const emailError = emailResult.error ?? 'unknown_email_error';
+          await markInteractionFailed(supabase, interaction.id, emailError);
           result.failed++;
-          result.errors.push(`Email falhou para lead ${enrollment.lead_id}: ${emailResult.error}`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=email_send_error error="${emailResult.error}" duration_ms=${Date.now() - stepStart}`);
+          result.errors.push(`Email falhou para lead ${enrollment.lead_id}: ${emailError}`);
+
+          // Classify error: permanent → pause immediately, transient → pause after MAX_SEND_RETRIES
+          if (isPermanentError(emailError, 'email')) {
+            await autoPauseEnrollment(supabase, enrollment.id, `permanent_email_error: ${emailError}`, { ...pauseNotifyCtx, channel: 'email' });
+            result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado (erro permanente)`);
+          } else {
+            const attempts = await getFailedAttemptCount(supabase, enrollment.cadence_id, enrollment.lead_id, step.id);
+            if (attempts >= MAX_SEND_RETRIES) {
+              await autoPauseEnrollment(supabase, enrollment.id, `max_retries_email (${attempts}/${MAX_SEND_RETRIES})`, { ...pauseNotifyCtx, channel: 'email' });
+              result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado após ${attempts} tentativas`);
+            } else {
+              console.warn(`[cadence-engine] enrollment=${enrollment.id} email transient error, attempt ${attempts}/${MAX_SEND_RETRIES} — will retry`);
+            }
+          }
+          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=email_send_error error="${emailError}" duration_ms=${Date.now() - stepStart}`);
           continue;
         }
       } else if (step.channel === 'whatsapp') {
         const phone = enrollment.lead.telefone;
         if (!phone || !validateBrazilianPhone(phone)) {
           await markInteractionFailed(supabase, interaction.id, 'invalid_phone');
+          await autoPauseEnrollment(supabase, enrollment.id, 'invalid_phone', { ...pauseNotifyCtx, channel: 'whatsapp' });
           result.failed++;
-          result.errors.push(`Lead ${enrollment.lead_id} sem telefone válido — não é possível enviar WhatsApp`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=invalid_phone duration_ms=${Date.now() - stepStart}`);
+          result.errors.push(`Lead ${enrollment.lead_id} sem telefone válido — enrollment pausado automaticamente`);
           continue;
         }
 
@@ -461,12 +648,34 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             .update({ external_id: waResult.messageId } as Record<string, unknown>)
             .eq('id', interaction.id);
           sendSuccess = true;
+          dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'email.sent', {
+            lead_id: enrollment.lead_id,
+            cadence_id: enrollment.cadence_id,
+            step_order: step.step_order,
+            phone,
+            channel: 'whatsapp',
+            message_id: waResult.messageId,
+          });
           console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp sent messageId=${waResult.messageId}`);
         } else {
-          await markInteractionFailed(supabase, interaction.id, waResult.error ?? 'unknown_whatsapp_error');
+          const waError = waResult.error ?? 'unknown_whatsapp_error';
+          await markInteractionFailed(supabase, interaction.id, waError);
           result.failed++;
-          result.errors.push(`WhatsApp falhou para lead ${enrollment.lead_id}: ${waResult.error}`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=whatsapp_send_error error="${waResult.error}" duration_ms=${Date.now() - stepStart}`);
+          result.errors.push(`WhatsApp falhou para lead ${enrollment.lead_id}: ${waError}`);
+
+          if (isPermanentError(waError, 'whatsapp')) {
+            await autoPauseEnrollment(supabase, enrollment.id, `permanent_whatsapp_error: ${waError}`, { ...pauseNotifyCtx, channel: 'whatsapp' });
+            result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado (erro permanente)`);
+          } else {
+            const attempts = await getFailedAttemptCount(supabase, enrollment.cadence_id, enrollment.lead_id, step.id);
+            if (attempts >= MAX_SEND_RETRIES) {
+              await autoPauseEnrollment(supabase, enrollment.id, `max_retries_whatsapp (${attempts}/${MAX_SEND_RETRIES})`, { ...pauseNotifyCtx, channel: 'whatsapp' });
+              result.errors.push(`Lead ${enrollment.lead_id} — enrollment pausado após ${attempts} tentativas`);
+            } else {
+              console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp transient error, attempt ${attempts}/${MAX_SEND_RETRIES} — will retry`);
+            }
+          }
+          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=whatsapp_send_error error="${waError}" duration_ms=${Date.now() - stepStart}`);
           continue;
         }
       }
@@ -495,10 +704,20 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
         result.completed++;
+        dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'enrollment.completed', {
+          lead_id: enrollment.lead_id,
+          cadence_id: enrollment.cadence_id,
+          enrollment_id: enrollment.id,
+        });
       }
 
       result.sent++;
       console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=sent ai=${aiGenerated} send_success=${sendSuccess} duration_ms=${Date.now() - stepStart}`);
+
+      // Rate limit: wait between sends to avoid Gmail/WhatsApp API throttling
+      if (SEND_DELAY_MS > 0) {
+        await new Promise((resolve) => setTimeout(resolve, SEND_DELAY_MS));
+      }
     } catch (err) {
       result.failed++;
       const message = err instanceof Error ? err.message : String(err);

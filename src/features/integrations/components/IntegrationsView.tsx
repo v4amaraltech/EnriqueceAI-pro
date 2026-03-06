@@ -30,6 +30,8 @@ import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
 import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
+import { WebhookEndpointsManager } from '@/features/cadences/components/WebhookEndpointsManager';
+
 import { Api4ComConfigModal } from './Api4ComConfigModal';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
@@ -365,6 +367,8 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
         currentSignature={gmail?.custom_signature ?? null}
         onSaved={() => router.refresh()}
       />
+
+      <WebhookEndpointsManager />
 
       {/* WhatsApp Evolution QR Code modal */}
       {showEvolutionModal && evolution.step !== 'idle' && (

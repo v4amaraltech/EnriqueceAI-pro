@@ -58,6 +58,7 @@ export interface LeadRow {
   website: string | null;
   fit_score: number | null;
   enriched_at: string | null;
+  email_bounced_at: string | null;
   created_by: string | null;
   assigned_to: string | null;
   import_id: string | null;

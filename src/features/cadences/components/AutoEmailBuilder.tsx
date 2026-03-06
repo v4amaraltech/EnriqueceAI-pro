@@ -44,7 +44,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
   if (!cadence?.steps.length) {
-    return [{ subject: '', body: '', delay_days: 0, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const }];
+    return [{ subject: '', body: '', delay_days: 0, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const, ab_enabled: false, ab_distribution: 50, subject_b: '', body_b: '' }];
   }
   return cadence.steps.map((s) => ({
     subject: s.template?.subject ?? '',
@@ -53,6 +53,10 @@ function buildInitialSteps(cadence?: CadenceDetail): AutoEmailStep[] {
     delay_hours: s.delay_hours,
     ai_personalization: s.ai_personalization,
     reply_type: s.reply_type ?? ('new_conversation' as const),
+    ab_enabled: s.ab_enabled,
+    ab_distribution: s.ab_distribution,
+    subject_b: s.template_b?.subject ?? '',
+    body_b: s.template_b?.body ?? '',
   }));
 }
 
@@ -97,7 +101,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   function addStep() {
     setSteps((prev) => [
       ...prev,
-      { subject: '', body: '', delay_days: 2, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const },
+      { subject: '', body: '', delay_days: 2, delay_hours: 0, ai_personalization: false, reply_type: 'new_conversation' as const, ab_enabled: false, ab_distribution: 50, subject_b: '', body_b: '' },
     ]);
   }
 
@@ -117,6 +121,16 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
       if (!s.body.trim()) {
         toast.error(`Step ${i + 1}: Corpo do email é obrigatório`);
         return;
+      }
+      if (s.ab_enabled) {
+        if (s.reply_type !== 'reply' && !(s.subject_b ?? '').trim()) {
+          toast.error(`Step ${i + 1}: Assunto da Variante B é obrigatório`);
+          return;
+        }
+        if (!(s.body_b ?? '').trim()) {
+          toast.error(`Step ${i + 1}: Corpo da Variante B é obrigatório`);
+          return;
+        }
       }
     }
 
@@ -454,6 +468,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
                 onChange={(updated) => updateStep(index, updated)}
                 onRemove={() => removeStep(index)}
                 cadenceId={cadence?.id}
+                stepId={cadence?.steps[index]?.id}
               />
             </div>
           ))}

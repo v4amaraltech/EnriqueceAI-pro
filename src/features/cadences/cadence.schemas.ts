@@ -161,6 +161,10 @@ export const autoEmailStepSchema = z.object({
   delay_hours: z.number().int().min(0).default(0),
   ai_personalization: z.boolean().default(false),
   reply_type: replyTypeSchema.default('new_conversation'),
+  ab_enabled: z.boolean().default(false),
+  ab_distribution: z.number().int().min(1).max(99).default(50),
+  subject_b: z.string().max(500).default(''),
+  body_b: z.string().max(10000).default(''),
 }).refine(
   (data) => {
     if (data.reply_type !== 'reply' && (!data.subject || data.subject.trim() === '')) {
@@ -169,6 +173,22 @@ export const autoEmailStepSchema = z.object({
     return true;
   },
   { message: 'Assunto é obrigatório para nova conversa', path: ['subject'] },
+).refine(
+  (data) => {
+    if (data.ab_enabled && (!data.body_b || data.body_b.trim() === '')) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'Corpo da Variante B é obrigatório quando Teste A/B está ativo', path: ['body_b'] },
+).refine(
+  (data) => {
+    if (data.ab_enabled && data.reply_type !== 'reply' && (!data.subject_b || data.subject_b.trim() === '')) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'Assunto da Variante B é obrigatório', path: ['subject_b'] },
 );
 
 // Save auto email cadence schema

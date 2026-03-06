@@ -170,9 +170,9 @@ export async function fetchCadenceDetail(
     .eq('cadence_id', cadenceId)
     .order('step_order', { ascending: true })) as { data: CadenceStepRow[] | null };
 
-  // Fetch templates for all steps
+  // Fetch templates for all steps (including variant B)
   const templateIds = (steps ?? [])
-    .map((s) => s.template_id)
+    .flatMap((s) => [s.template_id, s.template_id_b])
     .filter((id): id is string => id != null);
 
   let templatesMap: Record<string, MessageTemplateRow> = {};
@@ -196,6 +196,7 @@ export async function fetchCadenceDetail(
   const stepsWithTemplates = (steps ?? []).map((step) => ({
     ...step,
     template: step.template_id ? templatesMap[step.template_id] ?? null : null,
+    template_b: step.template_id_b ? templatesMap[step.template_id_b] ?? null : null,
   }));
 
   return {

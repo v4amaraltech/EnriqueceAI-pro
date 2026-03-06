@@ -22,6 +22,7 @@ export interface CadenceWithSteps extends CadenceRow {
 // Cadence step with template data loaded
 export interface CadenceStepWithTemplate extends CadenceStepRow {
   template: MessageTemplateRow | null;
+  template_b: MessageTemplateRow | null;
 }
 
 // Full cadence detail with steps and templates
@@ -82,6 +83,13 @@ export interface AutoEmailCadenceMetrics {
   meetings: number;
   replyRate: number;
   openRate: number;
+}
+
+// A/B test per-step metrics
+export interface StepAbMetrics {
+  stepId: string;
+  variant_a: { sent: number; opened: number; replied: number; bounced: number };
+  variant_b: { sent: number; opened: number; replied: number; bounced: number };
 }
 
 // Interaction timeline entry

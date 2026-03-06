@@ -10,6 +10,9 @@ import {
   type GmailConnection,
   refreshAccessToken,
 } from '@/features/integrations/services/email.service';
+import { createNotification } from '@/features/notifications/services/notification.service';
+
+import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 
 const REPLY_CHECK_DAYS = 30;
 const BATCH_SIZE = 100;
@@ -134,6 +137,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
 
           if (detection === 'bounce') {
             await recordBounce(supabase, interaction);
+            await checkAndAutoBlacklistDomain(supabase, interaction);
             found++;
             console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
           } else {
@@ -357,23 +361,29 @@ async function recordReply(
     .eq('lead_id', sentInteraction.lead_id)
     .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
+
+  dispatchWebhookEvent(supabase, lead.org_id, 'email.replied', {
+    lead_id: sentInteraction.lead_id,
+    cadence_id: sentInteraction.cadence_id,
+    interaction_id: sentInteraction.id,
+  });
 }
 
-/** Record a bounce: create bounced interaction + update enrollment status */
+/** Record a bounce: create bounced interaction, mark lead, pause ALL enrollments, notify SDR */
 async function recordBounce(
   supabase: SupabaseClient,
   sentInteraction: SentInteraction,
 ): Promise<void> {
-  // Get org_id from the lead
+  // Get lead details
   const { data: lead } = (await (supabase
     .from('leads') as ReturnType<typeof supabase.from>)
-    .select('org_id')
+    .select('org_id, nome_fantasia, razao_social, cnpj, email, assigned_to')
     .eq('id', sentInteraction.lead_id)
-    .single()) as { data: { org_id: string } | null };
+    .single()) as { data: { org_id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string | null; email: string | null; assigned_to: string | null } | null };
 
   if (!lead) return;
 
-  // Create bounced interaction
+  // 1. Create bounced interaction
   await (supabase
     .from('interactions') as ReturnType<typeof supabase.from>)
     .insert({
@@ -387,11 +397,166 @@ async function recordBounce(
       metadata: { detected_by: 'gmail_thread_poll', sent_interaction_id: sentInteraction.id },
     } as Record<string, unknown>);
 
-  // Update active enrollment to bounced
+  // 2. Mark lead email as bounced
+  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    .update({ email_bounced_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('id', sentInteraction.lead_id);
+
+  // 3. Bounce the enrollment in the originating cadence
   await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
     .update({ status: 'bounced' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
+
+  // 4. Pause ALL other active enrollments for this lead across all cadences
+  await (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .update({ status: 'paused' } as Record<string, unknown>)
+    .eq('lead_id', sentInteraction.lead_id)
+    .eq('status', 'active')
+    .neq('cadence_id', sentInteraction.cadence_id);
+
+  dispatchWebhookEvent(supabase, lead.org_id, 'email.bounced', {
+    lead_id: sentInteraction.lead_id,
+    cadence_id: sentInteraction.cadence_id,
+    interaction_id: sentInteraction.id,
+    email: lead.email,
+  });
+
+  console.warn(`[reply-check] Bounce: lead=${sentInteraction.lead_id} email=${lead.email} — marked bounced + paused all enrollments`);
+
+  // 5. Notify SDR
+  if (lead.assigned_to) {
+    const leadName = lead.nome_fantasia || lead.razao_social || lead.cnpj || 'Lead';
+    try {
+      await createNotification({
+        org_id: lead.org_id,
+        user_id: lead.assigned_to,
+        type: 'lead_bounced',
+        title: `Email bounce — ${leadName}`,
+        body: `O email "${lead.email}" retornou bounce. Todos os enrollments deste lead foram pausados. Atualize o email do lead para retomar as cadências.`,
+        resource_type: 'lead',
+        resource_id: sentInteraction.lead_id,
+        metadata: { cadence_id: sentInteraction.cadence_id, email: lead.email },
+      });
+    } catch (notifErr) {
+      console.error(`[reply-check] Failed to notify bounce for lead=${sentInteraction.lead_id}:`, notifErr);
+    }
+  }
+}
+
+/** Minimum bounces required before auto-blacklisting a domain */
+const AUTO_BLACKLIST_MIN_BOUNCES = 3;
+/** Minimum bounce rate (bounces / total sent) to trigger auto-blacklist */
+const AUTO_BLACKLIST_BOUNCE_RATE = 0.5;
+
+/**
+ * After recording a bounce, check if the domain should be auto-blacklisted.
+ * Criteria: >= 3 bounces AND >= 50% bounce rate for that domain within the org.
+ */
+async function checkAndAutoBlacklistDomain(
+  supabase: SupabaseClient,
+  sentInteraction: SentInteraction,
+): Promise<void> {
+  try {
+    // Get lead's email and org
+    const { data: lead } = (await (supabase
+      .from('leads') as ReturnType<typeof supabase.from>)
+      .select('org_id, email')
+      .eq('id', sentInteraction.lead_id)
+      .single()) as { data: { org_id: string; email: string | null } | null };
+
+    if (!lead?.email) return;
+
+    const domain = lead.email.split('@')[1]?.toLowerCase();
+    if (!domain) return;
+
+    // Check if domain is already blacklisted
+    const { data: existing } = (await (supabase
+      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+      .select('id')
+      .eq('org_id', lead.org_id)
+      .eq('domain', domain)
+      .maybeSingle()) as { data: { id: string } | null };
+
+    if (existing) return; // already blacklisted
+
+    // Get all leads with this domain in this org
+    const { data: domainLeads } = (await (supabase
+      .from('leads') as ReturnType<typeof supabase.from>)
+      .select('id')
+      .eq('org_id', lead.org_id)
+      .ilike('email', `%@${domain}`)) as { data: Array<{ id: string }> | null };
+
+    if (!domainLeads?.length) return;
+
+    const leadIds = domainLeads.map((l) => l.id);
+
+    // Count total sent emails to this domain
+    const { count: totalSent } = (await (supabase
+      .from('interactions') as ReturnType<typeof supabase.from>)
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', lead.org_id)
+      .eq('channel', 'email')
+      .eq('type', 'sent')
+      .in('lead_id', leadIds)) as { count: number | null };
+
+    // Count total bounces for this domain
+    const { count: totalBounced } = (await (supabase
+      .from('interactions') as ReturnType<typeof supabase.from>)
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', lead.org_id)
+      .eq('channel', 'email')
+      .eq('type', 'bounced')
+      .in('lead_id', leadIds)) as { count: number | null };
+
+    const sent = totalSent ?? 0;
+    const bounced = totalBounced ?? 0;
+
+    if (bounced < AUTO_BLACKLIST_MIN_BOUNCES) return;
+    if (sent === 0) return;
+
+    const bounceRate = bounced / sent;
+    if (bounceRate < AUTO_BLACKLIST_BOUNCE_RATE) return;
+
+    // Auto-blacklist the domain
+    await (supabase
+      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+      .insert({
+        org_id: lead.org_id,
+        domain,
+        reason: `Auto-blacklist: ${bounced}/${sent} bounces (${Math.round(bounceRate * 100)}%)`,
+      } as Record<string, unknown>);
+
+    console.warn(`[reply-check] Auto-blacklisted domain=${domain} org=${lead.org_id} bounces=${bounced}/${sent} rate=${Math.round(bounceRate * 100)}%`);
+
+    // Notify managers about the auto-blacklist
+    try {
+      const { data: managers } = (await (supabase
+        .from('organization_members') as ReturnType<typeof supabase.from>)
+        .select('user_id')
+        .eq('org_id', lead.org_id)
+        .eq('role', 'manager')
+        .eq('status', 'active')) as { data: Array<{ user_id: string }> | null };
+
+      for (const manager of managers ?? []) {
+        await createNotification({
+          org_id: lead.org_id,
+          user_id: manager.user_id,
+          type: 'integration_error',
+          title: `Domínio bloqueado automaticamente — @${domain}`,
+          body: `O domínio @${domain} foi adicionado à blacklist automaticamente por taxa de bounce alta (${bounced}/${sent} emails, ${Math.round(bounceRate * 100)}%). Emails futuros para este domínio não serão enviados.`,
+          resource_type: 'organization',
+          resource_id: lead.org_id,
+          metadata: { domain, bounced, sent, bounce_rate: bounceRate, auto_blacklisted: true },
+        });
+      }
+    } catch (notifErr) {
+      console.error(`[reply-check] Failed to notify auto-blacklist for domain=${domain}:`, notifErr);
+    }
+  } catch (err) {
+    console.error(`[reply-check] Auto-blacklist check failed for interaction=${sentInteraction.id}:`, err);
+  }
 }

@@ -62,6 +62,9 @@ export interface CadenceStepRow {
   activity_name: string | null;
   instructions: string | null;
   reply_type: ReplyType;
+  template_id_b: string | null;
+  ab_enabled: boolean;
+  ab_distribution: number;
   created_at: string;
 }
 
