@@ -35,7 +35,7 @@ export function CadenceProgressBar({ steps, cadenceName }: CadenceProgressBarPro
   if (steps.length === 0) return null;
 
   return (
-    <div className="rounded-lg border bg-[var(--card)] p-4">
+    <div className="p-4">
       <p className="mb-3 text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
         {cadenceName}
       </p>

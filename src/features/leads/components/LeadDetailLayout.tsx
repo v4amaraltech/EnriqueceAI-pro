@@ -127,7 +127,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       />
 
       {enrollmentData.enrollments.length > 0 && (
-        <div className="space-y-2">
+        <div className="rounded-lg border bg-[var(--card)] divide-y divide-[var(--border)]">
           {enrollmentData.enrollments.map((enr) => (
             enr.steps.length > 0 && (
               <CadenceProgressBar
