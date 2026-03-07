@@ -162,7 +162,7 @@ function mapApolloToLead(
   userId: string,
   assignTo: string | null,
 ) {
-  const phone = person.phone_numbers?.[0]?.raw_number ?? null;
+  const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
   const org = person.organization;
 
   return {

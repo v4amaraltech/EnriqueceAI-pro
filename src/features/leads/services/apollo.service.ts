@@ -79,6 +79,7 @@ export interface ApolloPersonFull {
   state: string | null;
   country: string | null;
   email: string | null;
+  sanitized_phone: string | null;
   phone_numbers: ApolloPhoneNumber[] | null;
 }
 
