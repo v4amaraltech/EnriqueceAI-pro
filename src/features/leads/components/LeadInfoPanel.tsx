@@ -757,21 +757,6 @@ export function LeadInfoPanel({
                   value={LEAD_SOURCE_OPTIONS.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
                 />
               )}
-              {(enrollments && enrollments.length > 0 ? enrollments : enrollment ? [enrollment] : []).map((enr, idx) => (
-                <div key={enr.cadence_name + idx}>
-                  <MeetimeFieldRow
-                    label={idx === 0 ? (enrollments && enrollments.length > 1 ? 'Cadências' : 'Cadência') : ''}
-                    value={
-                      <Badge variant="outline" className="text-xs">
-                        {enr.cadence_name}
-                      </Badge>
-                    }
-                  />
-                  {enr.enrolled_by_email && (
-                    <MeetimeFieldRow label="" value={enr.enrolled_by_email.split('@')[0] ?? ''} />
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         )}
