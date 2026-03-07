@@ -85,11 +85,28 @@ export interface AutoEmailCadenceMetrics {
   openRate: number;
 }
 
+// A/B variant rates with computed percentages
+export interface AbVariantRates {
+  sent: number;
+  opened: number;
+  replied: number;
+  bounced: number;
+  openRate: number;
+  replyRate: number;
+  bounceRate: number;
+}
+
 // A/B test per-step metrics
 export interface StepAbMetrics {
   stepId: string;
-  variant_a: { sent: number; opened: number; replied: number; bounced: number };
-  variant_b: { sent: number; opened: number; replied: number; bounced: number };
+  stepOrder: number;
+  variant_a: AbVariantRates;
+  variant_b: AbVariantRates;
+  confidence: 'low' | 'medium' | 'high';
+  pValue: number | null;
+  canDeclareWinner: boolean;
+  winnerVariant: 'A' | 'B' | null;
+  winnerAt: string | null;
 }
 
 // Performance dashboard types
@@ -101,6 +118,7 @@ export interface StepPerformanceMetrics {
   channel: string;
   activityName: string | null;
   abEnabled: boolean;
+  abWinnerVariant: 'A' | 'B' | null;
   sent: number;
   opened: number;
   replied: number;

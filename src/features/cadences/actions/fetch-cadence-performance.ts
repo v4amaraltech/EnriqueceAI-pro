@@ -13,6 +13,7 @@ interface StepRow {
   channel: string;
   activity_name: string | null;
   ab_enabled: boolean;
+  ab_winner_variant: string | null;
 }
 
 function getPeriodStart(period: PerformancePeriod): string | null {
@@ -57,7 +58,7 @@ export async function fetchCadencePerformance(
   // Fetch steps (activity_name added via migration, cast to bypass generated types)
   const { data: steps } = (await (supabase
     .from('cadence_steps') as ReturnType<typeof supabase.from>)
-    .select('id, step_order, channel, activity_name, ab_enabled')
+    .select('id, step_order, channel, activity_name, ab_enabled, ab_winner_variant')
     .eq('cadence_id', cadenceId)
     .order('step_order')) as { data: StepRow[] | null; error: { message: string } | null };
 
@@ -148,6 +149,7 @@ export async function fetchCadencePerformance(
       channel: s.channel,
       activityName: s.activity_name,
       abEnabled: s.ab_enabled,
+      abWinnerVariant: (s.ab_winner_variant as 'A' | 'B' | null) ?? null,
       sent: counts.sent,
       opened: counts.opened,
       replied: counts.replied,

@@ -338,10 +338,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       let aiGenerated = false;
       let cadenceCreatedBy: string | null = null;
 
-      // A/B variant selection
+      // A/B variant selection (winner override takes priority)
       let selectedTemplateId = step.template_id;
       let abVariant: 'A' | 'B' | null = null;
-      if (step.ab_enabled && step.template_id_b) {
+      if (step.ab_winner_variant) {
+        abVariant = step.ab_winner_variant as 'A' | 'B';
+        selectedTemplateId = abVariant === 'A' ? step.template_id : step.template_id_b;
+      } else if (step.ab_enabled && step.template_id_b) {
         abVariant = Math.random() * 100 < step.ab_distribution ? 'A' : 'B';
         selectedTemplateId = abVariant === 'A' ? step.template_id : step.template_id_b;
       }

@@ -152,6 +152,7 @@ export async function saveAutoEmailSteps(
         template_id_b: templateBId,
         ab_enabled: step.ab_enabled ?? false,
         ab_distribution: step.ab_distribution ?? 50,
+        ab_enabled_at: step.ab_enabled ? new Date().toISOString() : null,
         delay_days: i === 0 ? 0 : step.delay_days,
         delay_hours: i === 0 ? 0 : step.delay_hours,
         ai_personalization: step.ai_personalization,

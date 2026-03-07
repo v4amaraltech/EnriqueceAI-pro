@@ -153,7 +153,7 @@ describe('CadenceBuilder', () => {
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
           template: { id: 'tmpl-1', name: 'Primeiro Contato', org_id: 'org-1', channel: 'email', subject: 'Olá', body: 'Corpo', variables_used: [], is_system: false, created_by: 'user-1', created_at: '2026-02-15T10:00:00Z', updated_at: '2026-02-15T10:00:00Z' },
-          template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
         {
           id: 'step-2',
@@ -168,7 +168,7 @@ describe('CadenceBuilder', () => {
           instructions: null,
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
-          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
       ],
     });
@@ -194,7 +194,7 @@ describe('CadenceBuilder', () => {
           instructions: null,
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
-          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
         {
           id: 'step-2',
@@ -209,7 +209,7 @@ describe('CadenceBuilder', () => {
           instructions: null,
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
-          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
       ],
     });
@@ -247,7 +247,7 @@ describe('CadenceBuilder', () => {
           instructions: null,
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
-          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
         {
           id: 'step-2',
@@ -262,7 +262,7 @@ describe('CadenceBuilder', () => {
           instructions: null,
           reply_type: 'new_conversation' as const,
           created_at: '2026-02-15T10:00:00Z',
-          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50,
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
         },
       ],
     });

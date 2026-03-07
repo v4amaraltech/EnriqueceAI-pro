@@ -1,0 +1,69 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+export async function declareAbWinner(params: {
+  stepId: string;
+  variant: 'A' | 'B';
+}): Promise<ActionResult<void>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  // Verify org membership
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single();
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Verify step belongs to org via cadence
+  const { data: step } = (await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .select('id, cadence_id, ab_winner_variant')
+    .eq('id', params.stepId)
+    .single()) as { data: { id: string; cadence_id: string; ab_winner_variant: string | null } | null };
+
+  if (!step) {
+    return { success: false, error: 'Step não encontrado' };
+  }
+
+  // Idempotent: already declared
+  if (step.ab_winner_variant) {
+    return { success: true, data: undefined };
+  }
+
+  // Verify cadence belongs to org
+  const { data: cadence } = await supabase
+    .from('cadences')
+    .select('id')
+    .eq('id', step.cadence_id)
+    .eq('org_id', member.org_id)
+    .single();
+
+  if (!cadence) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  // Declare winner: set variant, timestamp, and 100% distribution
+  const { error } = await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .update({
+      ab_winner_variant: params.variant,
+      ab_winner_at: new Date().toISOString(),
+      ab_distribution: params.variant === 'A' ? 100 : 0,
+    } as Record<string, unknown>)
+    .eq('id', params.stepId);
+
+  if (error) {
+    return { success: false, error: 'Erro ao declarar vencedor' };
+  }
+
+  return { success: true, data: undefined };
+}

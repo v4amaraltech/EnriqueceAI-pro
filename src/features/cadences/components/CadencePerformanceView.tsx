@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Mail, MessageSquare, Send, TrendingDown, Users } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
 } from '@/shared/constants/chart-colors';
 
 import type { CadencePerformanceData, PerformancePeriod } from '../cadences.contract';
+import { AbTestDashboard } from './AbTestDashboard';
 import { StepPerformanceTable } from './StepPerformanceTable';
 import { StepRatesBarChart } from './StepRatesBarChart';
 
@@ -48,6 +49,11 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
   );
 
   const { summary, enrollments, steps } = data;
+
+  const abStepIds = useMemo(
+    () => steps.filter((s) => s.abEnabled).map((s) => s.stepId),
+    [steps],
+  );
 
   // Donut data
   const donutData = (['active', 'paused', 'completed', 'replied', 'bounced', 'unsubscribed'] as const)
@@ -105,6 +111,18 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
           <StepRatesBarChart steps={steps} />
         </CardContent>
       </Card>
+
+      {/* A/B Test Dashboard */}
+      {abStepIds.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Testes A/B</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AbTestDashboard stepIds={abStepIds} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Enrollments donut + Step table */}
       <div className="grid gap-4 lg:grid-cols-3">

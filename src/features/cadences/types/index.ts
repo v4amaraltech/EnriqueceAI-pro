@@ -65,6 +65,9 @@ export interface CadenceStepRow {
   template_id_b: string | null;
   ab_enabled: boolean;
   ab_distribution: number;
+  ab_winner_variant: 'A' | 'B' | null;
+  ab_winner_at: string | null;
+  ab_enabled_at: string | null;
   created_at: string;
 }
 

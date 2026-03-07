@@ -54,6 +54,11 @@ export function StepPerformanceTable({ steps }: StepPerformanceTableProps) {
                     A/B
                   </Badge>
                 )}
+                {s.abWinnerVariant && (
+                  <Badge className="ml-1 bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    Vencedor: {s.abWinnerVariant}
+                  </Badge>
+                )}
               </td>
               <td className="py-2 pr-3 text-right">{s.sent}</td>
               <td className="py-2 pr-3 text-right">{s.opened}</td>
