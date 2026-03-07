@@ -48,10 +48,9 @@ function toggleInArray(arr: string[], value: string): string[] {
 export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps) {
   // Text inputs
   const [titles, setTitles] = useState('');
-  const [personLocations, setPersonLocations] = useState('');
+  const [locations, setLocations] = useState('');
   const [keywords, setKeywords] = useState('');
   const [domains, setDomains] = useState('');
-  const [orgLocations, setOrgLocations] = useState('');
 
   // Multi-select arrays
   const [emailStatuses, setEmailStatuses] = useState<string[]>([]);
@@ -67,10 +66,13 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     };
 
     if (titles) params.personTitles = splitCommaSeparated(titles);
-    if (personLocations) params.personLocations = splitCommaSeparated(personLocations);
+    if (locations) {
+      const locs = splitCommaSeparated(locations);
+      params.personLocations = locs;
+      params.organizationLocations = locs;
+    }
     if (keywords) params.organizationKeywords = splitCommaSeparated(keywords);
     if (domains) params.organizationDomains = splitCommaSeparated(domains);
-    if (orgLocations) params.organizationLocations = splitCommaSeparated(orgLocations);
     if (emailStatuses.length) params.contactEmailStatus = emailStatuses;
     if (employeeRanges.length) params.employeeRanges = employeeRanges;
     params.includeSimilarTitles = includeSimilarTitles;
@@ -80,10 +82,9 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
 
   function handleClear() {
     setTitles('');
-    setPersonLocations('');
+    setLocations('');
     setKeywords('');
     setDomains('');
-    setOrgLocations('');
     setEmailStatuses([]);
     setEmployeeRanges([]);
     setIncludeSimilarTitles(true);
@@ -124,13 +125,14 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="apollo-person-loc">Localizacao da pessoa</Label>
+          <Label htmlFor="apollo-loc">Localização</Label>
           <Input
-            id="apollo-person-loc"
+            id="apollo-loc"
             placeholder="Sao Paulo, Brasil"
-            value={personLocations}
-            onChange={(e) => setPersonLocations(e.target.value)}
+            value={locations}
+            onChange={(e) => setLocations(e.target.value)}
           />
+          <p className="text-xs text-[var(--muted-foreground)]">Cidade, estado ou pais. Separe com virgula</p>
         </div>
 
         <div className="space-y-2">
@@ -185,16 +187,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             onChange={(e) => setDomains(e.target.value)}
           />
           <p className="text-xs text-[var(--muted-foreground)]">Busca em empresas especificas</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="apollo-org-loc">Localizacao da empresa</Label>
-          <Input
-            id="apollo-org-loc"
-            placeholder="Sao Paulo, Rio de Janeiro"
-            value={orgLocations}
-            onChange={(e) => setOrgLocations(e.target.value)}
-          />
         </div>
 
         <div className="space-y-2">
