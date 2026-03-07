@@ -44,9 +44,6 @@ export interface ApolloSearchPerson {
   has_city: boolean;
   has_state: boolean;
   has_country: boolean;
-  city: string | null;
-  state: string | null;
-  country: string | null;
   seniority?: string | null;
   has_direct_phone: string | null;
   organization: ApolloSearchOrganization | null;
@@ -133,16 +130,6 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
     people: ApolloSearchPerson[];
     total_entries: number;
   }>(apiKey, '/mixed_people/api_search', body);
-
-  // Debug: log first person to check available fields
-  if (data.people?.length) {
-    console.log('[apollo-search] sample person keys:', JSON.stringify(Object.keys(data.people[0])));
-    console.log('[apollo-search] sample person location:', JSON.stringify({
-      city: (data.people[0] as Record<string, unknown>).city,
-      state: (data.people[0] as Record<string, unknown>).state,
-      country: (data.people[0] as Record<string, unknown>).country,
-    }));
-  }
 
   return {
     people: data.people ?? [],

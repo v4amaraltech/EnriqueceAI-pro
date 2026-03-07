@@ -63,15 +63,12 @@ export function ApolloResultsTable({
               <TableHead>Nome</TableHead>
               <TableHead>Cargo</TableHead>
               <TableHead>Empresa</TableHead>
-              <TableHead>Localização</TableHead>
               <TableHead>Dados</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {people.map((person) => {
               const displayName = `${person.first_name ?? ''} ${person.last_name_obfuscated ?? ''}`.trim() || '\u2014';
-              const locationParts = [person.city, person.state, person.country].filter(Boolean);
-              const location = locationParts.length > 0 ? locationParts.join(', ') : null;
 
               return (
                 <TableRow key={person.id}>
@@ -87,9 +84,6 @@ export function ApolloResultsTable({
                     {person.title ?? '\u2014'}
                   </TableCell>
                   <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
-                  <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
-                    {location ?? '\u2014'}
-                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       {person.has_email && (
