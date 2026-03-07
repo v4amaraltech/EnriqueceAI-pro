@@ -15,6 +15,12 @@ const searchSchema = z.object({
   organizationKeywords: z.array(z.string()).optional(),
   organizationDomains: z.array(z.string()).optional(),
   employeeRanges: z.array(z.string()).optional(),
+  personSeniorities: z.array(z.string()).optional(),
+  contactEmailStatus: z.array(z.string()).optional(),
+  technologyUids: z.array(z.string()).optional(),
+  revenueRange: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
+  includeSimilarTitles: z.boolean().optional(),
+  qKeywords: z.string().optional(),
   page: z.number().int().positive().default(1),
   perPage: z.number().int().positive().max(100).default(25),
 });
@@ -50,7 +56,12 @@ export async function searchApollo(input: SearchApolloInput): Promise<ActionResu
     (params.organizationLocations?.length ?? 0) > 0 ||
     (params.organizationKeywords?.length ?? 0) > 0 ||
     (params.organizationDomains?.length ?? 0) > 0 ||
-    (params.employeeRanges?.length ?? 0) > 0;
+    (params.employeeRanges?.length ?? 0) > 0 ||
+    (params.personSeniorities?.length ?? 0) > 0 ||
+    (params.contactEmailStatus?.length ?? 0) > 0 ||
+    (params.technologyUids?.length ?? 0) > 0 ||
+    !!params.revenueRange ||
+    !!params.qKeywords;
 
   if (!hasFilter) {
     return { success: false, error: 'Preencha pelo menos um filtro de busca' };

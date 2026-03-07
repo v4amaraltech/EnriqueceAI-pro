@@ -42,7 +42,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if (!result.success) {
     return (
-      <div>
+      <div className="mx-auto max-w-7xl">
         <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
         <EmptyState
           icon={AlertTriangle}
@@ -54,7 +54,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-7xl">
       <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
       <DashboardView
         data={result.data}

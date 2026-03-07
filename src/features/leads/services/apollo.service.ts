@@ -14,6 +14,12 @@ export interface ApolloSearchParams {
   organizationKeywords?: string[];
   organizationDomains?: string[];
   employeeRanges?: string[];
+  personSeniorities?: string[];
+  contactEmailStatus?: string[];
+  technologyUids?: string[];
+  revenueRange?: { min?: number; max?: number };
+  includeSimilarTitles?: boolean;
+  qKeywords?: string;
   page?: number;
   perPage?: number;
 }
@@ -38,6 +44,7 @@ export interface ApolloSearchPerson {
   has_city: boolean;
   has_state: boolean;
   has_country: boolean;
+  seniority?: string | null;
   has_direct_phone: string | null;
   organization: ApolloSearchOrganization | null;
 }
@@ -112,6 +119,12 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
   if (params.organizationKeywords?.length) body.q_organization_keyword_tags = params.organizationKeywords;
   if (params.organizationDomains?.length) body.q_organization_domains_list = params.organizationDomains;
   if (params.employeeRanges?.length) body.organization_num_employees_ranges = params.employeeRanges;
+  if (params.personSeniorities?.length) body.person_seniorities = params.personSeniorities;
+  if (params.contactEmailStatus?.length) body.contact_email_status = params.contactEmailStatus;
+  if (params.technologyUids?.length) body.currently_using_any_of_technology_uids = params.technologyUids;
+  if (params.revenueRange) body.revenue_range = params.revenueRange;
+  if (params.includeSimilarTitles !== undefined) body.include_similar_titles = params.includeSimilarTitles;
+  if (params.qKeywords) body.q_keywords = params.qKeywords;
 
   const data = await apolloFetch<{
     people: ApolloSearchPerson[];

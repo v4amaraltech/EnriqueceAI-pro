@@ -1,7 +1,5 @@
 'use client';
 
-import { Mail, Phone } from 'lucide-react';
-
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -15,6 +13,19 @@ import {
 } from '@/shared/components/ui/table';
 
 import type { ApolloSearchPerson } from '../services/apollo.service';
+
+const SENIORITY_LABELS: Record<string, string> = {
+  entry: 'Junior',
+  senior: 'Senior',
+  manager: 'Gerente',
+  director: 'Diretor',
+  vp: 'VP',
+  c_suite: 'C-Level',
+  founder: 'Fundador',
+  owner: 'Proprietario',
+  partner: 'Socio',
+  intern: 'Estagiario',
+};
 
 interface ApolloResultsTableProps {
   people: ApolloSearchPerson[];
@@ -41,14 +52,16 @@ export function ApolloResultsTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Badge variant="secondary">{total.toLocaleString('pt-BR')} resultados encontrados</Badge>
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-[var(--muted-foreground)]">
+          Mostrando {people.length.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
+        </span>
         {selectedIds.size > 0 && (
           <Badge variant="default">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</Badge>
         )}
       </div>
 
-      <div className="rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -61,13 +74,16 @@ export function ApolloResultsTable({
               </TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Cargo</TableHead>
+              <TableHead>Senioridade</TableHead>
               <TableHead>Empresa</TableHead>
-              <TableHead className="w-20 text-center">Dados</TableHead>
+              <TableHead>Dados</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {people.map((person) => {
-              const displayName = `${person.first_name ?? ''} ${person.last_name_obfuscated ?? ''}`.trim() || '—';
+              const displayName = `${person.first_name ?? ''} ${person.last_name_obfuscated ?? ''}`.trim() || '\u2014';
+              const seniorityLabel = person.seniority ? (SENIORITY_LABELS[person.seniority] ?? person.seniority) : null;
+
               return (
                 <TableRow key={person.id}>
                   <TableCell>
@@ -79,16 +95,23 @@ export function ApolloResultsTable({
                   </TableCell>
                   <TableCell className="font-medium">{displayName}</TableCell>
                   <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
-                    {person.title ?? '—'}
+                    {person.title ?? '\u2014'}
                   </TableCell>
-                  <TableCell className="text-sm">{person.organization?.name ?? '—'}</TableCell>
+                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                    {seniorityLabel ?? '\u2014'}
+                  </TableCell>
+                  <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       {person.has_email && (
-                        <Mail className="h-3.5 w-3.5 text-green-500" />
+                        <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
+                          Email
+                        </Badge>
                       )}
                       {person.has_direct_phone === 'Yes' && (
-                        <Phone className="h-3.5 w-3.5 text-blue-500" />
+                        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400">
+                          Tel
+                        </Badge>
                       )}
                     </div>
                   </TableCell>
