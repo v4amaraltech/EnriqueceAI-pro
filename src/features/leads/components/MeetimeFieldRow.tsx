@@ -9,7 +9,7 @@ interface MeetimeFieldRowProps {
 
 export function MeetimeFieldRow({ label, value, href, mono }: MeetimeFieldRowProps) {
   const content = href ? (
-    <a href={href} className="text-[var(--primary)] hover:underline truncate">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--primary)] hover:underline truncate">
       {value}
     </a>
   ) : (

@@ -18,10 +18,12 @@ import {
   MousePointerClick,
   Pencil,
   Phone,
+  Plus,
   Reply,
   Save,
   Search,
   Send,
+  Trash2,
   User,
   Video,
   X,
@@ -50,6 +52,7 @@ import {
 import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
 import {
   Tooltip,
@@ -191,31 +194,87 @@ export function LeadInfoPanel({
     last_name: data.last_name ?? (primarySocio?.nome?.split(' ').slice(1).join(' ') ?? ''),
     nome_fantasia: data.nome_fantasia ?? '',
     email: primaryEmail,
-    telefone: data.telefone ?? '',
     job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
+    lead_source: data.lead_source ?? '',
     instagram: data.instagram ?? '',
     linkedin: data.linkedin ?? '',
     website: data.website ?? '',
   });
 
+  // Build initial phone entries from telefone + phones
+  const buildInitialPhones = useCallback((): LeadPhone[] => {
+    const entries: LeadPhone[] = [];
+    const seen = new Set<string>();
+
+    if (data.telefone) {
+      const key = data.telefone.replace(/\D/g, '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        const digits = key.length > 2 ? key.slice(2) : key;
+        const isCelular = digits.length >= 9 && digits.startsWith('9');
+        entries.push({ tipo: isCelular ? 'celular' : 'fixo', numero: data.telefone });
+      }
+    }
+
+    for (const p of data.phones ?? []) {
+      const key = p.numero.replace(/\D/g, '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        entries.push({ tipo: p.tipo, numero: p.numero });
+      }
+    }
+
+    if (entries.length === 0) {
+      entries.push({ tipo: 'celular', numero: '' });
+    }
+
+    return entries;
+  }, [data.telefone, data.phones]);
+
+  const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
+
+  const handleAddPhone = useCallback(() => {
+    setPhoneEntries((prev) => [...prev, { tipo: 'celular', numero: '' }]);
+  }, []);
+
+  const handleRemovePhone = useCallback((index: number) => {
+    setPhoneEntries((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handlePhoneChange = useCallback((index: number, field: 'tipo' | 'numero', value: string) => {
+    setPhoneEntries((prev) =>
+      prev.map((entry, i) =>
+        i === index ? { ...entry, [field]: value } : entry,
+      ),
+    );
+  }, []);
+
   const handleSave = useCallback(() => {
     startTransition(async () => {
       const { email: editEmail, ...leadFields } = editFields;
 
+      // Filter out empty phone entries
+      const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
+      const primaryPhone = validPhones[0]?.numero ?? '';
+      const extraPhones = validPhones.slice(1);
+
       const result = await updateLead(data.id, {
         ...leadFields,
         email: editEmail,
+        telefone: primaryPhone,
+        phones: extraPhones.length > 0 ? extraPhones : [],
       });
       if (result.success) {
-        // Update local data so display reflects saved values immediately
         setData((prev) => ({
           ...prev,
           first_name: editFields.first_name || null,
           last_name: editFields.last_name || null,
           nome_fantasia: editFields.nome_fantasia || null,
           email: editEmail || null,
-          telefone: editFields.telefone || null,
+          telefone: primaryPhone || null,
+          phones: extraPhones.length > 0 ? extraPhones : [],
           job_title: editFields.job_title || null,
+          lead_source: editFields.lead_source || null,
           instagram: editFields.instagram || null,
           linkedin: editFields.linkedin || null,
           website: editFields.website || null,
@@ -227,7 +286,7 @@ export function LeadInfoPanel({
         toast.error(result.error);
       }
     });
-  }, [data.id, editFields, router]);
+  }, [data.id, editFields, phoneEntries, router]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({
@@ -235,14 +294,15 @@ export function LeadInfoPanel({
       last_name: data.last_name ?? (primarySocio?.nome?.split(' ').slice(1).join(' ') ?? ''),
       nome_fantasia: data.nome_fantasia ?? '',
       email: primaryEmail,
-      telefone: data.telefone ?? '',
       job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
+      lead_source: data.lead_source ?? '',
       instagram: data.instagram ?? '',
       linkedin: data.linkedin ?? '',
       website: data.website ?? '',
     });
+    setPhoneEntries(buildInitialPhones());
     setIsEditing(false);
-  }, [data, primarySocio, primaryEmail]);
+  }, [data, primarySocio, primaryEmail, buildInitialPhones]);
 
   const contactFullName = data.first_name ? `${data.first_name} ${data.last_name ?? ''}`.trim() : null;
   const fullName = contactFullName ?? primarySocio?.nome ?? data.razao_social ?? null;
@@ -289,6 +349,21 @@ export function LeadInfoPanel({
         numero: data.telefone,
         href: `tel:${data.telefone}`,
         whatsapp: false,
+      });
+      seenPhones.add(key);
+    }
+  }
+
+  // Extra phones from phones JSONB
+  for (const phone of data.phones ?? []) {
+    const key = normalizePhone(phone.numero);
+    if (!seenPhones.has(key)) {
+      seenPhones.add(key);
+      allPhones.push({
+        tipo: phone.tipo === 'celular' ? 'Celular' : phone.tipo === 'whatsapp' ? 'WhatsApp' : 'Fixo',
+        numero: phone.numero,
+        href: `tel:${phone.numero}`,
+        whatsapp: phone.tipo === 'whatsapp',
       });
     }
   }
@@ -526,14 +601,56 @@ export function LeadInfoPanel({
                 Telefone(s)
               </h4>
               {isEditing ? (
-                <div className="space-y-1">
-                  <p className="text-xs text-[var(--muted-foreground)]">Telefone</p>
-                  <Input
-                    value={editFields.telefone}
-                    onChange={(e) => setEditFields({ ...editFields, telefone: e.target.value })}
-                    className="h-8 text-sm"
-                    placeholder="(11) 3000-0000"
-                  />
+                <div className="space-y-2">
+                  {phoneEntries.map((entry, index) => (
+                    <div key={`phone-edit-${index}`} className="flex items-end gap-1.5">
+                      <div className="w-[100px] shrink-0 space-y-1">
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)]">Tipo</p>}
+                        <Select
+                          value={entry.tipo}
+                          onValueChange={(val) => handlePhoneChange(index, 'tipo', val)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="celular">Celular</SelectItem>
+                            <SelectItem value="fixo">Fixo</SelectItem>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)]">Número</p>}
+                        <Input
+                          value={entry.numero}
+                          onChange={(e) => handlePhoneChange(index, 'numero', e.target.value)}
+                          className="h-8 text-sm"
+                          placeholder="(11) 99000-0000"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] hover:text-red-500"
+                        onClick={() => handleRemovePhone(index)}
+                        disabled={phoneEntries.length <= 1}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 h-7 text-xs text-[var(--primary)]"
+                    onClick={handleAddPhone}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Adicionar telefone
+                  </Button>
                 </div>
               ) : allPhones.length === 0 ? (
                 <p className="text-xs text-[var(--muted-foreground)]">Nenhum telefone informado.</p>
@@ -612,37 +729,34 @@ export function LeadInfoPanel({
               <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 Status
               </h4>
-              <div className="space-y-1">
-                <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
-                <Select
-                  value={data.lead_source ?? 'none'}
-                  onValueChange={(value) => {
-                    const newSource = value === 'none' ? null : value;
-                    setData((prev) => ({ ...prev, lead_source: newSource }));
-                    startTransition(async () => {
-                      const result = await updateLead(data.id, { lead_source: newSource ?? '' });
-                      if (result.success) {
-                        toast.success('Origem atualizada');
-                        router.refresh();
-                      } else {
-                        toast.error(result.error);
-                      }
-                    });
-                  }}
-                >
-                  <SelectTrigger className="w-full text-sm">
-                    <SelectValue placeholder="Selecione a origem" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {LEAD_SOURCE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isEditing ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                  <Select
+                    value={editFields.lead_source ?? 'none'}
+                    onValueChange={(value) => {
+                      setEditFields((prev) => ({ ...prev, lead_source: value === 'none' ? '' : value }));
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm">
+                      <SelectValue placeholder="Selecione a origem" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {LEAD_SOURCE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <MeetimeFieldRow
+                  label="Origem"
+                  value={LEAD_SOURCE_OPTIONS.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
+                />
+              )}
               {(enrollments && enrollments.length > 0 ? enrollments : enrollment ? [enrollment] : []).map((enr, idx) => (
                 <div key={enr.cadence_name + idx}>
                   <MeetimeFieldRow

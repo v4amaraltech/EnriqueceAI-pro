@@ -4,6 +4,12 @@ export type EnrichmentStatus = 'pending' | 'enriching' | 'enriched' | 'enrichmen
 export type ImportStatus = 'processing' | 'completed' | 'failed';
 export type EnrichmentProvider = 'cnpj_ws' | 'lemit';
 
+// Phone entry stored in phones JSONB array
+export interface LeadPhone {
+  tipo: 'celular' | 'fixo' | 'whatsapp';
+  numero: string;
+}
+
 // Lead address (stored as JSONB)
 export interface LeadAddress {
   logradouro?: string;
@@ -50,6 +56,7 @@ export interface LeadRow {
   situacao_cadastral: string | null;
   email: string | null;
   telefone: string | null;
+  phones: LeadPhone[] | null;
   socios: LeadSocio[] | null;
   faturamento_estimado: number | null;
   notes: string | null;
@@ -129,6 +136,7 @@ export interface LeadInsert {
   situacao_cadastral?: string | null;
   email?: string | null;
   telefone?: string | null;
+  phones?: LeadPhone[] | null;
   socios?: LeadSocio[] | null;
   faturamento_estimado?: number | null;
   instagram?: string | null;

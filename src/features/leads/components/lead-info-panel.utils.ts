@@ -1,6 +1,6 @@
 import type { ActivityLead } from '@/features/activities/types';
 
-import type { LeadRow, LeadAddress, LeadSocio, LeadStatus, EnrichmentStatus } from '../types';
+import type { LeadRow, LeadAddress, LeadPhone, LeadSocio, LeadStatus, EnrichmentStatus } from '../types';
 
 export interface LeadInfoPanelData {
   id: string;
@@ -13,6 +13,7 @@ export interface LeadInfoPanelData {
   lead_source: string | null;
   email: string | null;
   telefone: string | null;
+  phones: LeadPhone[] | null;
   porte: string | null;
   cnae: string | null;
   situacao_cadastral: string | null;
@@ -40,6 +41,7 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     lead_source: lead.lead_source,
     email: lead.email,
     telefone: lead.telefone,
+    phones: lead.phones,
     porte: lead.porte,
     cnae: lead.cnae,
     situacao_cadastral: lead.situacao_cadastral,
@@ -68,6 +70,7 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     lead_source: (lead as ActivityLead & { lead_source?: string | null }).lead_source ?? null,
     email: lead.email,
     telefone: lead.telefone,
+    phones: (lead as ActivityLead & { phones?: LeadPhone[] | null }).phones ?? null,
     porte: lead.porte,
     cnae: null,
     situacao_cadastral: null,
