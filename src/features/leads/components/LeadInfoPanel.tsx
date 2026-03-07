@@ -201,11 +201,21 @@ export function LeadInfoPanel({
     website: data.website ?? '',
   });
 
-  // Build initial phone entries from telefone + phones
+  // Build initial phone entries from phones JSONB (preferred) + telefone fallback
   const buildInitialPhones = useCallback((): LeadPhone[] => {
     const entries: LeadPhone[] = [];
     const seen = new Set<string>();
 
+    // phones JSONB has explicit type — preferred source
+    for (const p of data.phones ?? []) {
+      const key = p.numero.replace(/\D/g, '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        entries.push({ tipo: p.tipo, numero: p.numero });
+      }
+    }
+
+    // telefone TEXT fallback (only if not already in phones)
     if (data.telefone) {
       const key = data.telefone.replace(/\D/g, '');
       if (!seen.has(key)) {
@@ -213,14 +223,6 @@ export function LeadInfoPanel({
         const digits = key.length > 2 ? key.slice(2) : key;
         const isCelular = digits.length >= 9 && digits.startsWith('9');
         entries.push({ tipo: isCelular ? 'celular' : 'fixo', numero: data.telefone });
-      }
-    }
-
-    for (const p of data.phones ?? []) {
-      const key = p.numero.replace(/\D/g, '');
-      if (!seen.has(key)) {
-        seen.add(key);
-        entries.push({ tipo: p.tipo, numero: p.numero });
       }
     }
 
@@ -256,13 +258,12 @@ export function LeadInfoPanel({
       // Filter out empty phone entries
       const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
-      const extraPhones = validPhones.slice(1);
 
       const result = await updateLead(data.id, {
         ...leadFields,
         email: editEmail,
         telefone: primaryPhone,
-        phones: extraPhones.length > 0 ? extraPhones : [],
+        phones: validPhones,
       });
       if (result.success) {
         setData((prev) => ({
@@ -272,7 +273,7 @@ export function LeadInfoPanel({
           nome_fantasia: editFields.nome_fantasia || null,
           email: editEmail || null,
           telefone: primaryPhone || null,
-          phones: extraPhones.length > 0 ? extraPhones : [],
+          phones: validPhones,
           job_title: editFields.job_title || null,
           lead_source: editFields.lead_source || null,
           instagram: editFields.instagram || null,
@@ -337,24 +338,7 @@ export function LeadInfoPanel({
     }
   }
 
-  // Company-level phone (only add if not already seen)
-  if (data.telefone) {
-    const key = normalizePhone(data.telefone);
-    if (!seenPhones.has(key)) {
-      // Detect type: 9-digit local number = celular, else fixo
-      const digits = key.length > 2 ? key.slice(2) : key;
-      const isCelular = digits.length >= 9 && digits.startsWith('9');
-      allPhones.push({
-        tipo: isCelular ? 'Celular' : 'Fixo',
-        numero: data.telefone,
-        href: `tel:${data.telefone}`,
-        whatsapp: false,
-      });
-      seenPhones.add(key);
-    }
-  }
-
-  // Extra phones from phones JSONB
+  // Phones from phones JSONB (has explicit type — preferred source)
   for (const phone of data.phones ?? []) {
     const key = normalizePhone(phone.numero);
     if (!seenPhones.has(key)) {
@@ -365,6 +349,22 @@ export function LeadInfoPanel({
         href: `tel:${phone.numero}`,
         whatsapp: phone.tipo === 'whatsapp',
       });
+    }
+  }
+
+  // Company-level phone fallback (only if not already in phones JSONB)
+  if (data.telefone) {
+    const key = normalizePhone(data.telefone);
+    if (!seenPhones.has(key)) {
+      const digits = key.length > 2 ? key.slice(2) : key;
+      const isCelular = digits.length >= 9 && digits.startsWith('9');
+      allPhones.push({
+        tipo: isCelular ? 'Celular' : 'Fixo',
+        numero: data.telefone,
+        href: `tel:${data.telefone}`,
+        whatsapp: false,
+      });
+      seenPhones.add(key);
     }
   }
 

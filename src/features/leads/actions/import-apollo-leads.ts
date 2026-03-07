@@ -165,16 +165,16 @@ function mapApolloToLead(
   const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
   const org = person.organization;
 
-  // Extra phones (index 1+) → phones JSONB
-  const extraPhones: Array<{ tipo: string; numero: string }> = [];
-  if (person.phone_numbers && person.phone_numbers.length > 1) {
-    for (let i = 1; i < person.phone_numbers.length; i++) {
-      const pn = person.phone_numbers[i];
-      if (pn) {
-        const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
-        extraPhones.push({ tipo, numero: pn.raw_number });
-      }
+  // All phones with explicit type → phones JSONB
+  const allPhones: Array<{ tipo: string; numero: string }> = [];
+  if (person.phone_numbers && person.phone_numbers.length > 0) {
+    for (const pn of person.phone_numbers) {
+      const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
+      allPhones.push({ tipo, numero: pn.raw_number });
     }
+  } else if (phone) {
+    // Only sanitized_phone available — default to celular
+    allPhones.push({ tipo: 'celular', numero: phone });
   }
 
   return {
@@ -191,7 +191,7 @@ function mapApolloToLead(
     is_inbound: false,
     email: person.email ?? null,
     telefone: phone,
-    phones: extraPhones.length > 0 ? extraPhones : [],
+    phones: allPhones,
     linkedin: person.linkedin_url ?? null,
     website: org?.website_url ?? null,
     porte: org?.estimated_num_employees
