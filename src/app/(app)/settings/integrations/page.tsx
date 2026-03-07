@@ -29,6 +29,7 @@ export default async function IntegrationsPage() {
       calendar={result.data.calendar}
       api4com={result.data.api4com}
       evolutionInstance={result.data.evolutionInstance}
+      apollo={result.data.apollo}
       planFeatures={planFeatures}
     />
   );

@@ -69,6 +69,7 @@ import type { LeadInfoPanelData } from './lead-info-panel.utils';
 export interface LeadInfoPanelProps {
   data: LeadInfoPanelData;
   enrollment?: { cadence_name: string; enrolled_by_email: string | null } | null;
+  enrollments?: Array<{ cadence_name: string; enrolled_by_email: string | null }>;
   timeline?: TimelineEntry[];
   showLeadHeader?: boolean;
   cadenceConfig?: { cadenceName: string; stepOrder: number; totalSteps: number };
@@ -142,6 +143,7 @@ const channelColor: Record<string, string> = {
 export function LeadInfoPanel({
   data: initialData,
   enrollment,
+  enrollments,
   timeline,
   showLeadHeader = false,
   cadenceConfig,
@@ -641,19 +643,21 @@ export function LeadInfoPanel({
                   </SelectContent>
                 </Select>
               </div>
-              {enrollment && (
-                <MeetimeFieldRow
-                  label="Cadência"
-                  value={
-                    <Badge variant="outline" className="text-xs">
-                      {enrollment.cadence_name}
-                    </Badge>
-                  }
-                />
-              )}
-              {enrollment?.enrolled_by_email && (
-                <MeetimeFieldRow label="Responsável" value={enrollment.enrolled_by_email.split('@')[0] ?? ''} />
-              )}
+              {(enrollments && enrollments.length > 0 ? enrollments : enrollment ? [enrollment] : []).map((enr, idx) => (
+                <div key={enr.cadence_name + idx}>
+                  <MeetimeFieldRow
+                    label={idx === 0 ? (enrollments && enrollments.length > 1 ? 'Cadências' : 'Cadência') : ''}
+                    value={
+                      <Badge variant="outline" className="text-xs">
+                        {enr.cadence_name}
+                      </Badge>
+                    }
+                  />
+                  {enr.enrolled_by_email && (
+                    <MeetimeFieldRow label="" value={enr.enrolled_by_email.split('@')[0] ?? ''} />
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

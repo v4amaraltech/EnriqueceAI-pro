@@ -92,6 +92,14 @@ export interface Api4ComConnectionSafe {
   updated_at: string;
 }
 
+// Apollo connection (per org)
+export interface ApolloConnectionSafe {
+  id: string;
+  status: ConnectionStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 // WhatsApp Evolution instance (from whatsapp_instances table)
 export interface WhatsAppEvolutionInstanceSafe {
   id: string;

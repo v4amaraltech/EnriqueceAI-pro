@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getEnv } from '@/config/env';
 
 import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
+import { getApolloApiKey } from '../services/apollo-key.service';
 
 export interface ImportApolloResult {
   imported: number;
@@ -28,10 +29,10 @@ export async function importApolloLeads(
 ): Promise<ActionResult<ImportApolloResult>> {
   const { userId, orgId, role } = await requireAuthWithMember();
 
-  const env = getEnv();
-  const apiKey = env.APOLLO_API_KEY;
+  // Try org-level key first, fall back to env var
+  const apiKey = await getApolloApiKey(orgId) ?? getEnv().APOLLO_API_KEY;
   if (!apiKey) {
-    return { success: false, error: 'Apollo API Key não configurada' };
+    return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
   }
 
   if (people.length === 0) {

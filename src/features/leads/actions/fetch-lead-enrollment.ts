@@ -12,15 +12,22 @@ export interface EnrollmentStepInfo {
   status: 'completed' | 'current' | 'future';
 }
 
-export interface LeadEnrollmentData {
-  enrollment: {
-    cadence_name: string;
-    status: string;
-    current_step: number;
-    total_steps: number;
-    enrolled_by_email: string | null;
-  } | null;
+export interface EnrollmentInfo {
+  cadence_name: string;
+  status: string;
+  current_step: number;
+  total_steps: number;
+  enrolled_by_email: string | null;
   steps: EnrollmentStepInfo[];
+}
+
+export interface LeadEnrollmentData {
+  /** First active enrollment (backward compat) */
+  enrollment: Omit<EnrollmentInfo, 'steps'> | null;
+  /** Steps of the first enrollment (backward compat) */
+  steps: EnrollmentStepInfo[];
+  /** All active/paused enrollments */
+  enrollments: EnrollmentInfo[];
   kpis: {
     completed: number;
     open: number;
@@ -34,8 +41,8 @@ export async function fetchLeadEnrollment(
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  // Get active enrollment with cadence info
-  const { data: enrollment } = await supabase
+  // Get all active/paused enrollments with cadence info
+  const { data: enrollmentRows } = await supabase
     .from('cadence_enrollments')
     .select(`
       id,
@@ -46,51 +53,58 @@ export async function fetchLeadEnrollment(
       cadences!inner ( name, total_steps )
     `)
     .eq('lead_id', leadId)
-    .in('status', ['active', 'paused'])
-    .limit(1)
-    .maybeSingle();
+    .in('status', ['active', 'paused']);
 
-  let enrollmentData: LeadEnrollmentData['enrollment'] = null;
-  let steps: EnrollmentStepInfo[] = [];
+  type EnrollmentRow = {
+    id: string;
+    cadence_id: string;
+    status: string;
+    current_step: number;
+    enrolled_by: string | null;
+    cadences: { name: string; total_steps: number };
+  };
 
-  if (enrollment) {
-    const row = enrollment as unknown as {
-      id: string;
-      cadence_id: string;
-      status: string;
-      current_step: number;
-      enrolled_by: string | null;
-      cadences: { name: string; total_steps: number };
-    };
+  const rows = (enrollmentRows ?? []) as unknown as EnrollmentRow[];
 
-    // Resolve enrolled_by to email
-    let enrolledByEmail: string | null = null;
-    if (row.enrolled_by) {
-      const { data: member } = await supabase
-        .from('organization_members')
-        .select('user_email')
-        .eq('user_id', row.enrolled_by)
-        .maybeSingle();
-      enrolledByEmail = (member as { user_email: string | null } | null)?.user_email ?? null;
+  // Collect unique enrolled_by user IDs
+  const enrolledByIds = [...new Set(rows.map((r) => r.enrolled_by).filter(Boolean))] as string[];
+  const emailMap = new Map<string, string>();
+  if (enrolledByIds.length > 0) {
+    const { data: members } = (await (supabase
+      .from('organization_members') as ReturnType<typeof supabase.from>)
+      .select('user_id, user_email')
+      .in('user_id', enrolledByIds)) as { data: Array<{ user_id: string; user_email: string | null }> | null };
+    for (const m of members ?? []) {
+      if (m.user_email) emailMap.set(m.user_id, m.user_email);
     }
+  }
 
-    enrollmentData = {
+  // Fetch steps for all cadences in parallel
+  const cadenceIds = [...new Set(rows.map((r) => r.cadence_id))];
+  const stepsMap = new Map<string, Array<{ step_order: number; channel: string }>>();
+  if (cadenceIds.length > 0) {
+    const { data: allSteps } = await supabase
+      .from('cadence_steps')
+      .select('cadence_id, step_order, channel')
+      .in('cadence_id', cadenceIds)
+      .order('step_order', { ascending: true });
+    for (const s of (allSteps ?? []) as Array<{ cadence_id: string; step_order: number; channel: string }>) {
+      const existing = stepsMap.get(s.cadence_id) ?? [];
+      existing.push(s);
+      stepsMap.set(s.cadence_id, existing);
+    }
+  }
+
+  // Build enrollments array
+  const enrollments: EnrollmentInfo[] = rows.map((row) => {
+    const rawSteps = stepsMap.get(row.cadence_id) ?? [];
+    return {
       cadence_name: row.cadences.name,
       status: row.status,
       current_step: row.current_step,
       total_steps: row.cadences.total_steps,
-      enrolled_by_email: enrolledByEmail,
-    };
-
-    // Get cadence steps for the progress bar
-    const { data: stepsData } = await supabase
-      .from('cadence_steps')
-      .select('step_order, channel')
-      .eq('cadence_id', row.cadence_id)
-      .order('step_order', { ascending: true });
-
-    if (stepsData) {
-      steps = (stepsData as Array<{ step_order: number; channel: string }>).map((s) => ({
+      enrolled_by_email: row.enrolled_by ? (emailMap.get(row.enrolled_by) ?? null) : null,
+      steps: rawSteps.map((s) => ({
         step_order: s.step_order,
         channel: s.channel as ChannelType,
         status: s.step_order < row.current_step
@@ -98,9 +112,11 @@ export async function fetchLeadEnrollment(
           : s.step_order === row.current_step
             ? 'current' as const
             : 'future' as const,
-      }));
-    }
-  }
+      })),
+    };
+  });
+
+  const firstEnrollment = enrollments[0] ?? null;
 
   // KPIs from interactions
   const [completedRes, openRes, conversationRes] = await Promise.all([
@@ -124,8 +140,15 @@ export async function fetchLeadEnrollment(
   return {
     success: true,
     data: {
-      enrollment: enrollmentData,
-      steps,
+      enrollment: firstEnrollment ? {
+        cadence_name: firstEnrollment.cadence_name,
+        status: firstEnrollment.status,
+        current_step: firstEnrollment.current_step,
+        total_steps: firstEnrollment.total_steps,
+        enrolled_by_email: firstEnrollment.enrolled_by_email,
+      } : null,
+      steps: firstEnrollment?.steps ?? [],
+      enrollments,
       kpis: {
         completed: completedRes.count ?? 0,
         open: openRes.count ?? 0,

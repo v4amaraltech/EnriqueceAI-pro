@@ -14,12 +14,13 @@ interface LeadDetailSidebarProps {
 }
 
 export function LeadDetailSidebar({ lead, enrollmentData, timeline }: LeadDetailSidebarProps) {
-  const { enrollment, kpis } = enrollmentData;
+  const { enrollment, enrollments, kpis } = enrollmentData;
 
   return (
     <LeadInfoPanel
       data={leadRowToInfoPanelData(lead)}
       enrollment={enrollment}
+      enrollments={enrollments}
       timeline={timeline}
       kpis={kpis}
     />

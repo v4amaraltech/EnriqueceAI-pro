@@ -25,14 +25,16 @@ import {
 
 import type { PlanFeatures } from '@/features/billing/types';
 import { checkFeature } from '@/features/billing/services/feature-flags';
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
+import { deleteApolloConnection } from '../actions/manage-apollo';
 import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
 import { WebhookEndpointsManager } from '@/features/cadences/components/WebhookEndpointsManager';
 
 import { Api4ComConfigModal } from './Api4ComConfigModal';
+import { ApolloConfigModal } from './ApolloConfigModal';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 
@@ -43,6 +45,7 @@ interface IntegrationsViewProps {
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
+  apollo: ApolloConnectionSafe | null;
   planFeatures: PlanFeatures;
 }
 
@@ -53,14 +56,15 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
-export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance, planFeatures }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | null>(null);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
+  const [showApolloConfig, setShowApolloConfig] = useState(false);
   const evolution = useEvolutionWhatsApp();
 
   function handleConnectGoogle() {
@@ -257,6 +261,54 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </CardContent>
         </Card>
 
+        {/* Apollo Card */}
+        <Card className="flex flex-col">
+          <CardContent className="flex flex-1 flex-col p-6">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--muted)]">
+              <svg viewBox="0 0 24 24" className="h-7 w-7 text-[var(--foreground)]" fill="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <CardTitle className="mt-4 text-xl">Apollo.io</CardTitle>
+            <div className="min-h-[3.5rem] flex-1">
+              {apollo ? (
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  Conectado em {new Date(apollo.created_at).toLocaleDateString('pt-BR')}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  Conecte sua conta Apollo.io para buscar e importar leads qualificados.
+                </p>
+              )}
+            </div>
+            <div className="mt-auto border-t border-[var(--border)] pt-4">
+              {apollo ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={statusConfig[apollo.status].className}>
+                      {apollo.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
+                      {apollo.status === 'error' && <X className="mr-1 h-3 w-3" />}
+                      {statusConfig[apollo.status].label}
+                    </Badge>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
+                    onClick={() => setShowDisconnect('apollo')}
+                  >
+                    <Unplug className="mr-1 h-3 w-3" />
+                    Desconectar
+                  </button>
+                </div>
+              ) : (
+                <Button onClick={() => setShowApolloConfig(true)}>
+                  Conectar Apollo
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
 
       {/* Disconnect Google dialog */}
@@ -367,6 +419,48 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
         currentSignature={gmail?.custom_signature ?? null}
         onSaved={() => router.refresh()}
       />
+
+      {/* Apollo config modal */}
+      <ApolloConfigModal
+        open={showApolloConfig}
+        onOpenChange={setShowApolloConfig}
+        onSuccess={() => router.refresh()}
+      />
+
+      {/* Disconnect Apollo dialog */}
+      <Dialog open={showDisconnect === 'apollo'} onOpenChange={() => setShowDisconnect(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Desconectar Apollo</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja desconectar o Apollo? A busca e importação de leads do Apollo ficarão indisponíveis.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisconnect(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await deleteApolloConnection();
+                  if (result.success) {
+                    toast.success('Apollo desconectado');
+                  } else {
+                    toast.error(result.error);
+                  }
+                  setShowDisconnect(null);
+                  router.refresh();
+                });
+              }}
+            >
+              {isPending ? 'Desconectando...' : 'Desconectar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <WebhookEndpointsManager />
 

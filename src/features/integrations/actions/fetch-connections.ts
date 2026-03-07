@@ -4,7 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
@@ -13,6 +13,7 @@ export interface ConnectionsOverview {
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
+  apollo: ApolloConnectionSafe | null;
 }
 
 export async function fetchConnections(): Promise<ActionResult<ConnectionsOverview>> {
@@ -76,6 +77,13 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
 
+  // Fetch Apollo connection (per org) — exclude encrypted api key
+  const { data: apolloRow } = (await (supabase
+    .from('apollo_connections' as never) as ReturnType<typeof supabase.from>)
+    .select('id, status, created_at, updated_at')
+    .eq('org_id', member.org_id)
+    .maybeSingle()) as { data: ApolloConnectionSafe | null };
+
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {
         id: api4comRaw.id,
@@ -97,6 +105,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       calendar: calendarRow ?? null,
       api4com: api4comRow ?? null,
       evolutionInstance: evolutionRow ?? null,
+      apollo: apolloRow ?? null,
     },
   };
 }

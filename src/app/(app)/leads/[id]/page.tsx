@@ -28,7 +28,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const timeline = timelineResult.success ? timelineResult.data : [];
   const enrollmentData = enrollmentResult.success
     ? enrollmentResult.data
-    : { enrollment: null, steps: [], kpis: { completed: 0, open: 0, conversations: 0 } };
+    : { enrollment: null, steps: [], enrollments: [], kpis: { completed: 0, open: 0, conversations: 0 } };
 
   return (
     <LeadDetailLayout

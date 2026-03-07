@@ -7,6 +7,7 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { getEnv } from '@/config/env';
 
 import { searchPeople, type ApolloSearchPerson } from '../services/apollo.service';
+import { getApolloApiKey } from '../services/apollo-key.service';
 
 const searchSchema = z.object({
   personTitles: z.array(z.string()).optional(),
@@ -34,12 +35,12 @@ export interface SearchApolloResult {
 }
 
 export async function searchApollo(input: SearchApolloInput): Promise<ActionResult<SearchApolloResult>> {
-  await requireAuthWithMember();
+  const { orgId } = await requireAuthWithMember();
 
-  const env = getEnv();
-  const apiKey = env.APOLLO_API_KEY;
+  // Try org-level key first, fall back to env var
+  const apiKey = await getApolloApiKey(orgId) ?? getEnv().APOLLO_API_KEY;
   if (!apiKey) {
-    return { success: false, error: 'Apollo API Key não configurada. Configure em Settings > Integrações.' };
+    return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
   }
 
   const parsed = searchSchema.safeParse(input);

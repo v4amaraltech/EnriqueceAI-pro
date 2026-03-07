@@ -126,11 +126,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onEnrich={handleEnrich}
       />
 
-      {enrollmentData.enrollment && enrollmentData.steps.length > 0 && (
-        <CadenceProgressBar
-          steps={enrollmentData.steps}
-          cadenceName={enrollmentData.enrollment.cadence_name}
-        />
+      {enrollmentData.enrollments.length > 0 && (
+        <div className="space-y-2">
+          {enrollmentData.enrollments.map((enr) => (
+            enr.steps.length > 0 && (
+              <CadenceProgressBar
+                key={enr.cadence_name}
+                steps={enr.steps}
+                cadenceName={enr.cadence_name}
+              />
+            )
+          ))}
+        </div>
       )}
 
       <div className="flex gap-6">
