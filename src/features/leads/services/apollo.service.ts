@@ -44,6 +44,9 @@ export interface ApolloSearchPerson {
   has_city: boolean;
   has_state: boolean;
   has_country: boolean;
+  city: string | null;
+  state: string | null;
+  country: string | null;
   seniority?: string | null;
   has_direct_phone: string | null;
   organization: ApolloSearchOrganization | null;

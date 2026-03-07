@@ -14,18 +14,6 @@ import {
 
 import type { ApolloSearchPerson } from '../services/apollo.service';
 
-const SENIORITY_LABELS: Record<string, string> = {
-  entry: 'Junior',
-  senior: 'Senior',
-  manager: 'Gerente',
-  director: 'Diretor',
-  vp: 'VP',
-  c_suite: 'C-Level',
-  founder: 'Fundador',
-  owner: 'Proprietario',
-  partner: 'Socio',
-  intern: 'Estagiario',
-};
 
 interface ApolloResultsTableProps {
   people: ApolloSearchPerson[];
@@ -74,7 +62,7 @@ export function ApolloResultsTable({
               </TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Cargo</TableHead>
-              <TableHead>Senioridade</TableHead>
+              <TableHead>Localização</TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>Dados</TableHead>
             </TableRow>
@@ -82,7 +70,8 @@ export function ApolloResultsTable({
           <TableBody>
             {people.map((person) => {
               const displayName = `${person.first_name ?? ''} ${person.last_name_obfuscated ?? ''}`.trim() || '\u2014';
-              const seniorityLabel = person.seniority ? (SENIORITY_LABELS[person.seniority] ?? person.seniority) : null;
+              const locationParts = [person.city, person.state, person.country].filter(Boolean);
+              const location = locationParts.length > 0 ? locationParts.join(', ') : null;
 
               return (
                 <TableRow key={person.id}>
@@ -97,8 +86,8 @@ export function ApolloResultsTable({
                   <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
                     {person.title ?? '\u2014'}
                   </TableCell>
-                  <TableCell className="text-sm text-[var(--muted-foreground)]">
-                    {seniorityLabel ?? '\u2014'}
+                  <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
+                    {location ?? '\u2014'}
                   </TableCell>
                   <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
                   <TableCell>
