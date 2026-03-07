@@ -29,16 +29,15 @@ export function ApolloImportView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importResult, setImportResult] = useState<ImportApolloResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = useCallback(async (params: SearchApolloInput) => {
-    alert('1) handleSearch do ImportView chamado');
     setIsSearching(true);
     setError(null);
+    setHasSearched(true);
 
     try {
-      alert('2) Chamando searchApollo...');
       const result = await searchApollo(params);
-      alert('3) searchApollo retornou: ' + JSON.stringify(result).slice(0, 200));
 
       if (!result.success) {
         setError(result.error);
@@ -52,7 +51,6 @@ export function ApolloImportView() {
       setSelectedIds(new Set());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro inesperado ao buscar no Apollo';
-      alert('ERRO: ' + message);
       setError(message);
     } finally {
       setIsSearching(false);
@@ -241,7 +239,7 @@ export function ApolloImportView() {
               <p className="text-sm text-[var(--muted-foreground)]">Buscando no Apollo...</p>
             </div>
           ) : people.length === 0 ? (
-            <ApolloEmptyState />
+            <ApolloEmptyState hasSearched={hasSearched} />
           ) : (
             <div className="space-y-4">
               <ApolloResultsTable
