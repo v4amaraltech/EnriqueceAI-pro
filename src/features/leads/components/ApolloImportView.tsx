@@ -31,11 +31,14 @@ export function ApolloImportView() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = useCallback(async (params: SearchApolloInput) => {
+    alert('1) handleSearch do ImportView chamado');
     setIsSearching(true);
     setError(null);
 
     try {
+      alert('2) Chamando searchApollo...');
       const result = await searchApollo(params);
+      alert('3) searchApollo retornou: ' + JSON.stringify(result).slice(0, 200));
 
       if (!result.success) {
         setError(result.error);
@@ -49,6 +52,7 @@ export function ApolloImportView() {
       setSelectedIds(new Set());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro inesperado ao buscar no Apollo';
+      alert('ERRO: ' + message);
       setError(message);
     } finally {
       setIsSearching(false);
