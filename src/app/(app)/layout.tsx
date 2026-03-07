@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
 import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGuard';
+import { TrialBanner } from '@/features/billing/components/TrialBanner';
 import type { SubscriptionStatus } from '@/features/billing/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
@@ -66,11 +67,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: subscriptionData } = (await (
     supabase.from('subscriptions') as ReturnType<typeof supabase.from>
   )
-    .select('status')
+    .select('status, current_period_end')
     .eq('org_id', memberData.organization.id)
-    .maybeSingle()) as { data: { status: SubscriptionStatus } | null };
+    .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };
 
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
+  const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
 
   const { data: members } = (await supabase
     .from('organization_members')
@@ -121,8 +123,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           initialMember={currentMember}
         >
           <NotificationProvider userId={user.id}>
-            <SubscriptionGuard status={subscriptionStatus}>
+            <SubscriptionGuard status={subscriptionStatus} periodEnd={subscriptionPeriodEnd}>
               <div className="flex h-screen flex-col">
+                {subscriptionStatus === 'trialing' && subscriptionPeriodEnd && (
+                  <TrialBanner periodEnd={subscriptionPeriodEnd} />
+                )}
                 <TopBar />
                 <main className="flex-1 overflow-auto p-6" data-tour="main-content">
                   <Breadcrumbs />

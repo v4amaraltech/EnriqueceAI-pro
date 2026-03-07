@@ -5,25 +5,27 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import type { SubscriptionStatus } from '../types';
 
-const ALLOWED_CANCELED_PATHS = ['/upgrade', '/settings/billing'];
+const ALLOWED_BLOCKED_PATHS = ['/upgrade', '/settings/billing'];
 
 interface SubscriptionGuardProps {
   status: SubscriptionStatus;
+  periodEnd?: string | null;
   children: React.ReactNode;
 }
 
-export function SubscriptionGuard({ status, children }: SubscriptionGuardProps) {
+export function SubscriptionGuard({ status, periodEnd, children }: SubscriptionGuardProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const isBlocked =
+    status === 'canceled' ||
+    (status === 'trialing' && periodEnd && new Date(periodEnd) < new Date());
+
   useEffect(() => {
-    if (
-      status === 'canceled' &&
-      !ALLOWED_CANCELED_PATHS.some((p) => pathname.startsWith(p))
-    ) {
+    if (isBlocked && !ALLOWED_BLOCKED_PATHS.some((p) => pathname.startsWith(p))) {
       router.replace('/upgrade');
     }
-  }, [status, pathname, router]);
+  }, [isBlocked, pathname, router]);
 
   return <>{children}</>;
 }
