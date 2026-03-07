@@ -215,13 +215,6 @@ export function ApolloImportView() {
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
-          {error}
-        </div>
-      )}
-
       {/* Sidebar + Content */}
       <div className="flex min-h-0 flex-1 gap-0 rounded-lg border">
         {/* Sidebar */}
@@ -231,7 +224,19 @@ export function ApolloImportView() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {people.length === 0 ? (
+          {/* Error inside content area */}
+          {error && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          {isSearching ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--muted-foreground)]" />
+              <p className="text-sm text-[var(--muted-foreground)]">Buscando no Apollo...</p>
+            </div>
+          ) : people.length === 0 ? (
             <ApolloEmptyState />
           ) : (
             <div className="space-y-4">
