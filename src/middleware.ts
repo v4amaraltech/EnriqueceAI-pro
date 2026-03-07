@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
 const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm'];
 
