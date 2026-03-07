@@ -58,7 +58,7 @@ export function ApolloConfigModal({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="items-center text-center">
           <Image
-            src="/logos/apollo-logo.webp"
+            src="/logos/apollo-logo.svg"
             alt="Apollo.io"
             width={56}
             height={56}
