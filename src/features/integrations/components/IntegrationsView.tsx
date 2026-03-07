@@ -264,11 +264,7 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
         {/* Apollo Card */}
         <Card className="flex flex-col">
           <CardContent className="flex flex-1 flex-col p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--muted)]">
-              <svg viewBox="0 0 24 24" className="h-7 w-7 text-[var(--foreground)]" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
+            <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={48} height={48} className="rounded-lg" />
             <CardTitle className="mt-4 text-xl">Apollo.io</CardTitle>
             <div className="min-h-[3.5rem] flex-1">
               {apollo ? (

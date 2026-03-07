@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useTransition } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -56,11 +57,13 @@ export function ApolloConfigModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="items-center text-center">
-          <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-lg bg-[var(--muted)]">
-            <svg viewBox="0 0 24 24" className="h-8 w-8 text-[var(--foreground)]" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+          <Image
+            src="/logos/apollo-logo.webp"
+            alt="Apollo.io"
+            width={56}
+            height={56}
+            className="mb-2 rounded-lg"
+          />
           <DialogTitle className="text-xl">Conectar Apollo.io</DialogTitle>
           <DialogDescription>
             Cole sua API Key do Apollo para habilitar busca e importação de leads
