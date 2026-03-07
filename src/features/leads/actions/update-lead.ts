@@ -229,10 +229,10 @@ export async function markLeadAsLost(
   if (lossNotes) {
     enrollmentUpdate.loss_notes = lossNotes;
   }
+  // cadence_enrollments has no org_id column — RLS via cadences.org_id handles isolation
   await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
     .update(enrollmentUpdate)
     .eq('lead_id', leadId)
-    .eq('org_id', member.org_id)
     .in('status', ['active', 'paused']);
 
   revalidatePath('/leads');
