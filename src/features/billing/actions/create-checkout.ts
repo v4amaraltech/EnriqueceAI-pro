@@ -8,7 +8,10 @@ import { stripe } from '@/lib/stripe';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-export async function createCheckoutSession(planId: string): Promise<ActionResult<{ url: string }>> {
+export async function createCheckoutSession(
+  planId: string,
+  returnPath?: string,
+): Promise<ActionResult<{ url: string }>> {
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
@@ -86,8 +89,8 @@ export async function createCheckoutSession(planId: string): Promise<ActionResul
       org_id: org.id,
       plan_id: plan.id,
     },
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/settings/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/settings/billing?canceled=true`,
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath : '/settings/billing?success=true'}`,
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath.split('?')[0] + '?canceled=true' : '/settings/billing?canceled=true'}`,
   });
 
   if (!session.url) {

@@ -57,7 +57,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // Redirect to onboarding if org name looks like a domain (not yet configured)
+  // Redirect to onboarding if not yet completed
+  if (memberData.organization.onboarding_step !== null && memberData.organization.onboarding_step !== undefined) {
+    redirect('/onboarding');
+  }
+  // Fallback for orgs created before onboarding_step migration
   const orgName = memberData.organization.name;
   if (orgName && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(orgName)) {
     redirect('/onboarding');

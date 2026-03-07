@@ -12,7 +12,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? '';
 
-export async function getGmailAuthUrl(): Promise<ActionResult<{ url: string }>> {
+export async function getGmailAuthUrl(
+  redirectAfter?: string,
+): Promise<ActionResult<{ url: string }>> {
   await requireAuth();
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
@@ -34,6 +36,7 @@ export async function getGmailAuthUrl(): Promise<ActionResult<{ url: string }>> 
     scope: scopes.join(' '),
     access_type: 'offline',
     prompt: 'consent',
+    ...(redirectAfter ? { state: redirectAfter } : {}),
   });
 
   return {

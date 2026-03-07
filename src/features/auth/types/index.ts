@@ -3,6 +3,7 @@ export interface OrganizationRow {
   name: string;
   slug: string;
   owner_id: string;
+  onboarding_step: number | null;
   created_at: string;
   updated_at: string;
 }

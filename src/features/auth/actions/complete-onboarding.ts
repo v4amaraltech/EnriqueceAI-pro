@@ -45,10 +45,10 @@ export async function completeOnboarding(
     .replace(/(^-|-$)/g, '');
   const slug = input.orgSlug?.trim() || `${baseSlug}-${Date.now().toString(36)}`;
 
-  // Update organization
-  const { error: updateError } = await supabase
-    .from('organizations')
-    .update({ name: orgName, slug } as Record<string, unknown>)
+  // Update organization name and advance to step 1
+  const { error: updateError } = await (supabase
+    .from('organizations') as ReturnType<typeof supabase.from>)
+    .update({ name: orgName, slug, onboarding_step: 1 } as Record<string, unknown>)
     .eq('id', member.org_id);
 
   if (updateError) {
@@ -60,23 +60,33 @@ export async function completeOnboarding(
 
 /**
  * Checks if the current user's org needs onboarding.
- * Heuristic: org name still looks like an auto-generated domain name.
+ * Uses onboarding_step column (NOT NULL = still onboarding).
+ * Falls back to domain name heuristic for orgs created before the migration.
  */
-export async function checkNeedsOnboarding(): Promise<boolean> {
+export async function checkNeedsOnboarding(): Promise<number | false> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('organization:organizations(name)')
+  const { data: member } = (await (supabase
+    .from('organization_members') as ReturnType<typeof supabase.from>)
+    .select('organization:organizations(name, onboarding_step)')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .single()) as { data: { organization: { name: string } } | null };
+    .single()) as { data: { organization: { name: string; onboarding_step: number | null } } | null };
 
   if (!member?.organization) return false;
 
+  // If onboarding_step is set, return it (0-5 = current step)
+  if (member.organization.onboarding_step !== null && member.organization.onboarding_step !== undefined) {
+    return member.organization.onboarding_step;
+  }
+
+  // Fallback for orgs created before the migration: check domain name heuristic
   const name = member.organization.name;
-  // Auto-generated names look like domain names (e.g., "gmail.com", "empresa.com.br")
-  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(name);
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(name)) {
+    return 0;
+  }
+
+  return false;
 }
