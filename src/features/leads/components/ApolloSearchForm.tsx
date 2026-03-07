@@ -56,22 +56,16 @@ function toggleInArray(arr: string[], value: string): string[] {
 
 export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps) {
   // Text inputs
-  const [qKeywords, setQKeywords] = useState('');
   const [titles, setTitles] = useState('');
   const [personLocations, setPersonLocations] = useState('');
   const [keywords, setKeywords] = useState('');
   const [domains, setDomains] = useState('');
   const [orgLocations, setOrgLocations] = useState('');
-  const [technologies, setTechnologies] = useState('');
 
   // Multi-select arrays
   const [seniorities, setSeniorities] = useState<string[]>([]);
   const [emailStatuses, setEmailStatuses] = useState<string[]>([]);
   const [employeeRanges, setEmployeeRanges] = useState<string[]>([]);
-
-  // Revenue range
-  const [revenueMin, setRevenueMin] = useState('');
-  const [revenueMax, setRevenueMax] = useState('');
 
   // Toggle
   const [includeSimilarTitles, setIncludeSimilarTitles] = useState(true);
@@ -82,39 +76,28 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
       perPage: 25,
     };
 
-    if (qKeywords) params.qKeywords = qKeywords;
     if (titles) params.personTitles = splitCommaSeparated(titles);
     if (personLocations) params.personLocations = splitCommaSeparated(personLocations);
     if (keywords) params.organizationKeywords = splitCommaSeparated(keywords);
     if (domains) params.organizationDomains = splitCommaSeparated(domains);
     if (orgLocations) params.organizationLocations = splitCommaSeparated(orgLocations);
-    if (technologies) params.technologyUids = splitCommaSeparated(technologies);
     if (seniorities.length) params.personSeniorities = seniorities;
     if (emailStatuses.length) params.contactEmailStatus = emailStatuses;
     if (employeeRanges.length) params.employeeRanges = employeeRanges;
-    if (revenueMin || revenueMax) {
-      params.revenueRange = {};
-      if (revenueMin) params.revenueRange.min = Number(revenueMin);
-      if (revenueMax) params.revenueRange.max = Number(revenueMax);
-    }
     params.includeSimilarTitles = includeSimilarTitles;
 
     onSearch(params);
   }
 
   function handleClear() {
-    setQKeywords('');
     setTitles('');
     setPersonLocations('');
     setKeywords('');
     setDomains('');
     setOrgLocations('');
-    setTechnologies('');
     setSeniorities([]);
     setEmailStatuses([]);
     setEmployeeRanges([]);
-    setRevenueMin('');
-    setRevenueMax('');
     setIncludeSimilarTitles(true);
   }
 
@@ -134,23 +117,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         )}
       </Button>
 
-      {/* Busca Geral */}
-      <Separator />
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-          Busca Geral
-        </p>
-        <div className="space-y-1.5">
-          <Label htmlFor="apollo-keywords-general">Palavras-chave</Label>
-          <Input
-            id="apollo-keywords-general"
-            placeholder="Ex: SaaS, vendas, fintech"
-            value={qKeywords}
-            onChange={(e) => setQKeywords(e.target.value)}
-          />
-        </div>
-      </div>
-
       {/* Pessoa */}
       <Separator />
       <div className="space-y-3">
@@ -162,7 +128,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
           <Label htmlFor="apollo-titles">Cargo</Label>
           <Input
             id="apollo-titles"
-            placeholder="CEO, CTO, Diretor Comercial"
+            placeholder="CEO, Diretor Comercial, Gerente de Vendas"
             value={titles}
             onChange={(e) => setTitles(e.target.value)}
           />
@@ -185,7 +151,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="apollo-person-loc">Localizacao</Label>
+          <Label htmlFor="apollo-person-loc">Localizacao da pessoa</Label>
           <Input
             id="apollo-person-loc"
             placeholder="Sao Paulo, Brasil"
@@ -210,7 +176,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         </div>
 
         <div className="flex items-center justify-between">
-          <Label htmlFor="apollo-similar-titles">Cargos similares</Label>
+          <Label htmlFor="apollo-similar-titles">Incluir cargos similares</Label>
           <Switch
             id="apollo-similar-titles"
             checked={includeSimilarTitles}
@@ -227,13 +193,14 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         </p>
 
         <div className="space-y-1.5">
-          <Label htmlFor="apollo-org-keywords">Palavras-chave</Label>
+          <Label htmlFor="apollo-org-keywords">Setor / Industria</Label>
           <Input
             id="apollo-org-keywords"
-            placeholder="SaaS, fintech, e-commerce"
+            placeholder="hotel, saas, fintech, e-commerce"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
           />
+          <p className="text-xs text-[var(--muted-foreground)]">Tags do setor da empresa. Separe com virgula</p>
         </div>
 
         <div className="space-y-1.5">
@@ -244,10 +211,11 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={domains}
             onChange={(e) => setDomains(e.target.value)}
           />
+          <p className="text-xs text-[var(--muted-foreground)]">Busca em empresas especificas</p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="apollo-org-loc">Localizacao</Label>
+          <Label htmlFor="apollo-org-loc">Localizacao da empresa</Label>
           <Input
             id="apollo-org-loc"
             placeholder="Sao Paulo, Rio de Janeiro"
@@ -269,46 +237,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
               </label>
             ))}
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Faturamento (USD)</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              placeholder="Min"
-              value={revenueMin}
-              onChange={(e) => setRevenueMin(e.target.value)}
-              className="w-full"
-            />
-            <span className="text-sm text-[var(--muted-foreground)]">-</span>
-            <Input
-              type="number"
-              placeholder="Max"
-              value={revenueMax}
-              onChange={(e) => setRevenueMax(e.target.value)}
-              className="w-full"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Tecnologia */}
-      <Separator />
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-          Tecnologia
-        </p>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="apollo-tech">Tecnologias utilizadas</Label>
-          <Input
-            id="apollo-tech"
-            placeholder="Salesforce, HubSpot, Slack"
-            value={technologies}
-            onChange={(e) => setTechnologies(e.target.value)}
-          />
-          <p className="text-xs text-[var(--muted-foreground)]">Separe com virgula</p>
         </div>
       </div>
 
