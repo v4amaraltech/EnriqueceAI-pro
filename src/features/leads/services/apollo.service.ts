@@ -134,6 +134,16 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
     total_entries: number;
   }>(apiKey, '/mixed_people/api_search', body);
 
+  // Debug: log first person to check available fields
+  if (data.people?.length) {
+    console.log('[apollo-search] sample person keys:', JSON.stringify(Object.keys(data.people[0])));
+    console.log('[apollo-search] sample person location:', JSON.stringify({
+      city: (data.people[0] as Record<string, unknown>).city,
+      state: (data.people[0] as Record<string, unknown>).state,
+      country: (data.people[0] as Record<string, unknown>).country,
+    }));
+  }
+
   return {
     people: data.people ?? [],
     totalEntries: data.total_entries ?? 0,
