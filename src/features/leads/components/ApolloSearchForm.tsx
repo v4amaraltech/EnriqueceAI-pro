@@ -13,15 +13,6 @@ import { Switch } from '@/shared/components/ui/switch';
 
 import type { SearchApolloInput } from '../actions/search-apollo';
 
-const SENIORITY_OPTIONS = [
-  { value: 'entry', label: 'Junior' },
-  { value: 'senior', label: 'Senior' },
-  { value: 'manager', label: 'Gerente' },
-  { value: 'director', label: 'Diretor' },
-  { value: 'vp', label: 'VP' },
-  { value: 'c_suite', label: 'C-Level' },
-];
-
 const EMAIL_STATUS_OPTIONS = [
   { value: 'verified', label: 'Verificado' },
   { value: 'likely to engage', label: 'Provavel' },
@@ -63,7 +54,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   const [orgLocations, setOrgLocations] = useState('');
 
   // Multi-select arrays
-  const [seniorities, setSeniorities] = useState<string[]>([]);
   const [emailStatuses, setEmailStatuses] = useState<string[]>([]);
   const [employeeRanges, setEmployeeRanges] = useState<string[]>([]);
 
@@ -81,7 +71,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     if (keywords) params.organizationKeywords = splitCommaSeparated(keywords);
     if (domains) params.organizationDomains = splitCommaSeparated(domains);
     if (orgLocations) params.organizationLocations = splitCommaSeparated(orgLocations);
-    if (seniorities.length) params.personSeniorities = seniorities;
     if (emailStatuses.length) params.contactEmailStatus = emailStatuses;
     if (employeeRanges.length) params.employeeRanges = employeeRanges;
     params.includeSimilarTitles = includeSimilarTitles;
@@ -95,7 +84,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     setKeywords('');
     setDomains('');
     setOrgLocations('');
-    setSeniorities([]);
     setEmailStatuses([]);
     setEmployeeRanges([]);
     setIncludeSimilarTitles(true);
@@ -133,21 +121,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             onChange={(e) => setTitles(e.target.value)}
           />
           <p className="text-xs text-[var(--muted-foreground)]">Separe com virgula</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Senioridade</Label>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {SENIORITY_OPTIONS.map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={seniorities.includes(opt.value)}
-                  onCheckedChange={() => setSeniorities((prev) => toggleInArray(prev, opt.value))}
-                />
-                {opt.label}
-              </label>
-            ))}
-          </div>
         </div>
 
         <div className="space-y-1.5">
