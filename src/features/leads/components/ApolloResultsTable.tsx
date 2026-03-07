@@ -62,8 +62,8 @@ export function ApolloResultsTable({
               </TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Cargo</TableHead>
-              <TableHead>Localização</TableHead>
               <TableHead>Empresa</TableHead>
+              <TableHead>Localização</TableHead>
               <TableHead>Dados</TableHead>
             </TableRow>
           </TableHeader>
@@ -86,10 +86,10 @@ export function ApolloResultsTable({
                   <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
                     {person.title ?? '\u2014'}
                   </TableCell>
+                  <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
                   <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
                     {location ?? '\u2014'}
                   </TableCell>
-                  <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       {person.has_email && (
