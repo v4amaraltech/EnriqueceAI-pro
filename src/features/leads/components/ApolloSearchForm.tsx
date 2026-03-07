@@ -175,7 +175,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Tags do setor da empresa. Separe com virgula</p>
+          <p className="text-xs text-[var(--muted-foreground)]">Use termos em ingles para melhores resultados (ex: saas, fintech, real estate). Separe com virgula</p>
         </div>
 
         <div className="space-y-1.5">
