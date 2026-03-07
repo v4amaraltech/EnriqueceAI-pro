@@ -76,9 +76,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   // Toggle
   const [includeSimilarTitles, setIncludeSimilarTitles] = useState(true);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
+  function handleSearch() {
     const params: SearchApolloInput = {
       page: 1,
       perPage: 25,
@@ -121,8 +119,8 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Button type="submit" className="w-full" disabled={isLoading}>
+    <div className="space-y-4">
+      <Button type="button" className="w-full" disabled={isLoading} onClick={handleSearch}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -320,6 +318,6 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
         <X className="mr-2 h-3.5 w-3.5" />
         Limpar filtros
       </Button>
-    </form>
+    </div>
   );
 }

@@ -34,19 +34,25 @@ export function ApolloImportView() {
     setIsSearching(true);
     setError(null);
 
-    const result = await searchApollo(params);
-    setIsSearching(false);
+    try {
+      const result = await searchApollo(params);
 
-    if (!result.success) {
-      setError(result.error);
-      return;
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setPeople(result.data.people);
+      setTotalResults(result.data.total);
+      setCurrentPage(result.data.page);
+      setLastSearchParams(params);
+      setSelectedIds(new Set());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro inesperado ao buscar no Apollo';
+      setError(message);
+    } finally {
+      setIsSearching(false);
     }
-
-    setPeople(result.data.people);
-    setTotalResults(result.data.total);
-    setCurrentPage(result.data.page);
-    setLastSearchParams(params);
-    setSelectedIds(new Set());
   }, []);
 
   const handleLoadMore = useCallback(async () => {
