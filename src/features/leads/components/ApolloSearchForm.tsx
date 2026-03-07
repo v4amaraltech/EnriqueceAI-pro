@@ -77,6 +77,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   const [includeSimilarTitles, setIncludeSimilarTitles] = useState(true);
 
   function handleSearch() {
+    alert('handleSearch chamado!');
     const params: SearchApolloInput = {
       page: 1,
       perPage: 25,
