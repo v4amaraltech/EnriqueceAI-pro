@@ -14,7 +14,7 @@ export async function resendVerification(email: string): Promise<ActionResult<nu
   const headerStore = await headers();
   const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
 
-  const rateCheck = checkRateLimit(`resend:${ip}`, RESEND_LIMIT, RESEND_WINDOW_MS);
+  const rateCheck = await checkRateLimit(`resend:${ip}`, RESEND_LIMIT, RESEND_WINDOW_MS);
   if (!rateCheck.allowed) {
     const retryMinutes = Math.ceil((rateCheck.retryAfterMs ?? 0) / 60000);
     return {

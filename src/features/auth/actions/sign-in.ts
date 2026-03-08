@@ -17,7 +17,7 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const rateLimitKey = `login:${ip}`;
 
-  const rateCheck = checkRateLimit(rateLimitKey, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  const rateCheck = await checkRateLimit(rateLimitKey, LOGIN_LIMIT, LOGIN_WINDOW_MS);
   if (!rateCheck.allowed) {
     const retryMinutes = Math.ceil((rateCheck.retryAfterMs ?? 0) / 60000);
     return {
@@ -48,7 +48,7 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   }
 
   // Reset rate limit on successful login
-  resetRateLimit(rateLimitKey);
+  await resetRateLimit(rateLimitKey);
 
   return { success: true, data: undefined };
 }

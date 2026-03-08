@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import LinkExtension from '@tiptap/extension-link';
+import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import {
   Bold,
   Braces,
@@ -210,7 +211,7 @@ export function ActivityEmailCompose({
                 {signature && (
                   <div
                     className="border-t border-dashed border-[var(--border)] px-3 py-2 text-sm opacity-70"
-                    dangerouslySetInnerHTML={{ __html: signature }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
                   />
                 )}
 

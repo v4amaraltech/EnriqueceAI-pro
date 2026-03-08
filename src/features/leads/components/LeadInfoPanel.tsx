@@ -3,6 +3,7 @@
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import {
   Bell,
   Calendar,
@@ -806,10 +807,12 @@ export function LeadInfoPanel({
                         <div
                           className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] [&_a]:text-[var(--primary)] [&_a]:underline"
                           dangerouslySetInnerHTML={{
-                            __html: entry.message_content
-                              .replace(/\{\{[^}]+\}\}/g, '')
-                              .replace(/\s{2,}/g, ' ')
-                              .trim(),
+                            __html: sanitizeHtml(
+                              entry.message_content
+                                .replace(/\{\{[^}]+\}\}/g, '')
+                                .replace(/\s{2,}/g, ' ')
+                                .trim(),
+                            ),
                           }}
                         />
                       ) : (

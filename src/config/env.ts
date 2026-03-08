@@ -16,7 +16,7 @@ const envSchema = z.object({
   GCAL_CLIENT_SECRET: z.string().min(1).optional(),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-  CRON_SECRET: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters'),
   SENTRY_DSN: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   LEMIT_API_URL: z.string().url().optional(),

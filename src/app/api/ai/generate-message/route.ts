@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
 
     // Per-user rate limit: 10 requests per minute
-    const rl = checkRateLimit(`ai:${user.id}`, 10, 60_000);
+    const rl = await checkRateLimit(`ai:${user.id}`, 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: 'Muitas requisições. Tente novamente em alguns segundos.' },

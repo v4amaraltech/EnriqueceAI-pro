@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -262,7 +263,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                 <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Mensagem:</p>
                 <div
                   className="prose prose-sm max-w-none rounded-md border bg-[var(--muted)] p-4 [&_p]:my-3"
-                  dangerouslySetInnerHTML={{ __html: previewBody || '<span class="text-muted-foreground">Corpo vazio</span>' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody || '<span class="text-muted-foreground">Corpo vazio</span>') }}
                 />
               </div>
               <div>

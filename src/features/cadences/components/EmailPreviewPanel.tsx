@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Monitor, RefreshCw, Search, Smartphone } from 'lucide-react';
 
+import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -175,7 +176,7 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
             {/* Email body */}
             <div
               className="prose prose-sm max-w-none [&_p]:my-3"
-              dangerouslySetInnerHTML={{ __html: renderedBody || '<p class="text-muted-foreground">(corpo vazio)</p>' }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderedBody || '<p class="text-muted-foreground">(corpo vazio)</p>') }}
             />
 
             {/* Signature */}
@@ -184,7 +185,7 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
                 <div className="my-4 border-t border-dashed" />
                 <div
                   className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
-                  dangerouslySetInnerHTML={{ __html: signature }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
                 />
               </>
             )}

@@ -111,7 +111,7 @@ export class WhatsAppService {
         };
 
     // Rate limit: 80 msgs/sec per org (Meta API limit)
-    const rateCheck = checkRateLimit(`whatsapp:${orgId}`, WHATSAPP_RATE_LIMIT, WHATSAPP_RATE_WINDOW_MS);
+    const rateCheck = await checkRateLimit(`whatsapp:${orgId}`, WHATSAPP_RATE_LIMIT, WHATSAPP_RATE_WINDOW_MS);
     if (!rateCheck.allowed) {
       return { success: false, error: `Rate limit excedido. Tente novamente em ${Math.ceil((rateCheck.retryAfterMs ?? 1000) / 1000)}s` };
     }

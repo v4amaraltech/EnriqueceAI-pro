@@ -7,7 +7,7 @@ vi.mock('next/headers', () => ({
 }));
 
 vi.mock('@/lib/security/rate-limit', () => ({
-  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 3, limit: 3 })),
+  checkRateLimit: vi.fn(() => Promise.resolve({ allowed: true, remaining: 3, limit: 3 })),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({

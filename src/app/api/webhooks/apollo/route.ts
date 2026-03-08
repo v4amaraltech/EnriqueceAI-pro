@@ -29,6 +29,16 @@ interface ApolloPhoneWebhook {
 }
 
 export async function POST(request: Request) {
+  // Verify webhook secret (passed as query param)
+  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    if (token !== webhookSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   let payload: ApolloPhoneWebhook;
 
   try {
@@ -68,14 +78,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: 'No email to match lead' });
   }
 
+  // Scope to org_id if provided (multi-tenant isolation)
+  const url = new URL(request.url);
+  const orgId = url.searchParams.get('org_id');
+
   const supabase = createServiceRoleClient();
 
-  const { data: lead } = await (supabase
+  let query = (supabase
     .from('leads') as ReturnType<typeof supabase.from>)
     .select('id, phones')
     .eq('lead_source', 'apollo')
     .eq('email', email)
-    .is('deleted_at', null)
+    .is('deleted_at', null);
+
+  if (orgId) {
+    query = query.eq('org_id', orgId);
+  }
+
+  const { data: lead } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };

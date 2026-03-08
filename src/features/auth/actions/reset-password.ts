@@ -16,7 +16,7 @@ export async function resetPassword(formData: FormData): Promise<ActionResult<vo
   const headerStore = await headers();
   const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
 
-  const rateCheck = checkRateLimit(`reset:${ip}`, RESET_LIMIT, RESET_WINDOW_MS);
+  const rateCheck = await checkRateLimit(`reset:${ip}`, RESET_LIMIT, RESET_WINDOW_MS);
   if (!rateCheck.allowed) {
     const retryMinutes = Math.ceil((rateCheck.retryAfterMs ?? 0) / 60000);
     return {

@@ -71,6 +71,17 @@ async function processApi4ComEvent(
 }
 
 export async function POST(request: Request) {
+  // Verify webhook secret (passed as query param or header)
+  const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token') ?? request.headers.get('x-webhook-secret');
+    if (token !== webhookSecret) {
+      logger.warn('Invalid webhook secret');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   const rawBody = await request.text();
 
   let body: Api4ComWebhookPayload;

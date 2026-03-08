@@ -16,7 +16,7 @@ export async function signUp(formData: FormData): Promise<ActionResult<{ userId:
   const headerStore = await headers();
   const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
 
-  const rateCheck = checkRateLimit(`signup:${ip}`, SIGNUP_LIMIT, SIGNUP_WINDOW_MS);
+  const rateCheck = await checkRateLimit(`signup:${ip}`, SIGNUP_LIMIT, SIGNUP_WINDOW_MS);
   if (!rateCheck.allowed) {
     const retryMinutes = Math.ceil((rateCheck.retryAfterMs ?? 0) / 60000);
     return {

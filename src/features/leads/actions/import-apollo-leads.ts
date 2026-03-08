@@ -84,7 +84,11 @@ export async function importApolloLeads(
   let errors = 0;
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const webhookUrl = `${appUrl}/api/webhooks/apollo`;
+  const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
+  const webhookParams = new URLSearchParams();
+  if (apolloWebhookSecret) webhookParams.set('token', apolloWebhookSecret);
+  webhookParams.set('org_id', orgId);
+  const webhookUrl = `${appUrl}/api/webhooks/apollo?${webhookParams.toString()}`;
 
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
