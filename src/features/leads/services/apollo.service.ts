@@ -153,8 +153,11 @@ export async function enrichPerson(
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
 
+  // Always reveal phone synchronously so phones come in the immediate response
+  body.reveal_phone_number = true;
+
+  // Webhook as backup for async phone delivery (optional)
   if (params.webhookUrl) {
-    body.reveal_phone_number = true;
     body.webhook_url = params.webhookUrl;
   }
 
