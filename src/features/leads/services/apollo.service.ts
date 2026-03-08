@@ -163,5 +163,12 @@ export async function enrichPerson(
 
   const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
 
-  return { person: data.person ?? null };
+  const p = data.person;
+  if (p) {
+    console.warn(
+      `[apollo-enrich] ${p.first_name} ${p.last_name} | phone_numbers: ${JSON.stringify(p.phone_numbers)} | sanitized_phone: ${p.sanitized_phone}`,
+    );
+  }
+
+  return { person: p ?? null };
 }

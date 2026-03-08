@@ -85,10 +85,14 @@ export async function importApolloLeads(
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
   const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
+  if (!apolloWebhookSecret) {
+    console.warn('[apollo-import] APOLLO_WEBHOOK_SECRET not set — async phone reveals will fail');
+  }
   const webhookParams = new URLSearchParams();
   if (apolloWebhookSecret) webhookParams.set('token', apolloWebhookSecret);
   webhookParams.set('org_id', orgId);
   const webhookUrl = `${appUrl}/api/webhooks/apollo?${webhookParams.toString()}`;
+  console.warn(`[apollo-import] webhookUrl: ${webhookUrl}`);
 
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
@@ -171,6 +175,7 @@ function mapApolloToLead(
   assignTo: string | null,
 ) {
   const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
+  console.warn(`[apollo-map] ${person.first_name} | phone: ${phone} | phone_numbers count: ${person.phone_numbers?.length ?? 0}`);
   const org = person.organization;
 
   // All phones with explicit type → phones JSONB

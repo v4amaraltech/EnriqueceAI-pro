@@ -19,7 +19,7 @@ export function MeetimeFieldRow({ label, value, href, mono }: MeetimeFieldRowPro
   return (
     <div className="space-y-1">
       <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
-      <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">{content}</div>
+      <div className="min-w-0 overflow-hidden rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">{content}</div>
     </div>
   );
 }
