@@ -88,7 +88,7 @@ export function ImportListView({ result }: ImportListViewProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="outline">
+          <Button asChild className="bg-[#FFCA28] text-black hover:bg-[#FFB300]">
             <Link href="/leads/import/apollo">
               <Globe className="mr-2 h-4 w-4" />
               Importar do Apollo

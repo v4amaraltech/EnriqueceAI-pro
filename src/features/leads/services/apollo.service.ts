@@ -143,9 +143,7 @@ export async function enrichPerson(
   apiKey: string,
   params: { id?: string; firstName?: string; lastName?: string; domain?: string; linkedinUrl?: string },
 ): Promise<{ person: ApolloPersonFull | null }> {
-  const body: Record<string, unknown> = {
-    reveal_phone_number: true,
-  };
+  const body: Record<string, unknown> = {};
 
   if (params.id) body.id = params.id;
   if (params.firstName) body.first_name = params.firstName;
