@@ -207,16 +207,6 @@ export function ApolloImportView() {
                     Nova importacao
                   </Button>
                 </div>
-
-                {/* Temporary phone debug — remove after diagnosis */}
-                {importResult._phoneDebug && importResult._phoneDebug.length > 0 && (
-                  <div className="mt-4 w-full rounded-md bg-gray-100 p-3 text-left dark:bg-gray-900">
-                    <p className="mb-1 text-xs font-bold text-gray-500">Phone Debug (Apollo response):</p>
-                    {importResult._phoneDebug.map((line, i) => (
-                      <p key={i} className="break-all font-mono text-xs text-gray-600 dark:text-gray-400">{line}</p>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
           )}

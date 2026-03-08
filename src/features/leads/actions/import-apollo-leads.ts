@@ -14,7 +14,6 @@ export interface ImportApolloResult {
   imported: number;
   duplicates: number;
   errors: number;
-  _phoneDebug?: string[];
 }
 
 interface ApolloPersonInput {
@@ -83,18 +82,13 @@ export async function importApolloLeads(
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
-  const phoneDebug: string[] = [];
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
   const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
-  if (!apolloWebhookSecret) {
-    console.warn('[apollo-import] APOLLO_WEBHOOK_SECRET not set — async phone reveals will fail');
-  }
   const webhookParams = new URLSearchParams();
   if (apolloWebhookSecret) webhookParams.set('token', apolloWebhookSecret);
   webhookParams.set('org_id', orgId);
   const webhookUrl = `${appUrl}/api/webhooks/apollo?${webhookParams.toString()}`;
-  console.warn(`[apollo-import] webhookUrl: ${webhookUrl}`);
 
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
@@ -123,22 +117,8 @@ export async function importApolloLeads(
 
       const enriched = enrichResult.value.person;
       if (!enriched) {
-        phoneDebug.push(`${chunk[j]!.id}: person=null`);
         errors++;
         continue;
-      }
-
-      phoneDebug.push(
-        `KEYS: ${Object.keys(enriched).join(', ')}`,
-      );
-      phoneDebug.push(
-        `PHONE FIELDS: phone_numbers=${JSON.stringify(enriched.phone_numbers)} | sanitized_phone=${enriched.sanitized_phone}`,
-      );
-      // Log any field containing "phone" in the raw response
-      for (const [k, v] of Object.entries(enriched)) {
-        if (k.toLowerCase().includes('phone') || k.toLowerCase().includes('mobile') || k.toLowerCase().includes('tel')) {
-          phoneDebug.push(`  ${k}: ${JSON.stringify(v)}`);
-        }
       }
 
       const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo);
@@ -180,7 +160,7 @@ export async function importApolloLeads(
 
   return {
     success: true,
-    data: { imported, duplicates, errors, _phoneDebug: phoneDebug },
+    data: { imported, duplicates, errors },
   };
 }
 
@@ -191,7 +171,6 @@ function mapApolloToLead(
   assignTo: string | null,
 ) {
   const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
-  console.warn(`[apollo-map] ${person.first_name} | phone: ${phone} | phone_numbers count: ${person.phone_numbers?.length ?? 0}`);
   const org = person.organization;
 
   // All phones with explicit type → phones JSONB
@@ -228,6 +207,6 @@ function mapApolloToLead(
       : null,
     created_by: userId,
     assigned_to: assignTo,
-    notes: `[Apollo Debug] phone_numbers: ${JSON.stringify(person.phone_numbers)} | sanitized_phone: ${person.sanitized_phone}`,
+    notes: null,
   };
 }
