@@ -120,8 +120,8 @@ export function ApolloImportView() {
       .map((p) => ({
         id: p.id,
         firstName: p.first_name,
-        lastName: null,
-        domain: null,
+        lastName: p.last_name_obfuscated,
+        domain: p.organization?.name ?? null,
         linkedinUrl: null,
       }));
 

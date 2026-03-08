@@ -212,5 +212,6 @@ function mapApolloToLead(
       : null,
     created_by: userId,
     assigned_to: assignTo,
+    notes: `[Apollo Debug] phone_numbers: ${JSON.stringify(person.phone_numbers)} | sanitized_phone: ${person.sanitized_phone}`,
   };
 }
