@@ -90,6 +90,7 @@ const SOURCE_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
   evento: 'Evento',
   site: 'Site',
+  apollo: 'Apollo.io',
   outro: 'Outro',
 };
 

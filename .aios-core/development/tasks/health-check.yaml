@@ -47,14 +47,18 @@ instructions: |
   Use the Bash tool to run:
 
   ```bash
-  node bin/aios.js doctor --json
+  npx aios-core doctor --json
   ```
 
   If `--fix` was requested, run instead:
 
   ```bash
-  node bin/aios.js doctor --json --fix
+  npx aios-core doctor --json --fix
   ```
+
+  NOTE: Always use `npx aios-core` (not `node bin/aios.js`) — this works in both
+  framework-dev mode (resolves local bin) and project-dev/brownfield mode
+  (resolves from node_modules/.bin/).
 
   Capture the JSON output.
 
