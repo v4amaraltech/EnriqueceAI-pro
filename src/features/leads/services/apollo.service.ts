@@ -90,8 +90,19 @@ export interface ApolloSearchResult {
   page: number;
 }
 
-async function apolloFetch<T>(apiKey: string, path: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${APOLLO_BASE_URL}${path}`, {
+async function apolloFetch<T>(
+  apiKey: string,
+  path: string,
+  body: Record<string, unknown>,
+  queryParams?: Record<string, string>,
+): Promise<T> {
+  let url = `${APOLLO_BASE_URL}${path}`;
+  if (queryParams && Object.keys(queryParams).length > 0) {
+    const qs = new URLSearchParams(queryParams).toString();
+    url = `${url}?${qs}`;
+  }
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -153,15 +164,15 @@ export async function enrichPerson(
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
 
-  // Always reveal phone synchronously so phones come in the immediate response
-  body.reveal_phone_number = true;
-
-  // Webhook as backup for async phone delivery (optional)
+  // reveal_phone_number and webhook_url must be QUERY PARAMS per Apollo docs
+  const queryParams: Record<string, string> = {
+    reveal_phone_number: 'true',
+  };
   if (params.webhookUrl) {
-    body.webhook_url = params.webhookUrl;
+    queryParams.webhook_url = params.webhookUrl;
   }
 
-  const data = await apolloFetch<Record<string, unknown>>(apiKey, '/people/match', body);
+  const data = await apolloFetch<Record<string, unknown>>(apiKey, '/people/match', body, queryParams);
 
   // Log raw response keys at top level
   console.warn(`[apollo-enrich] RAW top-level keys: ${Object.keys(data).join(', ')}`);
