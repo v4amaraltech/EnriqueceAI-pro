@@ -31,12 +31,13 @@ interface ApolloPhoneWebhook {
 export async function POST(request: Request) {
   // Verify webhook secret (passed as query param)
   const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const url = new URL(request.url);
-    const token = url.searchParams.get('token');
-    if (token !== webhookSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token');
+  if (token !== webhookSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let payload: ApolloPhoneWebhook;
@@ -79,8 +80,8 @@ export async function POST(request: Request) {
   }
 
   // Scope to org_id if provided (multi-tenant isolation)
-  const url = new URL(request.url);
-  const orgId = url.searchParams.get('org_id');
+  const reqUrl = new URL(request.url);
+  const orgId = reqUrl.searchParams.get('org_id');
 
   const supabase = createServiceRoleClient();
 

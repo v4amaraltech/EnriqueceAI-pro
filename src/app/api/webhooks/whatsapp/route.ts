@@ -61,17 +61,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const rawBody = await request.text();
 
-  // Verify signature if app secret is configured
+  // Verify HMAC signature (required)
   const appSecret = process.env.WHATSAPP_APP_SECRET;
-  if (appSecret) {
-    const signature = request.headers.get('x-hub-signature-256');
-    if (!signature) {
-      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
-    }
-
-    if (!verifyHmacSignature(rawBody, signature, appSecret)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
+  if (!appSecret) {
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+  const signature = request.headers.get('x-hub-signature-256');
+  if (!signature) {
+    return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+  }
+  if (!verifyHmacSignature(rawBody, signature, appSecret)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
   const body = JSON.parse(rawBody) as WhatsAppWebhookPayload;

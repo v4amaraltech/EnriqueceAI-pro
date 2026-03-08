@@ -12,7 +12,11 @@ import {
 
 export const maxDuration = 60;
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+function getStripeWebhookSecret(): string {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is required');
+  return secret;
+}
 const logger = createWebhookLogger('stripe');
 
 /** Extract period dates from a Stripe subscription (v20+: period is on items) */
@@ -150,7 +154,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = stripe.webhooks.constructEvent(body, signature, getStripeWebhookSecret());
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logger.error('Signature verification failed', { error: message });

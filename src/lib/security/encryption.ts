@@ -10,7 +10,12 @@ const AUTH_TAG_LENGTH = 16; // 128 bits
  */
 function getKey(): Buffer | null {
   const hex = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!hex) return null;
+  if (!hex) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY] TOKEN_ENCRYPTION_KEY is not set in production — OAuth tokens will be stored in plaintext!');
+    }
+    return null;
+  }
   return Buffer.from(hex, 'hex');
 }
 
