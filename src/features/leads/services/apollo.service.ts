@@ -141,7 +141,7 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
 
 export async function enrichPerson(
   apiKey: string,
-  params: { id?: string; firstName?: string; lastName?: string; domain?: string; linkedinUrl?: string },
+  params: { id?: string; firstName?: string; lastName?: string; domain?: string; linkedinUrl?: string; webhookUrl?: string },
 ): Promise<{ person: ApolloPersonFull | null }> {
   const body: Record<string, unknown> = {};
 
@@ -150,6 +150,11 @@ export async function enrichPerson(
   if (params.lastName) body.last_name = params.lastName;
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
+
+  if (params.webhookUrl) {
+    body.reveal_phone_number = true;
+    body.webhook_url = params.webhookUrl;
+  }
 
   const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
 

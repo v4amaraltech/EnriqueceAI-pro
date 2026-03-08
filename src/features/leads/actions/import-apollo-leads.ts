@@ -83,6 +83,9 @@ export async function importApolloLeads(
   let duplicates = 0;
   let errors = 0;
 
+  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
+  const webhookUrl = `${appUrl}/api/webhooks/apollo`;
+
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
     const chunk = people.slice(i, i + 10);
@@ -95,6 +98,7 @@ export async function importApolloLeads(
           lastName: person.lastName ?? undefined,
           domain: person.domain ?? undefined,
           linkedinUrl: person.linkedinUrl ?? undefined,
+          webhookUrl,
         }),
       ),
     );
