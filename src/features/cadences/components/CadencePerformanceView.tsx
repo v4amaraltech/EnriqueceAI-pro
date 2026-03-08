@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Mail, MessageSquare, Send, TrendingDown, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, CheckCircle2, Mail, MessageSquare, Send, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Button } from '@/shared/components/ui/button';
@@ -16,6 +16,7 @@ import {
 import type { CadencePerformanceData, PerformancePeriod } from '../cadences.contract';
 import { AbTestDashboard } from './AbTestDashboard';
 import { StepPerformanceTable } from './StepPerformanceTable';
+import { StepProgressChart } from './StepProgressChart';
 import { StepRatesBarChart } from './StepRatesBarChart';
 
 interface CadencePerformanceViewProps {
@@ -48,7 +49,8 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
     [router, searchParams, data.cadenceId],
   );
 
-  const { summary, enrollments, steps } = data;
+  const { summary, enrollments, steps, cadenceType } = data;
+  const isStandard = cadenceType === 'standard';
 
   const abStepIds = useMemo(
     () => steps.filter((s) => s.abEnabled).map((s) => s.stepId),
@@ -95,25 +97,39 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <KpiCard icon={Send} label="Enviados" value={summary.sent} />
-        <KpiCard icon={Mail} label="Abertos" value={summary.opened} rate={summary.openRate} />
-        <KpiCard icon={MessageSquare} label="Respondidos" value={summary.replied} rate={summary.replyRate} />
-        <KpiCard icon={TrendingDown} label="Bounce" value={summary.bounced} rate={summary.bounceRate} />
-        <KpiCard icon={Users} label="Reuniões" value={summary.meetings} rate={summary.conversionRate} rateLabel="conversão" />
+        {isStandard ? (
+          <>
+            <KpiCard icon={CheckCircle2} label="Atividades Executadas" value={summary.sent} />
+            <KpiCard icon={MessageSquare} label="Respostas" value={summary.replied} />
+            <KpiCard icon={Calendar} label="Reuniões Agendadas" value={summary.meetings} />
+            <KpiCard icon={TrendingUp} label="Taxa de Conversão" value={summary.conversionRate} isPercent />
+            <KpiCard icon={Users} label="Leads Ativos" value={enrollments.active} />
+          </>
+        ) : (
+          <>
+            <KpiCard icon={Send} label="Enviados" value={summary.sent} />
+            <KpiCard icon={Mail} label="Abertos" value={summary.opened} rate={summary.openRate} />
+            <KpiCard icon={MessageSquare} label="Respondidos" value={summary.replied} rate={summary.replyRate} />
+            <KpiCard icon={TrendingDown} label="Bounce" value={summary.bounced} rate={summary.bounceRate} />
+            <KpiCard icon={Users} label="Reuniões" value={summary.meetings} rate={summary.conversionRate} rateLabel="conversão" />
+          </>
+        )}
       </div>
 
       {/* Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Taxas por Etapa</CardTitle>
+          <CardTitle className="text-base">
+            {isStandard ? 'Progresso por Etapa' : 'Taxas por Etapa'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <StepRatesBarChart steps={steps} />
+          {isStandard ? <StepProgressChart steps={steps} /> : <StepRatesBarChart steps={steps} />}
         </CardContent>
       </Card>
 
-      {/* A/B Test Dashboard */}
-      {abStepIds.length > 0 && (
+      {/* A/B Test Dashboard — only for auto_email */}
+      {!isStandard && abStepIds.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Testes A/B</CardTitle>
@@ -178,7 +194,7 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
             <CardTitle className="text-base">Detalhes por Etapa</CardTitle>
           </CardHeader>
           <CardContent>
-            <StepPerformanceTable steps={steps} />
+            <StepPerformanceTable steps={steps} cadenceType={cadenceType} />
           </CardContent>
         </Card>
       </div>
@@ -192,12 +208,14 @@ function KpiCard({
   value,
   rate,
   rateLabel,
+  isPercent,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   rate?: number;
   rateLabel?: string;
+  isPercent?: boolean;
 }) {
   return (
     <Card>
@@ -206,7 +224,7 @@ function KpiCard({
           <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
         </div>
         <div>
-          <p className="text-2xl font-bold">{value}</p>
+          <p className="text-2xl font-bold">{value}{isPercent ? '%' : ''}</p>
           <p className="text-xs text-[var(--muted-foreground)]">
             {label}
             {rate !== undefined && ` · ${rate}% ${rateLabel ?? ''}`}

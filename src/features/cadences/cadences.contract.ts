@@ -123,14 +123,17 @@ export interface StepPerformanceMetrics {
   opened: number;
   replied: number;
   bounced: number;
+  pending: number;
   openRate: number;
   replyRate: number;
   bounceRate: number;
+  completionRate: number;
 }
 
 export interface CadencePerformanceData {
   cadenceId: string;
   cadenceName: string;
+  cadenceType: 'standard' | 'auto_email';
   summary: {
     sent: number;
     opened: number;

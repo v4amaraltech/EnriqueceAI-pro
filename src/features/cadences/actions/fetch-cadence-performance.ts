@@ -46,10 +46,10 @@ export async function fetchCadencePerformance(
   // Fetch cadence info
   const { data: cadence, error: cadenceErr } = await supabase
     .from('cadences')
-    .select('id, name')
+    .select('id, name, type')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
-    .single();
+    .single() as { data: { id: string; name: string; type: string } | null; error: { message: string } | null };
 
   if (cadenceErr || !cadence) {
     return { success: false, error: 'Cadência não encontrada' };
@@ -74,6 +74,19 @@ export async function fetchCadencePerformance(
   }
 
   const { data: enrollments } = await enrollmentQuery;
+
+  // Fetch active enrollments with current_step for pending counts
+  const { data: activeEnrollments } = (await (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .select('current_step')
+    .eq('cadence_id', cadenceId)
+    .eq('status', 'active')) as { data: Array<{ current_step: number }> | null; error: { message: string } | null };
+
+  // Build pending-per-step map
+  const pendingMap = new Map<number, number>();
+  for (const e of activeEnrollments ?? []) {
+    pendingMap.set(e.current_step, (pendingMap.get(e.current_step) ?? 0) + 1);
+  }
 
   // Fetch interactions
   let interactionQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
@@ -143,6 +156,7 @@ export async function fetchCadencePerformance(
   // Build step metrics
   const stepMetrics = (steps ?? []).map((s) => {
     const counts = stepMap.get(s.id) ?? { sent: 0, opened: 0, replied: 0, bounced: 0 };
+    const pending = pendingMap.get(s.step_order) ?? 0;
     return {
       stepId: s.id,
       stepOrder: s.step_order,
@@ -154,9 +168,11 @@ export async function fetchCadencePerformance(
       opened: counts.opened,
       replied: counts.replied,
       bounced: counts.bounced,
+      pending,
       openRate: safeRate(counts.opened, counts.sent),
       replyRate: safeRate(counts.replied, counts.sent),
       bounceRate: safeRate(counts.bounced, counts.sent),
+      completionRate: safeRate(counts.sent, counts.sent + pending),
     };
   });
 
@@ -165,6 +181,7 @@ export async function fetchCadencePerformance(
     data: {
       cadenceId: cadence.id,
       cadenceName: cadence.name,
+      cadenceType: (cadence.type === 'auto_email' ? 'auto_email' : 'standard') as 'standard' | 'auto_email',
       summary: {
         sent: totalSent,
         opened: totalOpened,
