@@ -30,8 +30,17 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SyncRequestBody;
 
     if (body.connectionId) {
-      // Manual sync: require authenticated user
+      // Manual sync: require authenticated user + verify connection belongs to their org
       await requireAuth();
+      const supabaseUser = await createServerSupabaseClient();
+      const { data: conn } = await supabaseUser
+        .from('crm_connections')
+        .select('id')
+        .eq('id', body.connectionId)
+        .maybeSingle();
+      if (!conn) {
+        return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
+      }
       const result = await CrmSyncService.syncConnection(body.connectionId);
       return NextResponse.json({
         success: true,

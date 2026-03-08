@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import { NextResponse, after } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -78,8 +80,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
   const webhookUrl = new URL(request.url);
-  const token = webhookUrl.searchParams.get('token') ?? request.headers.get('x-webhook-secret');
-  if (token !== webhookSecret) {
+  const token = webhookUrl.searchParams.get('token') ?? request.headers.get('x-webhook-secret') ?? '';
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(webhookSecret);
+  if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
     logger.warn('Invalid webhook secret');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
