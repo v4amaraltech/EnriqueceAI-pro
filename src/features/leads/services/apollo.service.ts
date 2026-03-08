@@ -17,6 +17,7 @@ export interface ApolloSearchParams {
   personSeniorities?: string[];
   contactEmailStatus?: string[];
   technologyUids?: string[];
+  organizationIndustryTagIds?: string[];
   revenueRange?: { min?: number; max?: number };
   includeSimilarTitles?: boolean;
   qKeywords?: string;
@@ -123,6 +124,7 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
   if (params.personSeniorities?.length) body.person_seniorities = params.personSeniorities;
   if (params.contactEmailStatus?.length) body.contact_email_status = params.contactEmailStatus;
   if (params.technologyUids?.length) body.currently_using_any_of_technology_uids = params.technologyUids;
+  if (params.organizationIndustryTagIds?.length) body.organization_industry_tag_ids = params.organizationIndustryTagIds;
   if (params.revenueRange) body.revenue_range = params.revenueRange;
   if (params.includeSimilarTitles !== undefined) body.include_similar_titles = params.includeSimilarTitles;
   if (params.qKeywords) body.q_keywords = params.qKeywords;

@@ -19,6 +19,7 @@ const searchSchema = z.object({
   personSeniorities: z.array(z.string()).optional(),
   contactEmailStatus: z.array(z.string()).optional(),
   technologyUids: z.array(z.string()).optional(),
+  organizationIndustryTagIds: z.array(z.string()).optional(),
   revenueRange: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
   includeSimilarTitles: z.boolean().optional(),
   qKeywords: z.string().optional(),
@@ -61,6 +62,7 @@ export async function searchApollo(input: SearchApolloInput): Promise<ActionResu
     (params.personSeniorities?.length ?? 0) > 0 ||
     (params.contactEmailStatus?.length ?? 0) > 0 ||
     (params.technologyUids?.length ?? 0) > 0 ||
+    (params.organizationIndustryTagIds?.length ?? 0) > 0 ||
     !!params.revenueRange ||
     !!params.qKeywords;
 

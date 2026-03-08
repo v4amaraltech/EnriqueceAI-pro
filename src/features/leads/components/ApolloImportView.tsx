@@ -21,7 +21,6 @@ type WizardStep = 'search' | 'importing' | 'report';
 export function ApolloImportView() {
   const [step, setStep] = useState<WizardStep>('search');
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [people, setPeople] = useState<ApolloSearchPerson[]>([]);
   const [totalResults, setTotalResults] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,19 +56,19 @@ export function ApolloImportView() {
     }
   }, []);
 
-  const handleLoadMore = useCallback(async () => {
+  const handleGoToPage = useCallback(async (page: number) => {
     if (!lastSearchParams) return;
 
-    setIsLoadingMore(true);
-    const nextPage = currentPage + 1;
-    const result = await searchApollo({ ...lastSearchParams, page: nextPage });
-    setIsLoadingMore(false);
+    setIsSearching(true);
+    const result = await searchApollo({ ...lastSearchParams, page });
+    setIsSearching(false);
 
     if (result.success) {
-      setPeople((prev) => [...prev, ...result.data.people]);
-      setCurrentPage(nextPage);
+      setPeople(result.data.people);
+      setTotalResults(result.data.total);
+      setCurrentPage(result.data.page);
     }
-  }, [lastSearchParams, currentPage]);
+  }, [lastSearchParams]);
 
   const handleToggle = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -245,12 +244,13 @@ export function ApolloImportView() {
               <ApolloResultsTable
                 people={people}
                 total={totalResults}
+                currentPage={currentPage}
+                perPage={25}
                 selectedIds={selectedIds}
                 onToggle={handleToggle}
                 onToggleAll={handleToggleAll}
-                onLoadMore={handleLoadMore}
-                hasMore={people.length < totalResults}
-                isLoadingMore={isLoadingMore}
+                onGoToPage={handleGoToPage}
+                isLoading={isSearching}
               />
 
               {selectedIds.size > 0 && (

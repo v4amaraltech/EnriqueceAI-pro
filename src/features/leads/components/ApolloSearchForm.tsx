@@ -19,6 +19,29 @@ const EMAIL_STATUS_OPTIONS = [
   { value: 'unverified', label: 'Nao verificado' },
 ];
 
+const INDUSTRY_OPTIONS = [
+  { value: '5567cd4773696439b10b0000', label: 'Tecnologia da Informação' },
+  { value: '5567e1277369641ad2040000', label: 'Software / SaaS' },
+  { value: '5567e1337369641ad2970000', label: 'Internet' },
+  { value: '5567cd4773696439b1080000', label: 'Serviços Financeiros' },
+  { value: '5567cd4773696439b1050000', label: 'Saúde' },
+  { value: '5567cd4773696439b1060000', label: 'Educação' },
+  { value: '5567e1277369641ad2070000', label: 'E-commerce / Varejo' },
+  { value: '5567e1337369641ad2950000', label: 'Hotelaria e Turismo' },
+  { value: '5567cd4773696439b1090000', label: 'Imobiliário' },
+  { value: '5567e1277369641ad2030000', label: 'Consultoria' },
+  { value: '5567cd4773696439b10a0000', label: 'Marketing e Publicidade' },
+  { value: '5567e1277369641ad2060000', label: 'Telecomunicações' },
+  { value: '5567e1337369641ad2940000', label: 'Construção' },
+  { value: '5567cd4773696439b1070000', label: 'Manufatura / Industrial' },
+  { value: '5567e1337369641ad2930000', label: 'Logística e Transporte' },
+  { value: '5567e1277369641ad2050000', label: 'Alimentos e Bebidas' },
+  { value: '5567e1337369641ad2960000', label: 'Automotivo' },
+  { value: '5567e1277369641ad2020000', label: 'Seguros' },
+  { value: '5567e1277369641ad2010000', label: 'Energia' },
+  { value: '5567e1337369641ad2920000', label: 'Agronegócio' },
+];
+
 const EMPLOYEE_RANGE_OPTIONS = [
   { value: '1,10', label: '1-10' },
   { value: '11,50', label: '11-50' },
@@ -54,6 +77,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
 
   // Multi-select arrays
   const [emailStatuses, setEmailStatuses] = useState<string[]>([]);
+  const [industries, setIndustries] = useState<string[]>([]);
   const [employeeRanges, setEmployeeRanges] = useState<string[]>([]);
 
   // Toggle
@@ -72,6 +96,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
       params.organizationLocations = locs;
     }
     if (keywords) params.organizationKeywords = splitCommaSeparated(keywords);
+    if (industries.length) params.organizationIndustryTagIds = industries;
     if (domains) params.organizationDomains = splitCommaSeparated(domains);
     if (emailStatuses.length) params.contactEmailStatus = emailStatuses;
     if (employeeRanges.length) params.employeeRanges = employeeRanges;
@@ -86,6 +111,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     setKeywords('');
     setDomains('');
     setEmailStatuses([]);
+    setIndustries([]);
     setEmployeeRanges([]);
     setIncludeSimilarTitles(true);
   }
@@ -167,15 +193,30 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
           Empresa
         </p>
 
+        <div className="space-y-2">
+          <Label>Indústria</Label>
+          <div className="grid grid-cols-1 gap-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {INDUSTRY_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={industries.includes(opt.value)}
+                  onCheckedChange={() => setIndustries((prev) => toggleInArray(prev, opt.value))}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-1.5">
-          <Label htmlFor="apollo-org-keywords">Setor / Industria</Label>
+          <Label htmlFor="apollo-org-keywords">Palavras-chave</Label>
           <Input
             id="apollo-org-keywords"
-            placeholder="hotel, saas, fintech, e-commerce"
+            placeholder="saas, fintech, real estate"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Use termos em ingles para melhores resultados (ex: saas, fintech, real estate). Separe com virgula</p>
+          <p className="text-xs text-[var(--muted-foreground)]">Termos livres para busca ampla. Separe com virgula</p>
         </div>
 
         <div className="space-y-1.5">

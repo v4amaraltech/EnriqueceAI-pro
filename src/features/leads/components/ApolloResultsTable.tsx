@@ -1,5 +1,7 @@
 'use client';
 
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -18,31 +20,36 @@ import type { ApolloSearchPerson } from '../services/apollo.service';
 interface ApolloResultsTableProps {
   people: ApolloSearchPerson[];
   total: number;
+  currentPage: number;
+  perPage: number;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
-  onLoadMore: () => void;
-  hasMore: boolean;
-  isLoadingMore: boolean;
+  onGoToPage: (page: number) => void;
+  isLoading: boolean;
 }
 
 export function ApolloResultsTable({
   people,
   total,
+  currentPage,
+  perPage,
   selectedIds,
   onToggle,
   onToggleAll,
-  onLoadMore,
-  hasMore,
-  isLoadingMore,
+  onGoToPage,
+  isLoading,
 }: ApolloResultsTableProps) {
   const allSelected = people.length > 0 && people.every((p) => selectedIds.has(p.id));
+  const totalPages = Math.ceil(total / perPage);
+  const from = (currentPage - 1) * perPage + 1;
+  const to = Math.min(currentPage * perPage, total);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <span className="text-sm text-[var(--muted-foreground)]">
-          Mostrando {people.length.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
+          Mostrando {from.toLocaleString('pt-BR')}-{to.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
         </span>
         {selectedIds.size > 0 && (
           <Badge variant="default">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</Badge>
@@ -105,13 +112,75 @@ export function ApolloResultsTable({
         </Table>
       </div>
 
-      {hasMore && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={onLoadMore} disabled={isLoadingMore}>
-            {isLoadingMore ? 'Carregando...' : 'Carregar mais resultados'}
-          </Button>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[var(--muted-foreground)]">
+            Página {currentPage} de {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onGoToPage(currentPage - 1)}
+              disabled={currentPage <= 1 || isLoading}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </Button>
+            {generatePageNumbers(currentPage, totalPages).map((page, i) =>
+              page === '...' ? (
+                <span key={`ellipsis-${i}`} className="px-2 text-sm text-[var(--muted-foreground)]">
+                  ...
+                </span>
+              ) : (
+                <Button
+                  key={page}
+                  variant={page === currentPage ? 'default' : 'outline'}
+                  size="sm"
+                  className="min-w-[36px]"
+                  onClick={() => onGoToPage(page as number)}
+                  disabled={isLoading}
+                >
+                  {page}
+                </Button>
+              ),
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onGoToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages || isLoading}
+            >
+              Próximo
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function generatePageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages: (number | '...')[] = [1];
+
+  if (current > 3) pages.push('...');
+
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+
+  if (current < total - 2) pages.push('...');
+
+  pages.push(total);
+
+  return pages;
 }
