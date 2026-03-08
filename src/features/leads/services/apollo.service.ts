@@ -161,9 +161,12 @@ export async function enrichPerson(
     body.webhook_url = params.webhookUrl;
   }
 
-  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
+  const data = await apolloFetch<Record<string, unknown>>(apiKey, '/people/match', body);
 
-  const p = data.person;
+  // Log raw response keys at top level
+  console.warn(`[apollo-enrich] RAW top-level keys: ${Object.keys(data).join(', ')}`);
+
+  const p = (data.person ?? data.match ?? data.contact) as ApolloPersonFull | null;
   if (p) {
     console.warn(
       `[apollo-enrich] ${p.first_name} ${p.last_name} | phone_numbers: ${JSON.stringify(p.phone_numbers)} | sanitized_phone: ${p.sanitized_phone}`,

@@ -129,8 +129,17 @@ export async function importApolloLeads(
       }
 
       phoneDebug.push(
-        `${enriched.first_name}: phone_numbers=${JSON.stringify(enriched.phone_numbers)} | sanitized=${enriched.sanitized_phone}`,
+        `KEYS: ${Object.keys(enriched).join(', ')}`,
       );
+      phoneDebug.push(
+        `PHONE FIELDS: phone_numbers=${JSON.stringify(enriched.phone_numbers)} | sanitized_phone=${enriched.sanitized_phone}`,
+      );
+      // Log any field containing "phone" in the raw response
+      for (const [k, v] of Object.entries(enriched)) {
+        if (k.toLowerCase().includes('phone') || k.toLowerCase().includes('mobile') || k.toLowerCase().includes('tel')) {
+          phoneDebug.push(`  ${k}: ${JSON.stringify(v)}`);
+        }
+      }
 
       const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo);
 
