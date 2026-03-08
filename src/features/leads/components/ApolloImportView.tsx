@@ -28,6 +28,7 @@ export function ApolloImportView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importResult, setImportResult] = useState<ImportApolloResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [perPage, setPerPage] = useState(25);
   const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = useCallback(async (params: SearchApolloInput) => {
@@ -36,7 +37,7 @@ export function ApolloImportView() {
     setHasSearched(true);
 
     try {
-      const result = await searchApollo(params);
+      const result = await searchApollo({ ...params, perPage });
 
       if (!result.success) {
         setError(result.error);
@@ -54,19 +55,35 @@ export function ApolloImportView() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [perPage]);
 
   const handleGoToPage = useCallback(async (page: number) => {
     if (!lastSearchParams) return;
 
     setIsSearching(true);
-    const result = await searchApollo({ ...lastSearchParams, page });
+    const result = await searchApollo({ ...lastSearchParams, page, perPage });
     setIsSearching(false);
 
     if (result.success) {
       setPeople(result.data.people);
       setTotalResults(result.data.total);
       setCurrentPage(result.data.page);
+    }
+  }, [lastSearchParams, perPage]);
+
+  const handleChangePerPage = useCallback(async (newPerPage: number) => {
+    setPerPage(newPerPage);
+    if (!lastSearchParams) return;
+
+    setIsSearching(true);
+    const result = await searchApollo({ ...lastSearchParams, page: 1, perPage: newPerPage });
+    setIsSearching(false);
+
+    if (result.success) {
+      setPeople(result.data.people);
+      setTotalResults(result.data.total);
+      setCurrentPage(1);
+      setSelectedIds(new Set());
     }
   }, [lastSearchParams]);
 
@@ -245,11 +262,12 @@ export function ApolloImportView() {
                 people={people}
                 total={totalResults}
                 currentPage={currentPage}
-                perPage={25}
+                perPage={perPage}
                 selectedIds={selectedIds}
                 onToggle={handleToggle}
                 onToggleAll={handleToggleAll}
                 onGoToPage={handleGoToPage}
+                onChangePerPage={handleChangePerPage}
                 isLoading={isSearching}
               />
 

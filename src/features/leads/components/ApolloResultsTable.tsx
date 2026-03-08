@@ -6,6 +6,13 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +33,7 @@ interface ApolloResultsTableProps {
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onGoToPage: (page: number) => void;
+  onChangePerPage: (perPage: number) => void;
   isLoading: boolean;
 }
 
@@ -38,6 +46,7 @@ export function ApolloResultsTable({
   onToggle,
   onToggleAll,
   onGoToPage,
+  onChangePerPage,
   isLoading,
 }: ApolloResultsTableProps) {
   const allSelected = people.length > 0 && people.every((p) => selectedIds.has(p.id));
@@ -47,13 +56,28 @@ export function ApolloResultsTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--muted-foreground)]">
-          Mostrando {from.toLocaleString('pt-BR')}-{to.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
-        </span>
-        {selectedIds.size > 0 && (
-          <Badge variant="default">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</Badge>
-        )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-[var(--muted-foreground)]">
+            Mostrando {from.toLocaleString('pt-BR')}-{to.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
+          </span>
+          {selectedIds.size > 0 && (
+            <Badge variant="default">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--muted-foreground)]">Por página:</span>
+          <Select value={String(perPage)} onValueChange={(v) => onChangePerPage(Number(v))}>
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-md border">

@@ -80,97 +80,109 @@ export function LeadFilters() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
-          <Input
-            placeholder="Buscar lead..."
-            className="pl-8"
-            defaultValue={currentSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                updateParam('search', e.currentTarget.value);
-              }
-            }}
-          />
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
+        <Input
+          placeholder="Buscar lead por nome, email, empresa ou CNPJ..."
+          className="pl-8"
+          defaultValue={currentSearch}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              updateParam('search', e.currentTarget.value);
+            }
+          }}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        {/* Status */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>
+          <Select
+            value={currentStatus || ALL_VALUE}
+            onValueChange={(v) => updateParam('status', v)}
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {leadStatusValues.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {statusLabels[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Status */}
-        <Select
-          value={currentStatus || ALL_VALUE}
-          onValueChange={(v) => updateParam('status', v)}
-        >
-          <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos status</SelectItem>
-            {leadStatusValues.map((s) => (
-              <SelectItem key={s} value={s}>
-                {statusLabels[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         {/* Enrichment */}
-        <Select
-          value={currentEnrichment || ALL_VALUE}
-          onValueChange={(v) => updateParam('enrichment_status', v)}
-        >
-          <SelectTrigger className="w-full sm:w-[160px]">
-            <SelectValue placeholder="Enriquecimento" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-            {enrichmentStatusValues.map((s) => (
-              <SelectItem key={s} value={s}>
-                {enrichmentLabels[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Enriquecimento</span>
+          <Select
+            value={currentEnrichment || ALL_VALUE}
+            onValueChange={(v) => updateParam('enrichment_status', v)}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {enrichmentStatusValues.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {enrichmentLabels[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Porte */}
-        <Select
-          value={currentPorte || ALL_VALUE}
-          onValueChange={(v) => updateParam('porte', v)}
-        >
-          <SelectTrigger className="w-full sm:w-[120px]">
-            <SelectValue placeholder="Porte" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos portes</SelectItem>
-            {porteOptions.map((p) => (
-              <SelectItem key={p.value} value={p.value}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Porte</span>
+          <Select
+            value={currentPorte || ALL_VALUE}
+            onValueChange={(v) => updateParam('porte', v)}
+          >
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {porteOptions.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* UF */}
-        <Select
-          value={currentUf || ALL_VALUE}
-          onValueChange={(v) => updateParam('uf', v)}
-        >
-          <SelectTrigger className="w-full sm:w-[100px]">
-            <SelectValue placeholder="UF" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos UFs</SelectItem>
-            {ufOptions.map((uf) => (
-              <SelectItem key={uf} value={uf}>
-                {uf}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">UF</span>
+          <Select
+            value={currentUf || ALL_VALUE}
+            onValueChange={(v) => updateParam('uf', v)}
+          >
+            <SelectTrigger className="w-[100px]">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {ufOptions.map((uf) => (
+                <SelectItem key={uf} value={uf}>
+                  {uf}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Clear filters */}
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="mb-0.5">
             <X className="mr-1 h-4 w-4" />
             Limpar
           </Button>
