@@ -35,6 +35,7 @@ const pathLabels: Record<string, string> = {
   'custom-fields': 'Campos Personalizados',
   'fit-score': 'Fit Score',
   import: 'Importar',
+  imports: 'Importações',
   apollo: 'Apollo',
   new: 'Novo',
   execution: 'Execução',
