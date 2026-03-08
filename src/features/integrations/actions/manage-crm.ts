@@ -14,6 +14,7 @@ import type {
 } from '../types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '../types/crm';
 import { CRMRegistry } from '../services/crm-registry';
+import { CrmSyncService } from '../services/crm-sync.service';
 
 function getCrmRedirectUri(provider: CrmProvider): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
@@ -234,14 +235,8 @@ export async function triggerCrmSync(
       .eq('id', connection.id);
 
     // Run sync in background (fire-and-forget from the action perspective)
-    // The actual sync is handled by the API route /api/crm/sync
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    fetch(`${appUrl}/api/crm/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ connectionId: connection.id }),
-    }).catch(() => {
-      // Fire-and-forget — errors will be logged in sync_log
+    void CrmSyncService.syncConnection(connection.id).catch((err) => {
+      console.error('[triggerCrmSync] Sync failed:', err);
     });
 
     return { success: true, data: { message: 'Sincronização iniciada' } };

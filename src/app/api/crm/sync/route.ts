@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/require-auth';
@@ -12,9 +14,18 @@ interface SyncRequestBody {
 }
 
 function verifyCronAuth(request: Request): boolean {
-  const authHeader = request.headers.get('authorization');
+  const authHeader = request.headers.get('authorization') ?? '';
   const expectedToken = process.env.CRON_SECRET;
-  return !!expectedToken && authHeader === `Bearer ${expectedToken}`;
+  if (!expectedToken) return false;
+  const expected = `Bearer ${expectedToken}`;
+  try {
+    return (
+      Buffer.byteLength(authHeader) === Buffer.byteLength(expected) &&
+      crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

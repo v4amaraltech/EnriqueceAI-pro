@@ -35,6 +35,14 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     return { success: false, error: 'Apenas arquivos CSV são aceitos' };
   }
 
+  const MAX_CSV_SIZE = 10 * 1024 * 1024; // 10 MB
+  if (file.size > MAX_CSV_SIZE) {
+    return {
+      success: false,
+      error: `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo permitido: 10MB.`,
+    };
+  }
+
   // Read file content
   const content = await file.text();
   const parsed = parseCsv(content);

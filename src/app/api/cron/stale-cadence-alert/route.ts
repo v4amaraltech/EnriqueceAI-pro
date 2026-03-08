@@ -1,11 +1,22 @@
+import crypto from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { checkStaleCadences } from '@/features/cadences/actions/stale-cadence-alert';
 
 function verifyAuth(request: Request): boolean {
-  const authHeader = request.headers.get('authorization');
+  const authHeader = request.headers.get('authorization') ?? '';
   const expectedToken = process.env.CRON_SECRET;
-  return !!expectedToken && authHeader === `Bearer ${expectedToken}`;
+  if (!expectedToken) return false;
+  const expected = `Bearer ${expectedToken}`;
+  try {
+    return (
+      Buffer.byteLength(authHeader) === Buffer.byteLength(expected) &&
+      crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: Request) {
