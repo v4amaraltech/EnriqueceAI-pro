@@ -79,22 +79,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: 'No email to match lead' });
   }
 
-  // Scope to org_id if provided (multi-tenant isolation)
+  // org_id is required for multi-tenant isolation
   const reqUrl = new URL(request.url);
   const orgId = reqUrl.searchParams.get('org_id');
+  if (!orgId) {
+    return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
+  }
 
   const supabase = createServiceRoleClient();
 
-  let query = (supabase
+  const query = (supabase
     .from('leads') as ReturnType<typeof supabase.from>)
     .select('id, phones')
     .eq('lead_source', 'apollo')
     .eq('email', email)
+    .eq('org_id', orgId)
     .is('deleted_at', null);
-
-  if (orgId) {
-    query = query.eq('org_id', orgId);
-  }
 
   const { data: lead } = await query
     .order('created_at', { ascending: false })

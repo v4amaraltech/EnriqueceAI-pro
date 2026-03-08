@@ -6,13 +6,13 @@ const AUTH_TAG_LENGTH = 16; // 128 bits
 
 /**
  * Returns the 32-byte encryption key from TOKEN_ENCRYPTION_KEY env var.
- * Returns null if not configured (graceful degradation for dev mode).
+ * In production, throws if not configured. In dev, returns null (graceful degradation).
  */
 function getKey(): Buffer | null {
   const hex = process.env.TOKEN_ENCRYPTION_KEY;
   if (!hex) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[SECURITY] TOKEN_ENCRYPTION_KEY is not set in production — OAuth tokens will be stored in plaintext!');
+      throw new Error('[SECURITY] TOKEN_ENCRYPTION_KEY is required in production — cannot store OAuth tokens in plaintext');
     }
     return null;
   }

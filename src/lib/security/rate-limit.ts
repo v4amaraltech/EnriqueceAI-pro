@@ -20,7 +20,12 @@ function getRedis(): Redis | null {
   if (redis) return redis;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  if (!url || !token) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting falls back to in-memory (ineffective on serverless)');
+    }
+    return null;
+  }
   redis = new Redis({ url, token });
   return redis;
 }

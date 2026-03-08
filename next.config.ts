@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
           key: 'Content-Security-Policy',
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.sentry.io https://vercel.live https://*.vercel.app",
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.sentry.io https://vercel.live https://*.vercel.app",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             "font-src 'self' data:",

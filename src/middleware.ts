@@ -9,11 +9,8 @@ const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip public API routes and other API routes
+  // Skip public API routes (webhooks, tracking, auth callbacks) — no session needed
   if (API_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.next();
-  }
-  if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 
@@ -27,6 +24,11 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 });
       }
     }
+  }
+
+  // Cron endpoints use Bearer auth, not session — skip session handling
+  if (pathname.startsWith('/api/cron/')) {
+    return NextResponse.next();
   }
 
   // Create supabase client with cookie handling

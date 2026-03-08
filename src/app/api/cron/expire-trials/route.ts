@@ -77,7 +77,7 @@ async function expireTrials() {
   return { success: true as const, data: { expired: expired?.length ?? 0, notified } };
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   if (!verifyAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -89,8 +89,4 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ ok: true, data: result.data });
-}
-
-export async function POST(request: Request) {
-  return GET(request);
 }
