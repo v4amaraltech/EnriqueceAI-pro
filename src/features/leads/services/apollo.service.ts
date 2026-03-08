@@ -129,8 +129,6 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
   if (params.includeSimilarTitles !== undefined) body.include_similar_titles = params.includeSimilarTitles;
   if (params.qKeywords) body.q_keywords = params.qKeywords;
 
-  console.log('[apollo-search] body:', JSON.stringify(body));
-
   const data = await apolloFetch<{
     people: ApolloSearchPerson[];
     total_entries: number;
