@@ -14,6 +14,7 @@ export interface ImportApolloResult {
   imported: number;
   duplicates: number;
   errors: number;
+  _phoneDebug?: string[];
 }
 
 interface ApolloPersonInput {
@@ -82,6 +83,7 @@ export async function importApolloLeads(
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  const phoneDebug: string[] = [];
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
   const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
@@ -121,9 +123,14 @@ export async function importApolloLeads(
 
       const enriched = enrichResult.value.person;
       if (!enriched) {
+        phoneDebug.push(`${chunk[j]!.id}: person=null`);
         errors++;
         continue;
       }
+
+      phoneDebug.push(
+        `${enriched.first_name}: phone_numbers=${JSON.stringify(enriched.phone_numbers)} | sanitized=${enriched.sanitized_phone}`,
+      );
 
       const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo);
 
@@ -164,7 +171,7 @@ export async function importApolloLeads(
 
   return {
     success: true,
-    data: { imported, duplicates, errors },
+    data: { imported, duplicates, errors, _phoneDebug: phoneDebug },
   };
 }
 
