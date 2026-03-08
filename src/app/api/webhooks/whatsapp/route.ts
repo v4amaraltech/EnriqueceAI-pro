@@ -50,6 +50,9 @@ export async function GET(request: Request) {
   const challenge = url.searchParams.get('hub.challenge');
 
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  if (!verifyToken) {
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
 
   if (mode === 'subscribe' && token === verifyToken && challenge) {
     return new Response(challenge, { status: 200 });

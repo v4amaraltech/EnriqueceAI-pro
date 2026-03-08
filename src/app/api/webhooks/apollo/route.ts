@@ -1,6 +1,9 @@
+import crypto from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { isEventProcessed, markEventProcessed } from '@/lib/webhooks';
 
 export const maxDuration = 30;
 
@@ -35,8 +38,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
   const url = new URL(request.url);
-  const token = url.searchParams.get('token');
-  if (token !== webhookSecret) {
+  const token = url.searchParams.get('token') ?? '';
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(webhookSecret);
+  if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -51,6 +56,14 @@ export async function POST(request: Request) {
   const person = payload.person;
   if (!person?.id) {
     return NextResponse.json({ ok: true, message: 'No person data' });
+  }
+
+  const supabase = createServiceRoleClient();
+
+  // Idempotency check — skip already-processed events
+  const eventId = `phone_${person.id}`;
+  if (await isEventProcessed(supabase, 'apollo', eventId)) {
+    return NextResponse.json({ ok: true, message: 'Already processed' });
   }
 
   const phoneNumbers = person.phone_numbers;
@@ -85,8 +98,6 @@ export async function POST(request: Request) {
   if (!orgId) {
     return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
   }
-
-  const supabase = createServiceRoleClient();
 
   const query = (supabase
     .from('leads') as ReturnType<typeof supabase.from>)
@@ -123,6 +134,9 @@ export async function POST(request: Request) {
       phones: mergedPhones,
     } as Record<string, unknown>)
     .eq('id', lead.id);
+
+  // Mark event as processed for idempotency
+  await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
 
   return NextResponse.json({ ok: true, updated: lead.id });
 }
