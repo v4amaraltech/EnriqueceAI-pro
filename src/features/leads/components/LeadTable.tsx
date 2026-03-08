@@ -27,6 +27,7 @@ import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bu
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
+import { EngagementScoreBadge } from './EngagementScoreBadge';
 import { LeadAvatar } from './LeadAvatar';
 import { LeadStatusBadge } from './LeadStatusBadge';
 
@@ -229,6 +230,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
               </TableHead>
               <TableHead>Lead</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-[70px]">Engajamento</TableHead>
               <TableHead>
                 <button
                   type="button"
@@ -288,6 +290,9 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <LeadStatusBadge status={lead.status} variant="meetime" />
+                  </TableCell>
+                  <TableCell onClick={() => navigateToLead(lead.id)}>
+                    <EngagementScoreBadge score={lead.engagement_score} size={28} />
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <span className="text-sm">

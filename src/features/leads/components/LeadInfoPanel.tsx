@@ -68,6 +68,7 @@ import type { InteractionType } from '@/features/cadences/types';
 import { EnrichmentStatusBadge, LeadStatusBadge } from './LeadStatusBadge';
 import { LeadNotes } from './LeadNotes';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
+import { EngagementScoreBadge } from './EngagementScoreBadge';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
 
 export interface LeadInfoPanelProps {
@@ -390,6 +391,11 @@ export function LeadInfoPanel({
           {data.fit_score != null && data.fit_score > 0 && (
             <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
               {data.fit_score}
+            </span>
+          )}
+          {data.engagement_score != null && (
+            <span className="absolute -top-1 -left-1">
+              <EngagementScoreBadge score={data.engagement_score} size={22} />
             </span>
           )}
         </div>

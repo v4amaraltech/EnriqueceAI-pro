@@ -31,6 +31,7 @@ interface RawLead {
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
   fit_score: number | null;
+  engagement_score: number | null;
 }
 
 interface EnrollmentRow {

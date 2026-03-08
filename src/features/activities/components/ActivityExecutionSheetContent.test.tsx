@@ -59,6 +59,7 @@ const baseLead = {
   enrichment_status: null,
   notes: null as string | null,
   fit_score: null as number | null,
+  engagement_score: null as number | null,
 };
 
 function makeActivity(channel: string, overrides: Partial<PendingActivity> = {}): PendingActivity {

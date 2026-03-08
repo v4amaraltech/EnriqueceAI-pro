@@ -55,6 +55,7 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
       enrichment_status: null,
       notes: null,
       fit_score: null,
+      engagement_score: null,
     },
     activityName: null,
     callScript: null,

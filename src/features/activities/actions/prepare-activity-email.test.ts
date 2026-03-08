@@ -58,6 +58,7 @@ const mockLead: ActivityLead = {
   enrichment_status: null,
   notes: null,
   fit_score: null,
+  engagement_score: null,
 };
 
 // ---------------------------------------------------------------------------

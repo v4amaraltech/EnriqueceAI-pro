@@ -20,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
+import { EngagementScoreBadge } from '@/features/leads/components/EngagementScoreBadge';
+
 import type { PendingActivity } from '../types';
 
 interface ActivityRowProps {
@@ -96,17 +98,20 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
         </p>
       </div>
 
-      {/* Column 3: LEAD (nome + email) */}
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
-          {activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj}
-        </p>
-        <p className="truncate text-xs text-[var(--muted-foreground)]">
-          {activity.lead.email
-            ?? (activity.lead.socios as Array<{ emails?: Array<{ email: string; ranking: number }> }> | null)
-              ?.[0]?.emails?.sort((a, b) => a.ranking - b.ranking)[0]?.email
-            ?? 'Sem email'}
-        </p>
+      {/* Column 3: LEAD (nome + email + engagement) */}
+      <div className="flex items-center gap-2 min-w-0">
+        <EngagementScoreBadge score={activity.lead.engagement_score} size={24} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            {activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj}
+          </p>
+          <p className="truncate text-xs text-[var(--muted-foreground)]">
+            {activity.lead.email
+              ?? (activity.lead.socios as Array<{ emails?: Array<{ email: string; ranking: number }> }> | null)
+                ?.[0]?.emails?.sort((a, b) => a.ranking - b.ranking)[0]?.email
+              ?? 'Sem email'}
+          </p>
+        </div>
       </div>
 
       {/* Column 4: AÇÕES */}

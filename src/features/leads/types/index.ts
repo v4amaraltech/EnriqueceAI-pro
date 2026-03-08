@@ -64,6 +64,7 @@ export interface LeadRow {
   linkedin: string | null;
   website: string | null;
   fit_score: number | null;
+  engagement_score: number | null;
   enriched_at: string | null;
   email_bounced_at: string | null;
   created_by: string | null;

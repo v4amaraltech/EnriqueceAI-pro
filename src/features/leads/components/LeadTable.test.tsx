@@ -46,6 +46,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     linkedin: null,
     website: null,
     fit_score: null,
+    engagement_score: null,
     enriched_at: null,
     created_by: null,
     import_id: null,

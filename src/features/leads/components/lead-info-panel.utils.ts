@@ -21,6 +21,7 @@ export interface LeadInfoPanelData {
   endereco: LeadAddress | null;
   socios: LeadSocio[] | null;
   fit_score: number | null;
+  engagement_score: number | null;
   status: LeadStatus | null;
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
@@ -49,6 +50,7 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     endereco: lead.endereco,
     socios: lead.socios,
     fit_score: lead.fit_score,
+    engagement_score: lead.engagement_score,
     status: lead.status,
     enrichment_status: lead.enrichment_status,
     notes: lead.notes,
@@ -78,6 +80,7 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     endereco: lead.endereco ?? (lead.municipio || lead.uf ? { cidade: lead.municipio ?? undefined, uf: lead.uf ?? undefined } : null),
     socios: lead.socios,
     fit_score: lead.fit_score,
+    engagement_score: lead.engagement_score,
     status: lead.status,
     enrichment_status: lead.enrichment_status,
     notes: lead.notes,

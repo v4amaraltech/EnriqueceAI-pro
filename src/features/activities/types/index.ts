@@ -24,6 +24,7 @@ export interface ActivityLead {
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
   fit_score: number | null;
+  engagement_score: number | null;
 }
 
 // A single pending activity derived from enrollment + step + cadence
