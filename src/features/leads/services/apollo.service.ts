@@ -169,12 +169,8 @@ export async function enrichPerson(
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
 
-  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(
-    apiKey,
-    '/people/match',
-    body,
-    { reveal_phone_number: 'true' },
-  );
+  // TODO: add reveal_phone_number once we confirm the correct param format
+  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
 
   return { person: data.person ?? null };
 }
