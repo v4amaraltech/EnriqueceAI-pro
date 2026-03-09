@@ -121,7 +121,7 @@ export async function importApolloLeads(
         continue;
       }
 
-      const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo, enriched.id);
+      const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo, enriched.id, chunk[j]!.organizationName);
 
       // Check duplicate by email
       if (lead.email) {
@@ -168,6 +168,7 @@ function mapApolloToLead(
   userId: string,
   assignTo: string | null,
   apolloPersonId?: string,
+  searchOrgName?: string | null,
 ) {
   const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
   const org = person.organization;
@@ -191,7 +192,7 @@ function mapApolloToLead(
     enrichment_status: 'enriched',
     first_name: person.first_name ?? null,
     last_name: person.last_name ?? null,
-    razao_social: org?.name ?? null,
+    razao_social: org?.name ?? searchOrgName ?? null,
     nome_fantasia: null,
     job_title: person.title ?? null,
     lead_source: 'apollo',
