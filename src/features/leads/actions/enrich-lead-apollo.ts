@@ -18,7 +18,7 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
 
   // Verify lead belongs to user's org
   const { data: lead } = (await from(supabase, 'leads')
-    .select('id, org_id, first_name, last_name, email, linkedin, razao_social, source_id, telefone, phones, job_title, website, porte')
+    .select('id, org_id, first_name, last_name, email, linkedin, razao_social, nome_fantasia, source_id, telefone, phones, job_title, website, porte')
     .eq('id', leadId)
     .single()) as {
     data: {
@@ -29,6 +29,7 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
       email: string | null;
       linkedin: string | null;
       razao_social: string | null;
+      nome_fantasia: string | null;
       source_id: string | null;
       telefone: string | null;
       phones: LeadPhone[] | null;
@@ -84,7 +85,10 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
     if (!lead.job_title && person.title) updates.job_title = person.title;
     if (!lead.linkedin && person.linkedin_url) updates.linkedin = person.linkedin_url;
     if (!lead.website && person.organization?.website_url) updates.website = person.organization.website_url;
-    if (!lead.razao_social && person.organization?.name) updates.razao_social = person.organization.name;
+    if (person.organization?.name) {
+      if (!lead.razao_social) updates.razao_social = person.organization.name;
+      if (!lead.nome_fantasia) updates.nome_fantasia = person.organization.name;
+    }
     if (!lead.porte && person.organization?.estimated_num_employees) {
       updates.porte = categorizePorte(person.organization.estimated_num_employees);
     }
