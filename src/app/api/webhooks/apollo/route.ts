@@ -32,6 +32,7 @@ interface ApolloWebhookPerson {
     raw_number: string;
     sanitized_number?: string;
     type?: string;
+    type_cd?: string;
     confidence_cd?: string;
     status_cd?: string;
     dnc_status_cd?: string;
@@ -110,7 +111,8 @@ export async function POST(request: Request) {
     const phones: { tipo: string; numero: string }[] = [];
     if (phoneNumbers && phoneNumbers.length > 0) {
       for (const pn of phoneNumbers) {
-        const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
+        const phoneType = pn.type_cd ?? pn.type ?? '';
+        const tipo = phoneType === 'mobile' || phoneType === 'mobile_phone' ? 'celular' : 'fixo';
         phones.push({ tipo, numero: pn.raw_number });
       }
     } else if (sanitizedPhone) {
