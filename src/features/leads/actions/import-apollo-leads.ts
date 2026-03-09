@@ -103,6 +103,7 @@ export async function importApolloLeads(
       const enrichResult = enrichedResults[j]!;
 
       if (enrichResult.status === 'rejected') {
+        console.error('[apollo-import] enrichPerson failed:', enrichResult.reason);
         errors++;
         continue;
       }

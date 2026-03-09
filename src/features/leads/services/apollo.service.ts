@@ -156,10 +156,9 @@ export async function enrichPerson(
   apiKey: string,
   params: { id?: string; firstName?: string; lastName?: string; email?: string; organizationName?: string; domain?: string; linkedinUrl?: string },
 ): Promise<{ person: ApolloPersonFull | null }> {
-  // api_key in body (Make.com pattern) + reveal_phone_number to request phone data
+  // api_key in body (Make.com pattern), reveal_phone_number as query param (Apollo docs)
   const body: Record<string, unknown> = {
     api_key: apiKey,
-    reveal_phone_number: true,
   };
 
   if (params.id) body.id = params.id;
@@ -170,7 +169,12 @@ export async function enrichPerson(
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
 
-  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
+  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(
+    apiKey,
+    '/people/match',
+    body,
+    { reveal_phone_number: 'true' },
+  );
 
   return { person: data.person ?? null };
 }
