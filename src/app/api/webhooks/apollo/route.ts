@@ -34,7 +34,7 @@ interface ApolloPhoneWebhook {
 
 export async function POST(request: Request) {
   // Verify webhook secret (passed as query param)
-  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
+  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
   if (!webhookSecret) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
   const tokenBuf = Buffer.from(token);
   const secretBuf = Buffer.from(webhookSecret);
   if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
+    console.warn('[apollo-webhook] Auth failed: tokenLen=%d secretLen=%d', tokenBuf.length, secretBuf.length);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -54,8 +55,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  // Diagnostic logging — remove after confirming phone flow works
+  console.warn('[apollo-webhook] Received payload:', JSON.stringify({
+    personId: payload.person?.id,
+    email: payload.person?.email,
+    sanitized_phone: payload.person?.sanitized_phone,
+    phone_numbers: payload.person?.phone_numbers,
+    orgId: new URL(request.url).searchParams.get('org_id'),
+  }));
+
   const person = payload.person;
   if (!person?.id) {
+    console.warn('[apollo-webhook] No person data in payload');
     return NextResponse.json({ ok: true, message: 'No person data' });
   }
 
@@ -71,6 +82,7 @@ export async function POST(request: Request) {
   const sanitizedPhone = person.sanitized_phone;
 
   if ((!phoneNumbers || phoneNumbers.length === 0) && !sanitizedPhone) {
+    console.warn('[apollo-webhook] No phone data for person=%s', person.id);
     return NextResponse.json({ ok: true, message: 'No phone data' });
   }
 
@@ -113,6 +125,7 @@ export async function POST(request: Request) {
     .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
 
   if (!lead) {
+    console.warn('[apollo-webhook] Lead not found for email=%s org=%s', email, orgId);
     return NextResponse.json({ ok: true, message: 'Lead not found' });
   }
 
@@ -137,5 +150,6 @@ export async function POST(request: Request) {
   // Mark event as processed for idempotency
   await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
 
+  console.warn('[apollo-webhook] Updated lead=%s with %d phones, primary=%s', lead.id, mergedPhones.length, primaryPhone);
   return NextResponse.json({ ok: true, updated: lead.id });
 }

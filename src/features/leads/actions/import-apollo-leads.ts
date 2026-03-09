@@ -82,7 +82,7 @@ export async function importApolloLeads(
   let errors = 0;
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET;
+  const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
   const webhookParams = new URLSearchParams();
   if (apolloWebhookSecret) webhookParams.set('token', apolloWebhookSecret);
   webhookParams.set('org_id', orgId);
@@ -118,6 +118,14 @@ export async function importApolloLeads(
         errors++;
         continue;
       }
+
+      // Diagnostic logging — remove after confirming phone flow works
+      console.warn('[apollo-import] enrichPerson response phone data:', {
+        email: enriched.email,
+        sanitized_phone: enriched.sanitized_phone,
+        phone_numbers: enriched.phone_numbers,
+        has_phones: (enriched.phone_numbers?.length ?? 0) > 0 || !!enriched.sanitized_phone,
+      });
 
       const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo);
 
