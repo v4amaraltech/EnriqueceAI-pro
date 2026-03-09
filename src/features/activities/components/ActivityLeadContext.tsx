@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
+import { from } from '@/lib/supabase/from';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadInfoPanel } from '@/features/leads/components/LeadInfoPanel';
@@ -24,8 +25,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps }
     const supabase = createClient();
 
     (async () => {
-      const { data } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data } = (await from(supabase, 'interactions')
         .select('id, type, channel, message_content, ai_generated, created_at')
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false })

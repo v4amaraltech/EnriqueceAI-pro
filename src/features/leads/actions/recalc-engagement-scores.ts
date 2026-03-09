@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 const CHUNK_SIZE = 100;
 
@@ -14,7 +15,7 @@ export async function recalcEngagementScoresForOrg(): Promise<ActionResult<{ upd
   const { orgId, supabase } = await getManagerOrgId();
 
   // Fetch lead IDs
-  const { data: leads, error } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: leads, error } = (await from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
     .is('deleted_at', null)) as {

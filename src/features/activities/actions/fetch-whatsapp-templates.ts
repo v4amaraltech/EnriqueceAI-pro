@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export interface WhatsAppTemplateOption {
   id: string;
@@ -25,8 +26,7 @@ export async function fetchWhatsAppTemplates(): Promise<ActionResult<WhatsAppTem
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'message_templates')
     .select('id, name, body')
     .eq('org_id', member.org_id)
     .eq('channel', 'whatsapp')

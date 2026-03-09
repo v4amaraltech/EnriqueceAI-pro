@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import { CONVERSION_COLORS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -49,7 +50,7 @@ export async function fetchConversionAnalyticsData(
   cadenceId?: string,
 ): Promise<ConversionAnalyticsData> {
   // Fetch leads
-  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let leadsQuery = from(supabase, 'leads')
     .select('id, status, created_at, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
@@ -63,7 +64,7 @@ export async function fetchConversionAnalyticsData(
   const leads = rawLeads ?? [];
 
   // Fetch interactions
-  let intQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let intQuery = from(supabase, 'interactions')
     .select('type, lead_id, cadence_id, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
@@ -77,7 +78,7 @@ export async function fetchConversionAnalyticsData(
   const interactions = rawInteractions ?? [];
 
   // Fetch enrollments
-  let enrQuery = (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, enrolled_by, created_at, updated_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)

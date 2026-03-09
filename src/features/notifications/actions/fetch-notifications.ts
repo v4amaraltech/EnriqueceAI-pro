@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchNotificationsSchema } from '../schemas/notification.schemas';
@@ -39,7 +40,7 @@ export async function fetchNotifications(
   }
 
   // Fetch notifications
-  let query = (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'notifications')
     .select('*', { count: 'exact' })
     .eq('user_id', user.id)
     .eq('org_id', member.org_id)
@@ -61,7 +62,7 @@ export async function fetchNotifications(
   }
 
   // Get unread count
-  const { count: unreadCount } = (await (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+  const { count: unreadCount } = (await from(supabase, 'notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .eq('org_id', member.org_id)

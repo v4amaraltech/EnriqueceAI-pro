@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { from } from '@/lib/supabase/from';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -49,8 +50,7 @@ async function getFailedAttemptCount(
   leadId: string,
   stepId: string,
 ): Promise<number> {
-  const { count } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { count } = (await from(supabase, 'interactions')
     .select('id', { count: 'exact', head: true })
     .eq('cadence_id', cadenceId)
     .eq('lead_id', leadId)
@@ -74,7 +74,7 @@ async function autoPauseEnrollment(
     channel: 'email' | 'whatsapp';
   },
 ): Promise<void> {
-  await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update({ status: 'paused' } as Record<string, unknown>)
     .eq('id', enrollmentId);
   console.error(`[cadence-engine] enrollment=${enrollmentId} status=auto_paused reason=${reason}`);
@@ -114,7 +114,7 @@ async function markInteractionFailed(
   interactionId: string,
   errorReason: string,
 ): Promise<void> {
-  await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'interactions')
     .update({
       type: 'failed',
       metadata: { error: errorReason },
@@ -189,8 +189,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   const startTime = Date.now();
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
-  const { data: enrollments, error: enrollError } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
     .select('*, lead:leads(*), cadence:cadences!inner(status, name, type)')
     .eq('status', 'active')
     .eq('cadence.status', 'active')
@@ -219,8 +218,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   const orgIds = [...new Set((enrollments ?? []).map((e) => e.lead.org_id))];
   const blacklistedDomains = new Set<string>();
   if (orgIds.length > 0) {
-    const { data: blacklistRows } = (await (supabase
-      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+    const { data: blacklistRows } = (await from(supabase, 'email_blacklist')
       .select('domain, org_id')
       .in('org_id', orgIds)) as { data: Array<{ domain: string; org_id: string }> | null };
     for (const row of blacklistRows ?? []) {
@@ -234,15 +232,14 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
     try {
       // Fetch current step
-      const { data: step } = (await (supabase
-        .from('cadence_steps') as ReturnType<typeof supabase.from>)
+      const { data: step } = (await from(supabase, 'cadence_steps')
         .select('*')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('step_order', enrollment.current_step)
         .single()) as { data: CadenceStepRow | null };
 
       if (!step) {
-        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'cadence_enrollments')
           .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
         result.completed++;
@@ -259,8 +256,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
       // Idempotency check: skip if a *successful* interaction already exists for this enrollment + step
       // Only checks for 'sent' type so that failed interactions can be retried on the next batch
-      const { data: existingInteraction } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data: existingInteraction } = (await from(supabase, 'interactions')
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('step_id', step.id)
@@ -271,8 +267,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
       if (existingInteraction) {
         // Already executed this step — advance to next so enrollment doesn't get stuck
-        const { data: nextIdempStep } = (await (supabase
-          .from('cadence_steps') as ReturnType<typeof supabase.from>)
+        const { data: nextIdempStep } = (await from(supabase, 'cadence_steps')
           .select('step_order')
           .eq('cadence_id', enrollment.cadence_id)
           .gt('step_order', enrollment.current_step)
@@ -281,11 +276,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           .maybeSingle()) as { data: { step_order: number } | null };
 
         if (nextIdempStep) {
-          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+          await from(supabase, 'cadence_enrollments')
             .update({ current_step: nextIdempStep.step_order } as Record<string, unknown>)
             .eq('id', enrollment.id);
         } else {
-          await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+          await from(supabase, 'cadence_enrollments')
             .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
             .eq('id', enrollment.id);
           result.completed++;
@@ -296,8 +291,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Auto-stop: check if lead already replied to this cadence
-      const { data: replyInteraction } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data: replyInteraction } = (await from(supabase, 'interactions')
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('lead_id', enrollment.lead_id)
@@ -306,7 +300,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { id: string } | null };
 
       if (replyInteraction) {
-        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'cadence_enrollments')
           .update({ status: 'replied' } as Record<string, unknown>)
           .eq('id', enrollment.id);
         result.skipped++;
@@ -315,8 +309,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Auto-stop: check if lead's email bounced in this cadence
-      const { data: bounceInteraction } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data: bounceInteraction } = (await from(supabase, 'interactions')
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('lead_id', enrollment.lead_id)
@@ -325,7 +318,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { id: string } | null };
 
       if (bounceInteraction) {
-        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'cadence_enrollments')
           .update({ status: 'bounced' } as Record<string, unknown>)
           .eq('id', enrollment.id);
         result.skipped++;
@@ -350,8 +343,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       if (selectedTemplateId) {
-        const { data: template } = (await (supabase
-          .from('message_templates') as ReturnType<typeof supabase.from>)
+        const { data: template } = (await from(supabase, 'message_templates')
           .select('*')
           .eq('id', selectedTemplateId)
           .single()) as { data: MessageTemplateRow | null };
@@ -364,8 +356,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             email_vendedor: null,
           };
           try {
-            const { data: cadenceForVendor } = (await (supabase
-              .from('cadences') as ReturnType<typeof supabase.from>)
+            const { data: cadenceForVendor } = (await from(supabase, 'cadences')
               .select('created_by')
               .eq('id', enrollment.cadence_id)
               .single()) as { data: { created_by: string | null } | null };
@@ -414,8 +405,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       if (subject) interactionMeta.subject = subject;
       if (abVariant) interactionMeta.ab_variant = abVariant;
 
-      const { data: interaction } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data: interaction } = (await from(supabase, 'interactions')
         .insert({
           org_id: enrollment.lead.org_id,
           lead_id: enrollment.lead_id,
@@ -484,8 +474,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         // Use cached cadenceCreatedBy (fetched earlier for vendor vars)
         if (!cadenceCreatedBy) {
           // Fallback: fetch if template block was skipped
-          const { data: cadenceFallback } = (await (supabase
-            .from('cadences') as ReturnType<typeof supabase.from>)
+          const { data: cadenceFallback } = (await from(supabase, 'cadences')
             .select('created_by')
             .eq('id', enrollment.cadence_id)
             .single()) as { data: { created_by: string | null } | null };
@@ -504,8 +493,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         let replyThreadId: string | undefined;
         const stepReplyType = (step as CadenceStepRow & { reply_type?: ReplyType }).reply_type;
         if (stepReplyType === 'reply') {
-          const { data: prevInteraction } = (await (supabase
-            .from('interactions') as ReturnType<typeof supabase.from>)
+          const { data: prevInteraction } = (await from(supabase, 'interactions')
             .select('metadata, external_id')
             .eq('cadence_id', enrollment.cadence_id)
             .eq('lead_id', enrollment.lead_id)
@@ -553,7 +541,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           if (Object.keys(metaUpdate).length > 0) {
             updateData.metadata = metaUpdate;
           }
-          await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+          await from(supabase, 'interactions')
             .update(updateData)
             .eq('id', interaction.id);
           sendSuccess = true;
@@ -591,8 +579,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Check if there's a next step (handles non-contiguous step_order)
-      const { data: nextStep } = (await (supabase
-        .from('cadence_steps') as ReturnType<typeof supabase.from>)
+      const { data: nextStep } = (await from(supabase, 'cadence_steps')
         .select('step_order')
         .eq('cadence_id', enrollment.cadence_id)
         .gt('step_order', enrollment.current_step)
@@ -601,11 +588,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { step_order: number } | null };
 
       if (nextStep) {
-        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'cadence_enrollments')
           .update({ current_step: nextStep.step_order } as Record<string, unknown>)
           .eq('id', enrollment.id);
       } else {
-        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'cadence_enrollments')
           .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
         result.completed++;

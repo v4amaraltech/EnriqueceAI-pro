@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { decrypt, encrypt } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SendEmailParams {
@@ -138,7 +139,7 @@ export async function refreshAccessToken(
   });
 
   if (!tokenResponse.ok) {
-    await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'gmail_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);
     return { error: 'Falha ao renovar token Gmail — reconexão necessária' };
@@ -151,7 +152,7 @@ export async function refreshAccessToken(
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'gmail_connections')
     .update({
       access_token_encrypted: encrypt(tokens.access_token),
       token_expires_at: expiresAt,
@@ -179,8 +180,7 @@ export class EmailService {
     const supabase = supabaseClient ?? (await createServerSupabaseClient());
 
     // Fetch Gmail connection (include 'error' status — will attempt auto-refresh)
-    const { data: connection } = (await (supabase
-      .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    const { data: connection } = (await from(supabase, 'gmail_connections')
       .select('*')
       .eq('org_id', orgId)
       .eq('user_id', userId)

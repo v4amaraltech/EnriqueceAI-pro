@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
@@ -63,8 +64,7 @@ export async function fetchActivityLog(
   const search = typeof rawFilters.search === 'string' ? rawFilters.search : undefined;
 
   // Fetch active enrollments (all — not filtered by next_step_due)
-  let query = (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)', { count: 'exact' })
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
@@ -89,8 +89,7 @@ export async function fetchActivityLog(
   // Batch-fetch steps + templates
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
 
-  const { data: steps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: steps } = (await from(supabase, 'cadence_steps')
     .select('*')
     .in('cadence_id', cadenceIds)) as { data: CadenceStepRow[] | null };
 
@@ -100,8 +99,7 @@ export async function fetchActivityLog(
 
   let templates: MessageTemplateRow[] = [];
   if (templateIds.length > 0) {
-    const { data: tplData } = (await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    const { data: tplData } = (await from(supabase, 'message_templates')
       .select('*')
       .in('id', templateIds)) as { data: MessageTemplateRow[] | null };
     templates = tplData ?? [];

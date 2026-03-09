@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
 
 import type { AbVariantRates, StepAbMetrics } from '../cadences.contract';
@@ -31,8 +32,7 @@ export async function fetchStepAbMetrics(
   const supabase = await createServerSupabaseClient();
 
   // Fetch step info for winner and enabled_at
-  const { data: step } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: step } = (await from(supabase, 'cadence_steps')
     .select('step_order, ab_winner_variant, ab_winner_at, ab_enabled_at')
     .eq('id', stepId)
     .single()) as { data: StepRow | null };
@@ -41,8 +41,7 @@ export async function fetchStepAbMetrics(
     return { success: false, error: 'Step não encontrado' };
   }
 
-  const { data: rows, error } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: rows, error } = (await from(supabase, 'interactions')
     .select('type, metadata')
     .eq('step_id', stepId)
     .in('type', ['sent', 'opened', 'replied', 'bounced'])) as {

@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { calculateMonthlyTotal } from '../services/feature-flags';
@@ -30,8 +31,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   }
 
   // Fetch subscription with plan
-  const { data: subscription } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('*')
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: SubscriptionRow | null };
@@ -41,8 +41,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   }
 
   // Fetch plan
-  const { data: plan } = (await (supabase
-    .from('plans') as ReturnType<typeof supabase.from>)
+  const { data: plan } = (await from(supabase, 'plans')
     .select('*')
     .eq('id', subscription.plan_id)
     .single()) as { data: PlanRow | null };
@@ -52,8 +51,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   }
 
   // Fetch member count
-  const { count: memberCount } = (await (supabase
-    .from('organization_members') as ReturnType<typeof supabase.from>)
+  const { count: memberCount } = (await from(supabase, 'organization_members')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', member.org_id)
     .eq('status', 'active')) as { count: number | null };
@@ -63,8 +61,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
 
   // Fetch AI usage today
   const today = new Date().toISOString().split('T')[0];
-  const { data: aiUsage } = (await (supabase
-    .from('ai_usage') as ReturnType<typeof supabase.from>)
+  const { data: aiUsage } = (await from(supabase, 'ai_usage')
     .select('generation_count, daily_limit')
     .eq('org_id', member.org_id)
     .eq('usage_date', today)
@@ -72,8 +69,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
 
   // Fetch WhatsApp credits for current month
   const currentPeriod = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const { data: waCredits } = (await (supabase
-    .from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+  const { data: waCredits } = (await from(supabase, 'whatsapp_credits')
     .select('used_credits, plan_credits, period')
     .eq('org_id', member.org_id)
     .eq('period', currentPeriod)
@@ -116,15 +112,13 @@ export async function fetchPlanComparison(): Promise<ActionResult<PlanComparison
   }
 
   // Fetch all active plans
-  const { data: plans } = (await (supabase
-    .from('plans') as ReturnType<typeof supabase.from>)
+  const { data: plans } = (await from(supabase, 'plans')
     .select('*')
     .eq('active', true)
     .order('price_cents', { ascending: true })) as { data: PlanRow[] | null };
 
   // Get current subscription
-  const { data: subscription } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('plan_id')
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: { plan_id: string } | null };

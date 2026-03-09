@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 import { getEnv } from '@/config/env';
 
 import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
@@ -46,22 +47,19 @@ export async function importApolloLeads(
   const supabase = await createServerSupabaseClient();
 
   // Check lead limit
-  const { data: sub } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: sub } = (await from(supabase, 'subscriptions')
     .select('plan_id')
     .eq('org_id', orgId)
     .maybeSingle()) as { data: { plan_id: string } | null };
 
   if (sub) {
-    const { data: plan } = (await (supabase
-      .from('plans') as ReturnType<typeof supabase.from>)
+    const { data: plan } = (await from(supabase, 'plans')
       .select('max_leads')
       .eq('id', sub.plan_id)
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
-      const { count: leadCount } = (await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { count: leadCount } = (await from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .is('deleted_at', null)) as { count: number | null };
@@ -125,8 +123,7 @@ export async function importApolloLeads(
 
       // Check duplicate by email
       if (lead.email) {
-        const { data: existing } = (await (supabase
-          .from('leads') as ReturnType<typeof supabase.from>)
+        const { data: existing } = (await from(supabase, 'leads')
           .select('id')
           .eq('org_id', orgId)
           .eq('email', lead.email)
@@ -139,8 +136,7 @@ export async function importApolloLeads(
         }
       }
 
-      const { error: insertError } = await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { error: insertError } = await from(supabase, 'leads')
         .insert(lead as Record<string, unknown>);
 
       if (insertError) {

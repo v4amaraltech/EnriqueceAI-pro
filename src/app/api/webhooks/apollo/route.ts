@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { NextResponse } from 'next/server';
 
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { isEventProcessed, markEventProcessed } from '@/lib/webhooks';
 
@@ -99,8 +100,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
   }
 
-  const query = (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const query = from(supabase, 'leads')
     .select('id, phones')
     .eq('lead_source', 'apollo')
     .eq('email', email)
@@ -127,8 +127,7 @@ export async function POST(request: Request) {
     }
   }
 
-  await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({
       telefone: primaryPhone,
       phones: mergedPhones,

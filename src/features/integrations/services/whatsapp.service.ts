@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { decrypt } from '@/lib/security/encryption';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 const WHATSAPP_RATE_LIMIT = 80; // msgs per second (Meta API limit)
@@ -64,8 +65,7 @@ export class WhatsAppService {
     const supabase = supabaseClient ?? await createServerSupabaseClient();
 
     // Fetch WhatsApp connection
-    const { data: connection } = (await (supabase
-      .from('whatsapp_connections') as ReturnType<typeof supabase.from>)
+    const { data: connection } = (await from(supabase, 'whatsapp_connections')
       .select('*')
       .eq('org_id', orgId)
       .eq('status', 'connected')

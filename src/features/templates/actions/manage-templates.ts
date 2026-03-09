@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { createTemplateSchema, updateTemplateSchema, TEMPLATE_VARIABLE_REGEX } from '../index';
@@ -26,8 +27,7 @@ export async function createTemplate(
   const allText = `${subject ?? ''} ${body}`;
   const variables_used = extractVarsFromText(allText);
 
-  const { data, error } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'message_templates')
     .insert({
       org_id: orgId,
       name,
@@ -61,8 +61,7 @@ export async function updateTemplate(
   const supabase = await createServerSupabaseClient();
 
   // Check template exists and ownership
-  const { data: existing } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data: existing } = (await from(supabase, 'message_templates')
     .select('is_system, created_by')
     .eq('id', templateId)
     .eq('org_id', orgId)
@@ -86,8 +85,7 @@ export async function updateTemplate(
   // Recalculate variables_used if body or subject changed
   if (parsed.data.body || parsed.data.subject !== undefined) {
     // Need full data to calculate
-    const { data: full } = (await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    const { data: full } = (await from(supabase, 'message_templates')
       .select('subject, body')
       .eq('id', templateId)
       .single()) as { data: { subject: string | null; body: string } | null };
@@ -99,8 +97,7 @@ export async function updateTemplate(
     }
   }
 
-  const { data, error } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'message_templates')
     .update(updates as Record<string, unknown>)
     .eq('id', templateId)
     .eq('org_id', orgId)
@@ -121,8 +118,7 @@ export async function deleteTemplate(
   const supabase = await createServerSupabaseClient();
 
   // Check exists and ownership
-  const { data: existing } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data: existing } = (await from(supabase, 'message_templates')
     .select('is_system, created_by')
     .eq('id', templateId)
     .eq('org_id', orgId)
@@ -141,8 +137,7 @@ export async function deleteTemplate(
     return { success: false, error: 'Você só pode deletar seus próprios templates' };
   }
 
-  const { error } = await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'message_templates')
     .delete()
     .eq('id', templateId)
     .eq('org_id', orgId);
@@ -160,8 +155,7 @@ export async function duplicateTemplate(
   const { orgId, userId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  const { data: source } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data: source } = (await from(supabase, 'message_templates')
     .select('*')
     .eq('id', templateId)
     .eq('org_id', orgId)
@@ -176,8 +170,7 @@ export async function duplicateTemplate(
     return { success: false, error: 'Você só pode duplicar seus próprios templates' };
   }
 
-  const { data, error } = (await (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'message_templates')
     .insert({
       org_id: orgId,
       name: `${source.name} (cópia)`,

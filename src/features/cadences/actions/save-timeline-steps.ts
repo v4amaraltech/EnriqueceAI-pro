@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { ChannelType } from '../types';
 
@@ -37,8 +38,7 @@ export async function saveTimelineSteps(
   }
 
   // Verify cadence belongs to org and is editable
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, status')
     .eq('id', cadenceId)
     .eq('org_id', member.org_id)
@@ -54,8 +54,7 @@ export async function saveTimelineSteps(
   }
 
   // Delete existing steps
-  const { error: deleteError } = await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { error: deleteError } = await from(supabase, 'cadence_steps')
     .delete()
     .eq('cadence_id', cadenceId);
 
@@ -77,8 +76,7 @@ export async function saveTimelineSteps(
       instructions: s.instructions ?? null,
     }));
 
-    const { error: insertError } = await (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    const { error: insertError } = await from(supabase, 'cadence_steps')
       .insert(rows as Record<string, unknown>[]);
 
     if (insertError) {
@@ -87,8 +85,7 @@ export async function saveTimelineSteps(
   }
 
   // Update total_steps
-  await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadences')
     .update({ total_steps: steps.length } as Record<string, unknown>)
     .eq('id', cadenceId);
 

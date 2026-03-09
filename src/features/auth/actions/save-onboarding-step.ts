@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 /**
@@ -24,8 +25,7 @@ export async function saveOnboardingStep(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('organizations') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'organizations')
     .update({ onboarding_step: step } as Record<string, unknown>)
     .eq('id', member.org_id);
 

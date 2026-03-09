@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { from } from '@/lib/supabase/from';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
@@ -43,23 +44,20 @@ export async function createLead(
   let maxLeads = 0;
   let hasLimitInfo = false;
 
-  const { data: sub } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: sub } = (await from(supabase, 'subscriptions')
     .select('plan_id')
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: { plan_id: string } | null };
 
   if (sub) {
-    const { data: plan } = (await (supabase
-      .from('plans') as ReturnType<typeof supabase.from>)
+    const { data: plan } = (await from(supabase, 'plans')
       .select('max_leads')
       .eq('id', sub.plan_id)
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
       maxLeads = plan.max_leads;
-      const { count: leadCount } = (await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { count: leadCount } = (await from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', member.org_id)
         .is('deleted_at', null)) as { count: number | null };
@@ -91,8 +89,7 @@ export async function createLead(
   }
 
   // 1. Create the lead
-  const { data: lead, error } = await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead, error } = await from(supabase, 'leads')
     .insert({
       org_id: member.org_id,
       first_name: parsed.data.first_name,
@@ -160,8 +157,7 @@ async function fireLeadThresholdAlert(orgId: string, used: number, limit: number
   const supabase = createServiceRoleClient();
   const today = new Date().toISOString().split('T')[0]!;
 
-  const { data: existing } = (await (supabase
-    .from('notifications') as ReturnType<typeof supabase.from>)
+  const { data: existing } = (await from(supabase, 'notifications')
     .select('id')
     .eq('org_id', orgId)
     .eq('type', 'usage_limit_alert')

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { NextResponse } from 'next/server';
 
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 function verifyAuth(request: Request): boolean {
@@ -24,8 +25,7 @@ async function expireTrials() {
 
   // Send trial_expiring notifications for trials expiring within 3 days
   const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: expiringTrials } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: expiringTrials } = (await from(supabase, 'subscriptions')
     .select('org_id, current_period_end')
     .eq('status', 'trialing')
     .lte('current_period_end', threeDaysFromNow)
@@ -50,8 +50,7 @@ async function expireTrials() {
     for (const manager of managers ?? []) {
       // Check if already notified today to avoid duplicates
       const today = new Date().toISOString().slice(0, 10);
-      const { data: existing } = (await (supabase
-        .from('notifications') as ReturnType<typeof supabase.from>)
+      const { data: existing } = (await from(supabase, 'notifications')
         .select('id')
         .eq('user_id', manager.user_id)
         .eq('type', 'trial_expiring')
@@ -60,7 +59,7 @@ async function expireTrials() {
         .maybeSingle()) as { data: { id: string } | null };
 
       if (!existing) {
-        await (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'notifications')
           .insert({
             user_id: manager.user_id,
             org_id: trial.org_id,
@@ -74,8 +73,7 @@ async function expireTrials() {
   }
 
   // Expire trials past their period end
-  const { data: expired, error } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: expired, error } = (await from(supabase, 'subscriptions')
     .update({ status: 'canceled', updated_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('status', 'trialing')
     .lt('current_period_end', new Date().toISOString())

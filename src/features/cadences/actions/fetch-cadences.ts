@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { CadenceDetail, CadenceListResult } from '../cadences.contract';
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '../types';
@@ -41,11 +42,10 @@ export async function fetchCadences(
 
   const page = params.page ?? 1;
   const per_page = params.per_page ?? 20;
-  const from = (page - 1) * per_page;
-  const to = from + per_page - 1;
+  const rangeFrom = (page - 1) * per_page;
+  const to = rangeFrom + per_page - 1;
 
-  let query = (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'cadences')
     .select('*', { count: 'exact' })
     .eq('org_id', member.org_id)
     .is('deleted_at', null);
@@ -70,7 +70,7 @@ export async function fetchCadences(
     query = query.ilike('name', `%${params.search}%`);
   }
 
-  query = query.order('created_at', { ascending: false }).range(from, to);
+  query = query.order('created_at', { ascending: false }).range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: CadenceRow[] | null;
@@ -108,16 +108,14 @@ export async function fetchCadenceTabCounts(): Promise<ActionResult<CadenceTabCo
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const baseQuery = (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const baseQuery = from(supabase, 'cadences')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', member.org_id)
     .is('deleted_at', null);
 
   const [standardResult, autoEmailResult] = await Promise.all([
     baseQuery.eq('type', 'standard') as Promise<{ count: number | null }>,
-    (supabase
-      .from('cadences') as ReturnType<typeof supabase.from>)
+    from(supabase, 'cadences')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', member.org_id)
       .is('deleted_at', null)
@@ -151,8 +149,7 @@ export async function fetchCadenceDetail(
   }
 
   // Fetch cadence
-  const { data: cadence, error: cadenceError } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence, error: cadenceError } = (await from(supabase, 'cadences')
     .select('*')
     .eq('id', cadenceId)
     .eq('org_id', member.org_id)
@@ -164,8 +161,7 @@ export async function fetchCadenceDetail(
   }
 
   // Fetch steps with templates
-  const { data: steps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: steps } = (await from(supabase, 'cadence_steps')
     .select('*')
     .eq('cadence_id', cadenceId)
     .order('step_order', { ascending: true })) as { data: CadenceStepRow[] | null };
@@ -177,8 +173,7 @@ export async function fetchCadenceDetail(
 
   let templatesMap: Record<string, MessageTemplateRow> = {};
   if (templateIds.length > 0) {
-    const { data: templates } = (await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    const { data: templates } = (await from(supabase, 'message_templates')
       .select('*')
       .in('id', templateIds)) as { data: MessageTemplateRow[] | null };
 
@@ -188,8 +183,7 @@ export async function fetchCadenceDetail(
   }
 
   // Count enrollments
-  const { count: enrollmentCount } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { count: enrollmentCount } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
     .eq('cadence_id', cadenceId)) as { count: number | null };
 

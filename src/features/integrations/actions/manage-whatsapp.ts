@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { encrypt } from '@/lib/security/encryption';
@@ -40,8 +41,7 @@ export async function connectWhatsApp(
   }
 
   // Upsert connection (1 per org)
-  const { data, error } = (await (supabase
-    .from('whatsapp_connections') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'whatsapp_connections')
     .upsert(
       {
         org_id: member.org_id,
@@ -81,8 +81,7 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
     return { success: false, error: 'Apenas administradores podem desconectar WhatsApp' };
   }
 
-  const { error } = await (supabase
-    .from('whatsapp_connections') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'whatsapp_connections')
     .delete()
     .eq('org_id', member.org_id);
 
@@ -108,8 +107,7 @@ export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disc
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('whatsapp_instances' as never) as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'whatsapp_instances' as never)
     .delete()
     .eq('org_id', member.org_id);
 

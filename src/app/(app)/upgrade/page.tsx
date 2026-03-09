@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { AlertTriangle } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchPlanComparison } from '@/features/billing/actions/fetch-billing';
@@ -61,8 +62,7 @@ async function isTrialExpired(): Promise<boolean> {
 
     if (!member) return false;
 
-    const { data: sub } = (await (supabase
-      .from('subscriptions') as ReturnType<typeof supabase.from>)
+    const { data: sub } = (await from(supabase, 'subscriptions')
       .select('status, current_period_end')
       .eq('org_id', member.org_id)
       .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };

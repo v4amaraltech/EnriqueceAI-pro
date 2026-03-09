@@ -1,4 +1,5 @@
 import { decrypt } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type {
@@ -16,8 +17,7 @@ interface Api4ComCredentials {
 async function getCredentials(userId: string): Promise<Api4ComCredentials | null> {
   const supabase = createServiceRoleClient();
 
-  const { data } = (await (supabase
-    .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+  const { data } = (await from(supabase, 'api4com_connections' as never)
     .select('api_key_encrypted, base_url, ramal')
     .eq('user_id', userId)
     .eq('status', 'connected')

@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { markNotificationReadSchema } from '../schemas/notification.schemas';
@@ -17,7 +18,7 @@ export async function markNotificationRead(
     return { success: false, error: 'ID de notificação inválido' };
   }
 
-  const { error } = await (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'notifications')
     .update({ read_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', parsed.data.notification_id)
     .eq('user_id', user.id);

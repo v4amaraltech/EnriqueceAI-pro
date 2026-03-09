@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
@@ -68,9 +69,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   // Fetch subscription status for canceled guard
-  const { data: subscriptionData } = (await (
-    supabase.from('subscriptions') as ReturnType<typeof supabase.from>
-  )
+  const { data: subscriptionData } = (await from(supabase, 'subscriptions')
     .select('status, current_period_end')
     .eq('org_id', memberData.organization.id)
     .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };

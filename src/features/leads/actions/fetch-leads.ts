@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
@@ -33,11 +34,11 @@ export async function fetchLeads(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const from = (filters.page - 1) * filters.per_page;
-  const to = from + filters.per_page - 1;
+  const rangeFrom = (filters.page - 1) * filters.per_page;
+  const to = rangeFrom + filters.per_page - 1;
 
   // Build query
-  let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'leads')
     .select('*', { count: 'exact' })
     .eq('org_id', member.org_id)
     .is('deleted_at', null);
@@ -74,7 +75,7 @@ export async function fetchLeads(
   const ascending = filters.sort_dir === 'asc';
   query = query
     .order(filters.sort_by, { ascending, nullsFirst: false })
-    .range(from, to);
+    .range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: Record<string, unknown>[] | null;

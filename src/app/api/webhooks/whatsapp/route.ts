@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
 
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   createWebhookLogger,
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
           eventId: statusEventId,
           eventType: `status.${status.status}`,
           process: async (sb) => {
-            await (sb.from('interactions') as ReturnType<typeof sb.from>)
+            await from(sb, 'interactions')
               .update({
                 type: interactionType,
                 metadata: status.errors ? { errors: status.errors } : null,
@@ -175,9 +176,7 @@ async function processIncomingMessage(
     phonesToMatch.push(phone.slice(2));
   }
 
-  const { data: lead } = (await (
-    supabase.from('leads') as ReturnType<typeof supabase.from>
-  )
+  const { data: lead } = (await from(supabase, 'leads')
     .select('id, org_id')
     .in('telefone', phonesToMatch)
     .limit(1)
@@ -189,9 +188,7 @@ async function processIncomingMessage(
   }
 
   // Find active enrollment with whatsapp channel for this lead
-  const { data: enrollment } = (await (
-    supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>
-  )
+  const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, current_step')
     .eq('lead_id', lead.id)
     .eq('status', 'active')
@@ -207,9 +204,7 @@ async function processIncomingMessage(
   }
 
   // Find current step to verify it's a whatsapp step
-  const { data: step } = (await (
-    supabase.from('cadence_steps') as ReturnType<typeof supabase.from>
-  )
+  const { data: step } = (await from(supabase, 'cadence_steps')
     .select('id')
     .eq('cadence_id', enrollment.cadence_id)
     .eq('step_order', enrollment.current_step)
@@ -219,7 +214,7 @@ async function processIncomingMessage(
   const messageText = message.text?.body ?? '';
 
   // Create interaction for the reply
-  await (supabase.from('interactions') as ReturnType<typeof supabase.from>).insert({
+  await from(supabase, 'interactions').insert({
     org_id: lead.org_id,
     lead_id: lead.id,
     cadence_id: enrollment.cadence_id,
@@ -232,7 +227,7 @@ async function processIncomingMessage(
   } as Record<string, unknown>);
 
   // Mark enrollment as replied
-  await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('id', enrollment.id);
 

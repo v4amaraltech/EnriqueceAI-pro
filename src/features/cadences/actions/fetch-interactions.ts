@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { TimelineEntry, CadenceMetrics } from '../cadences.contract';
 import type { CadenceEnrollmentRow, InteractionRow } from '../types';
@@ -25,8 +26,7 @@ export async function fetchLeadTimeline(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data: interactions, error } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interactions, error } = (await from(supabase, 'interactions')
     .select('*')
     .eq('lead_id', leadId)
     .eq('org_id', member.org_id)
@@ -43,8 +43,7 @@ export async function fetchLeadTimeline(
 
   let cadenceMap: Record<string, string> = {};
   if (cadenceIds.length > 0) {
-    const { data: cadences } = (await (supabase
-      .from('cadences') as ReturnType<typeof supabase.from>)
+    const { data: cadences } = (await from(supabase, 'cadences')
       .select('id, name')
       .in('id', cadenceIds)) as { data: { id: string; name: string }[] | null };
     for (const c of cadences ?? []) {
@@ -58,8 +57,7 @@ export async function fetchLeadTimeline(
 
   let stepMap: Record<string, { step_order: number; activity_name: string | null; instructions: string | null }> = {};
   if (stepIds.length > 0) {
-    const { data: steps } = (await (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    const { data: steps } = (await from(supabase, 'cadence_steps')
       .select('id, step_order, activity_name, instructions')
       .in('id', stepIds)) as { data: { id: string; step_order: number; activity_name: string | null; instructions: string | null }[] | null };
     for (const s of steps ?? []) {
@@ -107,8 +105,7 @@ export async function fetchCadenceMetrics(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data: enrollments } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
     .select('status')
     .eq('cadence_id', cadenceId)) as { data: Pick<CadenceEnrollmentRow, 'status'>[] | null };
 

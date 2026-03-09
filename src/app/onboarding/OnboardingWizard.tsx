@@ -49,7 +49,7 @@ export function OnboardingWizard({
   const [orgName, setOrgName] = useState('');
   const [isPending, startTransition] = useTransition();
   const [selectedPlan, setSelectedPlan] = useState<PlanRow | null>(null);
-  const [gmailConnected, setGmailConnected] = useState(initialGmailConnected);
+  const [gmailConnected, _setGmailConnected] = useState(initialGmailConnected);
   const [teamInvited, setTeamInvited] = useState(false);
 
   function goToStep(nextStep: number) {

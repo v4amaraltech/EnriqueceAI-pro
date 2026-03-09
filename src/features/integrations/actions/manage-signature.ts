@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 /**
@@ -25,9 +26,7 @@ export async function saveCustomSignature(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (
-    supabase.from('gmail_connections') as ReturnType<typeof supabase.from>
-  )
+  const { error } = await from(supabase, 'gmail_connections')
     .update({ custom_signature: signatureHtml } as Record<string, unknown>)
     .eq('org_id', member.org_id)
     .eq('user_id', user.id);

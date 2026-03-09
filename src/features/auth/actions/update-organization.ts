@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { updateOrganizationSchema } from '../schemas/organization.schemas';
@@ -33,7 +34,7 @@ export async function updateOrganization(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const query = supabase.from('organizations') as ReturnType<typeof supabase.from>;
+  const query = from(supabase, 'organizations');
   const { data, error } = (await query
     .update({ name: parsed.data.name, updated_at: new Date().toISOString() })
     .eq('id', member.org_id)

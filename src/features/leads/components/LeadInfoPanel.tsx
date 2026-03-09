@@ -29,7 +29,6 @@ import {
   Video,
   X,
   XCircle,
-  Zap,
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -65,7 +64,7 @@ import {
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { InteractionType } from '@/features/cadences/types';
 
-import { EnrichmentStatusBadge, LeadStatusBadge } from './LeadStatusBadge';
+
 import { LeadNotes } from './LeadNotes';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
 import { EngagementScoreBadge } from './EngagementScoreBadge';
@@ -147,11 +146,11 @@ const channelColor: Record<string, string> = {
 
 export function LeadInfoPanel({
   data: initialData,
-  enrollment,
-  enrollments,
+  enrollment: _enrollment,
+  enrollments: _enrollments,
   timeline,
   showLeadHeader = false,
-  cadenceConfig,
+  cadenceConfig: _cadenceConfig,
   kpis,
 }: LeadInfoPanelProps) {
   const router = useRouter();

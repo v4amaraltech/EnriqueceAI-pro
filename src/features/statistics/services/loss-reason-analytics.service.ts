@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import { CHART_FALLBACK_COLOR, CHART_SERIES_COLORS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -36,7 +37,7 @@ export async function fetchLossReasonAnalyticsData(
   cadenceId?: string,
 ): Promise<LossReasonAnalyticsData> {
   // Fetch enrollments
-  let enrQuery = (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, loss_reason_id, enrolled_by')
     .eq('org_id', orgId)
     .gte('enrolled_at', periodStart)
@@ -57,13 +58,13 @@ export async function fetchLossReasonAnalyticsData(
   }
 
   // Fetch loss reasons
-  const { data: rawReasons } = (await (supabase.from('loss_reasons') as ReturnType<typeof supabase.from>)
+  const { data: rawReasons } = (await from(supabase, 'loss_reasons')
     .select('id, name')
     .eq('org_id', orgId)) as { data: LossReasonRow[] | null };
   const reasons = rawReasons ?? [];
 
   // Fetch cadences
-  const { data: rawCadences } = (await (supabase.from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: rawCadences } = (await from(supabase, 'cadences')
     .select('id, name')
     .eq('org_id', orgId)
     .is('deleted_at', null)) as { data: CadenceRow[] | null };

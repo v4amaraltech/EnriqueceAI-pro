@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { CrmConnectionRow } from '@/features/integrations/types/crm';
@@ -66,8 +67,7 @@ export async function POST(request: Request) {
 
     // Sync all active connections using service role (no cookies in cron)
     const supabase = createServiceRoleClient();
-    const { data: connections } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data: connections } = (await from(supabase, 'crm_connections')
       .select('id')
       .eq('status', 'connected')) as { data: Pick<CrmConnectionRow, 'id'>[] | null };
 

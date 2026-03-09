@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 
@@ -22,8 +23,7 @@ async function resumePausedEnrollments(
   reasons: string[],
 ): Promise<number> {
   // Find paused enrollments that have a failed interaction with one of the given reasons
-  const { data: failedInteractions } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: failedInteractions } = (await from(supabase, 'interactions')
     .select('cadence_id')
     .eq('lead_id', leadId)
     .eq('type', 'failed')
@@ -35,8 +35,7 @@ async function resumePausedEnrollments(
   const cadenceIds = [...new Set(failedInteractions.map((i) => i.cadence_id))];
 
   // Resume only enrollments that are paused AND belong to active cadences
-  const { data: updated } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: updated } = (await from(supabase, 'cadence_enrollments')
     .update({ status: 'active' } as Record<string, unknown>)
     .eq('lead_id', leadId)
     .eq('status', 'paused')
@@ -68,7 +67,7 @@ export async function archiveLead(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'leads')
     .update({ status: 'archived' } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', member.org_id);
@@ -115,7 +114,7 @@ export async function updateLead(
   }
 
   // Fetch current lead to detect email/phone changes
-  const { data: currentLead } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: currentLead } = (await from(supabase, 'leads')
     .select('email, telefone, email_bounced_at')
     .eq('id', leadId)
     .eq('org_id', member.org_id)
@@ -128,7 +127,7 @@ export async function updateLead(
     safeUpdates.email_bounced_at = null;
   }
 
-  const { error } = await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'leads')
     .update(safeUpdates as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', member.org_id);
@@ -211,7 +210,7 @@ export async function markLeadAsLost(
   }
 
   // 1. Update lead status to unqualified
-  const { error: leadError } = await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { error: leadError } = await from(supabase, 'leads')
     .update({ status: 'unqualified' } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', member.org_id);
@@ -230,7 +229,7 @@ export async function markLeadAsLost(
     enrollmentUpdate.loss_notes = lossNotes;
   }
   // cadence_enrollments has no org_id column — RLS via cadences.org_id handles isolation
-  await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update(enrollmentUpdate)
     .eq('lead_id', leadId)
     .in('status', ['active', 'paused']);

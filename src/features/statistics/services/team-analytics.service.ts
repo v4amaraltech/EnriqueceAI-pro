@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   RankingMetric,
   SdrComparisonRow,
@@ -54,29 +56,25 @@ export async function fetchTeamAnalyticsData(
     .eq('org_id', orgId)
     .eq('status', 'active')) as { data: MemberRow[] | null };
 
-  const { data: rawInteractions } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: rawInteractions } = (await from(supabase, 'interactions')
     .select('id, type, lead_id, performed_by, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: InteractionRow[] | null };
 
-  const { data: rawEnrollments } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: rawEnrollments } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id, enrolled_by, status')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: EnrollmentRow[] | null };
 
-  const { data: rawCalls } = (await (supabase
-    .from('calls') as ReturnType<typeof supabase.from>)
+  const { data: rawCalls } = (await from(supabase, 'calls')
     .select('id, user_id, status')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)) as { data: CallRow[] | null };
 
-  const { data: rawLeads } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: rawLeads } = (await from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)

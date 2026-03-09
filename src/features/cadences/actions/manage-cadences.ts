@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
@@ -16,8 +17,7 @@ export async function createCadence(
 
   const { orgId, userId, supabase } = await getAuthOrgId();
 
-  const { data, error } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'cadences')
     .insert({
       org_id: orgId,
       name: parsed.data.name,
@@ -52,8 +52,7 @@ export async function updateCadence(
 
   const { orgId, supabase } = await getAuthOrgId();
 
-  const { data, error } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'cadences')
     .update(parsed.data as Record<string, unknown>)
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -74,8 +73,7 @@ export async function deleteCadence(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Soft delete
-  const { error } = await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadences')
     .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', cadenceId)
     .eq('org_id', orgId);
@@ -93,8 +91,7 @@ export async function activateCadence(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Check minimum 2 steps
-  const { count } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { count } = (await from(supabase, 'cadence_steps')
     .select('id', { count: 'exact', head: true })
     .eq('cadence_id', cadenceId)) as { count: number | null };
 
@@ -102,8 +99,7 @@ export async function activateCadence(
     return { success: false, error: 'Cadência precisa de no mínimo 2 passos para ser ativada' };
   }
 
-  const { data, error } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'cadences')
     .update({ status: 'active' } as Record<string, unknown>)
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -130,8 +126,7 @@ export async function addCadenceStep(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, total_steps')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -142,8 +137,7 @@ export async function addCadenceStep(
     return { success: false, error: 'Cadência não encontrada' };
   }
 
-  const { data: step, error } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: step, error } = (await from(supabase, 'cadence_steps')
     .insert({
       cadence_id: cadenceId,
       step_order: parsed.data.step_order,
@@ -161,8 +155,7 @@ export async function addCadenceStep(
   }
 
   // Update total_steps
-  await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadences')
     .update({ total_steps: cadence.total_steps + 1 } as Record<string, unknown>)
     .eq('id', cadenceId);
 
@@ -176,8 +169,7 @@ export async function removeCadenceStep(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, total_steps')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -188,8 +180,7 @@ export async function removeCadenceStep(
     return { success: false, error: 'Cadência não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadence_steps')
     .delete()
     .eq('id', stepId)
     .eq('cadence_id', cadenceId);
@@ -200,8 +191,7 @@ export async function removeCadenceStep(
 
   // Update total_steps
   const newTotal = Math.max(0, cadence.total_steps - 1);
-  await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadences')
     .update({ total_steps: newTotal } as Record<string, unknown>)
     .eq('id', cadenceId);
 
@@ -216,8 +206,7 @@ export async function enrollLeads(
   const { orgId, userId, supabase } = await getAuthOrgId();
 
   // Verify cadence is active
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, status')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -237,8 +226,7 @@ export async function enrollLeads(
 
   for (const leadId of leadIds) {
     // Complete any existing active/paused enrollment for this lead in this cadence
-    await (supabase
-      .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'cadence_enrollments')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -247,8 +235,7 @@ export async function enrollLeads(
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
 
-    const { error } = await (supabase
-      .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'cadence_enrollments')
       .insert({
         cadence_id: cadenceId,
         lead_id: leadId,

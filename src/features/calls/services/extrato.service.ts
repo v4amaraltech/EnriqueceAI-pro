@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { CallStatus } from '@/features/calls/types';
+import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
 
 import type {
@@ -31,7 +32,7 @@ export async function fetchExtratoData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<ExtratoData> {
-  let callsQuery = (supabase.from('calls') as ReturnType<typeof supabase.from>)
+  let callsQuery = from(supabase, 'calls')
     .select('id, user_id, status, duration_seconds, cost, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { NextResponse, after } from 'next/server';
 
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   createWebhookLogger,
@@ -34,9 +35,7 @@ async function processApi4ComEvent(
   supabase: ReturnType<typeof createServiceRoleClient>,
 ): Promise<void> {
   // Correlate with our calls table via metadata->api4com_call_id
-  const { data: call } = (await (
-    supabase.from('calls') as ReturnType<typeof supabase.from>
-  )
+  const { data: call } = (await from(supabase, 'calls')
     .select('id, status')
     .eq('metadata->>api4com_call_id', body.id)
     .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
@@ -44,9 +43,7 @@ async function processApi4ComEvent(
   if (!call) {
     // Fallback: try matching by caller (ramal) + called (phone)
     const calledNormalized = body.called.replace(/\D/g, '');
-    const { data: fallbackCall } = (await (
-      supabase.from('calls') as ReturnType<typeof supabase.from>
-    )
+    const { data: fallbackCall } = (await from(supabase, 'calls')
       .select('id, status')
       .eq('origin', body.caller)
       .like('destination', `%${calledNormalized.slice(-8)}`)
@@ -156,7 +153,7 @@ async function updateCallFromWebhook(
     updates.status = 'significant';
   }
 
-  await (supabase.from('calls') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'calls')
     .update(updates)
     .eq('id', callId);
 }

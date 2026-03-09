@@ -1,5 +1,6 @@
 import { decrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 /**
  * Fetches and decrypts the Apollo API key for a given organization.
@@ -8,8 +9,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 export async function getApolloApiKey(orgId: string): Promise<string | null> {
   const supabase = await createServerSupabaseClient();
 
-  const { data } = (await (supabase
-    .from('apollo_connections' as never) as ReturnType<typeof supabase.from>)
+  const { data } = (await from(supabase, 'apollo_connections')
     .select('api_key_encrypted')
     .eq('org_id', orgId)
     .maybeSingle()) as { data: { api_key_encrypted: string } | null };

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   CadenceAnalyticsData,
   CadencePerformanceRow,
@@ -43,7 +45,7 @@ export async function fetchCadenceAnalyticsData(
   cadenceId?: string,
 ): Promise<CadenceAnalyticsData> {
   // Fetch cadences (non-deleted)
-  let cadenceQuery = (supabase.from('cadences') as ReturnType<typeof supabase.from>)
+  let cadenceQuery = from(supabase, 'cadences')
     .select('id, name, status, priority')
     .eq('org_id', orgId)
     .is('deleted_at', null);
@@ -62,7 +64,7 @@ export async function fetchCadenceAnalyticsData(
   const cadenceIds = cadences.map((c) => c.id);
 
   // Fetch enrollments in period
-  let enrQuery = (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, current_step, status, enrolled_by')
     .eq('org_id', orgId)
     .in('cadence_id', cadenceIds)
@@ -77,7 +79,7 @@ export async function fetchCadenceAnalyticsData(
   const enrollments = rawEnrollments ?? [];
 
   // Fetch interactions for reply/meeting counts
-  let intQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let intQuery = from(supabase, 'interactions')
     .select('type, cadence_id')
     .eq('org_id', orgId)
     .in('cadence_id', cadenceIds)
@@ -89,7 +91,7 @@ export async function fetchCadenceAnalyticsData(
   const interactions = rawInteractions ?? [];
 
   // Fetch cadence steps for progression
-  const { data: rawSteps } = (await (supabase.from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: rawSteps } = (await from(supabase, 'cadence_steps')
     .select('cadence_id, step_order, channel')
     .in('cadence_id', cadenceIds)
     .order('step_order', { ascending: true })) as { data: StepRow[] | null };

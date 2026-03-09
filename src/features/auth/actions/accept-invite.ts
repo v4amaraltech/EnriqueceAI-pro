@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
@@ -18,8 +19,7 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
 
     // Check for pending invite matching user email
     // The invite was created with status='invited' before the user signed up
-    const { data: invites } = (await (supabase
-      .from('organization_members') as ReturnType<typeof supabase.from>)
+    const { data: invites } = (await from(supabase, 'organization_members')
       .select('id, org_id')
       .eq('user_id', user.id)
       .eq('status', 'invited')) as { data: Array<{ id: string; org_id: string }> | null };
@@ -31,8 +31,7 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
     const invite = invites[0]!;
 
     // Find the auto-created org (where user is manager)
-    const { data: autoOrgMember } = (await (supabase
-      .from('organization_members') as ReturnType<typeof supabase.from>)
+    const { data: autoOrgMember } = (await from(supabase, 'organization_members')
       .select('id, org_id')
       .eq('user_id', user.id)
       .eq('role', 'manager')
@@ -41,14 +40,13 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
 
     if (autoOrgMember && autoOrgMember.org_id !== invite.org_id) {
       // Delete auto-created org member record (cascade will clean up)
-      await (supabase.from('organizations') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'organizations')
         .delete()
         .eq('id', autoOrgMember.org_id);
     }
 
     // Accept the invite
-    const { error } = await (supabase
-      .from('organization_members') as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'organization_members')
       .update({ status: 'active', accepted_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', invite.id);
 

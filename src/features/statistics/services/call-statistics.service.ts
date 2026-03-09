@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { CallStatus } from '@/features/calls/types';
+import { from } from '@/lib/supabase/from';
 import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -44,7 +45,7 @@ export async function fetchCallStatisticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<CallStatisticsData> {
-  let query = (supabase.from('calls') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'calls')
     .select('id, user_id, status, duration_seconds, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)

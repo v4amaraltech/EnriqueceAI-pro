@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 interface AvailableLeadsData {
   count: number;
@@ -16,15 +17,14 @@ export async function fetchAvailableLeadsCount(): Promise<ActionResult<Available
   const { orgId, supabase } = await getAuthOrgId();
 
   // Get lead IDs already enrolled in active or paused cadences
-  const { data: enrolled } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id')
     .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
 
   const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
 
   // Get available leads (not enrolled, not archived, not deleted)
-  let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
     .is('deleted_at', null)

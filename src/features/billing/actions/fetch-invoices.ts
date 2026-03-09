@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { stripe } from '@/lib/stripe';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface InvoiceItem {
@@ -28,8 +29,7 @@ export async function fetchInvoices(): Promise<ActionResult<InvoiceItem[]>> {
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data: org } = (await (supabase
-    .from('organizations') as ReturnType<typeof supabase.from>)
+  const { data: org } = (await from(supabase, 'organizations')
     .select('stripe_customer_id')
     .eq('id', member.org_id)
     .single()) as { data: { stripe_customer_id: string | null } | null };

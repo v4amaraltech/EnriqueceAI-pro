@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
@@ -39,7 +40,7 @@ export async function scheduleMeeting(
     const event = await createCalendarEvent(connection, input);
 
     // Register interaction as meeting_scheduled
-    await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'interactions')
       .insert({
         org_id: member.org_id,
         lead_id: leadId,

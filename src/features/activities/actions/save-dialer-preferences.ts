@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { dialerPreferencesSchema } from '../schemas/dialer-preferences.schemas';
 
@@ -31,8 +32,7 @@ export async function saveDialerPreferences(
     .single()) as { data: { id: string } | null };
 
   if (existing) {
-    const { error } = await (supabase
-      .from('organization_call_settings') as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'organization_call_settings')
       .update({
         dialer_simultaneous_phones: input.simultaneous_phones,
         dialer_daily_limit_per_lead: input.daily_limit_per_lead,
@@ -41,8 +41,7 @@ export async function saveDialerPreferences(
 
     if (error) return { success: false, error: 'Erro ao salvar preferências' };
   } else {
-    const { error } = await (supabase
-      .from('organization_call_settings') as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'organization_call_settings')
       .insert({
         org_id: orgId,
         dialer_simultaneous_phones: input.simultaneous_phones,

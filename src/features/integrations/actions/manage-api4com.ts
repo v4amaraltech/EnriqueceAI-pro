@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { encrypt } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SaveApi4ComInput {
@@ -38,8 +39,7 @@ export async function saveApi4ComConfig(
   const baseUrl = (input.baseUrl?.trim() || 'https://api.api4com.com/api/v1/');
 
   // Check for existing connection
-  const { data: existing } = (await (supabase
-    .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+  const { data: existing } = (await from(supabase, 'api4com_connections' as never)
     .select('id')
     .eq('org_id', member.org_id)
     .eq('user_id', user.id)
@@ -58,8 +58,7 @@ export async function saveApi4ComConfig(
       updates.api_key_encrypted = encrypt(input.apiToken.trim());
     }
 
-    const { error } = await (supabase
-      .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'api4com_connections' as never)
       .update(updates as Record<string, unknown>)
       .eq('id', existing.id);
 
@@ -68,8 +67,7 @@ export async function saveApi4ComConfig(
     }
   } else {
     // Insert new
-    const { error } = await (supabase
-      .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'api4com_connections' as never)
       .insert({
         org_id: member.org_id,
         user_id: user.id,
@@ -111,8 +109,7 @@ export async function disconnectApi4Com(): Promise<ActionResult<void>> {
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'api4com_connections' as never)
     .delete()
     .eq('org_id', member.org_id)
     .eq('user_id', user.id);

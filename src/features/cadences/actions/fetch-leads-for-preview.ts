@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { LeadForVariables } from '../utils/build-template-variables';
 
 export interface PreviewLead extends LeadForVariables {
@@ -28,7 +29,7 @@ export async function fetchLeadsForPreview(
   try {
     const { supabase } = await getAuthOrgId();
 
-    let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    let query = from(supabase, 'leads')
       .select('id, razao_social, nome_fantasia, cnpj, email, telefone, porte, endereco, socios')
       .is('deleted_at', null)
       .neq('status', 'archived')

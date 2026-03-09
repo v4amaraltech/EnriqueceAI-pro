@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { encrypt } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CalendarConnectionSafe } from '../types';
@@ -115,8 +116,7 @@ export async function handleCalendarCallback(
   // Preserve existing refresh_token if Google didn't send a new one (happens on re-auth)
   let encryptedRefreshToken = tokens.refresh_token ? encrypt(tokens.refresh_token) : '';
   if (!encryptedRefreshToken) {
-    const { data: existing } = (await (supabase
-      .from('calendar_connections') as ReturnType<typeof supabase.from>)
+    const { data: existing } = (await from(supabase, 'calendar_connections')
       .select('refresh_token_encrypted')
       .eq('org_id', member.org_id)
       .eq('user_id', user.id)
@@ -125,8 +125,7 @@ export async function handleCalendarCallback(
   }
 
   // Upsert connection
-  const { data, error } = (await (supabase
-    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'calendar_connections')
     .upsert(
       {
         org_id: member.org_id,
@@ -164,8 +163,7 @@ export async function disconnectCalendar(): Promise<ActionResult<{ disconnected:
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'calendar_connections')
     .delete()
     .eq('org_id', member.org_id)
     .eq('user_id', user.id);

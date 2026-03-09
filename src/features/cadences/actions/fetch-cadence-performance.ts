@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
 
 import type { CadencePerformanceData, PerformancePeriod } from '../cadences.contract';
@@ -56,8 +57,7 @@ export async function fetchCadencePerformance(
   }
 
   // Fetch steps (activity_name added via migration, cast to bypass generated types)
-  const { data: steps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: steps } = (await from(supabase, 'cadence_steps')
     .select('id, step_order, channel, activity_name, ab_enabled, ab_winner_variant')
     .eq('cadence_id', cadenceId)
     .order('step_order')) as { data: StepRow[] | null; error: { message: string } | null };
@@ -76,8 +76,7 @@ export async function fetchCadencePerformance(
   const { data: enrollments } = await enrollmentQuery;
 
   // Fetch active enrollments with current_step for pending counts
-  const { data: activeEnrollments } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: activeEnrollments } = (await from(supabase, 'cadence_enrollments')
     .select('current_step')
     .eq('cadence_id', cadenceId)
     .eq('status', 'active')) as { data: Array<{ current_step: number }> | null; error: { message: string } | null };
@@ -89,7 +88,7 @@ export async function fetchCadencePerformance(
   }
 
   // Fetch interactions
-  let interactionQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let interactionQuery = from(supabase, 'interactions')
     .select('step_id, type')
     .eq('cadence_id', cadenceId)
     .in('type', ['sent', 'opened', 'replied', 'bounced', 'meeting_scheduled']);

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { ChannelType } from '@/features/cadences/types';
 
@@ -70,8 +71,7 @@ export async function fetchLeadEnrollment(
   const enrolledByIds = [...new Set(rows.map((r) => r.enrolled_by).filter(Boolean))] as string[];
   const emailMap = new Map<string, string>();
   if (enrolledByIds.length > 0) {
-    const { data: members } = (await (supabase
-      .from('organization_members') as ReturnType<typeof supabase.from>)
+    const { data: members } = (await from(supabase, 'organization_members')
       .select('user_id, user_email')
       .in('user_id', enrolledByIds)) as { data: Array<{ user_id: string; user_email: string | null }> | null };
     for (const m of members ?? []) {

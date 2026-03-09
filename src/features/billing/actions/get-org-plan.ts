@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { PlanRow, SubscriptionRow } from '../types';
@@ -21,8 +22,7 @@ export async function getOrgPlan(): Promise<ActionResult<PlanRow>> {
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data: subscription } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('plan_id')
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: Pick<SubscriptionRow, 'plan_id'> | null };
@@ -31,8 +31,7 @@ export async function getOrgPlan(): Promise<ActionResult<PlanRow>> {
     return { success: false, error: 'Assinatura não encontrada' };
   }
 
-  const { data: plan } = (await (supabase
-    .from('plans') as ReturnType<typeof supabase.from>)
+  const { data: plan } = (await from(supabase, 'plans')
     .select('*')
     .eq('id', subscription.plan_id)
     .single()) as { data: PlanRow | null };

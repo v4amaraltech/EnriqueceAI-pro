@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { from } from '@/lib/supabase/from';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 const STALE_DAYS = 3;
@@ -21,8 +22,7 @@ export async function checkStaleCadences(): Promise<ActionResult<{ checked: numb
   const supabase = createServiceRoleClient();
 
   // Fetch all active cadences
-  const { data: cadences, error: cadenceError } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadences, error: cadenceError } = (await from(supabase, 'cadences')
     .select('id, name, org_id, status')
     .eq('status', 'active')) as { data: ActiveCadence[] | null; error: { message: string } | null };
 
@@ -48,8 +48,7 @@ export async function checkStaleCadences(): Promise<ActionResult<{ checked: numb
   for (const cadence of cadences) {
     try {
       // Check if cadence has any sent interactions in the last STALE_DAYS
-      const { count } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { count } = (await from(supabase, 'interactions')
         .select('id', { count: 'exact', head: true })
         .eq('cadence_id', cadence.id)
         .eq('type', 'sent')
@@ -58,8 +57,7 @@ export async function checkStaleCadences(): Promise<ActionResult<{ checked: numb
       if ((count ?? 0) > 0) continue;
 
       // Check if cadence has any active enrollments (otherwise it's just empty, not stale)
-      const { count: activeEnrollments } = (await (supabase
-        .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+      const { count: activeEnrollments } = (await from(supabase, 'cadence_enrollments')
         .select('id', { count: 'exact', head: true })
         .eq('cadence_id', cadence.id)
         .eq('status', 'active')) as { count: number | null };
@@ -67,8 +65,7 @@ export async function checkStaleCadences(): Promise<ActionResult<{ checked: numb
       if ((activeEnrollments ?? 0) === 0) continue;
 
       // Dedup: check if we already sent this alert today for this cadence
-      const { count: existingAlert } = (await (supabase
-        .from('notifications') as ReturnType<typeof supabase.from>)
+      const { count: existingAlert } = (await from(supabase, 'notifications')
         .select('id', { count: 'exact', head: true })
         .eq('type', 'integration_error')
         .gte('created_at', `${today}T03:00:00.000Z`)

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { stripe } from '@/lib/stripe';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -28,8 +29,7 @@ export async function createCheckoutSession(
   }
 
   // Get the plan to find its Stripe price
-  const { data: plan } = (await (supabase
-    .from('plans') as ReturnType<typeof supabase.from>)
+  const { data: plan } = (await from(supabase, 'plans')
     .select('id, name, slug, price_cents')
     .eq('id', planId)
     .single()) as { data: { id: string; name: string; slug: string; price_cents: number } | null };
@@ -39,8 +39,7 @@ export async function createCheckoutSession(
   }
 
   // Get or create Stripe customer
-  const { data: org } = (await (supabase
-    .from('organizations') as ReturnType<typeof supabase.from>)
+  const { data: org } = (await from(supabase, 'organizations')
     .select('id, name, stripe_customer_id')
     .eq('id', member.org_id)
     .single()) as { data: { id: string; name: string; stripe_customer_id: string | null } | null };
@@ -61,8 +60,7 @@ export async function createCheckoutSession(
 
     // Save customer ID (use service role to bypass RLS for this update)
     const serviceClient = createServiceRoleClient();
-    await (serviceClient
-      .from('organizations') as ReturnType<typeof serviceClient.from>)
+    await from(serviceClient, 'organizations')
       .update({ stripe_customer_id: customerId } as Record<string, unknown>)
       .eq('id', org.id);
   }

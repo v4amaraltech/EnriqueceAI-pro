@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { calculateUsageLimits } from '../services/feature-flags';
@@ -30,8 +31,7 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
   }
 
   // Fetch subscription
-  const { data: subscription } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('*')
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: SubscriptionRow | null };
@@ -41,8 +41,7 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
   }
 
   // Fetch plan
-  const { data: plan } = (await (supabase
-    .from('plans') as ReturnType<typeof supabase.from>)
+  const { data: plan } = (await from(supabase, 'plans')
     .select('*')
     .eq('id', subscription.plan_id)
     .single()) as { data: PlanRow | null };
@@ -58,33 +57,33 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
   const [leadsResult, aiUsageResult, waCreditsResult, memberCountResult, aiHistoryResult] =
     await Promise.all([
       // Lead count
-      (supabase.from('leads') as ReturnType<typeof supabase.from>)
+      from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', member.org_id)
         .is('deleted_at', null) as Promise<{ count: number | null }>,
 
       // AI usage today
-      (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
+      from(supabase, 'ai_usage')
         .select('generation_count, daily_limit')
         .eq('org_id', member.org_id)
         .eq('usage_date', today)
         .maybeSingle() as Promise<{ data: AiUsageRow | null }>,
 
       // WhatsApp credits
-      (supabase.from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+      from(supabase, 'whatsapp_credits')
         .select('used_credits, plan_credits, period')
         .eq('org_id', member.org_id)
         .eq('period', currentPeriod)
         .maybeSingle() as Promise<{ data: WhatsAppCreditsRow | null }>,
 
       // Member count
-      (supabase.from('organization_members') as ReturnType<typeof supabase.from>)
+      from(supabase, 'organization_members')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', member.org_id)
         .eq('status', 'active') as Promise<{ count: number | null }>,
 
       // AI history (last 30 days)
-      (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
+      from(supabase, 'ai_usage')
         .select('usage_date, generation_count')
         .eq('org_id', member.org_id)
         .gte('usage_date', getDateDaysAgo(30))

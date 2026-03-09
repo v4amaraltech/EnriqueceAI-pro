@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 // ──────────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────────
@@ -58,14 +60,14 @@ export async function fetchLossReasonStats(
   filters: StatisticsFilters,
 ): Promise<LossReasonStat[]> {
   // Get loss reasons for the org
-  const { data: reasons } = await (supabase.from('loss_reasons') as ReturnType<typeof supabase.from>)
+  const { data: reasons } = await from(supabase, 'loss_reasons')
     .select('id, name')
     .eq('org_id', orgId) as { data: { id: string; name: string }[] | null };
 
   if (!reasons || reasons.length === 0) return [];
 
   // Get enrollments with loss_reason_id in period
-  let query = (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'cadence_enrollments')
     .select('loss_reason_id, enrolled_by, cadence_id')
     .not('loss_reason_id', 'is', null)
     .gte('updated_at', filters.periodStart)
@@ -107,7 +109,7 @@ export async function fetchConversionByOrigin(
   orgId: string,
   filters: StatisticsFilters,
 ): Promise<ConversionByOriginStat[]> {
-  let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -161,7 +163,7 @@ export async function fetchResponseTimeData(
   const thresholdMinutes = filters.thresholdMinutes ?? 60;
 
   // Get leads created in period
-  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let leadsQuery = from(supabase, 'leads')
     .select('id, created_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -189,7 +191,7 @@ export async function fetchResponseTimeData(
   const leadIds = leads.map((l) => l.id);
 
   // Get first interaction per lead
-  const { data: interactions } = await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interactions } = await from(supabase, 'interactions')
     .select('lead_id, cadence_id, created_at')
     .eq('org_id', orgId)
     .in('lead_id', leadIds)
@@ -248,7 +250,7 @@ export async function fetchResponseTimeData(
   let cadenceNames = new Map<string, string>();
 
   if (cadenceIds.length > 0) {
-    const { data: cadences } = await (supabase.from('cadences') as ReturnType<typeof supabase.from>)
+    const { data: cadences } = await from(supabase, 'cadences')
       .select('id, name')
       .in('id', cadenceIds) as { data: { id: string; name: string }[] | null };
 

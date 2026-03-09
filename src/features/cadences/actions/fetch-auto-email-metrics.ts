@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 
@@ -17,9 +18,7 @@ export async function fetchAutoEmailMetrics(
   const supabase = await createServerSupabaseClient();
 
   // Fetch enrollment counts grouped by cadence_id + status
-  const { data: enrollmentRows, error: enrollmentError } = (await (
-    supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>
-  )
+  const { data: enrollmentRows, error: enrollmentError } = (await from(supabase, 'cadence_enrollments')
     .select('cadence_id, status')
     .in('cadence_id', cadenceIds)) as {
     data: Array<{ cadence_id: string; status: string }> | null;
@@ -31,9 +30,7 @@ export async function fetchAutoEmailMetrics(
   }
 
   // Fetch interaction counts grouped by cadence_id + type
-  const { data: interactionRows, error: interactionError } = (await (
-    supabase.from('interactions') as ReturnType<typeof supabase.from>
-  )
+  const { data: interactionRows, error: interactionError } = (await from(supabase, 'interactions')
     .select('cadence_id, type')
     .in('cadence_id', cadenceIds)) as {
     data: Array<{ cadence_id: string; type: string }> | null;

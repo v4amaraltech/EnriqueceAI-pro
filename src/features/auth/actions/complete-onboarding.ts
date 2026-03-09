@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface OnboardingInput {
@@ -46,8 +47,7 @@ export async function completeOnboarding(
   const slug = input.orgSlug?.trim() || `${baseSlug}-${Date.now().toString(36)}`;
 
   // Update organization name and advance to step 1
-  const { error: updateError } = await (supabase
-    .from('organizations') as ReturnType<typeof supabase.from>)
+  const { error: updateError } = await from(supabase, 'organizations')
     .update({ name: orgName, slug, onboarding_step: 1 } as Record<string, unknown>)
     .eq('id', member.org_id);
 
@@ -68,8 +68,7 @@ export async function checkNeedsOnboarding(): Promise<number | false> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const { data: member } = (await (supabase
-    .from('organization_members') as ReturnType<typeof supabase.from>)
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('organization:organizations(name, onboarding_step)')
     .eq('user_id', user.id)
     .eq('status', 'active')

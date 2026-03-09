@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   CadenceOption,
   DailyDataPoint,
@@ -102,7 +104,7 @@ export async function fetchOpportunityKpi(
   }
 
   // Query qualified leads in the month
-  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let leadsQuery = from(supabase, 'leads')
     .select('id, updated_at')
     .eq('org_id', orgId)
     .eq('status', 'qualified')

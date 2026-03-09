@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { TemplateListResult } from '../index';
@@ -23,11 +24,10 @@ export async function fetchTemplates(
 
   const page = params.page ?? 1;
   const per_page = params.per_page ?? 20;
-  const from = (page - 1) * per_page;
-  const to = from + per_page - 1;
+  const rangeFrom = (page - 1) * per_page;
+  const to = rangeFrom + per_page - 1;
 
-  let query = (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'message_templates')
     .select('*', { count: 'exact' })
     .eq('org_id', orgId);
 
@@ -48,7 +48,7 @@ export async function fetchTemplates(
     query = query.ilike('name', `%${params.search}%`);
   }
 
-  query = query.order('created_at', { ascending: false }).range(from, to);
+  query = query.order('created_at', { ascending: false }).range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: MessageTemplateRow[] | null;
@@ -77,8 +77,7 @@ export async function fetchTemplate(
   const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  let query = (supabase
-    .from('message_templates') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'message_templates')
     .select('*')
     .eq('id', templateId)
     .eq('org_id', orgId);

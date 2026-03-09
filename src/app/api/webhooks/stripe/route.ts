@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import type Stripe from 'stripe';
 
 import { stripe } from '@/lib/stripe';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
   createWebhookLogger,
@@ -51,7 +52,7 @@ export async function processStripeEvent(
         const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
         const period = getSubscriptionPeriod(sub);
 
-        await (supabase.from('subscriptions') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'subscriptions')
           .update({
             plan_id: planId,
             status: 'active',
@@ -68,9 +69,7 @@ export async function processStripeEvent(
       const sub = event.data.object as Stripe.Subscription;
       const customerId = sub.customer as string;
 
-      const { data: org } = (await (
-        supabase.from('organizations') as ReturnType<typeof supabase.from>
-      )
+      const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
         .single()) as { data: { id: string } | null };
@@ -89,7 +88,7 @@ export async function processStripeEvent(
 
         const period = getSubscriptionPeriod(sub);
 
-        await (supabase.from('subscriptions') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'subscriptions')
           .update({
             status: statusMap[sub.status] ?? 'active',
             current_period_start: period.start,
@@ -104,15 +103,13 @@ export async function processStripeEvent(
       const sub = event.data.object as Stripe.Subscription;
       const customerId = sub.customer as string;
 
-      const { data: org } = (await (
-        supabase.from('organizations') as ReturnType<typeof supabase.from>
-      )
+      const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
         .single()) as { data: { id: string } | null };
 
       if (org) {
-        await (supabase.from('subscriptions') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'subscriptions')
           .update({
             status: 'canceled',
             stripe_subscription_id: null,
@@ -126,15 +123,13 @@ export async function processStripeEvent(
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
 
-      const { data: org } = (await (
-        supabase.from('organizations') as ReturnType<typeof supabase.from>
-      )
+      const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
         .single()) as { data: { id: string } | null };
 
       if (org) {
-        await (supabase.from('subscriptions') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'subscriptions')
           .update({ status: 'past_due' } as Record<string, unknown>)
           .eq('org_id', org.id);
       }

@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { PlanRow } from '../types';
@@ -32,8 +33,7 @@ export async function fetchDowngradeWarnings(
   const warnings: string[] = [];
 
   // Check lead count vs target plan limit
-  const { count: leadCount } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { count: leadCount } = (await from(supabase, 'leads')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', member.org_id)) as { count: number | null };
 
@@ -45,8 +45,7 @@ export async function fetchDowngradeWarnings(
 
   // Check CRM integrations
   if (!targetPlan.features.crm) {
-    const { count: crmCount } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { count: crmCount } = (await from(supabase, 'crm_connections')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', member.org_id)
       .eq('status', 'connected')) as { count: number | null };
@@ -60,8 +59,7 @@ export async function fetchDowngradeWarnings(
 
   // Check Calendar integrations
   if (!targetPlan.features.calendar) {
-    const { count: calendarCount } = (await (supabase
-      .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    const { count: calendarCount } = (await from(supabase, 'gmail_connections')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', member.org_id)
       .eq('status', 'connected')) as { count: number | null };

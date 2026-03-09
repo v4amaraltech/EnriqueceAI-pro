@@ -4,6 +4,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type { EnrichmentData, EnrichmentProvider, EnrichmentResult } from './enrichment-provider';
 import type { LemitCpfProvider } from './lemit-cpf-provider';
 import type { LeadSocio } from '../types';
@@ -28,7 +30,7 @@ export async function enrichLead({
   maxRetries = 3,
 }: EnrichLeadOptions): Promise<EnrichmentResult> {
   // Update status to 'enriching'
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({ enrichment_status: 'enriching' } as Record<string, unknown>)
     .eq('id', leadId);
 
@@ -47,7 +49,7 @@ export async function enrichLead({
     const durationMs = Date.now() - startTime;
 
     // Record attempt
-    await (supabase.from('enrichment_attempts') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'enrichment_attempts')
       .insert({
         lead_id: leadId,
         provider: provider.name,
@@ -67,7 +69,7 @@ export async function enrichLead({
 
     // Don't retry on 404 (not found)
     if (lastError === 'CNPJ not found') {
-      await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'leads')
         .update({
           enrichment_status: 'not_found',
         } as Record<string, unknown>)
@@ -77,7 +79,7 @@ export async function enrichLead({
   }
 
   // All retries exhausted
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({
       enrichment_status: 'enrichment_failed',
     } as Record<string, unknown>)
@@ -107,7 +109,7 @@ async function updateLeadWithEnrichment(
   if (data.socios) update.socios = data.socios;
   if (data.faturamento_estimado !== undefined) update.faturamento_estimado = data.faturamento_estimado;
 
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update(update)
     .eq('id', leadId);
 }
@@ -203,7 +205,7 @@ async function enrichSocios(
   }
 
   // Update lead socios in database
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({ socios: enrichedSocios } as Record<string, unknown>)
     .eq('id', leadId);
 }

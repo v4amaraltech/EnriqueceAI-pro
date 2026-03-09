@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import { calculateFitScore, type FitScoreRule } from '../services/fit-score.service';
 
@@ -34,7 +35,7 @@ export async function recalcFitScoreForLead(
 ): Promise<void> {
   const rules = await fetchRules(supabase, orgId);
 
-  const { data: lead } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead } = (await from(supabase, 'leads')
     .select('email, telefone, razao_social, nome_fantasia, porte, cnae, situacao_cadastral, faturamento_estimado, notes')
     .eq('id', leadId)
     .eq('org_id', orgId)
@@ -43,7 +44,7 @@ export async function recalcFitScoreForLead(
   if (!lead) return;
 
   // UF comes from endereco JSONB
-  const { data: addressRow } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: addressRow } = (await from(supabase, 'leads')
     .select('endereco')
     .eq('id', leadId)
     .single()) as { data: { endereco: { uf?: string } | null } | null };
@@ -55,7 +56,7 @@ export async function recalcFitScoreForLead(
 
   const score = calculateFitScore(leadData, rules);
 
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({ fit_score: score } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
@@ -72,7 +73,7 @@ export async function recalcFitScoresForOrg(): Promise<ActionResult<{ updated: n
   const rules = await fetchRules(supabase, orgId);
 
   // Fetch all leads for org
-  const { data: leads, error } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: leads, error } = (await from(supabase, 'leads')
     .select('id, email, telefone, razao_social, nome_fantasia, porte, cnae, situacao_cadastral, faturamento_estimado, notes, endereco')
     .eq('org_id', orgId)
     .is('deleted_at', null)) as {
@@ -112,7 +113,7 @@ export async function recalcFitScoresForOrg(): Promise<ActionResult<{ updated: n
 
     // Update each lead in the chunk
     for (const { id, fit_score } of updates) {
-      await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'leads')
         .update({ fit_score } as Record<string, unknown>)
         .eq('id', id)
         .eq('org_id', orgId);

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 import { EmailService } from '@/features/integrations/services/email.service';
 
 interface SendManualEmailInput {
@@ -36,8 +37,7 @@ export async function sendManualEmail(
   }
 
   // Create interaction record first
-  const { data: interaction, error: interactionError } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interaction, error: interactionError } = (await from(supabase, 'interactions')
     .insert({
       org_id: member.org_id,
       lead_id: leadId,
@@ -69,8 +69,7 @@ export async function sendManualEmail(
 
   if (!result.success) {
     // Update interaction to failed
-    await (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'interactions')
       .update({ type: 'failed' } as Record<string, unknown>)
       .eq('id', interaction!.id);
 
@@ -78,8 +77,7 @@ export async function sendManualEmail(
   }
 
   // Update lead status to contacted if still new
-  await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({ status: 'contacted' } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('status', 'new');

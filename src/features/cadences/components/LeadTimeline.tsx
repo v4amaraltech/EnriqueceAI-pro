@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Linkedin,
   Mail,
   MessageSquare,
   Phone,

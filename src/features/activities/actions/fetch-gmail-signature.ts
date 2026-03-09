@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 interface GmailConnection {
   id: string;
@@ -48,7 +49,7 @@ async function refreshAccessToken(
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'gmail_connections')
     .update({
       access_token_encrypted: encrypt(tokens.access_token),
       token_expires_at: expiresAt,
@@ -74,8 +75,7 @@ export async function fetchGmailSignature(): Promise<ActionResult<string>> {
     return { success: true, data: '' };
   }
 
-  const { data: connection } = (await (supabase
-    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+  const { data: connection } = (await from(supabase, 'gmail_connections')
     .select('*')
     .eq('org_id', member.org_id)
     .eq('user_id', user.id)

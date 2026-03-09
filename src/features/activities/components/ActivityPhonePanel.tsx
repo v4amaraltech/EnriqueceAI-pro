@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   CheckCircle2,
-  ChevronDown,
   Clock,
   FileText,
   Loader2,

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import { saveAutoEmailCadenceSchema } from '../cadence.schemas';
 import { extractVariables } from '../utils/render-template';
@@ -37,8 +38,7 @@ export async function saveAutoEmailSteps(
   }
 
   // Verify cadence belongs to org and is editable
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, status, type')
     .eq('id', cadence_id)
     .eq('org_id', member.org_id)
@@ -58,14 +58,12 @@ export async function saveAutoEmailSteps(
   }
 
   // Delete existing steps and their inline templates
-  const { data: existingSteps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: existingSteps } = (await from(supabase, 'cadence_steps')
     .select('template_id, template_id_b')
     .eq('cadence_id', cadence_id)) as { data: Array<{ template_id: string | null; template_id_b: string | null }> | null };
 
   // Delete existing steps
-  const { error: deleteStepsError } = await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { error: deleteStepsError } = await from(supabase, 'cadence_steps')
     .delete()
     .eq('cadence_id', cadence_id);
 
@@ -79,8 +77,7 @@ export async function saveAutoEmailSteps(
     .filter((id): id is string => id != null);
 
   if (templateIds.length > 0) {
-    await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'message_templates')
       .delete()
       .in('id', templateIds)
       .eq('org_id', member.org_id);
@@ -94,8 +91,7 @@ export async function saveAutoEmailSteps(
     const variablesUsed = extractVariables(`${step.subject} ${step.body}`);
 
     // Create inline template
-    const { data: template, error: templateError } = (await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    const { data: template, error: templateError } = (await from(supabase, 'message_templates')
       .insert({
         org_id: member.org_id,
         name: `Auto Email - Step ${i + 1}`,
@@ -119,8 +115,7 @@ export async function saveAutoEmailSteps(
     let templateBId: string | null = null;
     if (step.ab_enabled && step.body_b) {
       const variablesUsedB = extractVariables(`${step.subject_b ?? ''} ${step.body_b}`);
-      const { data: templateB, error: templateBError } = (await (supabase
-        .from('message_templates') as ReturnType<typeof supabase.from>)
+      const { data: templateB, error: templateBError } = (await from(supabase, 'message_templates')
         .insert({
           org_id: member.org_id,
           name: `Auto Email - Step ${i + 1} (B)`,
@@ -142,8 +137,7 @@ export async function saveAutoEmailSteps(
     }
 
     // Create cadence step
-    const { error: stepError } = await (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    const { error: stepError } = await from(supabase, 'cadence_steps')
       .insert({
         cadence_id,
         step_order: i + 1,
@@ -161,13 +155,11 @@ export async function saveAutoEmailSteps(
 
     if (stepError) {
       // Clean up orphaned templates
-      await (supabase
-        .from('message_templates') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'message_templates')
         .delete()
         .eq('id', template.id);
       if (templateBId) {
-        await (supabase
-          .from('message_templates') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'message_templates')
           .delete()
           .eq('id', templateBId);
       }
@@ -176,8 +168,7 @@ export async function saveAutoEmailSteps(
   }
 
   // Update total_steps
-  await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadences')
     .update({ total_steps: steps.length } as Record<string, unknown>)
     .eq('id', cadence_id);
 

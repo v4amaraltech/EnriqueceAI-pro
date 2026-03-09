@@ -1,3 +1,4 @@
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -146,10 +147,9 @@ export class AIService {
 
   static async getUsage(orgId: string): Promise<AIUsageInfo> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0]!;
 
-    const { data } = (await (supabase
-      .from('ai_usage') as ReturnType<typeof supabase.from>)
+    const { data } = (await from(supabase, 'ai_usage')
       .select('*')
       .eq('org_id', orgId)
       .eq('usage_date', today)
@@ -178,11 +178,10 @@ export class AIService {
 
   static async incrementUsage(orgId: string): Promise<void> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0]!;
 
     // Try to update existing row
-    const { data: existing } = (await (supabase
-      .from('ai_usage') as ReturnType<typeof supabase.from>)
+    const { data: existing } = (await from(supabase, 'ai_usage')
       .select('id, generation_count, daily_limit')
       .eq('org_id', orgId)
       .eq('usage_date', today)
@@ -192,7 +191,7 @@ export class AIService {
       const oldCount = existing.generation_count;
       const newCount = oldCount + 1;
 
-      await (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'ai_usage')
         .update({ generation_count: newCount } as Record<string, unknown>)
         .eq('id', existing.id);
 
@@ -206,13 +205,13 @@ export class AIService {
         }
       }
     } else {
-      await (supabase.from('ai_usage') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'ai_usage')
         .insert({
           org_id: orgId,
           usage_date: today,
           generation_count: 1,
           daily_limit: DEFAULT_DAILY_LIMIT,
-        } as Record<string, unknown>);
+        } as unknown as Record<string, unknown>);
     }
   }
 }
@@ -222,8 +221,7 @@ async function fireAiThresholdAlert(orgId: string, used: number, limit: number):
   const supabase = createServiceRoleClient();
   const today = new Date().toISOString().split('T')[0]!;
 
-  const { data: existing } = (await (supabase
-    .from('notifications') as ReturnType<typeof supabase.from>)
+  const { data: existing } = (await from(supabase, 'notifications')
     .select('id')
     .eq('org_id', orgId)
     .eq('type', 'usage_limit_alert')

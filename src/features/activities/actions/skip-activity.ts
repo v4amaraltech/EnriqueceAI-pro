@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export async function skipActivity(
   enrollmentId: string,
@@ -14,8 +15,7 @@ export async function skipActivity(
 
   const nextStepDue = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
-  const { error } = await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadence_enrollments')
     .update({ next_step_due: nextStepDue } as Record<string, unknown>)
     .eq('id', enrollmentId);
 

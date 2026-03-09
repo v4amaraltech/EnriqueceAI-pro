@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 
-import { Clock, Eye, Loader2, MessageSquare, Send, Sparkles } from 'lucide-react';
+import { Clock, Eye, Loader2, Send, Sparkles } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';

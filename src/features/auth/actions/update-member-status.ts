@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { updateMemberStatusSchema } from '../schemas/member.schemas';
@@ -51,8 +52,7 @@ export async function updateMemberStatus(formData: FormData): Promise<ActionResu
   }
 
   // Update status
-  const { error } = await (supabase
-    .from('organization_members') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'organization_members')
     .update({ status: parsed.data.status, updated_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', parsed.data.memberId);
 

@@ -1,4 +1,5 @@
 import { decrypt, encrypt } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
@@ -86,7 +87,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
   if (!response.ok) {
     // Mark connection as error
     const supabase = await createServerSupabaseClient();
-    await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'calendar_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);
     throw new Error('Erro ao renovar token do Google Calendar');
@@ -101,7 +102,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
 
   // Update stored token (encrypted)
   const supabase = await createServerSupabaseClient();
-  await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'calendar_connections')
     .update({
       access_token_encrypted: encrypt(tokens.access_token),
       token_expires_at: newExpiresAt,
@@ -119,8 +120,7 @@ export async function getCalendarConnection(
   const supabase = await createServerSupabaseClient();
 
   // Include 'error' status — ensureValidToken will attempt auto-refresh
-  const { data } = (await (supabase
-    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+  const { data } = (await from(supabase, 'calendar_connections')
     .select('id, access_token_encrypted, refresh_token_encrypted, token_expires_at, calendar_email')
     .eq('org_id', orgId)
     .eq('user_id', userId)

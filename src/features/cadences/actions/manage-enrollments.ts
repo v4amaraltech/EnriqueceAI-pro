@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import type { EnrollmentListResult, EnrollmentWithLead } from '../cadences.contract';
 import type { EnrollmentStatus } from '../types';
@@ -14,8 +15,7 @@ export async function fetchCadenceEnrollments(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
-  const { data: cadence } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadence } = (await from(supabase, 'cadences')
     .select('id')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -26,15 +26,14 @@ export async function fetchCadenceEnrollments(
     return { success: false, error: 'Cadência não encontrada' };
   }
 
-  const from = (page - 1) * perPage;
-  const to = from + perPage - 1;
+  const rangeFrom = (page - 1) * perPage;
+  const to = rangeFrom + perPage - 1;
 
-  const { data, count, error } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data, count, error } = (await from(supabase, 'cadence_enrollments')
     .select('*, leads!inner(razao_social, nome_fantasia, cnpj)', { count: 'exact' })
     .eq('cadence_id', cadenceId)
     .order('enrolled_at', { ascending: false })
-    .range(from, to)) as {
+    .range(rangeFrom, to)) as {
     data: Array<Record<string, unknown> & { leads: { razao_social: string | null; nome_fantasia: string | null; cnpj: string } }> | null;
     count: number | null;
     error: { message: string } | null;
@@ -70,15 +69,14 @@ export async function fetchAvailableLeads(
   const { orgId, supabase } = await getAuthOrgId();
 
   // Get leads already enrolled in this cadence
-  const { data: enrolled } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id')
     .eq('cadence_id', cadenceId)) as { data: Array<{ lead_id: string }> | null };
 
   const enrolledIds = (enrolled ?? []).map((e) => e.lead_id);
 
   // Get available leads
-  let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'leads')
     .select('id, razao_social, nome_fantasia, cnpj, email')
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -120,8 +118,7 @@ export async function updateEnrollmentStatus(
 ): Promise<ActionResult<void>> {
   const { supabase } = await getAuthOrgId();
 
-  const { error } = await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadence_enrollments')
     .update({ status } as Record<string, unknown>)
     .eq('id', enrollmentId);
 
@@ -137,8 +134,7 @@ export async function removeEnrollment(
 ): Promise<ActionResult<void>> {
   const { supabase } = await getAuthOrgId();
 
-  const { error } = await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadence_enrollments')
     .delete()
     .eq('id', enrollmentId);
 

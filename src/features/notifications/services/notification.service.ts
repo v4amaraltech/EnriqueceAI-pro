@@ -1,3 +1,4 @@
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { NotificationInsert, NotificationType } from '../types';
@@ -5,7 +6,7 @@ import type { NotificationInsert, NotificationType } from '../types';
 export async function createNotification(params: NotificationInsert): Promise<{ id: string }> {
   const supabase = createServiceRoleClient();
 
-  const { data, error } = (await (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'notifications')
     .insert(params as unknown as Record<string, unknown>)
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -31,7 +32,7 @@ export async function createNotificationsForOrgMembers(params: {
   const supabase = createServiceRoleClient();
 
   // Fetch active members of the org
-  let query = (supabase.from('organization_members') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'organization_members')
     .select('user_id')
     .eq('org_id', params.orgId)
     .eq('status', 'active');
@@ -64,7 +65,7 @@ export async function createNotificationsForOrgMembers(params: {
 
   if (notifications.length === 0) return;
 
-  const { error: insertError } = await (supabase.from('notifications') as ReturnType<typeof supabase.from>)
+  const { error: insertError } = await from(supabase, 'notifications')
     .insert(notifications as unknown as Record<string, unknown>[]);
 
   if (insertError) {

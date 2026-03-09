@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export interface DailyProgress {
   completed: number;
@@ -31,8 +32,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { count: completed } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { count: completed } = (await from(supabase, 'interactions')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', member.org_id)
     .eq('performed_by', user.id)
@@ -41,8 +41,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   // Count pending activities — must match fetchPendingActivities logic exactly:
   // 1. ALL active enrollments with next_step_due set, excluding auto_email
   // 2. Subtract activities that already have an interaction (already executed)
-  const { data: pendingEnrollments } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: pendingEnrollments } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, cadence:cadences!inner(type), lead:leads!inner(id)')
     .eq('status', 'active')
     .neq('cadence.type', 'auto_email')
@@ -54,8 +53,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   if (pendingEnrollments && pendingEnrollments.length > 0) {
     // Fetch matching steps to get step IDs for dedup
     const cadenceIds = [...new Set(pendingEnrollments.map((e) => e.cadence_id))];
-    const { data: steps } = (await (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    const { data: steps } = (await from(supabase, 'cadence_steps')
       .select('id, cadence_id, step_order')
       .in('cadence_id', cadenceIds)) as { data: Array<{ id: string; cadence_id: string; step_order: number }> | null };
 
@@ -77,8 +75,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
       const stepIds = [...new Set(candidates.map((c) => c.stepId))];
       const leadIds = [...new Set(candidates.map((c) => c.leadId))];
 
-      const { data: existingInteractions } = (await (supabase
-        .from('interactions') as ReturnType<typeof supabase.from>)
+      const { data: existingInteractions } = (await from(supabase, 'interactions')
         .select('cadence_id, step_id, lead_id')
         .in('cadence_id', cadenceIds)
         .in('step_id', stepIds)

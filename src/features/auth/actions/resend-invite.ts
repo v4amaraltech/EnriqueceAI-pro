@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 const INVITE_EXPIRY_DAYS = 7;
@@ -30,8 +31,7 @@ export async function resendInvite(
     }
 
     // Get the invited member
-    const { data: invitedMember } = (await (admin
-      .from('organization_members') as ReturnType<typeof admin.from>)
+    const { data: invitedMember } = (await from(admin, 'organization_members')
       .select('user_id, org_id, status')
       .eq('id', memberId)
       .single()) as { data: { user_id: string; org_id: string; status: string } | null };
@@ -70,7 +70,7 @@ export async function resendInvite(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
-    await (admin.from('organization_members') as ReturnType<typeof admin.from>)
+    await from(admin, 'organization_members')
       .update({ invited_expires_at: expiresAt.toISOString(), updated_at: new Date().toISOString() })
       .eq('id', memberId);
 

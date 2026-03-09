@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export interface LeadNote {
   id: string;
@@ -37,8 +38,7 @@ export async function addLeadNote(
 
   const authorEmail = user.email ?? null;
 
-  const { data: interaction, error } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interaction, error } = (await from(supabase, 'interactions')
     .insert({
       org_id: member.org_id,
       lead_id: leadId,

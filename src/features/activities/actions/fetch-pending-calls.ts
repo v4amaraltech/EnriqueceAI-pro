@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export interface PendingCallLead {
   enrollmentId: string;
@@ -16,8 +17,7 @@ export async function fetchPendingCalls(): Promise<ActionResult<PendingCallLead[
   const supabase = await createServerSupabaseClient();
 
   // Active enrollments where next step is a phone call
-  const { data: enrollments, error } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollments, error } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads(id, nome_fantasia, razao_social, cnpj)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString())
@@ -40,8 +40,7 @@ export async function fetchPendingCalls(): Promise<ActionResult<PendingCallLead[
 
   // Batch-fetch steps for these cadences
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
-  const { data: steps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: steps } = (await from(supabase, 'cadence_steps')
     .select('cadence_id, step_order, channel')
     .in('cadence_id', cadenceIds)
     .eq('channel', 'phone')) as {

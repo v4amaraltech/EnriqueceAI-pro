@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { LeadRow } from '../types';
 
@@ -24,7 +25,7 @@ export async function fetchLead(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data: lead, error } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead, error } = (await from(supabase, 'leads')
     .select('*')
     .eq('id', leadId)
     .eq('org_id', member.org_id)

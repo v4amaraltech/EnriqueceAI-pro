@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
@@ -26,7 +27,7 @@ export async function bulkDeleteLeads(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'leads')
     .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('org_id', orgId)
     .in('id', leadIds);
@@ -57,7 +58,7 @@ export async function bulkArchiveLeads(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'leads')
     .update({ status: 'archived' } as Record<string, unknown>)
     .eq('org_id', orgId)
     .in('id', leadIds);
@@ -167,7 +168,7 @@ export async function exportLeadsCsv(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'leads')
     .select('cnpj, razao_social, nome_fantasia, porte, cnae, email, telefone, status, enrichment_status, endereco, created_at')
     .eq('org_id', orgId)
     .in('id', leadIds)) as {

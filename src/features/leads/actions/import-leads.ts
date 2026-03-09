@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { LeadImportErrorRow } from '../types';
 import { parseCsv } from '../utils/csv-parser';
@@ -53,22 +54,19 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   }
 
   // Check lead limit before importing
-  const { data: sub } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: sub } = (await from(supabase, 'subscriptions')
     .select('plan_id')
     .eq('org_id', orgId)
     .maybeSingle()) as { data: { plan_id: string } | null };
 
   if (sub) {
-    const { data: plan } = (await (supabase
-      .from('plans') as ReturnType<typeof supabase.from>)
+    const { data: plan } = (await from(supabase, 'plans')
       .select('max_leads')
       .eq('id', sub.plan_id)
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
-      const { count: leadCount } = (await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { count: leadCount } = (await from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .is('deleted_at', null)) as { count: number | null };
@@ -94,8 +92,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   }
 
   // Create import record
-  const { data: importRecord, error: importError } = (await (supabase
-    .from('lead_imports') as ReturnType<typeof supabase.from>)
+  const { data: importRecord, error: importError } = (await from(supabase, 'lead_imports')
     .insert({
       org_id: orgId,
       file_name: file.name,
@@ -124,8 +121,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
   // Insert valid rows
   for (const row of parsed.rows) {
-    const { error: insertError } = await (supabase
-      .from('leads') as ReturnType<typeof supabase.from>)
+    const { error: insertError } = await from(supabase, 'leads')
       .insert({
         org_id: orgId,
         cnpj: row.cnpj,
@@ -144,8 +140,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
       // If duplicate, check if the existing lead is soft-deleted and restore it
       if (isDuplicate) {
-        const { data: existingLead } = (await (supabase
-          .from('leads') as ReturnType<typeof supabase.from>)
+        const { data: existingLead } = (await from(supabase, 'leads')
           .select('id, deleted_at')
           .eq('org_id', orgId)
           .eq('cnpj', row.cnpj)
@@ -163,8 +158,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           const effectiveSource = leadSource ?? row.lead_source;
           if (effectiveSource) restoreFields.lead_source = effectiveSource;
 
-          const { error: restoreError } = await (supabase
-            .from('leads') as ReturnType<typeof supabase.from>)
+          const { error: restoreError } = await from(supabase, 'leads')
             .update(restoreFields)
             .eq('id', existingLead.id);
 
@@ -187,8 +181,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       };
 
       // Record error in database
-      await (supabase
-        .from('lead_import_errors') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'lead_import_errors')
         .insert({
           import_id: importId,
           row_number: row.rowNumber,
@@ -204,8 +197,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
   // Record parse validation errors
   for (const error of parsed.errors) {
-    await (supabase
-      .from('lead_import_errors') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'lead_import_errors')
       .insert({
         import_id: importId,
         row_number: error.rowNumber,
@@ -226,8 +218,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   const totalErrorCount = importErrors.length;
 
   // Update import record with final counts
-  await (supabase
-    .from('lead_imports') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'lead_imports')
     .update({
       processed_rows: parsed.totalRows,
       success_count: successCount,

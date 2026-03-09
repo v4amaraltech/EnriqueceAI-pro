@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
@@ -52,8 +53,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // 1. Fetch ALL active enrollments with due steps (no time window — show everything pending)
   // RLS on leads table filters by assigned_to for SDRs: leads not visible to this
   // user will come back as null in the join, and are filtered out below.
-  const { data: enrollments, error: enrollError } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
@@ -72,8 +72,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // 2. Collect unique cadence IDs and batch-fetch steps + templates
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
 
-  const { data: steps } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: steps } = (await from(supabase, 'cadence_steps')
     .select('*')
     .in('cadence_id', cadenceIds)) as { data: CadenceStepRow[] | null };
 
@@ -83,8 +82,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   let templates: MessageTemplateRow[] = [];
   if (templateIds.length > 0) {
-    const { data: tplData } = (await (supabase
-      .from('message_templates') as ReturnType<typeof supabase.from>)
+    const { data: tplData } = (await from(supabase, 'message_templates')
       .select('*')
       .in('id', templateIds)) as { data: MessageTemplateRow[] | null };
     templates = tplData ?? [];
@@ -192,8 +190,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   const stepIds = [...new Set(candidates.map((c) => c.stepId))];
   const leadIds = [...new Set(candidates.map((c) => c.leadId))];
 
-  const { data: existingInteractions } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: existingInteractions } = (await from(supabase, 'interactions')
     .select('cadence_id, step_id, lead_id')
     .in('cadence_id', cadenceIds)
     .in('step_id', stepIds)

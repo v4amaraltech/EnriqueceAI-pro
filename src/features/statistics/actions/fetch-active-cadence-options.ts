@@ -1,6 +1,7 @@
 'use server';
 
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface CadenceOption {
@@ -21,8 +22,7 @@ export async function fetchActiveCadenceOptions(): Promise<CadenceOption[]> {
 
   if (!member) return [];
 
-  const { data: cadences } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadences } = (await from(supabase, 'cadences')
     .select('id, name')
     .eq('org_id', member.org_id)
     .is('deleted_at', null)

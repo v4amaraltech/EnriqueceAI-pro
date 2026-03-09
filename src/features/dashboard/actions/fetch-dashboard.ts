@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { DashboardMetrics, EnrichmentStats, ImportSummary } from '../dashboard.contract';
@@ -36,8 +37,7 @@ export async function fetchDashboardMetrics(
   const sinceDate = getPeriodDate(period);
 
   // Fetch leads (non-deleted) for the org within period
-  const { data: leads, error: leadsError } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: leads, error: leadsError } = (await from(supabase, 'leads')
     .select('status, enrichment_status, porte, endereco, created_at')
     .eq('org_id', member.org_id)
     .is('deleted_at', null)
@@ -100,8 +100,7 @@ export async function fetchDashboardMetrics(
   }
 
   // Recent imports (last 5)
-  const { data: imports } = (await (supabase
-    .from('lead_imports') as ReturnType<typeof supabase.from>)
+  const { data: imports } = (await from(supabase, 'lead_imports')
     .select('id, file_name, total_rows, success_count, error_count, status, created_at')
     .eq('org_id', member.org_id)
     .order('created_at', { ascending: false })

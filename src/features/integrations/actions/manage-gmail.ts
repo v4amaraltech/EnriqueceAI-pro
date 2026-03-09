@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { decrypt, encrypt } from '@/lib/security/encryption';
@@ -108,8 +109,7 @@ export async function handleGmailCallback(
   // Preserve existing refresh_token if Google didn't send a new one (happens on re-auth)
   let refreshToken = tokens.refresh_token ?? '';
   if (!refreshToken) {
-    const { data: existing } = (await (supabase
-      .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    const { data: existing } = (await from(supabase, 'gmail_connections')
       .select('refresh_token_encrypted')
       .eq('org_id', member.org_id)
       .eq('user_id', user.id)
@@ -122,8 +122,7 @@ export async function handleGmailCallback(
   const encryptedRefreshToken = refreshToken ? encrypt(refreshToken) : '';
 
   // Upsert connection
-  const { data, error } = (await (supabase
-    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'gmail_connections')
     .upsert(
       {
         org_id: member.org_id,
@@ -144,8 +143,7 @@ export async function handleGmailCallback(
   }
 
   // Also save calendar connection (same tokens, unified OAuth)
-  await (supabase
-    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'calendar_connections')
     .upsert(
       {
         org_id: member.org_id,
@@ -177,8 +175,7 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { error } = await (supabase
-    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'gmail_connections')
     .delete()
     .eq('org_id', member.org_id)
     .eq('user_id', user.id);
@@ -188,8 +185,7 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
   }
 
   // Also disconnect calendar (unified OAuth)
-  await (supabase
-    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'calendar_connections')
     .delete()
     .eq('org_id', member.org_id)
     .eq('user_id', user.id);
@@ -208,8 +204,7 @@ export async function refreshGmailToken(
   }
 
   // Fetch current connection (needs refresh token)
-  const { data: connection } = (await (supabase
-    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+  const { data: connection } = (await from(supabase, 'gmail_connections')
     .select('*')
     .eq('id', connectionId)
     .eq('user_id', user.id)
@@ -232,7 +227,7 @@ export async function refreshGmailToken(
 
   if (!tokenResponse.ok) {
     // Mark connection as error
-    await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'gmail_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connectionId);
     return { success: false, error: 'Erro ao renovar token' };
@@ -246,7 +241,7 @@ export async function refreshGmailToken(
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   const encryptedNewAccessToken = encrypt(tokens.access_token);
 
-  await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'gmail_connections')
     .update({
       access_token_encrypted: encryptedNewAccessToken,
       token_expires_at: expiresAt,
@@ -255,7 +250,7 @@ export async function refreshGmailToken(
     .eq('id', connectionId);
 
   // Also refresh calendar token (unified OAuth)
-  await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'calendar_connections')
     .update({
       access_token_encrypted: encryptedNewAccessToken,
       token_expires_at: expiresAt,

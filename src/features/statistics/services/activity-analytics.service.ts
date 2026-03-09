@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import {
   CHANNEL_COLORS,
   CHANNEL_LABELS,
@@ -33,7 +34,7 @@ export async function fetchActivityAnalyticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<ActivityAnalyticsData> {
-  let query = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'interactions')
     .select('id, type, channel, created_at, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export interface DialerQueueItem {
   enrollmentId: string;
@@ -28,8 +29,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
 
   // Active enrollments (all due, regardless of step type)
   // RLS on leads filters by assigned_to for SDRs — !inner excludes enrollments for invisible leads
-  const { data: enrollments, error } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { data: enrollments, error } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios), cadence:cadences(id, name)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString())
@@ -56,13 +56,11 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   if (cadenceIds.length === 0) return { success: true, data: [] };
 
   const [phoneStepsResult, allStepsResult] = await Promise.all([
-    (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    from(supabase, 'cadence_steps')
       .select('id, cadence_id, step_order, channel, activity_name, instructions')
       .in('cadence_id', cadenceIds)
       .eq('channel', 'phone') as Promise<{ data: Array<{ id: string; cadence_id: string; step_order: number; channel: string; activity_name: string | null; instructions: string | null }> | null }>,
-    (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    from(supabase, 'cadence_steps')
       .select('cadence_id, step_order')
       .in('cadence_id', cadenceIds) as Promise<{ data: Array<{ cadence_id: string; step_order: number }> | null }>,
   ]);
@@ -83,8 +81,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   }
 
   // Get daily limit setting
-  const { data: settings } = (await (supabase
-    .from('organization_call_settings') as ReturnType<typeof supabase.from>)
+  const { data: settings } = (await from(supabase, 'organization_call_settings')
     .select('dialer_daily_limit_per_lead')
     .single()) as { data: { dialer_daily_limit_per_lead: number } | null };
 
@@ -135,8 +132,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data: todayCalls } = (await (supabase
-      .from('calls') as ReturnType<typeof supabase.from>)
+    const { data: todayCalls } = (await from(supabase, 'calls')
       .select('lead_id')
       .in('lead_id', leadIds)
       .gte('started_at', todayStart.toISOString())) as {

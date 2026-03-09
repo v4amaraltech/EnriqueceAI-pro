@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { CnpjWsProvider, LemitProvider } from '@/features/leads/services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '@/features/leads/services/enrichment.service';
 import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 // Allow long-running execution on Vercel (up to 5 minutes)
@@ -54,8 +55,7 @@ async function processLeadsBatch(importId: string): Promise<void> {
   const supabase = createServiceRoleClient();
 
   // Fetch pending leads for this import
-  const { data: leads, error } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: leads, error } = (await from(supabase, 'leads')
     .select('id, cnpj')
     .eq('import_id', importId)
     .eq('enrichment_status', 'pending')

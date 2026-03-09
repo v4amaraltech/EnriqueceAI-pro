@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 
@@ -43,8 +44,7 @@ export async function GET(
   try {
     const supabase = createServiceRoleClient();
 
-    const { data: interaction } = (await (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
+    const { data: interaction } = (await from(supabase, 'interactions')
       .select('metadata')
       .eq('id', interactionId)
       .single()) as { data: { metadata: Record<string, unknown> | null } | null };
@@ -54,7 +54,7 @@ export async function GET(
       const clicks = Array.isArray(metadata.clicks) ? metadata.clicks : [];
       clicks.push({ url: parsedUrl.href, clicked_at: new Date().toISOString() });
 
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({ metadata: { ...metadata, clicks } } as Record<string, unknown>)
         .eq('id', interactionId);
     }

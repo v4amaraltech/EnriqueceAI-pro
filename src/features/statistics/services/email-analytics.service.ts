@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import { INTERACTION_TYPE_COLORS } from '@/shared/constants/chart-colors';
 
 import type { FunnelStage } from '../types/conversion-analytics.types';
@@ -28,8 +29,7 @@ export async function fetchEmailAnalyticsData(
   // When filtering by userIds, get lead_ids enrolled by those users
   let leadIdFilter: string[] | undefined;
   if (userIds && userIds.length > 0) {
-    const { data: enrollments } = (await (supabase
-      .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
       .select('lead_id')
       .eq('org_id', orgId)
       .in('enrolled_by', userIds)) as { data: { lead_id: string }[] | null };
@@ -39,7 +39,7 @@ export async function fetchEmailAnalyticsData(
     }
   }
 
-  let query = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let query = from(supabase, 'interactions')
     .select('type, lead_id, cadence_id, created_at')
     .eq('org_id', orgId)
     .eq('channel', 'email')

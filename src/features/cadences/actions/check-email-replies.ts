@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { decrypt } from '@/lib/security/encryption';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { from } from '@/lib/supabase/from';
 
 import {
   type GmailConnection,
@@ -42,8 +43,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - REPLY_CHECK_DAYS);
 
-  const { data: sentInteractions, error: fetchError } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: sentInteractions, error: fetchError } = (await from(supabase, 'interactions')
     .select('id, lead_id, cadence_id, external_id, metadata')
     .eq('type', 'sent')
     .eq('channel', 'email')
@@ -61,15 +61,14 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
 
   // 2. Filter out interactions that already have a 'replied' or 'bounced' counterpart (batch query)
   const cadenceLeadPairs = sentInteractions.map((i) => `${i.cadence_id}:${i.lead_id}`);
-  const uniquePairs = [...new Set(cadenceLeadPairs)];
+  const _uniquePairs = [...new Set(cadenceLeadPairs)];
 
   const alreadyProcessedMap = new Set<string>();
 
   const uniqueCadenceIds = [...new Set(sentInteractions.map((i) => i.cadence_id))];
   const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
 
-  const { data: processedInteractions } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: processedInteractions } = (await from(supabase, 'interactions')
     .select('cadence_id, lead_id')
     .in('cadence_id', uniqueCadenceIds)
     .in('lead_id', uniqueLeadIds)
@@ -89,8 +88,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
 
   // 3. Group by cadence → get created_by (the Gmail user)
   const cadenceIds = [...new Set(toCheck.map((i) => i.cadence_id))];
-  const { data: cadences } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data: cadences } = (await from(supabase, 'cadences')
     .select('id, created_by')
     .in('id', cadenceIds)) as { data: CadenceCreator[] | null };
 
@@ -165,8 +163,7 @@ async function getValidAccessToken(
   userId: string,
 ): Promise<string | null> {
   // Get the user's org first
-  const { data: member } = (await (supabase
-    .from('organization_members') as ReturnType<typeof supabase.from>)
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', userId)
     .eq('status', 'active')
@@ -175,8 +172,7 @@ async function getValidAccessToken(
 
   if (!member) return null;
 
-  const { data: connection } = (await (supabase
-    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+  const { data: connection } = (await from(supabase, 'gmail_connections')
     .select('*')
     .eq('org_id', member.org_id)
     .eq('user_id', userId)
@@ -220,7 +216,7 @@ async function getThreadId(
     // Cache the threadId for next time
     if (threadId) {
       const existingMeta = interaction.metadata ?? {};
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({
           metadata: { ...existingMeta, thread_id: threadId },
         } as Record<string, unknown>)
@@ -332,8 +328,7 @@ async function recordReply(
   sentInteraction: SentInteraction,
 ): Promise<void> {
   // Get org_id from the lead
-  const { data: lead } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead } = (await from(supabase, 'leads')
     .select('org_id')
     .eq('id', sentInteraction.lead_id)
     .single()) as { data: { org_id: string } | null };
@@ -341,8 +336,7 @@ async function recordReply(
   if (!lead) return;
 
   // Create replied interaction
-  await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'interactions')
     .insert({
       org_id: lead.org_id,
       lead_id: sentInteraction.lead_id,
@@ -355,8 +349,7 @@ async function recordReply(
     } as Record<string, unknown>);
 
   // Update active enrollment to replied
-  await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('cadence_id', sentInteraction.cadence_id)
@@ -375,8 +368,7 @@ async function recordBounce(
   sentInteraction: SentInteraction,
 ): Promise<void> {
   // Get lead details
-  const { data: lead } = (await (supabase
-    .from('leads') as ReturnType<typeof supabase.from>)
+  const { data: lead } = (await from(supabase, 'leads')
     .select('org_id, nome_fantasia, razao_social, cnpj, email, assigned_to')
     .eq('id', sentInteraction.lead_id)
     .single()) as { data: { org_id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string | null; email: string | null; assigned_to: string | null } | null };
@@ -384,8 +376,7 @@ async function recordBounce(
   if (!lead) return;
 
   // 1. Create bounced interaction
-  await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'interactions')
     .insert({
       org_id: lead.org_id,
       lead_id: sentInteraction.lead_id,
@@ -398,21 +389,19 @@ async function recordBounce(
     } as Record<string, unknown>);
 
   // 2. Mark lead email as bounced
-  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'leads')
     .update({ email_bounced_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', sentInteraction.lead_id);
 
   // 3. Bounce the enrollment in the originating cadence
-  await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update({ status: 'bounced' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
 
   // 4. Pause ALL other active enrollments for this lead across all cadences
-  await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'cadence_enrollments')
     .update({ status: 'paused' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('status', 'active')
@@ -462,8 +451,7 @@ async function checkAndAutoBlacklistDomain(
 ): Promise<void> {
   try {
     // Get lead's email and org
-    const { data: lead } = (await (supabase
-      .from('leads') as ReturnType<typeof supabase.from>)
+    const { data: lead } = (await from(supabase, 'leads')
       .select('org_id, email')
       .eq('id', sentInteraction.lead_id)
       .single()) as { data: { org_id: string; email: string | null } | null };
@@ -474,8 +462,7 @@ async function checkAndAutoBlacklistDomain(
     if (!domain) return;
 
     // Check if domain is already blacklisted
-    const { data: existing } = (await (supabase
-      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+    const { data: existing } = (await from(supabase, 'email_blacklist')
       .select('id')
       .eq('org_id', lead.org_id)
       .eq('domain', domain)
@@ -484,8 +471,7 @@ async function checkAndAutoBlacklistDomain(
     if (existing) return; // already blacklisted
 
     // Get all leads with this domain in this org
-    const { data: domainLeads } = (await (supabase
-      .from('leads') as ReturnType<typeof supabase.from>)
+    const { data: domainLeads } = (await from(supabase, 'leads')
       .select('id')
       .eq('org_id', lead.org_id)
       .ilike('email', `%@${domain}`)) as { data: Array<{ id: string }> | null };
@@ -495,8 +481,7 @@ async function checkAndAutoBlacklistDomain(
     const leadIds = domainLeads.map((l) => l.id);
 
     // Count total sent emails to this domain
-    const { count: totalSent } = (await (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
+    const { count: totalSent } = (await from(supabase, 'interactions')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', lead.org_id)
       .eq('channel', 'email')
@@ -504,8 +489,7 @@ async function checkAndAutoBlacklistDomain(
       .in('lead_id', leadIds)) as { count: number | null };
 
     // Count total bounces for this domain
-    const { count: totalBounced } = (await (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
+    const { count: totalBounced } = (await from(supabase, 'interactions')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', lead.org_id)
       .eq('channel', 'email')
@@ -522,8 +506,7 @@ async function checkAndAutoBlacklistDomain(
     if (bounceRate < AUTO_BLACKLIST_BOUNCE_RATE) return;
 
     // Auto-blacklist the domain
-    await (supabase
-      .from('email_blacklist') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'email_blacklist')
       .insert({
         org_id: lead.org_id,
         domain,
@@ -534,8 +517,7 @@ async function checkAndAutoBlacklistDomain(
 
     // Notify managers about the auto-blacklist
     try {
-      const { data: managers } = (await (supabase
-        .from('organization_members') as ReturnType<typeof supabase.from>)
+      const { data: managers } = (await from(supabase, 'organization_members')
         .select('user_id')
         .eq('org_id', lead.org_id)
         .eq('role', 'manager')

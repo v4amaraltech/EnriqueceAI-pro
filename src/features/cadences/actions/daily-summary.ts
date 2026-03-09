@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { from } from '@/lib/supabase/from';
 import { EmailService } from '@/features/integrations/services/email.service';
 
 interface DailyMetrics {
@@ -34,8 +35,7 @@ function getTodayRangeBRT(): { start: string; end: string } {
 /** Aggregate daily metrics for an organization */
 async function getOrgDailyMetrics(supabase: SupabaseClient, orgId: string, start: string, end: string): Promise<DailyMetrics> {
   // Count interactions by type and channel
-  const { data: interactions } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interactions } = (await from(supabase, 'interactions')
     .select('type, channel')
     .eq('org_id', orgId)
     .gte('created_at', start)
@@ -49,8 +49,7 @@ async function getOrgDailyMetrics(supabase: SupabaseClient, orgId: string, start
   const whatsapp_failed = items.filter((i) => i.channel === 'whatsapp' && i.type === 'failed').length;
 
   // Count enrollments paused today
-  const { count: enrollments_paused } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { count: enrollments_paused } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'paused')
     .gte('updated_at', start)
@@ -59,16 +58,14 @@ async function getOrgDailyMetrics(supabase: SupabaseClient, orgId: string, start
     .not('lead_id', 'is', null)) as { count: number | null };
 
   // Count enrollments completed today
-  const { count: enrollments_completed } = (await (supabase
-    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+  const { count: enrollments_completed } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'completed')
     .gte('completed_at', start)
     .lte('completed_at', end)) as { count: number | null };
 
   // Count active cadences
-  const { count: active_cadences } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { count: active_cadences } = (await from(supabase, 'cadences')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', orgId)
     .eq('status', 'active')) as { count: number | null };
@@ -179,8 +176,7 @@ export async function sendDailyCadenceSummary(): Promise<ActionResult<{ orgs_pro
   const dateStr = brt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   // Fetch all organizations that have at least 1 active cadence
-  const { data: orgs } = (await (supabase
-    .from('organizations') as ReturnType<typeof supabase.from>)
+  const { data: orgs } = (await from(supabase, 'organizations')
     .select('id, name')) as { data: Array<{ id: string; name: string }> | null };
 
   if (!orgs || orgs.length === 0) {
@@ -201,8 +197,7 @@ export async function sendDailyCadenceSummary(): Promise<ActionResult<{ orgs_pro
       }
 
       // Fetch managers with Gmail connected
-      const { data: managers } = (await (supabase
-        .from('organization_members') as ReturnType<typeof supabase.from>)
+      const { data: managers } = (await from(supabase, 'organization_members')
         .select('user_id')
         .eq('org_id', org.id)
         .eq('role', 'manager')
@@ -211,16 +206,14 @@ export async function sendDailyCadenceSummary(): Promise<ActionResult<{ orgs_pro
       if (!managers || managers.length === 0) continue;
 
       // Get manager emails from auth.users
-      const { data: users } = (await (adminSupabase
-        .from('users') as ReturnType<typeof adminSupabase.from>)
+      const { data: users } = (await from(adminSupabase, 'users')
         .select('id, email')
         .in('id', managers.map((m) => m.user_id))) as { data: Array<{ id: string; email: string }> | null };
 
       if (!users || users.length === 0) continue;
 
       // Check which managers have Gmail connected (needed to send via their account)
-      const { data: gmailConnections } = (await (supabase
-        .from('gmail_connections') as ReturnType<typeof supabase.from>)
+      const { data: gmailConnections } = (await from(supabase, 'gmail_connections')
         .select('user_id')
         .eq('org_id', org.id)
         .eq('status', 'connected')) as { data: Array<{ user_id: string }> | null };

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function revokeInvite(
@@ -28,8 +29,7 @@ export async function revokeInvite(
     }
 
     // Get the invited member
-    const { data: invitedMember } = (await (admin
-      .from('organization_members') as ReturnType<typeof admin.from>)
+    const { data: invitedMember } = (await from(admin, 'organization_members')
       .select('org_id, status')
       .eq('id', memberId)
       .single()) as { data: { org_id: string; status: string } | null };
@@ -43,7 +43,7 @@ export async function revokeInvite(
     }
 
     // Set status to removed
-    await (admin.from('organization_members') as ReturnType<typeof admin.from>)
+    await from(admin, 'organization_members')
       .update({ status: 'removed', updated_at: new Date().toISOString() })
       .eq('id', memberId);
 

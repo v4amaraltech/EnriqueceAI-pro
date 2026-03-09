@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   DailySdrPerformanceEntry,
   PerformanceAnalyticsData,
@@ -36,7 +38,7 @@ export async function fetchPerformanceAnalyticsData(
   cadenceId?: string,
 ): Promise<PerformanceAnalyticsData> {
   // Fetch org members
-  const { data: rawMembers } = (await (supabase.from('organization_members') as ReturnType<typeof supabase.from>)
+  const { data: rawMembers } = (await from(supabase, 'organization_members')
     .select('user_id, user_email')
     .eq('org_id', orgId)
     .eq('status', 'active')) as { data: MemberRow[] | null };
@@ -51,7 +53,7 @@ export async function fetchPerformanceAnalyticsData(
     : members.map((m) => m.user_id);
 
   // Fetch interactions
-  let intQuery = (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+  let intQuery = from(supabase, 'interactions')
     .select('type, lead_id, performed_by, cadence_id, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
@@ -66,7 +68,7 @@ export async function fetchPerformanceAnalyticsData(
   const interactions = rawInteractions ?? [];
 
   // Fetch leads created in period
-  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+  let leadsQuery = from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)

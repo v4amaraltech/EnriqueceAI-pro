@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 interface ActiveCadence {
   id: string;
@@ -25,8 +26,7 @@ export async function fetchActiveCadences(): Promise<ActionResult<ActiveCadence[
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase
-    .from('cadences') as ReturnType<typeof supabase.from>)
+  const { data, error } = (await from(supabase, 'cadences')
     .select('id, name, total_steps')
     .eq('org_id', member.org_id)
     .eq('status', 'active')

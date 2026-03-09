@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
@@ -31,8 +32,7 @@ export class WhatsAppCreditService {
     const period = getCurrentPeriod();
 
     // Try to fetch existing credit row for this period
-    const { data: credit } = (await (supabase
-      .from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+    const { data: credit } = (await from(supabase, 'whatsapp_credits')
       .select('id, plan_credits, used_credits, overage_count')
       .eq('org_id', orgId)
       .eq('period', period)
@@ -71,7 +71,7 @@ async function deductFromExisting(
     updatePayload.overage_count = credit.overage_count + 1;
   }
 
-  await (supabase.from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'whatsapp_credits')
     .update(updatePayload as Record<string, unknown>)
     .eq('id', credit.id);
 
@@ -97,8 +97,7 @@ async function createAndDeduct(
   period: string,
 ): Promise<CreditCheckResult> {
   // Fetch plan limit via subscription
-  const { data: sub } = (await (supabase
-    .from('subscriptions') as ReturnType<typeof supabase.from>)
+  const { data: sub } = (await from(supabase, 'subscriptions')
     .select('plan:plans(max_whatsapp_per_month)')
     .eq('org_id', orgId)
     .eq('status', 'active')
@@ -113,8 +112,7 @@ async function createAndDeduct(
   }
 
   // Insert the row for this period (deducting 1 immediately)
-  const { error: insertError } = await (supabase
-    .from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+  const { error: insertError } = await from(supabase, 'whatsapp_credits')
     .insert({
       org_id: orgId,
       plan_credits: planCredits,
@@ -126,8 +124,7 @@ async function createAndDeduct(
   if (insertError) {
     // Race condition: row was created between our select and insert
     // Retry by fetching the existing row
-    const { data: retryCredit } = (await (supabase
-      .from('whatsapp_credits') as ReturnType<typeof supabase.from>)
+    const { data: retryCredit } = (await from(supabase, 'whatsapp_credits')
       .select('id, plan_credits, used_credits, overage_count')
       .eq('org_id', orgId)
       .eq('period', period)

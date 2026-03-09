@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import type { CallStatus } from '@/features/calls/types';
 
@@ -73,8 +74,7 @@ export async function completeDialerCall(
   }
 
   // 2. Create interaction record
-  await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  await from(supabase, 'interactions')
     .insert({
       org_id: member.org_id,
       lead_id: leadId,
@@ -87,16 +87,14 @@ export async function completeDialerCall(
     } as Record<string, unknown>);
 
   // 3. Advance cadence: find next step
-  const { data: currentStepData } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: currentStepData } = (await from(supabase, 'cadence_steps')
     .select('step_order')
     .eq('id', stepId)
     .single()) as { data: { step_order: number } | null };
 
   const currentOrder = currentStepData?.step_order ?? 0;
 
-  const { data: nextStep } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: nextStep } = (await from(supabase, 'cadence_steps')
     .select('step_order')
     .eq('cadence_id', cadenceId)
     .gt('step_order', currentOrder)
@@ -107,14 +105,14 @@ export async function completeDialerCall(
   if (nextStep) {
     // Only update current_step — the DB trigger calculate_next_step_due
     // automatically sets next_step_due based on the new step's delay
-    await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'cadence_enrollments')
       .update({
         current_step: nextStep.step_order,
       } as Record<string, unknown>)
       .eq('id', enrollmentId);
   } else {
     // Last step — mark enrollment as completed
-    await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'cadence_enrollments')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),

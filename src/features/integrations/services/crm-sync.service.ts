@@ -1,4 +1,5 @@
 import { decryptJson, encryptJson } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type {
@@ -46,8 +47,7 @@ export class CrmSyncService {
     const supabase = await createServerSupabaseClient();
 
     // Get connection with credentials
-    const { data: connection } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data: connection } = (await from(supabase, 'crm_connections')
       .select('*')
       .eq('id', connectionId)
       .single()) as { data: CrmConnectionRow | null };
@@ -99,7 +99,7 @@ export class CrmSyncService {
       );
 
       // Update connection status
-      await (supabase.from('crm_connections') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'crm_connections')
         .update({
           status: 'connected',
           last_sync_at: new Date().toISOString(),
@@ -107,7 +107,7 @@ export class CrmSyncService {
         .eq('id', connectionId);
     } catch (error) {
       // Mark connection as error
-      await (supabase.from('crm_connections') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'crm_connections')
         .update({ status: 'error' } as Record<string, unknown>)
         .eq('id', connectionId);
       throw error;
@@ -122,7 +122,7 @@ export class CrmSyncService {
       ...activityResult.errorDetails,
     ];
 
-    await (supabase.from('crm_sync_log') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'crm_sync_log')
       .insert({
         connection_id: connectionId,
         direction: 'push',
@@ -148,7 +148,7 @@ export class CrmSyncService {
       new Date(credentials.token_expires_at) <= new Date()
     ) {
       credentials = await adapter.refreshToken(credentials);
-      await (supabase.from('crm_connections') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'crm_connections')
         .update({ credentials_encrypted: encryptJson(credentials) } as Record<string, unknown>)
         .eq('id', connection.id);
     }
@@ -227,8 +227,7 @@ export class CrmSyncService {
     let existingId: string | null = null;
 
     if (cnpj) {
-      const { data } = (await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { data } = (await from(supabase, 'leads')
         .select('id, updated_at')
         .eq('org_id', orgId)
         .eq('cnpj', cnpj)
@@ -237,8 +236,7 @@ export class CrmSyncService {
     }
 
     if (!existingId && email) {
-      const { data } = (await (supabase
-        .from('leads') as ReturnType<typeof supabase.from>)
+      const { data } = (await from(supabase, 'leads')
         .select('id, updated_at')
         .eq('org_id', orgId)
         .eq('email', email)
@@ -250,7 +248,7 @@ export class CrmSyncService {
       // Update existing lead (last-write-wins)
       const updateData = { ...leadData };
       delete updateData.cnpj; // Don't update CNPJ
-      await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'leads')
         .update(updateData as Record<string, unknown>)
         .eq('id', existingId);
     }
@@ -271,8 +269,7 @@ export class CrmSyncService {
     const result: SyncResult = { synced: 0, errors: 0, errorDetails: [] };
 
     // Get leads updated since last sync
-    let query = (supabase
-      .from('leads') as ReturnType<typeof supabase.from>)
+    let query = from(supabase, 'leads')
       .select('id, org_id, cnpj, razao_social, nome_fantasia, email, telefone, porte, cnae, situacao_cadastral, updated_at')
       .eq('org_id', connection.org_id)
       .is('deleted_at', null)
@@ -298,8 +295,7 @@ export class CrmSyncService {
         };
 
         // Check if lead has been synced before (external_id in interactions)
-        const { data: existingSync } = (await (supabase
-          .from('interactions') as ReturnType<typeof supabase.from>)
+        const { data: existingSync } = (await from(supabase, 'interactions')
           .select('external_id')
           .eq('lead_id', lead.id)
           .eq('type', 'crm_synced')
@@ -314,7 +310,7 @@ export class CrmSyncService {
 
         // Record sync mapping if new
         if (!existingSync) {
-          await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+          await from(supabase, 'interactions')
             .insert({
               org_id: connection.org_id,
               lead_id: lead.id,
@@ -349,8 +345,7 @@ export class CrmSyncService {
     const result: SyncResult = { synced: 0, errors: 0, errorDetails: [] };
 
     // Get interactions not yet synced to CRM (no external_id, type = 'sent')
-    let query = (supabase
-      .from('interactions') as ReturnType<typeof supabase.from>)
+    let query = from(supabase, 'interactions')
       .select('id, lead_id, channel, type, message_content, created_at')
       .eq('org_id', connection.org_id)
       .eq('type', 'sent')
@@ -368,8 +363,7 @@ export class CrmSyncService {
     for (const interaction of interactions ?? []) {
       try {
         // Find CRM external ID for this lead
-        const { data: crmSync } = (await (supabase
-          .from('interactions') as ReturnType<typeof supabase.from>)
+        const { data: crmSync } = (await from(supabase, 'interactions')
           .select('external_id')
           .eq('lead_id', interaction.lead_id)
           .eq('type', 'crm_synced')
@@ -386,7 +380,7 @@ export class CrmSyncService {
         });
 
         // Mark interaction as synced
-        await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        await from(supabase, 'interactions')
           .update({ external_id: pushResult.external_id } as Record<string, unknown>)
           .eq('id', interaction.id);
 

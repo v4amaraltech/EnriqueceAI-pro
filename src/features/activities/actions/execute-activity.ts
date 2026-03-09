@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
@@ -53,8 +54,7 @@ export async function executeActivity(
   } = input;
 
   // Idempotency check: skip if interaction already exists for this step + lead
-  const { data: existingInteraction } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: existingInteraction } = (await from(supabase, 'interactions')
     .select('id')
     .eq('cadence_id', cadenceId)
     .eq('step_id', stepId)
@@ -67,8 +67,7 @@ export async function executeActivity(
   }
 
   // Record interaction
-  const { data: interaction } = (await (supabase
-    .from('interactions') as ReturnType<typeof supabase.from>)
+  const { data: interaction } = (await from(supabase, 'interactions')
     .insert({
       org_id: orgId,
       lead_id: leadId,
@@ -98,7 +97,7 @@ export async function executeActivity(
     const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
     if (!creditResult.allowed) {
       // Mark interaction as failed before returning
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
         .eq('id', interaction.id);
       return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
@@ -111,11 +110,11 @@ export async function executeActivity(
     );
 
     if (waResult.success && waResult.messageId) {
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({ external_id: waResult.messageId } as Record<string, unknown>)
         .eq('id', interaction.id);
     } else {
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({ type: 'failed', metadata: { error: waResult.error ?? 'whatsapp_send_error' } } as Record<string, unknown>)
         .eq('id', interaction.id);
       return { success: false, error: waResult.error ?? 'Falha ao enviar WhatsApp' };
@@ -144,11 +143,11 @@ export async function executeActivity(
           thread_id: emailResult.threadId,
         };
       }
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update(updateData)
         .eq('id', interaction.id);
     } else {
-      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+      await from(supabase, 'interactions')
         .update({ type: 'failed', metadata: { error: emailResult.error ?? 'email_send_error' } } as Record<string, unknown>)
         .eq('id', interaction.id);
       return { success: false, error: emailResult.error ?? 'Falha ao enviar email' };
@@ -157,12 +156,10 @@ export async function executeActivity(
   // Manual channels (phone, linkedin, research) — interaction already recorded above, no external send needed
 
   // Advance step or mark enrollment completed
-  const { data: nextStep } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: nextStep } = (await from(supabase, 'cadence_steps')
     .select('step_order')
     .eq('cadence_id', cadenceId)
-    .gt('step_order', (await (supabase
-      .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .gt('step_order', (await from(supabase, 'cadence_steps')
       .select('step_order')
       .eq('id', stepId)
       .single()).data?.step_order ?? 0)
@@ -171,11 +168,11 @@ export async function executeActivity(
     .maybeSingle()) as { data: { step_order: number } | null };
 
   if (nextStep) {
-    await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'cadence_enrollments')
       .update({ current_step: nextStep.step_order } as Record<string, unknown>)
       .eq('id', enrollmentId);
   } else {
-    await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', enrollmentId);
   }

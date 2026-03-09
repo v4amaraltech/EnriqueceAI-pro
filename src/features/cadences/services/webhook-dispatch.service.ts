@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { from } from '@/lib/supabase/from';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -33,8 +34,7 @@ export async function dispatchWebhookEvent(
   data: Record<string, unknown>,
 ): Promise<void> {
   try {
-    const { data: endpoints } = (await (supabase
-      .from('webhook_endpoints') as ReturnType<typeof supabase.from>)
+    const { data: endpoints } = (await from(supabase, 'webhook_endpoints')
       .select('id, url, secret, events')
       .eq('org_id', orgId)
       .eq('is_active', true)) as { data: WebhookEndpoint[] | null };

@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId, getManagerOrgId } from '@/lib/auth/get-org-id';
 
 import { encryptJson } from '@/lib/security/encryption';
+import { from } from '@/lib/supabase/from';
 
 import type {
   CrmConnectionRow,
@@ -65,8 +66,7 @@ export async function handleCrmCallback(
     const fieldMapping = DEFAULT_FIELD_MAPPINGS[provider];
 
     // Upsert connection
-    const { data, error } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data, error } = (await from(supabase, 'crm_connections')
       .upsert(
         {
           org_id: orgId,
@@ -99,8 +99,7 @@ export async function disconnectCrm(
   try {
     const { orgId, supabase } = await getManagerOrgId();
 
-    const { error } = await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { error } = await from(supabase, 'crm_connections')
       .delete()
       .eq('org_id', orgId)
       .eq('crm_provider', provider);
@@ -125,8 +124,7 @@ export async function updateCrmFieldMapping(
   try {
     const { orgId, supabase } = await getManagerOrgId();
 
-    const { data, error } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data, error } = (await from(supabase, 'crm_connections')
       .update({ field_mapping: fieldMapping } as Record<string, unknown>)
       .eq('org_id', orgId)
       .eq('crm_provider', provider)
@@ -150,8 +148,7 @@ export async function fetchCrmConnections(): Promise<ActionResult<CrmConnectionS
   try {
     const { orgId, supabase } = await getAuthOrgId();
 
-    const { data, error } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data, error } = (await from(supabase, 'crm_connections')
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
       .eq('org_id', orgId)) as { data: CrmConnectionSafe[] | null; error: { message: string } | null };
 
@@ -176,8 +173,7 @@ export async function fetchCrmSyncLogs(
     const { orgId, supabase } = await getAuthOrgId();
 
     // Get connection ID for this provider
-    const { data: connection } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data: connection } = (await from(supabase, 'crm_connections')
       .select('id')
       .eq('org_id', orgId)
       .eq('crm_provider', provider)
@@ -187,8 +183,7 @@ export async function fetchCrmSyncLogs(
       return { success: true, data: [] };
     }
 
-    const { data, error } = (await (supabase
-      .from('crm_sync_log') as ReturnType<typeof supabase.from>)
+    const { data, error } = (await from(supabase, 'crm_sync_log')
       .select('*')
       .eq('connection_id', connection.id)
       .order('created_at', { ascending: false })
@@ -214,8 +209,7 @@ export async function triggerCrmSync(
     const { orgId, supabase } = await getManagerOrgId();
 
     // Get connection
-    const { data: connection } = (await (supabase
-      .from('crm_connections') as ReturnType<typeof supabase.from>)
+    const { data: connection } = (await from(supabase, 'crm_connections')
       .select('*')
       .eq('org_id', orgId)
       .eq('crm_provider', provider)
@@ -230,7 +224,7 @@ export async function triggerCrmSync(
     }
 
     // Mark as syncing
-    await (supabase.from('crm_connections') as ReturnType<typeof supabase.from>)
+    await from(supabase, 'crm_connections')
       .update({ status: 'syncing' } as Record<string, unknown>)
       .eq('id', connection.id);
 

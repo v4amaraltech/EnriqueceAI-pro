@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { from } from '@/lib/supabase/from';
 
 export async function declareAbWinner(params: {
   stepId: string;
@@ -24,8 +25,7 @@ export async function declareAbWinner(params: {
   }
 
   // Verify step belongs to org via cadence
-  const { data: step } = (await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { data: step } = (await from(supabase, 'cadence_steps')
     .select('id, cadence_id, ab_winner_variant')
     .eq('id', params.stepId)
     .single()) as { data: { id: string; cadence_id: string; ab_winner_variant: string | null } | null };
@@ -52,8 +52,7 @@ export async function declareAbWinner(params: {
   }
 
   // Declare winner: set variant, timestamp, and 100% distribution
-  const { error } = await (supabase
-    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+  const { error } = await from(supabase, 'cadence_steps')
     .update({
       ab_winner_variant: params.variant,
       ab_winner_at: new Date().toISOString(),
