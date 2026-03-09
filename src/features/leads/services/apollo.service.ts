@@ -156,9 +156,10 @@ export async function enrichPerson(
   apiKey: string,
   params: { id?: string; firstName?: string; lastName?: string; email?: string; organizationName?: string; domain?: string; linkedinUrl?: string },
 ): Promise<{ person: ApolloPersonFull | null }> {
-  // Match the working Make.com pattern: api_key + all fields in body, no reveal_phone_number
+  // api_key in body (Make.com pattern) + reveal_phone_number to request phone data
   const body: Record<string, unknown> = {
     api_key: apiKey,
+    reveal_phone_number: true,
   };
 
   if (params.id) body.id = params.id;
