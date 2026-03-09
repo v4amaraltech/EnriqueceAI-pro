@@ -121,15 +121,6 @@ export async function importApolloLeads(
         continue;
       }
 
-      // Diagnostic logging — remove after confirming phone flow works
-      console.warn('[apollo-import] enrichPerson response:', {
-        email: enriched.email,
-        sanitized_phone: enriched.sanitized_phone,
-        phone_numbers: enriched.phone_numbers,
-        has_phones: (enriched.phone_numbers?.length ?? 0) > 0 || !!enriched.sanitized_phone,
-        all_keys: Object.keys(enriched),
-      });
-
       const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo, enriched.id);
 
       // Check duplicate by email

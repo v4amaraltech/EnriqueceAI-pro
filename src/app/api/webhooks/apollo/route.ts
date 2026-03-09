@@ -62,19 +62,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let rawBody: string;
   let payload: ApolloPhoneWebhook;
 
   try {
-    rawBody = await request.text();
-    payload = JSON.parse(rawBody) as ApolloPhoneWebhook;
+    payload = (await request.json()) as ApolloPhoneWebhook;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-
-  // Log complete raw payload to understand Apollo's webhook format
-  console.warn('[apollo-webhook] RAW payload:', rawBody.slice(0, 2000));
-  console.warn('[apollo-webhook] Top-level keys:', Object.keys(payload));
 
   const orgId = url.searchParams.get('org_id');
   if (!orgId) {
