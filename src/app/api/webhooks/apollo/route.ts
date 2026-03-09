@@ -13,23 +13,37 @@ export const maxDuration = 30;
  * When we call /people/match with reveal_phone_number=true + webhook_url,
  * Apollo asynchronously sends phone data here once verified.
  *
- * Payload shape (from Apollo docs):
+ * Actual payload shape (from Apollo docs):
  * {
- *   person: {
+ *   status: "success",
+ *   people: [{
  *     id: string,
- *     sanitized_phone: string | null,
- *     phone_numbers: [{ raw_number: string, type: string }]
- *   }
+ *     status: "success",
+ *     phone_numbers: [{ raw_number: string, sanitized_number: string, ... }]
+ *   }]
  * }
  */
 
+interface ApolloWebhookPerson {
+  id: string;
+  status?: string;
+  email?: string;
+  phone_numbers?: {
+    raw_number: string;
+    sanitized_number?: string;
+    type?: string;
+    confidence_cd?: string;
+    status_cd?: string;
+    dnc_status_cd?: string;
+  }[];
+  sanitized_phone?: string | null;
+}
+
 interface ApolloPhoneWebhook {
-  person?: {
-    id: string;
-    email?: string;
-    sanitized_phone?: string | null;
-    phone_numbers?: { raw_number: string; type: string }[];
-  };
+  status?: string;
+  people?: ApolloWebhookPerson[];
+  // Legacy format (fallback)
+  person?: ApolloWebhookPerson;
 }
 
 export async function POST(request: Request) {
@@ -60,94 +74,107 @@ export async function POST(request: Request) {
   // Log complete raw payload to understand Apollo's webhook format
   console.warn('[apollo-webhook] RAW payload:', rawBody.slice(0, 2000));
   console.warn('[apollo-webhook] Top-level keys:', Object.keys(payload));
-  console.warn('[apollo-webhook] org_id:', new URL(request.url).searchParams.get('org_id'));
 
-  const person = payload.person;
-  if (!person?.id) {
-    console.warn('[apollo-webhook] No person data in payload');
-    return NextResponse.json({ ok: true, message: 'No person data' });
-  }
-
-  const supabase = createServiceRoleClient();
-
-  // Idempotency check — skip already-processed events
-  const eventId = `phone_${person.id}`;
-  if (await isEventProcessed(supabase, 'apollo', eventId)) {
-    return NextResponse.json({ ok: true, message: 'Already processed' });
-  }
-
-  const phoneNumbers = person.phone_numbers;
-  const sanitizedPhone = person.sanitized_phone;
-
-  if ((!phoneNumbers || phoneNumbers.length === 0) && !sanitizedPhone) {
-    console.warn('[apollo-webhook] No phone data for person=%s', person.id);
-    return NextResponse.json({ ok: true, message: 'No phone data' });
-  }
-
-  // Build phones array
-  const phones: { tipo: string; numero: string }[] = [];
-  if (phoneNumbers && phoneNumbers.length > 0) {
-    for (const pn of phoneNumbers) {
-      const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
-      phones.push({ tipo, numero: pn.raw_number });
-    }
-  } else if (sanitizedPhone) {
-    phones.push({ tipo: 'celular', numero: sanitizedPhone });
-  }
-
-  const primaryPhone = phones[0]?.numero ?? null;
-
-  // Find lead by email (Apollo person.id is not stored in our DB)
-  const email = person.email;
-  if (!email) {
-    return NextResponse.json({ ok: true, message: 'No email to match lead' });
-  }
-
-  // org_id is required for multi-tenant isolation
-  const reqUrl = new URL(request.url);
-  const orgId = reqUrl.searchParams.get('org_id');
+  const orgId = url.searchParams.get('org_id');
   if (!orgId) {
     return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
   }
 
-  const query = from(supabase, 'leads')
-    .select('id, phones')
-    .eq('lead_source', 'apollo')
-    .eq('email', email)
-    .eq('org_id', orgId)
-    .is('deleted_at', null);
+  // Apollo sends `people` (array) — also handle legacy `person` format
+  const people = payload.people ?? (payload.person ? [payload.person] : []);
 
-  const { data: lead } = await query
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
-
-  if (!lead) {
-    console.warn('[apollo-webhook] Lead not found for email=%s org=%s', email, orgId);
-    return NextResponse.json({ ok: true, message: 'Lead not found' });
+  if (people.length === 0) {
+    console.warn('[apollo-webhook] No people in payload');
+    return NextResponse.json({ ok: true, message: 'No people data' });
   }
 
-  // Merge with existing phones (avoid duplicates)
-  const existingNumbers = new Set(
-    (lead.phones ?? []).map((p: { numero: string }) => p.numero),
-  );
-  const mergedPhones = [...(lead.phones ?? [])];
-  for (const p of phones) {
-    if (!existingNumbers.has(p.numero)) {
-      mergedPhones.push(p);
+  const supabase = createServiceRoleClient();
+  let updated = 0;
+
+  for (const person of people) {
+    if (!person.id) continue;
+
+    // Idempotency check
+    const eventId = `phone_${person.id}`;
+    if (await isEventProcessed(supabase, 'apollo', eventId)) continue;
+
+    const phoneNumbers = person.phone_numbers;
+    const sanitizedPhone = person.sanitized_phone;
+
+    if ((!phoneNumbers || phoneNumbers.length === 0) && !sanitizedPhone) {
+      console.warn('[apollo-webhook] No phone data for person=%s', person.id);
+      continue;
     }
+
+    // Build phones array
+    const phones: { tipo: string; numero: string }[] = [];
+    if (phoneNumbers && phoneNumbers.length > 0) {
+      for (const pn of phoneNumbers) {
+        const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
+        phones.push({ tipo, numero: pn.raw_number });
+      }
+    } else if (sanitizedPhone) {
+      phones.push({ tipo: 'celular', numero: sanitizedPhone });
+    }
+
+    const primaryPhone = phones[0]?.numero ?? null;
+
+    // Match lead by source_id (Apollo person ID) — most reliable
+    let lead: { id: string; phones: { tipo: string; numero: string }[] | null } | null = null;
+
+    const { data: bySourceId } = await from(supabase, 'leads')
+      .select('id, phones')
+      .eq('source_id', person.id)
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
+
+    lead = bySourceId;
+
+    // Fallback: match by email if available
+    if (!lead && person.email) {
+      const { data: byEmail } = await from(supabase, 'leads')
+        .select('id, phones')
+        .eq('lead_source', 'apollo')
+        .eq('email', person.email)
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
+
+      lead = byEmail;
+    }
+
+    if (!lead) {
+      console.warn('[apollo-webhook] Lead not found for person=%s org=%s', person.id, orgId);
+      continue;
+    }
+
+    // Merge with existing phones (avoid duplicates)
+    const existingNumbers = new Set(
+      (lead.phones ?? []).map((p: { numero: string }) => p.numero),
+    );
+    const mergedPhones = [...(lead.phones ?? [])];
+    for (const p of phones) {
+      if (!existingNumbers.has(p.numero)) {
+        mergedPhones.push(p);
+      }
+    }
+
+    await from(supabase, 'leads')
+      .update({
+        telefone: primaryPhone,
+        phones: mergedPhones,
+      } as Record<string, unknown>)
+      .eq('id', lead.id);
+
+    await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
+    console.warn('[apollo-webhook] Updated lead=%s with %d phones, primary=%s', lead.id, mergedPhones.length, primaryPhone);
+    updated++;
   }
 
-  await from(supabase, 'leads')
-    .update({
-      telefone: primaryPhone,
-      phones: mergedPhones,
-    } as Record<string, unknown>)
-    .eq('id', lead.id);
-
-  // Mark event as processed for idempotency
-  await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
-
-  console.warn('[apollo-webhook] Updated lead=%s with %d phones, primary=%s', lead.id, mergedPhones.length, primaryPhone);
-  return NextResponse.json({ ok: true, updated: lead.id });
+  return NextResponse.json({ ok: true, updated });
 }
