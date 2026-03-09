@@ -29,6 +29,7 @@ import type { LeadContext } from '@/features/ai/types';
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
+import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { archiveLead, fetchLossReasons, markLeadAsLost } from '../actions/update-lead';
 import type { LeadRow } from '../types';
@@ -87,6 +88,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     });
   }, [lead.id, router]);
 
+  const handleEnrichApollo = useCallback(() => {
+    startTransition(async () => {
+      const result = await enrichLeadWithApollo(lead.id);
+      if (result.success) {
+        toast.success('Lead enriquecido com Apollo');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [lead.id, router]);
+
   const handleOpenLostDialog = useCallback(async () => {
     setShowLostDialog(true);
     setSelectedReasonId(null);
@@ -124,6 +137,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowArchive={() => setShowArchiveDialog(true)}
         onShowLost={handleOpenLostDialog}
         onEnrich={handleEnrich}
+        onEnrichApollo={handleEnrichApollo}
       />
 
       {enrollmentData.enrollments.length > 0 && (

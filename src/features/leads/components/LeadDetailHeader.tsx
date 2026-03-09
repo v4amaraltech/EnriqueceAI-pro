@@ -6,6 +6,7 @@ import {
   Archive,
   Calendar,
   ChevronLeft,
+  Globe,
   Mail,
   MoreHorizontal,
   Phone,
@@ -38,6 +39,7 @@ interface LeadDetailHeaderProps {
   onShowArchive: () => void;
   onShowLost: () => void;
   onEnrich: () => void;
+  onEnrichApollo: () => void;
 }
 
 export function LeadDetailHeader({
@@ -49,6 +51,7 @@ export function LeadDetailHeader({
   onShowArchive,
   onShowLost,
   onEnrich,
+  onEnrichApollo,
 }: LeadDetailHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -164,7 +167,11 @@ export function LeadDetailHeader({
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onEnrich}>
               <RefreshCw className="mr-2 h-3.5 w-3.5" />
-              Enriquecer
+              Enriquecer (CNPJ)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEnrichApollo}>
+              <Globe className="mr-2 h-3.5 w-3.5" />
+              Enriquecer com Apollo
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShowArchive} className="text-red-600">
