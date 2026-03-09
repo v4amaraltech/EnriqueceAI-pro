@@ -47,22 +47,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  let rawBody: string;
   let payload: ApolloPhoneWebhook;
 
   try {
-    payload = await request.json() as ApolloPhoneWebhook;
+    rawBody = await request.text();
+    payload = JSON.parse(rawBody) as ApolloPhoneWebhook;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Diagnostic logging — remove after confirming phone flow works
-  console.warn('[apollo-webhook] Received payload:', JSON.stringify({
-    personId: payload.person?.id,
-    email: payload.person?.email,
-    sanitized_phone: payload.person?.sanitized_phone,
-    phone_numbers: payload.person?.phone_numbers,
-    orgId: new URL(request.url).searchParams.get('org_id'),
-  }));
+  // Log complete raw payload to understand Apollo's webhook format
+  console.warn('[apollo-webhook] RAW payload:', rawBody.slice(0, 2000));
+  console.warn('[apollo-webhook] Top-level keys:', Object.keys(payload));
+  console.warn('[apollo-webhook] org_id:', new URL(request.url).searchParams.get('org_id'));
 
   const person = payload.person;
   if (!person?.id) {
