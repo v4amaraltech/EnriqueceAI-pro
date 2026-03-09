@@ -154,25 +154,22 @@ export async function searchPeople(apiKey: string, params: ApolloSearchParams): 
 
 export async function enrichPerson(
   apiKey: string,
-  params: { id?: string; firstName?: string; lastName?: string; domain?: string; linkedinUrl?: string; webhookUrl?: string },
+  params: { id?: string; firstName?: string; lastName?: string; email?: string; organizationName?: string; domain?: string; linkedinUrl?: string },
 ): Promise<{ person: ApolloPersonFull | null }> {
-  const body: Record<string, unknown> = {};
+  // Match the working Make.com pattern: api_key + all fields in body, no reveal_phone_number
+  const body: Record<string, unknown> = {
+    api_key: apiKey,
+  };
 
   if (params.id) body.id = params.id;
   if (params.firstName) body.first_name = params.firstName;
   if (params.lastName) body.last_name = params.lastName;
+  if (params.email) body.email = params.email;
+  if (params.organizationName) body.organization_name = params.organizationName;
   if (params.domain) body.domain = params.domain;
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
 
-  // reveal_phone_number and webhook_url must be QUERY PARAMS per Apollo docs
-  const queryParams: Record<string, string> = {
-    reveal_phone_number: 'true',
-  };
-  if (params.webhookUrl) {
-    queryParams.webhook_url = params.webhookUrl;
-  }
-
-  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body, queryParams);
+  const data = await apolloFetch<{ person: ApolloPersonFull | null }>(apiKey, '/people/match', body);
 
   return { person: data.person ?? null };
 }

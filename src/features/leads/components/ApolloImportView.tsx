@@ -121,7 +121,8 @@ export function ApolloImportView() {
         id: p.id,
         firstName: p.first_name,
         lastName: p.last_name_obfuscated,
-        domain: p.organization?.name ?? null,
+        organizationName: p.organization?.name ?? null,
+        domain: null,
         linkedinUrl: null,
       }));
 

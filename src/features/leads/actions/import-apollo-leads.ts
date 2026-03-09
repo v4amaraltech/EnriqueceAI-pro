@@ -21,6 +21,7 @@ interface ApolloPersonInput {
   id: string;
   firstName: string | null;
   lastName: string | null;
+  organizationName: string | null;
   domain: string | null;
   linkedinUrl: string | null;
 }
@@ -81,13 +82,6 @@ export async function importApolloLeads(
   let duplicates = 0;
   let errors = 0;
 
-  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const apolloWebhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
-  const webhookParams = new URLSearchParams();
-  if (apolloWebhookSecret) webhookParams.set('token', apolloWebhookSecret);
-  webhookParams.set('org_id', orgId);
-  const webhookUrl = `${appUrl}/api/webhooks/apollo?${webhookParams.toString()}`;
-
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
     const chunk = people.slice(i, i + 10);
@@ -98,9 +92,9 @@ export async function importApolloLeads(
           id: person.id,
           firstName: person.firstName ?? undefined,
           lastName: person.lastName ?? undefined,
+          organizationName: person.organizationName ?? undefined,
           domain: person.domain ?? undefined,
           linkedinUrl: person.linkedinUrl ?? undefined,
-          webhookUrl,
         }),
       ),
     );
