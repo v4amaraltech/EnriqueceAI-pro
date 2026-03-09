@@ -82,6 +82,13 @@ export async function importApolloLeads(
   let duplicates = 0;
   let errors = 0;
 
+  // Build webhook URL for async phone reveal (Apollo delivers phone data via webhook)
+  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
+  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
+  const webhookUrl = webhookSecret
+    ? `${appUrl}/api/webhooks/apollo?token=${encodeURIComponent(webhookSecret)}&org_id=${encodeURIComponent(orgId)}`
+    : undefined;
+
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {
     const chunk = people.slice(i, i + 10);
@@ -95,7 +102,7 @@ export async function importApolloLeads(
           organizationName: person.organizationName ?? undefined,
           domain: person.domain ?? undefined,
           linkedinUrl: person.linkedinUrl ?? undefined,
-        }),
+        }, webhookUrl),
       ),
     );
 
