@@ -193,7 +193,7 @@ function mapApolloToLead(
     first_name: person.first_name ?? null,
     last_name: person.last_name ?? null,
     razao_social: org?.name ?? searchOrgName ?? null,
-    nome_fantasia: null,
+    nome_fantasia: org?.name ?? searchOrgName ?? null,
     job_title: person.title ?? null,
     lead_source: 'apollo',
     is_inbound: false,

@@ -44,6 +44,7 @@ export { importLeads } from './actions/import-leads';
 export type { ImportLeadsResult } from './actions/import-leads';
 export { enrichLeadAction } from './actions/enrich-lead';
 export { enrichLeadWithApollo } from './actions/enrich-lead-apollo';
+export { backfillApolloSourceIds } from './actions/backfill-apollo-source-id';
 export { fetchLeads } from './actions/fetch-leads';
 export { fetchLead } from './actions/fetch-lead';
 export { bulkDeleteLeads, bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './actions/bulk-actions';
