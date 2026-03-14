@@ -43,6 +43,11 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
     return { success: false, error: 'Lead não encontrado' };
   }
 
+  // Skip if already enriched via Apollo (has source_id)
+  if (lead.source_id) {
+    return { success: false, error: 'Lead já foi enriquecido via Apollo' };
+  }
+
   // Get Apollo API key (org-level or env fallback)
   const apiKey = await getApolloApiKey(orgId);
   if (!apiKey) {
@@ -100,7 +105,7 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
       const newPhones = [...existingPhones];
 
       if (person.sanitized_phone && !existingNumbers.has(person.sanitized_phone)) {
-        newPhones.push({ tipo: 'fixo', numero: person.sanitized_phone });
+        newPhones.push({ tipo: 'celular', numero: person.sanitized_phone });
         existingNumbers.add(person.sanitized_phone);
       }
 

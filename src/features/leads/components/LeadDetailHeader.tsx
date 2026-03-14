@@ -40,6 +40,7 @@ interface LeadDetailHeaderProps {
   onShowLost: () => void;
   onEnrich: () => void;
   onEnrichApollo: () => void;
+  isEnriching?: boolean;
 }
 
 export function LeadDetailHeader({
@@ -52,6 +53,7 @@ export function LeadDetailHeader({
   onShowLost,
   onEnrich,
   onEnrichApollo,
+  isEnriching,
 }: LeadDetailHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -165,13 +167,13 @@ export function LeadDetailHeader({
               Agendar Reunião
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEnrich}>
-              <RefreshCw className="mr-2 h-3.5 w-3.5" />
-              Enriquecer (CNPJ)
+            <DropdownMenuItem onClick={onEnrich} disabled={isEnriching}>
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+              {isEnriching ? 'Enriquecendo...' : 'Enriquecer (CNPJ)'}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEnrichApollo}>
-              <Globe className="mr-2 h-3.5 w-3.5" />
-              Enriquecer com Apollo
+            <DropdownMenuItem onClick={onEnrichApollo} disabled={isEnriching}>
+              <Globe className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+              {isEnriching ? 'Enriquecendo...' : 'Enriquecer com Apollo'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShowArchive} className="text-red-600">

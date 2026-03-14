@@ -138,6 +138,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowLost={handleOpenLostDialog}
         onEnrich={handleEnrich}
         onEnrichApollo={handleEnrichApollo}
+        isEnriching={isPending}
       />
 
       {enrollmentData.enrollments.length > 0 && (

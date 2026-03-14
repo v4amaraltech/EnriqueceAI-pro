@@ -130,7 +130,7 @@ export async function backfillApolloSourceIds(): Promise<ActionResult<BackfillRe
         const newPhones = [...existingPhones];
 
         if (person.sanitized_phone && !existingNumbers.has(person.sanitized_phone)) {
-          newPhones.push({ tipo: 'fixo', numero: person.sanitized_phone });
+          newPhones.push({ tipo: 'celular', numero: person.sanitized_phone });
           existingNumbers.add(person.sanitized_phone);
         }
 
