@@ -46,3 +46,12 @@ export function EnrichmentStatusBadge({ status }: { status: EnrichmentStatus }) 
     </Badge>
   );
 }
+
+export function LeadSourceBadge({ source }: { source: string | null }) {
+  if (source !== 'apollo') return null;
+  return (
+    <Badge variant="outline" className="bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300 text-[10px] px-1.5 py-0">
+      Apollo
+    </Badge>
+  );
+}

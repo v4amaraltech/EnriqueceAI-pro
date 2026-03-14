@@ -62,6 +62,7 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
     : undefined;
 
   try {
+    const startTime = Date.now();
     const { person } = await enrichPerson(
       apiKey,
       {
@@ -74,8 +75,18 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
       },
       webhookUrl,
     );
+    const durationMs = Date.now() - startTime;
 
     if (!person) {
+      // Record failed attempt
+      await from(supabase, 'enrichment_attempts').insert({
+        lead_id: leadId,
+        provider: 'apollo',
+        status: 'not_found',
+        response_data: null,
+        error_message: 'Pessoa não encontrada no Apollo',
+        duration_ms: durationMs,
+      } as Record<string, unknown>);
       return { success: false, error: 'Pessoa não encontrada no Apollo' };
     }
 
@@ -128,6 +139,16 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
     }
 
     await from(supabase, 'leads').update(updates).eq('id', leadId);
+
+    // Record successful attempt
+    await from(supabase, 'enrichment_attempts').insert({
+      lead_id: leadId,
+      provider: 'apollo',
+      status: 'enriched',
+      response_data: { person_id: person.id, email: person.email, title: person.title },
+      error_message: null,
+      duration_ms: durationMs,
+    } as Record<string, unknown>);
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);

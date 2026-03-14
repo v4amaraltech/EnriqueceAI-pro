@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pencil, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -23,13 +23,13 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkEnrichApollo, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
 import { EngagementScoreBadge } from './EngagementScoreBadge';
 import { LeadAvatar } from './LeadAvatar';
-import { LeadStatusBadge } from './LeadStatusBadge';
+import { LeadSourceBadge, LeadStatusBadge } from './LeadStatusBadge';
 
 interface LeadTableProps {
   leads: LeadRow[];
@@ -118,6 +118,25 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     });
   }, [selected, router]);
 
+  const handleEnrichApollo = useCallback(() => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkEnrichApollo(ids);
+      if (result.success) {
+        const { successCount, failCount, skippedCount } = result.data;
+        const parts: string[] = [];
+        if (successCount > 0) parts.push(`${successCount} enriquecidos`);
+        if (skippedCount > 0) parts.push(`${skippedCount} já enriquecidos`);
+        if (failCount > 0) parts.push(`${failCount} falharam`);
+        toast.success(parts.join(', '));
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [selected, router]);
+
   const handleExport = useCallback(() => {
     const ids = Array.from(selected);
     startTransition(async () => {
@@ -142,6 +161,18 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
       const result = await bulkEnrichLeads([id]);
       if (result.success) {
         toast.success('Enriquecimento iniciado');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [router]);
+
+  const handleSingleEnrichApollo = useCallback((id: string) => {
+    startTransition(async () => {
+      const result = await bulkEnrichApollo([id]);
+      if (result.success) {
+        toast.success('Enriquecimento Apollo iniciado');
         router.refresh();
       } else {
         toast.error(result.error);
@@ -184,7 +215,16 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
               disabled={isPending}
             >
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
-              Enriquecer
+              Enriquecer (CNPJ)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEnrichApollo}
+              disabled={isPending}
+            >
+              <Globe className="mr-1 h-3.5 w-3.5" />
+              Enriquecer (Apollo)
             </Button>
             <Button
               variant="outline"
@@ -277,8 +317,9 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
                     <div className="flex items-center gap-3">
                       <LeadAvatar name={primaryName} size="sm" />
                       <div className="min-w-0">
-                        <div className="truncate font-semibold">
-                          {primaryName}
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-semibold">{primaryName}</span>
+                          <LeadSourceBadge source={lead.lead_source} />
                         </div>
                         {secondaryName && (
                           <div className="truncate text-xs text-[var(--muted-foreground)]">
@@ -319,7 +360,11 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleSingleEnrich(lead.id)}>
                           <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                          Enriquecer
+                          Enriquecer (CNPJ)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleSingleEnrichApollo(lead.id)}>
+                          <Globe className="mr-2 h-3.5 w-3.5" />
+                          Enriquecer (Apollo)
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleSingleArchive(lead.id)}>

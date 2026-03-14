@@ -9,6 +9,7 @@ import { from } from '@/lib/supabase/from';
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
 import { LemitCpfProvider } from '../services/lemit-cpf-provider';
+import { enrichLeadWithApollo } from './enrich-lead-apollo';
 
 export async function bulkDeleteLeads(
   leadIds: string[],
@@ -149,6 +150,34 @@ export async function bulkEnrichLeads(
   revalidatePath('/leads');
 
   return { success: true, data: { successCount, failCount } };
+}
+
+export async function bulkEnrichApollo(
+  leadIds: string[],
+): Promise<ActionResult<{ successCount: number; failCount: number; skippedCount: number }>> {
+  if (leadIds.length === 0) {
+    return { success: false, error: 'Nenhum lead selecionado' };
+  }
+
+  let successCount = 0;
+  let failCount = 0;
+  let skippedCount = 0;
+
+  for (const leadId of leadIds) {
+    const result = await enrichLeadWithApollo(leadId);
+
+    if (result.success) {
+      successCount++;
+    } else if (result.error === 'Lead já foi enriquecido via Apollo') {
+      skippedCount++;
+    } else {
+      failCount++;
+    }
+  }
+
+  revalidatePath('/leads');
+
+  return { success: true, data: { successCount, failCount, skippedCount } };
 }
 
 export async function exportLeadsCsv(

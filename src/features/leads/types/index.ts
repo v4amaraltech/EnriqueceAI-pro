@@ -2,7 +2,7 @@
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'archived';
 export type EnrichmentStatus = 'pending' | 'enriching' | 'enriched' | 'enrichment_failed' | 'not_found';
 export type ImportStatus = 'processing' | 'completed' | 'failed';
-export type EnrichmentProvider = 'cnpj_ws' | 'lemit';
+export type EnrichmentProvider = 'cnpj_ws' | 'lemit' | 'apollo';
 
 // Phone entry stored in phones JSONB array
 export interface LeadPhone {
