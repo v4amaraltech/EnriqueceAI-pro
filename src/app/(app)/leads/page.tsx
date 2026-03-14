@@ -25,13 +25,14 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.porte) filters.porte = params.porte;
   if (params.cnae) filters.cnae = params.cnae;
   if (params.uf) filters.uf = params.uf;
+  if (params.lead_source) filters.lead_source = params.lead_source;
   if (params.search) filters.search = params.search;
   if (params.page) filters.page = params.page;
   if (params.per_page) filters.per_page = params.per_page;
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
-  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.search);
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.search);
 
   const result = await fetchLeads(filters);
 
