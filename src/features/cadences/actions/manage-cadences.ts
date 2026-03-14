@@ -198,6 +198,85 @@ export async function removeCadenceStep(
   return { success: true, data: { removed: true } };
 }
 
+export async function duplicateCadence(
+  cadenceId: string,
+): Promise<ActionResult<CadenceRow>> {
+  const { orgId, userId, supabase } = await getAuthOrgId();
+
+  // Fetch source cadence
+  const { data: source, error: srcErr } = (await from(supabase, 'cadences')
+    .select('*')
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single()) as { data: CadenceRow | null; error: { message: string } | null };
+
+  if (srcErr || !source) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  // Fetch source steps
+  const { data: steps } = (await from(supabase, 'cadence_steps')
+    .select('*')
+    .eq('cadence_id', cadenceId)
+    .order('step_order', { ascending: true })) as { data: CadenceStepRow[] | null };
+
+  // Create new cadence with all fields
+  const { data: newCadence, error: createErr } = (await from(supabase, 'cadences')
+    .insert({
+      org_id: orgId,
+      name: `${source.name} (cópia)`,
+      description: source.description,
+      type: source.type,
+      priority: source.priority,
+      origin: source.origin,
+      auto_loss_after_days: source.auto_loss_after_days,
+      auto_loss_reason_id: source.auto_loss_reason_id,
+      status: 'draft',
+      total_steps: 0,
+      created_by: userId,
+    } as Record<string, unknown>)
+    .select('*')
+    .single()) as { data: CadenceRow | null; error: { message: string } | null };
+
+  if (createErr || !newCadence) {
+    return { success: false, error: 'Erro ao duplicar cadência' };
+  }
+
+  // Copy steps
+  if (steps && steps.length > 0) {
+    const stepInserts = steps.map((s) => ({
+      cadence_id: newCadence.id,
+      step_order: s.step_order,
+      channel: s.channel,
+      template_id: s.template_id,
+      delay_days: s.delay_days,
+      delay_hours: s.delay_hours,
+      ai_personalization: s.ai_personalization,
+      activity_name: s.activity_name,
+      instructions: s.instructions,
+      reply_type: s.reply_type,
+      template_id_b: s.template_id_b,
+      ab_enabled: s.ab_enabled,
+      ab_distribution: s.ab_distribution,
+      ab_winner_variant: null,
+      ab_winner_at: null,
+      ab_enabled_at: null,
+    } as Record<string, unknown>));
+
+    await from(supabase, 'cadence_steps').insert(stepInserts);
+
+    // Update total_steps
+    await from(supabase, 'cadences')
+      .update({ total_steps: steps.length } as Record<string, unknown>)
+      .eq('id', newCadence.id);
+
+    newCadence.total_steps = steps.length;
+  }
+
+  return { success: true, data: newCadence };
+}
+
 export async function enrollLeads(
   cadenceId: string,
   leadIds: string[],

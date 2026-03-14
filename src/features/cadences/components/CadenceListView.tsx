@@ -53,7 +53,7 @@ import {
 
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 import type { CadenceTabCounts } from '../actions/fetch-cadences';
-import { activateCadence, createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
+import { activateCadence, deleteCadence, duplicateCadence, updateCadence } from '../actions/manage-cadences';
 import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
 import { AutoEmailTable } from './AutoEmailTable';
 import { PriorityIcon } from './PriorityIcon';
@@ -177,12 +177,9 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
 
   function handleDuplicate(cadence: CadenceRow) {
     startTransition(async () => {
-      const result = await createCadence({
-        name: `${cadence.name} (cópia)`,
-        description: cadence.description,
-      });
+      const result = await duplicateCadence(cadence.id);
       if (result.success) {
-        toast.success('Cadência duplicada');
+        toast.success('Cadência duplicada com todos os passos');
         router.refresh();
       } else {
         toast.error(result.error);

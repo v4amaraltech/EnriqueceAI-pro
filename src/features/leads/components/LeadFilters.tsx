@@ -47,7 +47,11 @@ const ufOptions = [
 
 const ALL_VALUE = '__all__';
 
-export function LeadFilters() {
+interface LeadFiltersProps {
+  members?: { userId: string; email: string }[];
+}
+
+export function LeadFilters({ members }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -57,8 +61,9 @@ export function LeadFilters() {
   const currentPorte = searchParams.get('porte') ?? '';
   const currentUf = searchParams.get('uf') ?? '';
   const currentSource = searchParams.get('lead_source') ?? '';
+  const currentAssigned = searchParams.get('assigned_to') ?? '';
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch;
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -201,6 +206,29 @@ export function LeadFilters() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Responsável */}
+        {members && members.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">Responsável</span>
+            <Select
+              value={currentAssigned || ALL_VALUE}
+              onValueChange={(v) => updateParam('assigned_to', v)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>
+                    {m.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Clear filters */}
         {hasFilters && (

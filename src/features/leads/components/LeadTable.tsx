@@ -2,11 +2,19 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pencil, RefreshCw, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pencil, RefreshCw, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +22,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import {
   Table,
   TableBody,
@@ -23,7 +38,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkEnrichApollo, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkEnrichApollo, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -51,6 +67,9 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
+  const [assignTarget, setAssignTarget] = useState('');
 
   const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
   const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
@@ -192,6 +211,30 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     });
   }, [router]);
 
+  const handleOpenAssignDialog = useCallback(() => {
+    setShowAssignDialog(true);
+    setAssignTarget('');
+    fetchOrgMembersAuth().then((res) => {
+      if (res.success) setAssignMembers(res.data);
+    });
+  }, []);
+
+  const handleAssign = useCallback(() => {
+    if (!assignTarget) return;
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkAssignLeads(ids, assignTarget);
+      if (result.success) {
+        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} reatribuído${result.data.count > 1 ? 's' : ''}`);
+        setSelected(new Set());
+        setShowAssignDialog(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [assignTarget, selected, router]);
+
   const navigateToLead = useCallback(
     (id: string) => {
       router.push(`/leads/${id}`);
@@ -234,6 +277,15 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             >
               <Zap className="mr-1 h-3.5 w-3.5" />
               Cadência
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenAssignDialog}
+              disabled={isPending}
+            >
+              <UserCheck className="mr-1 h-3.5 w-3.5" />
+              Reatribuir
             </Button>
             <Button
               variant="outline"
@@ -380,6 +432,38 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Assign dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reatribuir leads</DialogTitle>
+            <DialogDescription>
+              Selecione o responsável para {selected.size} lead{selected.size > 1 ? 's' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={assignTarget} onValueChange={setAssignTarget}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              {assignMembers.map((m) => (
+                <SelectItem key={m.userId} value={m.userId}>
+                  {m.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAssign} disabled={!assignTarget || isPending}>
+              {isPending ? 'Reatribuindo...' : 'Reatribuir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Enroll in cadence dialog */}
       <EnrollInCadenceDialog

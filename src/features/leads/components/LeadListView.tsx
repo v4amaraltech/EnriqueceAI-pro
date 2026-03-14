@@ -20,9 +20,10 @@ interface LeadListViewProps {
   cadenceInfo: Record<string, LeadCadenceInfo>;
   userMap: Record<string, string>;
   currentUserId: string;
+  members?: { userId: string; email: string }[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members }: LeadListViewProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const { data: leads, total, page, per_page } = result;
 
@@ -65,7 +66,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters />
+        <LeadFilters members={members} />
       </Suspense>
 
       {/* Table or filtered empty */}
