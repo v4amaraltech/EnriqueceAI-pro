@@ -297,7 +297,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l1', org_id: 'org1', cnpj: '12.345.678/0001-90', status: 'qualified', enrichment_status: 'enriched',
     razao_social: 'TechNova Soluções em TI Ltda', nome_fantasia: 'TechNova Soluções',
-    first_name: 'Rafael', last_name: 'Oliveira', job_title: 'CTO', lead_source: 'Outbound', is_inbound: false,
+    first_name: 'Rafael', last_name: 'Oliveira', job_title: 'CTO', lead_source: 'Outbound', source_id: null, is_inbound: false,
     endereco: { cidade: 'São Paulo', uf: 'SP' }, porte: 'Média Empresa',
     cnae: '6311-9/00', situacao_cadastral: 'Ativa', email: 'rafael@technova.com.br',
     telefone: '(11) 98765-4321', phones: null, socios: null, faturamento_estimado: 12500000,
@@ -309,7 +309,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l2', org_id: 'org1', cnpj: '98.765.432/0001-10', status: 'contacted', enrichment_status: 'enriched',
     razao_social: 'Nexus Digital Marketing Ltda', nome_fantasia: 'Nexus Digital',
-    first_name: 'Fernanda', last_name: 'Lima', job_title: 'Head de Vendas', lead_source: 'Inbound Marketing', is_inbound: true,
+    first_name: 'Fernanda', last_name: 'Lima', job_title: 'Head de Vendas', lead_source: 'Inbound Marketing', source_id: null, is_inbound: true,
     endereco: { cidade: 'Rio de Janeiro', uf: 'RJ' }, porte: 'Pequena Empresa',
     cnae: '7311-4/00', situacao_cadastral: 'Ativa', email: 'fernanda@nexusdigital.com.br',
     telefone: '(21) 99876-5432', phones: null, socios: null, faturamento_estimado: 3200000,
@@ -321,7 +321,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l3', org_id: 'org1', cnpj: '11.222.333/0001-44', status: 'new', enrichment_status: 'enriched',
     razao_social: 'Logística Express Transportes S.A.', nome_fantasia: 'Logística Express',
-    first_name: 'Carlos', last_name: 'Santos', job_title: 'Diretor Comercial', lead_source: 'LinkedIn', is_inbound: false,
+    first_name: 'Carlos', last_name: 'Santos', job_title: 'Diretor Comercial', lead_source: 'LinkedIn', source_id: null, is_inbound: false,
     endereco: { cidade: 'Curitiba', uf: 'PR' }, porte: 'Grande Empresa',
     cnae: '4930-2/01', situacao_cadastral: 'Ativa', email: 'carlos@logisticaexpress.com.br',
     telefone: '(41) 99123-4567', phones: null, socios: null, faturamento_estimado: 85000000,
@@ -333,7 +333,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l4', org_id: 'org1', cnpj: '44.555.666/0001-77', status: 'contacted', enrichment_status: 'enriched',
     razao_social: 'Grupo Inova Construções Ltda', nome_fantasia: 'Inova Construções',
-    first_name: 'Patrícia', last_name: 'Almeida', job_title: 'Gerente de Compras', lead_source: 'Indicação', is_inbound: false,
+    first_name: 'Patrícia', last_name: 'Almeida', job_title: 'Gerente de Compras', lead_source: 'Indicação', source_id: null, is_inbound: false,
     endereco: { cidade: 'Belo Horizonte', uf: 'MG' }, porte: 'Média Empresa',
     cnae: '4120-4/00', situacao_cadastral: 'Ativa', email: 'patricia@inovaconstrucoes.com.br',
     telefone: '(31) 98456-7890', phones: null, socios: null, faturamento_estimado: 28000000,
@@ -345,7 +345,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l5', org_id: 'org1', cnpj: '77.888.999/0001-11', status: 'qualified', enrichment_status: 'enriched',
     razao_social: 'CloudBase Tecnologia Ltda', nome_fantasia: 'CloudBase',
-    first_name: 'Thiago', last_name: 'Ribeiro', job_title: 'VP de Tecnologia', lead_source: 'Outbound', is_inbound: false,
+    first_name: 'Thiago', last_name: 'Ribeiro', job_title: 'VP de Tecnologia', lead_source: 'Outbound', source_id: null, is_inbound: false,
     endereco: { cidade: 'Florianópolis', uf: 'SC' }, porte: 'Média Empresa',
     cnae: '6201-5/00', situacao_cadastral: 'Ativa', email: 'thiago@cloudbase.io',
     telefone: '(48) 99234-5678', phones: null, socios: null, faturamento_estimado: 18000000,
@@ -357,7 +357,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l6', org_id: 'org1', cnpj: '22.333.444/0001-55', status: 'unqualified', enrichment_status: 'enriched',
     razao_social: 'Alimentos Sabor & Saúde Ltda', nome_fantasia: 'Sabor & Saúde',
-    first_name: 'Juliana', last_name: 'Martins', job_title: 'Proprietária', lead_source: 'Inbound Marketing', is_inbound: true,
+    first_name: 'Juliana', last_name: 'Martins', job_title: 'Proprietária', lead_source: 'Inbound Marketing', source_id: null, is_inbound: true,
     endereco: { cidade: 'Porto Alegre', uf: 'RS' }, porte: 'Micro Empresa',
     cnae: '1091-1/02', situacao_cadastral: 'Ativa', email: 'juliana@saboresaude.com.br',
     telefone: '(51) 98765-1234', phones: null, socios: null, faturamento_estimado: 850000,
@@ -369,7 +369,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l7', org_id: 'org1', cnpj: '55.666.777/0001-33', status: 'new', enrichment_status: 'pending',
     razao_social: 'FinTech Solutions Brasil S.A.', nome_fantasia: 'FinTech Solutions',
-    first_name: 'André', last_name: 'Nascimento', job_title: 'CEO', lead_source: 'LinkedIn', is_inbound: false,
+    first_name: 'André', last_name: 'Nascimento', job_title: 'CEO', lead_source: 'LinkedIn', source_id: null, is_inbound: false,
     endereco: { cidade: 'Campinas', uf: 'SP' }, porte: 'Média Empresa',
     cnae: '6499-9/99', situacao_cadastral: 'Ativa', email: 'andre@fintechsolutions.com.br',
     telefone: '(19) 99876-5432', phones: null, socios: null, faturamento_estimado: 22000000,
@@ -381,7 +381,7 @@ export const demoLeads: LeadRow[] = [
   {
     id: 'l8', org_id: 'org1', cnpj: '88.999.000/0001-66', status: 'contacted', enrichment_status: 'enriched',
     razao_social: 'Energia Verde Sustentável Ltda', nome_fantasia: 'Energia Verde',
-    first_name: 'Camila', last_name: 'Rocha', job_title: 'Diretora de Operações', lead_source: 'Outbound', is_inbound: false,
+    first_name: 'Camila', last_name: 'Rocha', job_title: 'Diretora de Operações', lead_source: 'Outbound', source_id: null, is_inbound: false,
     endereco: { cidade: 'Salvador', uf: 'BA' }, porte: 'Média Empresa',
     cnae: '3511-5/01', situacao_cadastral: 'Ativa', email: 'camila@energiaverde.com.br',
     telefone: '(71) 98123-4567', phones: null, socios: null, faturamento_estimado: 45000000,

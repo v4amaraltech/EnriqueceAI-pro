@@ -49,6 +49,7 @@ export interface LeadRow {
   last_name: string | null;
   job_title: string | null;
   lead_source: string | null;
+  source_id: string | null;
   is_inbound: boolean;
   endereco: LeadAddress | null;
   porte: string | null;
@@ -130,6 +131,7 @@ export interface LeadInsert {
   last_name?: string | null;
   job_title?: string | null;
   lead_source?: string | null;
+  source_id?: string | null;
   is_inbound?: boolean;
   endereco?: LeadAddress | null;
   porte?: string | null;

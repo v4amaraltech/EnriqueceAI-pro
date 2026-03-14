@@ -40,6 +40,7 @@ interface LeadDetailHeaderProps {
   onShowLost: () => void;
   onEnrich: () => void;
   onEnrichApollo: () => void;
+  onReenrichApollo: () => void;
   isEnriching?: boolean;
 }
 
@@ -53,6 +54,7 @@ export function LeadDetailHeader({
   onShowLost,
   onEnrich,
   onEnrichApollo,
+  onReenrichApollo,
   isEnriching,
 }: LeadDetailHeaderProps) {
   const router = useRouter();
@@ -171,10 +173,17 @@ export function LeadDetailHeader({
               <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
               {isEnriching ? 'Enriquecendo...' : 'Enriquecer (CNPJ)'}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEnrichApollo} disabled={isEnriching}>
-              <Globe className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-              {isEnriching ? 'Enriquecendo...' : 'Enriquecer com Apollo'}
-            </DropdownMenuItem>
+            {lead.source_id ? (
+              <DropdownMenuItem onClick={onReenrichApollo} disabled={isEnriching}>
+                <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+                {isEnriching ? 'Enriquecendo...' : 'Re-enriquecer (Apollo)'}
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={onEnrichApollo} disabled={isEnriching}>
+                <Globe className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+                {isEnriching ? 'Enriquecendo...' : 'Enriquecer com Apollo'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShowArchive} className="text-red-600">
               <Archive className="mr-2 h-3.5 w-3.5" />

@@ -12,7 +12,7 @@ import { getApolloApiKey } from '../services/apollo-key.service';
 import { enrichPerson } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
-export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult<void>> {
+export async function enrichLeadWithApollo(leadId: string, force = false): Promise<ActionResult<void>> {
   const { orgId } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
@@ -43,8 +43,8 @@ export async function enrichLeadWithApollo(leadId: string): Promise<ActionResult
     return { success: false, error: 'Lead não encontrado' };
   }
 
-  // Skip if already enriched via Apollo (has source_id)
-  if (lead.source_id) {
+  // Skip if already enriched via Apollo (has source_id) unless force
+  if (lead.source_id && !force) {
     return { success: false, error: 'Lead já foi enriquecido via Apollo' };
   }
 

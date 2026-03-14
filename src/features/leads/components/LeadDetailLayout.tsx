@@ -100,6 +100,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     });
   }, [lead.id, router]);
 
+  const handleReenrichApollo = useCallback(() => {
+    startTransition(async () => {
+      const result = await enrichLeadWithApollo(lead.id, true);
+      if (result.success) {
+        toast.success('Lead re-enriquecido com Apollo');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [lead.id, router]);
+
   const handleOpenLostDialog = useCallback(async () => {
     setShowLostDialog(true);
     setSelectedReasonId(null);
@@ -138,6 +150,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowLost={handleOpenLostDialog}
         onEnrich={handleEnrich}
         onEnrichApollo={handleEnrichApollo}
+        onReenrichApollo={handleReenrichApollo}
         isEnriching={isPending}
       />
 

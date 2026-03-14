@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { enrichmentStatusValues, leadStatusValues } from '../schemas/lead.schemas';
+import { enrichmentStatusValues, LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
 
 const statusLabels: Record<string, string> = {
   new: 'Novo',
@@ -56,8 +56,9 @@ export function LeadFilters() {
   const currentEnrichment = searchParams.get('enrichment_status') ?? '';
   const currentPorte = searchParams.get('porte') ?? '';
   const currentUf = searchParams.get('uf') ?? '';
+  const currentSource = searchParams.get('lead_source') ?? '';
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSearch;
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -174,6 +175,27 @@ export function LeadFilters() {
               {ufOptions.map((uf) => (
                 <SelectItem key={uf} value={uf}>
                   {uf}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Origem */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Origem</span>
+          <Select
+            value={currentSource || ALL_VALUE}
+            onValueChange={(v) => updateParam('lead_source', v)}
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {LEAD_SOURCE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>

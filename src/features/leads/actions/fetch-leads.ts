@@ -62,6 +62,9 @@ export async function fetchLeads(
   if (filters.assigned_to) {
     query = query.eq('assigned_to', filters.assigned_to);
   }
+  if (filters.lead_source) {
+    query = query.eq('lead_source', filters.lead_source);
+  }
 
   // Full-text search
   if (filters.search) {
