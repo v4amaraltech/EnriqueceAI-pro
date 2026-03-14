@@ -47,9 +47,9 @@ describe('fetchOrgMembersAuth', () => {
     mockListUsers.mockResolvedValue({
       data: {
         users: [
-          { id: 'user-1', email: 'alice@company.com' },
-          { id: 'user-2', email: 'bob@company.com' },
-          { id: 'user-3', email: 'charlie@other.com' },
+          { id: 'user-1', email: 'alice@company.com', user_metadata: { full_name: 'Alice Silva' } },
+          { id: 'user-2', email: 'bob@company.com', user_metadata: { full_name: 'Bob Santos' } },
+          { id: 'user-3', email: 'charlie@other.com', user_metadata: { full_name: 'Charlie Lima' } },
         ],
       },
     });
@@ -68,8 +68,8 @@ describe('fetchOrgMembersAuth', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data).toHaveLength(2);
-      expect(result.data[0]).toEqual({ userId: 'user-1', email: 'alice@company.com' });
-      expect(result.data[1]).toEqual({ userId: 'user-2', email: 'bob@company.com' });
+      expect(result.data[0]).toEqual({ userId: 'user-1', email: 'alice@company.com', name: 'Alice Silva' });
+      expect(result.data[1]).toEqual({ userId: 'user-2', email: 'bob@company.com', name: 'Bob Santos' });
     }
   });
 
@@ -116,6 +116,7 @@ describe('fetchOrgMembersAuth', () => {
     if (result.success) {
       expect(result.data).toHaveLength(1);
       expect(result.data[0]?.email).toBe('abcdef12');
+      expect(result.data[0]?.name).toBe('abcdef12');
     }
   });
 

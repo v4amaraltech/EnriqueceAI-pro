@@ -449,7 +449,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             <SelectContent>
               {assignMembers.map((m) => (
                 <SelectItem key={m.userId} value={m.userId}>
-                  {m.email}
+                  {m.name}
                 </SelectItem>
               ))}
             </SelectContent>

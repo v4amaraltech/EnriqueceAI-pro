@@ -48,7 +48,7 @@ const ufOptions = [
 const ALL_VALUE = '__all__';
 
 interface LeadFiltersProps {
-  members?: { userId: string; email: string }[];
+  members?: { userId: string; name: string }[];
 }
 
 export function LeadFilters({ members }: LeadFiltersProps) {
@@ -222,7 +222,7 @@ export function LeadFilters({ members }: LeadFiltersProps) {
                 <SelectItem value={ALL_VALUE}>Todos</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.userId} value={m.userId}>
-                    {m.email}
+                    {m.name}
                   </SelectItem>
                 ))}
               </SelectContent>

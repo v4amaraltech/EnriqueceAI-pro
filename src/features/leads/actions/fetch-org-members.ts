@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 export interface OrgMemberOption {
   userId: string;
   email: string;
+  name: string;
 }
 
 export async function fetchOrgMembersAuth(): Promise<ActionResult<OrgMemberOption[]>> {
@@ -35,8 +36,9 @@ export async function fetchOrgMembersAuth(): Promise<ActionResult<OrgMemberOptio
     return { success: true, data: [] };
   }
 
-  // Get emails via admin client (same pattern as get-daily-goals.ts)
+  // Get emails and names via admin client (same pattern as get-daily-goals.ts)
   const emailMap = new Map<string, string>();
+  const nameMap = new Map<string, string>();
   try {
     const adminClient = createAdminSupabaseClient();
     const memberIds = new Set(members.map((m) => m.user_id));
@@ -45,6 +47,9 @@ export async function fetchOrgMembersAuth(): Promise<ActionResult<OrgMemberOptio
       for (const u of usersData.users) {
         if (memberIds.has(u.id)) {
           emailMap.set(u.id, u.email ?? u.id.slice(0, 8));
+          const meta = u.user_metadata as { full_name?: string; name?: string } | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+          if (fullName) nameMap.set(u.id, fullName);
         }
       }
     }
@@ -52,10 +57,14 @@ export async function fetchOrgMembersAuth(): Promise<ActionResult<OrgMemberOptio
     // Fallback: if service_role key is missing, truncated user_id used below
   }
 
-  const result: OrgMemberOption[] = members.map((m) => ({
-    userId: m.user_id,
-    email: emailMap.get(m.user_id) ?? m.user_id.slice(0, 8),
-  }));
+  const result: OrgMemberOption[] = members.map((m) => {
+    const email = emailMap.get(m.user_id) ?? m.user_id.slice(0, 8);
+    return {
+      userId: m.user_id,
+      email,
+      name: nameMap.get(m.user_id) ?? email,
+    };
+  });
 
   return { success: true, data: result };
 }

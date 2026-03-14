@@ -256,7 +256,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                       <SelectContent>
                         {members.map((m) => (
                           <SelectItem key={m.userId} value={m.userId}>
-                            {m.email}
+                            {m.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

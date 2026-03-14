@@ -20,7 +20,7 @@ interface LeadListViewProps {
   cadenceInfo: Record<string, LeadCadenceInfo>;
   userMap: Record<string, string>;
   currentUserId: string;
-  members?: { userId: string; email: string }[];
+  members?: { userId: string; name: string }[];
 }
 
 export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members }: LeadListViewProps) {
