@@ -21,11 +21,12 @@ import {
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { ChannelType, MessageTemplateRow } from '../../cadences/types';
-import { AVAILABLE_TEMPLATE_VARIABLES, extractVariables, renderTemplate } from '../index';
+import { ALL_TEMPLATE_VARIABLES, extractVariables, renderTemplate } from '../index';
 import { createTemplate, updateTemplate } from '../actions/manage-templates';
 
 interface TemplateEditorProps {
   template?: MessageTemplateRow;
+  signature?: string;
 }
 
 /**
@@ -59,6 +60,8 @@ function plainTextToHtml(text: string): string {
 }
 
 const sampleLeadData: Record<string, string> = {
+  primeiro_nome: 'Carlos',
+  empresa: 'Acme Corp',
   nome_fantasia: 'Acme Corp',
   razao_social: 'Acme Corporation LTDA',
   cnpj: '12.345.678/0001-00',
@@ -68,9 +71,11 @@ const sampleLeadData: Record<string, string> = {
   cidade: 'São Paulo',
   uf: 'SP',
   cnae: '6201-5/01',
+  nome_vendedor: 'Vinicius Mercante',
+  email_vendedor: 'vinicius@empresa.com.br',
 };
 
-export function TemplateEditor({ template }: TemplateEditorProps) {
+export function TemplateEditor({ template, signature }: TemplateEditorProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPreview, setShowPreview] = useState(false);
@@ -199,7 +204,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
             <div className="space-y-2">
               <Label>Variáveis disponíveis</Label>
               <div className="flex flex-wrap gap-1">
-                {AVAILABLE_TEMPLATE_VARIABLES.map((v) => (
+                {ALL_TEMPLATE_VARIABLES.map((v) => (
                   <Button
                     key={v}
                     variant="outline"
@@ -261,10 +266,21 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
               )}
               <div>
                 <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Mensagem:</p>
-                <div
-                  className="prose prose-sm max-w-none rounded-md border bg-[var(--muted)] p-4 [&_p]:my-3"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody || '<span class="text-muted-foreground">Corpo vazio</span>') }}
-                />
+                <div className="rounded-md border bg-[var(--muted)] p-4">
+                  <div
+                    className="prose prose-sm max-w-none [&_p]:my-3"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody || '<span class="text-muted-foreground">Corpo vazio</span>') }}
+                  />
+                  {channel === 'email' && signature && (
+                    <>
+                      <div className="my-4 border-t border-dashed" />
+                      <div
+                        className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Dados do lead de exemplo:</p>

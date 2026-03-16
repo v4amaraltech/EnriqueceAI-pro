@@ -17,6 +17,8 @@ export {
   channelTypeSchema,
   TEMPLATE_VARIABLE_REGEX,
   AVAILABLE_TEMPLATE_VARIABLES,
+  VENDOR_TEMPLATE_VARIABLES,
+  ALL_TEMPLATE_VARIABLES,
 } from '../cadences/cadence.schemas';
 
 export type {
