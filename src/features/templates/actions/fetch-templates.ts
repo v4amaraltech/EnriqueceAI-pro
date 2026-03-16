@@ -45,7 +45,8 @@ export async function fetchTemplates(
   }
 
   if (params.search) {
-    query = query.ilike('name', `%${params.search}%`);
+    const term = `%${params.search}%`;
+    query = query.or(`name.ilike.${term},subject.ilike.${term},body.ilike.${term}`);
   }
 
   query = query.order('created_at', { ascending: false }).range(rangeFrom, to);

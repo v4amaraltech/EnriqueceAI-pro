@@ -31,6 +31,8 @@ function createTemplate(overrides: Partial<MessageTemplateRow> = {}): MessageTem
   };
 }
 
+const defaultUserMap: Record<string, string> = { 'user-1': 'João Silva' };
+
 describe('TemplateListView', () => {
   it('should render template list header', () => {
     render(
@@ -39,19 +41,21 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     expect(screen.getByText('Templates de Mensagem')).toBeInTheDocument();
     expect(screen.getByText('1 template')).toBeInTheDocument();
   });
 
-  it('should render template card with name', () => {
+  it('should render template name in table', () => {
     render(
       <TemplateListView
         templates={[createTemplate()]}
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     expect(screen.getByText('Primeiro Contato')).toBeInTheDocument();
@@ -64,6 +68,7 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     // "Email" appears in both the tab filter and the badge
@@ -77,22 +82,23 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     expect(screen.getByText('Sistema')).toBeInTheDocument();
   });
 
-  it('should show variables used', () => {
+  it('should show responsible name from userMap', () => {
     render(
       <TemplateListView
         templates={[createTemplate()]}
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
-    expect(screen.getByText('{{nome_fantasia}}')).toBeInTheDocument();
-    expect(screen.getByText('{{razao_social}}')).toBeInTheDocument();
+    expect(screen.getByText('João Silva')).toBeInTheDocument();
   });
 
   it('should show empty state when no templates', () => {
@@ -102,6 +108,7 @@ describe('TemplateListView', () => {
         total={0}
         page={1}
         perPage={20}
+        userMap={{}}
       />,
     );
     expect(screen.getByText('Nenhum template encontrado')).toBeInTheDocument();
@@ -114,6 +121,7 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     // "WhatsApp" appears in both the tab filter and the badge
@@ -127,6 +135,7 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     expect(screen.getByText('Novo Template')).toBeInTheDocument();
@@ -139,6 +148,7 @@ describe('TemplateListView', () => {
         total={1}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     // "Todos" appears in both the tab and the select filter
@@ -153,6 +163,7 @@ describe('TemplateListView', () => {
         total={2}
         page={1}
         perPage={20}
+        userMap={defaultUserMap}
       />,
     );
     expect(screen.getByText('2 templates')).toBeInTheDocument();

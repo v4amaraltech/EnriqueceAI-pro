@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
+import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
 import { fetchTemplates } from '@/features/templates/actions/fetch-templates';
 import { TemplateListView } from '@/features/templates/components/TemplateListView';
 
@@ -26,6 +27,16 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
     return <p className="py-10 text-center text-[var(--muted-foreground)]">{result.error}</p>;
   }
 
+  const uniqueUserIds = [
+    ...new Set(
+      result.data.data
+        .map((t) => t.created_by)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const userMapResult = await fetchUserMap(uniqueUserIds);
+  const userMap = userMapResult.success ? userMapResult.data : {};
+
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
       <TemplateListView
@@ -33,6 +44,7 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
         total={result.data.total}
         page={result.data.page}
         perPage={result.data.per_page}
+        userMap={userMap}
       />
     </Suspense>
   );

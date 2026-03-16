@@ -1,13 +1,12 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
-import { Copy, FileText, Linkedin, Mail, MessageSquare, MoreHorizontal, Pencil, Phone, Plus, Search, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { Copy, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent } from '@/shared/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 import type { MessageTemplateRow } from '../../cadences/types';
@@ -40,27 +47,26 @@ interface TemplateListViewProps {
   total: number;
   page: number;
   perPage: number;
+  userMap: Record<string, string>;
 }
 
 const ALL_VALUE = '__all__';
 
-const channelIcon: { [k: string]: typeof Mail } = {
-  email: Mail,
-  whatsapp: MessageSquare,
-  phone: Phone,
-  linkedin: Linkedin,
-  research: Search,
-};
-
-const channelLabel: { [k: string]: string } = {
+const channelLabel: Record<string, string> = {
   email: 'Email',
   whatsapp: 'WhatsApp',
-  phone: 'Ligação',
-  linkedin: 'LinkedIn',
-  research: 'Pesquisa',
 };
 
-export function TemplateListView({ templates, total, page, perPage }: TemplateListViewProps) {
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').trim();
+}
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+}
+
+export function TemplateListView({ templates, total, page, perPage, userMap }: TemplateListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -68,6 +74,13 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
 
   const currentChannel = searchParams.get('channel') ?? ALL_VALUE;
   const currentSearch = searchParams.get('search') ?? '';
+
+  const [searchValue, setSearchValue] = useState(currentSearch);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setSearchValue(currentSearch);
+  }, [currentSearch]);
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -138,16 +151,28 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
           </TabsList>
         </Tabs>
 
-        <Input
-          placeholder="Buscar por nome..."
-          defaultValue={currentSearch}
-          className="max-w-xs"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              updateParams({ search: (e.target as HTMLInputElement).value });
-            }
-          }}
-        />
+        <div className="relative max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
+          <Input
+            placeholder="Buscar por nome, assunto ou corpo..."
+            value={searchValue}
+            className="pl-9"
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearchValue(v);
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(() => {
+                updateParams({ search: v });
+              }, 400);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                updateParams({ search: searchValue });
+              }
+            }}
+          />
+        </div>
 
         <Select
           value={searchParams.get('is_system') ?? ALL_VALUE}
@@ -180,41 +205,80 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => {
-            const Icon = channelIcon[template.channel] ?? Mail;
-            return (
-              <Card key={template.id} className="relative">
-                <CardContent className="p-4">
-                  <div className="mb-3 flex items-start justify-between">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead className="min-w-[300px]">Conteúdo</TableHead>
+              <TableHead>Responsável</TableHead>
+              <TableHead>Criado</TableHead>
+              <TableHead className="w-[60px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {templates.map((template) => {
+              const ChannelIcon = template.channel === 'whatsapp' ? MessageSquare : Mail;
+              const bodyPreview = stripHtml(template.body);
+              return (
+                <TableRow
+                  key={template.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/templates/${template.id}`)}
+                >
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                      <Badge variant="outline" className="text-xs">
+                      <span className="font-medium">{template.name}</span>
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <ChannelIcon className="h-3 w-3" />
                         {channelLabel[template.channel] ?? template.channel}
                       </Badge>
                       {template.is_system && (
                         <Badge variant="secondary" className="text-xs">Sistema</Badge>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[400px]">
+                      <p className="text-sm font-medium truncate">
+                        {template.subject || '(Sem assunto)'}
+                      </p>
+                      <p className="text-xs text-[var(--muted-foreground)] line-clamp-1">
+                        {bodyPreview}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                    {template.created_by ? (userMap[template.created_by] ?? '—') : '—'}
+                  </TableCell>
+                  <TableCell className="text-sm text-[var(--muted-foreground)] whitespace-nowrap">
+                    {formatShortDate(template.created_at)}
+                  </TableCell>
+                  <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Ações para ${template.name}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          aria-label={`Ações para ${template.name}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/templates/${template.id}`)}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/templates/${template.id}`); }}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(template.id)}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicate(template.id); }}>
                           <Copy className="mr-2 h-4 w-4" />
                           Duplicar
                         </DropdownMenuItem>
                         {!template.is_system && (
                           <DropdownMenuItem
                             className="text-red-600"
-                            onClick={() => setDeleteId(template.id)}
+                            onClick={(e) => { e.stopPropagation(); setDeleteId(template.id); }}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Deletar
@@ -222,42 +286,12 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => router.push(`/templates/${template.id}`)}
-                  >
-                    <h3 className="mb-1 font-medium">{template.name}</h3>
-                    {template.subject && (
-                      <p className="mb-1 text-xs text-[var(--muted-foreground)]">
-                        Assunto: {template.subject}
-                      </p>
-                    )}
-                    <p className="line-clamp-2 text-sm text-[var(--muted-foreground)]">
-                      {template.body}
-                    </p>
-                  </button>
-
-                  {template.variables_used.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {template.variables_used.map((v) => (
-                        <Badge key={v} variant="outline" className="text-xs font-mono">
-                          {`{{${v}}}`}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="mt-3 text-xs text-[var(--muted-foreground)]">
-                    {new Date(template.created_at).toLocaleDateString('pt-BR')}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
 
       {/* Pagination */}
