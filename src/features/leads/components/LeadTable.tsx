@@ -69,6 +69,8 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showEnrichConfirm, setShowEnrichConfirm] = useState<'cnpj' | 'apollo' | null>(null);
+  const [singleArchiveId, setSingleArchiveId] = useState<string | null>(null);
   const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
   const [assignTarget, setAssignTarget] = useState('');
 
@@ -201,17 +203,19 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     });
   }, [router]);
 
-  const handleSingleArchive = useCallback((id: string) => {
+  const handleSingleArchiveConfirmed = useCallback(() => {
+    if (!singleArchiveId) return;
     startTransition(async () => {
-      const result = await bulkArchiveLeads([id]);
+      const result = await bulkArchiveLeads([singleArchiveId]);
       if (result.success) {
         toast.success('Lead arquivado');
+        setSingleArchiveId(null);
         router.refresh();
       } else {
         toast.error(result.error);
       }
     });
-  }, [router]);
+  }, [singleArchiveId, router]);
 
   const handleOpenAssignDialog = useCallback(() => {
     setShowAssignDialog(true);
@@ -256,7 +260,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleEnrich}
+              onClick={() => setShowEnrichConfirm('cnpj')}
               disabled={isPending}
             >
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
@@ -265,7 +269,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleEnrichApollo}
+              onClick={() => setShowEnrichConfirm('apollo')}
               disabled={isPending}
             >
               <Globe className="mr-1 h-3.5 w-3.5" />
@@ -421,7 +425,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
                           Enriquecer (Apollo)
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleSingleArchive(lead.id)}>
+                        <DropdownMenuItem onClick={() => setSingleArchiveId(lead.id)}>
                           <Archive className="mr-2 h-3.5 w-3.5" />
                           Arquivar
                         </DropdownMenuItem>
@@ -449,6 +453,56 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
               Cancelar
             </Button>
             <Button variant="destructive" onClick={handleArchiveConfirmed} disabled={isPending}>
+              {isPending ? 'Arquivando...' : 'Arquivar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enrich confirmation dialog */}
+      <Dialog open={!!showEnrichConfirm} onOpenChange={(open) => !open && setShowEnrichConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enriquecer leads</DialogTitle>
+            <DialogDescription>
+              {showEnrichConfirm === 'cnpj'
+                ? `Deseja enriquecer ${selected.size} lead${selected.size > 1 ? 's' : ''} via CNPJ? Essa operação pode levar alguns minutos.`
+                : `Deseja enriquecer ${selected.size} lead${selected.size > 1 ? 's' : ''} via Apollo? Cada enriquecimento consome 1 crédito.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEnrichConfirm(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (showEnrichConfirm === 'cnpj') handleEnrich();
+                else handleEnrichApollo();
+                setShowEnrichConfirm(null);
+              }}
+              disabled={isPending}
+            >
+              Enriquecer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single archive confirmation dialog */}
+      <Dialog open={!!singleArchiveId} onOpenChange={(open) => !open && setSingleArchiveId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Arquivar lead</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja arquivar este lead? Ele não aparecerá mais na lista principal.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSingleArchiveId(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleSingleArchiveConfirmed} disabled={isPending}>
               {isPending ? 'Arquivando...' : 'Arquivar'}
             </Button>
           </DialogFooter>

@@ -225,7 +225,7 @@ export async function duplicateCadence(
   const { data: newCadence, error: createErr } = (await from(supabase, 'cadences')
     .insert({
       org_id: orgId,
-      name: `${source.name} (cópia)`,
+      name: `${source.name.replace(/ \(cópia\)$/,'')} (cópia)`,
       description: source.description,
       type: source.type,
       priority: source.priority,

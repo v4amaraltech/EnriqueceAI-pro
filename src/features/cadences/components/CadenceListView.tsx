@@ -377,6 +377,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
               <div className="min-w-0 flex-1">Descrição</div>
               <div className="w-20 shrink-0 text-center">Status</div>
               <div className="w-16 shrink-0 text-center">Passos</div>
+              <div className="w-28 shrink-0">Criada por</div>
               <div className="w-8 shrink-0" />
               <div className="w-8 shrink-0" />
             </div>
@@ -442,6 +443,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   {/* Steps count */}
                   <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
                     {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
+                  </div>
+
+                  {/* Creator */}
+                  <div className="w-28 shrink-0 truncate text-xs text-[var(--muted-foreground)]">
+                    {cadence.created_by ? (userMap[cadence.created_by] ?? '—') : '—'}
                   </div>
 
                   {/* Performance link */}
