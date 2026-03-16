@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { Copy, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { useRef, useState, useTransition } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -75,17 +75,22 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
   const currentChannel = searchParams.get('channel') ?? ALL_VALUE;
   const currentSearch = searchParams.get('search') ?? '';
 
-  const [activeChannel, setActiveChannel] = useState(currentChannel);
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    setSearchValue(currentSearch);
-  }, [currentSearch]);
+  // Optimistic overrides for instant feedback
+  const paramsKey = searchParams.toString();
+  const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    setActiveChannel(currentChannel);
-  }, [currentChannel]);
+  if (paramsKey !== lastParamsKey) {
+    setLastParamsKey(paramsKey);
+    setOverrides({});
+    setSearchValue(searchParams.get('search') ?? '');
+  }
+
+  const activeChannel = overrides.channel ?? currentChannel;
+  const activeIsSystem = overrides.is_system ?? (searchParams.get('is_system') ?? ALL_VALUE);
 
   const filteredTemplates = activeChannel === ALL_VALUE
     ? templates
@@ -104,8 +109,29 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
     router.push(`/templates?${params.toString()}`);
   }
 
+  const currentSortBy = searchParams.get('sort_by') ?? 'created_at';
+  const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
+
+  function handleSort(column: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (currentSortBy === column) {
+      params.set('sort_dir', currentSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      params.set('sort_by', column);
+      params.set('sort_dir', column === 'name' ? 'asc' : 'desc');
+    }
+    params.set('page', '1');
+    router.push(`/templates?${params.toString()}`);
+  }
+
+  function sortIcon(column: string) {
+    if (currentSortBy !== column) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />;
+    if (currentSortDir === 'asc') return <ArrowUp className="ml-1 h-3 w-3" />;
+    return <ArrowDown className="ml-1 h-3 w-3" />;
+  }
+
   function handleChannelChange(channel: string) {
-    setActiveChannel(channel);
+    setOverrides((prev) => ({ ...prev, channel }));
     updateParams({ channel });
   }
 
@@ -170,7 +196,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
           <Input
             placeholder="Buscar por nome, assunto ou corpo..."
             value={searchValue}
-            className="pl-9"
+            className="pl-9 pr-8"
             onChange={(e) => {
               const v = e.target.value;
               setSearchValue(v);
@@ -186,11 +212,24 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
               }
             }}
           />
+          {searchValue && (
+            <button
+              type="button"
+              className="absolute right-2.5 top-2.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              onClick={() => {
+                setSearchValue('');
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                updateParams({ search: '' });
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <Select
-          value={searchParams.get('is_system') ?? ALL_VALUE}
-          onValueChange={(v) => updateParams({ is_system: v })}
+          value={activeIsSystem}
+          onValueChange={(v) => { setOverrides((prev) => ({ ...prev, is_system: v })); updateParams({ is_system: v }); }}
         >
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Tipo" />
@@ -223,10 +262,18 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[25%] pl-4">Nome</TableHead>
+              <TableHead className="w-[25%] pl-4">
+                <button type="button" className="inline-flex items-center" onClick={() => handleSort('name')}>
+                  Nome {sortIcon('name')}
+                </button>
+              </TableHead>
               <TableHead className="w-[40%]">Conteúdo</TableHead>
               <TableHead className="w-[15%]">Responsável</TableHead>
-              <TableHead className="w-[12%]">Criado</TableHead>
+              <TableHead className="w-[12%]">
+                <button type="button" className="inline-flex items-center" onClick={() => handleSort('created_at')}>
+                  Criado {sortIcon('created_at')}
+                </button>
+              </TableHead>
               <TableHead className="w-[8%]" />
             </TableRow>
           </TableHeader>

@@ -14,6 +14,8 @@ interface FetchTemplatesParams {
   is_system?: boolean;
   page?: number;
   per_page?: number;
+  sort_by?: string;
+  sort_dir?: string;
 }
 
 export async function fetchTemplates(
@@ -49,7 +51,9 @@ export async function fetchTemplates(
     query = query.or(`name.ilike.${term},subject.ilike.${term},body.ilike.${term}`);
   }
 
-  query = query.order('created_at', { ascending: false }).range(rangeFrom, to);
+  const sortColumn = params.sort_by === 'name' ? 'name' : 'created_at';
+  const ascending = params.sort_dir === 'asc';
+  query = query.order(sortColumn, { ascending }).range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: MessageTemplateRow[] | null;

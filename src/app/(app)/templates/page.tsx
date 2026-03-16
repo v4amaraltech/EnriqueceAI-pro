@@ -20,8 +20,10 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
   const search = typeof params.search === 'string' ? params.search : undefined;
   const is_system = typeof params.is_system === 'string' ? params.is_system === 'true' : undefined;
   const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
+  const sort_by = typeof params.sort_by === 'string' ? params.sort_by : undefined;
+  const sort_dir = typeof params.sort_dir === 'string' ? params.sort_dir : undefined;
 
-  const result = await fetchTemplates({ channel, search, is_system, page });
+  const result = await fetchTemplates({ channel, search, is_system, page, sort_by, sort_dir });
 
   if (!result.success) {
     return <p className="py-10 text-center text-[var(--muted-foreground)]">{result.error}</p>;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import {
   Archive,
   ArrowDown,
@@ -104,6 +104,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const [pendingTab, setPendingTab] = useState<CadenceType | null>(null);
   const displayTab = pendingTab ?? activeTab;
 
+  // Search with debounce
+  const currentSearch = searchParams.get('search') ?? '';
+  const [searchValue, setSearchValue] = useState(currentSearch);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Optimistic overrides for instant Select feedback
   const paramsKey = searchParams.toString();
   const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
@@ -113,6 +118,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
     setLastParamsKey(paramsKey);
     setOverrides({});
     setPendingTab(null);
+    setSearchValue(searchParams.get('search') ?? '');
   }
 
   const activeStatus = overrides.status ?? (searchParams.get('status') ?? ALL_VALUE);
@@ -303,11 +309,20 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome..."
-            defaultValue={searchParams.get('search') ?? ''}
+            value={searchValue}
             className="h-9 pl-9"
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearchValue(v);
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(() => {
+                updateParams({ search: v });
+              }, 400);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                updateParams({ search: (e.target as HTMLInputElement).value });
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                updateParams({ search: searchValue });
               }
             }}
           />
