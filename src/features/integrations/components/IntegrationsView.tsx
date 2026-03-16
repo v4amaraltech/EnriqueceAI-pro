@@ -75,8 +75,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   const [showApolloConfig, setShowApolloConfig] = useState(false);
   const evolution = useEvolutionWhatsApp();
 
-  const crmEnabled = checkFeature(planFeatures, 'crm');
-
   function findCrm(provider: CrmProvider): CrmConnectionSafe | undefined {
     return crmConnections.find(c => c.crm_provider === provider);
   }
@@ -372,14 +370,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Card key={provider.id} className="flex flex-col">
                 <CardContent className="flex flex-1 flex-col p-6">
                   <Image src={provider.logo} alt={provider.name} width={48} height={48} className="rounded-lg" />
-                  <div className="mt-4 flex items-center gap-2">
-                    <CardTitle className="text-xl">{provider.name}</CardTitle>
-                    {!crmEnabled && (
-                      <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                        Pro
-                      </Badge>
-                    )}
-                  </div>
+                  <CardTitle className="mt-4 text-xl">{provider.name}</CardTitle>
                   <div className="min-h-[3.5rem] flex-1">
                     {connection ? (
                       <p className="mt-1 text-sm text-[var(--muted-foreground)]">
@@ -426,7 +417,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     ) : (
                       <Button
                         onClick={() => handleConnectCrm(provider.id)}
-                        disabled={isPending || !crmEnabled}
+                        disabled={isPending}
                       >
                         {isPending ? 'Conectando...' : `Conectar ${provider.name}`}
                       </Button>
