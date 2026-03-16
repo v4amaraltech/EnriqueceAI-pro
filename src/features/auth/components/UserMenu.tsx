@@ -29,9 +29,18 @@ export function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-[var(--primary-foreground)]">
-            {initials}
-          </div>
+          {organization?.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={organization.logo_url}
+              alt={organization.name}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-[var(--primary-foreground)]">
+              {initials}
+            </div>
+          )}
           <span className="hidden text-sm md:inline">{organization?.name}</span>
         </Button>
       </DropdownMenuTrigger>
