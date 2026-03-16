@@ -66,6 +66,7 @@ interface CadenceListViewProps {
   tabCounts: CadenceTabCounts;
   metrics?: Record<string, AutoEmailCadenceMetrics>;
   userMap?: Record<string, string>;
+  members?: { userId: string; name: string }[];
 }
 
 const ALL_VALUE = '__all__';
@@ -89,7 +90,7 @@ const statusConfig: Record<CadenceStatus, { label: string; className: string }> 
   },
 };
 
-export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {} }: CadenceListViewProps) {
+export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {}, members }: CadenceListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -98,7 +99,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
   const [pendingTab, setPendingTab] = useState<CadenceType | null>(null);
   const displayTab = pendingTab ?? activeTab;
-  const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin'));
+  const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin') || searchParams.get('created_by'));
 
   // Clear optimistic tab when URL catches up
   useEffect(() => {
@@ -180,7 +181,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
       const result = await duplicateCadence(cadence.id);
       if (result.success) {
         toast.success('Cadência duplicada com todos os passos');
-        router.refresh();
+        router.push(`/cadences/${result.data.id}`);
       } else {
         toast.error(result.error);
       }
@@ -309,6 +310,24 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             <SelectItem value="outbound">Outbound</SelectItem>
           </SelectContent>
         </Select>
+        {members && members.length > 0 && (
+          <Select
+            value={searchParams.get('created_by') ?? ALL_VALUE}
+            onValueChange={(v) => updateParams({ created_by: v })}
+          >
+            <SelectTrigger className="h-9 w-44">
+              <SelectValue placeholder="Criada por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+              {members.map((m) => (
+                <SelectItem key={m.userId} value={m.userId}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {hasFilters && (
           <Button
             variant="ghost"

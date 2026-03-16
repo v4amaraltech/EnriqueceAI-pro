@@ -60,7 +60,11 @@ export async function fetchLeads(
     query = query.eq('endereco->>uf', filters.uf);
   }
   if (filters.assigned_to) {
-    query = query.eq('assigned_to', filters.assigned_to);
+    if (filters.assigned_to === '__unassigned__') {
+      query = query.is('assigned_to', null);
+    } else {
+      query = query.eq('assigned_to', filters.assigned_to);
+    }
   }
   if (filters.lead_source) {
     query = query.eq('lead_source', filters.lead_source);

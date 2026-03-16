@@ -9,6 +9,7 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import { fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
 import { fetchAutoEmailMetrics } from '@/features/cadences/actions/fetch-auto-email-metrics';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
+import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
 import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
 
 interface CadencesPageProps {
@@ -24,13 +25,15 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
   const type = typeof params.type === 'string' ? params.type : undefined;
   const priority = typeof params.priority === 'string' ? params.priority : undefined;
   const origin = typeof params.origin === 'string' ? params.origin : undefined;
+  const created_by = typeof params.created_by === 'string' ? params.created_by : undefined;
   const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
 
   const activeType = type || 'standard';
 
-  const [result, countsResult] = await Promise.all([
-    fetchCadences({ status, search, type: activeType, priority, origin, page }),
+  const [result, countsResult, membersResult] = await Promise.all([
+    fetchCadences({ status, search, type: activeType, priority, origin, created_by, page }),
     fetchCadenceTabCounts(),
+    fetchOrgMembersAuth(),
   ]);
 
   if (!result.success) {
@@ -61,6 +64,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
   const creatorIds = [...new Set(result.data.data.map((c) => c.created_by).filter(Boolean))] as string[];
   const userMapResult = await fetchUserMap(creatorIds);
   const userMap = userMapResult.success ? userMapResult.data : {};
+  const members = membersResult.success ? membersResult.data : [];
 
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
@@ -72,6 +76,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         tabCounts={tabCounts}
         metrics={metrics}
         userMap={userMap}
+        members={members}
       />
     </Suspense>
   );

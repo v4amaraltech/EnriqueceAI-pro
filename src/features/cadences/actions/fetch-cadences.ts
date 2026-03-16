@@ -14,6 +14,7 @@ interface FetchCadencesParams {
   type?: string;
   priority?: string;
   origin?: string;
+  created_by?: string;
   page?: number;
   per_page?: number;
 }
@@ -64,6 +65,10 @@ export async function fetchCadences(
 
   if (params.origin) {
     query = query.eq('origin', params.origin);
+  }
+
+  if (params.created_by) {
+    query = query.eq('created_by', params.created_by);
   }
 
   if (params.search) {

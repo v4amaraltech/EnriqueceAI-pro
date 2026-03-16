@@ -68,6 +68,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const [isPending, startTransition] = useTransition();
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
   const [assignTarget, setAssignTarget] = useState('');
 
@@ -109,13 +110,14 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     router.push(`/leads?${params.toString()}`);
   }, [router, searchParams, currentSortBy, currentSortDir]);
 
-  const handleArchive = useCallback(() => {
+  const handleArchiveConfirmed = useCallback(() => {
     const ids = Array.from(selected);
     startTransition(async () => {
       const result = await bulkArchiveLeads(ids);
       if (result.success) {
         toast.success(`${result.data.count} leads arquivados`);
         setSelected(new Set());
+        setShowArchiveConfirm(false);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -290,7 +292,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleArchive}
+              onClick={() => setShowArchiveConfirm(true)}
               disabled={isPending}
             >
               <Archive className="mr-1 h-3.5 w-3.5" />
@@ -432,6 +434,26 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Archive confirmation dialog */}
+      <Dialog open={showArchiveConfirm} onOpenChange={setShowArchiveConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Arquivar leads</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja arquivar {selected.size} lead{selected.size > 1 ? 's' : ''}? Os leads arquivados não aparecerão mais na lista principal.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowArchiveConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleArchiveConfirmed} disabled={isPending}>
+              {isPending ? 'Arquivando...' : 'Arquivar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign dialog */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>

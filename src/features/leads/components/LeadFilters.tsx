@@ -220,6 +220,7 @@ export function LeadFilters({ members }: LeadFiltersProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                <SelectItem value="__unassigned__">Sem responsável</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.userId} value={m.userId}>
                     {m.name}
