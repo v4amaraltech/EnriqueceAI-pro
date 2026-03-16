@@ -20,6 +20,7 @@ export async function fetchLeadsCadenceInfo(
     .from('cadence_enrollments')
     .select(`
       lead_id,
+      status,
       cadences!inner ( name ),
       enrolled_by
     `)
@@ -35,6 +36,7 @@ export async function fetchLeadsCadenceInfo(
   if (data) {
     for (const row of data as unknown as Array<{
       lead_id: string;
+      status: 'active' | 'paused';
       cadences: { name: string } | null;
       enrolled_by: string | null;
     }>) {
@@ -43,6 +45,7 @@ export async function fetchLeadsCadenceInfo(
         result[row.lead_id] = {
           cadence_name: row.cadences?.name ?? null,
           responsible_email: row.enrolled_by,
+          enrollment_status: row.status,
         };
       }
     }

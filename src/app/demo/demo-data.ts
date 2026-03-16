@@ -393,14 +393,14 @@ export const demoLeads: LeadRow[] = [
 ];
 
 export const demoCadenceInfo: Record<string, LeadCadenceInfo> = {
-  l1: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'ana.silva@empresa.com.br' },
-  l2: { cadence_name: 'Inbound Nurture', responsible_email: 'bruno.costa@empresa.com.br' },
-  l3: { cadence_name: null, responsible_email: null },
-  l4: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'ana.silva@empresa.com.br' },
-  l5: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'bruno.costa@empresa.com.br' },
-  l6: { cadence_name: 'Inbound Nurture', responsible_email: 'ana.silva@empresa.com.br' },
-  l7: { cadence_name: null, responsible_email: null },
-  l8: { cadence_name: 'Re-engajamento', responsible_email: 'bruno.costa@empresa.com.br' },
+  l1: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'ana.silva@empresa.com.br', enrollment_status: 'active' },
+  l2: { cadence_name: 'Inbound Nurture', responsible_email: 'bruno.costa@empresa.com.br', enrollment_status: 'active' },
+  l3: { cadence_name: null, responsible_email: null, enrollment_status: null },
+  l4: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'ana.silva@empresa.com.br', enrollment_status: 'paused' },
+  l5: { cadence_name: 'Outbound Enterprise Q1', responsible_email: 'bruno.costa@empresa.com.br', enrollment_status: 'active' },
+  l6: { cadence_name: 'Inbound Nurture', responsible_email: 'ana.silva@empresa.com.br', enrollment_status: 'active' },
+  l7: { cadence_name: null, responsible_email: null, enrollment_status: null },
+  l8: { cadence_name: 'Re-engajamento', responsible_email: 'bruno.costa@empresa.com.br', enrollment_status: 'paused' },
 };
 
 export const demoUserMap: Record<string, string> = {

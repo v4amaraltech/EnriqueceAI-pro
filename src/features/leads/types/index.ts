@@ -117,6 +117,7 @@ export interface EnrichmentAttemptRow {
 export interface LeadCadenceInfo {
   cadence_name: string | null;
   responsible_email: string | null;
+  enrollment_status: 'active' | 'paused' | null;
 }
 
 // Insert types (without auto-generated fields)

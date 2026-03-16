@@ -239,7 +239,7 @@ describe('fetchLeads', () => {
 
     expect(result.success).toBe(true);
     expect(leadsChain.or).toHaveBeenCalledWith(
-      'razao_social.ilike.%Company%,nome_fantasia.ilike.%Company%,cnpj.ilike.%Company%',
+      'razao_social.ilike.%Company%,nome_fantasia.ilike.%Company%,cnpj.ilike.%Company%,first_name.ilike.%Company%,last_name.ilike.%Company%,email.ilike.%Company%',
     );
   });
 
@@ -263,7 +263,7 @@ describe('fetchLeads', () => {
 
     // The search term should have % and _ stripped before being used in .or()
     expect(leadsChain.or).toHaveBeenCalledWith(
-      'razao_social.ilike.%testhack%,nome_fantasia.ilike.%testhack%,cnpj.ilike.%testhack%',
+      'razao_social.ilike.%testhack%,nome_fantasia.ilike.%testhack%,cnpj.ilike.%testhack%,first_name.ilike.%testhack%,last_name.ilike.%testhack%,email.ilike.%testhack%',
     );
   });
 

@@ -145,7 +145,7 @@ describe('LeadTable', () => {
   it('should display cadence name from cadenceInfo', () => {
     const leads = [createMockLead({ id: 'lead-1' })];
     const cadenceInfo = {
-      'lead-1': { cadence_name: 'Outbound Q1', responsible_email: 'john@test.com' },
+      'lead-1': { cadence_name: 'Outbound Q1', responsible_email: 'john@test.com', enrollment_status: 'active' as const },
     };
 
     render(<LeadTable leads={leads} cadenceInfo={cadenceInfo} userMap={emptyUserMap} total={leads.length} />);

@@ -74,7 +74,7 @@ export async function fetchLeads(
   if (filters.search) {
     const term = filters.search.replace(/[%_]/g, '');
     query = query.or(
-      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%`,
+      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
     );
   }
 
@@ -161,7 +161,7 @@ export async function fetchFilteredLeadIds(
   if (filters.search) {
     const term = filters.search.replace(/[%_]/g, '');
     query = query.or(
-      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%`,
+      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
     );
   }
 

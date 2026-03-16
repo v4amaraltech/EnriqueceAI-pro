@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pencil, RefreshCw, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -38,7 +38,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkAssignLeads, bulkEnrichApollo, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -264,6 +264,36 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     });
   }, [assignTarget, selected, router]);
 
+  const handleBulkPause = useCallback(() => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkPauseEnrollments(ids);
+      if (result.success) {
+        const count = result.data.count;
+        toast.success(count > 0 ? `${count} inscrição${count > 1 ? 'ões' : ''} pausada${count > 1 ? 's' : ''}` : 'Nenhuma inscrição ativa encontrada');
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [selected, router]);
+
+  const handleBulkResume = useCallback(() => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkResumeEnrollments(ids);
+      if (result.success) {
+        const count = result.data.count;
+        toast.success(count > 0 ? `${count} inscrição${count > 1 ? 'ões' : ''} retomada${count > 1 ? 's' : ''}` : 'Nenhuma inscrição pausada encontrada');
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [selected, router]);
+
   const navigateToLead = useCallback(
     (id: string) => {
       router.push(`/leads/${id}`);
@@ -335,6 +365,24 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             >
               <Zap className="mr-1 h-3.5 w-3.5" />
               Cadência
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkPause}
+              disabled={isPending}
+            >
+              <Pause className="mr-1 h-3.5 w-3.5" />
+              Pausar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkResume}
+              disabled={isPending}
+            >
+              <Play className="mr-1 h-3.5 w-3.5" />
+              Retomar
             </Button>
             <Button
               variant="outline"
@@ -447,9 +495,20 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                     <EngagementScoreBadge score={lead.engagement_score} size={28} />
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <span className="text-sm">
-                      {info?.cadence_name ?? '—'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">
+                        {info?.cadence_name ?? '—'}
+                      </span>
+                      {info?.enrollment_status && (
+                        <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${
+                          info.enrollment_status === 'active'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }`}>
+                          {info.enrollment_status === 'active' ? 'Ativo' : 'Pausado'}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <span className="text-sm text-[var(--muted-foreground)]">
