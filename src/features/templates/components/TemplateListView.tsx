@@ -75,12 +75,21 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
   const currentChannel = searchParams.get('channel') ?? ALL_VALUE;
   const currentSearch = searchParams.get('search') ?? '';
 
+  const [activeChannel, setActiveChannel] = useState(currentChannel);
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSearchValue(currentSearch);
   }, [currentSearch]);
+
+  useEffect(() => {
+    setActiveChannel(currentChannel);
+  }, [currentChannel]);
+
+  const filteredTemplates = activeChannel === ALL_VALUE
+    ? templates
+    : templates.filter((t) => t.channel === activeChannel);
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -93,6 +102,11 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
     }
     params.set('page', '1');
     router.push(`/templates?${params.toString()}`);
+  }
+
+  function handleChannelChange(channel: string) {
+    setActiveChannel(channel);
+    updateParams({ channel });
   }
 
   function handleDelete(id: string) {
@@ -129,7 +143,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
         <div>
           <h1 className="text-2xl font-bold">Templates de Mensagem</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            {total} template{total !== 1 ? 's' : ''}
+            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
           </p>
         </div>
         <Button onClick={() => router.push('/templates/new')}>
@@ -141,8 +155,8 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
       {/* Filters */}
       <div className="flex items-center gap-4">
         <Tabs
-          value={currentChannel}
-          onValueChange={(v) => updateParams({ channel: v })}
+          value={activeChannel}
+          onValueChange={handleChannelChange}
         >
           <TabsList>
             <TabsTrigger value={ALL_VALUE}>Todos</TabsTrigger>
@@ -190,7 +204,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
       </div>
 
       {/* Template list */}
-      {templates.length === 0 ? (
+      {filteredTemplates.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
             <FileText className="h-10 w-10 text-[var(--muted-foreground)]" />
@@ -217,7 +231,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
             </TableRow>
           </TableHeader>
           <TableBody>
-            {templates.map((template) => {
+            {filteredTemplates.map((template) => {
               const ChannelIcon = template.channel === 'whatsapp' ? MessageSquare : Mail;
               const bodyPreview = stripHtml(template.body);
               return (
