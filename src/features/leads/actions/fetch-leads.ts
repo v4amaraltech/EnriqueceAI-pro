@@ -249,3 +249,37 @@ export async function fetchFilteredLeadIds(
 
   return { success: true, data: (data ?? []).map((r) => r.id) };
 }
+
+export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { data, error } = (await from(supabase, 'leads')
+    .select('cnae')
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null)
+    .not('cnae', 'is', null)
+    .not('cnae', 'eq', '')
+    .order('cnae')) as {
+    data: Array<{ cnae: string }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar CNAEs' };
+  }
+
+  const unique = [...new Set((data ?? []).map((r) => r.cnae))];
+  return { success: true, data: unique };
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, Trash2, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -38,7 +38,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -74,6 +74,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEnrichConfirm, setShowEnrichConfirm] = useState<'cnpj' | 'apollo' | null>(null);
   const [singleArchiveId, setSingleArchiveId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusTarget, setStatusTarget] = useState('');
   const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
@@ -145,6 +146,21 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         toast.success(`${result.data.count} leads arquivados`);
         setSelected(new Set());
         setShowArchiveConfirm(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [selected, router]);
+
+  const handleDeleteConfirmed = useCallback(() => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkDeleteLeads(ids);
+      if (result.success) {
+        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} excluído${result.data.count > 1 ? 's' : ''}`);
+        setSelected(new Set());
+        setShowDeleteConfirm(false);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -433,6 +449,15 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isPending}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Excluir
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleExport}
               disabled={isPending}
             >
@@ -612,6 +637,26 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             </Button>
             <Button variant="destructive" onClick={handleArchiveConfirmed} disabled={isPending}>
               {isPending ? 'Arquivando...' : 'Arquivar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir leads</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir {selected.size} lead{selected.size > 1 ? 's' : ''}? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirmed} disabled={isPending}>
+              {isPending ? 'Excluindo...' : 'Excluir'}
             </Button>
           </DialogFooter>
         </DialogContent>

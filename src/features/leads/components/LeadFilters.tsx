@@ -50,9 +50,10 @@ const ALL_VALUE = '__all__';
 interface LeadFiltersProps {
   members?: { userId: string; name: string }[];
   cadences?: { id: string; name: string }[];
+  cnaes?: string[];
 }
 
-export function LeadFilters({ members, cadences }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -64,6 +65,7 @@ export function LeadFilters({ members, cadences }: LeadFiltersProps) {
   const currentSource = searchParams.get('lead_source') ?? '';
   const currentAssigned = searchParams.get('assigned_to') ?? '';
   const currentCadence = searchParams.get('cadence_id') ?? '';
+  const currentCnae = searchParams.get('cnae') ?? '';
 
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,7 +75,7 @@ export function LeadFilters({ members, cadences }: LeadFiltersProps) {
     setSearchValue(currentSearch);
   }, [currentSearch]);
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence;
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence || currentCnae;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -225,6 +227,29 @@ export function LeadFilters({ members, cadences }: LeadFiltersProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* CNAE */}
+        {cnaes && cnaes.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">CNAE</span>
+            <Select
+              value={currentCnae || ALL_VALUE}
+              onValueChange={(v) => updateParam('cnae', v)}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                {cnaes.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Cadência */}
         {cadences && cadences.length > 0 && (
