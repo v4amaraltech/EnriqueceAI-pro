@@ -5,7 +5,6 @@ import { useState, useTransition } from 'react';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -20,20 +19,21 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import { VariableInsertBar } from '@/features/cadences/components/VariableInsertBar';
+
 import type { ChannelType, MessageTemplateRow } from '../../cadences/types';
-import { ALL_TEMPLATE_VARIABLES, extractVariables, renderTemplate } from '../index';
+import { extractVariables } from '../index';
 import { createTemplate, updateTemplate } from '../actions/manage-templates';
+import { TemplatePreviewPanel } from './TemplatePreviewPanel';
 
 interface TemplateEditorProps {
   template?: MessageTemplateRow;
-  signature?: string;
 }
 
 /**
  * Strips HTML tags and converts block elements to newlines for plain-text editing.
  */
 function stripHtml(html: string): string {
-  // Replace closing block tags with newlines, then strip all remaining tags
   return html
     .replace(/<\/p>\s*<p>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -59,23 +59,7 @@ function plainTextToHtml(text: string): string {
     .join('');
 }
 
-const sampleLeadData: Record<string, string> = {
-  primeiro_nome: 'Carlos',
-  empresa: 'Acme Corp',
-  nome_fantasia: 'Acme Corp',
-  razao_social: 'Acme Corporation LTDA',
-  cnpj: '12.345.678/0001-00',
-  email: 'contato@acme.com.br',
-  telefone: '(11) 99999-0000',
-  porte: 'ME',
-  cidade: 'São Paulo',
-  uf: 'SP',
-  cnae: '6201-5/01',
-  nome_vendedor: 'Vinicius Mercante',
-  email_vendedor: 'vinicius@empresa.com.br',
-};
-
-export function TemplateEditor({ template, signature }: TemplateEditorProps) {
+export function TemplateEditor({ template }: TemplateEditorProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPreview, setShowPreview] = useState(false);
@@ -89,8 +73,6 @@ export function TemplateEditor({ template, signature }: TemplateEditorProps) {
   const isSystem = template?.is_system ?? false;
 
   const detectedVars = extractVariables(`${subject} ${body}`);
-  const previewSubject = renderTemplate(subject, sampleLeadData);
-  const previewBody = renderTemplate(plainTextToHtml(body), sampleLeadData);
 
   function insertVariable(varName: string) {
     const insertion = `{{${varName}}}`;
@@ -118,6 +100,8 @@ export function TemplateEditor({ template, signature }: TemplateEditorProps) {
       }
     });
   }
+
+  const previewBody = channel === 'email' ? plainTextToHtml(body) : body;
 
   return (
     <div className="space-y-6">
@@ -200,24 +184,8 @@ export function TemplateEditor({ template, signature }: TemplateEditorProps) {
               )}
             </div>
 
-            {/* Variable insertion */}
-            <div className="space-y-2">
-              <Label>Variáveis disponíveis</Label>
-              <div className="flex flex-wrap gap-1">
-                {ALL_TEMPLATE_VARIABLES.map((v) => (
-                  <Button
-                    key={v}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs font-mono"
-                    disabled={isSystem}
-                    onClick={() => insertVariable(v)}
-                  >
-                    {`{{${v}}}`}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            {/* Variable insertion — grouped by Lead / Vendedor */}
+            <VariableInsertBar onInsert={insertVariable} disabled={isSystem} />
 
             {/* Detected variables */}
             {detectedVars.length > 0 && (
@@ -253,48 +221,11 @@ export function TemplateEditor({ template, signature }: TemplateEditorProps) {
 
         {/* Preview */}
         {showPreview && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Preview (dados de exemplo)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {channel === 'email' && previewSubject && (
-                <div>
-                  <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Assunto:</p>
-                  <p className="font-medium">{previewSubject}</p>
-                </div>
-              )}
-              <div>
-                <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Mensagem:</p>
-                <div className="rounded-md border bg-[var(--muted)] p-4">
-                  <div
-                    className="prose prose-sm max-w-none [&_p]:my-3"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody || '<span class="text-muted-foreground">Corpo vazio</span>') }}
-                  />
-                  {channel === 'email' && signature && (
-                    <>
-                      <div className="my-4 border-t border-dashed" />
-                      <div
-                        className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Dados do lead de exemplo:</p>
-                <div className="space-y-1 text-xs">
-                  {Object.entries(sampleLeadData).map(([key, value]) => (
-                    <div key={key} className="flex gap-2">
-                      <span className="font-mono text-[var(--muted-foreground)]">{`{{${key}}}`}</span>
-                      <span>{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <TemplatePreviewPanel
+            subject={subject}
+            body={previewBody}
+            channel={channel}
+          />
         )}
       </div>
     </div>
