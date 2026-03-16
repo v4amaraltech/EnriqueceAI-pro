@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react';
 import {
   Check,
   FileSignature,
+  RefreshCw,
   Unplug,
   X,
 } from 'lucide-react';
@@ -25,8 +26,9 @@ import {
 
 import type { PlanFeatures } from '@/features/billing/types';
 import { checkFeature } from '@/features/billing/services/feature-flags';
-import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, CrmProvider, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
+import { getCrmAuthUrl, disconnectCrm, triggerCrmSync } from '../actions/manage-crm';
 import { disconnectApi4Com } from '../actions/manage-api4com';
 import { deleteApolloConnection } from '../actions/manage-apollo';
 import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
@@ -41,13 +43,19 @@ import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 interface IntegrationsViewProps {
   gmail: GmailConnectionSafe | null;
   whatsapp: WhatsAppConnectionSafe | null;
-  crm: CrmConnectionSafe | null;
+  crmConnections: CrmConnectionSafe[];
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
   apollo: ApolloConnectionSafe | null;
   planFeatures: PlanFeatures;
 }
+
+const CRM_PROVIDERS = [
+  { id: 'hubspot' as const, name: 'HubSpot', logo: '/logos/hubspot-icon.svg', description: 'Sincronize leads e atividades com o HubSpot CRM.' },
+  { id: 'pipedrive' as const, name: 'Pipedrive', logo: '/logos/pipedrive-icon.png', description: 'Sincronize leads e negócios com o Pipedrive.' },
+  { id: 'rdstation' as const, name: 'RD Station', logo: '/logos/rdstation-icon.png', description: 'Sincronize leads e oportunidades com o RD Station CRM.' },
+] as const;
 
 const statusConfig = {
   connected: { label: 'Conectado', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
@@ -56,16 +64,58 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
-export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | 'hubspot' | 'pipedrive' | 'rdstation' | null>(null);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const [showApolloConfig, setShowApolloConfig] = useState(false);
   const evolution = useEvolutionWhatsApp();
+
+  const crmEnabled = checkFeature(planFeatures, 'crm');
+
+  function findCrm(provider: CrmProvider): CrmConnectionSafe | undefined {
+    return crmConnections.find(c => c.crm_provider === provider);
+  }
+
+  function handleConnectCrm(provider: CrmProvider) {
+    startTransition(async () => {
+      const result = await getCrmAuthUrl(provider);
+      if (result.success) {
+        window.location.href = result.data.url;
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleDisconnectCrm(provider: CrmProvider) {
+    startTransition(async () => {
+      const result = await disconnectCrm(provider);
+      if (result.success) {
+        toast.success(`${CRM_PROVIDERS.find(p => p.id === provider)?.name ?? 'CRM'} desconectado`);
+      } else {
+        toast.error(result.error);
+      }
+      setShowDisconnect(null);
+      router.refresh();
+    });
+  }
+
+  function handleSyncCrm(provider: CrmProvider) {
+    startTransition(async () => {
+      const result = await triggerCrmSync(provider);
+      if (result.success) {
+        toast.success('Sincronização iniciada');
+      } else {
+        toast.error(result.error);
+      }
+      router.refresh();
+    });
+  }
 
   function handleConnectGoogle() {
     startTransition(async () => {
@@ -307,6 +357,88 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
 
       </div>
 
+      {/* CRM Section */}
+      <div>
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">CRM</h2>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Conecte seu CRM para sincronizar leads e atividades automaticamente.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {CRM_PROVIDERS.map((provider) => {
+            const connection = findCrm(provider.id);
+            return (
+              <Card key={provider.id} className="flex flex-col">
+                <CardContent className="flex flex-1 flex-col p-6">
+                  <Image src={provider.logo} alt={provider.name} width={48} height={48} className="rounded-lg" />
+                  <div className="mt-4 flex items-center gap-2">
+                    <CardTitle className="text-xl">{provider.name}</CardTitle>
+                    {!crmEnabled && (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                        Pro
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="min-h-[3.5rem] flex-1">
+                    {connection ? (
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                        Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
+                        {connection.last_sync_at && (
+                          <> &middot; Último sync: {new Date(connection.last_sync_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                        {provider.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-auto border-t border-[var(--border)] pt-4">
+                    {connection ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={statusConfig[connection.status].className}>
+                            {connection.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
+                            {connection.status === 'error' && <X className="mr-1 h-3 w-3" />}
+                            {connection.status === 'syncing' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
+                            {statusConfig[connection.status].label}
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending || connection.status === 'syncing'}
+                            onClick={() => handleSyncCrm(provider.id)}
+                          >
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            Sincronizar
+                          </Button>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
+                          onClick={() => setShowDisconnect(provider.id)}
+                        >
+                          <Unplug className="mr-1 h-3 w-3" />
+                          Desconectar
+                        </button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleConnectCrm(provider.id)}
+                        disabled={isPending || !crmEnabled}
+                      >
+                        {isPending ? 'Conectando...' : `Conectar ${provider.name}`}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Disconnect Google dialog */}
       <Dialog open={showDisconnect === 'google'} onOpenChange={() => setShowDisconnect(null)}>
         <DialogContent>
@@ -457,6 +589,32 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Disconnect CRM dialogs */}
+      {CRM_PROVIDERS.map((provider) => (
+        <Dialog key={provider.id} open={showDisconnect === provider.id} onOpenChange={() => setShowDisconnect(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Desconectar {provider.name}</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja desconectar o {provider.name}? A sincronização de leads e atividades será interrompida.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDisconnect(null)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={isPending}
+                onClick={() => handleDisconnectCrm(provider.id)}
+              >
+                {isPending ? 'Desconectando...' : 'Desconectar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ))}
 
       <WebhookEndpointsManager />
 

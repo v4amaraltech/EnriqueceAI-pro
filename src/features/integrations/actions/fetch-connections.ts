@@ -10,7 +10,7 @@ import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSaf
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
   whatsapp: WhatsAppConnectionSafe | null;
-  crm: CrmConnectionSafe | null;
+  crmConnections: CrmConnectionSafe[];
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
@@ -45,12 +45,10 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('org_id', member.org_id)
     .maybeSingle()) as { data: WhatsAppConnectionSafe | null };
 
-  // Fetch CRM connection (per org) — exclude encrypted credentials
-  const { data: crmRow } = (await from(supabase, 'crm_connections')
+  // Fetch CRM connections (per org) — exclude encrypted credentials
+  const { data: crmRows } = (await from(supabase, 'crm_connections')
     .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
-    .eq('org_id', member.org_id)
-    .limit(1)
-    .maybeSingle()) as { data: CrmConnectionSafe | null };
+    .eq('org_id', member.org_id)) as { data: CrmConnectionSafe[] | null };
 
   // Fetch Calendar connection (per user) — exclude encrypted tokens
   const { data: calendarRow } = (await from(supabase, 'calendar_connections')
@@ -95,7 +93,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     data: {
       gmail: gmailRow ?? null,
       whatsapp: whatsappRow ?? null,
-      crm: crmRow ?? null,
+      crmConnections: crmRows ?? [],
       calendar: calendarRow ?? null,
       api4com: api4comRow ?? null,
       evolutionInstance: evolutionRow ?? null,

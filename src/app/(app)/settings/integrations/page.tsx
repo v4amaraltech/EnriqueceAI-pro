@@ -25,7 +25,7 @@ export default async function IntegrationsPage() {
     <IntegrationsView
       gmail={result.data.gmail}
       whatsapp={result.data.whatsapp}
-      crm={result.data.crm}
+      crmConnections={result.data.crmConnections}
       calendar={result.data.calendar}
       api4com={result.data.api4com}
       evolutionInstance={result.data.evolutionInstance}
