@@ -191,7 +191,7 @@ export function TemplatePreviewPanel({ subject, body, channel }: TemplatePreview
               <>
                 <div className="my-4 border-t border-dashed" />
                 <div
-                  className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
+                  className="prose prose-sm max-w-none"
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
                 />
               </>

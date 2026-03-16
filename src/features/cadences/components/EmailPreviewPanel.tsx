@@ -184,7 +184,7 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
               <>
                 <div className="my-4 border-t border-dashed" />
                 <div
-                  className="prose prose-sm max-w-none text-[var(--muted-foreground)]"
+                  className="prose prose-sm max-w-none"
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
                 />
               </>
