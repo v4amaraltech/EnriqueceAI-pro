@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 
@@ -63,6 +63,14 @@ export function LeadFilters({ members }: LeadFiltersProps) {
   const currentSource = searchParams.get('lead_source') ?? '';
   const currentAssigned = searchParams.get('assigned_to') ?? '';
 
+  const [searchValue, setSearchValue] = useState(currentSearch);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync input when URL param changes externally (e.g. clear filters)
+  useEffect(() => {
+    setSearchValue(currentSearch);
+  }, [currentSearch]);
+
   const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned;
 
   const updateParam = useCallback(
@@ -86,16 +94,25 @@ export function LeadFilters({ members }: LeadFiltersProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Search */}
+      {/* Search (debounced) */}
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
         <Input
           placeholder="Buscar lead por nome, email, empresa ou CNPJ..."
           className="pl-8"
-          defaultValue={currentSearch}
+          value={searchValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearchValue(v);
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => {
+              updateParam('search', v);
+            }, 400);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              updateParam('search', e.currentTarget.value);
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              updateParam('search', searchValue);
             }
           }}
         />

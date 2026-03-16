@@ -104,3 +104,75 @@ export async function fetchLeads(
     },
   };
 }
+
+export async function fetchFilteredLeadIds(
+  rawFilters: Record<string, unknown>,
+): Promise<ActionResult<string[]>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const parsed = leadFiltersSchema.safeParse(rawFilters);
+  if (!parsed.success) {
+    return { success: false, error: 'Filtros inválidos' };
+  }
+  const filters: LeadFilters = parsed.data;
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  let query = from(supabase, 'leads')
+    .select('id')
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null);
+
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+  if (filters.enrichment_status) {
+    query = query.eq('enrichment_status', filters.enrichment_status);
+  }
+  if (filters.porte) {
+    query = query.eq('porte', filters.porte);
+  }
+  if (filters.cnae) {
+    query = query.ilike('cnae', `${filters.cnae}%`);
+  }
+  if (filters.uf) {
+    query = query.eq('endereco->>uf', filters.uf);
+  }
+  if (filters.assigned_to) {
+    if (filters.assigned_to === '__unassigned__') {
+      query = query.is('assigned_to', null);
+    } else {
+      query = query.eq('assigned_to', filters.assigned_to);
+    }
+  }
+  if (filters.lead_source) {
+    query = query.eq('lead_source', filters.lead_source);
+  }
+  if (filters.search) {
+    const term = filters.search.replace(/[%_]/g, '');
+    query = query.or(
+      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%`,
+    );
+  }
+
+  const { data, error } = (await query) as {
+    data: Array<{ id: string }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar IDs dos leads' };
+  }
+
+  return { success: true, data: (data ?? []).map((r) => r.id) };
+}

@@ -4,6 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Copy,
   Info,
@@ -67,6 +70,7 @@ interface CadenceListViewProps {
   metrics?: Record<string, AutoEmailCadenceMetrics>;
   userMap?: Record<string, string>;
   members?: { userId: string; name: string }[];
+  enrollmentCounts?: Record<string, number>;
 }
 
 const ALL_VALUE = '__all__';
@@ -90,7 +94,7 @@ const statusConfig: Record<CadenceStatus, { label: string; className: string }> 
   },
 };
 
-export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {}, members }: CadenceListViewProps) {
+export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {}, members, enrollmentCounts = {} }: CadenceListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -100,6 +104,28 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const [pendingTab, setPendingTab] = useState<CadenceType | null>(null);
   const displayTab = pendingTab ?? activeTab;
   const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin') || searchParams.get('created_by'));
+  const currentSortBy = searchParams.get('sort_by') ?? 'created_at';
+  const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
+
+  function handleSort(column: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (currentSortBy === column) {
+      params.set('sort_dir', currentSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      params.set('sort_by', column);
+      params.set('sort_dir', column === 'name' ? 'asc' : 'desc');
+    }
+    params.set('page', '1');
+    startTransition(() => {
+      router.push(`/cadences?${params.toString()}`);
+    });
+  }
+
+  function sortIcon(column: string) {
+    if (currentSortBy !== column) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />;
+    if (currentSortDir === 'asc') return <ArrowUp className="ml-1 h-3 w-3" />;
+    return <ArrowDown className="ml-1 h-3 w-3" />;
+  }
 
   // Clear optimistic tab when URL catches up
   useEffect(() => {
@@ -373,11 +399,20 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--muted)]/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-[var(--foreground)]">
               <div className="w-7 shrink-0" />
               <div className="w-6 shrink-0" />
-              <div className="w-48 shrink-0">Nome</div>
+              <div className="w-48 shrink-0">
+                <button type="button" className="flex items-center hover:text-[var(--primary)]" onClick={() => handleSort('name')}>
+                  Nome {sortIcon('name')}
+                </button>
+              </div>
               <div className="min-w-0 flex-1">Descrição</div>
               <div className="w-20 shrink-0 text-center">Status</div>
               <div className="w-16 shrink-0 text-center">Passos</div>
-              <div className="w-28 shrink-0">Criada por</div>
+              <div className="w-16 shrink-0 text-center">Leads</div>
+              <div className="w-28 shrink-0">
+                <button type="button" className="flex items-center hover:text-[var(--primary)]" onClick={() => handleSort('created_at')}>
+                  Criada por {sortIcon('created_at')}
+                </button>
+              </div>
               <div className="w-8 shrink-0" />
               <div className="w-8 shrink-0" />
             </div>
@@ -443,6 +478,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   {/* Steps count */}
                   <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
                     {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
+                  </div>
+
+                  {/* Enrollment count */}
+                  <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
+                    {enrollmentCounts[cadence.id] ?? 0}
                   </div>
 
                   {/* Creator */}

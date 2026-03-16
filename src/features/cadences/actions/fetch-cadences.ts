@@ -15,6 +15,8 @@ interface FetchCadencesParams {
   priority?: string;
   origin?: string;
   created_by?: string;
+  sort_by?: string;
+  sort_dir?: string;
   page?: number;
   per_page?: number;
 }
@@ -75,7 +77,9 @@ export async function fetchCadences(
     query = query.ilike('name', `%${params.search}%`);
   }
 
-  query = query.order('created_at', { ascending: false }).range(rangeFrom, to);
+  const sortColumn = params.sort_by === 'name' ? 'name' : 'created_at';
+  const ascending = params.sort_dir === 'asc';
+  query = query.order(sortColumn, { ascending }).range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: CadenceRow[] | null;
@@ -134,6 +138,36 @@ export async function fetchCadenceTabCounts(): Promise<ActionResult<CadenceTabCo
       auto_email: autoEmailResult.count ?? 0,
     },
   };
+}
+
+export async function fetchCadenceEnrollmentCounts(
+  cadenceIds: string[],
+): Promise<ActionResult<Record<string, number>>> {
+  if (cadenceIds.length === 0) {
+    return { success: true, data: {} };
+  }
+
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = (await from(supabase, 'cadence_enrollments')
+    .select('cadence_id')
+    .in('cadence_id', cadenceIds)
+    .in('status', ['active', 'paused'])) as {
+    data: Array<{ cadence_id: string }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar inscrições' };
+  }
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    counts[row.cadence_id] = (counts[row.cadence_id] ?? 0) + 1;
+  }
+
+  return { success: true, data: counts };
 }
 
 export async function fetchCadenceDetail(

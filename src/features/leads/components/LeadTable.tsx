@@ -39,6 +39,7 @@ import {
 } from '@/shared/components/ui/table';
 
 import { bulkArchiveLeads, bulkAssignLeads, bulkEnrichApollo, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
@@ -49,6 +50,7 @@ import { LeadSourceBadge, LeadStatusBadge } from './LeadStatusBadge';
 
 interface LeadTableProps {
   leads: LeadRow[];
+  total: number;
   cadenceInfo: Record<string, LeadCadenceInfo>;
   userMap: Record<string, string>;
 }
@@ -61,10 +63,11 @@ function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; cur
   return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
 }
 
-export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
+export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
@@ -83,12 +86,14 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const toggleAll = useCallback(() => {
     if (allSelected) {
       setSelected(new Set());
+      setAllFilteredSelected(false);
     } else {
       setSelected(new Set(leads.map((l) => l.id)));
     }
   }, [allSelected, leads]);
 
   const toggleOne = useCallback((id: string) => {
+    setAllFilteredSelected(false);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -99,6 +104,24 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
       return next;
     });
   }, []);
+
+  const handleSelectAllFiltered = useCallback(() => {
+    const filters: Record<string, unknown> = {};
+    searchParams.forEach((value, key) => {
+      if (key !== 'page') filters[key] = value;
+    });
+    startTransition(async () => {
+      const result = await fetchFilteredLeadIds(filters);
+      if (result.success) {
+        setSelected(new Set(result.data));
+        setAllFilteredSelected(true);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [searchParams]);
+
+  const showSelectAllBanner = allSelected && total > leads.length && !allFilteredSelected;
 
   const handleSort = useCallback((column: SortColumn) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -252,6 +275,35 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     <div className="space-y-3">
       {/* Bulk actions bar */}
       {selected.size > 0 && (
+        <div className="flex flex-col gap-1">
+          {showSelectAllBanner && (
+            <div className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] p-2 text-sm">
+              <span>Todos os {leads.length} leads desta página estão selecionados.</span>
+              <button
+                type="button"
+                className="font-semibold text-[var(--primary)] underline-offset-2 hover:underline"
+                onClick={handleSelectAllFiltered}
+                disabled={isPending}
+              >
+                Selecionar todos os {total} leads dos filtros
+              </button>
+            </div>
+          )}
+          {allFilteredSelected && (
+            <div className="flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] p-2 text-sm">
+              <span>Todos os {selected.size} leads dos filtros estão selecionados.</span>
+              <button
+                type="button"
+                className="font-semibold text-[var(--primary)] underline-offset-2 hover:underline"
+                onClick={() => {
+                  setSelected(new Set(leads.map((l) => l.id)));
+                  setAllFilteredSelected(false);
+                }}
+              >
+                Limpar seleção
+              </button>
+            </div>
+          )}
         <div className="flex items-center gap-2 rounded-md bg-[var(--muted)] p-2">
           <span className="text-sm font-medium">
             {selected.size} lead{selected.size > 1 ? 's' : ''} selecionado{selected.size > 1 ? 's' : ''}
@@ -312,6 +364,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
               Exportar CSV
             </Button>
           </div>
+        </div>
         </div>
       )}
 

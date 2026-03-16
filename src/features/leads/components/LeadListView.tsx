@@ -75,7 +75,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
           Nenhum lead encontrado com os filtros aplicados.
         </div>
       ) : (
-        <LeadTable leads={leads} cadenceInfo={cadenceInfo} userMap={userMap} />
+        <LeadTable leads={leads} total={total} cadenceInfo={cadenceInfo} userMap={userMap} />
       )}
 
       {/* Pagination */}

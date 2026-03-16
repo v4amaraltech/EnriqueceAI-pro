@@ -203,6 +203,7 @@ export default function DemoPage() {
             <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Carregando...</div>}>
               <LeadTable
                 leads={demoLeads}
+                total={demoLeads.length}
                 cadenceInfo={demoCadenceInfo}
                 userMap={demoUserMap}
               />

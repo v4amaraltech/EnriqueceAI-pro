@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import { fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
+import { fetchCadenceEnrollmentCounts, fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
 import { fetchAutoEmailMetrics } from '@/features/cadences/actions/fetch-auto-email-metrics';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
 import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
@@ -26,12 +26,14 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
   const priority = typeof params.priority === 'string' ? params.priority : undefined;
   const origin = typeof params.origin === 'string' ? params.origin : undefined;
   const created_by = typeof params.created_by === 'string' ? params.created_by : undefined;
+  const sort_by = typeof params.sort_by === 'string' ? params.sort_by : undefined;
+  const sort_dir = typeof params.sort_dir === 'string' ? params.sort_dir : undefined;
   const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
 
   const activeType = type || 'standard';
 
   const [result, countsResult, membersResult] = await Promise.all([
-    fetchCadences({ status, search, type: activeType, priority, origin, created_by, page }),
+    fetchCadences({ status, search, type: activeType, priority, origin, created_by, sort_by, sort_dir, page }),
     fetchCadenceTabCounts(),
     fetchOrgMembersAuth(),
   ]);
@@ -60,10 +62,15 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
     }
   }
 
-  // Resolve creator UUIDs to display names
+  // Fetch enrollment counts + resolve creator names
+  const cadenceIds = result.data.data.map((c) => c.id);
   const creatorIds = [...new Set(result.data.data.map((c) => c.created_by).filter(Boolean))] as string[];
-  const userMapResult = await fetchUserMap(creatorIds);
+  const [userMapResult, enrollmentResult] = await Promise.all([
+    fetchUserMap(creatorIds),
+    fetchCadenceEnrollmentCounts(cadenceIds),
+  ]);
   const userMap = userMapResult.success ? userMapResult.data : {};
+  const enrollmentCounts = enrollmentResult.success ? enrollmentResult.data : {};
   const members = membersResult.success ? membersResult.data : [];
 
   return (
@@ -77,6 +84,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         metrics={metrics}
         userMap={userMap}
         members={members}
+        enrollmentCounts={enrollmentCounts}
       />
     </Suspense>
   );

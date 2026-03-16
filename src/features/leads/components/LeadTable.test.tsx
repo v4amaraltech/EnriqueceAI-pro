@@ -75,7 +75,7 @@ describe('LeadTable', () => {
       createMockLead({ id: 'lead-2', nome_fantasia: 'Beta Inc', cnpj: '22333444000100' }),
     ];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Alpha Corp')).toBeInTheDocument();
     expect(screen.getByText('Beta Inc')).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe('LeadTable', () => {
   it('should display Meetime-style status badge', () => {
     const leads = [createMockLead({ status: 'new' })];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('ESPERANDO INÍCIO')).toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe('LeadTable', () => {
   it('should display ATIVO badge for contacted leads', () => {
     const leads = [createMockLead({ status: 'contacted' })];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('ATIVO')).toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('LeadTable', () => {
   it('should render checkboxes for selection', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes.length).toBe(2);
@@ -114,7 +114,7 @@ describe('LeadTable', () => {
       }),
     ];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('João Silva')).toBeInTheDocument();
     expect(screen.getByText('Alpha Corp')).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('LeadTable', () => {
       }),
     ];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Nome Fantasia')).toBeInTheDocument();
   });
@@ -137,7 +137,7 @@ describe('LeadTable', () => {
   it('should show formatted CNPJ when no names or socios exist', () => {
     const leads = [createMockLead({ nome_fantasia: null, razao_social: null, socios: null })];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('11.222.333/0001-81')).toBeInTheDocument();
   });
@@ -148,7 +148,7 @@ describe('LeadTable', () => {
       'lead-1': { cadence_name: 'Outbound Q1', responsible_email: 'john@test.com' },
     };
 
-    render(<LeadTable leads={leads} cadenceInfo={cadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={cadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Outbound Q1')).toBeInTheDocument();
   });
@@ -157,7 +157,7 @@ describe('LeadTable', () => {
     const leads = [createMockLead({ id: 'lead-1', assigned_to: 'user-123', created_by: 'user-456' })];
     const userMap = { 'user-123': 'maria', 'user-456': 'carlos' };
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={userMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={userMap} total={leads.length} />);
 
     expect(screen.getByText('maria')).toBeInTheDocument();
   });
@@ -166,7 +166,7 @@ describe('LeadTable', () => {
     const leads = [createMockLead({ id: 'lead-1', assigned_to: null, created_by: 'user-456' })];
     const userMap = { 'user-456': 'carlos' };
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={userMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={userMap} total={leads.length} />);
 
     expect(screen.getByText('carlos')).toBeInTheDocument();
   });
@@ -174,7 +174,7 @@ describe('LeadTable', () => {
   it('should render Responsável column header', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Responsável')).toBeInTheDocument();
   });
@@ -182,7 +182,7 @@ describe('LeadTable', () => {
   it('should render Cadência column header', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Cadência')).toBeInTheDocument();
   });
@@ -190,7 +190,7 @@ describe('LeadTable', () => {
   it('should render action menu button', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
     expect(screen.getByText('Ações')).toBeInTheDocument();
   });
