@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 
@@ -70,10 +70,31 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync input when URL param changes externally (e.g. clear filters)
-  useEffect(() => {
+  // Optimistic overrides for instant Select feedback
+  const paramsKey = searchParams.toString();
+  const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+
+  // Clear overrides when URL catches up (React-recommended render-time adjustment)
+  if (paramsKey !== lastParamsKey) {
+    setLastParamsKey(paramsKey);
+    setOverrides({});
     setSearchValue(currentSearch);
-  }, [currentSearch]);
+  }
+
+  const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
+  const activeEnrichment = overrides.enrichment_status ?? (currentEnrichment || ALL_VALUE);
+  const activePorte = overrides.porte ?? (currentPorte || ALL_VALUE);
+  const activeUf = overrides.uf ?? (currentUf || ALL_VALUE);
+  const activeSource = overrides.lead_source ?? (currentSource || ALL_VALUE);
+  const activeCnae = overrides.cnae ?? (currentCnae || ALL_VALUE);
+  const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
+  const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);
+
+  function handleFilterChange(key: string, value: string) {
+    setOverrides((prev) => ({ ...prev, [key]: value }));
+    updateParam(key, value);
+  }
 
   const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence || currentCnae;
 
@@ -127,8 +148,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>
           <Select
-            value={currentStatus || ALL_VALUE}
-            onValueChange={(v) => updateParam('status', v)}
+            value={activeStatus}
+            onValueChange={(v) => handleFilterChange('status', v)}
           >
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Todos" />
@@ -148,8 +169,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Enriquecimento</span>
           <Select
-            value={currentEnrichment || ALL_VALUE}
-            onValueChange={(v) => updateParam('enrichment_status', v)}
+            value={activeEnrichment}
+            onValueChange={(v) => handleFilterChange('enrichment_status', v)}
           >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Todos" />
@@ -169,8 +190,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Porte</span>
           <Select
-            value={currentPorte || ALL_VALUE}
-            onValueChange={(v) => updateParam('porte', v)}
+            value={activePorte}
+            onValueChange={(v) => handleFilterChange('porte', v)}
           >
             <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="Todos" />
@@ -190,8 +211,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">UF</span>
           <Select
-            value={currentUf || ALL_VALUE}
-            onValueChange={(v) => updateParam('uf', v)}
+            value={activeUf}
+            onValueChange={(v) => handleFilterChange('uf', v)}
           >
             <SelectTrigger className="w-[100px]">
               <SelectValue placeholder="Todos" />
@@ -211,8 +232,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Origem</span>
           <Select
-            value={currentSource || ALL_VALUE}
-            onValueChange={(v) => updateParam('lead_source', v)}
+            value={activeSource}
+            onValueChange={(v) => handleFilterChange('lead_source', v)}
           >
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Todos" />
@@ -233,8 +254,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--muted-foreground)]">CNAE</span>
             <Select
-              value={currentCnae || ALL_VALUE}
-              onValueChange={(v) => updateParam('cnae', v)}
+              value={activeCnae}
+              onValueChange={(v) => handleFilterChange('cnae', v)}
             >
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Todos" />
@@ -256,8 +277,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--muted-foreground)]">Cadência</span>
             <Select
-              value={currentCadence || ALL_VALUE}
-              onValueChange={(v) => updateParam('cadence_id', v)}
+              value={activeCadence}
+              onValueChange={(v) => handleFilterChange('cadence_id', v)}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Todos" />
@@ -280,8 +301,8 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--muted-foreground)]">Responsável</span>
             <Select
-              value={currentAssigned || ALL_VALUE}
-              onValueChange={(v) => updateParam('assigned_to', v)}
+              value={activeAssigned}
+              onValueChange={(v) => handleFilterChange('assigned_to', v)}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Todos" />

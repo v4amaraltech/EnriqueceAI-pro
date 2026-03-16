@@ -52,6 +52,19 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   const currentChannel = searchParams.get('channel') ?? '';
   const currentSearch = searchParams.get('search') ?? '';
 
+  // Optimistic overrides for instant Select feedback
+  const paramsKey = searchParams.toString();
+  const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+
+  if (paramsKey !== lastParamsKey) {
+    setLastParamsKey(paramsKey);
+    setOverrides({});
+  }
+
+  const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
+  const activeChannel = overrides.channel ?? (currentChannel || ALL_VALUE);
+
   const updateParam = useCallback(
     (key: string, value: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -167,8 +180,8 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       <div className="flex flex-wrap items-center gap-2">
         {/* Status */}
         <Select
-          value={currentStatus || ALL_VALUE}
-          onValueChange={(v) => updateParam('status', v)}
+          value={activeStatus}
+          onValueChange={(v) => { setOverrides((prev) => ({ ...prev, status: v })); updateParam('status', v); }}
         >
           <SelectTrigger className="w-full sm:w-[130px]">
             <SelectValue placeholder="Status" />
@@ -185,8 +198,8 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
 
         {/* Channel */}
         <Select
-          value={currentChannel || ALL_VALUE}
-          onValueChange={(v) => updateParam('channel', v)}
+          value={activeChannel}
+          onValueChange={(v) => { setOverrides((prev) => ({ ...prev, channel: v })); updateParam('channel', v); }}
         >
           <SelectTrigger className="w-full sm:w-[140px]">
             <SelectValue placeholder="Atividade" />

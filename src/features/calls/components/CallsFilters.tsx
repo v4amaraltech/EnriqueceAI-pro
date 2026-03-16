@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 
@@ -41,6 +41,24 @@ export function CallsFilters() {
   const currentStatus = searchParams.get('status') ?? '';
   const currentPeriod = searchParams.get('period') ?? '';
   const currentImportant = searchParams.get('important_only') === 'true';
+
+  // Optimistic overrides for instant Select feedback
+  const paramsKey = searchParams.toString();
+  const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+
+  if (paramsKey !== lastParamsKey) {
+    setLastParamsKey(paramsKey);
+    setOverrides({});
+  }
+
+  const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
+  const activePeriod = overrides.period ?? (currentPeriod || ALL_VALUE);
+
+  function handleFilterChange(key: string, value: string) {
+    setOverrides((prev) => ({ ...prev, [key]: value }));
+    updateParam(key, value);
+  }
 
   const hasFilters = currentStatus || currentPeriod || currentSearch || currentImportant;
 
@@ -93,8 +111,8 @@ export function CallsFilters() {
 
         {/* Status */}
         <Select
-          value={currentStatus || ALL_VALUE}
-          onValueChange={(v) => updateParam('status', v)}
+          value={activeStatus}
+          onValueChange={(v) => handleFilterChange('status', v)}
         >
           <SelectTrigger className="w-full sm:w-[170px]">
             <SelectValue placeholder="Status" />
@@ -111,8 +129,8 @@ export function CallsFilters() {
 
         {/* Period */}
         <Select
-          value={currentPeriod || ALL_VALUE}
-          onValueChange={(v) => updateParam('period', v)}
+          value={activePeriod}
+          onValueChange={(v) => handleFilterChange('period', v)}
         >
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Período" />

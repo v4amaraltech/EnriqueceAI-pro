@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import {
   Archive,
   ArrowDown,
@@ -103,6 +103,28 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
   const [pendingTab, setPendingTab] = useState<CadenceType | null>(null);
   const displayTab = pendingTab ?? activeTab;
+
+  // Optimistic overrides for instant Select feedback
+  const paramsKey = searchParams.toString();
+  const [lastParamsKey, setLastParamsKey] = useState(paramsKey);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+
+  if (paramsKey !== lastParamsKey) {
+    setLastParamsKey(paramsKey);
+    setOverrides({});
+    setPendingTab(null);
+  }
+
+  const activeStatus = overrides.status ?? (searchParams.get('status') ?? ALL_VALUE);
+  const activePriority = overrides.priority ?? (searchParams.get('priority') ?? ALL_VALUE);
+  const activeOrigin = overrides.origin ?? (searchParams.get('origin') ?? ALL_VALUE);
+  const activeCreatedBy = overrides.created_by ?? (searchParams.get('created_by') ?? ALL_VALUE);
+
+  function handleFilterChange(key: string, value: string) {
+    setOverrides((prev) => ({ ...prev, [key]: value }));
+    updateParams({ [key]: value });
+  }
+
   const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin') || searchParams.get('created_by'));
   const currentSortBy = searchParams.get('sort_by') ?? 'created_at';
   const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
@@ -127,10 +149,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
     return <ArrowDown className="ml-1 h-3 w-3" />;
   }
 
-  // Clear optimistic tab when URL catches up
-  useEffect(() => {
-    setPendingTab(null);
-  }, [activeTab]);
+  // Note: optimistic state sync happens via paramsKey comparison above
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -294,8 +313,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           />
         </div>
         <Select
-          value={searchParams.get('status') ?? ALL_VALUE}
-          onValueChange={(v) => updateParams({ status: v })}
+          value={activeStatus}
+          onValueChange={(v) => handleFilterChange('status', v)}
         >
           <SelectTrigger className="h-9 w-32">
             <SelectValue placeholder="Status" />
@@ -309,8 +328,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           </SelectContent>
         </Select>
         <Select
-          value={searchParams.get('priority') ?? ALL_VALUE}
-          onValueChange={(v) => updateParams({ priority: v })}
+          value={activePriority}
+          onValueChange={(v) => handleFilterChange('priority', v)}
         >
           <SelectTrigger className="h-9 w-32">
             <SelectValue placeholder="Prioridade" />
@@ -323,8 +342,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           </SelectContent>
         </Select>
         <Select
-          value={searchParams.get('origin') ?? ALL_VALUE}
-          onValueChange={(v) => updateParams({ origin: v })}
+          value={activeOrigin}
+          onValueChange={(v) => handleFilterChange('origin', v)}
         >
           <SelectTrigger className="h-9 w-36">
             <SelectValue placeholder="Origem" />
@@ -338,8 +357,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
         </Select>
         {members && members.length > 0 && (
           <Select
-            value={searchParams.get('created_by') ?? ALL_VALUE}
-            onValueChange={(v) => updateParams({ created_by: v })}
+            value={activeCreatedBy}
+            onValueChange={(v) => handleFilterChange('created_by', v)}
           >
             <SelectTrigger className="h-9 w-44">
               <SelectValue placeholder="Criada por" />
