@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileUp, Plus, Users } from 'lucide-react';
@@ -40,11 +40,19 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [isTabPending, startTabTransition] = useTransition();
   const { data: leads, total, page, per_page } = result;
 
-  const currentStatusTab = searchParams.get('status') ?? '';
+  const urlStatusTab = searchParams.get('status') ?? '';
+  const [optimisticTab, setOptimisticTab] = useState(urlStatusTab);
+
+  // Sync optimistic state when URL actually updates
+  useEffect(() => {
+    setOptimisticTab(urlStatusTab);
+  }, [urlStatusTab]);
 
   const handleStatusTab = (key: string) => {
+    setOptimisticTab(key);
     const params = new URLSearchParams(searchParams.toString());
     if (key) {
       params.set('status', key);
@@ -52,7 +60,9 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       params.delete('status');
     }
     params.delete('page');
-    router.push(`/leads?${params.toString()}`);
+    startTabTransition(() => {
+      router.push(`/leads?${params.toString()}`);
+    });
   };
 
   // Empty state: no leads at all
@@ -97,7 +107,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
         <div className="flex gap-1 border-b">
           {STATUS_TABS.map((tab) => {
             const count = statusCounts[tab.countKey];
-            const isActive = currentStatusTab === tab.key;
+            const isActive = optimisticTab === tab.key;
             return (
               <button
                 key={tab.key}
@@ -130,6 +140,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       </Suspense>
 
       {/* Table or filtered empty */}
+      <div className={isTabPending ? 'pointer-events-none opacity-50 transition-opacity' : ''}>
       {leads.length === 0 && hasFilters ? (
         <div className="py-12 text-center text-[var(--muted-foreground)]">
           Nenhum lead encontrado com os filtros aplicados.
@@ -137,6 +148,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       ) : (
         <LeadTable leads={leads} total={total} cadenceInfo={cadenceInfo} userMap={userMap} />
       )}
+      </div>
 
       {/* Pagination */}
       <Suspense>
