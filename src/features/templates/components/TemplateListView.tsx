@@ -205,14 +205,15 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
           </Button>
         </div>
       ) : (
+        <div className="rounded-lg border border-[var(--border)]">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead className="min-w-[300px]">Conteúdo</TableHead>
-              <TableHead>Responsável</TableHead>
-              <TableHead>Criado</TableHead>
-              <TableHead className="w-[60px]" />
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[25%] pl-4">Nome</TableHead>
+              <TableHead className="w-[40%]">Conteúdo</TableHead>
+              <TableHead className="w-[15%]">Responsável</TableHead>
+              <TableHead className="w-[12%]">Criado</TableHead>
+              <TableHead className="w-[8%]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -225,24 +226,24 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
                   className="cursor-pointer"
                   onClick={() => router.push(`/templates/${template.id}`)}
                 >
-                  <TableCell>
+                  <TableCell className="pl-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{template.name}</span>
-                      <Badge variant="outline" className="text-xs gap-1">
+                      <Badge variant="outline" className="text-xs gap-1 shrink-0">
                         <ChannelIcon className="h-3 w-3" />
                         {channelLabel[template.channel] ?? template.channel}
                       </Badge>
                       {template.is_system && (
-                        <Badge variant="secondary" className="text-xs">Sistema</Badge>
+                        <Badge variant="secondary" className="text-xs shrink-0">Sistema</Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="max-w-[400px]">
+                    <div>
                       <p className="text-sm font-medium truncate">
                         {template.subject || '(Sem assunto)'}
                       </p>
-                      <p className="text-xs text-[var(--muted-foreground)] line-clamp-1">
+                      <p className="text-xs text-[var(--muted-foreground)] truncate">
                         {bodyPreview}
                       </p>
                     </div>
@@ -292,6 +293,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
             })}
           </TableBody>
         </Table>
+        </div>
       )}
 
       {/* Pagination */}
