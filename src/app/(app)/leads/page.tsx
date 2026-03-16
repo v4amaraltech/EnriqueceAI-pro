@@ -4,7 +4,8 @@ import { requireAuth } from '@/lib/auth/require-auth';
 
 import { EmptyState } from '@/shared/components/EmptyState';
 
-import { fetchLeads } from '@/features/leads/actions/fetch-leads';
+import { fetchActiveCadences } from '@/features/leads/actions/fetch-active-cadences';
+import { fetchLeads, fetchLeadStatusCounts } from '@/features/leads/actions/fetch-leads';
 import { fetchLeadsCadenceInfo } from '@/features/leads/actions/fetch-leads-cadence-info';
 import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
 import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
@@ -28,13 +29,14 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.uf) filters.uf = params.uf;
   if (params.lead_source) filters.lead_source = params.lead_source;
   if (params.assigned_to) filters.assigned_to = params.assigned_to;
+  if (params.cadence_id) filters.cadence_id = params.cadence_id;
   if (params.search) filters.search = params.search;
   if (params.page) filters.page = params.page;
   if (params.per_page) filters.per_page = params.per_page;
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
-  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.assigned_to || params.search);
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.assigned_to || params.cadence_id || params.search);
 
   const result = await fetchLeads(filters);
 
@@ -56,14 +58,18 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       .filter((id): id is string => id !== null && id !== undefined),
   )];
 
-  const [cadenceResult, userMapResult, membersResult] = await Promise.all([
+  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult] = await Promise.all([
     fetchLeadsCadenceInfo(leadIds),
     fetchUserMap(uniqueUserIds),
     fetchOrgMembersAuth(),
+    fetchLeadStatusCounts(),
+    fetchActiveCadences(),
   ]);
   const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
   const userMap = userMapResult.success ? userMapResult.data : {};
   const members = membersResult.success ? membersResult.data : [];
+  const statusCounts = statusCountsResult.success ? statusCountsResult.data : undefined;
+  const cadences = cadencesResult.success ? cadencesResult.data : [];
 
   return (
     <LeadListView
@@ -73,6 +79,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       userMap={userMap}
       currentUserId={user.id}
       members={members}
+      statusCounts={statusCounts}
+      cadences={cadences}
     />
   );
 }

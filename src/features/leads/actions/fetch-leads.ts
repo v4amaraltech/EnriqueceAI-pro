@@ -70,6 +70,32 @@ export async function fetchLeads(
     query = query.eq('lead_source', filters.lead_source);
   }
 
+  // Filter by cadence enrollment
+  if (filters.cadence_id) {
+    if (filters.cadence_id === '__none__') {
+      // Leads without active enrollment — get enrolled lead IDs and exclude them
+      const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
+        .select('lead_id')
+        .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
+      const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
+      if (enrolledIds.length > 0) {
+        // Supabase doesn't have .not.in(), so use filter with negation
+        query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
+      }
+    } else {
+      // Leads enrolled in a specific cadence
+      const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
+        .select('lead_id')
+        .eq('cadence_id', filters.cadence_id)
+        .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
+      const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
+      if (enrolledIds.length === 0) {
+        return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
+      }
+      query = query.in('id', enrolledIds);
+    }
+  }
+
   // Full-text search
   if (filters.search) {
     const term = filters.search.replace(/[%_]/g, '');
@@ -103,6 +129,53 @@ export async function fetchLeads(
       per_page: filters.per_page,
     },
   };
+}
+
+export interface LeadStatusCounts {
+  all: number;
+  new: number;
+  contacted: number;
+  qualified: number;
+  unqualified: number;
+  archived: number;
+}
+
+export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCounts>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { data, error } = (await from(supabase, 'leads')
+    .select('status')
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null)) as {
+    data: Array<{ status: string }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar contagens' };
+  }
+
+  const counts: LeadStatusCounts = { all: 0, new: 0, contacted: 0, qualified: 0, unqualified: 0, archived: 0 };
+  for (const row of data ?? []) {
+    counts.all++;
+    if (row.status in counts && row.status !== 'all') {
+      counts[row.status as keyof Omit<LeadStatusCounts, 'all'>]++;
+    }
+  }
+
+  return { success: true, data: counts };
 }
 
 export async function fetchFilteredLeadIds(

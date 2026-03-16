@@ -49,9 +49,10 @@ const ALL_VALUE = '__all__';
 
 interface LeadFiltersProps {
   members?: { userId: string; name: string }[];
+  cadences?: { id: string; name: string }[];
 }
 
-export function LeadFilters({ members }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -62,6 +63,7 @@ export function LeadFilters({ members }: LeadFiltersProps) {
   const currentUf = searchParams.get('uf') ?? '';
   const currentSource = searchParams.get('lead_source') ?? '';
   const currentAssigned = searchParams.get('assigned_to') ?? '';
+  const currentCadence = searchParams.get('cadence_id') ?? '';
 
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,7 +73,7 @@ export function LeadFilters({ members }: LeadFiltersProps) {
     setSearchValue(currentSearch);
   }, [currentSearch]);
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned;
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -223,6 +225,30 @@ export function LeadFilters({ members }: LeadFiltersProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Cadência */}
+        {cadences && cadences.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">Cadência</span>
+            <Select
+              value={currentCadence || ALL_VALUE}
+              onValueChange={(v) => updateParam('cadence_id', v)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                <SelectItem value="__none__">Sem cadência</SelectItem>
+                {cadences.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Responsável */}
         {members && members.length > 0 && (

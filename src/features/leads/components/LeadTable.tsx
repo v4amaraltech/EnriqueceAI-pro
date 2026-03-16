@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -38,7 +38,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkAssignLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -55,7 +55,7 @@ interface LeadTableProps {
   userMap: Record<string, string>;
 }
 
-type SortColumn = 'created_at';
+type SortColumn = 'created_at' | 'nome_fantasia' | 'status' | 'engagement_score';
 
 function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; currentSort: SortColumn; currentDir: string }) {
   if (currentSort !== column) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-40" />;
@@ -74,6 +74,8 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEnrichConfirm, setShowEnrichConfirm] = useState<'cnpj' | 'apollo' | null>(null);
   const [singleArchiveId, setSingleArchiveId] = useState<string | null>(null);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [statusTarget, setStatusTarget] = useState('');
   const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
   const [assignTarget, setAssignTarget] = useState('');
 
@@ -264,6 +266,23 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     });
   }, [assignTarget, selected, router]);
 
+  const handleBulkStatusChange = useCallback(() => {
+    if (!statusTarget) return;
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkChangeStatus(ids, statusTarget as 'new' | 'contacted' | 'qualified' | 'unqualified');
+      if (result.success) {
+        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} atualizado${result.data.count > 1 ? 's' : ''}`);
+        setSelected(new Set());
+        setShowStatusDialog(false);
+        setStatusTarget('');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [statusTarget, selected, router]);
+
   const handleBulkPause = useCallback(() => {
     const ids = Array.from(selected);
     startTransition(async () => {
@@ -369,6 +388,15 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             <Button
               variant="outline"
               size="sm"
+              onClick={() => { setShowStatusDialog(true); setStatusTarget(''); }}
+              disabled={isPending}
+            >
+              <Tag className="mr-1 h-3.5 w-3.5" />
+              Status
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleBulkPause}
               disabled={isPending}
             >
@@ -427,19 +455,37 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                   aria-label="Selecionar todos"
                 />
               </TableHead>
-              <TableHead>Lead</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[70px]">Engajamento</TableHead>
               <TableHead>
                 <button
                   type="button"
                   className="flex items-center font-medium hover:text-[var(--foreground)]"
-                  onClick={() => handleSort('created_at')}
+                  onClick={() => handleSort('nome_fantasia')}
                 >
-                  Cadência
-                  <SortIcon column="created_at" currentSort={currentSortBy} currentDir={currentSortDir} />
+                  Lead
+                  <SortIcon column="nome_fantasia" currentSort={currentSortBy} currentDir={currentSortDir} />
                 </button>
               </TableHead>
+              <TableHead>
+                <button
+                  type="button"
+                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  onClick={() => handleSort('status')}
+                >
+                  Status
+                  <SortIcon column="status" currentSort={currentSortBy} currentDir={currentSortDir} />
+                </button>
+              </TableHead>
+              <TableHead className="w-[70px]">
+                <button
+                  type="button"
+                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  onClick={() => handleSort('engagement_score')}
+                >
+                  Engajamento
+                  <SortIcon column="engagement_score" currentSort={currentSortBy} currentDir={currentSortDir} />
+                </button>
+              </TableHead>
+              <TableHead>Cadência</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead className="w-[40px]" />
             </TableRow>
@@ -648,6 +694,37 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             </Button>
             <Button onClick={handleAssign} disabled={!assignTarget || isPending}>
               {isPending ? 'Reatribuindo...' : 'Reatribuir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status change dialog */}
+      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar status</DialogTitle>
+            <DialogDescription>
+              Selecione o novo status para {selected.size} lead{selected.size > 1 ? 's' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={statusTarget} onValueChange={setStatusTarget}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="new">Novo</SelectItem>
+              <SelectItem value="contacted">Contatado</SelectItem>
+              <SelectItem value="qualified">Qualificado</SelectItem>
+              <SelectItem value="unqualified">Não Qualificado</SelectItem>
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStatusDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleBulkStatusChange} disabled={!statusTarget || isPending}>
+              {isPending ? 'Alterando...' : 'Alterar status'}
             </Button>
           </DialogFooter>
         </DialogContent>
