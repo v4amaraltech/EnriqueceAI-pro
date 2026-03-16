@@ -73,7 +73,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const [showApolloConfig, setShowApolloConfig] = useState(false);
-  const [connectingCrm, setConnectingCrm] = useState<CrmProvider | null>(null);
+  const [crmPending, startCrmTransition] = useTransition();
+  const [activeCrmAction, setActiveCrmAction] = useState<CrmProvider | null>(null);
   const evolution = useEvolutionWhatsApp();
 
   function findCrm(provider: CrmProvider): CrmConnectionSafe | undefined {
@@ -81,39 +82,43 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   }
 
   function handleConnectCrm(provider: CrmProvider) {
-    setConnectingCrm(provider);
-    startTransition(async () => {
+    setActiveCrmAction(provider);
+    startCrmTransition(async () => {
       const result = await getCrmAuthUrl(provider);
       if (result.success) {
         window.location.href = result.data.url;
       } else {
         toast.error(result.error);
-        setConnectingCrm(null);
+        setActiveCrmAction(null);
       }
     });
   }
 
   function handleDisconnectCrm(provider: CrmProvider) {
-    startTransition(async () => {
+    setActiveCrmAction(provider);
+    startCrmTransition(async () => {
       const result = await disconnectCrm(provider);
       if (result.success) {
         toast.success(`${CRM_PROVIDERS.find(p => p.id === provider)?.name ?? 'CRM'} desconectado`);
       } else {
         toast.error(result.error);
       }
+      setActiveCrmAction(null);
       setShowDisconnect(null);
       router.refresh();
     });
   }
 
   function handleSyncCrm(provider: CrmProvider) {
-    startTransition(async () => {
+    setActiveCrmAction(provider);
+    startCrmTransition(async () => {
       const result = await triggerCrmSync(provider);
       if (result.success) {
         toast.success('Sincronização iniciada');
       } else {
         toast.error(result.error);
       }
+      setActiveCrmAction(null);
       router.refresh();
     });
   }
@@ -401,7 +406,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={isPending || connection.status === 'syncing'}
+                            disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
                             onClick={() => handleSyncCrm(provider.id)}
                           >
                             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -420,9 +425,9 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     ) : (
                       <Button
                         onClick={() => handleConnectCrm(provider.id)}
-                        disabled={connectingCrm !== null}
+                        disabled={activeCrmAction === provider.id}
                       >
-                        {connectingCrm === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
+                        {activeCrmAction === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
                       </Button>
                     )}
                   </div>
@@ -600,10 +605,10 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               </Button>
               <Button
                 variant="destructive"
-                disabled={isPending}
+                disabled={crmPending}
                 onClick={() => handleDisconnectCrm(provider.id)}
               >
-                {isPending ? 'Desconectando...' : 'Desconectar'}
+                {crmPending ? 'Desconectando...' : 'Desconectar'}
               </Button>
             </DialogFooter>
           </DialogContent>
