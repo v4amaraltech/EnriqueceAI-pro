@@ -73,6 +73,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const [showApolloConfig, setShowApolloConfig] = useState(false);
+  const [connectingCrm, setConnectingCrm] = useState<CrmProvider | null>(null);
   const evolution = useEvolutionWhatsApp();
 
   function findCrm(provider: CrmProvider): CrmConnectionSafe | undefined {
@@ -80,12 +81,14 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   }
 
   function handleConnectCrm(provider: CrmProvider) {
+    setConnectingCrm(provider);
     startTransition(async () => {
       const result = await getCrmAuthUrl(provider);
       if (result.success) {
         window.location.href = result.data.url;
       } else {
         toast.error(result.error);
+        setConnectingCrm(null);
       }
     });
   }
@@ -417,9 +420,9 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     ) : (
                       <Button
                         onClick={() => handleConnectCrm(provider.id)}
-                        disabled={isPending}
+                        disabled={connectingCrm !== null}
                       >
-                        {isPending ? 'Conectando...' : `Conectar ${provider.name}`}
+                        {connectingCrm === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
                       </Button>
                     )}
                   </div>
