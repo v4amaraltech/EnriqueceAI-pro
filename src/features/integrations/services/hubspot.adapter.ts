@@ -370,7 +370,7 @@ export class HubSpotAdapter implements CRMAdapter {
     companyId: string,
   ): Promise<void> {
     await hubspotFetch<unknown>(
-      `/crm/v3/objects/contacts/${contactId}/associations/companies/${companyId}`,
+      `/crm/v4/objects/contacts/${contactId}/associations/companies/${companyId}`,
       credentials.access_token,
       {
         method: 'PUT',
