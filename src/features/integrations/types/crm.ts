@@ -71,13 +71,9 @@ export const DEFAULT_FIELD_MAPPINGS: Record<CrmProvider, FieldMapping> = {
   hubspot: {
     leads: {
       nome_fantasia: 'company',
-      razao_social: 'name',
-      cnpj: 'hs_additional_id',
+      razao_social: 'lastname',
       email: 'email',
       telefone: 'phone',
-      porte: 'company_size',
-      cnae: 'industry',
-      situacao_cadastral: 'hs_lead_status',
     },
     activities: {
       channel: 'hs_activity_type',
