@@ -494,7 +494,8 @@ export async function markLeadAsWon(
 
     return { success: true, data: { dealCreated } };
   } catch (error) {
-    console.error('[markLeadAsWon] Error:', error);
-    return { success: false, error: 'Erro ao marcar lead como ganho' };
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[markLeadAsWon] Error:', message, error);
+    return { success: false, error: `Erro ao marcar lead como ganho: ${message}` };
   }
 }
