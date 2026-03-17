@@ -27,8 +27,8 @@
 | `import_status` | `'processing'`, `'completed'`, `'failed'` |
 | `cadence_status` | `'draft'`, `'active'`, `'paused'`, `'archived'` |
 | `enrollment_status` | `'active'`, `'paused'`, `'completed'`, `'replied'`, `'bounced'`, `'unsubscribed'` |
-| `channel_type` | `'email'`, `'whatsapp'` |
-| `interaction_type` | `'sent'`, `'delivered'`, `'opened'`, `'clicked'`, `'replied'`, `'bounced'`, `'failed'`, `'meeting_scheduled'` |
+| `channel_type` | `'email'`, `'whatsapp'`, `'phone'`, `'linkedin'`, `'research'`, `'crm'` |
+| `interaction_type` | `'sent'`, `'delivered'`, `'opened'`, `'clicked'`, `'replied'`, `'bounced'`, `'failed'`, `'meeting_scheduled'`, `'crm_synced'`, `'crm_deal_created'` |
 | `crm_type` | `'hubspot'`, `'pipedrive'`, `'rdstation'` |
 | `connection_status` | `'connected'`, `'disconnected'`, `'error'`, `'syncing'` |
 | `subscription_status` | `'active'`, `'past_due'`, `'canceled'`, `'trialing'` |

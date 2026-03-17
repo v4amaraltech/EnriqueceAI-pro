@@ -7,19 +7,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgId } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
-import { decryptJson } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 import type {
   CrmConnectionRow,
-  CrmCredentials,
   CrmPipeline,
   CrmProvider,
 } from '@/features/integrations/types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
+import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
@@ -270,8 +269,8 @@ export async function fetchCrmPipelines(): Promise<
       return { success: true, data: { provider: connection.crm_provider, pipelines: [] } };
     }
 
-    const credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
     const adapter = new PipedriveAdapter();
+    const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
     const rawPipelines = await adapter.fetchPipelines(credentials);
     const pipelines: CrmPipeline[] = await Promise.all(
@@ -328,8 +327,8 @@ export async function markLeadAsWon(
         .single()) as { data: CrmConnectionRow | null };
 
       if (connection) {
-        const credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
         const adapter = new PipedriveAdapter();
+        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
         // Fetch lead data for pushContact
         const { data: lead } = (await from(supabase, 'leads')
@@ -341,12 +340,31 @@ export async function markLeadAsWon(
         if (lead) {
           const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS.pipedrive.leads;
 
+          // Check if Person already synced (dedup)
+          const { data: existingSync } = (await from(supabase, 'interactions')
+            .select('external_id')
+            .eq('lead_id', leadId)
+            .eq('type', 'crm_synced')
+            .maybeSingle()) as { data: { external_id: string } | null };
+
           // Create/update Person
           const { external_id: personExternalId } = await adapter.pushContact(
             credentials,
             lead,
             fieldMapping,
+            existingSync?.external_id ?? undefined,
           );
+
+          // Record Person sync if new
+          if (!existingSync) {
+            await from(supabase, 'interactions').insert({
+              org_id: orgId,
+              lead_id: leadId,
+              channel: 'crm',
+              type: 'crm_synced',
+              external_id: personExternalId,
+            } as Record<string, unknown>);
+          }
 
           // Create Deal
           const dealTitle = (lead.nome_fantasia ?? lead.razao_social ?? 'Deal') as string;
@@ -357,16 +375,15 @@ export async function markLeadAsWon(
             stage_id: parseInt(crmOptions.stageId, 10),
           });
 
-          // Register interaction
+          // Record deal creation
           await from(supabase, 'interactions').insert({
+            org_id: orgId,
             lead_id: leadId,
-            cadence_id: null,
-            cadence_step_id: null,
+            channel: 'crm',
             type: 'crm_deal_created',
-            channel: 'email',
+            external_id: dealExternalId,
             metadata: {
               crm_provider: 'pipedrive',
-              deal_external_id: dealExternalId,
               person_external_id: personExternalId,
               pipeline_id: crmOptions.pipelineId,
               stage_id: crmOptions.stageId,

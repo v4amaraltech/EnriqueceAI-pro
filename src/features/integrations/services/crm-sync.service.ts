@@ -1,4 +1,3 @@
-import { decryptJson, encryptJson } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -10,6 +9,7 @@ import type {
   SyncResult,
 } from '../types/crm';
 import { CRMRegistry } from './crm-registry';
+import { ensureFreshCredentials } from './crm-token';
 
 interface LeadForSync {
   id: string;
@@ -66,7 +66,7 @@ export class CrmSyncService {
 
     try {
       // Check if token needs refresh
-      const credentials = await CrmSyncService.ensureValidToken(
+      const credentials = await ensureFreshCredentials(
         connection,
         adapter,
         supabase,
@@ -133,27 +133,6 @@ export class CrmSyncService {
       } as Record<string, unknown>);
 
     return { pull: pullResult, push: pushResult, activities: activityResult };
-  }
-
-  private static async ensureValidToken(
-    connection: CrmConnectionRow,
-    adapter: ReturnType<typeof CRMRegistry.getAdapter>,
-    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  ): Promise<CrmCredentials> {
-    let credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
-
-    // Check token expiration
-    if (
-      credentials.token_expires_at &&
-      new Date(credentials.token_expires_at) <= new Date()
-    ) {
-      credentials = await adapter.refreshToken(credentials);
-      await from(supabase, 'crm_connections')
-        .update({ credentials_encrypted: encryptJson(credentials) } as Record<string, unknown>)
-        .eq('id', connection.id);
-    }
-
-    return credentials;
   }
 
   /**
