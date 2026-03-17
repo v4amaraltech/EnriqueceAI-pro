@@ -274,46 +274,50 @@ export async function fetchCrmPipelines(): Promise<
     const connections: CrmPipelinesEntry[] = [];
 
     for (const connection of rows) {
-      let pipelines: CrmPipeline[] = [];
+      try {
+        let pipelines: CrmPipeline[] = [];
 
-      if (connection.crm_provider === 'pipedrive') {
-        const adapter = new PipedriveAdapter();
-        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+        if (connection.crm_provider === 'pipedrive') {
+          const adapter = new PipedriveAdapter();
+          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
-        const rawPipelines = await adapter.fetchPipelines(credentials);
-        pipelines = await Promise.all(
-          rawPipelines.map(async (p) => {
-            const rawStages = await adapter.fetchStages(credentials, p.id);
-            return {
-              id: p.id.toString(),
-              name: p.name,
-              stages: rawStages
-                .sort((a, b) => a.order_nr - b.order_nr)
-                .map((s) => ({ id: s.id.toString(), name: s.name })),
-            };
-          }),
-        );
-      } else if (connection.crm_provider === 'hubspot') {
-        const adapter = new HubSpotAdapter();
-        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const rawPipelines = await adapter.fetchPipelines(credentials);
+          pipelines = await Promise.all(
+            rawPipelines.map(async (p) => {
+              const rawStages = await adapter.fetchStages(credentials, p.id);
+              return {
+                id: p.id.toString(),
+                name: p.name,
+                stages: rawStages
+                  .sort((a, b) => a.order_nr - b.order_nr)
+                  .map((s) => ({ id: s.id.toString(), name: s.name })),
+              };
+            }),
+          );
+        } else if (connection.crm_provider === 'hubspot') {
+          const adapter = new HubSpotAdapter();
+          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
-        const rawPipelines = await adapter.fetchPipelines(credentials);
-        pipelines = await Promise.all(
-          rawPipelines.map(async (p) => {
-            const rawStages = await adapter.fetchStages(credentials, p.id);
-            return {
-              id: p.id,
-              name: p.label,
-              stages: rawStages
-                .sort((a, b) => a.displayOrder - b.displayOrder)
-                .map((s) => ({ id: s.id, name: s.label })),
-            };
-          }),
-        );
-      }
+          const rawPipelines = await adapter.fetchPipelines(credentials);
+          pipelines = await Promise.all(
+            rawPipelines.map(async (p) => {
+              const rawStages = await adapter.fetchStages(credentials, p.id);
+              return {
+                id: p.id,
+                name: p.label,
+                stages: rawStages
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map((s) => ({ id: s.id, name: s.label })),
+              };
+            }),
+          );
+        }
 
-      if (pipelines.length > 0) {
-        connections.push({ provider: connection.crm_provider, pipelines });
+        if (pipelines.length > 0) {
+          connections.push({ provider: connection.crm_provider, pipelines });
+        }
+      } catch (err) {
+        console.error(`[fetchCrmPipelines] Error fetching ${connection.crm_provider}:`, err);
       }
     }
 

@@ -331,9 +331,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                 </div>
                 {sendToCrm && (
                   <>
-                    {crmConnections.length > 1 && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-semibold">CRM</Label>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">CRM</Label>
+                      {crmConnections.length > 1 ? (
                         <Select
                           value={selectedProvider ?? undefined}
                           onValueChange={(value) => {
@@ -353,8 +353,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                    )}
+                      ) : selectedProvider && (
+                        <p className="text-sm text-[var(--muted-foreground)]">
+                          {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station' } as Record<string, string>)[selectedProvider] ?? selectedProvider}
+                        </p>
+                      )}
+                    </div>
                     {selectedProvider && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Funil</Label>
