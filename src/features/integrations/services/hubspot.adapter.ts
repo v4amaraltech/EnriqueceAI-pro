@@ -258,14 +258,28 @@ export class HubSpotAdapter implements CRMAdapter {
       return { external_id: externalId };
     }
 
-    // Create new contact
-    const result = await hubspotFetch<HubSpotCreateResponse>(
-      '/crm/v3/objects/contacts',
-      credentials.access_token,
-      { method: 'POST', body: JSON.stringify({ properties }) },
-    );
-
-    return { external_id: result.id };
+    // Create new contact — handle 409 CONFLICT (contact already exists)
+    try {
+      const result = await hubspotFetch<HubSpotCreateResponse>(
+        '/crm/v3/objects/contacts',
+        credentials.access_token,
+        { method: 'POST', body: JSON.stringify({ properties }) },
+      );
+      return { external_id: result.id };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '';
+      const existingIdMatch = msg.match(/Existing ID:\s*(\d+)/);
+      if (existingIdMatch?.[1]) {
+        const existingId = existingIdMatch[1];
+        await hubspotFetch<HubSpotCreateResponse>(
+          `/crm/v3/objects/contacts/${existingId}`,
+          credentials.access_token,
+          { method: 'PATCH', body: JSON.stringify({ properties }) },
+        );
+        return { external_id: existingId };
+      }
+      throw error;
+    }
   }
 
   async pushActivity(
