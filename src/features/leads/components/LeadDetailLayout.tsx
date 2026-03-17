@@ -33,7 +33,7 @@ import type { CrmPipeline, CrmProvider } from '@/features/integrations/types/crm
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, fetchCrmPipelines, fetchLossReasons, markLeadAsLost, markLeadAsWon, type CrmPipelinesEntry } from '../actions/update-lead';
+import { archiveLead, fetchCrmPipelines, fetchPipelineStages, fetchLossReasons, markLeadAsLost, markLeadAsWon, type CrmPipelinesEntry } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -72,7 +72,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
   const [selectedProvider, setSelectedProvider] = useState<CrmProvider | null>(null);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [stages, setStages] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
+  const [loadingStages, setLoadingStages] = useState(false);
 
   const handleArchive = useCallback(() => {
     startTransition(async () => {
@@ -149,12 +151,29 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     setShowLostDialog(false);
   }, [lead.id, selectedReasonId, lossNotes, router]);
 
+  const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string) => {
+    setLoadingStages(true);
+    setStages([]);
+    setSelectedStageId(null);
+    const result = await fetchPipelineStages(provider, pipelineId);
+    setLoadingStages(false);
+    if (result.success) {
+      setStages(result.data);
+      if (result.data.length === 1) {
+        setSelectedStageId(result.data[0]!.id);
+      }
+    } else {
+      toast.error(result.error);
+    }
+  }, []);
+
   const handleOpenWonDialog = useCallback(async () => {
     setShowWonDialog(true);
     setSendToCrm(false);
     setSelectedProvider(null);
     setSelectedPipelineId(null);
     setSelectedStageId(null);
+    setStages([]);
     setCrmConnections([]);
     setLoadingPipelines(true);
     const result = await fetchCrmPipelines();
@@ -164,16 +183,13 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       const firstConn = result.data.connections[0]!;
       setSelectedProvider(firstConn.provider);
       setSendToCrm(true);
-      // Auto-select pipeline and stage when there's only 1
       if (firstConn.pipelines.length === 1) {
         const pipeline = firstConn.pipelines[0]!;
         setSelectedPipelineId(pipeline.id);
-        if (pipeline.stages.length === 1) {
-          setSelectedStageId(pipeline.stages[0]!.id);
-        }
+        void loadStages(firstConn.provider, pipeline.id);
       }
     }
-  }, []);
+  }, [loadStages]);
 
   const handleConfirmWon = useCallback(() => {
     startTransition(async () => {
@@ -337,9 +353,17 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                         <Select
                           value={selectedProvider ?? undefined}
                           onValueChange={(value) => {
-                            setSelectedProvider(value as CrmProvider);
+                            const provider = value as CrmProvider;
+                            setSelectedProvider(provider);
                             setSelectedPipelineId(null);
                             setSelectedStageId(null);
+                            setStages([]);
+                            const conn = crmConnections.find((c) => c.provider === provider);
+                            if (conn?.pipelines.length === 1) {
+                              const pipeline = conn.pipelines[0]!;
+                              setSelectedPipelineId(pipeline.id);
+                              void loadStages(provider, pipeline.id);
+                            }
                           }}
                         >
                           <SelectTrigger className="w-full">
@@ -367,6 +391,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                           onValueChange={(value) => {
                             setSelectedPipelineId(value);
                             setSelectedStageId(null);
+                            if (selectedProvider) {
+                              void loadStages(selectedProvider, value);
+                            }
                           }}
                         >
                           <SelectTrigger className="w-full">
@@ -387,25 +414,25 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                     {selectedPipelineId && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Etapa</Label>
-                        <Select
-                          value={selectedStageId ?? undefined}
-                          onValueChange={setSelectedStageId}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecione a etapa" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {crmConnections
-                              .find((c) => c.provider === selectedProvider)
-                              ?.pipelines
-                              .find((p) => p.id === selectedPipelineId)
-                              ?.stages.map((stage) => (
+                        {loadingStages ? (
+                          <p className="text-sm text-[var(--muted-foreground)]">Carregando etapas...</p>
+                        ) : (
+                          <Select
+                            value={selectedStageId ?? undefined}
+                            onValueChange={setSelectedStageId}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione a etapa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {stages.map((stage) => (
                                 <SelectItem key={stage.id} value={stage.id}>
                                   {stage.name}
                                 </SelectItem>
                               ))}
-                          </SelectContent>
-                        </Select>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     )}
                   </>
