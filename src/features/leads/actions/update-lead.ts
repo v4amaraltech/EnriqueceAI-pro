@@ -412,7 +412,7 @@ export async function markLeadAsWon(
           .single()) as { data: Record<string, string | null> | null };
 
         if (lead) {
-          const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
+          const fieldMapping = DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
 
           // Check if Contact/Person already synced (dedup)
           const { data: existingSync } = (await from(supabase, 'interactions')
