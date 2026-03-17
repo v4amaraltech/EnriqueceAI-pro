@@ -309,7 +309,7 @@ export class PipedriveAdapter implements CRMAdapter {
       '/api/v1/pipelines',
       credentials.access_token,
     );
-    return (result.data ?? []).filter((p) => p.active && p.deal_probability);
+    return (result.data ?? []).filter((p) => p.active);
   }
 
   async fetchStages(
