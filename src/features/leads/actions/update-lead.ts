@@ -446,20 +446,101 @@ export async function markLeadAsWon(
 
           if (crmOptions.provider === 'pipedrive') {
             const pipedriveAdapter = adapter as PipedriveAdapter;
+
+            // Create Organization (company) with address
+            const orgName = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            let orgAddress: string | undefined;
+            const endereco = lead.endereco as unknown as {
+              logradouro?: string; numero?: string; complemento?: string;
+              bairro?: string; cidade?: string; uf?: string; cep?: string;
+            } | null;
+            if (endereco && typeof endereco === 'object') {
+              const parts = [
+                endereco.logradouro,
+                endereco.numero,
+                endereco.complemento,
+              ].filter(Boolean).join(', ');
+              const city = [
+                endereco.bairro,
+                endereco.cidade ? `${endereco.cidade}/${endereco.uf ?? ''}` : undefined,
+                endereco.cep,
+              ].filter(Boolean).join(' - ');
+              orgAddress = [parts, city].filter(Boolean).join(' - ');
+            }
+
+            const orgResult = await pipedriveAdapter.pushOrganization(credentials, {
+              name: orgName,
+              address: orgAddress,
+            });
+            const orgExternalId = parseInt(orgResult.external_id, 10);
+
+            // Update Person to link to Organization
+            await pipedriveAdapter.pushContact(
+              credentials,
+              lead,
+              fieldMapping,
+              contactExternalId,
+            );
+            // Set org_id on the person via direct API call
+            const apiDomain = credentials.api_key ?? '';
+            await fetch(`${apiDomain || 'https://api.pipedrive.com'}/api/v1/persons/${contactExternalId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${credentials.access_token}`,
+              },
+              body: JSON.stringify({ org_id: orgExternalId }),
+            });
+
             const result = await pipedriveAdapter.pushDeal(credentials, {
               title: dealTitle,
               person_id: parseInt(contactExternalId, 10),
               pipeline_id: parseInt(crmOptions.pipelineId, 10),
               stage_id: parseInt(crmOptions.stageId, 10),
+              org_id: orgExternalId,
             });
             dealExternalId = result.external_id;
           } else if (crmOptions.provider === 'hubspot') {
             const hubspotAdapter = adapter as HubSpotAdapter;
+
+            // Create Company with address fields
+            const companyName = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            const endereco = lead.endereco as unknown as {
+              logradouro?: string; numero?: string; complemento?: string;
+              bairro?: string; cidade?: string; uf?: string; cep?: string;
+            } | null;
+            let hsAddress: string | undefined;
+            let hsCity: string | undefined;
+            let hsState: string | undefined;
+            let hsZip: string | undefined;
+            if (endereco && typeof endereco === 'object') {
+              const streetParts = [endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean);
+              hsAddress = streetParts.join(', ') || undefined;
+              hsCity = endereco.cidade || undefined;
+              hsState = endereco.uf || undefined;
+              hsZip = endereco.cep || undefined;
+            }
+
+            const companyResult = await hubspotAdapter.pushCompany(credentials, {
+              name: companyName,
+              address: hsAddress,
+              city: hsCity,
+              state: hsState,
+              zip: hsZip,
+              phone: (lead.telefone as string) || undefined,
+            });
+            const companyId = companyResult.external_id;
+
+            // Associate Contact to Company
+            await hubspotAdapter.associateContactToCompany(credentials, contactExternalId, companyId);
+
+            // Create Deal linked to Contact + Company
             const result = await hubspotAdapter.pushDeal(credentials, {
               title: dealTitle,
               contactId: contactExternalId,
               pipelineId: crmOptions.pipelineId,
               stageId: crmOptions.stageId,
+              companyId,
             });
             dealExternalId = result.external_id;
           } else {

@@ -325,24 +325,43 @@ export class PipedriveAdapter implements CRMAdapter {
     return result.data ?? [];
   }
 
-  async pushDeal(
+  async pushOrganization(
     credentials: CrmCredentials,
-    deal: { title: string; person_id: number; pipeline_id: number; stage_id: number },
+    org: { name: string; address?: string },
   ): Promise<{ external_id: string }> {
     const apiDomain = credentials.api_key ?? '';
+    const body: Record<string, unknown> = { name: org.name };
+    if (org.address) {
+      body.address = org.address;
+    }
+    const result = await pipedriveFetch<PipedriveCreateResponse>(
+      apiDomain,
+      '/api/v1/organizations',
+      credentials.access_token,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+    return { external_id: result.data.id.toString() };
+  }
+
+  async pushDeal(
+    credentials: CrmCredentials,
+    deal: { title: string; person_id: number; pipeline_id: number; stage_id: number; org_id?: number },
+  ): Promise<{ external_id: string }> {
+    const apiDomain = credentials.api_key ?? '';
+    const body: Record<string, unknown> = {
+      title: deal.title,
+      person_id: deal.person_id,
+      pipeline_id: deal.pipeline_id,
+      stage_id: deal.stage_id,
+    };
+    if (deal.org_id) {
+      body.org_id = deal.org_id;
+    }
     const result = await pipedriveFetch<PipedriveDealCreateResponse>(
       apiDomain,
       '/api/v1/deals',
       credentials.access_token,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          title: deal.title,
-          person_id: deal.person_id,
-          pipeline_id: deal.pipeline_id,
-          stage_id: deal.stage_id,
-        }),
-      },
+      { method: 'POST', body: JSON.stringify(body) },
     );
     return { external_id: result.data.id.toString() };
   }

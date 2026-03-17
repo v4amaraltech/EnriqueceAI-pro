@@ -345,10 +345,63 @@ export class HubSpotAdapter implements CRMAdapter {
     return result.results;
   }
 
+  async pushCompany(
+    credentials: CrmCredentials,
+    company: { name: string; address?: string; city?: string; state?: string; zip?: string; phone?: string },
+  ): Promise<{ external_id: string }> {
+    const properties: Record<string, string> = { name: company.name };
+    if (company.address) properties.address = company.address;
+    if (company.city) properties.city = company.city;
+    if (company.state) properties.state = company.state;
+    if (company.zip) properties.zip = company.zip;
+    if (company.phone) properties.phone = company.phone;
+
+    const result = await hubspotFetch<HubSpotCreateResponse>(
+      '/crm/v3/objects/companies',
+      credentials.access_token,
+      { method: 'POST', body: JSON.stringify({ properties }) },
+    );
+    return { external_id: result.id };
+  }
+
+  async associateContactToCompany(
+    credentials: CrmCredentials,
+    contactId: string,
+    companyId: string,
+  ): Promise<void> {
+    await hubspotFetch<unknown>(
+      `/crm/v3/objects/contacts/${contactId}/associations/companies/${companyId}`,
+      credentials.access_token,
+      {
+        method: 'PUT',
+        body: JSON.stringify([
+          { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 1 },
+        ]),
+      },
+    );
+  }
+
   async pushDeal(
     credentials: CrmCredentials,
-    deal: { title: string; contactId: string; pipelineId: string; stageId: string },
+    deal: { title: string; contactId: string; pipelineId: string; stageId: string; companyId?: string },
   ): Promise<{ external_id: string }> {
+    const associations = [
+      {
+        to: { id: deal.contactId },
+        types: [
+          { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 },
+        ],
+      },
+    ];
+    if (deal.companyId) {
+      associations.push({
+        to: { id: deal.companyId },
+        types: [
+          { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 5 },
+        ],
+      });
+    }
+
     const result = await hubspotFetch<HubSpotDealResponse>(
       '/crm/v3/objects/deals',
       credentials.access_token,
@@ -360,17 +413,7 @@ export class HubSpotAdapter implements CRMAdapter {
             pipeline: deal.pipelineId,
             dealstage: deal.stageId,
           },
-          associations: [
-            {
-              to: { id: deal.contactId },
-              types: [
-                {
-                  associationCategory: 'HUBSPOT_DEFINED',
-                  associationTypeId: 3,
-                },
-              ],
-            },
-          ],
+          associations,
         }),
       },
     );
