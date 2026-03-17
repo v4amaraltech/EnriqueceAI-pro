@@ -251,61 +251,73 @@ export async function markLeadAsLost(
   return { success: true, data: undefined };
 }
 
+export interface CrmPipelinesEntry {
+  provider: CrmProvider;
+  pipelines: CrmPipeline[];
+}
+
 export async function fetchCrmPipelines(): Promise<
-  ActionResult<{ provider: CrmProvider | null; pipelines: CrmPipeline[] }>
+  ActionResult<{ connections: CrmPipelinesEntry[] }>
 > {
   try {
     const { orgId, supabase } = await getAuthOrgId();
 
-    const { data: connection } = (await from(supabase, 'crm_connections')
+    const { data: rows } = (await from(supabase, 'crm_connections')
       .select('*')
       .eq('org_id', orgId)
-      .eq('status', 'connected')
-      .single()) as { data: CrmConnectionRow | null };
+      .eq('status', 'connected')) as { data: CrmConnectionRow[] | null };
 
-    if (!connection) {
-      return { success: true, data: { provider: null, pipelines: [] } };
+    if (!rows?.length) {
+      return { success: true, data: { connections: [] } };
     }
 
-    let pipelines: CrmPipeline[] = [];
+    const connections: CrmPipelinesEntry[] = [];
 
-    if (connection.crm_provider === 'pipedrive') {
-      const adapter = new PipedriveAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+    for (const connection of rows) {
+      let pipelines: CrmPipeline[] = [];
 
-      const rawPipelines = await adapter.fetchPipelines(credentials);
-      pipelines = await Promise.all(
-        rawPipelines.map(async (p) => {
-          const rawStages = await adapter.fetchStages(credentials, p.id);
-          return {
-            id: p.id.toString(),
-            name: p.name,
-            stages: rawStages
-              .sort((a, b) => a.order_nr - b.order_nr)
-              .map((s) => ({ id: s.id.toString(), name: s.name })),
-          };
-        }),
-      );
-    } else if (connection.crm_provider === 'hubspot') {
-      const adapter = new HubSpotAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      if (connection.crm_provider === 'pipedrive') {
+        const adapter = new PipedriveAdapter();
+        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
-      const rawPipelines = await adapter.fetchPipelines(credentials);
-      pipelines = await Promise.all(
-        rawPipelines.map(async (p) => {
-          const rawStages = await adapter.fetchStages(credentials, p.id);
-          return {
-            id: p.id,
-            name: p.label,
-            stages: rawStages
-              .sort((a, b) => a.displayOrder - b.displayOrder)
-              .map((s) => ({ id: s.id, name: s.label })),
-          };
-        }),
-      );
+        const rawPipelines = await adapter.fetchPipelines(credentials);
+        pipelines = await Promise.all(
+          rawPipelines.map(async (p) => {
+            const rawStages = await adapter.fetchStages(credentials, p.id);
+            return {
+              id: p.id.toString(),
+              name: p.name,
+              stages: rawStages
+                .sort((a, b) => a.order_nr - b.order_nr)
+                .map((s) => ({ id: s.id.toString(), name: s.name })),
+            };
+          }),
+        );
+      } else if (connection.crm_provider === 'hubspot') {
+        const adapter = new HubSpotAdapter();
+        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+
+        const rawPipelines = await adapter.fetchPipelines(credentials);
+        pipelines = await Promise.all(
+          rawPipelines.map(async (p) => {
+            const rawStages = await adapter.fetchStages(credentials, p.id);
+            return {
+              id: p.id,
+              name: p.label,
+              stages: rawStages
+                .sort((a, b) => a.displayOrder - b.displayOrder)
+                .map((s) => ({ id: s.id, name: s.label })),
+            };
+          }),
+        );
+      }
+
+      if (pipelines.length > 0) {
+        connections.push({ provider: connection.crm_provider, pipelines });
+      }
     }
 
-    return { success: true, data: { provider: connection.crm_provider, pipelines } };
+    return { success: true, data: { connections } };
   } catch (error) {
     console.error('[fetchCrmPipelines] Error:', error);
     return { success: false, error: 'Erro ao buscar funis do CRM' };

@@ -33,7 +33,7 @@ import type { CrmPipeline, CrmProvider } from '@/features/integrations/types/crm
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, fetchCrmPipelines, fetchLossReasons, markLeadAsLost, markLeadAsWon } from '../actions/update-lead';
+import { archiveLead, fetchCrmPipelines, fetchLossReasons, markLeadAsLost, markLeadAsWon, type CrmPipelinesEntry } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -68,7 +68,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
   // Won dialog state
   const [showWonDialog, setShowWonDialog] = useState(false);
   const [sendToCrm, setSendToCrm] = useState(false);
-  const [crmData, setCrmData] = useState<{ provider: CrmProvider | null; pipelines: CrmPipeline[] }>({ provider: null, pipelines: [] });
+  const [crmConnections, setCrmConnections] = useState<CrmPipelinesEntry[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<CrmProvider | null>(null);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
@@ -151,24 +152,24 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
   const handleOpenWonDialog = useCallback(async () => {
     setShowWonDialog(true);
     setSendToCrm(false);
+    setSelectedProvider(null);
     setSelectedPipelineId(null);
     setSelectedStageId(null);
-    setCrmData({ provider: null, pipelines: [] });
+    setCrmConnections([]);
     setLoadingPipelines(true);
     const result = await fetchCrmPipelines();
     setLoadingPipelines(false);
-    if (result.success) {
-      setCrmData(result.data);
-      if (result.data.provider && result.data.pipelines.length > 0) {
-        setSendToCrm(true);
-      }
+    if (result.success && result.data.connections.length > 0) {
+      setCrmConnections(result.data.connections);
+      setSelectedProvider(result.data.connections[0]!.provider);
+      setSendToCrm(true);
     }
   }, []);
 
   const handleConfirmWon = useCallback(() => {
     startTransition(async () => {
-      const crmOptions = sendToCrm && crmData.provider && selectedPipelineId && selectedStageId
-        ? { provider: crmData.provider, pipelineId: selectedPipelineId, stageId: selectedStageId }
+      const crmOptions = sendToCrm && selectedProvider && selectedPipelineId && selectedStageId
+        ? { provider: selectedProvider, pipelineId: selectedPipelineId, stageId: selectedStageId }
         : undefined;
 
       const result = await markLeadAsWon(lead.id, crmOptions);
@@ -184,7 +185,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       }
     });
     setShowWonDialog(false);
-  }, [lead.id, sendToCrm, crmData.provider, selectedPipelineId, selectedStageId, router]);
+  }, [lead.id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, router]);
 
   return (
     <div className="space-y-4">
@@ -301,7 +302,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
           <div className="space-y-5">
             {loadingPipelines ? (
               <p className="text-sm text-[var(--muted-foreground)]">Carregando funis do CRM...</p>
-            ) : crmData.provider && crmData.pipelines.length > 0 ? (
+            ) : crmConnections.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -316,32 +317,60 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                     }}
                   />
                   <Label htmlFor="send-to-crm" className="text-sm font-semibold">
-                    Enviar ao CRM ({({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station' } as Record<string, string>)[crmData.provider!] ?? crmData.provider})
+                    Enviar ao CRM
                   </Label>
                 </div>
                 {sendToCrm && (
                   <>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Funil</Label>
-                      <Select
-                        value={selectedPipelineId ?? undefined}
-                        onValueChange={(value) => {
-                          setSelectedPipelineId(value);
-                          setSelectedStageId(null);
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecione o funil" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {crmData.pipelines.map((pipeline) => (
-                            <SelectItem key={pipeline.id} value={pipeline.id}>
-                              {pipeline.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {crmConnections.length > 1 && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">CRM</Label>
+                        <Select
+                          value={selectedProvider ?? undefined}
+                          onValueChange={(value) => {
+                            setSelectedProvider(value as CrmProvider);
+                            setSelectedPipelineId(null);
+                            setSelectedStageId(null);
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione o CRM" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {crmConnections.map((conn) => (
+                              <SelectItem key={conn.provider} value={conn.provider}>
+                                {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station' } as Record<string, string>)[conn.provider] ?? conn.provider}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {selectedProvider && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Funil</Label>
+                        <Select
+                          value={selectedPipelineId ?? undefined}
+                          onValueChange={(value) => {
+                            setSelectedPipelineId(value);
+                            setSelectedStageId(null);
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione o funil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {crmConnections
+                              .find((c) => c.provider === selectedProvider)
+                              ?.pipelines.map((pipeline) => (
+                                <SelectItem key={pipeline.id} value={pipeline.id}>
+                                  {pipeline.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     {selectedPipelineId && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Etapa</Label>
@@ -353,7 +382,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                             <SelectValue placeholder="Selecione a etapa" />
                           </SelectTrigger>
                           <SelectContent>
-                            {crmData.pipelines
+                            {crmConnections
+                              .find((c) => c.provider === selectedProvider)
+                              ?.pipelines
                               .find((p) => p.id === selectedPipelineId)
                               ?.stages.map((stage) => (
                                 <SelectItem key={stage.id} value={stage.id}>
@@ -369,9 +400,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
               </>
             ) : (
               <p className="text-sm text-[var(--muted-foreground)]">
-                {crmData.provider
-                  ? 'Funis não disponíveis para este CRM.'
-                  : 'Nenhum CRM conectado. O lead será marcado como ganho sem enviar ao CRM.'}
+                {'Nenhum CRM conectado. O lead será marcado como ganho sem enviar ao CRM.'}
               </p>
             )}
           </div>
