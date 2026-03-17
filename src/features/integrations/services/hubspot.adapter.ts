@@ -18,6 +18,7 @@ const HUBSPOT_SCOPES = [
   'crm.objects.companies.read',
   'crm.objects.companies.write',
   'crm.objects.deals.read',
+  'crm.objects.deals.write',
   'crm.schemas.contacts.read',
   'sales-email-read',
   'timeline',
@@ -49,6 +50,19 @@ interface HubSpotCreateResponse {
 
 interface HubSpotEngagementResponse {
   id: string;
+}
+
+interface HubSpotPipelineResponse {
+  results: Array<{ id: string; label: string }>;
+}
+
+interface HubSpotStageResponse {
+  results: Array<{ id: string; label: string; displayOrder: number }>;
+}
+
+interface HubSpotDealResponse {
+  id: string;
+  properties: Record<string, string | null>;
 }
 
 async function hubspotFetch<T>(
@@ -308,6 +322,59 @@ export class HubSpotAdapter implements CRMAdapter {
     } catch {
       return false;
     }
+  }
+
+  async fetchPipelines(
+    credentials: CrmCredentials,
+  ): Promise<Array<{ id: string; label: string }>> {
+    const result = await hubspotFetch<HubSpotPipelineResponse>(
+      '/crm/v3/pipelines/deals',
+      credentials.access_token,
+    );
+    return result.results;
+  }
+
+  async fetchStages(
+    credentials: CrmCredentials,
+    pipelineId: string,
+  ): Promise<Array<{ id: string; label: string; displayOrder: number }>> {
+    const result = await hubspotFetch<HubSpotStageResponse>(
+      `/crm/v3/pipelines/deals/${pipelineId}/stages`,
+      credentials.access_token,
+    );
+    return result.results;
+  }
+
+  async pushDeal(
+    credentials: CrmCredentials,
+    deal: { title: string; contactId: string; pipelineId: string; stageId: string },
+  ): Promise<{ external_id: string }> {
+    const result = await hubspotFetch<HubSpotDealResponse>(
+      '/crm/v3/objects/deals',
+      credentials.access_token,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          properties: {
+            dealname: deal.title,
+            pipeline: deal.pipelineId,
+            dealstage: deal.stageId,
+          },
+          associations: [
+            {
+              to: { id: deal.contactId },
+              types: [
+                {
+                  associationCategory: 'HUBSPOT_DEFINED',
+                  associationTypeId: 3,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    );
+    return { external_id: result.id };
   }
 
   private mapActivityType(type: string): string {

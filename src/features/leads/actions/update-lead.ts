@@ -18,6 +18,8 @@ import type {
 } from '@/features/integrations/types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
+import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
+import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
@@ -265,26 +267,43 @@ export async function fetchCrmPipelines(): Promise<
       return { success: true, data: { provider: null, pipelines: [] } };
     }
 
-    if (connection.crm_provider !== 'pipedrive') {
-      return { success: true, data: { provider: connection.crm_provider, pipelines: [] } };
+    let pipelines: CrmPipeline[] = [];
+
+    if (connection.crm_provider === 'pipedrive') {
+      const adapter = new PipedriveAdapter();
+      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+
+      const rawPipelines = await adapter.fetchPipelines(credentials);
+      pipelines = await Promise.all(
+        rawPipelines.map(async (p) => {
+          const rawStages = await adapter.fetchStages(credentials, p.id);
+          return {
+            id: p.id.toString(),
+            name: p.name,
+            stages: rawStages
+              .sort((a, b) => a.order_nr - b.order_nr)
+              .map((s) => ({ id: s.id.toString(), name: s.name })),
+          };
+        }),
+      );
+    } else if (connection.crm_provider === 'hubspot') {
+      const adapter = new HubSpotAdapter();
+      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+
+      const rawPipelines = await adapter.fetchPipelines(credentials);
+      pipelines = await Promise.all(
+        rawPipelines.map(async (p) => {
+          const rawStages = await adapter.fetchStages(credentials, p.id);
+          return {
+            id: p.id,
+            name: p.label,
+            stages: rawStages
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((s) => ({ id: s.id, name: s.label })),
+          };
+        }),
+      );
     }
-
-    const adapter = new PipedriveAdapter();
-    const credentials = await ensureFreshCredentials(connection, adapter, supabase);
-
-    const rawPipelines = await adapter.fetchPipelines(credentials);
-    const pipelines: CrmPipeline[] = await Promise.all(
-      rawPipelines.map(async (p) => {
-        const rawStages = await adapter.fetchStages(credentials, p.id);
-        return {
-          id: p.id.toString(),
-          name: p.name,
-          stages: rawStages
-            .sort((a, b) => a.order_nr - b.order_nr)
-            .map((s) => ({ id: s.id.toString(), name: s.name })),
-        };
-      }),
-    );
 
     return { success: true, data: { provider: connection.crm_provider, pipelines } };
   } catch (error) {
@@ -318,16 +337,16 @@ export async function markLeadAsWon(
 
     // 3. Push to CRM if requested
     let dealCreated = false;
-    if (crmOptions && crmOptions.provider === 'pipedrive') {
+    if (crmOptions) {
       const { data: connection } = (await from(supabase, 'crm_connections')
         .select('*')
         .eq('org_id', orgId)
-        .eq('crm_provider', 'pipedrive')
+        .eq('crm_provider', crmOptions.provider)
         .eq('status', 'connected')
         .single()) as { data: CrmConnectionRow | null };
 
       if (connection) {
-        const adapter = new PipedriveAdapter();
+        const adapter = CRMRegistry.getAdapter(crmOptions.provider);
         const credentials = await ensureFreshCredentials(connection, adapter, supabase);
 
         // Fetch lead data for pushContact
@@ -338,59 +357,79 @@ export async function markLeadAsWon(
           .single()) as { data: Record<string, string | null> | null };
 
         if (lead) {
-          const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS.pipedrive.leads;
+          const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
 
-          // Check if Person already synced (dedup)
+          // Check if Contact/Person already synced (dedup)
           const { data: existingSync } = (await from(supabase, 'interactions')
             .select('external_id')
             .eq('lead_id', leadId)
             .eq('type', 'crm_synced')
             .maybeSingle()) as { data: { external_id: string } | null };
 
-          // Create/update Person
-          const { external_id: personExternalId } = await adapter.pushContact(
+          // Create/update Contact/Person
+          const { external_id: contactExternalId } = await adapter.pushContact(
             credentials,
             lead,
             fieldMapping,
             existingSync?.external_id ?? undefined,
           );
 
-          // Record Person sync if new
+          // Record contact sync if new
           if (!existingSync) {
             await from(supabase, 'interactions').insert({
               org_id: orgId,
               lead_id: leadId,
               channel: 'crm',
               type: 'crm_synced',
-              external_id: personExternalId,
+              external_id: contactExternalId,
             } as Record<string, unknown>);
           }
 
-          // Create Deal
+          // Create Deal — provider-specific
           const dealTitle = (lead.nome_fantasia ?? lead.razao_social ?? 'Deal') as string;
-          const { external_id: dealExternalId } = await adapter.pushDeal(credentials, {
-            title: dealTitle,
-            person_id: parseInt(personExternalId, 10),
-            pipeline_id: parseInt(crmOptions.pipelineId, 10),
-            stage_id: parseInt(crmOptions.stageId, 10),
-          });
+          let dealExternalId: string;
 
-          // Record deal creation
-          await from(supabase, 'interactions').insert({
-            org_id: orgId,
-            lead_id: leadId,
-            channel: 'crm',
-            type: 'crm_deal_created',
-            external_id: dealExternalId,
-            metadata: {
-              crm_provider: 'pipedrive',
-              person_external_id: personExternalId,
-              pipeline_id: crmOptions.pipelineId,
-              stage_id: crmOptions.stageId,
-            },
-          } as Record<string, unknown>);
+          if (crmOptions.provider === 'pipedrive') {
+            const pipedriveAdapter = adapter as PipedriveAdapter;
+            const result = await pipedriveAdapter.pushDeal(credentials, {
+              title: dealTitle,
+              person_id: parseInt(contactExternalId, 10),
+              pipeline_id: parseInt(crmOptions.pipelineId, 10),
+              stage_id: parseInt(crmOptions.stageId, 10),
+            });
+            dealExternalId = result.external_id;
+          } else if (crmOptions.provider === 'hubspot') {
+            const hubspotAdapter = adapter as HubSpotAdapter;
+            const result = await hubspotAdapter.pushDeal(credentials, {
+              title: dealTitle,
+              contactId: contactExternalId,
+              pipelineId: crmOptions.pipelineId,
+              stageId: crmOptions.stageId,
+            });
+            dealExternalId = result.external_id;
+          } else {
+            // Unsupported provider for deal creation — skip
+            dealExternalId = '';
+          }
 
-          dealCreated = true;
+          if (dealExternalId) {
+            // Record deal creation
+            await from(supabase, 'interactions').insert({
+              org_id: orgId,
+              lead_id: leadId,
+              channel: 'crm',
+              type: 'crm_deal_created',
+              external_id: dealExternalId,
+              metadata: {
+                crm_provider: crmOptions.provider,
+                person_external_id: contactExternalId,
+                pipeline_id: crmOptions.pipelineId,
+                stage_id: crmOptions.stageId,
+              },
+            } as Record<string, unknown>);
+
+            dealCreated = true;
+          }
         }
       }
     }

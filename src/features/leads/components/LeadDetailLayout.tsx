@@ -316,7 +316,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                     }}
                   />
                   <Label htmlFor="send-to-crm" className="text-sm font-semibold">
-                    Enviar ao CRM ({crmData.provider === 'pipedrive' ? 'Pipedrive' : crmData.provider})
+                    Enviar ao CRM ({({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station' } as Record<string, string>)[crmData.provider!] ?? crmData.provider})
                   </Label>
                 </div>
                 {sendToCrm && (
