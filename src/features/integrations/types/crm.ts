@@ -88,11 +88,8 @@ export const DEFAULT_FIELD_MAPPINGS: Record<CrmProvider, FieldMapping> = {
   pipedrive: {
     leads: {
       nome_fantasia: 'name',
-      razao_social: 'org_name',
-      cnpj: 'custom_cnpj',
       email: 'email',
       telefone: 'phone',
-      porte: 'custom_porte',
     },
   },
   rdstation: {
