@@ -19,6 +19,10 @@ import { CrmSyncService } from '../services/crm-sync.service';
 
 function getCrmRedirectUri(provider: CrmProvider): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  // Pipedrive forces private apps to use /API/v2/callback
+  if (provider === 'pipedrive') {
+    return `${baseUrl}/API/v2/callback`;
+  }
   return `${baseUrl}/api/auth/callback/${provider}`;
 }
 
