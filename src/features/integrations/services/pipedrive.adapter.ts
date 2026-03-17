@@ -44,6 +44,21 @@ interface PipedriveCreateResponse {
   data: { id: number };
 }
 
+interface PipedrivePipelineResponse {
+  success: boolean;
+  data: Array<{ id: number; name: string }> | null;
+}
+
+interface PipedriveStageResponse {
+  success: boolean;
+  data: Array<{ id: number; name: string; pipeline_id: number; order_nr: number }> | null;
+}
+
+interface PipedriveDealCreateResponse {
+  success: boolean;
+  data: { id: number };
+}
+
 async function pipedriveFetch<T>(
   apiDomain: string,
   path: string,
@@ -281,5 +296,54 @@ export class PipedriveAdapter implements CRMAdapter {
     } catch {
       return false;
     }
+  }
+
+  // --- Pipedrive-specific methods (not part of CRMAdapter interface) ---
+
+  async fetchPipelines(
+    credentials: CrmCredentials,
+  ): Promise<Array<{ id: number; name: string }>> {
+    const apiDomain = credentials.api_key ?? '';
+    const result = await pipedriveFetch<PipedrivePipelineResponse>(
+      apiDomain,
+      '/api/v1/pipelines',
+      credentials.access_token,
+    );
+    return result.data ?? [];
+  }
+
+  async fetchStages(
+    credentials: CrmCredentials,
+    pipelineId: number,
+  ): Promise<Array<{ id: number; name: string; pipeline_id: number; order_nr: number }>> {
+    const apiDomain = credentials.api_key ?? '';
+    const result = await pipedriveFetch<PipedriveStageResponse>(
+      apiDomain,
+      `/api/v1/stages?pipeline_id=${pipelineId}`,
+      credentials.access_token,
+    );
+    return result.data ?? [];
+  }
+
+  async pushDeal(
+    credentials: CrmCredentials,
+    deal: { title: string; person_id: number; pipeline_id: number; stage_id: number },
+  ): Promise<{ external_id: string }> {
+    const apiDomain = credentials.api_key ?? '';
+    const result = await pipedriveFetch<PipedriveDealCreateResponse>(
+      apiDomain,
+      '/api/v1/deals',
+      credentials.access_token,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: deal.title,
+          person_id: deal.person_id,
+          pipeline_id: deal.pipeline_id,
+          stage_id: deal.stage_id,
+        }),
+      },
+    );
+    return { external_id: result.data.id.toString() };
   }
 }

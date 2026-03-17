@@ -134,6 +134,18 @@ export interface CrmActivity {
   timestamp: string;
 }
 
+// CRM pipeline/stage for deal creation (Pipedrive-specific)
+export interface CrmPipeline {
+  id: string;
+  name: string;
+  stages: CrmStage[];
+}
+
+export interface CrmStage {
+  id: string;
+  name: string;
+}
+
 // Abstract CRM adapter interface
 export interface CRMAdapter {
   readonly provider: CrmProvider;

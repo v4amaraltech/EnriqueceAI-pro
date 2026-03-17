@@ -5,11 +5,21 @@ import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { decryptJson } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import type {
+  CrmConnectionRow,
+  CrmCredentials,
+  CrmPipeline,
+  CrmProvider,
+} from '@/features/integrations/types/crm';
+import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
+import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
@@ -238,4 +248,142 @@ export async function markLeadAsLost(
   revalidatePath(`/leads/${leadId}`);
 
   return { success: true, data: undefined };
+}
+
+export async function fetchCrmPipelines(): Promise<
+  ActionResult<{ provider: CrmProvider | null; pipelines: CrmPipeline[] }>
+> {
+  try {
+    const { orgId, supabase } = await getAuthOrgId();
+
+    const { data: connection } = (await from(supabase, 'crm_connections')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('status', 'connected')
+      .single()) as { data: CrmConnectionRow | null };
+
+    if (!connection) {
+      return { success: true, data: { provider: null, pipelines: [] } };
+    }
+
+    if (connection.crm_provider !== 'pipedrive') {
+      return { success: true, data: { provider: connection.crm_provider, pipelines: [] } };
+    }
+
+    const credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
+    const adapter = new PipedriveAdapter();
+
+    const rawPipelines = await adapter.fetchPipelines(credentials);
+    const pipelines: CrmPipeline[] = await Promise.all(
+      rawPipelines.map(async (p) => {
+        const rawStages = await adapter.fetchStages(credentials, p.id);
+        return {
+          id: p.id.toString(),
+          name: p.name,
+          stages: rawStages
+            .sort((a, b) => a.order_nr - b.order_nr)
+            .map((s) => ({ id: s.id.toString(), name: s.name })),
+        };
+      }),
+    );
+
+    return { success: true, data: { provider: connection.crm_provider, pipelines } };
+  } catch (error) {
+    console.error('[fetchCrmPipelines] Error:', error);
+    return { success: false, error: 'Erro ao buscar funis do CRM' };
+  }
+}
+
+export async function markLeadAsWon(
+  leadId: string,
+  crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string },
+): Promise<ActionResult<{ dealCreated?: boolean }>> {
+  try {
+    const { orgId, supabase } = await getAuthOrgId();
+
+    // 1. Update lead status to qualified
+    const { error: leadError } = await from(supabase, 'leads')
+      .update({ status: 'qualified' } as Record<string, unknown>)
+      .eq('id', leadId)
+      .eq('org_id', orgId);
+
+    if (leadError) {
+      return { success: false, error: 'Erro ao marcar lead como ganho' };
+    }
+
+    // 2. Complete active/paused enrollments
+    await from(supabase, 'cadence_enrollments')
+      .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+      .eq('lead_id', leadId)
+      .in('status', ['active', 'paused']);
+
+    // 3. Push to CRM if requested
+    let dealCreated = false;
+    if (crmOptions && crmOptions.provider === 'pipedrive') {
+      const { data: connection } = (await from(supabase, 'crm_connections')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('crm_provider', 'pipedrive')
+        .eq('status', 'connected')
+        .single()) as { data: CrmConnectionRow | null };
+
+      if (connection) {
+        const credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
+        const adapter = new PipedriveAdapter();
+
+        // Fetch lead data for pushContact
+        const { data: lead } = (await from(supabase, 'leads')
+          .select('*')
+          .eq('id', leadId)
+          .eq('org_id', orgId)
+          .single()) as { data: Record<string, string | null> | null };
+
+        if (lead) {
+          const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS.pipedrive.leads;
+
+          // Create/update Person
+          const { external_id: personExternalId } = await adapter.pushContact(
+            credentials,
+            lead,
+            fieldMapping,
+          );
+
+          // Create Deal
+          const dealTitle = (lead.nome_fantasia ?? lead.razao_social ?? 'Deal') as string;
+          const { external_id: dealExternalId } = await adapter.pushDeal(credentials, {
+            title: dealTitle,
+            person_id: parseInt(personExternalId, 10),
+            pipeline_id: parseInt(crmOptions.pipelineId, 10),
+            stage_id: parseInt(crmOptions.stageId, 10),
+          });
+
+          // Register interaction
+          await from(supabase, 'interactions').insert({
+            lead_id: leadId,
+            cadence_id: null,
+            cadence_step_id: null,
+            type: 'crm_deal_created',
+            channel: 'email',
+            metadata: {
+              crm_provider: 'pipedrive',
+              deal_external_id: dealExternalId,
+              person_external_id: personExternalId,
+              pipeline_id: crmOptions.pipelineId,
+              stage_id: crmOptions.stageId,
+            },
+          } as Record<string, unknown>);
+
+          dealCreated = true;
+        }
+      }
+    }
+
+    revalidatePath('/leads');
+    revalidatePath(`/leads/${leadId}`);
+
+    return { success: true, data: { dealCreated } };
+  } catch (error) {
+    console.error('[markLeadAsWon] Error:', error);
+    return { success: false, error: 'Erro ao marcar lead como ganho' };
+  }
 }

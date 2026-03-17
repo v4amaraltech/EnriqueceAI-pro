@@ -38,6 +38,7 @@ interface LeadDetailHeaderProps {
   onShowMeeting: () => void;
   onShowArchive: () => void;
   onShowLost: () => void;
+  onShowWon: () => void;
   onEnrich: () => void;
   onEnrichApollo: () => void;
   onReenrichApollo: () => void;
@@ -52,6 +53,7 @@ export function LeadDetailHeader({
   onShowMeeting,
   onShowArchive,
   onShowLost,
+  onShowWon,
   onEnrich,
   onEnrichApollo,
   onReenrichApollo,
@@ -127,7 +129,7 @@ export function LeadDetailHeader({
             <Button
               size="sm"
               className="bg-green-600 hover:bg-green-700"
-              onClick={() => handleStatusChange('qualified')}
+              onClick={onShowWon}
               disabled={isPending}
             >
               <ThumbsUp className="mr-1 h-4 w-4" />

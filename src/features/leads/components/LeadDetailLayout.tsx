@@ -26,12 +26,14 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
 import type { LeadContext } from '@/features/ai/types';
+import { Checkbox } from '@/shared/components/ui/checkbox';
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import type { CrmPipeline, CrmProvider } from '@/features/integrations/types/crm';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, fetchLossReasons, markLeadAsLost } from '../actions/update-lead';
+import { archiveLead, fetchCrmPipelines, fetchLossReasons, markLeadAsLost, markLeadAsWon } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -62,6 +64,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
   const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
   const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
   const [lossNotes, setLossNotes] = useState('');
+
+  // Won dialog state
+  const [showWonDialog, setShowWonDialog] = useState(false);
+  const [sendToCrm, setSendToCrm] = useState(false);
+  const [crmData, setCrmData] = useState<{ provider: CrmProvider | null; pipelines: CrmPipeline[] }>({ provider: null, pipelines: [] });
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [loadingPipelines, setLoadingPipelines] = useState(false);
 
   const handleArchive = useCallback(() => {
     startTransition(async () => {
@@ -138,6 +148,44 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     setShowLostDialog(false);
   }, [lead.id, selectedReasonId, lossNotes, router]);
 
+  const handleOpenWonDialog = useCallback(async () => {
+    setShowWonDialog(true);
+    setSendToCrm(false);
+    setSelectedPipelineId(null);
+    setSelectedStageId(null);
+    setCrmData({ provider: null, pipelines: [] });
+    setLoadingPipelines(true);
+    const result = await fetchCrmPipelines();
+    setLoadingPipelines(false);
+    if (result.success) {
+      setCrmData(result.data);
+      if (result.data.provider && result.data.pipelines.length > 0) {
+        setSendToCrm(true);
+      }
+    }
+  }, []);
+
+  const handleConfirmWon = useCallback(() => {
+    startTransition(async () => {
+      const crmOptions = sendToCrm && crmData.provider && selectedPipelineId && selectedStageId
+        ? { provider: crmData.provider, pipelineId: selectedPipelineId, stageId: selectedStageId }
+        : undefined;
+
+      const result = await markLeadAsWon(lead.id, crmOptions);
+      if (result.success) {
+        if (result.data.dealCreated) {
+          toast.success('Lead marcado como ganho e enviado ao CRM');
+        } else {
+          toast.success('Lead marcado como ganho');
+        }
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+    setShowWonDialog(false);
+  }, [lead.id, sendToCrm, crmData.provider, selectedPipelineId, selectedStageId, router]);
+
   return (
     <div className="space-y-4">
       <LeadDetailHeader
@@ -148,6 +196,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowMeeting={() => setShowMeeting(true)}
         onShowArchive={() => setShowArchiveDialog(true)}
         onShowLost={handleOpenLostDialog}
+        onShowWon={handleOpenWonDialog}
         onEnrich={handleEnrich}
         onEnrichApollo={handleEnrichApollo}
         onReenrichApollo={handleReenrichApollo}
@@ -238,6 +287,104 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
               disabled={!selectedReasonId || isPending}
             >
               Desqualificar lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Won dialog */}
+      <Dialog open={showWonDialog} onOpenChange={setShowWonDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Marcar lead como ganho</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5">
+            {loadingPipelines ? (
+              <p className="text-sm text-[var(--muted-foreground)]">Carregando funis do CRM...</p>
+            ) : crmData.provider && crmData.pipelines.length > 0 ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="send-to-crm"
+                    checked={sendToCrm}
+                    onCheckedChange={(checked) => {
+                      setSendToCrm(checked === true);
+                      if (!checked) {
+                        setSelectedPipelineId(null);
+                        setSelectedStageId(null);
+                      }
+                    }}
+                  />
+                  <Label htmlFor="send-to-crm" className="text-sm font-semibold">
+                    Enviar ao CRM ({crmData.provider === 'pipedrive' ? 'Pipedrive' : crmData.provider})
+                  </Label>
+                </div>
+                {sendToCrm && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Funil</Label>
+                      <Select
+                        value={selectedPipelineId ?? undefined}
+                        onValueChange={(value) => {
+                          setSelectedPipelineId(value);
+                          setSelectedStageId(null);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione o funil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {crmData.pipelines.map((pipeline) => (
+                            <SelectItem key={pipeline.id} value={pipeline.id}>
+                              {pipeline.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {selectedPipelineId && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Etapa</Label>
+                        <Select
+                          value={selectedStageId ?? undefined}
+                          onValueChange={setSelectedStageId}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione a etapa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {crmData.pipelines
+                              .find((p) => p.id === selectedPipelineId)
+                              ?.stages.map((stage) => (
+                                <SelectItem key={stage.id} value={stage.id}>
+                                  {stage.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {crmData.provider
+                  ? 'Funis não disponíveis para este CRM.'
+                  : 'Nenhum CRM conectado. O lead será marcado como ganho sem enviar ao CRM.'}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowWonDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              onClick={handleConfirmWon}
+              disabled={isPending || (sendToCrm && (!selectedPipelineId || !selectedStageId))}
+            >
+              Confirmar ganho
             </Button>
           </DialogFooter>
         </DialogContent>
