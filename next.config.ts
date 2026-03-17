@@ -4,6 +4,14 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  rewrites: async () => [
+    {
+      // Pipedrive forces private apps to callback at /API/v2/callback (uppercase)
+      // but Next.js normalizes routes to lowercase
+      source: '/API/v2/callback',
+      destination: '/api/v2/callback',
+    },
+  ],
   headers: async () => [
     {
       source: '/(.*)',
