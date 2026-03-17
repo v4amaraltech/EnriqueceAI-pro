@@ -46,7 +46,7 @@ interface PipedriveCreateResponse {
 
 interface PipedrivePipelineResponse {
   success: boolean;
-  data: Array<{ id: number; name: string }> | null;
+  data: Array<{ id: number; name: string; active: boolean }> | null;
 }
 
 interface PipedriveStageResponse {
@@ -309,7 +309,7 @@ export class PipedriveAdapter implements CRMAdapter {
       '/api/v1/pipelines',
       credentials.access_token,
     );
-    return result.data ?? [];
+    return (result.data ?? []).filter((p) => p.active);
   }
 
   async fetchStages(

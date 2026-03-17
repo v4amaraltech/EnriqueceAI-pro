@@ -161,8 +161,17 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     setLoadingPipelines(false);
     if (result.success && result.data.connections.length > 0) {
       setCrmConnections(result.data.connections);
-      setSelectedProvider(result.data.connections[0]!.provider);
+      const firstConn = result.data.connections[0]!;
+      setSelectedProvider(firstConn.provider);
       setSendToCrm(true);
+      // Auto-select pipeline and stage when there's only 1
+      if (firstConn.pipelines.length === 1) {
+        const pipeline = firstConn.pipelines[0]!;
+        setSelectedPipelineId(pipeline.id);
+        if (pipeline.stages.length === 1) {
+          setSelectedStageId(pipeline.stages[0]!.id);
+        }
+      }
     }
   }, []);
 
