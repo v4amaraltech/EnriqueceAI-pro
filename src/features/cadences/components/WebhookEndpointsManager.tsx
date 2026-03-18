@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent, CardTitle } from '@/shared/components/ui/card';
+import { Card, CardContent } from '@/shared/components/ui/card';
+import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import { Separator } from '@/shared/components/ui/separator';
 import { Switch } from '@/shared/components/ui/switch';
 
 import {
@@ -153,10 +155,18 @@ export function WebhookEndpointsManager() {
   return (
     <Card className="mt-6">
       <CardContent className="pt-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-[var(--muted-foreground)]" />
-            <CardTitle className="text-base">Webhooks</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-500/10 p-2">
+              <Globe className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold">Webhooks</h3>
+              <p className="text-sm text-muted-foreground">
+                Receba notificações em tempo real sobre eventos via HTTP POST.
+              </p>
+            </div>
           </div>
           <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
             <Plus className="mr-1 h-4 w-4" />
@@ -164,54 +174,70 @@ export function WebhookEndpointsManager() {
           </Button>
         </div>
 
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-          Receba notificações em tempo real sobre eventos de cadência via HTTP POST.
-        </p>
-
+        {/* Create Form */}
         {showForm && (
-          <div className="mt-4 space-y-3 rounded-md border p-4">
-            <div>
+          <div className="mt-5 space-y-4 rounded-lg border p-5">
+            <div className="space-y-1">
               <Label>URL (HTTPS)</Label>
               <Input
                 placeholder="https://example.com/webhook"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                O endpoint deve aceitar requisições POST e retornar status 2xx.
+              </p>
             </div>
-            <div>
-              <Label>Secret (opcional, para assinatura HMAC)</Label>
+            <div className="space-y-1">
+              <Label>Secret (opcional)</Label>
               <Input
                 placeholder="whsec_..."
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Usado para gerar a assinatura HMAC-SHA256 no header X-Webhook-Signature.
+              </p>
             </div>
-            <div>
-              <Label>Eventos (vazio = todos)</Label>
-              <div className="mt-2 space-y-3">
-                {EVENT_GROUPS.map((group) => (
-                  <div key={group.label}>
-                    <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">{group.label}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {group.events.map((opt) => (
-                        <Badge
-                          key={opt.value}
-                          variant={selectedEvents.includes(opt.value) ? 'default' : 'outline'}
-                          className="cursor-pointer"
-                          onClick={() => toggleEvent(opt.value)}
-                        >
-                          {opt.label}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div>
+                <Label>Eventos</Label>
+                <p className="text-xs text-muted-foreground">
+                  Selecione os eventos que disparam o webhook. Deixe vazio para receber todos.
+                </p>
               </div>
+              {EVENT_GROUPS.map((group) => (
+                <div key={group.label}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    {group.events.map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex cursor-pointer items-center gap-2 text-sm"
+                      >
+                        <Checkbox
+                          checked={selectedEvents.includes(opt.value)}
+                          onCheckedChange={() => toggleEvent(opt.value)}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <Separator />
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleCreate} disabled={isPending || !url}>
-                {isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-                Criar
+                {isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+                Criar webhook
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
                 Cancelar
@@ -220,24 +246,45 @@ export function WebhookEndpointsManager() {
           </div>
         )}
 
+        {/* Empty State */}
         {endpoints.length === 0 && !showForm && (
-          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
-            Nenhum webhook configurado.
-          </p>
+          <div className="mt-6 flex flex-col items-center justify-center rounded-lg border border-dashed py-10">
+            <div className="rounded-lg bg-muted p-3">
+              <Globe className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="mt-3 text-sm font-medium">Nenhum webhook configurado</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Crie um webhook para receber eventos em tempo real.
+            </p>
+            <Button size="sm" variant="outline" className="mt-4" onClick={() => setShowForm(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              Criar primeiro webhook
+            </Button>
+          </div>
         )}
 
+        {/* Endpoints List */}
         {endpoints.length > 0 && (
-          <div className="mt-4 space-y-3">
-            {endpoints.map((ep) => (
+          <div className="mt-5 overflow-hidden rounded-lg border">
+            {endpoints.map((ep, index) => (
               <div
                 key={ep.id}
-                className="flex items-center justify-between rounded-md border p-3"
+                className={`group flex items-center justify-between p-3 transition-colors hover:bg-muted/50 ${
+                  index < endpoints.length - 1 ? 'border-b' : ''
+                }`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{ep.url}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{ep.url}</p>
+                    <Badge variant={ep.is_active ? 'default' : 'secondary'} className="shrink-0 text-xs">
+                      {ep.is_active ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                  </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {ep.events.length === 0 ? (
-                      <Badge variant="secondary" className="text-xs">Todos os eventos</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        Todos os eventos
+                      </Badge>
                     ) : (
                       ep.events.map((e) => (
                         <Badge key={e} variant="secondary" className="text-xs">
@@ -251,7 +298,7 @@ export function WebhookEndpointsManager() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8"
+                    className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
                     onClick={() => handleTest(ep.id)}
                     disabled={testingId === ep.id}
                     title="Testar"
@@ -269,7 +316,7 @@ export function WebhookEndpointsManager() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 text-red-500 hover:text-red-600"
+                    className="h-8 w-8 text-red-500 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
                     onClick={() => handleDelete(ep.id)}
                     title="Remover"
                   >
