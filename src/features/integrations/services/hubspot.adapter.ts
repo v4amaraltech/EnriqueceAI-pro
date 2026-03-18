@@ -395,9 +395,33 @@ export class HubSpotAdapter implements CRMAdapter {
     );
   }
 
+  async ensureOrigemProperty(credentials: CrmCredentials): Promise<void> {
+    try {
+      await hubspotFetch<unknown>(
+        '/crm/v3/properties/deals/origem',
+        credentials.access_token,
+      );
+    } catch {
+      await hubspotFetch<unknown>(
+        '/crm/v3/properties/deals',
+        credentials.access_token,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'origem',
+            label: 'Origem',
+            type: 'string',
+            fieldType: 'text',
+            groupName: 'dealinformation',
+          }),
+        },
+      );
+    }
+  }
+
   async pushDeal(
     credentials: CrmCredentials,
-    deal: { title: string; contactId: string; pipelineId: string; stageId: string; companyId?: string },
+    deal: { title: string; contactId: string; pipelineId: string; stageId: string; companyId?: string; customProperties?: Record<string, string> },
   ): Promise<{ external_id: string }> {
     const associations = [
       {
@@ -426,6 +450,7 @@ export class HubSpotAdapter implements CRMAdapter {
             dealname: deal.title,
             pipeline: deal.pipelineId,
             dealstage: deal.stageId,
+            ...deal.customProperties,
           },
           associations,
         }),

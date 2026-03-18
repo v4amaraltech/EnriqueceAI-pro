@@ -59,6 +59,16 @@ interface PipedriveDealCreateResponse {
   data: { id: number };
 }
 
+interface PipedriveDealFieldsResponse {
+  success: boolean;
+  data: Array<{ id: number; key: string; name: string; field_type: string }> | null;
+}
+
+interface PipedriveDealFieldCreateResponse {
+  success: boolean;
+  data: { id: number; key: string };
+}
+
 async function pipedriveFetch<T>(
   apiDomain: string,
   path: string,
@@ -343,9 +353,28 @@ export class PipedriveAdapter implements CRMAdapter {
     return { external_id: result.data.id.toString() };
   }
 
+  async ensureOrigemField(credentials: CrmCredentials): Promise<string> {
+    const apiDomain = credentials.api_key ?? '';
+    const result = await pipedriveFetch<PipedriveDealFieldsResponse>(
+      apiDomain,
+      '/api/v1/dealFields',
+      credentials.access_token,
+    );
+    const existing = (result.data ?? []).find((f) => f.name === 'Origem');
+    if (existing) return existing.key;
+
+    const created = await pipedriveFetch<PipedriveDealFieldCreateResponse>(
+      apiDomain,
+      '/api/v1/dealFields',
+      credentials.access_token,
+      { method: 'POST', body: JSON.stringify({ name: 'Origem', field_type: 'text' }) },
+    );
+    return created.data.key;
+  }
+
   async pushDeal(
     credentials: CrmCredentials,
-    deal: { title: string; person_id: number; pipeline_id: number; stage_id: number; org_id?: number },
+    deal: { title: string; person_id: number; pipeline_id: number; stage_id: number; org_id?: number; customFields?: Record<string, string> },
   ): Promise<{ external_id: string }> {
     const apiDomain = credentials.api_key ?? '';
     const body: Record<string, unknown> = {
@@ -356,6 +385,11 @@ export class PipedriveAdapter implements CRMAdapter {
     };
     if (deal.org_id) {
       body.org_id = deal.org_id;
+    }
+    if (deal.customFields) {
+      for (const [key, value] of Object.entries(deal.customFields)) {
+        body[key] = value;
+      }
     }
     const result = await pipedriveFetch<PipedriveDealCreateResponse>(
       apiDomain,

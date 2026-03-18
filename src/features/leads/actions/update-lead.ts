@@ -487,12 +487,21 @@ export async function markLeadAsWon(
               body: JSON.stringify({ org_id: orgExternalId }),
             });
 
+            // Ensure "Origem" custom field exists and set lead source
+            const leadSource = lead.lead_source as string | null;
+            let customFields: Record<string, string> | undefined;
+            if (leadSource) {
+              const origemKey = await pipedriveAdapter.ensureOrigemField(credentials);
+              customFields = { [origemKey]: leadSource };
+            }
+
             const result = await pipedriveAdapter.pushDeal(credentials, {
               title: dealTitle,
               person_id: parseInt(contactExternalId, 10),
               pipeline_id: parseInt(crmOptions.pipelineId, 10),
               stage_id: parseInt(crmOptions.stageId, 10),
               org_id: orgExternalId,
+              customFields,
             });
             dealExternalId = result.external_id;
           } else if (crmOptions.provider === 'hubspot') {
@@ -531,6 +540,14 @@ export async function markLeadAsWon(
             // Associate Contact to Company
             await hubspotAdapter.associateContactToCompany(credentials, contactExternalId, companyId);
 
+            // Ensure "Origem" custom property exists and set lead source
+            const hsLeadSource = lead.lead_source as string | null;
+            let customProperties: Record<string, string> | undefined;
+            if (hsLeadSource) {
+              await hubspotAdapter.ensureOrigemProperty(credentials);
+              customProperties = { origem: hsLeadSource };
+            }
+
             // Create Deal linked to Contact + Company
             const result = await hubspotAdapter.pushDeal(credentials, {
               title: dealTitle,
@@ -538,6 +555,7 @@ export async function markLeadAsWon(
               pipelineId: crmOptions.pipelineId,
               stageId: crmOptions.stageId,
               companyId,
+              customProperties,
             });
             dealExternalId = result.external_id;
           } else {
