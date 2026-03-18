@@ -1,4 +1,8 @@
 export type ReportPeriod = '7d' | '30d' | '90d';
+export interface ReportDateRange {
+  from: string;
+  to: string;
+}
 export type ReportView = 'cadence' | 'sdr' | 'overall';
 
 export interface CadenceMetrics {

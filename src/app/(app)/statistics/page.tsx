@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { fetchStatisticsData } from '@/features/reports/actions/fetch-statistics';
 import { StatisticsView } from '@/features/reports/components/StatisticsView';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 const statisticsPages = [
   {
@@ -37,19 +38,20 @@ const statisticsPages = [
 ];
 
 interface PageProps {
-  searchParams: Promise<{ period?: string; user?: string; threshold?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; threshold?: string }>;
 }
 
 export default async function StatisticsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const period = params.period ?? '30d';
+  const { from, to } = parseDateRangeParams(params);
+  const dateRange = { from, to };
   const userFilter = params.user;
   const threshold = params.threshold ? parseInt(params.threshold, 10) : 60;
 
   const userIds = userFilter ? [userFilter] : undefined;
 
   const [result, members] = await Promise.all([
-    fetchStatisticsData(period, userIds, threshold),
+    fetchStatisticsData('30d', userIds, threshold, dateRange),
     fetchOrgMembers(),
   ]);
 

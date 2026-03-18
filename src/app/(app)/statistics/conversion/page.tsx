@@ -3,20 +3,22 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchConversionAnalytics } from '@/features/statistics/actions/fetch-conversion-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ConversionAnalyticsView } from '@/features/statistics/components/ConversionAnalyticsView';
+import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 interface PageProps {
-  searchParams: Promise<{ period?: string; user?: string; cadence?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; cadence?: string }>;
 }
 
 export default async function ConversionAnalyticsPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const period = params.period ?? '30d';
+  const { from, to } = parseDateRangeParams(params);
+  const dateRange = { from, to };
   const userIds = params.user ? [params.user] : undefined;
   const cadenceId = params.cadence || undefined;
 
   const [result, members] = await Promise.all([
-    fetchConversionAnalytics(period, userIds, cadenceId),
+    fetchConversionAnalytics('30d', userIds, cadenceId, dateRange),
     fetchOrgMembers(),
   ]);
 

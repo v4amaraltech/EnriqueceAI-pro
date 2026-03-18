@@ -104,20 +104,13 @@ describe('ReportsView', () => {
       expect(screen.getByText('Relatórios')).toBeInTheDocument();
     });
 
-    it('renders all period selector buttons', () => {
+    it('renders date range picker trigger with formatted range', () => {
       render(<ReportsView data={makeReportData()} />);
 
-      expect(screen.getByRole('button', { name: '7 dias' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '30 dias' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '90 dias' })).toBeInTheDocument();
-    });
-
-    it('defaults to 30d period when no search param is set', () => {
-      render(<ReportsView data={makeReportData()} />);
-
-      // 30d button should have default (active) variant — check it exists
-      const btn30d = screen.getByRole('button', { name: '30 dias' });
-      expect(btn30d).toBeInTheDocument();
+      // DateRangePicker trigger button shows the formatted date range
+      const buttons = screen.getAllByRole('button');
+      const dateButton = buttons.find((btn) => btn.textContent?.includes('—'));
+      expect(dateButton).toBeDefined();
     });
   });
 
@@ -269,30 +262,14 @@ describe('ReportsView', () => {
     });
   });
 
-  describe('period change', () => {
-    it('calls router.push with period=7d when 7 dias is clicked', () => {
+  describe('date range picker', () => {
+    it('renders date range picker with from/to display', () => {
       render(<ReportsView data={makeReportData()} />);
 
-      fireEvent.click(screen.getByRole('button', { name: '7 dias' }));
-
-      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('period=7d'));
-    });
-
-    it('calls router.push with period=90d when 90 dias is clicked', () => {
-      render(<ReportsView data={makeReportData()} />);
-
-      fireEvent.click(screen.getByRole('button', { name: '90 dias' }));
-
-      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('period=90d'));
-    });
-
-    it('calls router.push without period param when 30 dias is clicked (default)', () => {
-      render(<ReportsView data={makeReportData()} />);
-
-      fireEvent.click(screen.getByRole('button', { name: '30 dias' }));
-
-      // 30d is the default so the period param is deleted from the URL
-      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/reports'));
+      // The DateRangePicker trigger shows a formatted date range with "—"
+      const buttons = screen.getAllByRole('button');
+      const dateButton = buttons.find((btn) => btn.textContent?.includes('—'));
+      expect(dateButton).toBeDefined();
     });
   });
 });

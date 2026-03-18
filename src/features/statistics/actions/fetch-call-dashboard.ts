@@ -11,11 +11,14 @@ import { getManagerOrgId } from './shared';
 export async function fetchCallDashboard(
   period: string = '30d',
   userIds?: string[],
+  dateRange?: { from: string; to: string },
 ): Promise<ActionResult<CallDashboardData>> {
   try {
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
-    const { start, end } = getPeriodDates(period);
+    const { start, end } = dateRange
+      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      : getPeriodDates(period);
 
     const data = await fetchCallDashboardData(
       supabase,

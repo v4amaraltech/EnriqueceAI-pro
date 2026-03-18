@@ -3,19 +3,21 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchCallDashboard } from '@/features/statistics/actions/fetch-call-dashboard';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { CallDashboardView } from '@/features/statistics/components/CallDashboardView';
+import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 interface PageProps {
-  searchParams: Promise<{ period?: string; user?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string }>;
 }
 
 export default async function CallDashboardPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const period = params.period ?? '30d';
+  const { from, to } = parseDateRangeParams(params);
+  const dateRange = { from, to };
   const userIds = params.user ? [params.user] : undefined;
 
   const [result, members] = await Promise.all([
-    fetchCallDashboard(period, userIds),
+    fetchCallDashboard('30d', userIds, dateRange),
     fetchOrgMembers(),
   ]);
 

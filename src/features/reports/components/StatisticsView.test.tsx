@@ -76,12 +76,12 @@ describe('StatisticsView', () => {
     expect(screen.getByText(/Insights de motivos de perda/)).toBeInTheDocument();
   });
 
-  it('renders period filter buttons', async () => {
+  it('renders date range picker', async () => {
     await renderView(emptyData);
-    expect(screen.getByText('Hoje')).toBeInTheDocument();
-    expect(screen.getByText('7 dias')).toBeInTheDocument();
-    expect(screen.getByText('30 dias')).toBeInTheDocument();
-    expect(screen.getByText('90 dias')).toBeInTheDocument();
+    // DateRangePicker trigger shows formatted range with "—"
+    const buttons = screen.getAllByRole('button');
+    const dateButton = buttons.find((btn) => btn.textContent?.includes('—'));
+    expect(dateButton).toBeDefined();
   });
 
   it('renders user filter dropdown', async () => {

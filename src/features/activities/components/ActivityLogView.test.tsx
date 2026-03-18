@@ -112,7 +112,7 @@ describe('ActivityLogView', () => {
   it('should show empty state when no activities match filters', () => {
     render(<ActivityLogView activities={[]} total={0} hasFilters={true} />);
 
-    expect(screen.getByText('Nenhuma atividade encontrada com os filtros aplicados.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhuma atividade encontrada')).toBeInTheDocument();
   });
 
   it('should render Executar button for each activity', () => {

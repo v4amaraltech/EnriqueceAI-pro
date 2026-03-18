@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Download } from 'lucide-react';
 
+import { DateRangePicker } from '@/shared/components/DateRangePicker';
+import { useDateRange } from '@/shared/hooks/useDateRange';
 import { Button } from '@/shared/components/ui/button';
 
 import type { ReportData, ReportView } from '../reports.contract';
@@ -22,31 +24,11 @@ const tabs: { value: ReportView; label: string }[] = [
   { value: 'sdr', label: 'Por SDR' },
 ];
 
-const periods = [
-  { value: '7d', label: '7 dias' },
-  { value: '30d', label: '30 dias' },
-  { value: '90d', label: '90 dias' },
-] as const;
-
 export function ReportsView({ data }: ReportsViewProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const { from, to, setRange } = useDateRange('/reports');
   const [activeTab, setActiveTab] = useState<ReportView>(
     (searchParams.get('view') as ReportView) ?? 'overall',
-  );
-  const currentPeriod = searchParams.get('period') ?? '30d';
-
-  const setPeriod = useCallback(
-    (period: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (period === '30d') {
-        params.delete('period');
-      } else {
-        params.set('period', period);
-      }
-      router.push(`/reports?${params.toString()}`);
-    },
-    [router, searchParams],
   );
 
   function handleExport() {
@@ -70,18 +52,7 @@ export function ReportsView({ data }: ReportsViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1">
-            {periods.map((p) => (
-              <Button
-                key={p.value}
-                variant={currentPeriod === p.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPeriod(p.value)}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
+          <DateRangePicker from={from} to={to} onChange={setRange} />
           {activeTab !== 'overall' && (
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" />

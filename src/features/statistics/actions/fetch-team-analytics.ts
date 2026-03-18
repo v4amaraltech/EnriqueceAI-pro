@@ -10,11 +10,14 @@ import { getManagerOrgId } from './shared';
 
 export async function fetchTeamAnalytics(
   period: string = '30d',
+  dateRange?: { from: string; to: string },
 ): Promise<ActionResult<TeamAnalyticsData>> {
   try {
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
-    const { start, end } = getPeriodDates(period);
+    const { start, end } = dateRange
+      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      : getPeriodDates(period);
 
     const data = await fetchTeamAnalyticsData(supabase, orgId, start, end);
 

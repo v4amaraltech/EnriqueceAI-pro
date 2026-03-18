@@ -17,11 +17,14 @@ function escapeCsvField(value: string): string {
 export async function exportExtratoCsv(
   period: string,
   userIds?: string[],
+  dateRange?: { from: string; to: string },
 ): Promise<ActionResult<{ csv: string; filename: string }>> {
   try {
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
-    const { start, end } = getPeriodDates(period);
+    const { start, end } = dateRange
+      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      : getPeriodDates(period);
 
     const data = await fetchExtratoData(supabase, orgId, start, end, userIds);
 

@@ -33,7 +33,6 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
           <StatisticsFilters
             basePath="/statistics/activities"
             members={members}
-            periods={['7d', '30d', '90d']}
           />
         )}
       </div>

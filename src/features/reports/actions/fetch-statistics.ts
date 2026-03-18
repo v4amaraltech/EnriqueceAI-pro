@@ -39,6 +39,7 @@ export async function fetchStatisticsData(
   period: string = '30d',
   userIds?: string[],
   thresholdMinutes?: number,
+  dateRange?: { from: string; to: string },
 ): Promise<ActionResult<StatisticsData>> {
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
@@ -54,7 +55,9 @@ export async function fetchStatisticsData(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { start, end } = getPeriodDates(period);
+  const { start, end } = dateRange
+    ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+    : getPeriodDates(period);
 
   const filters: StatisticsFilters = {
     periodStart: start,

@@ -3,19 +3,21 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchExtrato } from '@/features/calls/actions/fetch-extrato';
 import { ExtratoView } from '@/features/calls/components/ExtratoView';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
+import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 interface PageProps {
-  searchParams: Promise<{ period?: string; user?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string }>;
 }
 
 export default async function ExtratoPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const period = params.period ?? '30d';
+  const { from, to } = parseDateRangeParams(params);
+  const dateRange = { from, to };
   const userIds = params.user ? [params.user] : undefined;
 
   const [result, members] = await Promise.all([
-    fetchExtrato(period, userIds),
+    fetchExtrato('30d', userIds, dateRange),
     fetchOrgMembers(),
   ]);
 
@@ -32,7 +34,6 @@ export default async function ExtratoPage({ searchParams }: PageProps) {
       <ExtratoView
         data={result.data}
         members={members}
-        period={period}
         userId={params.user}
       />
     </div>

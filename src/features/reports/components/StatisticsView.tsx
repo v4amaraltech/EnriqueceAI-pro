@@ -3,7 +3,8 @@
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { Button } from '@/shared/components/ui/button';
+import { DateRangePicker } from '@/shared/components/DateRangePicker';
+import { useDateRange } from '@/shared/hooks/useDateRange';
 
 import type { StatisticsData } from '../services/statistics.service';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
@@ -16,20 +17,13 @@ interface StatisticsViewProps {
   members: { userId: string; email: string }[];
 }
 
-const periods = [
-  { value: 'today', label: 'Hoje' },
-  { value: '7d', label: '7 dias' },
-  { value: '30d', label: '30 dias' },
-  { value: '90d', label: '90 dias' },
-] as const;
-
 export function StatisticsView({ data, members }: StatisticsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [intervalModalOpen, setIntervalModalOpen] = useState(false);
+  const { from, to, setRange } = useDateRange('/statistics');
 
-  const currentPeriod = searchParams.get('period') ?? '30d';
   const currentUser = searchParams.get('user') ?? '';
   const currentThreshold = parseInt(searchParams.get('threshold') ?? '60', 10);
 
@@ -37,7 +31,7 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
     (updates: Record<string, string | undefined>) => {
       const params = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(updates)) {
-        if (!value || value === '' || (key === 'period' && value === '30d') || (key === 'threshold' && value === '60')) {
+        if (!value || value === '' || (key === 'threshold' && value === '60')) {
           params.delete(key);
         } else {
           params.set(key, value);
@@ -63,19 +57,7 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Period filter */}
-          <div className="flex gap-1">
-            {periods.map((p) => (
-              <Button
-                key={p.value}
-                variant={currentPeriod === p.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => updateParams({ period: p.value })}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
+          <DateRangePicker from={from} to={to} onChange={setRange} />
           {/* User filter */}
           <select
             value={currentUser}

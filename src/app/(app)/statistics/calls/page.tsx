@@ -3,19 +3,21 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchCallStatistics } from '@/features/statistics/actions/fetch-call-statistics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { CallStatisticsView } from '@/features/statistics/components/CallStatisticsView';
+import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 interface PageProps {
-  searchParams: Promise<{ period?: string; user?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string }>;
 }
 
 export default async function CallStatisticsPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const period = params.period ?? '30d';
+  const { from, to } = parseDateRangeParams(params);
+  const dateRange = { from, to };
   const userIds = params.user ? [params.user] : undefined;
 
   const [result, members] = await Promise.all([
-    fetchCallStatistics(period, userIds),
+    fetchCallStatistics('30d', userIds, dateRange),
     fetchOrgMembers(),
   ]);
 

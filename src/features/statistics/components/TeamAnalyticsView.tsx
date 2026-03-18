@@ -27,7 +27,6 @@ export function TeamAnalyticsView({ data, members }: TeamAnalyticsViewProps) {
         <StatisticsFilters
           basePath="/statistics/team"
           members={members}
-          periods={['7d', '30d', '90d']}
         />
       </div>
 

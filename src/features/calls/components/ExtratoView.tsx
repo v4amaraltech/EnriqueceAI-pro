@@ -9,6 +9,7 @@ import { MetricCard } from '@/features/dashboard/components/MetricCard';
 import { StatisticsFilters } from '@/features/statistics/components/StatisticsFilters';
 import type { OrgMember } from '@/features/statistics/types/shared';
 import { formatDuration, formatDurationLong } from '@/features/statistics/types/shared';
+import { useDateRange } from '@/shared/hooks/useDateRange';
 import { Button } from '@/shared/components/ui/button';
 
 import { exportExtratoCsv } from '../actions/export-extrato-csv';
@@ -17,17 +18,17 @@ import type { ExtratoData } from '../types/extrato';
 interface ExtratoViewProps {
   data: ExtratoData;
   members: OrgMember[];
-  period: string;
   userId?: string;
 }
 
-export function ExtratoView({ data, members, period, userId }: ExtratoViewProps) {
+export function ExtratoView({ data, members, userId }: ExtratoViewProps) {
   const [isPending, startTransition] = useTransition();
+  const { from, to } = useDateRange('/calls/extrato');
 
   function handleExportCsv() {
     startTransition(async () => {
       const userIds = userId ? [userId] : undefined;
-      const result = await exportExtratoCsv(period, userIds);
+      const result = await exportExtratoCsv('30d', userIds, { from, to });
       if (result.success) {
         const blob = new Blob([result.data.csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
