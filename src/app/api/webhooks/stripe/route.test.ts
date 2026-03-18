@@ -42,6 +42,8 @@ vi.mock('@/lib/webhooks', async (importOriginal) => {
   };
 });
 
+vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_test_secret');
+
 import { isEventProcessed, markEventReceived, processWithRetry } from '@/lib/webhooks';
 
 import { POST } from './route';

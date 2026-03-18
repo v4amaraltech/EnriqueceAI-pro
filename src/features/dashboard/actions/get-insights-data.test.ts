@@ -8,10 +8,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
-vi.mock('@/lib/auth/require-auth', () => ({
-  requireAuth: vi.fn(() =>
-    Promise.resolve({ id: 'user-1', email: 'test@test.com' }),
-  ),
+const mockRequireAuthWithMember = vi.fn();
+vi.mock('@/lib/auth/require-auth-with-member', () => ({
+  requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
 }));
 
 const mockFetchInsights = vi.fn();
@@ -34,6 +33,7 @@ describe('getInsightsData', () => {
   beforeEach(() => {
     resetMocks();
     mockFetchInsights.mockReset();
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-1', role: 'manager' });
   });
 
   const validFilters = {
@@ -43,9 +43,6 @@ describe('getInsightsData', () => {
   };
 
   it('should return success with insights data', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     const insightsData = {
       lossReasons: [{ reason: 'Sem orçamento', count: 5, percent: 100 }],
       conversionByOrigin: [{ origin: 'Inbound', converted: 3, lost: 1 }],
@@ -67,22 +64,13 @@ describe('getInsightsData', () => {
     expect(result).toEqual({ success: false, error: 'Filtros inválidos' });
   });
 
-  it('should return error when org not found', async () => {
-    const memberChain = createChainMock({ data: null });
-    mockFrom.mockImplementation(() => memberChain);
+  it('should throw when org not found (redirect)', async () => {
+    mockRequireAuthWithMember.mockRejectedValue(new Error('NEXT_REDIRECT'));
 
-    const result = await getInsightsData(validFilters);
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Organização não encontrada',
-    });
+    await expect(getInsightsData(validFilters)).rejects.toThrow('NEXT_REDIRECT');
   });
 
   it('should return error when service throws', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     mockFetchInsights.mockRejectedValue(new Error('fail'));
 
     const result = await getInsightsData(validFilters);
@@ -94,8 +82,7 @@ describe('getInsightsData', () => {
   });
 
   it('should pass org_id and filters to service', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-42' } });
-    mockFrom.mockImplementation(() => memberChain);
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-42', role: 'manager' });
 
     mockFetchInsights.mockResolvedValue({
       lossReasons: [],

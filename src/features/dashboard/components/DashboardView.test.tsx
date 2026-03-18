@@ -19,6 +19,7 @@ vi.mock('@/features/auth/hooks/useOrganization', () => ({
       { user_id: 'u-2', role: 'member', status: 'active' },
     ],
     org: { id: 'org-1', name: 'Test Org' },
+    isManager: true,
   }),
 }));
 

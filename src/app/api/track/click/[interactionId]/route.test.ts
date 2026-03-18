@@ -8,6 +8,10 @@ vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
 }));
 
+vi.mock('@/lib/security/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 99, limit: 100 }),
+}));
+
 import { GET } from './route';
 
 function createChainMock(finalResult: unknown) {
@@ -41,9 +45,9 @@ describe('Track Click Endpoint', () => {
     });
 
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=https://acme.com/pricing',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://acme.com/pricing',
     );
-    const response = await GET(request, makeParams('int-1'));
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('https://acme.com/pricing');
@@ -60,9 +64,9 @@ describe('Track Click Endpoint', () => {
     });
 
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=https://acme.com',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://acme.com',
     );
-    await GET(request, makeParams('int-1'));
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -88,9 +92,9 @@ describe('Track Click Endpoint', () => {
     });
 
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=https://new.com',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://new.com',
     );
-    await GET(request, makeParams('int-1'));
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -105,8 +109,8 @@ describe('Track Click Endpoint', () => {
   });
 
   it('should return 400 when url param is missing', async () => {
-    const request = new Request('https://example.com/api/track/click/int-1');
-    const response = await GET(request, makeParams('int-1'));
+    const request = new Request('https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000');
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(400);
     const body = await response.json();
@@ -115,9 +119,9 @@ describe('Track Click Endpoint', () => {
 
   it('should return 400 for invalid URL', async () => {
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=not-a-url',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=not-a-url',
     );
-    const response = await GET(request, makeParams('int-1'));
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(400);
     const body = await response.json();
@@ -126,9 +130,9 @@ describe('Track Click Endpoint', () => {
 
   it('should return 400 for non-http protocol', async () => {
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=javascript:alert(1)',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=javascript:alert(1)',
     );
-    const response = await GET(request, makeParams('int-1'));
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(400);
   });
@@ -141,9 +145,9 @@ describe('Track Click Endpoint', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const request = new Request(
-      'https://example.com/api/track/click/int-1?url=https://acme.com',
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://acme.com',
     );
-    const response = await GET(request, makeParams('int-1'));
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('https://acme.com/');

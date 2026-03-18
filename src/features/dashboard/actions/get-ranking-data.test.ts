@@ -8,10 +8,13 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
-vi.mock('@/lib/auth/require-auth', () => ({
-  requireAuth: vi.fn(() =>
-    Promise.resolve({ id: 'user-1', email: 'test@test.com' }),
-  ),
+const mockRequireAuthWithMember = vi.fn();
+vi.mock('@/lib/auth/require-auth-with-member', () => ({
+  requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
+}));
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminSupabaseClient: () => ({ auth: { admin: { listUsers: vi.fn().mockResolvedValue({ data: { users: [] } }) } } }),
 }));
 
 const mockFetchRanking = vi.fn();
@@ -42,6 +45,7 @@ describe('getRankingData', () => {
   beforeEach(() => {
     resetMocks();
     mockFetchRanking.mockReset();
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-1', role: 'manager' });
   });
 
   const validFilters = {
@@ -51,9 +55,6 @@ describe('getRankingData', () => {
   };
 
   it('should return success with ranking data', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     const rankingData = {
       leadsFinished: { ...emptyCard, total: 15 },
       activitiesDone: { ...emptyCard, total: 200 },
@@ -76,22 +77,13 @@ describe('getRankingData', () => {
     expect(result).toEqual({ success: false, error: 'Filtros inválidos' });
   });
 
-  it('should return error when org not found', async () => {
-    const memberChain = createChainMock({ data: null });
-    mockFrom.mockImplementation(() => memberChain);
+  it('should throw when org not found (redirect)', async () => {
+    mockRequireAuthWithMember.mockRejectedValue(new Error('NEXT_REDIRECT'));
 
-    const result = await getRankingData(validFilters);
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Organização não encontrada',
-    });
+    await expect(getRankingData(validFilters)).rejects.toThrow('NEXT_REDIRECT');
   });
 
   it('should return error when service throws', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     mockFetchRanking.mockRejectedValue(new Error('fail'));
 
     const result = await getRankingData(validFilters);
@@ -103,8 +95,7 @@ describe('getRankingData', () => {
   });
 
   it('should pass org_id and filters to service', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-42' } });
-    mockFrom.mockImplementation(() => memberChain);
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-42', role: 'manager' });
 
     mockFetchRanking.mockResolvedValue({
       leadsFinished: emptyCard,

@@ -8,10 +8,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
-vi.mock('@/lib/auth/require-auth', () => ({
-  requireAuth: vi.fn(() =>
-    Promise.resolve({ id: 'user-1', email: 'test@test.com' }),
-  ),
+const mockRequireAuthWithMember = vi.fn();
+vi.mock('@/lib/auth/require-auth-with-member', () => ({
+  requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
 }));
 
 // Mock service functions
@@ -39,6 +38,7 @@ describe('getDashboardData', () => {
     resetMocks();
     mockFetchKpi.mockReset();
     mockFetchCadences.mockReset();
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-1', role: 'manager' });
   });
 
   const validFilters = {
@@ -48,10 +48,6 @@ describe('getDashboardData', () => {
   };
 
   it('should return success with dashboard data', async () => {
-    // Mock org member lookup
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     const kpiData = {
       totalOpportunities: 10,
       monthTarget: 50,
@@ -100,22 +96,13 @@ describe('getDashboardData', () => {
     });
   });
 
-  it('should return error when org not found', async () => {
-    const memberChain = createChainMock({ data: null });
-    mockFrom.mockImplementation(() => memberChain);
+  it('should throw when org not found (redirect)', async () => {
+    mockRequireAuthWithMember.mockRejectedValue(new Error('NEXT_REDIRECT'));
 
-    const result = await getDashboardData(validFilters);
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Organização não encontrada',
-    });
+    await expect(getDashboardData(validFilters)).rejects.toThrow('NEXT_REDIRECT');
   });
 
   it('should return error when service throws', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     mockFetchKpi.mockRejectedValue(new Error('DB connection failed'));
 
     const result = await getDashboardData(validFilters);
@@ -127,8 +114,7 @@ describe('getDashboardData', () => {
   });
 
   it('should pass org_id and filters to service functions', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-42' } });
-    mockFrom.mockImplementation(() => memberChain);
+    mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-42', role: 'manager' });
 
     mockFetchKpi.mockResolvedValue({
       totalOpportunities: 0,
@@ -152,9 +138,6 @@ describe('getDashboardData', () => {
   });
 
   it('should accept valid uuid in cadenceIds', async () => {
-    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
-    mockFrom.mockImplementation(() => memberChain);
-
     mockFetchKpi.mockResolvedValue({
       totalOpportunities: 0,
       monthTarget: 0,

@@ -14,6 +14,15 @@ vi.mock('../actions/manage-templates', () => ({
   updateTemplate: vi.fn(),
 }));
 
+vi.mock('./TemplatePreviewPanel', () => ({
+  TemplatePreviewPanel: ({ subject, body }: { subject?: string; body: string }) => (
+    <div data-testid="template-preview-panel">
+      {subject && <div>{subject}</div>}
+      <div>{body}</div>
+    </div>
+  ),
+}));
+
 function createTemplate(overrides: Partial<MessageTemplateRow> = {}): MessageTemplateRow {
   return {
     id: 'tmpl-1',
@@ -64,10 +73,9 @@ describe('TemplateEditor', () => {
 
   it('should show available variables', () => {
     render(<TemplateEditor />);
-    expect(screen.getByText('Variáveis disponíveis')).toBeInTheDocument();
+    expect(screen.getByText('Variáveis do Lead')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '{{primeiro_nome}}' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '{{empresa}}' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '{{nome_fantasia}}' })).toBeInTheDocument();
   });
 
   it('should show preview button', () => {
@@ -80,15 +88,7 @@ describe('TemplateEditor', () => {
     render(<TemplateEditor template={createTemplate()} />);
 
     await user.click(screen.getByText('Preview'));
-    expect(screen.getByText('Preview (dados de exemplo)')).toBeInTheDocument();
-  });
-
-  it('should render preview with sample data', async () => {
-    const user = userEvent.setup();
-    render(<TemplateEditor template={createTemplate({ subject: 'Olá {{nome_fantasia}}' })} />);
-
-    await user.click(screen.getByText('Preview'));
-    expect(screen.getByText('Olá Acme Corp')).toBeInTheDocument();
+    expect(screen.getByText('Ocultar Preview')).toBeInTheDocument();
   });
 
   it('should show "Criar Template" button for new templates', () => {

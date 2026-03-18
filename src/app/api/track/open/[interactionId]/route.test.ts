@@ -8,6 +8,10 @@ vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
 }));
 
+vi.mock('@/lib/security/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 99, limit: 100 }),
+}));
+
 import { GET } from './route';
 
 function createChainMock(finalResult: unknown) {
@@ -34,8 +38,8 @@ describe('Track Open Endpoint', () => {
     const selectChain = createChainMock({ data: null });
     mockFrom.mockReturnValue(selectChain);
 
-    const request = new Request('https://example.com/api/track/open/int-1');
-    const response = await GET(request, makeParams('int-1'));
+    const request = new Request('https://example.com/api/track/open/550e8400-e29b-41d4-a716-446655440000');
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/gif');
@@ -55,8 +59,8 @@ describe('Track Open Endpoint', () => {
       return callIndex === 1 ? selectChain : updateChain;
     });
 
-    const request = new Request('https://example.com/api/track/open/int-1');
-    await GET(request, makeParams('int-1'));
+    const request = new Request('https://example.com/api/track/open/550e8400-e29b-41d4-a716-446655440000');
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(mockFrom).toHaveBeenCalledWith('interactions');
     expect(updateChain.update).toHaveBeenCalledWith(
@@ -76,8 +80,8 @@ describe('Track Open Endpoint', () => {
       return callIndex === 1 ? selectChain : updateChain;
     });
 
-    const request = new Request('https://example.com/api/track/open/int-1');
-    await GET(request, makeParams('int-1'));
+    const request = new Request('https://example.com/api/track/open/550e8400-e29b-41d4-a716-446655440000');
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,8 +108,8 @@ describe('Track Open Endpoint', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const request = new Request('https://example.com/api/track/open/int-err');
-    const response = await GET(request, makeParams('int-err'));
+    const request = new Request('https://example.com/api/track/open/660e8400-e29b-41d4-a716-446655440000');
+    const response = await GET(request, makeParams('660e8400-e29b-41d4-a716-446655440000'));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/gif');

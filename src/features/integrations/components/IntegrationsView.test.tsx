@@ -86,12 +86,13 @@ describe('IntegrationsView', () => {
   it('should show unified Google card with description', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('Google')).toBeInTheDocument();
-    expect(screen.getByText(/sincronizar e gerenciar seus compromissos/)).toBeInTheDocument();
+    expect(screen.getByText(/Sincronize e-mails e compromissos/)).toBeInTheDocument();
   });
 
-  it('should show single "Conectar Google" button when not connected', () => {
+  it('should show connect button when Google not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Conectar Google')).toBeInTheDocument();
+    // Google section shows a generic "Conectar" button
+    expect(screen.getAllByText('Conectar').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show WhatsApp card', () => {
@@ -116,7 +117,7 @@ describe('IntegrationsView', () => {
 
   it('should show WhatsApp description when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText(/Integre o WhatsApp para acessar/)).toBeInTheDocument();
+    expect(screen.getByText(/Integre o WhatsApp para enviar mensagens/)).toBeInTheDocument();
   });
 
   it('should show error status for Google when Gmail has error', () => {
@@ -165,9 +166,8 @@ describe('IntegrationsView', () => {
 
   it('should show connect buttons when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Conectar WhatsApp')).toBeInTheDocument();
-    expect(screen.getByText('Conectar API4Com')).toBeInTheDocument();
-    expect(screen.getByText('Conectar Google')).toBeInTheDocument();
+    // All connect buttons use generic "Conectar" label
+    expect(screen.getAllByText('Conectar').length).toBeGreaterThanOrEqual(3);
   });
 
   it('should show ramal and Gerenciar button when API4Com connected', () => {

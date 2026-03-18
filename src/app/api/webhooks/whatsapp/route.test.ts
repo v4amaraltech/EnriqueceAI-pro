@@ -17,6 +17,10 @@ vi.mock('next/server', async (importOriginal) => {
 });
 
 // Mock webhook utilities — keep real verifyHmacSignature and logger, stub idempotency + retry
+vi.mock('@/features/cadences/services/webhook-dispatch.service', () => ({
+  dispatchWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/lib/webhooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/webhooks')>();
   return {
@@ -56,8 +60,11 @@ function signPayload(payload: string, secret: string): string {
   return 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
-function makeRequest(body: unknown, headers: Record<string, string> = {}): Request {
+function makeRequest(body: unknown, headers: Record<string, string> = {}, secret?: string): Request {
   const bodyStr = JSON.stringify(body);
+  if (secret) {
+    headers['x-hub-signature-256'] = signPayload(bodyStr, secret);
+  }
   return new Request('https://example.com/api/webhooks/whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
@@ -153,9 +160,7 @@ describe('WhatsApp Webhook POST — Status Updates', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // No app secret — skip signature verification
-    process.env = { ...originalEnv };
-    delete process.env.WHATSAPP_APP_SECRET;
+    process.env = { ...originalEnv, WHATSAPP_APP_SECRET: 'test-secret' };
   });
 
   afterEach(() => {
@@ -181,7 +186,7 @@ describe('WhatsApp Webhook POST — Status Updates', () => {
       }],
     };
 
-    const response = await POST(makeRequest(body));
+    const response = await POST(makeRequest(body, {}, 'test-secret'));
     // Flush floating promises from after() background processing
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -195,8 +200,7 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env = { ...originalEnv };
-    delete process.env.WHATSAPP_APP_SECRET;
+    process.env = { ...originalEnv, WHATSAPP_APP_SECRET: 'test-secret' };
   });
 
   afterEach(() => {
@@ -245,7 +249,7 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
       }],
     };
 
-    const response = await POST(makeRequest(body));
+    const response = await POST(makeRequest(body, {}, 'test-secret'));
     // Flush floating promises from after() background processing
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -279,7 +283,7 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
       }],
     };
 
-    const response = await POST(makeRequest(body));
+    const response = await POST(makeRequest(body, {}, 'test-secret'));
     // Flush floating promises from after() background processing
     await new Promise((resolve) => setTimeout(resolve, 0));
 
