@@ -15,7 +15,6 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent, CardTitle } from '@/shared/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -67,6 +66,18 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
+function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
+  const config = statusConfig[status];
+  return (
+    <Badge variant="outline" className={config.className}>
+      {status === 'connected' && <Check className="mr-1 h-3 w-3" />}
+      {status === 'error' && <X className="mr-1 h-3 w-3" />}
+      {status === 'syncing' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
+      {config.label}
+    </Badge>
+  );
+}
+
 export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -87,7 +98,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   }
 
   function handleConnectCrm(provider: CrmProvider) {
-    // RD Station CRM uses token-based auth, not OAuth
     if (provider === 'rdstation') {
       setShowRdStationConfig(true);
       return;
@@ -158,7 +168,9 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
     });
   }
 
-
+  const whatsappConnected = evolution.step === 'connected' || evolutionInstance?.status === 'connected';
+  const googleConnected = !!(gmail || calendar);
+  const googleError = gmail?.status === 'error' || calendar?.status === 'error';
 
   return (
     <div className="space-y-6">
@@ -169,289 +181,262 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* WhatsApp Card */}
-        <Card className="flex flex-col">
-          <CardContent className="flex flex-1 flex-col p-6">
-            <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={48} height={48} className="rounded-lg" />
-            <CardTitle className="mt-4 text-xl">WhatsApp</CardTitle>
-            <div className="min-h-[3.5rem] flex-1">
-              {(evolution.step === 'connected' || evolutionInstance?.status === 'connected') ? (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  {(evolution.phone || evolutionInstance?.phone)
-                    ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
-                    : 'WhatsApp conectado'}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Integre o WhatsApp para acessar e explorar suas conversas diretamente pela plataforma.
-                </p>
-              )}
+      {/* Comunicação */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Comunicação</h2>
+        <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+          {/* WhatsApp */}
+          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="w-10 shrink-0">
+              <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
             </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-4">
-              {(evolution.step === 'connected' || evolutionInstance?.status === 'connected') ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusConfig.connected.className}>
-                      <Check className="mr-1 h-3 w-3" />Conectado
-                    </Badge>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnect('whatsapp')}
-                  >
-                    <Unplug className="mr-1 h-3 w-3" />
-                    Desconectar
-                  </button>
-                </div>
+            <div className="w-32 shrink-0 font-medium">WhatsApp</div>
+            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+              {whatsappConnected
+                ? (evolution.phone || evolutionInstance?.phone)
+                  ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
+                  : 'WhatsApp conectado'
+                : 'Integre o WhatsApp para enviar mensagens pela plataforma'}
+            </div>
+            <div className="w-24 shrink-0 text-center">
+              {whatsappConnected ? (
+                <StatusBadge status="connected" />
               ) : whatsapp?.status === 'connected' ? (
-                <Badge variant="outline" className={statusConfig.connected.className}>
-                  <Check className="mr-1 h-3 w-3" />Conectado
-                </Badge>
-              ) : (
+                <StatusBadge status="connected" />
+              ) : null}
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              {whatsappConnected ? (
                 <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                  onClick={() => setShowDisconnect('whatsapp')}
+                >
+                  <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  Desconectar
+                </Button>
+              ) : whatsapp?.status === 'connected' ? null : (
+                <Button
+                  size="sm"
                   onClick={() => {
                     setShowEvolutionModal(true);
                     evolution.connect();
                   }}
                   disabled={evolution.step === 'creating' || evolution.step === 'waiting_scan'}
                 >
-                  Conectar WhatsApp
+                  Conectar
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* API4Com VoIP Card */}
-        <Card className="flex flex-col">
-          <CardContent className="flex flex-1 flex-col p-6">
-            <Image src="/logos/api4com-logo.png" alt="API4Com" width={48} height={48} className="rounded-lg" />
-            <CardTitle className="mt-4 text-xl">API4Com</CardTitle>
-            <div className="min-h-[3.5rem] flex-1">
-              {api4com ? (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Ramal {api4com.ramal} &middot; Conectado em {new Date(api4com.created_at).toLocaleDateString('pt-BR')}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Integração automática com sistema de ligações da API4Com.
-                </p>
-              )}
+          {/* API4Com */}
+          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="w-10 shrink-0">
+              <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
             </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-4">
+            <div className="w-32 shrink-0 font-medium">API4Com</div>
+            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+              {api4com
+                ? `Ramal ${api4com.ramal} \u00b7 Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`
+                : 'Integração automática com sistema de ligações'}
+            </div>
+            <div className="w-24 shrink-0 text-center">
+              {api4com && <StatusBadge status={api4com.status} />}
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
               {api4com ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusConfig[api4com.status].className}>
-                      {api4com.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                      {api4com.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                      {statusConfig[api4com.status].label}
-                    </Badge>
-                    <Button variant="outline" size="sm" onClick={() => setShowApi4ComConfig(true)}>
-                      Gerenciar
-                    </Button>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={() => setShowApi4ComConfig(true)}
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Gerenciar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnectApi4Com(true)}
                   >
-                    <Unplug className="mr-1 h-3 w-3" />
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
                     Desconectar
-                  </button>
-                </div>
+                  </Button>
+                </>
               ) : (
-                <Button onClick={() => setShowApi4ComConfig(true)}>
-                  Conectar API4Com
+                <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>
+                  Conectar
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Google Card (Gmail + Calendar) */}
-        <Card className="flex flex-col">
-          <CardContent className="flex flex-1 flex-col p-6">
-            <Image src="/logos/google-logo.png" alt="Google" width={48} height={48} className="rounded-lg" />
-            <div className="mt-4 flex items-center gap-2">
-              <CardTitle className="text-xl">Google</CardTitle>
+          {/* Google */}
+          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="w-10 shrink-0">
+              <Image src="/logos/google-logo.png" alt="Google" width={32} height={32} className="rounded-lg" />
+            </div>
+            <div className="w-32 shrink-0 flex items-center gap-2">
+              <span className="font-medium">Google</span>
               {!checkFeature(planFeatures, 'calendar') && (
-                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                  Calendar: Pro
+                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5">
+                  Cal: Pro
                 </Badge>
               )}
             </div>
-            <div className="min-h-[3.5rem] flex-1">
-              {gmail || calendar ? (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  {gmail?.email_address ?? calendar?.calendar_email} &middot; Conectado em {new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  {checkFeature(planFeatures, 'calendar')
-                    ? 'Integre com sua conta Google para sincronizar e gerenciar seus compromissos na plataforma.'
-                    : 'Integre com sua conta Google para enviar e-mails. Sincronização de Calendar disponível no plano Pro.'}
-                </p>
-              )}
+            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+              {googleConnected
+                ? `${gmail?.email_address ?? calendar?.calendar_email} \u00b7 Conectado em ${new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}`
+                : checkFeature(planFeatures, 'calendar')
+                  ? 'Sincronize e-mails e compromissos com sua conta Google'
+                  : 'Integre com sua conta Google para enviar e-mails'}
             </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-4">
-              {gmail || calendar ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusConfig[(gmail?.status === 'error' || calendar?.status === 'error') ? 'error' : 'connected'].className}>
-                      {(gmail?.status === 'error' || calendar?.status === 'error')
-                        ? <><X className="mr-1 h-3 w-3" />Erro</>
-                        : <><Check className="mr-1 h-3 w-3" />Conectado</>}
-                    </Badge>
-                    <Button variant="outline" size="sm" onClick={() => setShowSignatureEditor(true)}>
-                      <FileSignature className="mr-1.5 h-3.5 w-3.5" />
-                      Assinatura
-                    </Button>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
+            <div className="w-24 shrink-0 text-center">
+              {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              {googleConnected ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={() => setShowSignatureEditor(true)}
+                  >
+                    <FileSignature className="mr-1.5 h-3.5 w-3.5" />
+                    Assinatura
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnect('google')}
                   >
-                    <Unplug className="mr-1 h-3 w-3" />
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
                     Desconectar
-                  </button>
-                </div>
+                  </Button>
+                </>
               ) : (
-                <Button onClick={handleConnectGoogle} disabled={isPending}>
-                  {isPending ? 'Conectando...' : 'Conectar Google'}
+                <Button size="sm" onClick={handleConnectGoogle} disabled={isPending}>
+                  {isPending ? 'Conectando...' : 'Conectar'}
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Apollo Card */}
-        <Card className="flex flex-col">
-          <CardContent className="flex flex-1 flex-col p-6">
-            <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={48} height={48} className="rounded-lg" />
-            <CardTitle className="mt-4 text-xl">Apollo.io</CardTitle>
-            <div className="min-h-[3.5rem] flex-1">
-              {apollo ? (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Conectado em {new Date(apollo.created_at).toLocaleDateString('pt-BR')}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Conecte sua conta Apollo.io para buscar e importar leads qualificados.
-                </p>
-              )}
+          {/* Apollo */}
+          <div className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30">
+            <div className="w-10 shrink-0">
+              <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={32} height={32} className="rounded-lg" />
             </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-4">
+            <div className="w-32 shrink-0 font-medium">Apollo.io</div>
+            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+              {apollo
+                ? `Conectado em ${new Date(apollo.created_at).toLocaleDateString('pt-BR')}`
+                : 'Busque e importe leads qualificados do Apollo.io'}
+            </div>
+            <div className="w-24 shrink-0 text-center">
+              {apollo && <StatusBadge status={apollo.status} />}
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
               {apollo ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusConfig[apollo.status].className}>
-                      {apollo.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                      {apollo.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                      {statusConfig[apollo.status].label}
-                    </Badge>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnect('apollo')}
-                  >
-                    <Unplug className="mr-1 h-3 w-3" />
-                    Desconectar
-                  </button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                  onClick={() => setShowDisconnect('apollo')}
+                >
+                  <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  Desconectar
+                </Button>
               ) : (
-                <Button onClick={() => setShowApolloConfig(true)}>
-                  Conectar Apollo
+                <Button size="sm" onClick={() => setShowApolloConfig(true)}>
+                  Conectar
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
-
+          </div>
+        </div>
       </div>
 
-      {/* CRM Section */}
+      {/* CRM */}
       <div>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">CRM</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Conecte seu CRM para sincronizar leads e atividades automaticamente.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {CRM_PROVIDERS.map((provider) => {
+        <h2 className="mb-3 text-lg font-semibold">CRM</h2>
+        <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+          {CRM_PROVIDERS.map((provider, index) => {
             const connection = findCrm(provider.id);
+            const isLast = index === CRM_PROVIDERS.length - 1;
             return (
-              <Card key={provider.id} className="flex flex-col">
-                <CardContent className="flex flex-1 flex-col p-6">
-                  <Image src={provider.logo} alt={provider.name} width={48} height={48} className="rounded-lg" />
-                  <CardTitle className="mt-4 text-xl">{provider.name}</CardTitle>
-                  <div className="min-h-[3.5rem] flex-1">
-                    {connection ? (
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                        Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
-                        {connection.last_sync_at && (
-                          <> &middot; Último sync: {new Date(connection.last_sync_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
-                        )}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                        {provider.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-auto border-t border-[var(--border)] pt-4">
-                    {connection ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={statusConfig[connection.status].className}>
-                            {connection.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                            {connection.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                            {connection.status === 'syncing' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
-                            {statusConfig[connection.status].label}
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
-                            onClick={() => handleSyncCrm(provider.id)}
-                          >
-                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                            Sincronizar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setFieldMappingProvider(provider.id)}
-                          >
-                            <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                            Campos
-                          </Button>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex items-center text-xs text-[var(--muted-foreground)] hover:text-red-600"
-                          onClick={() => setShowDisconnect(provider.id)}
-                        >
-                          <Unplug className="mr-1 h-3 w-3" />
-                          Desconectar
-                        </button>
-                      </div>
-                    ) : (
+              <div
+                key={provider.id}
+                className={`group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 ${!isLast ? 'border-b border-[var(--border)]' : ''}`}
+              >
+                <div className="w-10 shrink-0">
+                  <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
+                </div>
+                <div className="w-32 shrink-0 font-medium">{provider.name}</div>
+                <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+                  {connection ? (
+                    <>
+                      Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
+                      {connection.last_sync_at && (
+                        <> &middot; Último sync: {new Date(connection.last_sync_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                      )}
+                    </>
+                  ) : (
+                    provider.description
+                  )}
+                </div>
+                <div className="w-24 shrink-0 text-center">
+                  {connection && <StatusBadge status={connection.status} />}
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  {connection ? (
+                    <>
                       <Button
-                        onClick={() => handleConnectCrm(provider.id)}
-                        disabled={activeCrmAction === provider.id}
+                        variant="outline"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100"
+                        disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
+                        onClick={() => handleSyncCrm(provider.id)}
                       >
-                        {activeCrmAction === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                        Sincronizar
                       </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100"
+                        onClick={() => setFieldMappingProvider(provider.id)}
+                      >
+                        <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                        Campos
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                        onClick={() => setShowDisconnect(provider.id)}
+                      >
+                        <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                        Desconectar
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleConnectCrm(provider.id)}
+                      disabled={activeCrmAction === provider.id}
+                    >
+                      {activeCrmAction === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
+                    </Button>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
