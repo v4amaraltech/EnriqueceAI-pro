@@ -191,17 +191,17 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">WhatsApp</div>
-            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
               {whatsappConnected
                 ? (evolution.phone || evolutionInstance?.phone)
                   ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
                   : 'WhatsApp conectado'
                 : 'Integre o WhatsApp para enviar mensagens pela plataforma'}
             </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {(whatsappConnected || whatsapp?.status === 'connected') && (
-                <StatusBadge status="connected" />
-              )}
+            {(whatsappConnected || whatsapp?.status === 'connected') && (
+              <StatusBadge status="connected" />
+            )}
+            <div className="ml-auto shrink-0 flex items-center gap-2">
               {whatsappConnected ? (
                 <Button
                   variant="ghost"
@@ -233,13 +233,13 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">API4Com</div>
-            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
               {api4com
                 ? `Ramal ${api4com.ramal} \u00b7 Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`
                 : 'Integração automática com sistema de ligações'}
             </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {api4com && <StatusBadge status={api4com.status} />}
+            {api4com && <StatusBadge status={api4com.status} />}
+            <div className="ml-auto shrink-0 flex items-center gap-2">
               {api4com ? (
                 <>
                   <Button
@@ -282,15 +282,15 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 </Badge>
               )}
             </div>
-            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
               {googleConnected
                 ? `${gmail?.email_address ?? calendar?.calendar_email} \u00b7 Conectado em ${new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}`
                 : checkFeature(planFeatures, 'calendar')
                   ? 'Sincronize e-mails e compromissos com sua conta Google'
                   : 'Integre com sua conta Google para enviar e-mails'}
             </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
+            {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
+            <div className="ml-auto shrink-0 flex items-center gap-2">
               {googleConnected ? (
                 <>
                   <Button
@@ -326,13 +326,13 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">Apollo.io</div>
-            <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
               {apollo
                 ? `Conectado em ${new Date(apollo.created_at).toLocaleDateString('pt-BR')}`
                 : 'Busque e importe leads qualificados do Apollo.io'}
             </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {apollo && <StatusBadge status={apollo.status} />}
+            {apollo && <StatusBadge status={apollo.status} />}
+            <div className="ml-auto shrink-0 flex items-center gap-2">
               {apollo ? (
                 <Button
                   variant="ghost"
@@ -369,7 +369,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
                 </div>
                 <div className="w-32 shrink-0 font-medium">{provider.name}</div>
-                <div className="min-w-0 flex-1 truncate text-sm text-[var(--muted-foreground)]">
+                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
                   {connection ? (
                     <>
                       Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
@@ -381,8 +381,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     provider.description
                   )}
                 </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  {connection && <StatusBadge status={connection.status} />}
+                {connection && <StatusBadge status={connection.status} />}
+                <div className="ml-auto shrink-0 flex items-center gap-2">
                   {connection ? (
                     <>
                       <Button
