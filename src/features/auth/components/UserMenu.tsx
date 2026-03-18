@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut, Settings, User } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
+import { useSettingsModal } from '@/shared/components/SettingsModal';
 
 import { useAuth } from '../hooks/useAuth';
 import { useOrganization } from '../hooks/useOrganization';
@@ -18,6 +19,7 @@ import { useOrganization } from '../hooks/useOrganization';
 export function UserMenu() {
   const { user, signOut } = useAuth();
   const { organization } = useOrganization();
+  const { openSettingsModal } = useSettingsModal();
 
   const email = user?.email ?? '';
   const initials = email
@@ -50,17 +52,12 @@ export function UserMenu() {
           <p className="text-xs text-[var(--muted-foreground)]">{organization?.name}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <a href="/settings/profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            Meu Perfil
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href="/settings" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configurações
-          </a>
+        <DropdownMenuItem
+          onClick={openSettingsModal}
+          className="flex items-center gap-2"
+        >
+          <Settings className="h-4 w-4" />
+          Configurações
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => signOut()} className="flex items-center gap-2 text-[var(--destructive)]">

@@ -17,6 +17,7 @@ import { NotificationProvider } from '@/features/notifications/components/Notifi
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
+import { SettingsModalProvider } from '@/shared/components/SettingsModal';
 import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
@@ -127,18 +128,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         >
           <NotificationProvider userId={user.id}>
             <SubscriptionGuard status={subscriptionStatus} periodEnd={subscriptionPeriodEnd}>
-              <div className="flex h-screen flex-col">
-                {subscriptionStatus === 'trialing' && subscriptionPeriodEnd && (
-                  <TrialBanner periodEnd={subscriptionPeriodEnd} />
-                )}
-                <TopBar />
-                <main className="flex-1 overflow-auto p-6" data-tour="main-content">
-                  <Breadcrumbs />
-                  <Suspense fallback={<PageSkeleton />}>
-                    {children}
-                  </Suspense>
-                </main>
-              </div>
+              <SettingsModalProvider>
+                <div className="flex h-screen flex-col">
+                  {subscriptionStatus === 'trialing' && subscriptionPeriodEnd && (
+                    <TrialBanner periodEnd={subscriptionPeriodEnd} />
+                  )}
+                  <TopBar />
+                  <main className="flex-1 overflow-auto p-6" data-tour="main-content">
+                    <Breadcrumbs />
+                    <Suspense fallback={<PageSkeleton />}>
+                      {children}
+                    </Suspense>
+                  </main>
+                </div>
+              </SettingsModalProvider>
             </SubscriptionGuard>
             <Toaster />
           </NotificationProvider>
