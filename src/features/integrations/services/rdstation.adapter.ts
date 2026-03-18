@@ -267,11 +267,11 @@ export class RDStationAdapter implements CRMAdapter {
     const body: Record<string, unknown> = {
       name: data.name,
       deal_stage_id: data.deal_stage_id,
-      contacts: data.contacts.map((id) => ({ id })),
+      contacts: data.contacts.map((id) => ({ _id: id })),
     };
 
     if (data.organization_id) {
-      body.organization_id = data.organization_id;
+      body.organization = { id: data.organization_id };
     }
 
     const result = await rdCrmFetch<RdCrmDealResponse>(

@@ -233,8 +233,8 @@ describe('RDStationAdapter', () => {
       const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
       expect(callBody.name).toBe('New Deal');
       expect(callBody.deal_stage_id).toBe('stage-1');
-      expect(callBody.contacts).toEqual([{ id: 'contact-1' }, { id: 'contact-2' }]);
-      expect(callBody.organization_id).toBe('org-123');
+      expect(callBody.contacts).toEqual([{ _id: 'contact-1' }, { _id: 'contact-2' }]);
+      expect(callBody.organization).toEqual({ id: 'org-123' });
     });
 
     it('should create deal without organization', async () => {
@@ -250,7 +250,7 @@ describe('RDStationAdapter', () => {
       });
 
       const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
-      expect(callBody.organization_id).toBeUndefined();
+      expect(callBody.organization).toBeUndefined();
     });
   });
 });
