@@ -447,25 +447,20 @@ export async function markLeadAsWon(
           if (crmOptions.provider === 'pipedrive') {
             const pipedriveAdapter = adapter as PipedriveAdapter;
 
-            // Create Organization (company) with address
-            const orgName = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
-            let orgAddress: string | undefined;
+            // Create Organization (company) with CNPJ and address
+            const razao = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            const cnpj = lead.cnpj as string | null;
+            const orgName = cnpj ? `${razao} | ${cnpj}` : razao;
+
             const endereco = lead.endereco as unknown as {
               logradouro?: string; numero?: string; complemento?: string;
               bairro?: string; cidade?: string; uf?: string; cep?: string;
             } | null;
+            let orgAddress: string | undefined;
             if (endereco && typeof endereco === 'object') {
-              const parts = [
-                endereco.logradouro,
-                endereco.numero,
-                endereco.complemento,
-              ].filter(Boolean).join(', ');
-              const city = [
-                endereco.bairro,
-                endereco.cidade ? `${endereco.cidade}/${endereco.uf ?? ''}` : undefined,
-                endereco.cep,
-              ].filter(Boolean).join(' - ');
-              orgAddress = [parts, city].filter(Boolean).join(' - ');
+              const street = [endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean).join(', ');
+              const locality = [endereco.bairro, endereco.cidade, endereco.uf].filter(Boolean).join(' - ');
+              orgAddress = [street, locality, endereco.cep].filter(Boolean).join(', ');
             }
 
             const orgResult = await pipedriveAdapter.pushOrganization(credentials, {
@@ -503,8 +498,10 @@ export async function markLeadAsWon(
           } else if (crmOptions.provider === 'hubspot') {
             const hubspotAdapter = adapter as HubSpotAdapter;
 
-            // Create Company with address fields
-            const companyName = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            // Create Company with CNPJ and address fields
+            const hsRazao = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            const hsCnpj = lead.cnpj as string | null;
+            const companyName = hsCnpj ? `${hsRazao} | ${hsCnpj}` : hsRazao;
             const endereco = lead.endereco as unknown as {
               logradouro?: string; numero?: string; complemento?: string;
               bairro?: string; cidade?: string; uf?: string; cep?: string;
