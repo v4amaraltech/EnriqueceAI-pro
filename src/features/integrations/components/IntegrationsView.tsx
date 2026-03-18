@@ -205,7 +205,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 <StatusBadge status="connected" />
               ) : null}
             </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 min-w-[280px]">
+            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {whatsappConnected ? (
                 <Button
                   variant="ghost"
@@ -245,7 +245,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             <div className="w-24 shrink-0 text-center">
               {api4com && <StatusBadge status={api4com.status} />}
             </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 min-w-[280px]">
+            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {api4com ? (
                 <>
                   <Button
@@ -298,7 +298,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             <div className="w-24 shrink-0 text-center">
               {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
             </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 min-w-[280px]">
+            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {googleConnected ? (
                 <>
                   <Button
@@ -342,7 +342,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             <div className="w-24 shrink-0 text-center">
               {apollo && <StatusBadge status={apollo.status} />}
             </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 min-w-[280px]">
+            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {apollo ? (
                 <Button
                   variant="ghost"
@@ -394,7 +394,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 <div className="w-24 shrink-0 text-center">
                   {connection && <StatusBadge status={connection.status} />}
                 </div>
-                <div className="shrink-0 flex items-center justify-end gap-2 min-w-[280px]">
+                <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
                   {connection ? (
                     <>
                       <Button
