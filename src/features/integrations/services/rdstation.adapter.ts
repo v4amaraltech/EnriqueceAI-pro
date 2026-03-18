@@ -234,7 +234,7 @@ export class RDStationAdapter implements CRMAdapter {
 
   async pushOrganization(
     credentials: CrmCredentials,
-    data: { name: string },
+    data: { name: string; address?: string; url?: string; phone?: string },
   ): Promise<{ external_id: string }> {
     const token = credentials.api_key ?? credentials.access_token;
 
@@ -244,10 +244,15 @@ export class RDStationAdapter implements CRMAdapter {
       orgName = `${orgName} .`;
     }
 
+    const body: Record<string, unknown> = { name: orgName };
+    if (data.address) body.address = data.address;
+    if (data.url) body.url = data.url;
+    if (data.phone) body.phone = data.phone;
+
     const result = await rdCrmFetch<RdCrmOrganizationResponse>(
       '/organizations',
       token,
-      { method: 'POST', body: JSON.stringify({ name: orgName }) },
+      { method: 'POST', body: JSON.stringify(body) },
     );
 
     return { external_id: result.id };
@@ -267,7 +272,7 @@ export class RDStationAdapter implements CRMAdapter {
     const body: Record<string, unknown> = {
       name: data.name,
       deal_stage_id: data.deal_stage_id,
-      contacts: data.contacts.map((id) => ({ _id: id })),
+      set_contacts: data.contacts.map((id) => ({ _id: id })),
     };
 
     if (data.organization_id) {

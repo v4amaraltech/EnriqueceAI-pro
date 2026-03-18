@@ -233,7 +233,7 @@ describe('RDStationAdapter', () => {
       const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
       expect(callBody.name).toBe('New Deal');
       expect(callBody.deal_stage_id).toBe('stage-1');
-      expect(callBody.contacts).toEqual([{ _id: 'contact-1' }, { _id: 'contact-2' }]);
+      expect(callBody.set_contacts).toEqual([{ _id: 'contact-1' }, { _id: 'contact-2' }]);
       expect(callBody.organization).toEqual({ id: 'org-123' });
     });
 

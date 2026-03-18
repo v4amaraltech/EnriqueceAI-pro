@@ -607,15 +607,29 @@ export async function markLeadAsWon(
           } else if (crmOptions.provider === 'rdstation') {
             const rdAdapter = adapter as RDStationAdapter;
 
-            // Create Organization with Razão Social | CNPJ
+            // Create Organization with Razão Social | CNPJ + address + phone
             const rdRazao = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
             const rdCnpj = lead.cnpj as string | null;
             const rdOrgName = rdCnpj ? `${rdRazao} | ${rdCnpj}` : rdRazao;
+
+            const rdEndereco = lead.endereco as unknown as {
+              logradouro?: string; numero?: string; complemento?: string;
+              bairro?: string; cidade?: string; uf?: string; cep?: string;
+            } | null;
+            let rdAddress: string | undefined;
+            if (rdEndereco && typeof rdEndereco === 'object') {
+              const street = [rdEndereco.logradouro, rdEndereco.numero, rdEndereco.complemento].filter(Boolean).join(', ');
+              const locality = [rdEndereco.bairro, rdEndereco.cidade, rdEndereco.uf].filter(Boolean).join(' - ');
+              rdAddress = [street, locality, rdEndereco.cep].filter(Boolean).join(', ') || undefined;
+            }
 
             let organizationId: string | undefined;
             try {
               const orgResult = await rdAdapter.pushOrganization(credentials, {
                 name: rdOrgName,
+                address: rdAddress,
+                phone: (lead.telefone as string) || undefined,
+                url: (lead.website as string) || undefined,
               });
               organizationId = orgResult.external_id;
             } catch {
