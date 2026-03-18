@@ -487,12 +487,16 @@ export async function markLeadAsWon(
               body: JSON.stringify({ org_id: orgExternalId }),
             });
 
-            // Ensure "Origem" custom field exists and set lead source
+            // Try to set lead source as custom field (requires deal fields scope)
             const leadSource = lead.lead_source as string | null;
             let customFields: Record<string, string> | undefined;
             if (leadSource) {
-              const origemKey = await pipedriveAdapter.ensureOrigemField(credentials);
-              customFields = { [origemKey]: leadSource };
+              try {
+                const origemKey = await pipedriveAdapter.ensureOrigemField(credentials);
+                customFields = { [origemKey]: leadSource };
+              } catch {
+                // Scope not granted — skip custom field, deal still gets created
+              }
             }
 
             const result = await pipedriveAdapter.pushDeal(credentials, {
