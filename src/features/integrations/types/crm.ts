@@ -90,7 +90,6 @@ export const DEFAULT_FIELD_MAPPINGS: Record<CrmProvider, FieldMapping> = {
   },
   rdstation: {
     leads: {
-      nome_fantasia: 'name',
       email: 'email',
       telefone: 'phone',
     },

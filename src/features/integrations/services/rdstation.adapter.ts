@@ -163,12 +163,15 @@ export class RDStationAdapter implements CRMAdapter {
     if (emails.length > 0) body.emails = emails;
     if (phones.length > 0) body.phones = phones;
 
+    // Build contact name from first_name + last_name, fallback to company name
+    if (!body.name) {
+      const fullName = [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim();
+      body.name = fullName || lead.nome_fantasia || lead.razao_social || 'Contato';
+    }
+
     // Ensure name has at least 2 chars (API requirement)
     if (typeof body.name === 'string' && body.name.length < 2) {
       body.name = `${body.name} .`;
-    }
-    if (!body.name) {
-      body.name = lead.nome_fantasia ?? lead.razao_social ?? 'Contato';
     }
 
     if (externalId) {
