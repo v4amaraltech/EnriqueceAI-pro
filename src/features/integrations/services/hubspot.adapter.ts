@@ -20,7 +20,6 @@ const HUBSPOT_SCOPES = [
   'crm.objects.deals.read',
   'crm.objects.deals.write',
   'crm.schemas.contacts.read',
-  'crm.schemas.deals.write',
   'sales-email-read',
   'timeline',
 ];
