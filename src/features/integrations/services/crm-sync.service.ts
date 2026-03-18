@@ -1,5 +1,6 @@
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 import type {
   CrmConnectionRow,
@@ -141,6 +142,15 @@ export class CrmSyncService {
         duration_ms: Date.now() - startTime,
         error_details: allErrors.length > 0 ? allErrors : null,
       } as Record<string, unknown>);
+
+    // Dispatch crm.synced webhook
+    dispatchWebhookEvent(supabase, connection.org_id, 'crm.synced', {
+      connection_id: connectionId,
+      crm_provider: connection.crm_provider,
+      records_synced: totalSynced,
+      errors: totalErrors,
+      duration_ms: Date.now() - startTime,
+    }).catch(() => {});
 
     return { pull: pullResult, push: pushResult, activities: activityResult };
   }

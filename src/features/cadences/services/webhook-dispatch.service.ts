@@ -7,8 +7,20 @@ export type WebhookEventType =
   | 'email.sent'
   | 'email.replied'
   | 'email.bounced'
+  | 'whatsapp.sent'
+  | 'whatsapp.replied'
+  | 'whatsapp.failed'
   | 'enrollment.completed'
-  | 'enrollment.paused';
+  | 'enrollment.paused'
+  | 'crm.synced'
+  | 'crm.deal_created'
+  | 'lead.created'
+  | 'lead.enriched'
+  | 'lead.qualified'
+  | 'lead.unqualified'
+  | 'call.completed'
+  | 'call.missed'
+  | 'call.scheduled';
 
 interface WebhookEndpoint {
   id: string;

@@ -9,6 +9,7 @@ import {
   processWithRetry,
   verifyHmacSignature,
 } from '@/lib/webhooks';
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 export const maxDuration = 60;
 
@@ -119,6 +120,22 @@ export async function POST(request: Request) {
                 metadata: status.errors ? { errors: status.errors } : null,
               } as Record<string, unknown>)
               .eq('external_id', status.id);
+
+            // Dispatch webhook for sent/failed
+            if (status.status === 'sent' || status.status === 'failed') {
+              const { data: interaction } = (await from(sb, 'interactions')
+                .select('org_id, lead_id')
+                .eq('external_id', status.id)
+                .maybeSingle()) as { data: { org_id: string; lead_id: string } | null };
+              if (interaction) {
+                const webhookEvent = status.status === 'sent' ? 'whatsapp.sent' : 'whatsapp.failed';
+                dispatchWebhookEvent(sb, interaction.org_id, webhookEvent, {
+                  lead_id: interaction.lead_id,
+                  whatsapp_message_id: status.id,
+                  errors: status.errors ?? null,
+                }).catch(() => {});
+              }
+            }
           },
         });
       }
@@ -230,6 +247,14 @@ async function processIncomingMessage(
   await from(supabase, 'cadence_enrollments')
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('id', enrollment.id);
+
+  // Dispatch whatsapp.replied webhook
+  dispatchWebhookEvent(supabase, lead.org_id, 'whatsapp.replied', {
+    lead_id: lead.id,
+    enrollment_id: enrollment.id,
+    message_id: message.id,
+    message_text: messageText,
+  }).catch(() => {});
 
   logger.info('Reply detected', { lead_id: lead.id, enrollment_id: enrollment.id });
 }

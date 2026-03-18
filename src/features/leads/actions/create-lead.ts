@@ -9,6 +9,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { createLeadSchema } from '../schemas/lead.schemas';
@@ -111,6 +112,14 @@ export async function createLead(
   }
 
   const leadId = (lead as { id: string }).id;
+
+  // Dispatch lead.created webhook
+  dispatchWebhookEvent(supabase, member.org_id, 'lead.created', {
+    lead_id: leadId,
+    email: parsed.data.email ?? null,
+    first_name: parsed.data.first_name,
+    last_name: parsed.data.last_name ?? null,
+  }).catch(() => {});
 
   // 2. Enroll in cadence if selected (non-blocking for lead creation)
   const cadenceId = parsed.data.cadence_id;

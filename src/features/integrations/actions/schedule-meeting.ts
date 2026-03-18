@@ -5,6 +5,8 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
 import {
   checkFreeBusy,
@@ -61,6 +63,16 @@ export async function scheduleMeeting(
         },
         performed_by: user.id,
       } as Record<string, unknown>);
+
+    // Dispatch call.scheduled webhook
+    dispatchWebhookEvent(supabase, member.org_id, 'call.scheduled', {
+      lead_id: leadId,
+      calendar_event_id: event.id,
+      title: input.title,
+      start_time: event.startTime,
+      end_time: event.endTime,
+      meet_link: event.meetLink ?? null,
+    }).catch(() => {});
 
     return { success: true, data: event };
   } catch (err) {

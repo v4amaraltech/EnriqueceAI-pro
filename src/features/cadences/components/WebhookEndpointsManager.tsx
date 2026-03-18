@@ -20,13 +20,57 @@ import {
   updateWebhookEndpoint,
 } from '../actions/webhook-endpoints-crud';
 
-const EVENT_OPTIONS = [
-  { value: 'email.sent', label: 'Email enviado' },
-  { value: 'email.replied', label: 'Email respondido' },
-  { value: 'email.bounced', label: 'Email bounce' },
-  { value: 'enrollment.completed', label: 'Enrollment finalizado' },
-  { value: 'enrollment.paused', label: 'Enrollment pausado' },
-] as const;
+const EVENT_GROUPS = [
+  {
+    label: 'Email',
+    events: [
+      { value: 'email.sent', label: 'Email enviado' },
+      { value: 'email.replied', label: 'Email respondido' },
+      { value: 'email.bounced', label: 'Email bounce' },
+    ],
+  },
+  {
+    label: 'WhatsApp',
+    events: [
+      { value: 'whatsapp.sent', label: 'WhatsApp enviado' },
+      { value: 'whatsapp.replied', label: 'WhatsApp respondido' },
+      { value: 'whatsapp.failed', label: 'WhatsApp falhou' },
+    ],
+  },
+  {
+    label: 'Enrollment',
+    events: [
+      { value: 'enrollment.completed', label: 'Enrollment finalizado' },
+      { value: 'enrollment.paused', label: 'Enrollment pausado' },
+    ],
+  },
+  {
+    label: 'CRM',
+    events: [
+      { value: 'crm.synced', label: 'CRM sincronizado' },
+      { value: 'crm.deal_created', label: 'Deal criado no CRM' },
+    ],
+  },
+  {
+    label: 'Lead',
+    events: [
+      { value: 'lead.created', label: 'Lead criado' },
+      { value: 'lead.enriched', label: 'Lead enriquecido' },
+      { value: 'lead.qualified', label: 'Lead qualificado' },
+      { value: 'lead.unqualified', label: 'Lead desqualificado' },
+    ],
+  },
+  {
+    label: 'Ligação',
+    events: [
+      { value: 'call.completed', label: 'Ligação completada' },
+      { value: 'call.missed', label: 'Ligação perdida' },
+      { value: 'call.scheduled', label: 'Reunião agendada' },
+    ],
+  },
+] satisfies { label: string; events: { value: string; label: string }[] }[];
+
+const ALL_EVENT_OPTIONS = EVENT_GROUPS.flatMap((g) => g.events);
 
 export function WebhookEndpointsManager() {
   const [endpoints, setEndpoints] = useState<WebhookEndpointRow[]>([]);
@@ -144,16 +188,23 @@ export function WebhookEndpointsManager() {
             </div>
             <div>
               <Label>Eventos (vazio = todos)</Label>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {EVENT_OPTIONS.map((opt) => (
-                  <Badge
-                    key={opt.value}
-                    variant={selectedEvents.includes(opt.value) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => toggleEvent(opt.value)}
-                  >
-                    {opt.label}
-                  </Badge>
+              <div className="mt-2 space-y-3">
+                {EVENT_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">{group.label}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {group.events.map((opt) => (
+                        <Badge
+                          key={opt.value}
+                          variant={selectedEvents.includes(opt.value) ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => toggleEvent(opt.value)}
+                        >
+                          {opt.label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -190,7 +241,7 @@ export function WebhookEndpointsManager() {
                     ) : (
                       ep.events.map((e) => (
                         <Badge key={e} variant="secondary" className="text-xs">
-                          {EVENT_OPTIONS.find((o) => o.value === e)?.label ?? e}
+                          {ALL_EVENT_OPTIONS.find((o) => o.value === e)?.label ?? e}
                         </Badge>
                       ))
                     )}

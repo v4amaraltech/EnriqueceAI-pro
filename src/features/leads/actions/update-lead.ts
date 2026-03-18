@@ -24,6 +24,8 @@ import { RDStationAdapter } from '@/features/integrations/services/rdstation.ada
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
 /**
@@ -232,6 +234,13 @@ export async function markLeadAsLost(
     return { success: false, error: 'Erro ao marcar lead como perdido' };
   }
 
+  // Dispatch lead.unqualified webhook
+  dispatchWebhookEvent(supabase, member.org_id, 'lead.unqualified', {
+    lead_id: leadId,
+    loss_reason_id: lossReasonId,
+    loss_notes: lossNotes ?? null,
+  }).catch(() => {});
+
   // 2. Complete active/paused enrollments with loss reason
   const enrollmentUpdate: Record<string, unknown> = {
     status: 'completed',
@@ -405,6 +414,12 @@ export async function markLeadAsWon(
     if (leadError) {
       return { success: false, error: 'Erro ao marcar lead como ganho' };
     }
+
+    // Dispatch lead.qualified webhook
+    dispatchWebhookEvent(supabase, orgId, 'lead.qualified', {
+      lead_id: leadId,
+      crm_provider: crmOptions?.provider ?? null,
+    }).catch(() => {});
 
     // 2. Complete active/paused enrollments
     await from(supabase, 'cadence_enrollments')
@@ -680,6 +695,15 @@ export async function markLeadAsWon(
             } as Record<string, unknown>);
 
             dealCreated = true;
+
+            // Dispatch crm.deal_created webhook
+            dispatchWebhookEvent(supabase, orgId, 'crm.deal_created', {
+              lead_id: leadId,
+              crm_provider: crmOptions.provider,
+              deal_external_id: dealExternalId,
+              pipeline_id: crmOptions.pipelineId,
+              stage_id: crmOptions.stageId,
+            }).catch(() => {});
           }
         }
       }

@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import type { CallStatus } from '@/features/calls/types';
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 export interface CompleteDialerCallInput {
   enrollmentId: string;
@@ -72,6 +73,16 @@ export async function completeDialerCall(
     console.error('[power-dialer] Failed to create call:', callError?.message);
     return { success: false, error: 'Erro ao registrar ligacao' };
   }
+
+  // Dispatch call.completed or call.missed webhook
+  const missedStatuses = ['no_answer', 'busy', 'wrong_number'];
+  const callWebhookEvent = missedStatuses.includes(callStatus) ? 'call.missed' : 'call.completed';
+  dispatchWebhookEvent(supabase, member.org_id, callWebhookEvent, {
+    lead_id: leadId,
+    call_id: call.id,
+    call_status: callStatus,
+    duration_seconds: durationSeconds ?? 0,
+  }).catch(() => {});
 
   // 2. Create interaction record
   await from(supabase, 'interactions')

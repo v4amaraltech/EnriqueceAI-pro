@@ -21,8 +21,20 @@ const VALID_EVENTS = [
   'email.sent',
   'email.replied',
   'email.bounced',
+  'whatsapp.sent',
+  'whatsapp.replied',
+  'whatsapp.failed',
   'enrollment.completed',
   'enrollment.paused',
+  'crm.synced',
+  'crm.deal_created',
+  'lead.created',
+  'lead.enriched',
+  'lead.qualified',
+  'lead.unqualified',
+  'call.completed',
+  'call.missed',
+  'call.scheduled',
 ] as const;
 
 function webhooksFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {

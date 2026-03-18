@@ -8,6 +8,8 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+
 import { getApolloApiKey } from '../services/apollo-key.service';
 import { enrichPerson } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
@@ -149,6 +151,13 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
       error_message: null,
       duration_ms: durationMs,
     } as Record<string, unknown>);
+
+    // Dispatch lead.enriched webhook
+    dispatchWebhookEvent(supabase, orgId, 'lead.enriched', {
+      lead_id: leadId,
+      provider: 'apollo',
+      person_id: person.id,
+    }).catch(() => {});
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);
