@@ -487,15 +487,16 @@ export async function markLeadAsWon(
               body: JSON.stringify({ org_id: orgExternalId }),
             });
 
-            // Try to set lead source as custom field (requires deal fields scope)
+            // Try to set lead source as custom field, fallback to note
             const leadSource = lead.lead_source as string | null;
             let customFields: Record<string, string> | undefined;
+            let origemFieldFailed = false;
             if (leadSource) {
               try {
                 const origemKey = await pipedriveAdapter.ensureOrigemField(credentials);
                 customFields = { [origemKey]: leadSource };
               } catch {
-                // Scope not granted — skip custom field, deal still gets created
+                origemFieldFailed = true;
               }
             }
 
@@ -508,6 +509,21 @@ export async function markLeadAsWon(
               customFields,
             });
             dealExternalId = result.external_id;
+
+            // Fallback: add origin as note on the deal if custom field failed
+            if (leadSource && origemFieldFailed) {
+              try {
+                await pipedriveAdapter.pushActivity(credentials, {
+                  contact_external_id: contactExternalId,
+                  type: 'note',
+                  subject: 'Origem do Lead',
+                  body: `Origem: ${leadSource}`,
+                  timestamp: new Date().toISOString(),
+                });
+              } catch {
+                // Best effort — don't fail the deal creation
+              }
+            }
           } else if (crmOptions.provider === 'hubspot') {
             const hubspotAdapter = adapter as HubSpotAdapter;
 
