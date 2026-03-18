@@ -540,12 +540,16 @@ export async function markLeadAsWon(
             // Associate Contact to Company
             await hubspotAdapter.associateContactToCompany(credentials, contactExternalId, companyId);
 
-            // Ensure "Origem" custom property exists and set lead source
+            // Try to set lead source as custom property (requires crm.schemas.deals.write scope)
             const hsLeadSource = lead.lead_source as string | null;
             let customProperties: Record<string, string> | undefined;
             if (hsLeadSource) {
-              await hubspotAdapter.ensureOrigemProperty(credentials);
-              customProperties = { origem: hsLeadSource };
+              try {
+                await hubspotAdapter.ensureOrigemProperty(credentials);
+                customProperties = { origem: hsLeadSource };
+              } catch {
+                // Scope not granted — skip custom property, deal still gets created
+              }
             }
 
             // Create Deal linked to Contact + Company
