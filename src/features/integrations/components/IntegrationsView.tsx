@@ -37,6 +37,7 @@ import { WebhookEndpointsManager } from '@/features/cadences/components/WebhookE
 
 import { Api4ComConfigModal } from './Api4ComConfigModal';
 import { ApolloConfigModal } from './ApolloConfigModal';
+import { RdStationTokenModal } from './RdStationTokenModal';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 
@@ -73,6 +74,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const [showApolloConfig, setShowApolloConfig] = useState(false);
+  const [showRdStationConfig, setShowRdStationConfig] = useState(false);
   const [crmPending, startCrmTransition] = useTransition();
   const [activeCrmAction, setActiveCrmAction] = useState<CrmProvider | null>(null);
   const evolution = useEvolutionWhatsApp();
@@ -82,6 +84,12 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   }
 
   function handleConnectCrm(provider: CrmProvider) {
+    // RD Station CRM uses token-based auth, not OAuth
+    if (provider === 'rdstation') {
+      setShowRdStationConfig(true);
+      return;
+    }
+
     setActiveCrmAction(provider);
     startCrmTransition(async () => {
       const result = await getCrmAuthUrl(provider);
@@ -551,6 +559,13 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
       <ApolloConfigModal
         open={showApolloConfig}
         onOpenChange={setShowApolloConfig}
+        onSuccess={() => router.refresh()}
+      />
+
+      {/* RD Station CRM token modal */}
+      <RdStationTokenModal
+        open={showRdStationConfig}
+        onOpenChange={setShowRdStationConfig}
         onSuccess={() => router.refresh()}
       />
 

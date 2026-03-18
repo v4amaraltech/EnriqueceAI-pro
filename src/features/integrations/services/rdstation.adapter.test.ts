@@ -9,16 +9,13 @@ vi.stubGlobal('fetch', mockFetch);
 describe('RDStationAdapter', () => {
   let adapter: RDStationAdapter;
   const mockCredentials: CrmCredentials = {
-    access_token: 'test-access-token',
-    refresh_token: 'test-refresh-token',
-    token_expires_at: new Date(Date.now() + 3600000).toISOString(),
+    access_token: 'test-api-token',
+    api_key: 'test-api-token',
   };
 
   beforeEach(() => {
     adapter = new RDStationAdapter();
     vi.clearAllMocks();
-    process.env.RDSTATION_CLIENT_ID = 'test-client-id';
-    process.env.RDSTATION_CLIENT_SECRET = 'test-client-secret';
   });
 
   it('should have provider set to rdstation', () => {
@@ -26,47 +23,63 @@ describe('RDStationAdapter', () => {
   });
 
   describe('getAuthUrl', () => {
-    it('should generate correct OAuth URL', () => {
-      const url = adapter.getAuthUrl('http://localhost:3000/callback');
-      expect(url).toContain('https://api.rd.services/auth/dialog');
-      expect(url).toContain('client_id=test-client-id');
-      expect(url).toContain('response_type=code');
+    it('should return empty string (no OAuth)', () => {
+      expect(adapter.getAuthUrl('http://localhost:3000/callback')).toBe('');
     });
   });
 
   describe('exchangeCode', () => {
-    it('should exchange code for tokens', async () => {
+    it('should throw error (not supported)', async () => {
+      await expect(
+        adapter.exchangeCode('code', 'http://localhost:3000/callback'),
+      ).rejects.toThrow('RD Station CRM uses API token authentication, not OAuth');
+    });
+  });
+
+  describe('refreshToken', () => {
+    it('should return credentials unchanged', async () => {
+      const result = await adapter.refreshToken(mockCredentials);
+      expect(result).toBe(mockCredentials);
+    });
+  });
+
+  describe('validateConnection', () => {
+    it('should return true for valid token', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          access_token: 'rd-token',
-          refresh_token: 'rd-refresh',
-          expires_in: 3600,
-        }),
+        json: async () => [{ id: 'pipe-1', name: 'Default' }],
       });
+      expect(await adapter.validateConnection(mockCredentials)).toBe(true);
+      expect(mockFetch.mock.calls[0]![0]).toContain('/deal_pipelines');
+      expect(mockFetch.mock.calls[0]![0]).toContain('token=test-api-token');
+    });
 
-      const result = await adapter.exchangeCode('code', 'http://localhost:3000/callback');
-      expect(result.access_token).toBe('rd-token');
-      expect(result.refresh_token).toBe('rd-refresh');
+    it('should return false for invalid token', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        text: async () => 'Unauthorized',
+      });
+      expect(await adapter.validateConnection(mockCredentials)).toBe(false);
     });
   });
 
   describe('pullContacts', () => {
-    it('should pull contacts from RD Station', async () => {
+    it('should pull and map contacts from RD CRM', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           contacts: [
             {
-              uuid: 'rd-contact-1',
-              email: 'test@example.com',
+              id: 'rd-contact-1',
               name: 'Test Contact',
-              company: 'Test Corp',
-              mobile_phone: '11999990000',
+              emails: [{ email: 'test@example.com' }],
+              phones: [{ phone: '11999990000' }],
+              organization: { id: 'org-1', name: 'Test Corp' },
               updated_at: '2026-02-19T10:00:00Z',
             },
           ],
           has_more: false,
+          total: 1,
         }),
       });
 
@@ -74,6 +87,30 @@ describe('RDStationAdapter', () => {
       expect(contacts).toHaveLength(1);
       expect(contacts[0]!.external_id).toBe('rd-contact-1');
       expect(contacts[0]!.email).toBe('test@example.com');
+      expect(contacts[0]!.phone).toBe('11999990000');
+      expect(contacts[0]!.company_name).toBe('Test Corp');
+    });
+
+    it('should handle contacts without optional fields', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          contacts: [
+            {
+              id: 'rd-contact-2',
+              name: 'No Details',
+              updated_at: '2026-02-19T10:00:00Z',
+            },
+          ],
+          has_more: false,
+          total: 1,
+        }),
+      });
+
+      const contacts = await adapter.pullContacts(mockCredentials);
+      expect(contacts[0]!.email).toBeNull();
+      expect(contacts[0]!.phone).toBeNull();
+      expect(contacts[0]!.company_name).toBeNull();
     });
   });
 
@@ -81,41 +118,42 @@ describe('RDStationAdapter', () => {
     it('should create new contact', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ uuid: 'new-rd-contact' }),
+        json: async () => ({ id: 'new-rd-contact' }),
       });
 
       const result = await adapter.pushContact(
         mockCredentials,
-        { nome_fantasia: 'Empresa', email: 'test@test.com', cnpj: '12345678000190' },
-        { nome_fantasia: 'name', email: 'email', cnpj: 'cf_cnpj' },
+        { nome_fantasia: 'Empresa', email: 'test@test.com', telefone: '11999990000' },
+        { nome_fantasia: 'name', email: 'email', telefone: 'phone' },
       );
       expect(result.external_id).toBe('new-rd-contact');
-    });
-
-    it('should map cf_ fields to custom_fields', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ uuid: 'new-rd-contact' }),
-      });
-
-      await adapter.pushContact(
-        mockCredentials,
-        { cnpj: '12345678000190' },
-        { cnpj: 'cf_cnpj' },
-      );
 
       const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
-      expect(callBody.custom_fields.cf_cnpj).toBe('12345678000190');
+      expect(callBody.name).toBe('Empresa');
+      expect(callBody.emails).toEqual([{ email: 'test@test.com' }]);
+      expect(callBody.phones).toEqual([{ phone: '11999990000' }]);
+    });
+
+    it('should update existing contact', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'existing-id' }),
+      });
+
+      const result = await adapter.pushContact(
+        mockCredentials,
+        { nome_fantasia: 'Updated' },
+        { nome_fantasia: 'name' },
+        'existing-id',
+      );
+      expect(result.external_id).toBe('existing-id');
+      expect(mockFetch.mock.calls[0]![0]).toContain('/contacts/existing-id');
+      expect(mockFetch.mock.calls[0]![1]!.method).toBe('PUT');
     });
   });
 
   describe('pushActivity', () => {
-    it('should push activity as event', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ event_uuid: 'event-1' }),
-      });
-
+    it('should return noop external_id', async () => {
       const result = await adapter.pushActivity(mockCredentials, {
         contact_external_id: 'rd-contact-1',
         type: 'email',
@@ -123,25 +161,96 @@ describe('RDStationAdapter', () => {
         body: 'Test body',
         timestamp: '2026-02-19T10:00:00Z',
       });
-      expect(result.external_id).toBe('event-1');
+      expect(result.external_id).toMatch(/^noop_/);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
-  describe('validateConnection', () => {
-    it('should return true for valid connection', async () => {
+  describe('fetchPipelines', () => {
+    it('should fetch and map pipelines', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ name: 'Test Account' }),
+        json: async () => [
+          { id: 'pipe-1', name: 'Sales Pipeline' },
+          { id: 'pipe-2', name: 'Enterprise Pipeline' },
+        ],
       });
-      expect(await adapter.validateConnection(mockCredentials)).toBe(true);
+
+      const pipelines = await adapter.fetchPipelines(mockCredentials);
+      expect(pipelines).toHaveLength(2);
+      expect(pipelines[0]).toEqual({ id: 'pipe-1', name: 'Sales Pipeline' });
+    });
+  });
+
+  describe('fetchStages', () => {
+    it('should fetch and map stages for a pipeline', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          deal_stages: [
+            { id: 'stage-1', name: 'Qualificação', nickname: 'qual', order: 1 },
+            { id: 'stage-2', name: 'Proposta', nickname: 'prop', order: 2 },
+          ],
+        }),
+      });
+
+      const stages = await adapter.fetchStages(mockCredentials, 'pipe-1');
+      expect(stages).toHaveLength(2);
+      expect(stages[0]).toEqual({ id: 'stage-1', name: 'Qualificação', order: 1 });
+      expect(mockFetch.mock.calls[0]![0]).toContain('deal_pipeline_id=pipe-1');
+    });
+  });
+
+  describe('pushOrganization', () => {
+    it('should create organization', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'org-123', name: 'Test Corp' }),
+      });
+
+      const result = await adapter.pushOrganization(mockCredentials, {
+        name: 'Test Corp',
+      });
+      expect(result.external_id).toBe('org-123');
+    });
+  });
+
+  describe('pushDeal', () => {
+    it('should create deal with contacts and stage', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'deal-456', name: 'New Deal' }),
+      });
+
+      const result = await adapter.pushDeal(mockCredentials, {
+        name: 'New Deal',
+        deal_stage_id: 'stage-1',
+        contacts: ['contact-1', 'contact-2'],
+        organization_id: 'org-123',
+      });
+      expect(result.external_id).toBe('deal-456');
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.name).toBe('New Deal');
+      expect(callBody.deal_stage_id).toBe('stage-1');
+      expect(callBody.contacts).toEqual([{ id: 'contact-1' }, { id: 'contact-2' }]);
+      expect(callBody.organization_id).toBe('org-123');
     });
 
-    it('should return false for invalid connection', async () => {
+    it('should create deal without organization', async () => {
       mockFetch.mockResolvedValueOnce({
-        ok: false,
-        text: async () => 'Unauthorized',
+        ok: true,
+        json: async () => ({ id: 'deal-789' }),
       });
-      expect(await adapter.validateConnection(mockCredentials)).toBe(false);
+
+      await adapter.pushDeal(mockCredentials, {
+        name: 'Simple Deal',
+        deal_stage_id: 'stage-1',
+        contacts: ['contact-1'],
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.organization_id).toBeUndefined();
     });
   });
 });

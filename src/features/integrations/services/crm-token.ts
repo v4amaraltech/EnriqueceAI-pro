@@ -14,16 +14,22 @@ export async function ensureFreshCredentials(
   adapter: { refreshToken(credentials: CrmCredentials): Promise<CrmCredentials> },
   supabase: SupabaseClient,
 ): Promise<CrmCredentials> {
-  let credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
+  const credentials = decryptJson<CrmCredentials>(connection.credentials_encrypted);
+
+  // RD Station CRM uses a non-expiring API token — skip refresh
+  if (connection.crm_provider === 'rdstation') {
+    return credentials;
+  }
 
   if (
     credentials.token_expires_at &&
     new Date(credentials.token_expires_at) <= new Date()
   ) {
-    credentials = await adapter.refreshToken(credentials);
+    const refreshed = await adapter.refreshToken(credentials);
     await from(supabase, 'crm_connections')
-      .update({ credentials_encrypted: encryptJson(credentials) } as Record<string, unknown>)
+      .update({ credentials_encrypted: encryptJson(refreshed) } as Record<string, unknown>)
       .eq('id', connection.id);
+    return refreshed;
   }
 
   return credentials;

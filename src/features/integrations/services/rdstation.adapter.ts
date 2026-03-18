@@ -5,63 +5,65 @@ import type {
   CrmProvider,
 } from '../types/crm';
 
-const RD_AUTH_URL = 'https://api.rd.services/auth/dialog';
-const RD_TOKEN_URL = 'https://api.rd.services/auth/token';
-const RD_API_BASE = 'https://api.rd.services';
+const RD_CRM_BASE = 'https://crm.rdstation.com/api/v1';
 
-function getRdClientId() {
-  return process.env.RDSTATION_CLIENT_ID ?? '';
-}
-function getRdClientSecret() {
-  return process.env.RDSTATION_CLIENT_SECRET ?? '';
-}
-
-interface RDTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
-
-interface RDContactsResponse {
-  contacts: RDContact[];
-  has_more: boolean;
-}
-
-interface RDContact {
-  uuid: string;
-  email: string | null;
-  name: string | null;
-  company: string | null;
-  mobile_phone: string | null;
-  custom_fields?: Record<string, string | null>;
+interface RdCrmContactResponse {
+  id: string;
+  name: string;
+  emails?: Array<{ email: string }>;
+  phones?: Array<{ phone: string }>;
+  organization?: { id: string; name: string } | null;
   updated_at: string;
+  custom_fields?: Record<string, unknown>;
 }
 
-interface RDCreateResponse {
-  uuid: string;
+interface RdCrmContactListResponse {
+  contacts: RdCrmContactResponse[];
+  has_more: boolean;
+  total: number;
 }
 
-interface RDEventResponse {
-  event_uuid: string;
+interface RdCrmOrganizationResponse {
+  id: string;
+  name: string;
 }
 
-async function rdFetch<T>(
+interface RdCrmDealResponse {
+  id: string;
+  name: string;
+}
+
+interface RdCrmPipelineResponse {
+  id: string;
+  name: string;
+}
+
+interface RdCrmStageResponse {
+  id: string;
+  name: string;
+  nickname: string;
+  order: number;
+}
+
+async function rdCrmFetch<T>(
   path: string,
-  accessToken: string,
+  token: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${RD_API_BASE}${path}`, {
+  const separator = path.includes('?') ? '&' : '?';
+  const url = `${RD_CRM_BASE}${path}${separator}token=${token}`;
+
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`RD Station API error (${response.status}): ${errorText}`);
+    throw new Error(`RD Station CRM API error (${response.status}): ${errorText}`);
   }
 
   return (await response.json()) as T;
@@ -70,108 +72,63 @@ async function rdFetch<T>(
 export class RDStationAdapter implements CRMAdapter {
   readonly provider: CrmProvider = 'rdstation';
 
-  getAuthUrl(redirectUri: string): string {
-    const params = new URLSearchParams({
-      client_id: getRdClientId(),
-      redirect_uri: redirectUri,
-      response_type: 'code',
-    });
-    return `${RD_AUTH_URL}?${params.toString()}`;
+  getAuthUrl(_redirectUri: string): string {
+    // RD Station CRM uses API token, not OAuth
+    return '';
   }
 
-  async exchangeCode(code: string, redirectUri: string): Promise<CrmCredentials> {
-    const response = await fetch(RD_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: getRdClientId(),
-        client_secret: getRdClientSecret(),
-        code,
-        redirect_uri: redirectUri,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('RD Station token exchange failed');
-    }
-
-    const tokens = (await response.json()) as RDTokenResponse;
-
-    return {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_expires_at: new Date(
-        Date.now() + tokens.expires_in * 1000,
-      ).toISOString(),
-    };
+  async exchangeCode(_code: string, _redirectUri: string): Promise<CrmCredentials> {
+    throw new Error('RD Station CRM uses API token authentication, not OAuth');
   }
 
   async refreshToken(credentials: CrmCredentials): Promise<CrmCredentials> {
-    if (!credentials.refresh_token) {
-      throw new Error('No refresh token available');
+    // API token does not expire — return as-is
+    return credentials;
+  }
+
+  async validateConnection(credentials: CrmCredentials): Promise<boolean> {
+    try {
+      await rdCrmFetch<RdCrmPipelineResponse[]>(
+        '/deal_pipelines?limit=1',
+        credentials.api_key ?? credentials.access_token,
+      );
+      return true;
+    } catch {
+      return false;
     }
-
-    const response = await fetch(RD_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: getRdClientId(),
-        client_secret: getRdClientSecret(),
-        refresh_token: credentials.refresh_token,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('RD Station token refresh failed');
-    }
-
-    const tokens = (await response.json()) as RDTokenResponse;
-
-    return {
-      ...credentials,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_expires_at: new Date(
-        Date.now() + tokens.expires_in * 1000,
-      ).toISOString(),
-    };
   }
 
   async pullContacts(
     credentials: CrmCredentials,
-    since?: string,
+    _since?: string,
   ): Promise<CrmContact[]> {
+    const token = credentials.api_key ?? credentials.access_token;
     const contacts: CrmContact[] = [];
-    let page = 1;
 
-    for (let i = 0; i < 10; i++) {
-      let path = `/platform/contacts?page=${page}&page_size=100`;
-      if (since) {
-        path += `&updated_since=${encodeURIComponent(since)}`;
-      }
-
-      const result = await rdFetch<RDContactsResponse>(
-        path,
-        credentials.access_token,
+    for (let page = 1; page <= 10; page++) {
+      const result = await rdCrmFetch<RdCrmContactListResponse>(
+        `/contacts?page=${page}&limit=100`,
+        token,
       );
 
       for (const contact of result.contacts) {
+        const primaryEmail = contact.emails?.[0]?.email ?? null;
+        const primaryPhone = contact.phones?.[0]?.phone ?? null;
+
         contacts.push({
-          external_id: contact.uuid,
-          email: contact.email,
-          company_name: contact.company,
-          phone: contact.mobile_phone,
+          external_id: contact.id,
+          email: primaryEmail,
+          company_name: contact.organization?.name ?? null,
+          phone: primaryPhone,
           properties: {
             name: contact.name,
-            company: contact.company,
-            ...(contact.custom_fields ?? {}),
+            company: contact.organization?.name ?? null,
           },
           updated_at: contact.updated_at,
         });
       }
 
       if (!result.has_more) break;
-      page++;
     }
 
     return contacts;
@@ -183,45 +140,58 @@ export class RDStationAdapter implements CRMAdapter {
     fieldMapping: Record<string, string>,
     externalId?: string,
   ): Promise<{ external_id: string }> {
+    const token = credentials.api_key ?? credentials.access_token;
+
+    // Build contact body from field mapping
     const body: Record<string, unknown> = {};
-    const customFields: Record<string, string> = {};
+    const emails: Array<{ email: string }> = [];
+    const phones: Array<{ phone: string }> = [];
 
     for (const [appField, crmField] of Object.entries(fieldMapping)) {
       const value = lead[appField];
-      if (value !== null && value !== undefined) {
-        if (crmField.startsWith('cf_')) {
-          customFields[crmField] = value;
-        } else {
-          body[crmField] = value;
-        }
+      if (value === null || value === undefined) continue;
+
+      if (crmField === 'email') {
+        emails.push({ email: value });
+      } else if (crmField === 'mobile_phone' || crmField === 'phone') {
+        phones.push({ phone: value });
+      } else {
+        body[crmField] = value;
       }
     }
 
-    if (Object.keys(customFields).length > 0) {
-      body.custom_fields = customFields;
+    if (emails.length > 0) body.emails = emails;
+    if (phones.length > 0) body.phones = phones;
+
+    // Ensure name has at least 2 chars (API requirement)
+    if (typeof body.name === 'string' && body.name.length < 2) {
+      body.name = `${body.name} .`;
+    }
+    if (!body.name) {
+      body.name = lead.nome_fantasia ?? lead.razao_social ?? 'Contato';
     }
 
     if (externalId) {
-      await rdFetch<RDCreateResponse>(
-        `/platform/contacts/${externalId}`,
-        credentials.access_token,
-        { method: 'PATCH', body: JSON.stringify(body) },
+      await rdCrmFetch<RdCrmContactResponse>(
+        `/contacts/${externalId}`,
+        token,
+        { method: 'PUT', body: JSON.stringify(body) },
       );
       return { external_id: externalId };
     }
 
-    const result = await rdFetch<RDCreateResponse>(
-      '/platform/contacts',
-      credentials.access_token,
+    const result = await rdCrmFetch<RdCrmContactResponse>(
+      '/contacts',
+      token,
       { method: 'POST', body: JSON.stringify(body) },
     );
 
-    return { external_id: result.uuid };
+    return { external_id: result.id };
   }
 
   async pushActivity(
-    credentials: CrmCredentials,
-    activity: {
+    _credentials: CrmCredentials,
+    _activity: {
       contact_external_id: string;
       type: string;
       subject: string;
@@ -229,38 +199,87 @@ export class RDStationAdapter implements CRMAdapter {
       timestamp: string;
     },
   ): Promise<{ external_id: string }> {
-    // RD Station uses events/conversions API for activities
-    const result = await rdFetch<RDEventResponse>(
-      '/platform/events',
-      credentials.access_token,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          event_type: 'CONVERSION',
-          event_family: 'CDP',
-          payload: {
-            conversion_identifier: `enriqueceai_${activity.type}_${Date.now()}`,
-            contact_uuid: activity.contact_external_id,
-            cf_activity_type: activity.type,
-            cf_activity_subject: activity.subject,
-            cf_activity_body: activity.body.substring(0, 500),
-          },
-        }),
-      },
-    );
-
-    return { external_id: result.event_uuid };
+    // RD Station CRM does not have a generic activities API
+    return { external_id: `noop_${Date.now()}` };
   }
 
-  async validateConnection(credentials: CrmCredentials): Promise<boolean> {
-    try {
-      await rdFetch<{ name: string }>(
-        '/marketing/account_info',
-        credentials.access_token,
-      );
-      return true;
-    } catch {
-      return false;
+  // --- RD Station CRM-specific methods ---
+
+  async fetchPipelines(
+    credentials: CrmCredentials,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const token = credentials.api_key ?? credentials.access_token;
+    const pipelines = await rdCrmFetch<RdCrmPipelineResponse[]>(
+      '/deal_pipelines',
+      token,
+    );
+    return pipelines.map((p) => ({ id: p.id, name: p.name }));
+  }
+
+  async fetchStages(
+    credentials: CrmCredentials,
+    pipelineId: string,
+  ): Promise<Array<{ id: string; name: string; order: number }>> {
+    const token = credentials.api_key ?? credentials.access_token;
+    const response = await rdCrmFetch<{ deal_stages: RdCrmStageResponse[] }>(
+      `/deal_stages?deal_pipeline_id=${pipelineId}`,
+      token,
+    );
+    return response.deal_stages.map((s) => ({
+      id: s.id,
+      name: s.name || s.nickname,
+      order: s.order,
+    }));
+  }
+
+  async pushOrganization(
+    credentials: CrmCredentials,
+    data: { name: string },
+  ): Promise<{ external_id: string }> {
+    const token = credentials.api_key ?? credentials.access_token;
+
+    // Ensure name has at least 2 chars
+    let orgName = data.name;
+    if (orgName.length < 2) {
+      orgName = `${orgName} .`;
     }
+
+    const result = await rdCrmFetch<RdCrmOrganizationResponse>(
+      '/organizations',
+      token,
+      { method: 'POST', body: JSON.stringify({ name: orgName }) },
+    );
+
+    return { external_id: result.id };
+  }
+
+  async pushDeal(
+    credentials: CrmCredentials,
+    data: {
+      name: string;
+      deal_stage_id: string;
+      contacts: string[];
+      organization_id?: string;
+    },
+  ): Promise<{ external_id: string }> {
+    const token = credentials.api_key ?? credentials.access_token;
+
+    const body: Record<string, unknown> = {
+      name: data.name,
+      deal_stage_id: data.deal_stage_id,
+      contacts: data.contacts.map((id) => ({ id })),
+    };
+
+    if (data.organization_id) {
+      body.organization_id = data.organization_id;
+    }
+
+    const result = await rdCrmFetch<RdCrmDealResponse>(
+      '/deals',
+      token,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+
+    return { external_id: result.id };
   }
 }

@@ -20,6 +20,7 @@ import type {
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
 import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
+import { RDStationAdapter } from '@/features/integrations/services/rdstation.adapter';
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 
@@ -294,6 +295,15 @@ export async function fetchCrmPipelines(): Promise<
             name: p.label,
             stages: [],
           }));
+        } else if (connection.crm_provider === 'rdstation') {
+          const adapter = new RDStationAdapter();
+          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const rawPipelines = await adapter.fetchPipelines(credentials);
+          pipelines = rawPipelines.map((p) => ({
+            id: p.id,
+            name: p.name,
+            stages: [],
+          }));
         }
 
         return pipelines.length > 0
@@ -357,6 +367,18 @@ export async function fetchPipelineStages(
         data: rawStages
           .sort((a, b) => a.displayOrder - b.displayOrder)
           .map((s) => ({ id: s.id, name: s.label })),
+      };
+    }
+
+    if (provider === 'rdstation') {
+      const adapter = new RDStationAdapter();
+      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const rawStages = await adapter.fetchStages(credentials, pipelineId);
+      return {
+        success: true,
+        data: rawStages
+          .sort((a, b) => a.order - b.order)
+          .map((s) => ({ id: s.id, name: s.name })),
       };
     }
 
@@ -582,6 +604,46 @@ export async function markLeadAsWon(
               customProperties,
             });
             dealExternalId = result.external_id;
+          } else if (crmOptions.provider === 'rdstation') {
+            const rdAdapter = adapter as RDStationAdapter;
+
+            // Create Organization with Razão Social | CNPJ
+            const rdRazao = (lead.razao_social ?? lead.nome_fantasia ?? dealTitle) as string;
+            const rdCnpj = lead.cnpj as string | null;
+            const rdOrgName = rdCnpj ? `${rdRazao} | ${rdCnpj}` : rdRazao;
+
+            let organizationId: string | undefined;
+            try {
+              const orgResult = await rdAdapter.pushOrganization(credentials, {
+                name: rdOrgName,
+              });
+              organizationId = orgResult.external_id;
+            } catch {
+              // Organization may already exist (name must be unique) — continue without it
+            }
+
+            // Update Contact with organization_id if available
+            if (organizationId) {
+              try {
+                await rdAdapter.pushContact(
+                  credentials,
+                  { ...lead, organization_id: organizationId } as Record<string, string | null>,
+                  fieldMapping,
+                  contactExternalId,
+                );
+              } catch {
+                // Best effort — don't fail deal creation
+              }
+            }
+
+            // Create Deal
+            const rdDealResult = await rdAdapter.pushDeal(credentials, {
+              name: dealTitle,
+              deal_stage_id: crmOptions.stageId,
+              contacts: [contactExternalId],
+              organization_id: organizationId,
+            });
+            dealExternalId = rdDealResult.external_id;
           } else {
             // Unsupported provider for deal creation — skip
             dealExternalId = '';

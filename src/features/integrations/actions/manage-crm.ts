@@ -97,6 +97,49 @@ export async function handleCrmCallback(
   }
 }
 
+export async function connectRdStationCrm(
+  token: string,
+): Promise<ActionResult<CrmConnectionSafe>> {
+  try {
+    const { orgId, supabase } = await getManagerOrgId();
+
+    const adapter = CRMRegistry.getAdapter('rdstation');
+    const credentials = { access_token: token, api_key: token };
+
+    const valid = await adapter.validateConnection(credentials);
+    if (!valid) {
+      return { success: false, error: 'Token inválido. Verifique e tente novamente.' };
+    }
+
+    const fieldMapping = DEFAULT_FIELD_MAPPINGS.rdstation;
+
+    const { data, error } = (await from(supabase, 'crm_connections')
+      .upsert(
+        {
+          org_id: orgId,
+          crm_provider: 'rdstation',
+          credentials_encrypted: encryptJson(credentials),
+          field_mapping: fieldMapping,
+          status: 'connected',
+        } as Record<string, unknown>,
+        { onConflict: 'org_id,crm_provider' },
+      )
+      .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
+      .single()) as { data: CrmConnectionSafe | null; error: { message: string } | null };
+
+    if (error || !data) {
+      return { success: false, error: 'Erro ao salvar conexão RD Station CRM' };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao conectar RD Station CRM',
+    };
+  }
+}
+
 export async function disconnectCrm(
   provider: CrmProvider,
 ): Promise<ActionResult<{ disconnected: boolean }>> {

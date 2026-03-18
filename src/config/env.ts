@@ -10,8 +10,6 @@ const envSchema = z.object({
   HUBSPOT_CLIENT_SECRET: z.string().min(1).optional(),
   PIPEDRIVE_CLIENT_ID: z.string().min(1).optional(),
   PIPEDRIVE_CLIENT_SECRET: z.string().min(1).optional(),
-  RDSTATION_CLIENT_ID: z.string().min(1).optional(),
-  RDSTATION_CLIENT_SECRET: z.string().min(1).optional(),
   GCAL_CLIENT_ID: z.string().min(1).optional(),
   GCAL_CLIENT_SECRET: z.string().min(1).optional(),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
