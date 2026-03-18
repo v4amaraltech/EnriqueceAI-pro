@@ -4,20 +4,22 @@ import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { fetchTeamAnalytics } from '@/features/statistics/actions/fetch-team-analytics';
 import { TeamAnalyticsView } from '@/features/statistics/components/TeamAnalyticsView';
 import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; compare?: string }>;
 }
 
 export default async function TeamAnalyticsPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const { from, to } = parseDateRangeParams(params);
+  const { from, to, compare } = parseDateRangeParams(params);
   const dateRange = { from, to };
 
-  const [result, members] = await Promise.all([
+  const [result, members, previousResult] = await Promise.all([
     fetchTeamAnalytics('30d', dateRange),
     fetchOrgMembers(),
+    compare ? fetchTeamAnalytics('30d', calculatePreviousPeriod(from, to)) : Promise.resolve(null),
   ]);
 
   if (!result.success) {
@@ -28,9 +30,11 @@ export default async function TeamAnalyticsPage({ searchParams }: PageProps) {
     );
   }
 
+  const previousData = previousResult?.success ? previousResult.data : undefined;
+
   return (
     <div className="p-6">
-      <TeamAnalyticsView data={result.data} members={members} />
+      <TeamAnalyticsView data={result.data} members={members} previousData={previousData} />
     </div>
   );
 }

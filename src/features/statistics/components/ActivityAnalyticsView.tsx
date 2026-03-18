@@ -3,6 +3,7 @@
 import { Activity, Calendar, Target, TrendingUp } from 'lucide-react';
 
 import { MetricCard } from '@/features/dashboard/components/MetricCard';
+import { calculateDelta } from '@/shared/utils/comparison';
 
 import type { ActivityAnalyticsData } from '../types/activity-analytics.types';
 import type { OrgMember } from '../types/shared';
@@ -16,9 +17,11 @@ interface ActivityAnalyticsViewProps {
   data: ActivityAnalyticsData;
   members: OrgMember[];
   hideFilters?: boolean;
+  previousData?: ActivityAnalyticsData;
 }
 
-export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAnalyticsViewProps) {
+export function ActivityAnalyticsView({ data, members, hideFilters, previousData }: ActivityAnalyticsViewProps) {
+  const prevKpis = previousData?.kpis;
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -44,6 +47,7 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
           value={data.kpis.totalActivities}
           icon={Activity}
           description="no período selecionado"
+          delta={prevKpis ? calculateDelta(data.kpis.totalActivities, prevKpis.totalActivities) : undefined}
         />
         <MetricCard
           title="Atividades Hoje"
@@ -56,12 +60,14 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
           value={data.kpis.avgPerDay}
           icon={TrendingUp}
           description="atividades por dia"
+          delta={prevKpis ? calculateDelta(data.kpis.avgPerDay, prevKpis.avgPerDay) : undefined}
         />
         <MetricCard
           title="Meta Atingida"
           value={`${data.kpis.goalAchievement}%`}
           icon={Target}
           description="da meta diária média"
+          delta={prevKpis ? calculateDelta(data.kpis.goalAchievement, prevKpis.goalAchievement) : undefined}
         />
       </div>
 

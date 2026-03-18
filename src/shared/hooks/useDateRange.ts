@@ -71,7 +71,23 @@ export function useDateRange(basePath?: string) {
     [router, searchParams, basePath],
   );
 
-  return { from, to, setRange };
+  const compare = searchParams.get('compare') === 'true';
+
+  const setCompare = useCallback(
+    (enabled: boolean) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (enabled) {
+        params.set('compare', 'true');
+      } else {
+        params.delete('compare');
+      }
+      const path = basePath ?? window.location.pathname;
+      router.push(`${path}?${params.toString()}`);
+    },
+    [router, searchParams, basePath],
+  );
+
+  return { from, to, setRange, compare, setCompare };
 }
 
 /** Server-side helper: parse from/to from searchParams with backward compat */
@@ -79,12 +95,14 @@ export function parseDateRangeParams(params: {
   from?: string;
   to?: string;
   period?: string;
-}): { from: string; to: string } {
+  compare?: string;
+}): { from: string; to: string; compare: boolean } {
+  const compare = params.compare === 'true';
   if (params.from && params.to) {
-    return { from: params.from, to: params.to };
+    return { from: params.from, to: params.to, compare };
   }
   if (params.period) {
-    return periodToRange(params.period);
+    return { ...periodToRange(params.period), compare };
   }
-  return { from: defaultFrom(), to: todayStr() };
+  return { from: defaultFrom(), to: todayStr(), compare };
 }

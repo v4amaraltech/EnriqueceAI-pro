@@ -103,29 +103,37 @@ describe('useDateRange', () => {
 describe('parseDateRangeParams', () => {
   it('returns from/to when both provided', () => {
     const result = parseDateRangeParams({ from: '2026-01-01', to: '2026-01-31' });
-    expect(result).toEqual({ from: '2026-01-01', to: '2026-01-31' });
+    expect(result).toEqual({ from: '2026-01-01', to: '2026-01-31', compare: false });
   });
 
   it('converts period to from/to', () => {
     const result = parseDateRangeParams({ period: '7d' });
     expect(result.from).toBe(daysAgo(7));
     expect(result.to).toBe(today());
+    expect(result.compare).toBe(false);
   });
 
   it('returns 30-day default when no params', () => {
     const result = parseDateRangeParams({});
     expect(result.from).toBe(daysAgo(30));
     expect(result.to).toBe(today());
+    expect(result.compare).toBe(false);
   });
 
   it('prefers from/to over period', () => {
     const result = parseDateRangeParams({ from: '2026-02-01', to: '2026-02-15', period: '90d' });
-    expect(result).toEqual({ from: '2026-02-01', to: '2026-02-15' });
+    expect(result).toEqual({ from: '2026-02-01', to: '2026-02-15', compare: false });
   });
 
   it('falls back to default when only from is provided', () => {
     const result = parseDateRangeParams({ from: '2026-01-01' });
     expect(result.from).toBe(daysAgo(30));
     expect(result.to).toBe(today());
+    expect(result.compare).toBe(false);
+  });
+
+  it('parses compare=true from params', () => {
+    const result = parseDateRangeParams({ from: '2026-01-01', to: '2026-01-31', compare: 'true' });
+    expect(result.compare).toBe(true);
   });
 });

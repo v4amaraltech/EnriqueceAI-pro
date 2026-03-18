@@ -3,15 +3,19 @@
 import Link from 'next/link';
 import { BarChart3 } from 'lucide-react';
 
+import { DeltaIndicator } from '@/shared/components/DeltaIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { calculateDelta } from '@/shared/utils/comparison';
 
 import type { CadenceMetrics } from '../reports.contract';
 
 interface CadenceReportProps {
   metrics: CadenceMetrics[];
+  previousMetrics?: CadenceMetrics[];
 }
 
-export function CadenceReport({ metrics }: CadenceReportProps) {
+export function CadenceReport({ metrics, previousMetrics }: CadenceReportProps) {
+  const prevMap = new Map(previousMetrics?.map((m) => [m.cadenceId, m]));
   if (metrics.length === 0) {
     return (
       <Card>
@@ -48,29 +52,41 @@ export function CadenceReport({ metrics }: CadenceReportProps) {
                 </tr>
               </thead>
               <tbody>
-                {metrics.map((m) => (
-                  <tr key={m.cadenceId} className="border-b border-[var(--border)] last:border-0">
-                    <td className="py-2 pr-4 font-medium">{m.cadenceName}</td>
-                    <td className="py-2 pr-4 text-right">{m.totalEnrollments}</td>
-                    <td className="py-2 pr-4 text-right">{m.sent}</td>
-                    <td className="py-2 pr-4 text-right">{m.opened}</td>
-                    <td className="py-2 pr-4 text-right">{m.replied}</td>
-                    <td className="py-2 pr-4 text-right">{m.bounced}</td>
-                    <td className="py-2 pr-4 text-right">{m.meetings}</td>
-                    <td className="py-2 pr-4 text-right">{m.openRate}%</td>
-                    <td className="py-2 pr-4 text-right">{m.replyRate}%</td>
-                    <td className="py-2 text-right font-medium">{m.conversionRate}%</td>
-                    <td className="py-2 text-right">
-                      <Link
-                        href={`/cadences/${m.cadenceId}/performance`}
-                        className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-                        title="Ver performance detalhada"
-                      >
-                        <BarChart3 className="h-3.5 w-3.5" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {metrics.map((m) => {
+                  const prev = prevMap.get(m.cadenceId);
+                  return (
+                    <tr key={m.cadenceId} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-2 pr-4 font-medium">{m.cadenceName}</td>
+                      <td className="py-2 pr-4 text-right">{m.totalEnrollments}</td>
+                      <td className="py-2 pr-4 text-right">{m.sent}</td>
+                      <td className="py-2 pr-4 text-right">{m.opened}</td>
+                      <td className="py-2 pr-4 text-right">{m.replied}</td>
+                      <td className="py-2 pr-4 text-right">{m.bounced}</td>
+                      <td className="py-2 pr-4 text-right">{m.meetings}</td>
+                      <td className="py-2 pr-4 text-right">
+                        <span>{m.openRate}%</span>
+                        {prev && <DeltaIndicator delta={calculateDelta(m.openRate, prev.openRate)} />}
+                      </td>
+                      <td className="py-2 pr-4 text-right">
+                        <span>{m.replyRate}%</span>
+                        {prev && <DeltaIndicator delta={calculateDelta(m.replyRate, prev.replyRate)} />}
+                      </td>
+                      <td className="py-2 text-right font-medium">
+                        <span>{m.conversionRate}%</span>
+                        {prev && <DeltaIndicator delta={calculateDelta(m.conversionRate, prev.conversionRate)} />}
+                      </td>
+                      <td className="py-2 text-right">
+                        <Link
+                          href={`/cadences/${m.cadenceId}/performance`}
+                          className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                          title="Ver performance detalhada"
+                        >
+                          <BarChart3 className="h-3.5 w-3.5" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

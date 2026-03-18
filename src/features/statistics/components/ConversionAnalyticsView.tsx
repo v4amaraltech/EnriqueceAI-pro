@@ -12,9 +12,10 @@ interface ConversionAnalyticsViewProps {
   data: ConversionAnalyticsData;
   members: OrgMember[];
   hideFilters?: boolean;
+  previousData?: ConversionAnalyticsData;
 }
 
-export function ConversionAnalyticsView({ data, members, hideFilters }: ConversionAnalyticsViewProps) {
+export function ConversionAnalyticsView({ data, members, hideFilters, previousData }: ConversionAnalyticsViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -37,7 +38,7 @@ export function ConversionAnalyticsView({ data, members, hideFilters }: Conversi
       </div>
 
       {/* Stage-to-stage */}
-      <StageToStageCards conversions={data.stageConversions} />
+      <StageToStageCards conversions={data.stageConversions} previousConversions={previousData?.stageConversions} />
 
       {/* Velocity */}
       <PipelineVelocityCard velocity={data.velocity} />

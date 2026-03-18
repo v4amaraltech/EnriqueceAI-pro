@@ -16,6 +16,7 @@ import { SdrReport } from './SdrReport';
 
 interface ReportsViewProps {
   data: ReportData;
+  previousData?: ReportData;
 }
 
 const tabs: { value: ReportView; label: string }[] = [
@@ -24,9 +25,9 @@ const tabs: { value: ReportView; label: string }[] = [
   { value: 'sdr', label: 'Por SDR' },
 ];
 
-export function ReportsView({ data }: ReportsViewProps) {
+export function ReportsView({ data, previousData }: ReportsViewProps) {
   const searchParams = useSearchParams();
-  const { from, to, setRange } = useDateRange('/reports');
+  const { from, to, setRange, compare, setCompare } = useDateRange('/reports');
   const [activeTab, setActiveTab] = useState<ReportView>(
     (searchParams.get('view') as ReportView) ?? 'overall',
   );
@@ -52,7 +53,7 @@ export function ReportsView({ data }: ReportsViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <DateRangePicker from={from} to={to} onChange={setRange} />
+          <DateRangePicker from={from} to={to} onChange={setRange} compare={compare} onCompareChange={setCompare} />
           {activeTab !== 'overall' && (
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" />
@@ -80,9 +81,24 @@ export function ReportsView({ data }: ReportsViewProps) {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overall' && <OverallReport metrics={data.overallMetrics} />}
-      {activeTab === 'cadence' && <CadenceReport metrics={data.cadenceMetrics} />}
-      {activeTab === 'sdr' && <SdrReport metrics={data.sdrMetrics} />}
+      {activeTab === 'overall' && (
+        <OverallReport
+          metrics={data.overallMetrics}
+          previousMetrics={previousData?.overallMetrics}
+        />
+      )}
+      {activeTab === 'cadence' && (
+        <CadenceReport
+          metrics={data.cadenceMetrics}
+          previousMetrics={previousData?.cadenceMetrics}
+        />
+      )}
+      {activeTab === 'sdr' && (
+        <SdrReport
+          metrics={data.sdrMetrics}
+          previousMetrics={previousData?.sdrMetrics}
+        />
+      )}
     </div>
   );
 }

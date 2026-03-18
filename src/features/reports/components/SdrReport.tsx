@@ -1,14 +1,18 @@
 'use client';
 
+import { DeltaIndicator } from '@/shared/components/DeltaIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { calculateDelta } from '@/shared/utils/comparison';
 
 import type { SdrMetrics } from '../reports.contract';
 
 interface SdrReportProps {
   metrics: SdrMetrics[];
+  previousMetrics?: SdrMetrics[];
 }
 
-export function SdrReport({ metrics }: SdrReportProps) {
+export function SdrReport({ metrics, previousMetrics }: SdrReportProps) {
+  const prevMap = new Map(previousMetrics?.map((m) => [m.userId, m]));
   if (metrics.length === 0) {
     return (
       <Card>
@@ -39,16 +43,28 @@ export function SdrReport({ metrics }: SdrReportProps) {
                 </tr>
               </thead>
               <tbody>
-                {metrics.map((m) => (
-                  <tr key={m.userId} className="border-b border-[var(--border)] last:border-0">
-                    <td className="py-2 pr-4 font-medium">{m.userName}</td>
-                    <td className="py-2 pr-4 text-right">{m.leadsWorked}</td>
-                    <td className="py-2 pr-4 text-right">{m.messagesSent}</td>
-                    <td className="py-2 pr-4 text-right">{m.replies}</td>
-                    <td className="py-2 pr-4 text-right">{m.meetings}</td>
-                    <td className="py-2 text-right font-medium">{m.conversionRate}%</td>
-                  </tr>
-                ))}
+                {metrics.map((m) => {
+                  const prev = prevMap.get(m.userId);
+                  return (
+                    <tr key={m.userId} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-2 pr-4 font-medium">{m.userName}</td>
+                      <td className="py-2 pr-4 text-right">
+                        <span>{m.leadsWorked}</span>
+                        {prev && <> <DeltaIndicator delta={calculateDelta(m.leadsWorked, prev.leadsWorked)} /></>}
+                      </td>
+                      <td className="py-2 pr-4 text-right">{m.messagesSent}</td>
+                      <td className="py-2 pr-4 text-right">
+                        <span>{m.replies}</span>
+                        {prev && <> <DeltaIndicator delta={calculateDelta(m.replies, prev.replies)} /></>}
+                      </td>
+                      <td className="py-2 pr-4 text-right">{m.meetings}</td>
+                      <td className="py-2 text-right font-medium">
+                        <span>{m.conversionRate}%</span>
+                        {prev && <> <DeltaIndicator delta={calculateDelta(m.conversionRate, prev.conversionRate)} /></>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

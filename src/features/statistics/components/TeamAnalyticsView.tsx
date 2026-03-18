@@ -11,9 +11,10 @@ import { StatisticsFilters } from './StatisticsFilters';
 interface TeamAnalyticsViewProps {
   data: TeamAnalyticsData;
   members: OrgMember[];
+  previousData?: TeamAnalyticsData;
 }
 
-export function TeamAnalyticsView({ data, members }: TeamAnalyticsViewProps) {
+export function TeamAnalyticsView({ data, members, previousData }: TeamAnalyticsViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -33,7 +34,7 @@ export function TeamAnalyticsView({ data, members }: TeamAnalyticsViewProps) {
       {/* Comparison table */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <h2 className="mb-4 text-lg font-semibold">Tabela Comparativa</h2>
-        <SdrComparisonTable data={data.comparison} />
+        <SdrComparisonTable data={data.comparison} previousData={previousData?.comparison} />
       </div>
 
       {/* Trend chart */}

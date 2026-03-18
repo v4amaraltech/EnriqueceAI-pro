@@ -4,15 +4,20 @@ import { useState } from 'react';
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
+import { DeltaIndicator } from '@/shared/components/DeltaIndicator';
+import { calculateDelta } from '@/shared/utils/comparison';
+
 import type { SdrComparisonRow } from '../types/team-analytics.types';
 
 interface SdrComparisonTableProps {
   data: SdrComparisonRow[];
+  previousData?: SdrComparisonRow[];
 }
 
 type SortKey = keyof Omit<SdrComparisonRow, 'userId' | 'userName'>;
 
-export function SdrComparisonTable({ data }: SdrComparisonTableProps) {
+export function SdrComparisonTable({ data, previousData }: SdrComparisonTableProps) {
+  const prevMap = new Map(previousData?.map((r) => [r.userId, r]));
   const [sortKey, setSortKey] = useState<SortKey>('activities');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -71,20 +76,32 @@ export function SdrComparisonTable({ data }: SdrComparisonTableProps) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row) => (
-            <tr key={row.userId} className="border-b border-[var(--border)]">
-              <td className="px-4 py-2 font-medium">{row.userName}</td>
-              <td className="px-4 py-2 text-right">{row.leads}</td>
-              <td className="px-4 py-2 text-right">{row.activities}</td>
-              <td className="px-4 py-2 text-right">{row.calls}</td>
-              <td className="px-4 py-2 text-right">{row.replies}</td>
-              <td className="px-4 py-2 text-right">{row.meetings}</td>
-              <td className="px-4 py-2 text-right">{row.conversionRate}%</td>
-              <td className="px-4 py-2 text-right">
-                <GoalBadge percentage={row.goalPercentage} />
-              </td>
-            </tr>
-          ))}
+          {sorted.map((row) => {
+            const prev = prevMap.get(row.userId);
+            return (
+              <tr key={row.userId} className="border-b border-[var(--border)]">
+                <td className="px-4 py-2 font-medium">{row.userName}</td>
+                <td className="px-4 py-2 text-right">
+                  {row.leads}
+                  {prev && <> <DeltaIndicator delta={calculateDelta(row.leads, prev.leads)} /></>}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {row.activities}
+                  {prev && <> <DeltaIndicator delta={calculateDelta(row.activities, prev.activities)} /></>}
+                </td>
+                <td className="px-4 py-2 text-right">{row.calls}</td>
+                <td className="px-4 py-2 text-right">{row.replies}</td>
+                <td className="px-4 py-2 text-right">{row.meetings}</td>
+                <td className="px-4 py-2 text-right">
+                  {row.conversionRate}%
+                  {prev && <> <DeltaIndicator delta={calculateDelta(row.conversionRate, prev.conversionRate)} /></>}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <GoalBadge percentage={row.goalPercentage} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

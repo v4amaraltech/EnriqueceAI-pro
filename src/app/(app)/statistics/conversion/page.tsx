@@ -4,22 +4,24 @@ import { fetchConversionAnalytics } from '@/features/statistics/actions/fetch-co
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ConversionAnalyticsView } from '@/features/statistics/components/ConversionAnalyticsView';
 import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; cadence?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; cadence?: string; compare?: string }>;
 }
 
 export default async function ConversionAnalyticsPage({ searchParams }: PageProps) {
   await requireAuth();
   const params = await searchParams;
-  const { from, to } = parseDateRangeParams(params);
+  const { from, to, compare } = parseDateRangeParams(params);
   const dateRange = { from, to };
   const userIds = params.user ? [params.user] : undefined;
   const cadenceId = params.cadence || undefined;
 
-  const [result, members] = await Promise.all([
+  const [result, members, previousResult] = await Promise.all([
     fetchConversionAnalytics('30d', userIds, cadenceId, dateRange),
     fetchOrgMembers(),
+    compare ? fetchConversionAnalytics('30d', userIds, cadenceId, calculatePreviousPeriod(from, to)) : Promise.resolve(null),
   ]);
 
   if (!result.success) {
@@ -30,9 +32,11 @@ export default async function ConversionAnalyticsPage({ searchParams }: PageProp
     );
   }
 
+  const previousData = previousResult?.success ? previousResult.data : undefined;
+
   return (
     <div className="p-6">
-      <ConversionAnalyticsView data={result.data} members={members} />
+      <ConversionAnalyticsView data={result.data} members={members} previousData={previousData} />
     </div>
   );
 }

@@ -22,7 +22,7 @@ export function StatisticsFilters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const { from, to, setRange } = useDateRange(basePath);
+  const { from, to, setRange, compare, setCompare } = useDateRange(basePath);
 
   const currentUser = searchParams.get('user') ?? '';
 
@@ -44,7 +44,7 @@ export function StatisticsFilters({
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${isPending ? 'opacity-70' : ''}`}>
-      <DateRangePicker from={from} to={to} onChange={setRange} />
+      <DateRangePicker from={from} to={to} onChange={setRange} compare={compare} onCompareChange={setCompare} />
       <select
         value={currentUser}
         onChange={(e) => updateUser(e.target.value || undefined)}
