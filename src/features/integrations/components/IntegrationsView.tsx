@@ -198,14 +198,10 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   : 'WhatsApp conectado'
                 : 'Integre o WhatsApp para enviar mensagens pela plataforma'}
             </div>
-            <div className="w-24 shrink-0 text-center">
-              {whatsappConnected ? (
+            <div className="shrink-0 flex items-center gap-2">
+              {(whatsappConnected || whatsapp?.status === 'connected') && (
                 <StatusBadge status="connected" />
-              ) : whatsapp?.status === 'connected' ? (
-                <StatusBadge status="connected" />
-              ) : null}
-            </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
+              )}
               {whatsappConnected ? (
                 <Button
                   variant="ghost"
@@ -242,10 +238,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 ? `Ramal ${api4com.ramal} \u00b7 Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`
                 : 'Integração automática com sistema de ligações'}
             </div>
-            <div className="w-24 shrink-0 text-center">
+            <div className="shrink-0 flex items-center gap-2">
               {api4com && <StatusBadge status={api4com.status} />}
-            </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {api4com ? (
                 <>
                   <Button
@@ -295,10 +289,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   ? 'Sincronize e-mails e compromissos com sua conta Google'
                   : 'Integre com sua conta Google para enviar e-mails'}
             </div>
-            <div className="w-24 shrink-0 text-center">
+            <div className="shrink-0 flex items-center gap-2">
               {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
-            </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {googleConnected ? (
                 <>
                   <Button
@@ -339,10 +331,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 ? `Conectado em ${new Date(apollo.created_at).toLocaleDateString('pt-BR')}`
                 : 'Busque e importe leads qualificados do Apollo.io'}
             </div>
-            <div className="w-24 shrink-0 text-center">
+            <div className="shrink-0 flex items-center gap-2">
               {apollo && <StatusBadge status={apollo.status} />}
-            </div>
-            <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
               {apollo ? (
                 <Button
                   variant="ghost"
@@ -391,10 +381,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     provider.description
                   )}
                 </div>
-                <div className="w-24 shrink-0 text-center">
+                <div className="shrink-0 flex items-center gap-2">
                   {connection && <StatusBadge status={connection.status} />}
-                </div>
-                <div className="shrink-0 flex items-center justify-end gap-2 w-[380px]">
                   {connection ? (
                     <>
                       <Button
