@@ -7,6 +7,7 @@ import {
   Check,
   FileSignature,
   RefreshCw,
+  Settings2,
   Unplug,
   X,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ import { WebhookEndpointsManager } from '@/features/cadences/components/WebhookE
 
 import { Api4ComConfigModal } from './Api4ComConfigModal';
 import { ApolloConfigModal } from './ApolloConfigModal';
+import { CrmFieldMappingModal } from './CrmFieldMappingModal';
 import { RdStationTokenModal } from './RdStationTokenModal';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
@@ -75,6 +77,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
   const [showSignatureEditor, setShowSignatureEditor] = useState(false);
   const [showApolloConfig, setShowApolloConfig] = useState(false);
   const [showRdStationConfig, setShowRdStationConfig] = useState(false);
+  const [fieldMappingProvider, setFieldMappingProvider] = useState<CrmProvider | null>(null);
   const [crmPending, startCrmTransition] = useTransition();
   const [activeCrmAction, setActiveCrmAction] = useState<CrmProvider | null>(null);
   const evolution = useEvolutionWhatsApp();
@@ -420,6 +423,14 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                             Sincronizar
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFieldMappingProvider(provider.id)}
+                          >
+                            <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                            Campos
+                          </Button>
                         </div>
                         <button
                           type="button"
@@ -561,6 +572,17 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         onOpenChange={setShowApolloConfig}
         onSuccess={() => router.refresh()}
       />
+
+      {/* CRM Field Mapping modal */}
+      {fieldMappingProvider && (
+        <CrmFieldMappingModal
+          open={!!fieldMappingProvider}
+          onOpenChange={(isOpen) => { if (!isOpen) setFieldMappingProvider(null); }}
+          provider={fieldMappingProvider}
+          currentMapping={findCrm(fieldMappingProvider)?.field_mapping ?? null}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       {/* RD Station CRM token modal */}
       <RdStationTokenModal

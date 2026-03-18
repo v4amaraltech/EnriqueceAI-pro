@@ -17,11 +17,21 @@ interface LeadForSync {
   cnpj: string;
   razao_social: string | null;
   nome_fantasia: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
   email: string | null;
   telefone: string | null;
   porte: string | null;
   cnae: string | null;
   situacao_cadastral: string | null;
+  faturamento_estimado: string | null;
+  uf: string | null;
+  lead_source: string | null;
+  instagram: string | null;
+  linkedin: string | null;
+  website: string | null;
+  notes: string | null;
   updated_at: string;
 }
 
@@ -249,7 +259,7 @@ export class CrmSyncService {
 
     // Get leads updated since last sync
     let query = from(supabase, 'leads')
-      .select('id, org_id, cnpj, razao_social, nome_fantasia, email, telefone, porte, cnae, situacao_cadastral, updated_at')
+      .select('id, org_id, cnpj, razao_social, nome_fantasia, first_name, last_name, job_title, email, telefone, porte, cnae, situacao_cadastral, faturamento_estimado, uf, lead_source, instagram, linkedin, website, notes, updated_at')
       .eq('org_id', connection.org_id)
       .is('deleted_at', null)
       .limit(200);
@@ -266,11 +276,21 @@ export class CrmSyncService {
           nome_fantasia: lead.nome_fantasia,
           razao_social: lead.razao_social,
           cnpj: lead.cnpj,
+          first_name: lead.first_name,
+          last_name: lead.last_name,
+          job_title: lead.job_title,
           email: lead.email,
           telefone: lead.telefone,
           porte: lead.porte,
           cnae: lead.cnae,
           situacao_cadastral: lead.situacao_cadastral,
+          faturamento_estimado: lead.faturamento_estimado,
+          uf: lead.uf,
+          lead_source: lead.lead_source,
+          instagram: lead.instagram,
+          linkedin: lead.linkedin,
+          website: lead.website,
+          notes: lead.notes,
         };
 
         // Check if lead has been synced before (external_id in interactions)
