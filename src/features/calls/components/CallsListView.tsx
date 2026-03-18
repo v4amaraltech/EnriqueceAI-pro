@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useState, useTransition } from 'react';
-import { Download, Phone } from 'lucide-react';
+import { Download, Phone, SearchX } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -95,8 +95,14 @@ export function CallsListView({ result, hasFilters, currentFilters }: CallsListV
 
       {/* Table or filtered empty */}
       {calls.length === 0 && hasFilters ? (
-        <div className="py-12 text-center text-[var(--muted-foreground)]">
-          Nenhuma ligação encontrada com os filtros aplicados.
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
+            <SearchX className="h-10 w-10 text-[var(--muted-foreground)]" />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold">Nenhuma ligação encontrada</h3>
+          <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
+            Tente ajustar os filtros para encontrar o que procura.
+          </p>
         </div>
       ) : (
         <CallsTable calls={calls} onView={handleView} />

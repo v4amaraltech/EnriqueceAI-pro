@@ -164,7 +164,11 @@ export function RankingCard({
       )}
 
       {/* Bottom spacing when no breakdown */}
-      {data.sdrBreakdown.length === 0 && <div className="pb-6" />}
+      {data.sdrBreakdown.length === 0 && (
+        <div className="mx-6 mb-6 mt-4 flex flex-col items-center justify-center rounded-lg border border-dashed py-6">
+          <p className="text-xs text-muted-foreground">Nenhum dado individual disponível</p>
+        </div>
+      )}
     </div>
   );
 }

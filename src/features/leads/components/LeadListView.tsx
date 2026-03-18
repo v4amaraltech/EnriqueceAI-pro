@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, FileUp, Plus, Users } from 'lucide-react';
+import { Download, FileUp, Plus, SearchX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -176,8 +176,14 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       {/* Table or filtered empty */}
       <div className={isTabPending ? 'pointer-events-none opacity-50 transition-opacity' : ''}>
       {leads.length === 0 && hasFilters ? (
-        <div className="py-12 text-center text-[var(--muted-foreground)]">
-          Nenhum lead encontrado com os filtros aplicados.
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
+            <SearchX className="h-10 w-10 text-[var(--muted-foreground)]" />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold">Nenhum lead encontrado</h3>
+          <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
+            Tente ajustar os filtros para encontrar o que procura.
+          </p>
         </div>
       ) : (
         <LeadTable leads={leads} total={total} cadenceInfo={cadenceInfo} userMap={userMap} />
