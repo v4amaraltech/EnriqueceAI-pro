@@ -56,7 +56,7 @@ describe('calendar.service', () => {
         description: 'Test description',
         startTime: '2026-02-20T12:00:00Z',
         endTime: '2026-02-20T12:30:00Z',
-        attendeeEmail: 'lead@example.com',
+        attendeeEmails: ['lead@example.com'],
         generateMeetLink: true,
       });
 

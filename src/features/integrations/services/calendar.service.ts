@@ -43,7 +43,7 @@ export interface CreateEventInput {
   description?: string;
   startTime: string; // ISO 8601
   endTime: string; // ISO 8601
-  attendeeEmail?: string;
+  attendeeEmails?: string[];
   generateMeetLink?: boolean;
 }
 
@@ -155,8 +155,8 @@ export async function createCalendarEvent(
     end: { dateTime: input.endTime, timeZone: 'America/Sao_Paulo' },
   };
 
-  if (input.attendeeEmail) {
-    event.attendees = [{ email: input.attendeeEmail }];
+  if (input.attendeeEmails && input.attendeeEmails.length > 0) {
+    event.attendees = input.attendeeEmails.map((email) => ({ email }));
   }
 
   if (input.generateMeetLink) {

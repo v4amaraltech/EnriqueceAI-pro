@@ -926,7 +926,9 @@ export function LeadInfoPanel({
                     title,
                     startTime: startDateTime.toISOString(),
                     endTime: endDateTime.toISOString(),
-                    attendeeEmail: meetingAttendee || data.email || undefined,
+                    attendeeEmails: (meetingAttendee || data.email)
+                      ? (meetingAttendee || data.email || '').split(',').map((e: string) => e.trim()).filter(Boolean)
+                      : undefined,
                     generateMeetLink: meetingMeetLink,
                   });
 

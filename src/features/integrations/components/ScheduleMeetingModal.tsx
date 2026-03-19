@@ -41,7 +41,7 @@ export function ScheduleMeetingModal({
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [duration, setDuration] = useState('30');
-  const [attendeeEmail, setAttendeeEmail] = useState(leadEmail ?? '');
+  const [attendeeEmails, setAttendeeEmails] = useState(leadEmail ?? '');
   const [generateMeetLink, setGenerateMeetLink] = useState(true);
 
   function handleSubmit() {
@@ -54,12 +54,17 @@ export function ScheduleMeetingModal({
     const endDateTime = new Date(startDateTime.getTime() + parseInt(duration, 10) * 60 * 1000);
 
     startTransition(async () => {
+      const emails = attendeeEmails
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+
       const result = await scheduleMeeting(leadId, {
         title,
         description: description || undefined,
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
-        attendeeEmail: attendeeEmail || undefined,
+        attendeeEmails: emails.length > 0 ? emails : undefined,
         generateMeetLink,
       });
 
@@ -153,14 +158,17 @@ export function ScheduleMeetingModal({
           </div>
 
           <div>
-            <Label htmlFor="meeting-email">Email do participante</Label>
+            <Label htmlFor="meeting-email">Emails dos participantes</Label>
             <Input
               id="meeting-email"
-              type="email"
-              value={attendeeEmail}
-              onChange={(e) => setAttendeeEmail(e.target.value)}
-              placeholder="email@exemplo.com"
+              type="text"
+              value={attendeeEmails}
+              onChange={(e) => setAttendeeEmails(e.target.value)}
+              placeholder="lead@exemplo.com, sdr@empresa.com"
             />
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Separe múltiplos emails com vírgula
+            </p>
           </div>
 
           <label className="flex items-center gap-2 text-sm">

@@ -59,7 +59,7 @@ export async function scheduleMeeting(
           calendar_event_id: event.id,
           calendar_link: event.htmlLink,
           meet_link: event.meetLink,
-          attendee: input.attendeeEmail ?? null,
+          attendees: input.attendeeEmails ?? [],
         },
         performed_by: user.id,
       } as Record<string, unknown>);

@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { DateRangePicker } from '@/shared/components/DateRangePicker';
 import { useDateRange } from '@/shared/hooks/useDateRange';
 import { Button } from '@/shared/components/ui/button';
+import { useOrganization } from '@/features/auth/hooks/useOrganization';
 
 import type { ReportData, ReportView } from '../reports.contract';
 import { cadenceMetricsToCsv, downloadCsv, sdrMetricsToCsv } from '../utils/csv-export';
@@ -28,11 +30,13 @@ const tabs: { value: ReportView; label: string }[] = [
 export function ReportsView({ data, previousData }: ReportsViewProps) {
   const searchParams = useSearchParams();
   const { from, to, setRange, compare, setCompare } = useDateRange('/reports');
+  const { organization } = useOrganization();
   const [activeTab, setActiveTab] = useState<ReportView>(
     (searchParams.get('view') as ReportView) ?? 'overall',
   );
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  function handleExport() {
+  function handleExportCsv() {
     const dateStr = new Date().toISOString().split('T')[0];
     if (activeTab === 'cadence') {
       const csv = cadenceMetricsToCsv(data.cadenceMetrics);
@@ -40,6 +44,25 @@ export function ReportsView({ data, previousData }: ReportsViewProps) {
     } else if (activeTab === 'sdr') {
       const csv = sdrMetricsToCsv(data.sdrMetrics);
       downloadCsv(csv, `relatorio-sdrs-${dateStr}.csv`);
+    }
+  }
+
+  async function handleExportPdf() {
+    setIsExportingPdf(true);
+    try {
+      const { exportReportPdf } = await import('../utils/pdf-export');
+      await exportReportPdf({
+        orgName: organization.name,
+        from,
+        to,
+        data,
+        previousData,
+      });
+      toast.success('PDF exportado com sucesso');
+    } catch {
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setIsExportingPdf(false);
     }
   }
 
@@ -54,8 +77,12 @@ export function ReportsView({ data, previousData }: ReportsViewProps) {
         </div>
         <div className="flex items-center gap-2">
           <DateRangePicker from={from} to={to} onChange={setRange} compare={compare} onCompareChange={setCompare} />
+          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExportingPdf}>
+            <FileText className="mr-2 h-4 w-4" />
+            {isExportingPdf ? 'Gerando PDF...' : 'Exportar PDF'}
+          </Button>
           {activeTab !== 'overall' && (
-            <Button variant="outline" size="sm" onClick={handleExport}>
+            <Button variant="outline" size="sm" onClick={handleExportCsv}>
               <Download className="mr-2 h-4 w-4" />
               Exportar CSV
             </Button>

@@ -37,6 +37,16 @@ vi.mock('../utils/csv-export', () => ({
   downloadCsv: vi.fn(),
 }));
 
+vi.mock('@/features/auth/hooks/useOrganization', () => ({
+  useOrganization: () => ({
+    organization: { id: 'org-1', name: 'Test Org', slug: 'test-org', owner_id: 'u1', onboarding_step: null, logo_url: null, created_at: '', updated_at: '' },
+    members: [],
+    currentMember: { user_id: 'u1', role: 'manager', status: 'active' },
+    isManager: true,
+    loading: false,
+  }),
+}));
+
 function makeCadenceMetric(overrides: Partial<CadenceMetrics> = {}): CadenceMetrics {
   return {
     cadenceId: 'c1',
