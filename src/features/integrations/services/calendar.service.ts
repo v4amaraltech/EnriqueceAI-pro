@@ -98,9 +98,11 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);
 
-    throw new Error(
-      'Erro ao renovar token do Google Calendar. Reconecte em Configurações > Integrações.',
+    const err = new Error(
+      'Sessão do Google Calendar expirada. Reconectando...',
     );
+    err.name = 'GCalTokenExpired';
+    throw err;
   }
 
   const tokens = (await response.json()) as {

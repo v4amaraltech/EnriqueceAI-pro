@@ -77,7 +77,8 @@ export async function scheduleMeeting(
     return { success: true, data: event };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao criar evento';
-    return { success: false, error: message };
+    const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
+    return { success: false, error: message, code };
   }
 }
 
@@ -109,6 +110,7 @@ export async function getAvailability(
     return { success: true, data: busy };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao verificar disponibilidade';
-    return { success: false, error: message };
+    const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
+    return { success: false, error: message, code };
   }
 }
