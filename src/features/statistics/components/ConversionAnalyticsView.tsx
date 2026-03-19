@@ -6,16 +6,18 @@ import { ConversionByCadenceTable } from './ConversionByCadenceTable';
 import { ConversionFunnelChart } from './ConversionFunnelChart';
 import { PipelineVelocityCard } from './PipelineVelocityCard';
 import { StageToStageCards } from './StageToStageCards';
-import { StatisticsFilters } from './StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
+import type { CadenceOption } from '@/shared/components/AnalyticsFilters';
 
 interface ConversionAnalyticsViewProps {
   data: ConversionAnalyticsData;
   members: OrgMember[];
+  cadences?: CadenceOption[];
   hideFilters?: boolean;
   previousData?: ConversionAnalyticsData;
 }
 
-export function ConversionAnalyticsView({ data, members, hideFilters, previousData }: ConversionAnalyticsViewProps) {
+export function ConversionAnalyticsView({ data, members, cadences, hideFilters, previousData }: ConversionAnalyticsViewProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -27,7 +29,7 @@ export function ConversionAnalyticsView({ data, members, hideFilters, previousDa
           </p>
         </div>
         {!hideFilters && (
-          <StatisticsFilters basePath="/statistics/conversion" members={members} />
+          <AnalyticsFilters basePath="/statistics/conversion" members={members} cadences={cadences} />
         )}
       </div>
 

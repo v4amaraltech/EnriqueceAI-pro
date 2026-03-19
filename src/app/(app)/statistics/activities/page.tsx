@@ -7,7 +7,7 @@ import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; compare?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; sdr?: string; compare?: string }>;
 }
 
 export default async function ActivityAnalyticsPage({ searchParams }: PageProps) {
@@ -15,7 +15,8 @@ export default async function ActivityAnalyticsPage({ searchParams }: PageProps)
   const params = await searchParams;
   const { from, to, compare } = parseDateRangeParams(params);
   const dateRange = { from, to };
-  const userIds = params.user ? [params.user] : undefined;
+  const sdrParam = params.sdr ?? params.user;
+  const userIds = sdrParam ? [sdrParam] : undefined;
 
   const [result, members, previousResult] = await Promise.all([
     fetchActivityAnalytics('30d', userIds, dateRange),

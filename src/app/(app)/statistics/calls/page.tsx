@@ -6,7 +6,7 @@ import { CallStatisticsView } from '@/features/statistics/components/CallStatist
 import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; sdr?: string }>;
 }
 
 export default async function CallStatisticsPage({ searchParams }: PageProps) {
@@ -14,7 +14,8 @@ export default async function CallStatisticsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { from, to } = parseDateRangeParams(params);
   const dateRange = { from, to };
-  const userIds = params.user ? [params.user] : undefined;
+  const sdrParam = params.sdr ?? params.user;
+  const userIds = sdrParam ? [sdrParam] : undefined;
 
   const [result, members] = await Promise.all([
     fetchCallStatistics('30d', userIds, dateRange),

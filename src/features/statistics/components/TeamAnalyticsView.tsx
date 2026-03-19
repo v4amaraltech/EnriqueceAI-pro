@@ -6,7 +6,7 @@ import { GoalAchievementGrid } from './GoalAchievementGrid';
 import { SdrComparisonTable } from './SdrComparisonTable';
 import { SdrPerformanceTrendChart } from './SdrPerformanceTrendChart';
 import { SdrRankingSection } from './SdrRankingSection';
-import { StatisticsFilters } from './StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 
 interface TeamAnalyticsViewProps {
   data: TeamAnalyticsData;
@@ -25,7 +25,7 @@ export function TeamAnalyticsView({ data, members, previousData }: TeamAnalytics
             Comparativo de performance dos SDRs.
           </p>
         </div>
-        <StatisticsFilters
+        <AnalyticsFilters
           basePath="/statistics/team"
           members={members}
         />

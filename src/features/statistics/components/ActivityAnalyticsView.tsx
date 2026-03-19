@@ -11,7 +11,7 @@ import { ActivityTypeDonutChart } from './ActivityTypeDonutChart';
 import { ChannelVolumeChart } from './ChannelVolumeChart';
 import { DailyActivityTrendChart } from './DailyActivityTrendChart';
 import { GoalAchievementCard } from './GoalAchievementCard';
-import { StatisticsFilters } from './StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 
 interface ActivityAnalyticsViewProps {
   data: ActivityAnalyticsData;
@@ -33,7 +33,7 @@ export function ActivityAnalyticsView({ data, members, hideFilters, previousData
           </p>
         </div>
         {!hideFilters && (
-          <StatisticsFilters
+          <AnalyticsFilters
             basePath="/statistics/activities"
             members={members}
           />

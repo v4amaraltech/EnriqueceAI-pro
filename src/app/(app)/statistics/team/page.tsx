@@ -7,7 +7,7 @@ import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
 import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string; compare?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; sdr?: string; compare?: string }>;
 }
 
 export default async function TeamAnalyticsPage({ searchParams }: PageProps) {

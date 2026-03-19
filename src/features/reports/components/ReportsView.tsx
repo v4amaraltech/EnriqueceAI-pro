@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { Download, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { DateRangePicker } from '@/shared/components/DateRangePicker';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
+import type { CadenceOption, OrgMember } from '@/shared/components/AnalyticsFilters';
 import { useDateRange } from '@/shared/hooks/useDateRange';
 import { Button } from '@/shared/components/ui/button';
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
@@ -19,6 +20,8 @@ import { SdrReport } from './SdrReport';
 interface ReportsViewProps {
   data: ReportData;
   previousData?: ReportData;
+  members: OrgMember[];
+  cadences: CadenceOption[];
 }
 
 const tabs: { value: ReportView; label: string }[] = [
@@ -27,9 +30,9 @@ const tabs: { value: ReportView; label: string }[] = [
   { value: 'sdr', label: 'Por SDR' },
 ];
 
-export function ReportsView({ data, previousData }: ReportsViewProps) {
+export function ReportsView({ data, previousData, members, cadences }: ReportsViewProps) {
   const searchParams = useSearchParams();
-  const { from, to, setRange, compare, setCompare } = useDateRange('/reports');
+  const { from, to } = useDateRange('/reports');
   const { organization } = useOrganization();
   const [activeTab, setActiveTab] = useState<ReportView>(
     (searchParams.get('view') as ReportView) ?? 'overall',
@@ -76,17 +79,18 @@ export function ReportsView({ data, previousData }: ReportsViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <DateRangePicker from={from} to={to} onChange={setRange} compare={compare} onCompareChange={setCompare} />
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExportingPdf}>
-            <FileText className="mr-2 h-4 w-4" />
-            {isExportingPdf ? 'Gerando PDF...' : 'Exportar PDF'}
-          </Button>
-          {activeTab !== 'overall' && (
-            <Button variant="outline" size="sm" onClick={handleExportCsv}>
-              <Download className="mr-2 h-4 w-4" />
-              Exportar CSV
+          <AnalyticsFilters basePath="/reports" members={members} cadences={cadences}>
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExportingPdf}>
+              <FileText className="mr-2 h-4 w-4" />
+              {isExportingPdf ? 'Gerando PDF...' : 'Exportar PDF'}
             </Button>
-          )}
+            {activeTab !== 'overall' && (
+              <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                <Download className="mr-2 h-4 w-4" />
+                Exportar CSV
+              </Button>
+            )}
+          </AnalyticsFilters>
         </div>
       </div>
 

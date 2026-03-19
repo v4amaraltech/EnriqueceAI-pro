@@ -10,7 +10,7 @@ import { formatDuration } from '../types/shared';
 import { CallOutcomePieChart } from './CallOutcomePieChart';
 import { HourlyDistributionChart } from './HourlyDistributionChart';
 import { RecentTeamCallsTable } from './RecentTeamCallsTable';
-import { StatisticsFilters } from './StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 
 interface CallDashboardViewProps {
   data: CallDashboardData;
@@ -28,7 +28,7 @@ export function CallDashboardView({ data, members }: CallDashboardViewProps) {
             Visão geral das ligações da equipe.
           </p>
         </div>
-        <StatisticsFilters basePath="/calls/dashboard" members={members} />
+        <AnalyticsFilters basePath="/calls/dashboard" members={members} />
       </div>
 
       {/* KPI Cards */}

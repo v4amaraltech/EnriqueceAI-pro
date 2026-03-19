@@ -8,9 +8,11 @@ import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 import { fetchReportData } from '@/features/reports/actions/fetch-reports';
 import { ReportsView } from '@/features/reports/components/ReportsView';
+import { fetchActiveCadenceOptions } from '@/features/statistics/actions/fetch-active-cadence-options';
+import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 
 interface ReportsPageProps {
-  searchParams: Promise<{ from?: string; to?: string; period?: string; compare?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; period?: string; compare?: string; sdr?: string; cadence?: string }>;
 }
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
@@ -19,15 +21,17 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams;
   const { from, to, compare } = parseDateRangeParams(params);
   const dateRange = { from, to };
+  const sdrId = params.sdr || undefined;
+  const cadenceId = params.cadence || undefined;
 
-  const fetches: [Promise<Awaited<ReturnType<typeof fetchReportData>>>, Promise<Awaited<ReturnType<typeof fetchReportData>>> | null] = [
-    fetchReportData('30d', dateRange),
-    compare ? fetchReportData('30d', calculatePreviousPeriod(from, to)) : null,
-  ];
-
-  const [result, previousResult] = await Promise.all(
-    fetches.map((f) => f ?? Promise.resolve(null)),
-  );
+  const [result, previousResult, members, cadences] = await Promise.all([
+    fetchReportData('30d', dateRange, sdrId, cadenceId),
+    compare
+      ? fetchReportData('30d', calculatePreviousPeriod(from, to), sdrId, cadenceId)
+      : Promise.resolve(null),
+    fetchOrgMembers(),
+    fetchActiveCadenceOptions(),
+  ]);
 
   if (!result?.success) {
     return (
@@ -41,5 +45,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const previousData = previousResult?.success ? previousResult.data : undefined;
 
-  return <ReportsView data={result.data} previousData={previousData} />;
+  return (
+    <ReportsView
+      data={result.data}
+      previousData={previousData}
+      members={members}
+      cadences={cadences}
+    />
+  );
 }

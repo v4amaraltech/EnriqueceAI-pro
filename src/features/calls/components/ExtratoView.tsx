@@ -6,7 +6,7 @@ import { Clock, DollarSign, Download, Phone, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { MetricCard } from '@/features/dashboard/components/MetricCard';
-import { StatisticsFilters } from '@/features/statistics/components/StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import type { OrgMember } from '@/features/statistics/types/shared';
 import { formatDuration, formatDurationLong } from '@/features/statistics/types/shared';
 import { useDateRange } from '@/shared/hooks/useDateRange';
@@ -55,7 +55,7 @@ export function ExtratoView({ data, members, userId }: ExtratoViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <StatisticsFilters basePath="/calls/extrato" members={members} />
+          <AnalyticsFilters basePath="/calls/extrato" members={members} />
           <Button
             variant="outline"
             size="sm"

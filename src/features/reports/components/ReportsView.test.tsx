@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CadenceOption, OrgMember } from '@/shared/components/AnalyticsFilters';
+
 import type { CadenceMetrics, OverallMetrics, ReportData, SdrMetrics } from '../reports.contract';
 
 import { ReportsView } from './ReportsView';
@@ -12,6 +14,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => mockSearchParams,
 }));
+
+const mockMembers: OrgMember[] = [
+  { userId: 'u1', email: 'sdr1@test.com' },
+  { userId: 'u2', email: 'sdr2@test.com' },
+];
+
+const mockCadences: CadenceOption[] = [
+  { id: 'c1', name: 'Outbound Q1' },
+  { id: 'c2', name: 'Inbound' },
+];
 
 vi.mock('./OverallReport', () => ({
   OverallReport: ({ metrics }: any) => (
@@ -109,13 +121,13 @@ function makeReportData(overrides: Partial<ReportData> = {}): ReportData {
 describe('ReportsView', () => {
   describe('title and period selector', () => {
     it('renders the page title', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.getByText('Relatórios')).toBeInTheDocument();
     });
 
     it('renders date range picker trigger with formatted range', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       // DateRangePicker trigger button shows the formatted date range
       const buttons = screen.getAllByRole('button');
@@ -126,19 +138,19 @@ describe('ReportsView', () => {
 
   describe('tab navigation', () => {
     it('renders Geral tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.getByRole('button', { name: 'Geral' })).toBeInTheDocument();
     });
 
     it('renders Por Cadência tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.getByRole('button', { name: 'Por Cadência' })).toBeInTheDocument();
     });
 
     it('renders Por SDR tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.getByRole('button', { name: 'Por SDR' })).toBeInTheDocument();
     });
@@ -146,7 +158,7 @@ describe('ReportsView', () => {
 
   describe('default tab content', () => {
     it('shows overall report by default', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.getByTestId('overall-report')).toBeInTheDocument();
       expect(screen.queryByTestId('cadence-report')).not.toBeInTheDocument();
@@ -156,7 +168,7 @@ describe('ReportsView', () => {
     it('passes overallMetrics to OverallReport', () => {
       const overallMetrics = makeOverallMetrics({ totalLeads: 999 });
       const data = makeReportData({ overallMetrics });
-      render(<ReportsView data={data} />);
+      render(<ReportsView data={data} members={mockMembers} cadences={mockCadences} />);
 
       const overallReport = screen.getByTestId('overall-report');
       expect(overallReport.textContent).toContain('999');
@@ -165,7 +177,7 @@ describe('ReportsView', () => {
 
   describe('tab switching', () => {
     it('switches to cadence report on Por Cadência tab click', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
 
@@ -177,7 +189,7 @@ describe('ReportsView', () => {
     it('passes cadenceMetrics to CadenceReport', () => {
       const cadenceMetrics = [makeCadenceMetric({ cadenceName: 'Minha Cadência' })];
       const data = makeReportData({ cadenceMetrics });
-      render(<ReportsView data={data} />);
+      render(<ReportsView data={data} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
 
@@ -186,7 +198,7 @@ describe('ReportsView', () => {
     });
 
     it('switches to sdr report on Por SDR tab click', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por SDR' }));
 
@@ -198,7 +210,7 @@ describe('ReportsView', () => {
     it('passes sdrMetrics to SdrReport', () => {
       const sdrMetrics = [makeSdrMetric({ userName: 'vendedor@enriqueceai.com' })];
       const data = makeReportData({ sdrMetrics });
-      render(<ReportsView data={data} />);
+      render(<ReportsView data={data} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por SDR' }));
 
@@ -207,7 +219,7 @@ describe('ReportsView', () => {
     });
 
     it('can switch back to Geral tab after switching away', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
       fireEvent.click(screen.getByRole('button', { name: 'Geral' }));
@@ -219,13 +231,13 @@ describe('ReportsView', () => {
 
   describe('export CSV button', () => {
     it('does not show export button on Geral tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       expect(screen.queryByRole('button', { name: /Exportar CSV/ })).not.toBeInTheDocument();
     });
 
     it('shows export button when on Por Cadência tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
 
@@ -233,7 +245,7 @@ describe('ReportsView', () => {
     });
 
     it('shows export button when on Por SDR tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por SDR' }));
 
@@ -241,7 +253,7 @@ describe('ReportsView', () => {
     });
 
     it('hides export button after switching back to Geral from cadence tab', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
       fireEvent.click(screen.getByRole('button', { name: 'Geral' }));
@@ -251,7 +263,7 @@ describe('ReportsView', () => {
 
     it('calls cadenceMetricsToCsv and downloadCsv when exporting from cadence tab', async () => {
       const { cadenceMetricsToCsv, downloadCsv } = await import('../utils/csv-export');
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por Cadência' }));
       fireEvent.click(screen.getByRole('button', { name: /Exportar CSV/ }));
@@ -262,7 +274,7 @@ describe('ReportsView', () => {
 
     it('calls sdrMetricsToCsv and downloadCsv when exporting from sdr tab', async () => {
       const { sdrMetricsToCsv, downloadCsv } = await import('../utils/csv-export');
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por SDR' }));
       fireEvent.click(screen.getByRole('button', { name: /Exportar CSV/ }));
@@ -274,7 +286,7 @@ describe('ReportsView', () => {
 
   describe('date range picker', () => {
     it('renders date range picker with from/to display', () => {
-      render(<ReportsView data={makeReportData()} />);
+      render(<ReportsView data={makeReportData()} members={mockMembers} cadences={mockCadences} />);
 
       // The DateRangePicker trigger shows a formatted date range with "—"
       const buttons = screen.getAllByRole('button');

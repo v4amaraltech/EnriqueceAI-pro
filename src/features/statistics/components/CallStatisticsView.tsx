@@ -10,7 +10,7 @@ import { formatDuration, formatDurationLong } from '../types/shared';
 import { CallOutcomeBarChart } from './CallOutcomeBarChart';
 import { CallsPerSdrChart } from './CallsPerSdrChart';
 import { DurationDistributionChart } from './DurationDistributionChart';
-import { StatisticsFilters } from './StatisticsFilters';
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import { TimeHeatmapGrid } from './TimeHeatmapGrid';
 
 interface CallStatisticsViewProps {
@@ -29,7 +29,7 @@ export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
             Análise detalhada de ligações por status, duração e horário.
           </p>
         </div>
-        <StatisticsFilters basePath="/statistics/calls" members={members} />
+        <AnalyticsFilters basePath="/statistics/calls" members={members} />
       </div>
 
       {/* KPI Row */}
