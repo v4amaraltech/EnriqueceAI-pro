@@ -99,11 +99,11 @@ function makeOverallMetrics(overrides: Partial<OverallMetrics> = {}): OverallMet
     meetings: 15,
     qualified: 10,
     funnelSteps: [
-      { label: 'Total de Leads', count: 200, percentage: 100, color: '#6366f1' },
-      { label: 'Contactados', count: 120, percentage: 60, color: '#8b5cf6' },
-      { label: 'Responderam', count: 40, percentage: 20, color: '#a78bfa' },
-      { label: 'Reuniões', count: 15, percentage: 7.5, color: '#c4b5fd' },
-      { label: 'Qualificados', count: 10, percentage: 5, color: '#ddd6fe' },
+      { label: 'Leads Trabalhados', count: 200, percentage: 100, color: 'bg-indigo-400' },
+      { label: 'Contactados', count: 120, percentage: 60, color: 'bg-indigo-500' },
+      { label: 'Responderam', count: 40, percentage: 20, color: 'bg-violet-500' },
+      { label: 'Reuniões', count: 15, percentage: 7.5, color: 'bg-purple-500' },
+      { label: 'Qualificados', count: 10, percentage: 5, color: 'bg-emerald-500' },
     ],
     ...overrides,
   };

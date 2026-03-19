@@ -114,7 +114,7 @@ export async function fetchReportData(
     data: {
       cadenceMetrics: calculateCadenceMetrics(cadences, enrollments, interactions),
       sdrMetrics: calculateSdrMetrics(members, enrollments, interactions),
-      overallMetrics: calculateOverallMetrics(leads, interactions),
+      overallMetrics: calculateOverallMetrics(leads, interactions, enrollments),
     },
   };
 }

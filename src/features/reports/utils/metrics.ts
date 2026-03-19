@@ -101,8 +101,15 @@ export function calculateSdrMetrics(
 export function calculateOverallMetrics(
   leads: RawLead[],
   interactions: RawInteraction[],
+  enrollments: RawEnrollment[],
 ): OverallMetrics {
-  const totalLeads = leads.length;
+  // Base: unique leads touched in the period (enrolled or interacted)
+  const workedLeadIds = new Set([
+    ...enrollments.map((e) => e.lead_id),
+    ...interactions.map((i) => i.lead_id),
+  ]);
+  const totalLeads = workedLeadIds.size;
+
   const contactedLeads = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
   );
@@ -114,7 +121,10 @@ export function calculateOverallMetrics(
       .filter((i) => i.type === 'meeting_scheduled')
       .map((i) => i.lead_id),
   );
-  const qualifiedLeads = leads.filter((l) => l.status === 'qualified').length;
+  // Only count qualified leads that were actually worked in the period
+  const qualifiedLeads = leads.filter(
+    (l) => l.status === 'qualified' && workedLeadIds.has(l.id),
+  ).length;
 
   const contacted = contactedLeads.size;
   const replied = repliedLeads.size;
@@ -122,34 +132,34 @@ export function calculateOverallMetrics(
 
   const funnelSteps: FunnelStep[] = [
     {
-      label: 'Total de Leads',
+      label: 'Leads Trabalhados',
       count: totalLeads,
       percentage: 100,
-      color: 'bg-red-400',
+      color: 'bg-indigo-400',
     },
     {
       label: 'Contactados',
       count: contacted,
       percentage: safeRate(contacted, totalLeads),
-      color: 'bg-red-500',
+      color: 'bg-indigo-500',
     },
     {
       label: 'Responderam',
       count: replied,
       percentage: safeRate(replied, totalLeads),
-      color: 'bg-red-600',
+      color: 'bg-violet-500',
     },
     {
       label: 'Reuniões',
       count: meetings,
       percentage: safeRate(meetings, totalLeads),
-      color: 'bg-pink-500',
+      color: 'bg-purple-500',
     },
     {
       label: 'Qualificados',
       count: qualifiedLeads,
       percentage: safeRate(qualifiedLeads, totalLeads),
-      color: 'bg-green-500',
+      color: 'bg-emerald-500',
     },
   ];
 

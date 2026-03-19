@@ -140,6 +140,12 @@ describe('calculateOverallMetrics', () => {
     { id: 'l5', status: 'new' },
   ];
 
+  const enrollments: RawEnrollment[] = [
+    { cadence_id: 'c1', lead_id: 'l1', status: 'replied', enrolled_by: 'u1' },
+    { cadence_id: 'c1', lead_id: 'l2', status: 'active', enrolled_by: 'u1' },
+    { cadence_id: 'c1', lead_id: 'l4', status: 'active', enrolled_by: 'u1' },
+  ];
+
   const interactions: RawInteraction[] = [
     { type: 'sent', cadence_id: 'c1', lead_id: 'l1', created_at: '2026-02-19T10:00:00Z' },
     { type: 'sent', cadence_id: 'c1', lead_id: 'l2', created_at: '2026-02-19T10:00:00Z' },
@@ -149,35 +155,43 @@ describe('calculateOverallMetrics', () => {
     { type: 'meeting_scheduled', cadence_id: 'c1', lead_id: 'l1', created_at: '2026-02-19T14:00:00Z' },
   ];
 
-  it('should calculate overall metrics', () => {
-    const result = calculateOverallMetrics(leads, interactions);
+  it('should use worked leads (enrolled + interacted) as base', () => {
+    const result = calculateOverallMetrics(leads, interactions, enrollments);
 
-    expect(result.totalLeads).toBe(5);
+    // l1, l2, l4 from enrollments/interactions (l3, l5 not touched)
+    expect(result.totalLeads).toBe(3);
     expect(result.contacted).toBe(3);
     expect(result.replied).toBe(2);
     expect(result.meetings).toBe(1);
+  });
+
+  it('should only count qualified leads that were worked in period', () => {
+    // l1 and l4 are qualified, both were worked — so 2
+    // l3 is 'new' and not worked, doesn't count
+    const result = calculateOverallMetrics(leads, interactions, enrollments);
+
     expect(result.qualified).toBe(2);
   });
 
-  it('should generate correct funnel steps', () => {
-    const result = calculateOverallMetrics(leads, interactions);
+  it('should generate correct funnel steps with period-scoped base', () => {
+    const result = calculateOverallMetrics(leads, interactions, enrollments);
 
     expect(result.funnelSteps).toHaveLength(5);
-    expect(result.funnelSteps[0]!.label).toBe('Total de Leads');
-    expect(result.funnelSteps[0]!.count).toBe(5);
+    expect(result.funnelSteps[0]!.label).toBe('Leads Trabalhados');
+    expect(result.funnelSteps[0]!.count).toBe(3);
     expect(result.funnelSteps[0]!.percentage).toBe(100);
 
     expect(result.funnelSteps[1]!.label).toBe('Contactados');
     expect(result.funnelSteps[1]!.count).toBe(3);
-    expect(result.funnelSteps[1]!.percentage).toBe(60);
+    expect(result.funnelSteps[1]!.percentage).toBe(100);
 
     expect(result.funnelSteps[4]!.label).toBe('Qualificados');
     expect(result.funnelSteps[4]!.count).toBe(2);
-    expect(result.funnelSteps[4]!.percentage).toBe(40);
+    expect(result.funnelSteps[4]!.percentage).toBe(66.7);
   });
 
   it('should handle empty data', () => {
-    const result = calculateOverallMetrics([], []);
+    const result = calculateOverallMetrics([], [], []);
 
     expect(result.totalLeads).toBe(0);
     expect(result.contacted).toBe(0);
