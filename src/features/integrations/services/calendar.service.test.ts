@@ -13,6 +13,14 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(() => ({
+    from: () => ({
+      update: () => ({ eq: () => ({}) }),
+    }),
+  })),
+}));
+
 describe('calendar.service', () => {
   const mockConnection = {
     id: 'cal-1',

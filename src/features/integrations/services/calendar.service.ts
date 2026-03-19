@@ -1,6 +1,7 @@
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
 
@@ -85,12 +86,21 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
   });
 
   if (!response.ok) {
-    // Mark connection as error
-    const supabase = await createServerSupabaseClient();
-    await from(supabase, 'calendar_connections')
+    const errorBody = await response.text().catch(() => 'unknown');
+    console.error(
+      `[gcal] Token refresh failed (HTTP ${response.status}) for connection ${connection.id}:`,
+      errorBody,
+    );
+
+    // Use service role to bypass RLS — user session may be unavailable in error path
+    const serviceClient = createServiceRoleClient();
+    await from(serviceClient, 'calendar_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);
-    throw new Error('Erro ao renovar token do Google Calendar');
+
+    throw new Error(
+      'Erro ao renovar token do Google Calendar. Reconecte em Configurações > Integrações.',
+    );
   }
 
   const tokens = (await response.json()) as {
