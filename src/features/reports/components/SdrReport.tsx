@@ -9,9 +9,10 @@ import type { SdrMetrics } from '../reports.contract';
 interface SdrReportProps {
   metrics: SdrMetrics[];
   previousMetrics?: SdrMetrics[];
+  onRowClick?: (userId: string) => void;
 }
 
-export function SdrReport({ metrics, previousMetrics }: SdrReportProps) {
+export function SdrReport({ metrics, previousMetrics, onRowClick }: SdrReportProps) {
   const prevMap = new Map(previousMetrics?.map((m) => [m.userId, m]));
   if (metrics.length === 0) {
     return (
@@ -46,7 +47,11 @@ export function SdrReport({ metrics, previousMetrics }: SdrReportProps) {
                 {metrics.map((m) => {
                   const prev = prevMap.get(m.userId);
                   return (
-                    <tr key={m.userId} className="border-b border-[var(--border)] last:border-0">
+                    <tr
+                      key={m.userId}
+                      className={`border-b border-[var(--border)] last:border-0 ${onRowClick ? 'cursor-pointer transition-colors hover:bg-[var(--accent)]' : ''}`}
+                      onClick={() => onRowClick?.(m.userId)}
+                    >
                       <td className="py-2 pr-4 font-medium">{m.userName}</td>
                       <td className="py-2 pr-4 text-right">
                         <span>{m.leadsWorked}</span>

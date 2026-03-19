@@ -4,9 +4,10 @@ import type { FunnelStage } from '../types/conversion-analytics.types';
 
 interface ConversionFunnelChartProps {
   stages: FunnelStage[];
+  onStageClick?: (stage: FunnelStage) => void;
 }
 
-export function ConversionFunnelChart({ stages }: ConversionFunnelChartProps) {
+export function ConversionFunnelChart({ stages, onStageClick }: ConversionFunnelChartProps) {
   if (stages.length === 0 || stages[0]?.count === 0) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -25,7 +26,11 @@ export function ConversionFunnelChart({ stages }: ConversionFunnelChartProps) {
           10,
         );
         return (
-          <div key={stage.label} className="flex items-center gap-3">
+          <div
+            key={stage.label}
+            className={`flex items-center gap-3 ${onStageClick ? 'cursor-pointer rounded-md px-1 -mx-1 transition-colors hover:bg-[var(--accent)]' : ''}`}
+            onClick={() => onStageClick?.(stage)}
+          >
             <div className="w-28 shrink-0 text-right text-sm font-medium">
               {stage.label}
             </div>

@@ -1,0 +1,291 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
+
+import type { DrilldownResult } from '@/shared/components/drilldown/drilldown.types';
+import { fetchDrilldownInputSchema, type FetchDrilldownInput } from '@/shared/schemas/drilldown.schema';
+
+const PAGE_SIZE = 25;
+
+function toIso(dateStr: string): string {
+  return `${dateStr}T00:00:00.000Z`;
+}
+
+function toIsoEnd(dateStr: string): string {
+  return `${dateStr}T23:59:59.999Z`;
+}
+
+function todayRange(): { start: string; end: string } {
+  const today = new Date().toISOString().split('T')[0]!;
+  return { start: toIso(today), end: toIsoEnd(today) };
+}
+
+export async function fetchDrilldownData(
+  input: FetchDrilldownInput,
+): Promise<ActionResult<DrilldownResult>> {
+  const parsed = fetchDrilldownInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: 'Parâmetros inválidos' };
+  }
+
+  try {
+    const { orgId, supabase } = await getAuthOrgId();
+    const { metric, filters, page } = parsed.data;
+    const offset = (page - 1) * PAGE_SIZE;
+    const rangeStart = offset;
+    const rangeEnd = offset + PAGE_SIZE - 1;
+    const fromDate = toIso(filters.from);
+    const toDate = toIsoEnd(filters.to);
+
+    switch (metric) {
+      case 'overall_contacted':
+      case 'overall_replied':
+      case 'overall_meetings': {
+        const typeMap: Record<string, string[]> = {
+          overall_contacted: ['sent'],
+          overall_replied: ['replied'],
+          overall_meetings: ['meeting_scheduled'],
+        };
+        const types = typeMap[metric]!;
+
+        const { data, count } = (await from(supabase, 'interactions')
+          .select('id, type, created_at, lead_id, cadence_id, leads!inner(id, razao_social, nome_fantasia, email), cadences(id, name)', { count: 'exact' })
+          .eq('org_id', orgId)
+          .in('type', types)
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate)
+          .order('created_at', { ascending: false })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.leads?.id,
+              razaoSocial: row.leads?.razao_social ?? '—',
+              nomeFantasia: row.leads?.nome_fantasia ?? '—',
+              email: row.leads?.email ?? '—',
+              type: row.type,
+              cadenceName: row.cadences?.name ?? '—',
+              createdAt: new Date(row.created_at).toLocaleDateString('pt-BR'),
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'overall_leads': {
+        // 2-step: get distinct lead_ids from interactions+enrollments, then paginate leads
+        const { data: interactionLeads } = (await from(supabase, 'interactions')
+          .select('lead_id')
+          .eq('org_id', orgId)
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate)) as { data: { lead_id: string }[] | null };
+
+        const { data: enrollmentLeads } = (await from(supabase, 'cadence_enrollments')
+          .select('lead_id')
+          .eq('org_id', orgId)
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate)) as { data: { lead_id: string }[] | null };
+
+        const leadIds = [
+          ...new Set([
+            ...(interactionLeads ?? []).map((r) => r.lead_id),
+            ...(enrollmentLeads ?? []).map((r) => r.lead_id),
+          ]),
+        ];
+
+        if (leadIds.length === 0) {
+          return { success: true, data: { data: [], total: 0, page } };
+        }
+
+        const { data, count } = (await from(supabase, 'leads')
+          .select('id, razao_social, nome_fantasia, email, status', { count: 'exact' })
+          .eq('org_id', orgId)
+          .in('id', leadIds)
+          .order('razao_social', { ascending: true })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.id,
+              razaoSocial: row.razao_social ?? '—',
+              nomeFantasia: row.nome_fantasia ?? '—',
+              email: row.email ?? '—',
+              status: row.status,
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'overall_qualified': {
+        const { data, count } = (await from(supabase, 'leads')
+          .select('id, razao_social, nome_fantasia, email, status', { count: 'exact' })
+          .eq('org_id', orgId)
+          .eq('status', 'qualified')
+          .gte('updated_at', fromDate)
+          .lte('updated_at', toDate)
+          .order('updated_at', { ascending: false })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.id,
+              razaoSocial: row.razao_social ?? '—',
+              nomeFantasia: row.nome_fantasia ?? '—',
+              email: row.email ?? '—',
+              status: row.status,
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'cadence_enrollments': {
+        let query = from(supabase, 'cadence_enrollments')
+          .select('id, status, created_at, leads!inner(id, razao_social, nome_fantasia, email)', { count: 'exact' })
+          .eq('org_id', orgId)
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate);
+
+        if (filters.cadenceId) {
+          query = query.eq('cadence_id', filters.cadenceId);
+        }
+
+        const { data, count } = (await query
+          .order('created_at', { ascending: false })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.leads?.id,
+              razaoSocial: row.leads?.razao_social ?? '—',
+              nomeFantasia: row.leads?.nome_fantasia ?? '—',
+              email: row.leads?.email ?? '—',
+              status: row.status,
+              enrolledAt: new Date(row.created_at).toLocaleDateString('pt-BR'),
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'sdr_activities': {
+        let query = from(supabase, 'interactions')
+          .select('id, type, created_at, lead_id, cadence_id, leads!inner(id, razao_social, nome_fantasia, email), cadences(id, name)', { count: 'exact' })
+          .eq('org_id', orgId)
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate);
+
+        if (filters.sdrId) {
+          query = query.eq('performed_by', filters.sdrId);
+        }
+
+        const { data, count } = (await query
+          .order('created_at', { ascending: false })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.leads?.id,
+              razaoSocial: row.leads?.razao_social ?? '—',
+              nomeFantasia: row.leads?.nome_fantasia ?? '—',
+              email: row.leads?.email ?? '—',
+              type: row.type,
+              cadenceName: row.cadences?.name ?? '—',
+              createdAt: new Date(row.created_at).toLocaleDateString('pt-BR'),
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'activity_total':
+      case 'activity_today': {
+        const dateRange = metric === 'activity_today'
+          ? todayRange()
+          : { start: fromDate, end: toDate };
+
+        const { data, count } = (await from(supabase, 'interactions')
+          .select('id, type, created_at, lead_id, cadence_id, leads!inner(id, razao_social, nome_fantasia, email), cadences(id, name)', { count: 'exact' })
+          .eq('org_id', orgId)
+          .gte('created_at', dateRange.start)
+          .lte('created_at', dateRange.end)
+          .order('created_at', { ascending: false })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.leads?.id,
+              razaoSocial: row.leads?.razao_social ?? '—',
+              nomeFantasia: row.leads?.nome_fantasia ?? '—',
+              email: row.leads?.email ?? '—',
+              type: row.type,
+              cadenceName: row.cadences?.name ?? '—',
+              createdAt: new Date(row.created_at).toLocaleDateString('pt-BR'),
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      case 'conversion_stage': {
+        const stage = filters.stage ?? 'new';
+
+        const { data, count } = (await from(supabase, 'leads')
+          .select('id, razao_social, nome_fantasia, email, status', { count: 'exact' })
+          .eq('org_id', orgId)
+          .eq('status', stage)
+          .order('razao_social', { ascending: true })
+          .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
+
+        return {
+          success: true,
+          data: {
+            data: (data ?? []).map((row: any) => ({
+              id: row.id,
+              leadId: row.id,
+              razaoSocial: row.razao_social ?? '—',
+              nomeFantasia: row.nome_fantasia ?? '—',
+              email: row.email ?? '—',
+              status: row.status,
+            })),
+            total: count ?? 0,
+            page,
+          },
+        };
+      }
+
+      default:
+        return { success: false, error: `Métrica desconhecida: ${metric}` };
+    }
+  } catch (error) {
+    console.error('Drilldown fetch error:', error);
+    return { success: false, error: 'Erro ao buscar dados detalhados' };
+  }
+}

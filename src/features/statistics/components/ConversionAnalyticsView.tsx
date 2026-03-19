@@ -1,13 +1,18 @@
 'use client';
 
+import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
+import type { CadenceOption } from '@/shared/components/AnalyticsFilters';
+import { DrilldownDrawer } from '@/shared/components/drilldown/DrilldownDrawer';
+import { useDateRange } from '@/shared/hooks/useDateRange';
+import { useDrilldown } from '@/shared/hooks/useDrilldown';
+
 import type { ConversionAnalyticsData } from '../types/conversion-analytics.types';
+import type { FunnelStage } from '../types/conversion-analytics.types';
 import type { OrgMember } from '../types/shared';
 import { ConversionByCadenceTable } from './ConversionByCadenceTable';
 import { ConversionFunnelChart } from './ConversionFunnelChart';
 import { PipelineVelocityCard } from './PipelineVelocityCard';
 import { StageToStageCards } from './StageToStageCards';
-import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
-import type { CadenceOption } from '@/shared/components/AnalyticsFilters';
 
 interface ConversionAnalyticsViewProps {
   data: ConversionAnalyticsData;
@@ -17,7 +22,25 @@ interface ConversionAnalyticsViewProps {
   previousData?: ConversionAnalyticsData;
 }
 
+const STAGE_LABEL_MAP: Record<string, string> = {
+  Novo: 'new',
+  Contactado: 'contacted',
+  Qualificado: 'qualified',
+  Desqualificado: 'unqualified',
+  Arquivado: 'archived',
+};
+
 export function ConversionAnalyticsView({ data, members, cadences, hideFilters, previousData }: ConversionAnalyticsViewProps) {
+  const { from, to } = useDateRange('/statistics/conversion');
+  const drilldown = useDrilldown();
+
+  function handleStageClick(stage: FunnelStage) {
+    const status = STAGE_LABEL_MAP[stage.label];
+    if (status) {
+      drilldown.open('conversion_stage', { from, to, stage: status });
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -36,7 +59,7 @@ export function ConversionAnalyticsView({ data, members, cadences, hideFilters, 
       {/* Funnel */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <h2 className="mb-4 text-lg font-semibold">Funil de Conversão</h2>
-        <ConversionFunnelChart stages={data.funnel} />
+        <ConversionFunnelChart stages={data.funnel} onStageClick={handleStageClick} />
       </div>
 
       {/* Stage-to-stage */}
@@ -50,6 +73,8 @@ export function ConversionAnalyticsView({ data, members, cadences, hideFilters, 
         <h2 className="mb-4 text-lg font-semibold">Conversão por Cadência</h2>
         <ConversionByCadenceTable data={data.cadenceConversion} />
       </div>
+
+      <DrilldownDrawer {...drilldown} />
     </div>
   );
 }

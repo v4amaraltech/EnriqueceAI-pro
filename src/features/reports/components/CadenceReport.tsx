@@ -12,9 +12,10 @@ import type { CadenceMetrics } from '../reports.contract';
 interface CadenceReportProps {
   metrics: CadenceMetrics[];
   previousMetrics?: CadenceMetrics[];
+  onRowClick?: (cadenceId: string) => void;
 }
 
-export function CadenceReport({ metrics, previousMetrics }: CadenceReportProps) {
+export function CadenceReport({ metrics, previousMetrics, onRowClick }: CadenceReportProps) {
   const prevMap = new Map(previousMetrics?.map((m) => [m.cadenceId, m]));
   if (metrics.length === 0) {
     return (
@@ -55,7 +56,11 @@ export function CadenceReport({ metrics, previousMetrics }: CadenceReportProps) 
                 {metrics.map((m) => {
                   const prev = prevMap.get(m.cadenceId);
                   return (
-                    <tr key={m.cadenceId} className="border-b border-[var(--border)] last:border-0">
+                    <tr
+                      key={m.cadenceId}
+                      className={`border-b border-[var(--border)] last:border-0 ${onRowClick ? 'cursor-pointer transition-colors hover:bg-[var(--accent)]' : ''}`}
+                      onClick={() => onRowClick?.(m.cadenceId)}
+                    >
                       <td className="py-2 pr-4 font-medium">{m.cadenceName}</td>
                       <td className="py-2 pr-4 text-right">{m.totalEnrollments}</td>
                       <td className="py-2 pr-4 text-right">{m.sent}</td>

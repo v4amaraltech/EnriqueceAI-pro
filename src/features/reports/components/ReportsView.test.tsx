@@ -49,6 +49,23 @@ vi.mock('../utils/csv-export', () => ({
   downloadCsv: vi.fn(),
 }));
 
+vi.mock('@/shared/hooks/useDrilldown', () => ({
+  useDrilldown: () => ({
+    isOpen: false,
+    metric: null,
+    filters: null,
+    data: [],
+    total: 0,
+    page: 1,
+    isLoading: false,
+    title: '',
+    columns: [],
+    open: vi.fn(),
+    close: vi.fn(),
+    goToPage: vi.fn(),
+  }),
+}));
+
 vi.mock('@/features/auth/hooks/useOrganization', () => ({
   useOrganization: () => ({
     organization: { id: 'org-1', name: 'Test Org', slug: 'test-org', owner_id: 'u1', onboarding_step: null, logo_url: null, created_at: '', updated_at: '' },

@@ -7,7 +7,10 @@ import { toast } from 'sonner';
 
 import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import type { CadenceOption, OrgMember } from '@/shared/components/AnalyticsFilters';
+import { DrilldownDrawer } from '@/shared/components/drilldown/DrilldownDrawer';
+import type { DrilldownMetric } from '@/shared/components/drilldown/drilldown.types';
 import { useDateRange } from '@/shared/hooks/useDateRange';
+import { useDrilldown } from '@/shared/hooks/useDrilldown';
 import { Button } from '@/shared/components/ui/button';
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
 
@@ -34,6 +37,7 @@ export function ReportsView({ data, previousData, members, cadences }: ReportsVi
   const searchParams = useSearchParams();
   const { from, to } = useDateRange('/reports');
   const { organization } = useOrganization();
+  const drilldown = useDrilldown();
   const [activeTab, setActiveTab] = useState<ReportView>(
     (searchParams.get('view') as ReportView) ?? 'overall',
   );
@@ -116,20 +120,31 @@ export function ReportsView({ data, previousData, members, cadences }: ReportsVi
         <OverallReport
           metrics={data.overallMetrics}
           previousMetrics={previousData?.overallMetrics}
+          onMetricClick={(metric: DrilldownMetric) =>
+            drilldown.open(metric, { from, to })
+          }
         />
       )}
       {activeTab === 'cadence' && (
         <CadenceReport
           metrics={data.cadenceMetrics}
           previousMetrics={previousData?.cadenceMetrics}
+          onRowClick={(cadenceId: string) =>
+            drilldown.open('cadence_enrollments', { from, to, cadenceId })
+          }
         />
       )}
       {activeTab === 'sdr' && (
         <SdrReport
           metrics={data.sdrMetrics}
           previousMetrics={previousData?.sdrMetrics}
+          onRowClick={(userId: string) =>
+            drilldown.open('sdr_activities', { from, to, sdrId: userId })
+          }
         />
       )}
+
+      <DrilldownDrawer {...drilldown} />
     </div>
   );
 }
