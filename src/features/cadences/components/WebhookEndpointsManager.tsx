@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
-import { Globe, Loader2, Plus, TestTube2, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { ChevronRight, Globe, Loader2, Minus, Plus, Search, TestTube2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -163,7 +163,7 @@ export function WebhookEndpointsManager() {
             </div>
             <div>
               <h3 className="text-base font-semibold">Webhooks</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Receba notificações em tempo real sobre eventos via HTTP POST.
               </p>
             </div>
@@ -202,35 +202,11 @@ export function WebhookEndpointsManager() {
 
             <Separator />
 
-            <div className="space-y-3">
-              <div>
-                <Label>Eventos</Label>
-                <p className="text-xs text-muted-foreground">
-                  Selecione os eventos que disparam o webhook. Deixe vazio para receber todos.
-                </p>
-              </div>
-              {EVENT_GROUPS.map((group) => (
-                <div key={group.label}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.label}
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                    {group.events.map((opt) => (
-                      <label
-                        key={opt.value}
-                        className="flex cursor-pointer items-center gap-2 text-sm"
-                      >
-                        <Checkbox
-                          checked={selectedEvents.includes(opt.value)}
-                          onCheckedChange={() => toggleEvent(opt.value)}
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <WebhookEventPicker
+              selectedEvents={selectedEvents}
+              onToggleEvent={toggleEvent}
+              onSetEvents={setSelectedEvents}
+            />
 
             <Separator />
 
@@ -329,5 +305,217 @@ export function WebhookEndpointsManager() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/* ─── Event Picker (Stripe-style accordion) ─── */
+
+const TOTAL_EVENTS = EVENT_GROUPS.flatMap((g) => g.events).length;
+
+function WebhookEventPicker({
+  selectedEvents,
+  onToggleEvent,
+  onSetEvents,
+}: {
+  selectedEvents: string[];
+  onToggleEvent: (event: string) => void;
+  onSetEvents: (events: string[]) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const normalizedSearch = search.toLowerCase().trim();
+
+  const filteredGroups = useMemo(() => {
+    if (!normalizedSearch) return EVENT_GROUPS;
+    return EVENT_GROUPS.map((group) => ({
+      ...group,
+      events: group.events.filter(
+        (e) =>
+          e.label.toLowerCase().includes(normalizedSearch) ||
+          e.value.toLowerCase().includes(normalizedSearch),
+      ),
+    })).filter((group) => group.events.length > 0);
+  }, [normalizedSearch]);
+
+  function toggleGroup(label: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedEvents.length === TOTAL_EVENTS) {
+      onSetEvents([]);
+    } else {
+      onSetEvents(EVENT_GROUPS.flatMap((g) => g.events.map((e) => e.value)));
+    }
+  }
+
+  function toggleGroupEvents(group: (typeof EVENT_GROUPS)[number]) {
+    const groupValues = group.events.map((e) => e.value);
+    const allSelected = groupValues.every((v) => selectedEvents.includes(v));
+    if (allSelected) {
+      onSetEvents(selectedEvents.filter((e) => !groupValues.includes(e)));
+    } else {
+      const missing = groupValues.filter((v) => !selectedEvents.includes(v));
+      onSetEvents([...selectedEvents, ...missing]);
+    }
+  }
+
+  function selectedCountForGroup(group: (typeof EVENT_GROUPS)[number]) {
+    return group.events.filter((e) => selectedEvents.includes(e.value)).length;
+  }
+
+  const allSelected = selectedEvents.length === TOTAL_EVENTS;
+  const someSelected = selectedEvents.length > 0 && !allSelected;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label>Eventos</Label>
+        {selectedEvents.length > 0 && (
+          <Badge variant="secondary" className="text-xs">
+            {selectedEvents.length} selecionado{selectedEvents.length !== 1 ? 's' : ''}
+          </Badge>
+        )}
+      </div>
+      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+        Selecione os eventos que disparam o webhook. Deixe vazio para receber todos.
+      </p>
+
+      <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+        {/* Search */}
+        <div className="border-b border-[var(--border)] px-3 py-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+            <input
+              type="text"
+              placeholder="Buscar evento..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border-0 bg-transparent py-1.5 pl-9 pr-3 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Select all */}
+        {!normalizedSearch && (
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-sm transition-colors hover:bg-[var(--accent)]"
+          >
+            <div
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors ${
+                allSelected
+                  ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : someSelected
+                    ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                    : 'border-[var(--border)]'
+              }`}
+            >
+              {allSelected && (
+                <svg viewBox="0 0 10 8" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 4l2.5 2.5L9 1" />
+                </svg>
+              )}
+              {someSelected && <Minus className="h-3 w-3" />}
+            </div>
+            <span className="font-medium">Selecionar tudo</span>
+          </button>
+        )}
+
+        {/* Category groups */}
+        <div className="max-h-[320px] overflow-y-auto">
+          {filteredGroups.length === 0 && (
+            <div className="px-4 py-6 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Nenhum evento encontrado.
+            </div>
+          )}
+          {filteredGroups.map((group) => {
+            const isExpanded = expandedGroups.has(group.label) || !!normalizedSearch;
+            const selectedCount = selectedCountForGroup(group);
+            return (
+              <div key={group.label} className="border-b border-[var(--border)] last:border-0">
+                {/* Category header */}
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-[var(--accent)]"
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronRight
+                      className={`h-4 w-4 text-[var(--muted-foreground)] transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                    />
+                    <span className="font-medium">{group.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedCount > 0 && (
+                      <Badge variant="default" className="text-xs px-1.5 py-0">
+                        {selectedCount}
+                      </Badge>
+                    )}
+                    <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                      {group.events.length} evento{group.events.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Expanded events */}
+                {isExpanded && (
+                  <div className="border-t border-[var(--border)] bg-[var(--muted)]/30">
+                    {/* Group select all */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleGroupEvents(group);
+                      }}
+                      className="flex w-full items-center gap-3 px-8 py-2 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]"
+                    >
+                      <Checkbox
+                        checked={
+                          selectedCount === group.events.length
+                            ? true
+                            : selectedCount > 0
+                              ? 'indeterminate'
+                              : false
+                        }
+                        onCheckedChange={() => toggleGroupEvents(group)}
+                        className="h-3.5 w-3.5"
+                      />
+                      Selecionar todos de {group.label}
+                    </button>
+
+                    {group.events.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onToggleEvent(opt.value)}
+                        className="flex w-full items-center gap-3 px-8 py-2 text-sm transition-colors hover:bg-[var(--accent)]"
+                      >
+                        <Checkbox
+                          checked={selectedEvents.includes(opt.value)}
+                          onCheckedChange={() => onToggleEvent(opt.value)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span>{opt.label}</span>
+                        <span className="ml-auto text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] font-mono">
+                          {opt.value}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
