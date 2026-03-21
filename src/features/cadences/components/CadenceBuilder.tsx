@@ -211,13 +211,13 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
         <CardHeader className="cursor-pointer select-none" onClick={() => setGeneralCollapsed(!generalCollapsed)}>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Geral</CardTitle>
-            <ChevronDown className={cn('h-5 w-5 text-[var(--muted-foreground)] transition-transform', generalCollapsed && '-rotate-90')} />
+            <ChevronDown className={cn('h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-transform', generalCollapsed && '-rotate-90')} />
           </div>
         </CardHeader>
         {!generalCollapsed && <CardContent className="space-y-0 divide-y">
           {/* Nome */}
           <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4 first:pt-0">
-            <Label htmlFor="cadence-name" className="text-sm text-[var(--muted-foreground)]">Nome:</Label>
+            <Label htmlFor="cadence-name" className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nome:</Label>
             <Input
               id="cadence-name"
               value={name}
@@ -229,7 +229,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
 
           {/* Descrição */}
           <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-4">
-            <Label htmlFor="cadence-desc" className="pt-2 text-sm text-[var(--muted-foreground)]">Descrição:</Label>
+            <Label htmlFor="cadence-desc" className="pt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</Label>
             <Textarea
               id="cadence-desc"
               value={description}
@@ -242,7 +242,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
 
           {/* Foco / Origem */}
           <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
-            <Label className="text-sm text-[var(--muted-foreground)]">Foco:</Label>
+            <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Foco:</Label>
             <div className="flex flex-wrap gap-1">
               {([
                 { value: 'inbound_active', label: 'Inbound ativo' },
@@ -269,7 +269,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
 
           {/* Prioridade */}
           <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
-            <Label className="text-sm text-[var(--muted-foreground)]">Prioridade:</Label>
+            <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Prioridade:</Label>
             <Select value={priority} onValueChange={(v) => setPriority(v as CadencePriority)} disabled={!isEditable}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
@@ -285,7 +285,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
           {/* Perda Automática por Inatividade */}
           <div className="py-4">
             <div className="grid grid-cols-[180px_1fr] items-center gap-4">
-              <Label className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+              <Label className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Perda automática por inatividade
               </Label>
               <div className="flex items-center gap-3">
@@ -299,7 +299,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${autoLossEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
-                <span className="text-sm text-[var(--muted-foreground)]">
+                <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   {autoLossEnabled ? 'Ativado' : 'Desativado'}
                 </span>
               </div>
@@ -307,7 +307,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
             {autoLossEnabled && (
               <div className="mt-4 space-y-4 pl-[196px]">
                 <div className="grid grid-cols-[180px_1fr] items-center gap-4">
-                  <Label className="text-sm text-[var(--muted-foreground)]">Dias de inatividade:</Label>
+                  <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Dias de inatividade:</Label>
                   <Input
                     type="number"
                     min={1}
@@ -319,7 +319,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
                   />
                 </div>
                 <div className="grid grid-cols-[180px_1fr] items-center gap-4">
-                  <Label className="text-sm text-[var(--muted-foreground)]">Motivo de perda:</Label>
+                  <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Motivo de perda:</Label>
                   <Select value={autoLossReasonId} onValueChange={setAutoLossReasonId} disabled={!isEditable}>
                     <SelectTrigger className="w-[300px]">
                       <SelectValue placeholder="Selecione um motivo" />
@@ -401,23 +401,23 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
               <div className="text-center">
                 <p className="text-2xl font-bold">{metrics.total_enrolled}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Inscritos</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Inscritos</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{metrics.in_progress}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Em progresso</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Em progresso</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{metrics.completed}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Completados</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Completados</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{metrics.replied}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Responderam</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Responderam</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{metrics.bounced}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Bounce</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Bounce</p>
               </div>
             </div>
           </CardContent>

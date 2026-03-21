@@ -10,7 +10,7 @@ export default async function ImportHistoryPage() {
 
   if (!result.success) {
     return (
-      <div className="py-12 text-center text-[var(--muted-foreground)]">
+      <div className="py-12 text-center text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Erro ao carregar importações: {result.error}
       </div>
     );

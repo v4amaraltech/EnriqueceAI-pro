@@ -99,11 +99,11 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
 
         <div className="max-h-64 overflow-y-auto">
           {isPending && !loaded ? (
-            <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+            <p className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Carregando cadências...
             </p>
           ) : cadences.length === 0 ? (
-            <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+            <p className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Nenhuma cadência ativa encontrada.
             </p>
           ) : (
@@ -121,7 +121,7 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
                       {cadence.name} ({cadence.total_steps} etapas)
                     </p>
                   </div>
-                  <Zap className="h-4 w-4 text-[var(--muted-foreground)]" />
+                  <Zap className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 </button>
               ))}
             </div>

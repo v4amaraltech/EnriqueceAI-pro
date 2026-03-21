@@ -47,7 +47,7 @@ export function ActivityFilters({ filters, onFiltersChange, cadenceOptions }: Ac
     <div className="flex flex-wrap items-center gap-3">
       {/* Search */}
       <div className="relative w-64">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
         <Input
           placeholder="Buscar lead ou cadência..."
           className="pl-9"
@@ -117,7 +117,7 @@ export function ActivityFilters({ filters, onFiltersChange, cadenceOptions }: Ac
           variant="ghost"
           size="sm"
           onClick={() => onFiltersChange(defaultFilters)}
-          className="gap-1 text-[var(--muted-foreground)]"
+          className="gap-1 text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
         >
           <X className="h-3.5 w-3.5" />
           Limpar

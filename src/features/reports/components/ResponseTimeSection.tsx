@@ -32,7 +32,7 @@ export function ResponseTimeSection({ data, onOpenIntervalModal }: ResponseTimeS
           </div>
           <div>
             <p className="text-2xl font-bold">{data.overallPct}%</p>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               abordados em até {threshold} ({data.overallCount} de {data.totalLeads})
             </p>
           </div>
@@ -49,16 +49,16 @@ export function ResponseTimeSection({ data, onOpenIntervalModal }: ResponseTimeS
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
-                <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)]">
+                <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Cadência
                 </th>
-                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">
+                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Leads Abordados
                 </th>
-                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">
+                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Em até {threshold}
                 </th>
-                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">%</th>
+                <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">%</th>
               </tr>
             </thead>
             <tbody>
@@ -86,7 +86,7 @@ export function ResponseTimeSection({ data, onOpenIntervalModal }: ResponseTimeS
           </table>
         </div>
       ) : (
-        <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+        <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhuma interação registrada no período.
         </div>
       )}

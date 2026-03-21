@@ -19,7 +19,7 @@ export function LossReasonAnalyticsView({ data }: LossReasonAnalyticsViewProps) 
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Motivos de Perda</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Análise dos motivos de perda e distribuição por cadência.
         </p>
       </div>

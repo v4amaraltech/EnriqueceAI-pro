@@ -88,13 +88,13 @@ export function ProspectingSidebarFilters({
   return (
     <div className={cn('space-y-5', isPending && 'opacity-70')}>
       {/* FILTROS header */}
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Filtros
       </h3>
 
       {/* Date Range Picker */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--muted-foreground)]">
+        <label className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Período
         </label>
         <Popover>
@@ -136,7 +136,7 @@ export function ProspectingSidebarFilters({
 
       {/* Cadence Filter */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--muted-foreground)]">
+        <label className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Cadência
         </label>
         <select
@@ -155,7 +155,7 @@ export function ProspectingSidebarFilters({
 
       {/* User/SDR Filter */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--muted-foreground)]">
+        <label className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Vendedor
         </label>
         <select

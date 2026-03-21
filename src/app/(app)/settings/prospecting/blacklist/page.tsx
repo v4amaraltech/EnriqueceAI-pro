@@ -11,7 +11,7 @@ export default async function BlacklistPage() {
   if (!result.success) {
     return (
       <div className="p-4">
-        <p className="text-sm text-[var(--muted-foreground)]">{result.error}</p>
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{result.error}</p>
       </div>
     );
   }

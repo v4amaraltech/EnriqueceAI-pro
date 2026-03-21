@@ -16,7 +16,7 @@ export default async function IntegrationsPage() {
   ]);
 
   if (!result.success) {
-    return <p className="py-10 text-center text-[var(--muted-foreground)]">{result.error}</p>;
+    return <p className="py-10 text-center text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{result.error}</p>;
   }
 
   const planFeatures = planResult.success ? planResult.data.features : DEFAULT_FEATURES;

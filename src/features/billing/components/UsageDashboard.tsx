@@ -30,7 +30,7 @@ function UsageBar({ label, current, max, unlimited, overageLabel }: UsageBarProp
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium">{label}</span>
-        <span className="text-[var(--muted-foreground)]">
+        <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {unlimited ? (
             `${current} (ilimitado)`
           ) : (
@@ -68,7 +68,7 @@ export function UsageDashboard({ data }: UsageDashboardProps) {
         <CardContent className="space-y-5">
           {/* Leads */}
           <div className="flex items-start gap-3">
-            <Database className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)]" />
+            <Database className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <div className="flex-1">
               <UsageBar
                 label="Leads"
@@ -80,7 +80,7 @@ export function UsageDashboard({ data }: UsageDashboardProps) {
 
           {/* AI */}
           <div className="flex items-start gap-3">
-            <Bot className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)]" />
+            <Bot className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <div className="flex-1">
               <UsageBar
                 label="IA (hoje)"
@@ -93,7 +93,7 @@ export function UsageDashboard({ data }: UsageDashboardProps) {
 
           {/* WhatsApp */}
           <div className="flex items-start gap-3">
-            <MessageSquare className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)]" />
+            <MessageSquare className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <div className="flex-1">
               <UsageBar
                 label="WhatsApp (mês)"
@@ -105,7 +105,7 @@ export function UsageDashboard({ data }: UsageDashboardProps) {
 
           {/* Members */}
           <div className="flex items-start gap-3">
-            <Users className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)]" />
+            <Users className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <div className="flex-1">
               <UsageBar
                 label="Membros"

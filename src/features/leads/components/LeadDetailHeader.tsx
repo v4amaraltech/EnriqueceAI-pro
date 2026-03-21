@@ -100,7 +100,7 @@ export function LeadDetailHeader({
         <div>
           <h1 className="text-xl font-bold">{primaryName}</h1>
           {secondaryName && (
-            <p className="text-sm text-[var(--muted-foreground)]">{secondaryName}</p>
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{secondaryName}</p>
           )}
         </div>
       </div>

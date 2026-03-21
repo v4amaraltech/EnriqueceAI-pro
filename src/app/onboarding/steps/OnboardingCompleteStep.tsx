@@ -29,7 +29,7 @@ export function OnboardingCompleteStep({ completedItems, onFinish }: OnboardingC
       <div className="text-center">
         <Rocket className="mx-auto h-10 w-10 text-[var(--primary)]" />
         <h1 className="mt-4 text-2xl font-bold">Tudo Pronto!</h1>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Sua organização está configurada. Veja o que foi feito:
         </p>
       </div>
@@ -43,13 +43,13 @@ export function OnboardingCompleteStep({ completedItems, onFinish }: OnboardingC
               className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm ${
                 done
                   ? 'border-green-200 bg-green-50 dark:border-green-800/50 dark:bg-green-900/20'
-                  : 'border-[var(--border)] text-[var(--muted-foreground)]'
+                  : 'border-[var(--border)] text-[var(--muted-foreground)] dark:text-[var(--foreground)]'
               }`}
             >
               {done ? (
                 <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
               ) : (
-                <Minus className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <Minus className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               )}
               <span className={done ? 'font-medium' : ''}>{item.label}</span>
               {!done && (

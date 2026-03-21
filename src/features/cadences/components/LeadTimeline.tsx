@@ -78,13 +78,13 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
   if (!hasContent) {
     if (entry.step_instructions) {
       return (
-        <p className="mt-2 text-sm text-[var(--muted-foreground)] italic">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] italic">
           {entry.step_instructions}
         </p>
       );
     }
     return (
-      <p className="mt-2 text-sm text-[var(--muted-foreground)] italic">
+      <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] italic">
         Nenhuma anotação
       </p>
     );
@@ -101,11 +101,11 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
         )}
         {hasHtml ? (
           <div
-            className="prose prose-sm max-w-none mt-1 text-sm text-[var(--muted-foreground)] [&_p]:my-3 [&_br]:block"
+            className="prose prose-sm max-w-none mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
           />
         ) : (
-          <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)]">
+          <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {entry.message_content}
           </p>
         )}
@@ -123,12 +123,12 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
       {hasHtml ? (
         <>
           <div
-            className={`mt-1 overflow-hidden text-sm text-[var(--muted-foreground)] transition-all ${
+            className={`mt-1 overflow-hidden text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-all ${
               expanded ? 'max-h-[800px]' : 'max-h-28'
             }`}
           >
             <div
-              className="prose prose-sm max-w-none text-sm text-[var(--muted-foreground)] [&_p]:my-3 [&_br]:block"
+              className="prose prose-sm max-w-none text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
             />
           </div>
@@ -150,7 +150,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
           </button>
         </>
       ) : (
-        <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {entry.message_content}
         </p>
       )}
@@ -169,7 +169,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
-          <p className="py-4 text-center text-sm text-[var(--muted-foreground)]">
+          <p className="py-4 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhuma interação registrada ainda.
           </p>
         ) : (
@@ -202,7 +202,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                           {title}
                         </span>
                         <span
-                          className="shrink-0 text-xs text-[var(--muted-foreground)]"
+                          className="shrink-0 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
                           title={formatFullDate(entry.created_at)}
                         >
                           {formatRelativeDate(entry.created_at)}

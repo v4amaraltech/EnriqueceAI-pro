@@ -19,7 +19,7 @@ export function SdrPerformanceTable({ data }: SdrPerformanceTableProps) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)]">
+          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <th className="pb-3 pr-4">#</th>
             <th className="pb-3 pr-4">SDR</th>
             <th className="pb-3 pr-4 text-right">Atividades</th>
@@ -32,7 +32,7 @@ export function SdrPerformanceTable({ data }: SdrPerformanceTableProps) {
         <tbody>
           {data.map((row, index) => (
             <tr key={row.userId} className="border-b border-[var(--border)] last:border-0">
-              <td className="py-3 pr-4 text-[var(--muted-foreground)]">{index + 1}</td>
+              <td className="py-3 pr-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{index + 1}</td>
               <td className="py-3 pr-4 font-medium">{row.userEmail}</td>
               <td className="py-3 pr-4 text-right">{row.activities}</td>
               <td className="py-3 pr-4 text-right">{row.leadsCreated}</td>

@@ -326,7 +326,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
           </DialogHeader>
           <div className="space-y-5">
             {loadingPipelines ? (
-              <p className="text-sm text-[var(--muted-foreground)]">Carregando funis do CRM...</p>
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando funis do CRM...</p>
             ) : crmConnections.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
@@ -378,7 +378,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                           </SelectContent>
                         </Select>
                       ) : selectedProvider && (
-                        <p className="text-sm text-[var(--muted-foreground)]">
+                        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                           {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station' } as Record<string, string>)[selectedProvider] ?? selectedProvider}
                         </p>
                       )}
@@ -415,7 +415,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Etapa</Label>
                         {loadingStages ? (
-                          <p className="text-sm text-[var(--muted-foreground)]">Carregando etapas...</p>
+                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando etapas...</p>
                         ) : (
                           <Select
                             value={selectedStageId ?? undefined}
@@ -439,7 +439,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                 )}
               </>
             ) : (
-              <p className="text-sm text-[var(--muted-foreground)]">
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {'Nenhum CRM conectado. O lead será marcado como ganho sem enviar ao CRM.'}
               </p>
             )}

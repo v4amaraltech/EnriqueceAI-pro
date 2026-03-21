@@ -160,10 +160,10 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ListChecks className="h-6 w-6 text-[var(--muted-foreground)]" />
+          <ListChecks className="h-6 w-6 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <div>
             <h1 className="text-2xl font-bold">Atividades</h1>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {total} atividade{total !== 1 ? 's' : ''} encontrada{total !== 1 ? 's' : ''}
             </p>
           </div>
@@ -274,7 +274,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       {/* Table header — must match ACTIVITY_GRID_COLS from ActivityRow */}
       {filtered.length > 0 && (
         <div className="border-b pb-2">
-          <div className={`${ACTIVITY_GRID_COLS} gap-4 px-4 text-xs font-medium uppercase text-[var(--muted-foreground)]`}>
+          <div className={`${ACTIVITY_GRID_COLS} gap-4 px-4 text-xs font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
             <span>Atividade</span>
             <span>Cadência</span>
             <span>Lead</span>
@@ -287,10 +287,10 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <SearchX className="h-10 w-10 text-[var(--muted-foreground)]" />
+            <SearchX className="h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">Nenhuma atividade encontrada</h3>
-          <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
+          <p className="max-w-sm text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Tente ajustar os filtros para encontrar o que procura.
           </p>
         </div>

@@ -127,7 +127,7 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
             Comparar
           </Label>
           {prevPeriod && (
-            <span className="text-xs text-[var(--muted-foreground)] whitespace-nowrap">
+            <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] whitespace-nowrap">
               vs {formatPeriodLabel(prevPeriod.from, prevPeriod.to)}
             </span>
           )}

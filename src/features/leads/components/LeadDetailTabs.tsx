@@ -81,7 +81,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
         {/* Agendar atividade Tab */}
         <TabsContent value="atividade" className="pt-4">
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-[var(--muted-foreground)]">
+          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Agendamento de atividades em breve
           </div>
         </TabsContent>
@@ -94,7 +94,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         {/* Agendar reunião Tab */}
         <TabsContent value="reuniao" className="pt-4">
           <div className="space-y-4">
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Agende uma reunião com este lead via Google Calendar.
             </p>
             <Button onClick={() => onShowMeetingChange(true)}>

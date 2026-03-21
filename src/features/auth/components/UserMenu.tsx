@@ -47,7 +47,7 @@ export function UserMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
           <p className="text-sm font-medium">{email}</p>
-          <p className="text-xs text-[var(--muted-foreground)]">{organization?.name}</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{organization?.name}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

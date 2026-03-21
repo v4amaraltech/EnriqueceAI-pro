@@ -121,7 +121,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
     <div className="flex flex-col gap-3">
       {/* Search (debounced) */}
       <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
         <Input
           placeholder="Buscar lead por nome, email, empresa ou CNPJ..."
           className="pl-8"
@@ -146,7 +146,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
       <div className="flex flex-wrap items-end gap-4">
         {/* Status */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>
+          <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Status</span>
           <Select
             value={activeStatus}
             onValueChange={(v) => handleFilterChange('status', v)}
@@ -167,7 +167,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
 
         {/* Enrichment */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Enriquecimento</span>
+          <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Enriquecimento</span>
           <Select
             value={activeEnrichment}
             onValueChange={(v) => handleFilterChange('enrichment_status', v)}
@@ -188,7 +188,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
 
         {/* Porte */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Porte</span>
+          <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Porte</span>
           <Select
             value={activePorte}
             onValueChange={(v) => handleFilterChange('porte', v)}
@@ -209,7 +209,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
 
         {/* UF */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">UF</span>
+          <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">UF</span>
           <Select
             value={activeUf}
             onValueChange={(v) => handleFilterChange('uf', v)}
@@ -230,7 +230,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
 
         {/* Origem */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Origem</span>
+          <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</span>
           <Select
             value={activeSource}
             onValueChange={(v) => handleFilterChange('lead_source', v)}
@@ -252,7 +252,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         {/* CNAE */}
         {cnaes && cnaes.length > 0 && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--muted-foreground)]">CNAE</span>
+            <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">CNAE</span>
             <Select
               value={activeCnae}
               onValueChange={(v) => handleFilterChange('cnae', v)}
@@ -275,7 +275,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         {/* Cadência */}
         {cadences && cadences.length > 0 && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--muted-foreground)]">Cadência</span>
+            <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cadência</span>
             <Select
               value={activeCadence}
               onValueChange={(v) => handleFilterChange('cadence_id', v)}
@@ -299,7 +299,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
         {/* Responsável */}
         {members && members.length > 0 && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--muted-foreground)]">Responsável</span>
+            <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Responsável</span>
             <Select
               value={activeAssigned}
               onValueChange={(v) => handleFilterChange('assigned_to', v)}

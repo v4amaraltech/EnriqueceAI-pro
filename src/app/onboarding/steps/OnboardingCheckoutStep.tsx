@@ -34,7 +34,7 @@ export function OnboardingCheckoutStep({
         <div className="text-center">
           <PartyPopper className="mx-auto h-10 w-10 text-green-500" />
           <h1 className="mt-4 text-2xl font-bold">Pagamento confirmado!</h1>
-          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+          <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Seu plano foi ativado. Vamos continuar a configuração.
           </p>
         </div>
@@ -68,7 +68,7 @@ export function OnboardingCheckoutStep({
         <h1 className="mt-4 text-2xl font-bold">
           {isStarter ? 'Trial gratuito' : 'Pagamento'}
         </h1>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {isStarter
             ? 'Você selecionou o plano Starter com 14 dias de trial gratuito.'
             : `Plano ${selectedPlan?.name ?? ''} — ${selectedPlan ? formatCents(selectedPlan.price_cents) : ''}/mês`}

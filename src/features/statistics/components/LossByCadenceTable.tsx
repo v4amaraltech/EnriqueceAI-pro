@@ -9,7 +9,7 @@ interface LossByCadenceTableProps {
 export function LossByCadenceTable({ data }: LossByCadenceTableProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma cadência com perdas no período.
       </div>
     );
@@ -19,7 +19,7 @@ export function LossByCadenceTable({ data }: LossByCadenceTableProps) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)]">
+          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <th className="pb-3 pr-4">Cadência</th>
             <th className="pb-3 pr-4 text-right">Inscritos</th>
             <th className="pb-3 pr-4 text-right">Perdidos</th>
@@ -34,7 +34,7 @@ export function LossByCadenceTable({ data }: LossByCadenceTableProps) {
               <td className="py-3 pr-4 text-right">{row.enrolled}</td>
               <td className="py-3 pr-4 text-right">{row.lost}</td>
               <td className="py-3 pr-4 text-right font-medium">{row.lossRate}%</td>
-              <td className="py-3 text-sm text-[var(--muted-foreground)]">{row.topReason}</td>
+              <td className="py-3 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{row.topReason}</td>
             </tr>
           ))}
         </tbody>

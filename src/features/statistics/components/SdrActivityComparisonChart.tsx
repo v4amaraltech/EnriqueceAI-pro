@@ -19,7 +19,7 @@ interface SdrActivityComparisonChartProps {
 export function SdrActivityComparisonChart({ data }: SdrActivityComparisonChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum dado de atividade no período.
       </div>
     );

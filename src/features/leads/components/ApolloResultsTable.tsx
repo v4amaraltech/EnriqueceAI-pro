@@ -58,7 +58,7 @@ export function ApolloResultsTable({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-sm text-[var(--muted-foreground)]">
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Mostrando {from.toLocaleString('pt-BR')}-{to.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} resultados
           </span>
           {selectedIds.size > 0 && (
@@ -66,7 +66,7 @@ export function ApolloResultsTable({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--muted-foreground)]">Por página:</span>
+          <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Por página:</span>
           <Select value={String(perPage)} onValueChange={(v) => onChangePerPage(Number(v))}>
             <SelectTrigger className="h-8 w-[70px]">
               <SelectValue />
@@ -111,7 +111,7 @@ export function ApolloResultsTable({
                     />
                   </TableCell>
                   <TableCell className="font-medium">{displayName}</TableCell>
-                  <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)]">
+                  <TableCell className="max-w-[200px] truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {person.title ?? '\u2014'}
                   </TableCell>
                   <TableCell className="text-sm">{person.organization?.name ?? '\u2014'}</TableCell>
@@ -139,7 +139,7 @@ export function ApolloResultsTable({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[var(--muted-foreground)]">
+          <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Página {currentPage} de {totalPages}
           </span>
           <div className="flex items-center gap-1">
@@ -154,7 +154,7 @@ export function ApolloResultsTable({
             </Button>
             {generatePageNumbers(currentPage, totalPages).map((page, i) =>
               page === '...' ? (
-                <span key={`ellipsis-${i}`} className="px-2 text-sm text-[var(--muted-foreground)]">
+                <span key={`ellipsis-${i}`} className="px-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   ...
                 </span>
               ) : (

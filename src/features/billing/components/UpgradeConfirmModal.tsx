@@ -57,10 +57,10 @@ export function UpgradeConfirmModal({
         <div className="space-y-4 py-2">
           {/* Price change */}
           <div className="flex items-center justify-center gap-3 rounded-lg bg-[var(--muted)] p-3">
-            <span className="text-sm text-[var(--muted-foreground)]">
+            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {formatCents(currentPlan.price_cents)}/mês
             </span>
-            <ArrowRight className="size-4 text-[var(--muted-foreground)]" />
+            <ArrowRight className="size-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <span className="text-lg font-semibold">
               {formatCents(targetPlan.price_cents)}/mês
             </span>
@@ -76,7 +76,7 @@ export function UpgradeConfirmModal({
                     <Check className="mt-0.5 size-4 shrink-0 text-green-500" />
                     <div>
                       <span className="font-medium">{item.name}</span>
-                      <span className="text-[var(--muted-foreground)]"> — {item.description}</span>
+                      <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]"> — {item.description}</span>
                     </div>
                   </li>
                 ))}

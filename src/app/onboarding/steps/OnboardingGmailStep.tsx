@@ -33,7 +33,7 @@ export function OnboardingGmailStep({ gmailConnected, onNext, onBack }: Onboardi
       <div className="text-center">
         <Mail className="mx-auto h-10 w-10 text-[var(--primary)]" />
         <h1 className="mt-4 text-2xl font-bold">Conecte seu Gmail</h1>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Conecte seu Gmail para enviar emails diretamente pela plataforma.
         </p>
       </div>

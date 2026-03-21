@@ -16,17 +16,17 @@ export function DialerProgressBar({ completed, skipped, total }: DialerProgressB
     <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">
-          <Phone className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <Phone className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <span className="font-medium">
             {completed} de {total} ligacoes concluidas
           </span>
           {skipped > 0 && (
-            <span className="text-[var(--muted-foreground)]">
+            <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               ({skipped} pulada{skipped > 1 ? 's' : ''})
             </span>
           )}
         </div>
-        <span className="text-[var(--muted-foreground)] tabular-nums">{percent}%</span>
+        <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] tabular-nums">{percent}%</span>
       </div>
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--muted)]">
         <div

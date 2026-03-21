@@ -401,7 +401,7 @@ export function LeadInfoPanel({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{headerName}</p>
           {headerCompany && (
-            <p className="truncate text-xs text-[var(--muted-foreground)]">{headerCompany}</p>
+            <p className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{headerCompany}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -417,11 +417,11 @@ export function LeadInfoPanel({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
-            <p className="px-2 py-1.5 text-xs font-semibold text-[var(--muted-foreground)]">
+            <p className="px-2 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Notificações do Lead
             </p>
             {notableCount === 0 ? (
-              <div className="px-2 py-3 text-center text-xs text-[var(--muted-foreground)]">
+              <div className="px-2 py-3 text-center text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Nenhuma notificação
               </div>
             ) : (
@@ -437,14 +437,14 @@ export function LeadInfoPanel({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
                         <span className="text-xs font-medium">{config.label}</span>
-                        <ChannelIcon className="h-3 w-3 text-[var(--muted-foreground)]" />
+                        <ChannelIcon className="h-3 w-3 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       </div>
                       {entry.cadence_name && (
-                        <p className="truncate text-[10px] text-[var(--muted-foreground)]">
+                        <p className="truncate text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                           {entry.cadence_name}
                         </p>
                       )}
-                      <p className="text-[10px] text-[var(--muted-foreground)]">
+                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         {formatTimelineDate(entry.created_at)}
                       </p>
                     </div>
@@ -479,19 +479,19 @@ export function LeadInfoPanel({
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <p className="text-2xl font-bold">{kpis.completed}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)]">
+              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Completado
               </p>
             </div>
             <div>
               <p className="text-2xl font-bold">{kpis.open}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)]">
+              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Aberto{kpis.open !== 1 ? 's' : ''}
               </p>
             </div>
             <div>
               <p className="text-2xl font-bold">{kpis.conversations}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)]">
+              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Conversa{kpis.conversations !== 1 ? 's' : ''}
               </p>
             </div>
@@ -513,7 +513,7 @@ export function LeadInfoPanel({
                     className={`flex flex-1 items-center justify-center border-b-2 py-2 transition-colors ${
                       activeTab === tab.id
                         ? 'border-[var(--primary)] text-[var(--primary)]'
-                        : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                        : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -534,13 +534,13 @@ export function LeadInfoPanel({
 
             {/* GERAL — contact principal */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Geral
               </h4>
               {isEditing ? (
                 <>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Primeiro nome</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Primeiro nome</p>
                     <Input
                       value={editFields.first_name}
                       onChange={(e) => setEditFields({ ...editFields, first_name: e.target.value })}
@@ -549,7 +549,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Sobrenome</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sobrenome</p>
                     <Input
                       value={editFields.last_name}
                       onChange={(e) => setEditFields({ ...editFields, last_name: e.target.value })}
@@ -558,7 +558,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">E-mail</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>
                     <Input
                       value={editFields.email}
                       onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
@@ -567,7 +567,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Empresa</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Empresa</p>
                     <Input
                       value={editFields.nome_fantasia}
                       onChange={(e) => setEditFields({ ...editFields, nome_fantasia: e.target.value })}
@@ -575,7 +575,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Cargo</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
                     <Input
                       value={editFields.job_title}
                       onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
@@ -603,7 +603,7 @@ export function LeadInfoPanel({
 
             {/* TELEFONE(S) — with type descriptor */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Telefone(s)
               </h4>
               {isEditing ? (
@@ -611,7 +611,7 @@ export function LeadInfoPanel({
                   {phoneEntries.map((entry, index) => (
                     <div key={`phone-edit-${index}`} className="flex items-end gap-1.5">
                       <div className="w-[100px] shrink-0 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)]">Tipo</p>}
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
                         <Select
                           value={entry.tipo}
                           onValueChange={(val) => handlePhoneChange(index, 'tipo', val)}
@@ -627,7 +627,7 @@ export function LeadInfoPanel({
                         </Select>
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)]">Número</p>}
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Número</p>}
                         <Input
                           value={entry.numero}
                           onChange={(e) => handlePhoneChange(index, 'numero', e.target.value)}
@@ -639,7 +639,7 @@ export function LeadInfoPanel({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] hover:text-red-500"
+                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
                         onClick={() => handleRemovePhone(index)}
                         disabled={phoneEntries.length <= 1}
                       >
@@ -659,18 +659,18 @@ export function LeadInfoPanel({
                   </Button>
                 </div>
               ) : allPhones.length === 0 ? (
-                <p className="text-xs text-[var(--muted-foreground)]">Nenhum telefone informado.</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum telefone informado.</p>
               ) : (
                 allPhones.map((phone, i) => (
                   <div key={`phone-${i}`} className="flex gap-2">
                     <div className="w-20 shrink-0 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)]">Descrição:</p>
+                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
                       <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
                         {phone.tipo}
                       </div>
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)]">Telefone:</p>
+                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone:</p>
                       <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
                         <a href={phone.href} className="text-[var(--primary)] hover:underline truncate">
                           {phone.numero}
@@ -686,13 +686,13 @@ export function LeadInfoPanel({
 
             {/* SOCIAL */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Social
               </h4>
               {isEditing ? (
                 <>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Instagram</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Instagram</p>
                     <Input
                       value={editFields.instagram}
                       onChange={(e) => setEditFields({ ...editFields, instagram: e.target.value })}
@@ -701,7 +701,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">LinkedIn</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">LinkedIn</p>
                     <Input
                       value={editFields.linkedin}
                       onChange={(e) => setEditFields({ ...editFields, linkedin: e.target.value })}
@@ -710,7 +710,7 @@ export function LeadInfoPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)]">Site</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Site</p>
                     <Input
                       value={editFields.website}
                       onChange={(e) => setEditFields({ ...editFields, website: e.target.value })}
@@ -732,12 +732,12 @@ export function LeadInfoPanel({
 
             {/* STATUS — metadados internos */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Status
               </h4>
               {isEditing ? (
                 <div className="space-y-1">
-                  <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
                   <Select
                     value={editFields.lead_source ?? 'none'}
                     onValueChange={(value) => {
@@ -771,7 +771,7 @@ export function LeadInfoPanel({
         {activeTab === 'timeline' && (
           <div className="space-y-1">
             {!timeline || timeline.length === 0 ? (
-              <p className="py-4 text-center text-xs text-[var(--muted-foreground)]">
+              <p className="py-4 text-center text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Nenhuma interação registrada.
               </p>
             ) : (
@@ -803,14 +803,14 @@ export function LeadInfoPanel({
                           )}
                         </div>
                         {relDate !== 'AGORA' && (
-                          <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
+                          <span className="shrink-0 text-[11px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                             {relDate}
                           </span>
                         )}
                       </div>
                       {entry.message_content ? (
                         <div
-                          className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] [&_a]:text-[var(--primary)] [&_a]:underline"
+                          className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_a]:text-[var(--primary)] [&_a]:underline"
                           dangerouslySetInnerHTML={{
                             __html: sanitizeHtml(
                               entry.message_content
@@ -821,7 +821,7 @@ export function LeadInfoPanel({
                           }}
                         />
                       ) : (
-                        <p className="mt-1 text-xs italic text-[var(--muted-foreground)]/60">
+                        <p className="mt-1 text-xs italic text-[var(--muted-foreground)] dark:text-[var(--foreground)]/60">
                           Nenhuma anotação
                         </p>
                       )}
@@ -841,7 +841,7 @@ export function LeadInfoPanel({
         {/* Tab Agendar */}
         {activeTab === 'agendar' && (
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Agendar Reunião
             </h4>
 

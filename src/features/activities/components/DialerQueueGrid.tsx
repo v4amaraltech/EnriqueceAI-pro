@@ -14,7 +14,7 @@ export function DialerQueueGrid({ items, totalCount, onViewLead, onSkip }: Diale
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[var(--border)] py-12">
-        <p className="text-sm text-[var(--muted-foreground)]">Nenhum lead encontrado com os filtros atuais</p>
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum lead encontrado com os filtros atuais</p>
       </div>
     );
   }
@@ -22,7 +22,7 @@ export function DialerQueueGrid({ items, totalCount, onViewLead, onSkip }: Diale
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[var(--muted-foreground)]">
+        <h3 className="text-sm font-semibold text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Proximas ligacoes ({items.length} de {totalCount})
         </h3>
       </div>

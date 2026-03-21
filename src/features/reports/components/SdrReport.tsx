@@ -17,7 +17,7 @@ export function SdrReport({ metrics, previousMetrics, onRowClick }: SdrReportPro
   if (metrics.length === 0) {
     return (
       <Card>
-        <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)]">
+        <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhum SDR com atividade no período selecionado.
         </CardContent>
       </Card>
@@ -34,7 +34,7 @@ export function SdrReport({ metrics, previousMetrics, onRowClick }: SdrReportPro
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <th className="pb-2 pr-4 font-medium">SDR</th>
                   <th className="pb-2 pr-4 text-right font-medium">Leads</th>
                   <th className="pb-2 pr-4 text-right font-medium">Mensagens</th>
@@ -89,7 +89,7 @@ export function SdrReport({ metrics, previousMetrics, onRowClick }: SdrReportPro
                 <div key={m.userId} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{m.userName}</span>
-                    <span className="text-[var(--muted-foreground)]">
+                    <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       {m.messagesSent} msgs | {m.replies} respostas | {m.meetings} reuniões
                     </span>
                   </div>

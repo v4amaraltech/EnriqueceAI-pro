@@ -30,7 +30,7 @@ export function StageToStageCards({ conversions, previousConversions }: StageToS
         return (
           <Card key={`${conv.from}-${conv.to}`}>
             <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+              <div className="mb-2 flex items-center gap-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 <span className="truncate">{conv.from}</span>
                 <ArrowRight className="h-3 w-3 shrink-0" />
                 <span className="truncate">{conv.to}</span>
@@ -39,7 +39,7 @@ export function StageToStageCards({ conversions, previousConversions }: StageToS
                 <p className="text-2xl font-bold">{conv.rate}%</p>
                 <DeltaIndicator delta={delta} />
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {conv.numerator} de {conv.denominator}
               </p>
             </CardContent>

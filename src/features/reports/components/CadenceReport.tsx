@@ -20,7 +20,7 @@ export function CadenceReport({ metrics, previousMetrics, onRowClick }: CadenceR
   if (metrics.length === 0) {
     return (
       <Card>
-        <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)]">
+        <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhuma cadência ativa no período selecionado.
         </CardContent>
       </Card>
@@ -38,7 +38,7 @@ export function CadenceReport({ metrics, previousMetrics, onRowClick }: CadenceR
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <th className="pb-2 pr-4 font-medium">Cadência</th>
                   <th className="pb-2 pr-4 text-right font-medium">Inscritos</th>
                   <th className="pb-2 pr-4 text-right font-medium">Enviados</th>
@@ -83,7 +83,7 @@ export function CadenceReport({ metrics, previousMetrics, onRowClick }: CadenceR
                       <td className="py-2 text-right">
                         <Link
                           href={`/cadences/${m.cadenceId}/performance`}
-                          className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                          className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-colors hover:text-[var(--foreground)]"
                           title="Ver performance detalhada"
                         >
                           <BarChart3 className="h-3.5 w-3.5" />
@@ -122,7 +122,7 @@ function RateBar({ label, value, color }: { label: string; value: number; color:
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-[var(--muted-foreground)]">{label}</span>
+        <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</span>
         <span className="font-medium">{value}%</span>
       </div>
       <div className="h-2 w-full rounded-full bg-[var(--muted)]">

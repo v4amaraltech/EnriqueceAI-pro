@@ -80,10 +80,10 @@ export function DowngradeConfirmModal({
         <div className="space-y-4 py-2">
           {/* Price change */}
           <div className="flex items-center justify-center gap-3 rounded-lg bg-[var(--muted)] p-3">
-            <span className="text-sm text-[var(--muted-foreground)]">
+            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {formatCents(currentPlan.price_cents)}/mês
             </span>
-            <ArrowRight className="size-4 text-[var(--muted-foreground)]" />
+            <ArrowRight className="size-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             <span className="text-lg font-semibold">
               {formatCents(targetPlan.price_cents)}/mês
             </span>
@@ -91,7 +91,7 @@ export function DowngradeConfirmModal({
 
           {/* Warnings */}
           {loadingWarnings && (
-            <p className="text-sm text-[var(--muted-foreground)]">Verificando compatibilidade...</p>
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Verificando compatibilidade...</p>
           )}
           {warnings && warnings.length > 0 && (
             <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
@@ -114,7 +114,7 @@ export function DowngradeConfirmModal({
                     <XIcon className="mt-0.5 size-4 shrink-0 text-red-500" />
                     <div>
                       <span className="font-medium">{item.name}</span>
-                      <span className="text-[var(--muted-foreground)]"> — {item.description}</span>
+                      <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]"> — {item.description}</span>
                     </div>
                   </li>
                 ))}
@@ -129,7 +129,7 @@ export function DowngradeConfirmModal({
               <ul className="space-y-1 text-sm">
                 {diff.limitsChanged.map((limit) => (
                   <li key={limit.name} className="flex items-center gap-2">
-                    <ArrowRight className="size-4 shrink-0 text-[var(--muted-foreground)]" />
+                    <ArrowRight className="size-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                     <span>
                       {limit.name}: {limit.from} → <strong>{limit.to}</strong>
                     </span>

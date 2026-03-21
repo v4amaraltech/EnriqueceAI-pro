@@ -194,7 +194,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       {/* Controls */}
       <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <div className="flex items-center gap-2">
-          <Phone className="h-5 w-5 text-[var(--muted-foreground)]" />
+          <Phone className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <span className="text-sm font-medium">Fila de Discagem</span>
           <Badge variant="secondary" className="text-xs">{queue.length} leads</Badge>
         </div>
@@ -223,7 +223,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         {/* Left: Queue list */}
         <div className="lg:col-span-4">
           <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3">
-            <h3 className="mb-3 text-sm font-semibold text-[var(--muted-foreground)]">
+            <h3 className="mb-3 text-sm font-semibold text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Fila ({queue.length - completedCount - skippedCount} restantes)
             </h3>
             <DialerQueueList
@@ -253,7 +253,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           ) : (
             <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)] p-12">
               <div className="text-center">
-                <Phone className="mx-auto h-10 w-10 text-[var(--muted-foreground)]" />
+                <Phone className="mx-auto h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 <p className="mt-3 text-sm font-medium">Selecione um lead na fila</p>
               </div>
             </div>

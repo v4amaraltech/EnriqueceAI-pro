@@ -111,7 +111,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
+          <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
             {total} lead{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
           </p>
@@ -150,12 +150,12 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
                 className={`relative px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
                     ? 'text-[var(--foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
                 }`}
               >
                 {tab.label}
                 <span className={`ml-1.5 inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                  isActive ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                  isActive ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)] dark:text-[var(--foreground)]'
                 }`}>
                   {count}
                 </span>
@@ -178,10 +178,10 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       {leads.length === 0 && hasFilters ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <SearchX className="h-10 w-10 text-[var(--muted-foreground)]" />
+            <SearchX className="h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">Nenhum lead encontrado</h3>
-          <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
+          <p className="max-w-sm text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Tente ajustar os filtros para encontrar o que procura.
           </p>
         </div>

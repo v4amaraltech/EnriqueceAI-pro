@@ -160,16 +160,16 @@ export function ActivityPhonePanel({
       <div className="flex items-start justify-between rounded-lg border border-[var(--border)] p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--muted)]">
-            <User className="h-5 w-5 text-[var(--muted-foreground)]" />
+            <User className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <div>
-            <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
             <p className="text-sm font-medium">Sua linha</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div>
-            <p className="text-right text-xs text-[var(--muted-foreground)]">Destino</p>
+            <p className="text-right text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
             <p className="text-sm font-medium">{leadName}</p>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/10">
@@ -181,7 +181,7 @@ export function ActivityPhonePanel({
       {/* Phone selector — only when multiple phones */}
       {hasMultiplePhones && (
         <div className="mt-4 space-y-1.5">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Selecionar telefone
           </Label>
           <Select value={selectedPhone} onValueChange={setSelectedPhone} disabled={isInCall}>
@@ -202,7 +202,7 @@ export function ActivityPhonePanel({
       {/* Call script / Roteiro */}
       {callScript && (
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {activityName ?? 'Roteiro da Ligação'}
           </p>
           <p className="whitespace-pre-wrap text-sm">{callScript}</p>
@@ -219,7 +219,7 @@ export function ActivityPhonePanel({
 
             {/* Timer display during call */}
             {isInCall && (
-              <p className="mb-2 font-mono text-lg tabular-nums text-[var(--muted-foreground)]">
+              <p className="mb-2 font-mono text-lg tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {formatTimer(elapsed)}
               </p>
             )}
@@ -265,14 +265,14 @@ export function ActivityPhonePanel({
               )}
             </div>
 
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+            <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {callState === 'idle' && 'Clique para ligar via API4COM'}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
             </p>
           </>
         ) : (
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Sem telefone cadastrado para este lead.
           </p>
         )}
@@ -298,17 +298,17 @@ export function ActivityPhonePanel({
             <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
               <div>
                 <p className="text-sm font-medium">{leadName}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{selectedPhone}</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{selectedPhone}</p>
               </div>
               <div className="text-right">
                 <p className="font-mono text-sm tabular-nums">{formatTimer(callDuration)}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Duração</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
               </div>
             </div>
 
             {/* Call status */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Status da Ligação
               </Label>
               <Select value={callStatus} onValueChange={setCallStatus}>
@@ -330,8 +330,8 @@ export function ActivityPhonePanel({
             {/* Notes */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Anotações
                 </Label>
               </div>

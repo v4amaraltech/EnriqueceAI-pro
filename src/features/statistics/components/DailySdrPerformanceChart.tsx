@@ -23,7 +23,7 @@ interface DailySdrPerformanceChartProps {
 export function DailySdrPerformanceChart({ data, sdrKeys }: DailySdrPerformanceChartProps) {
   if (data.length === 0 || sdrKeys.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum dado de tendência no período.
       </div>
     );

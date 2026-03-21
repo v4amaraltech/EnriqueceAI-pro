@@ -89,7 +89,7 @@ export function OrganizationSettings({ organization }: { organization: Organizat
                 className="h-full w-full object-cover"
               />
             ) : (
-              <Building2 className="h-6 w-6 text-[var(--muted-foreground)]" />
+              <Building2 className="h-6 w-6 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
             )}
           </div>
           <div className="flex gap-2">

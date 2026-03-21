@@ -77,7 +77,7 @@ export function LossReasonsSettings({ initial }: LossReasonsSettingsProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Motivos de Perda</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Gerencie os motivos de perda disponíveis ao encerrar uma cadência.
         </p>
       </div>
@@ -100,7 +100,7 @@ export function LossReasonsSettings({ initial }: LossReasonsSettingsProps) {
       {/* List */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
         {reasons.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)]">
+          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhum motivo de perda cadastrado.
           </p>
         ) : (
@@ -142,7 +142,7 @@ export function LossReasonsSettings({ initial }: LossReasonsSettingsProps) {
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{reason.name}</span>
                       {reason.is_system && (
-                        <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs text-[var(--muted-foreground)]">
+                        <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                           padrão
                         </span>
                       )}

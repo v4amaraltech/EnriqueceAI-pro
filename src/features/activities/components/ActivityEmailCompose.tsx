@@ -157,7 +157,7 @@ export function ActivityEmailCompose({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Compor Email
         </h3>
         <div className="flex items-center gap-2">
@@ -172,8 +172,8 @@ export function ActivityEmailCompose({
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
-          <span className="ml-2 text-sm text-[var(--muted-foreground)]">Preparando email...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+          <span className="ml-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Preparando email...</span>
         </div>
       ) : (
         <>
@@ -305,7 +305,7 @@ export function ActivityEmailCompose({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)]">
+                      <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         Lead
                       </DropdownMenuLabel>
                       {AVAILABLE_TEMPLATE_VARIABLES.map((v) => (
@@ -317,7 +317,7 @@ export function ActivityEmailCompose({
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)]">
+                      <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         Vendedor
                       </DropdownMenuLabel>
                       {VENDOR_TEMPLATE_VARIABLES.map((v) => (

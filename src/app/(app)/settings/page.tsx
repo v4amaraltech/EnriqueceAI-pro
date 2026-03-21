@@ -48,10 +48,10 @@ export default async function SettingsPage() {
               href={link.href}
               className="flex items-center gap-3 rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-[var(--accent)]"
             >
-              <Icon className="h-5 w-5 text-[var(--muted-foreground)]" />
+              <Icon className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               <div>
                 <p className="text-sm font-medium">{link.label}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{link.description}</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{link.description}</p>
               </div>
             </Link>
           );
@@ -60,7 +60,7 @@ export default async function SettingsPage() {
 
       {/* Organization settings inline */}
       <div className="flex items-center gap-2 mb-4">
-        <Building2 className="h-5 w-5 text-[var(--muted-foreground)]" />
+        <Building2 className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
         <h2 className="text-lg font-semibold">Organização</h2>
       </div>
       <OrganizationSettings organization={member.organization} />

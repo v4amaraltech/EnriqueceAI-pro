@@ -49,7 +49,7 @@ export function AbmSettings({ initialEnabled, initialGroupField }: AbmSettingsPr
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Vendas Baseadas em Contas (ABM)</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Ative o modo ABM para agrupar leads por empresa e trabalhar contas de forma estratégica.
         </p>
       </div>
@@ -71,7 +71,7 @@ export function AbmSettings({ initialEnabled, initialGroupField }: AbmSettingsPr
         {enabled && (
           <div>
             <label className="mb-1 block text-sm font-medium">Campo de agrupamento</label>
-            <p className="mb-2 text-xs text-[var(--muted-foreground)]">
+            <p className="mb-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Leads com o mesmo valor neste campo serão agrupados na mesma conta.
             </p>
             <Select value={groupField} onValueChange={setGroupField}>

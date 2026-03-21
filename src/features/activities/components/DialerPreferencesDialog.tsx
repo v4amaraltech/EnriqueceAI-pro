@@ -98,10 +98,10 @@ export function DialerPreferencesDialog({
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Número de leads a serem discados simultaneamente.
             </p>
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               *Valor entre {SIMULTANEOUS_MIN} e {SIMULTANEOUS_MAX}.
             </p>
             {phones !== DEFAULTS.simultaneous_phones && (
@@ -145,10 +145,10 @@ export function DialerPreferencesDialog({
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Máximo de tentativas de ligação que um lead pode receber em um mesmo dia. Após isso, o lead ficará fora da fila do Power Dialer até o fim do dia.
             </p>
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               *Valor entre {DAILY_LIMIT_MIN} e {DAILY_LIMIT_MAX}.
             </p>
             {limit !== DEFAULTS.daily_limit_per_lead && (

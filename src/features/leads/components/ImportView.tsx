@@ -117,7 +117,7 @@ export function ImportView() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Se selecionada, será aplicada a todos os leads importados.
           </p>
         </div>

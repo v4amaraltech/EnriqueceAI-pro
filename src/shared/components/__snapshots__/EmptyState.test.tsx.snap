@@ -10,7 +10,7 @@ exports[`EmptyState > should match snapshot 1`] = `
     >
       <svg
         aria-hidden="true"
-        class="lucide lucide-upload h-10 w-10 text-[var(--muted-foreground)]"
+        class="lucide lucide-upload h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
         fill="none"
         height="24"
         stroke="currentColor"
@@ -38,7 +38,7 @@ exports[`EmptyState > should match snapshot 1`] = `
       Import leads
     </h3>
     <p
-      class="mb-6 max-w-sm text-sm text-[var(--muted-foreground)]"
+      class="mb-6 max-w-sm text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
     >
       Get started by importing
     </p>

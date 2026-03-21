@@ -166,7 +166,7 @@ export function ScheduleMeetingModal({
               onChange={(e) => setAttendeeEmails(e.target.value)}
               placeholder="lead@exemplo.com, sdr@empresa.com"
             />
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+            <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Separe múltiplos emails com vírgula
             </p>
           </div>

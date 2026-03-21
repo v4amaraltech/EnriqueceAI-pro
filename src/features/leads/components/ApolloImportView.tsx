@@ -159,7 +159,7 @@ export function ApolloImportView() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">Importar do Apollo.io</h1>
-            <p className="text-[var(--muted-foreground)]">
+            <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Busque pessoas na base do Apollo e importe como leads.
             </p>
           </div>
@@ -169,10 +169,10 @@ export function ApolloImportView() {
           {step === 'importing' && (
             <div className="flex flex-col items-center gap-4 py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-[var(--muted-foreground)]">
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Enriquecendo e importando {selectedIds.size} lead{selectedIds.size !== 1 ? 's' : ''}...
               </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Cada pessoa e enriquecida individualmente para obter email e telefone.
               </p>
               <Progress value={undefined} className="w-64" />
@@ -188,15 +188,15 @@ export function ApolloImportView() {
                 <div className="grid grid-cols-3 gap-8 text-center">
                   <div>
                     <p className="text-3xl font-bold text-green-600">{importResult.imported}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">Importados</p>
+                    <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Importados</p>
                   </div>
                   <div>
                     <p className="text-3xl font-bold text-amber-600">{importResult.duplicates}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">Duplicados</p>
+                    <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duplicados</p>
                   </div>
                   <div>
                     <p className="text-3xl font-bold text-red-600">{importResult.errors}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">Erros</p>
+                    <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Erros</p>
                   </div>
                 </div>
 
@@ -228,7 +228,7 @@ export function ApolloImportView() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold">Importar do Apollo.io</h1>
-          <p className="text-[var(--muted-foreground)]">
+          <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Busque pessoas na base do Apollo e importe como leads.
           </p>
         </div>
@@ -252,8 +252,8 @@ export function ApolloImportView() {
 
           {isSearching ? (
             <div className="flex flex-col items-center justify-center gap-3 py-24">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--muted-foreground)]" />
-              <p className="text-sm text-[var(--muted-foreground)]">Buscando no Apollo...</p>
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Buscando no Apollo...</p>
             </div>
           ) : people.length === 0 ? (
             <ApolloEmptyState hasSearched={hasSearched} />

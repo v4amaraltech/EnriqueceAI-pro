@@ -35,7 +35,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 export function CadencePerformanceTable({ data }: CadencePerformanceTableProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma cadência com inscritos no período.
       </div>
     );
@@ -45,7 +45,7 @@ export function CadencePerformanceTable({ data }: CadencePerformanceTableProps) 
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)]">
+          <tr className="border-b border-[var(--border)] text-left text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <th className="pb-3 pr-4">Cadência</th>
             <th className="pb-3 pr-4">Status</th>
             <th className="pb-3 pr-4">Prioridade</th>
@@ -70,7 +70,7 @@ export function CadencePerformanceTable({ data }: CadencePerformanceTableProps) 
                     {PRIORITY_LABEL[row.priority] ?? row.priority}
                   </span>
                 ) : (
-                  <span className="text-xs text-[var(--muted-foreground)]">—</span>
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">—</span>
                 )}
               </td>
               <td className="py-3 pr-4 text-right">{row.enrolled}</td>

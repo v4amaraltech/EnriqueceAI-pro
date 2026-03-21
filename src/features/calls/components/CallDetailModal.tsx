@@ -149,7 +149,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                   <div className="flex items-center gap-2">
                     <Mic className="h-4 w-4 text-[var(--primary)]" />
                     <span className="text-xs font-medium">Gravação da ligação</span>
-                    <span className="ml-auto text-sm tabular-nums text-[var(--muted-foreground)]">
+                    <span className="ml-auto text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       {formatDuration(activeCall.duration_seconds)}
                     </span>
                   </div>
@@ -162,16 +162,16 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                 </div>
               ) : (
                 <div className="flex items-center gap-3 rounded-lg bg-[var(--muted)] p-4">
-                  <Mic className="h-5 w-5 text-[var(--muted-foreground)]" />
+                  <Mic className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                   <div className="flex-1">
                     <div className="h-2 rounded-full bg-[var(--border)]">
                       <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
                     </div>
-                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       Gravação não disponível
                     </p>
                   </div>
-                  <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
+                  <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {formatDuration(activeCall.duration_seconds)}
                   </span>
                 </div>
@@ -205,33 +205,33 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
               {/* Details grid */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
                   <p className="text-sm font-medium">{activeCall.origin}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Destino</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
                   <p className="text-sm font-medium">{activeCall.destination}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Data</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Data</p>
                   <p className="text-sm">{formatDate(activeCall.started_at)}</p>
                 </div>
                 <div className="flex items-start gap-1">
-                  <Clock className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                  <Clock className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                   <div>
-                    <p className="text-xs text-[var(--muted-foreground)]">Duração</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
                     <p className="text-sm tabular-nums">{formatDuration(activeCall.duration_seconds)}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)]">Tipo</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>
                   <Badge variant="outline">{typeLabels[activeCall.type] ?? activeCall.type}</Badge>
                 </div>
                 {activeCall.cost != null && (
                   <div className="flex items-start gap-1">
-                    <DollarSign className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                    <DollarSign className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                     <div>
-                      <p className="text-xs text-[var(--muted-foreground)]">Custo</p>
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Custo</p>
                       <p className="text-sm">R$ {activeCall.cost.toFixed(2)}</p>
                     </div>
                   </div>
@@ -243,7 +243,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                 <>
                   <Separator />
                   <div>
-                    <p className="text-xs text-[var(--muted-foreground)] mb-1">Anotações</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] mb-1">Anotações</p>
                     <p className="text-sm whitespace-pre-wrap">{activeCall.notes}</p>
                   </div>
                 </>
@@ -263,10 +263,10 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                       className="flex gap-3 rounded-lg border border-[var(--border)] p-3"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
-                        <User className="h-4 w-4 text-[var(--muted-foreground)]" />
+                        <User className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-[var(--muted-foreground)]">
+                        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                           {formatDate(fb.created_at)}
                         </p>
                         <p className="mt-1 text-sm whitespace-pre-wrap">{fb.content}</p>
@@ -275,7 +275,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[var(--muted-foreground)]">
+                <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Nenhum feedback adicionado.
                 </p>
               )}

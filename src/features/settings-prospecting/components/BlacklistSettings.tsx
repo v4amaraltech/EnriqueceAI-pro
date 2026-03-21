@@ -53,7 +53,7 @@ export function BlacklistSettings({ initial }: BlacklistSettingsProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Blacklist de E-mails</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Domínios na blacklist serão ignorados ao enviar e-mails de prospecção.
         </p>
       </div>
@@ -76,7 +76,7 @@ export function BlacklistSettings({ initial }: BlacklistSettingsProps) {
       {/* List */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
         {domains.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)]">
+          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhum domínio na blacklist.
           </p>
         ) : (

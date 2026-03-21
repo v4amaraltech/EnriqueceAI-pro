@@ -37,7 +37,7 @@ export function CallsPagination({ total, page, perPage }: CallsPaginationProps) 
 
   return (
     <div className="flex items-center justify-between px-2">
-      <p className="text-sm text-[var(--muted-foreground)]">
+      <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Mostrando {from}–{to} de {total} ligaç{total !== 1 ? 'ões' : 'ão'}
       </p>
       <div className="flex items-center gap-2">

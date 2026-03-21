@@ -105,7 +105,7 @@ export function Api4ComConfigModal({
               value={ramal}
               onChange={(e) => setRamal(e.target.value)}
             />
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Número do seu ramal registrado no painel da API4COM
             </p>
           </div>
@@ -121,7 +121,7 @@ export function Api4ComConfigModal({
               <Label htmlFor="api-token">
                 API Token{' '}
                 {hasExistingApiKey && (
-                  <span className="font-normal text-[var(--muted-foreground)]">
+                  <span className="font-normal text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     (deixe vazio para manter o atual)
                   </span>
                 )}
@@ -137,7 +137,7 @@ export function Api4ComConfigModal({
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
                   onClick={() => setShowToken(!showToken)}
                 >
                   {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -154,7 +154,7 @@ export function Api4ComConfigModal({
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
               />
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 URL padrão: {DEFAULT_BASE_URL}
               </p>
             </div>

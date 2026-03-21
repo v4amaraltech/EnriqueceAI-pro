@@ -49,7 +49,7 @@ export function LeadAccessSettings({ initialMode }: LeadAccessSettingsProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Acesso aos Leads</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Defina quem pode visualizar quais leads na sua organização.
         </p>
       </div>
@@ -74,7 +74,7 @@ export function LeadAccessSettings({ initialMode }: LeadAccessSettingsProps) {
             />
             <div>
               <span className="text-sm font-medium">{m.label}</span>
-              <p className="text-xs text-[var(--muted-foreground)]">{m.description}</p>
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{m.description}</p>
             </div>
           </label>
         ))}

@@ -26,7 +26,7 @@ export function OnboardingPlanStep({ plans, onSelect, onBack }: OnboardingPlanSt
       <div className="text-center">
         <Sparkles className="mx-auto h-10 w-10 text-[var(--primary)]" />
         <h1 className="mt-4 text-2xl font-bold">Escolha seu plano</h1>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Comece com 14 dias grátis no Starter ou escolha um plano maior.
         </p>
       </div>
@@ -65,7 +65,7 @@ export function OnboardingPlanStep({ plans, onSelect, onBack }: OnboardingPlanSt
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-[var(--muted-foreground)]">
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       {plan.max_leads.toLocaleString('pt-BR')} leads
                       {' · '}
                       {plan.max_ai_per_day === -1 ? 'IA ilimitada' : `${plan.max_ai_per_day} IA/dia`}
@@ -76,7 +76,7 @@ export function OnboardingPlanStep({ plans, onSelect, onBack }: OnboardingPlanSt
                 </div>
                 <div className="text-right">
                   <p className="font-bold">{formatCents(plan.price_cents)}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">/mês</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">/mês</p>
                 </div>
               </CardContent>
             </Card>

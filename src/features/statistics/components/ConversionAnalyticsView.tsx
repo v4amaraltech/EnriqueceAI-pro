@@ -47,7 +47,7 @@ export function ConversionAnalyticsView({ data, members, cadences, hideFilters, 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Conversão</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Funil de conversão e análise por cadência.
           </p>
         </div>

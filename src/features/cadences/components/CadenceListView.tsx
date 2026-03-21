@@ -258,7 +258,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               displayTab === 'standard'
                 ? 'border-[var(--primary)] text-[var(--foreground)]'
-                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             Padrão
@@ -272,7 +272,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               displayTab === 'auto_email'
                 ? 'border-[var(--primary)] text-[var(--foreground)]'
-                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             E-mail Automático
@@ -465,7 +465,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   <div className="w-7 shrink-0">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button type="button" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                        <button type="button" className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]">
                           <Info className="h-4 w-4" />
                         </button>
                       </TooltipTrigger>
@@ -520,7 +520,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
                   </div>
 
                   {/* Creator */}
-                  <div className="w-28 shrink-0 truncate text-xs text-[var(--muted-foreground)]">
+                  <div className="w-28 shrink-0 truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {cadence.created_by ? (userMap[cadence.created_by] ?? '—') : '—'}
                   </div>
 

@@ -135,7 +135,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
       {/* Pessoa */}
       <Separator />
       <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Pessoa
         </p>
 
@@ -147,7 +147,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={titles}
             onChange={(e) => setTitles(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Separe com virgula</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Separe com virgula</p>
         </div>
 
         <div className="space-y-1.5">
@@ -158,7 +158,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={locations}
             onChange={(e) => setLocations(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Cidade, estado ou pais. Separe com virgula</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cidade, estado ou pais. Separe com virgula</p>
         </div>
 
         <div className="space-y-2">
@@ -189,7 +189,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
       {/* Empresa */}
       <Separator />
       <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Empresa
         </p>
 
@@ -216,7 +216,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Termos livres para busca ampla. Separe com virgula</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Termos livres para busca ampla. Separe com virgula</p>
         </div>
 
         <div className="space-y-1.5">
@@ -227,7 +227,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
             value={domains}
             onChange={(e) => setDomains(e.target.value)}
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Busca em empresas especificas</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Busca em empresas especificas</p>
         </div>
 
         <div className="space-y-2">

@@ -71,7 +71,7 @@ export function EnrollmentsList({ enrollments }: EnrollmentsListProps) {
 
   if (enrollments.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+      <p className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum lead inscrito nesta cadência ainda.
       </p>
     );
@@ -97,14 +97,14 @@ export function EnrollmentsList({ enrollments }: EnrollmentsListProps) {
               <TableCell className="font-medium">
                 {enrollment.lead_name ?? '—'}
               </TableCell>
-              <TableCell className="text-sm text-[var(--muted-foreground)]">
+              <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {enrollment.lead_cnpj}
               </TableCell>
               <TableCell>
                 <Badge variant={config.variant}>{config.label}</Badge>
               </TableCell>
               <TableCell>{enrollment.current_step}</TableCell>
-              <TableCell className="text-sm text-[var(--muted-foreground)]">
+              <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {formatDate(enrollment.enrolled_at)}
               </TableCell>
               <TableCell className="text-right">

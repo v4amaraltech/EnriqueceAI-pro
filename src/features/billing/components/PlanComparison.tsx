@@ -38,7 +38,7 @@ export function PlanComparisonView({ data }: PlanComparisonProps) {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">Comparação de Planos</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Escolha o plano ideal para sua equipe
         </p>
       </div>
@@ -95,10 +95,10 @@ function PlanCard({ plan, isCurrent, onSelect, isUpgrade }: PlanCardProps) {
         </div>
         <div className="mt-2">
           <span className="text-2xl font-bold">{formatCents(plan.price_cents)}</span>
-          <span className="text-sm text-[var(--muted-foreground)]">/mês</span>
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">/mês</span>
         </div>
         {plan.additional_user_price_cents > 0 && (
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             + {formatCents(plan.additional_user_price_cents)} por usuário adicional
           </p>
         )}
@@ -154,9 +154,9 @@ function PlanFeatureRow({ label, included }: PlanFeatureRowProps) {
       {included ? (
         <Check className="size-4 text-green-500" />
       ) : (
-        <X className="size-4 text-[var(--muted-foreground)]" />
+        <X className="size-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
       )}
-      <span className={included ? '' : 'text-[var(--muted-foreground)]'}>{label}</span>
+      <span className={included ? '' : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]'}>{label}</span>
     </div>
   );
 }

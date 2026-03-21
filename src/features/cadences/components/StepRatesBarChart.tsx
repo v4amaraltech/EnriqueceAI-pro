@@ -20,7 +20,7 @@ interface StepRatesBarChartProps {
 export function StepRatesBarChart({ steps }: StepRatesBarChartProps) {
   if (steps.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma etapa com dados.
       </div>
     );

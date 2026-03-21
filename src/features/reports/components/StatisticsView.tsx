@@ -52,7 +52,7 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Estatísticas</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Insights de motivos de perda, conversão e tempo de resposta.
           </p>
         </div>

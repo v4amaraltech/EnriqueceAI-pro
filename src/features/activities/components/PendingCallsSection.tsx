@@ -45,7 +45,7 @@ export function PendingCallsSection({ leads }: PendingCallsSectionProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <PhoneCall className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <PhoneCall className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <h3 className="text-sm font-semibold">
             Leads Aguardando Primeira Ligação ({leads.length})
           </h3>

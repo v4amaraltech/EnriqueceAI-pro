@@ -95,13 +95,13 @@ export function RdStationTokenModal({
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
                 onClick={() => setShowToken(!showToken)}
               >
                 {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               O token será encriptado e armazenado de forma segura
             </p>
           </div>

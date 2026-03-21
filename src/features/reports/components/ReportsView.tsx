@@ -78,7 +78,7 @@ export function ReportsView({ data, previousData, members, cadences }: ReportsVi
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Relatórios</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Analise o desempenho das campanhas, SDRs e funil de conversão.
           </p>
         </div>
@@ -107,7 +107,7 @@ export function ReportsView({ data, previousData, members, cadences }: ReportsVi
             className={`px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.value
                 ? 'border-b-2 border-[var(--foreground)] text-[var(--foreground)]'
-                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             {tab.label}

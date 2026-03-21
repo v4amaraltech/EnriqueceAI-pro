@@ -13,7 +13,7 @@ interface StepPerformanceTableProps {
 export function StepPerformanceTable({ steps, cadenceType = 'auto_email' }: StepPerformanceTableProps) {
   if (steps.length === 0) {
     return (
-      <div className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+      <div className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma etapa cadastrada.
       </div>
     );
@@ -25,7 +25,7 @@ export function StepPerformanceTable({ steps, cadenceType = 'auto_email' }: Step
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+          <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <th className="pb-2 pr-3 font-medium">#</th>
             <th className="pb-2 pr-3 font-medium">Canal</th>
             <th className="pb-2 pr-3 font-medium">Nome</th>

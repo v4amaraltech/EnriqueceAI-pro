@@ -198,7 +198,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
             activeTab === 'execution'
               ? 'border-[var(--primary)] text-[var(--primary)]'
-              : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
           }`}
         >
           Execução
@@ -210,7 +210,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
               activeTab === 'dialer'
                 ? 'border-[var(--primary)] text-[var(--primary)]'
-                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             Power Dialer
@@ -250,13 +250,13 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           {/* Column headers */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <ListChecks className="h-5 w-5 text-[var(--muted-foreground)]" />
+              <ListChecks className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               <h2 className="text-lg font-semibold">
                 Atividades das Cadências ({filtered.length})
               </h2>
             </div>
             {filtered.length > 0 && (
-              <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]`}>
+              <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
                 <span>Atividade</span>
                 <span>Cadência</span>
                 <span>Lead</span>

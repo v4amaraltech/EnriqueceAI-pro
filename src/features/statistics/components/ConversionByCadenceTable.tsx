@@ -9,7 +9,7 @@ interface ConversionByCadenceTableProps {
 export function ConversionByCadenceTable({ data }: ConversionByCadenceTableProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma cadência com enrollments no período.
       </div>
     );
@@ -20,12 +20,12 @@ export function ConversionByCadenceTable({ data }: ConversionByCadenceTableProps
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
-            <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)]">Cadência</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">Enrollments</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">Respostas</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">Reuniões</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">Qualificados</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)]">Taxa %</th>
+            <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cadência</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Enrollments</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Respostas</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Reuniões</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Qualificados</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Taxa %</th>
           </tr>
         </thead>
         <tbody>

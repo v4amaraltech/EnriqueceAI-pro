@@ -48,7 +48,7 @@ export function CadenceTypeDialog({ open, onOpenChange }: CadenceTypeDialogProps
             </div>
             <div>
               <p className="font-medium">Padrão</p>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Multi-canal: email, WhatsApp, telefone, LinkedIn
               </p>
             </div>
@@ -63,7 +63,7 @@ export function CadenceTypeDialog({ open, onOpenChange }: CadenceTypeDialogProps
             </div>
             <div>
               <p className="font-medium">E-mail Automático</p>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Sequência de emails com editor rich text
               </p>
             </div>

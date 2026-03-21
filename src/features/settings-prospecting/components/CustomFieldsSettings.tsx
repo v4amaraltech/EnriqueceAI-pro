@@ -106,7 +106,7 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Campos Personalizados</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Crie campos personalizados para enriquecer os dados dos seus leads.
         </p>
       </div>
@@ -159,7 +159,7 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
       {/* List */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
         {fields.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)]">
+          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhum campo personalizado cadastrado.
           </p>
         ) : (
@@ -214,11 +214,11 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
                   <>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium">{field.field_name}</span>
-                      <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs text-[var(--muted-foreground)]">
+                      <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         {FIELD_TYPES.find((t) => t.value === field.field_type)?.label ?? field.field_type}
                       </span>
                       {field.options && field.options.length > 0 && (
-                        <span className="text-xs text-[var(--muted-foreground)]">
+                        <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                           ({field.options.join(', ')})
                         </span>
                       )}

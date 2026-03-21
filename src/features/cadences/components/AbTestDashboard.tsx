@@ -78,8 +78,8 @@ export function AbTestDashboard({ stepIds }: AbTestDashboardProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
-        <span className="ml-2 text-sm text-[var(--muted-foreground)]">Carregando métricas A/B...</span>
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+        <span className="ml-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando métricas A/B...</span>
       </div>
     );
   }
@@ -141,7 +141,7 @@ function StepAbCard({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+              <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 <th className="pb-2 pr-4 font-medium">Métrica</th>
                 <th className="pb-2 pr-4 text-right font-medium">Variante A</th>
                 <th className="pb-2 text-right font-medium">Variante B</th>
@@ -157,13 +157,13 @@ function StepAbCard({
         </div>
 
         {pValue !== null && (
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             p-value: {pValue} {pValue < 0.05 ? '(significativo)' : '(não significativo)'}
           </p>
         )}
 
         {!winnerVariant && !canDeclareWinner && (
-          <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+          <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             <AlertCircle className="mt-0.5 h-3 w-3 flex-shrink-0" />
             <span>
               Necessário mínimo de 50 envios por variante e 7 dias de teste para declarar vencedor.
@@ -175,7 +175,7 @@ function StepAbCard({
 
         {!winnerVariant && canDeclareWinner && pValue !== null && pValue >= 0.05 && (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-[var(--muted-foreground)]">Sem diferença significativa. Declarar manualmente:</span>
+            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sem diferença significativa. Declarar manualmente:</span>
             <Button
               size="sm"
               variant={aLeads ? 'default' : 'outline'}

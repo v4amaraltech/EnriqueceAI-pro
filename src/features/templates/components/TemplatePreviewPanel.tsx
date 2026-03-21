@@ -92,7 +92,7 @@ export function TemplatePreviewPanel({ subject, body, channel }: TemplatePreview
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <Input
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
@@ -158,18 +158,18 @@ export function TemplatePreviewPanel({ subject, body, channel }: TemplatePreview
       {/* Preview */}
       <div className="flex-1 overflow-auto p-4">
         {!selectedLead ? (
-          <p className="text-center text-sm text-[var(--muted-foreground)]">
+          <p className="text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Selecione um lead para visualizar o preview
           </p>
         ) : isEmail ? (
           <div className={`mx-auto ${viewMode === 'mobile' ? 'max-w-[375px]' : 'max-w-full'}`}>
             {/* Email header */}
             <div className="mb-4 space-y-1 border-b pb-3 text-sm">
-              <p className="text-[var(--muted-foreground)]">
+              <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 <span className="font-medium text-[var(--foreground)]">Para: </span>
                 {selectedLead.primeiro_nome ?? selectedLead.nome_fantasia ?? 'Lead'}{' '}
                 {selectedLead.email && (
-                  <span className="text-[var(--muted-foreground)]">
+                  <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     &lt;{selectedLead.email}&gt;
                   </span>
                 )}

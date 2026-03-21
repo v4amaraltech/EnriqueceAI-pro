@@ -20,7 +20,7 @@ export function RecentImports({ imports }: RecentImportsProps) {
           <CardTitle className="text-base">Importações Recentes</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhuma importação realizada ainda.{' '}
             <Link href="/leads/import" className="text-[var(--primary)] hover:underline">
               Importar CSV
@@ -46,16 +46,16 @@ export function RecentImports({ imports }: RecentImportsProps) {
             return (
               <div key={imp.id} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <FileUp className="h-4 w-4 text-[var(--muted-foreground)]" />
+                  <FileUp className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                   <div>
                     <p className="font-medium">{imp.file_name}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       {new Date(imp.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-[var(--muted-foreground)]">
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {imp.success_count}/{imp.total_rows}
                   </span>
                   <Badge

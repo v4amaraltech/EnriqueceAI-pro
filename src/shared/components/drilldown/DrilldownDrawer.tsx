@@ -57,14 +57,14 @@ export function DrilldownDrawer({
               ))}
             </div>
           ) : data.length === 0 ? (
-            <div className="flex h-40 items-center justify-center text-sm text-[var(--muted-foreground)]">
+            <div className="flex h-40 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Nenhum resultado encontrado.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                  <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {columns.map((col) => (
                       <th
                         key={col.key}
@@ -112,7 +112,7 @@ export function DrilldownDrawer({
 
         {!isLoading && data.length > 0 && (
           <SheetFooter className="flex-row items-center justify-between border-t border-[var(--border)] pt-3">
-            <span className="text-sm text-[var(--muted-foreground)]">
+            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Página {page} de {totalPages}
             </span>
             <div className="flex gap-2">

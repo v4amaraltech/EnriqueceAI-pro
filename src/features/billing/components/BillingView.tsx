@@ -60,7 +60,7 @@ export function BillingView({ data }: BillingViewProps) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-lg font-semibold">{plan.name}</p>
-              <p className="text-sm text-[var(--muted-foreground)]">
+              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {formatCents(plan.price_cents)}/mês
                 {additionalUsers > 0 && (
                   <span>
@@ -75,21 +75,21 @@ export function BillingView({ data }: BillingViewProps) {
 
           <div className="rounded-lg bg-[var(--muted)] p-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-[var(--muted-foreground)]">Total mensal</span>
+              <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Total mensal</span>
               <span className="font-semibold">{formatCents(monthlyTotal)}</span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-[var(--muted-foreground)]">Período atual</p>
+              <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Período atual</p>
               <p className="font-medium">
                 {new Date(subscription.current_period_start).toLocaleDateString('pt-BR')} —{' '}
                 {new Date(subscription.current_period_end).toLocaleDateString('pt-BR')}
               </p>
             </div>
             <div>
-              <p className="text-[var(--muted-foreground)]">Membros</p>
+              <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Membros</p>
               <p className="font-medium">
                 {memberCount} de {plan.included_users} inclusos
               </p>
@@ -155,10 +155,10 @@ interface FeatureItemProps {
 function FeatureItem({ label, value, enabled }: FeatureItemProps) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-[var(--muted-foreground)]">{label}</span>
+      <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</span>
       <span className="flex items-center gap-1 font-medium">
         {enabled !== undefined && (
-          <Check className={`size-3.5 ${enabled ? 'text-green-500' : 'text-[var(--muted-foreground)]'}`} />
+          <Check className={`size-3.5 ${enabled ? 'text-green-500' : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]'}`} />
         )}
         {value}
       </span>

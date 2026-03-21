@@ -24,7 +24,7 @@ export function CallDashboardView({ data, members }: CallDashboardViewProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Painel de Ligações</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Visão geral das ligações da equipe.
           </p>
         </div>

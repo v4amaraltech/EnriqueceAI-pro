@@ -30,15 +30,15 @@ export function GoalAchievementCard({ goal }: GoalAchievementCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-[var(--muted-foreground)]">
+        <CardTitle className="text-sm font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Meta de Atividades Hoje
         </CardTitle>
-        <Target className="h-4 w-4 text-[var(--muted-foreground)]" />
+        <Target className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-baseline gap-2">
           <span className={`text-2xl font-bold ${textColor}`}>{goal.actual}</span>
-          <span className="text-sm text-[var(--muted-foreground)]">/ {goal.target}</span>
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">/ {goal.target}</span>
         </div>
 
         <div className="h-2 w-full rounded-full bg-[var(--muted)]">

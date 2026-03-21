@@ -15,7 +15,7 @@ function getGoalColor(percentage: number): { bar: string; text: string } {
 export function GoalAchievementGrid({ goals }: GoalAchievementGridProps) {
   if (goals.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum SDR encontrado.
       </div>
     );
@@ -42,7 +42,7 @@ export function GoalAchievementGrid({ goals }: GoalAchievementGridProps) {
                 style={{ width: `${barWidth}%` }}
               />
             </div>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+            <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {entry.actual} / {entry.target} atividades
             </p>
           </div>

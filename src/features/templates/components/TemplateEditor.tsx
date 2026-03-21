@@ -178,7 +178,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                 disabled={isSystem}
               />
               {channel === 'whatsapp' && (
-                <p className="text-xs text-[var(--muted-foreground)]">
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   {body.length}/4096 caracteres
                 </p>
               )}
@@ -190,7 +190,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
             {/* Detected variables */}
             {detectedVars.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-[var(--muted-foreground)]">Variáveis detectadas:</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Variáveis detectadas:</p>
                 <div className="flex flex-wrap gap-1">
                   {detectedVars.map((v) => (
                     <Badge key={v} variant="outline" className="text-xs font-mono">

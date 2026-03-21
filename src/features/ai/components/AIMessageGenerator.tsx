@@ -161,7 +161,7 @@ export function AIMessageGenerator({
 
             {/* Lead context preview */}
             <div className="rounded-md border bg-[var(--muted)] p-2.5">
-              <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Contexto do Lead</p>
+              <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Contexto do Lead</p>
               <p className="text-sm font-medium">
                 {leadContext.nome_fantasia ?? leadContext.razao_social}
               </p>
@@ -215,7 +215,7 @@ export function AIMessageGenerator({
 
             {/* Usage counter */}
             {usage && (
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Uso hoje: {usage.used} / {usage.limit === -1 ? '∞' : usage.limit} gerações
                 {usage.remaining !== -1 && ` (${usage.remaining} restantes)`}
               </p>

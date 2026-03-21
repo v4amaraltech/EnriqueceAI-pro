@@ -25,7 +25,7 @@ export function SdrPerformanceTrendChart({ data, sdrNames }: SdrPerformanceTrend
 
   if (!hasData) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum dado no período.
       </div>
     );

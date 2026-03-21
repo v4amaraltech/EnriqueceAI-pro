@@ -44,14 +44,14 @@ export function OverallReport({ metrics, previousMetrics, onMetricClick }: Overa
             >
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                  <span className="text-xs text-[var(--muted-foreground)]">{step.label}</span>
+                  <Icon className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{step.label}</span>
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <p className="text-2xl font-bold">{step.count}</p>
                   <DeltaIndicator delta={delta} />
                 </div>
-                <p className="text-xs text-[var(--muted-foreground)]">{step.percentage}%</p>
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{step.percentage}%</p>
               </CardContent>
             </Card>
           );

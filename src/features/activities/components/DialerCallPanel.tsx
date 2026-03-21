@@ -88,16 +88,16 @@ export function DialerCallPanel({
       <div className="flex items-start justify-between rounded-lg border border-[var(--border)] p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--muted)]">
-            <User className="h-5 w-5 text-[var(--muted-foreground)]" />
+            <User className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <div>
-            <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
             <p className="text-sm font-medium">Sua linha</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div>
-            <p className="text-right text-xs text-[var(--muted-foreground)]">Destino</p>
+            <p className="text-right text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
             <p className="text-sm font-medium">{item.leadName}</p>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/10">
@@ -111,7 +111,7 @@ export function DialerCallPanel({
         <Badge variant="secondary" className="text-xs">
           {item.cadenceName}
         </Badge>
-        <span className="text-xs text-[var(--muted-foreground)]">
+        <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Passo {item.stepOrder} de {item.totalSteps}
           {item.activityName ? ` · ${item.activityName}` : ''}
         </span>
@@ -120,7 +120,7 @@ export function DialerCallPanel({
       {/* Call script / Roteiro */}
       {item.callScript && (
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Roteiro da Ligação
           </p>
           <p className="whitespace-pre-wrap text-sm">{item.callScript}</p>
@@ -137,7 +137,7 @@ export function DialerCallPanel({
 
             {/* Timer display during call */}
             {isInCall && (
-              <p className="mb-2 text-lg font-mono tabular-nums text-[var(--muted-foreground)]">
+              <p className="mb-2 text-lg font-mono tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {formatTimer(elapsed)}
               </p>
             )}
@@ -181,12 +181,12 @@ export function DialerCallPanel({
 
               {callState === 'ended' && (
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--muted)]">
-                  <Phone className="h-7 w-7 text-[var(--muted-foreground)]" />
+                  <Phone className="h-7 w-7 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 </div>
               )}
             </div>
 
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+            <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {callState === 'idle' && 'Clique para ligar'}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
@@ -194,7 +194,7 @@ export function DialerCallPanel({
             </p>
           </>
         ) : (
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Sem telefone cadastrado para este lead.
           </p>
         )}
@@ -204,7 +204,7 @@ export function DialerCallPanel({
       {callState === 'ended' && (
         <>
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Status da Ligacao
             </Label>
             <Select value={callStatus} onValueChange={setCallStatus}>
@@ -225,8 +225,8 @@ export function DialerCallPanel({
 
           <div className="mt-4 flex-1 space-y-1.5">
             <div className="flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Bloco de Notas
               </Label>
             </div>

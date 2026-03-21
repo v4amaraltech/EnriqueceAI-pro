@@ -46,7 +46,7 @@ export default function ProspectingSettingsLayout({
       {/* Sidebar */}
       <aside className="w-64 shrink-0 border-r border-[var(--border)] bg-[var(--card)] p-4">
         <div className="mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-[var(--muted-foreground)]" />
+          <Clock className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <h2 className="text-sm font-semibold">Ajustes de Prospecção</h2>
         </div>
         <nav className="flex flex-col gap-1">
@@ -58,7 +58,7 @@ export default function ProspectingSettingsLayout({
               return (
                 <span
                   key={item.href}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--muted-foreground)]/50 cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]/50 cursor-not-allowed"
                 >
                   <Icon className="h-4 w-4" />
                   <span className="flex-1">{item.label}</span>
@@ -77,7 +77,7 @@ export default function ProspectingSettingsLayout({
                   'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
                   isActive
                     ? 'bg-[var(--accent)] font-medium text-[var(--accent-foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
+                    : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
                 )}
               >
                 <Icon className="h-4 w-4" />

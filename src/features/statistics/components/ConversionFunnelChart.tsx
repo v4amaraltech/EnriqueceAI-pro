@@ -10,7 +10,7 @@ interface ConversionFunnelChartProps {
 export function ConversionFunnelChart({ stages, onStageClick }: ConversionFunnelChartProps) {
   if (stages.length === 0 || stages[0]?.count === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum dado de conversão no período.
       </div>
     );

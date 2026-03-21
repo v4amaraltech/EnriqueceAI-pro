@@ -63,7 +63,7 @@ export function PowerDialerIdleLayout({
           </div>
           <div>
             <h2 className="text-lg font-semibold">Power Dialer</h2>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Discador automatico para acelerar suas ligacoes
             </p>
           </div>

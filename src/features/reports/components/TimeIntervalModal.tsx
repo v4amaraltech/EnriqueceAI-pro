@@ -62,7 +62,7 @@ export function TimeIntervalModal({
           <DialogTitle>Intervalo de Tempo de Resposta</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Defina o intervalo de tempo para calcular a % de leads abordados.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -86,7 +86,7 @@ export function TimeIntervalModal({
               onChange={(e) => handleCustomChange(e.target.value)}
               className="w-40"
             />
-            <span className="text-sm text-[var(--muted-foreground)]">minutos</span>
+            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">minutos</span>
           </div>
         </div>
         <DialogFooter>

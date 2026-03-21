@@ -189,9 +189,9 @@ export function AutoEmailStepEditor({
       <div className="flex items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5">
         <button type="button" onClick={() => setCollapsed(!collapsed)}>
           {collapsed ? (
-            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           )}
         </button>
         <span className="text-sm font-medium">Step {stepNumber}</span>
@@ -216,7 +216,7 @@ export function AutoEmailStepEditor({
             Resposta
           </Badge>
         )}
-        <span className="flex-1 truncate text-xs text-[var(--muted-foreground)]">
+        <span className="flex-1 truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {step.reply_type === 'reply' && !isFirst
             ? 'Re: (assunto do email anterior)'
             : step.subject || 'Sem assunto'}
@@ -225,7 +225,7 @@ export function AutoEmailStepEditor({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 text-[var(--muted-foreground)]"
+          className="h-7 w-7 p-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
           onClick={() => setShowPreview(!showPreview)}
           title={showPreview ? 'Fechar preview' : 'Preview do email'}
         >
@@ -235,7 +235,7 @@ export function AutoEmailStepEditor({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 text-[var(--muted-foreground)] hover:text-red-500"
+          className="h-7 w-7 p-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
           onClick={onRemove}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -264,7 +264,7 @@ export function AutoEmailStepEditor({
                     }
                     className="w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
-                  <span className="text-xs text-[var(--muted-foreground)]">dias</span>
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">dias</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
@@ -277,7 +277,7 @@ export function AutoEmailStepEditor({
                     }
                     className="w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
-                  <span className="text-xs text-[var(--muted-foreground)]">horas</span>
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">horas</span>
                 </div>
               </div>
             )}
@@ -317,7 +317,7 @@ export function AutoEmailStepEditor({
             {/* A/B Distribution slider */}
             {step.ab_enabled && (
               <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-[var(--muted-foreground)]">A: {step.ab_distribution ?? 50}%</span>
+                <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">A: {step.ab_distribution ?? 50}%</span>
                 <input
                   type="range"
                   min={1}
@@ -326,7 +326,7 @@ export function AutoEmailStepEditor({
                   onChange={(e) => onChange({ ...step, ab_distribution: parseInt(e.target.value, 10) })}
                   className="h-1.5 w-40 cursor-pointer accent-purple-500"
                 />
-                <span className="text-xs font-medium text-[var(--muted-foreground)]">B: {100 - (step.ab_distribution ?? 50)}%</span>
+                <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">B: {100 - (step.ab_distribution ?? 50)}%</span>
               </div>
             )}
 
@@ -342,7 +342,7 @@ export function AutoEmailStepEditor({
                   <div className="space-y-1.5">
                     <Label htmlFor={`subject-a-${stepNumber}`} className="text-sm">Assunto</Label>
                     {!isFirst && step.reply_type === 'reply' ? (
-                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         Re: (assunto do email anterior)
                       </p>
                     ) : (
@@ -374,7 +374,7 @@ export function AutoEmailStepEditor({
                   <div className="space-y-1.5">
                     <Label htmlFor={`subject-b-${stepNumber}`} className="text-sm">Assunto</Label>
                     {!isFirst && step.reply_type === 'reply' ? (
-                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                      <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         Re: (assunto do email anterior)
                       </p>
                     ) : (
@@ -409,7 +409,7 @@ export function AutoEmailStepEditor({
                     Assunto
                   </Label>
                   {!isFirst && step.reply_type === 'reply' ? (
-                    <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+                    <p className="rounded-md border bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       Re: (assunto do email anterior)
                     </p>
                   ) : (
@@ -444,7 +444,7 @@ export function AutoEmailStepEditor({
                 <h4 className="mb-3 text-sm font-medium">Resultados do Teste A/B</h4>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[var(--muted-foreground)]">
+                    <tr className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                       <th className="pb-2 text-left font-medium">Métrica</th>
                       <th className="pb-2 text-center font-medium">Variante A</th>
                       <th className="pb-2 text-center font-medium">Variante B</th>
@@ -460,22 +460,22 @@ export function AutoEmailStepEditor({
                       <td className="py-1.5">Abertos</td>
                       <td className="py-1.5 text-center tabular-nums">
                         {abMetrics.variant_a.opened}
-                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_a.opened / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
+                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">({((abMetrics.variant_a.opened / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
                       </td>
                       <td className="py-1.5 text-center tabular-nums">
                         {abMetrics.variant_b.opened}
-                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_b.opened / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
+                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">({((abMetrics.variant_b.opened / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
                       </td>
                     </tr>
                     <tr>
                       <td className="py-1.5">Respondidos</td>
                       <td className="py-1.5 text-center tabular-nums">
                         {abMetrics.variant_a.replied}
-                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_a.replied / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
+                        {abMetrics.variant_a.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">({((abMetrics.variant_a.replied / abMetrics.variant_a.sent) * 100).toFixed(0)}%)</span>}
                       </td>
                       <td className="py-1.5 text-center tabular-nums">
                         {abMetrics.variant_b.replied}
-                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)]">({((abMetrics.variant_b.replied / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
+                        {abMetrics.variant_b.sent > 0 && <span className="ml-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">({((abMetrics.variant_b.replied / abMetrics.variant_b.sent) * 100).toFixed(0)}%)</span>}
                       </td>
                     </tr>
                     <tr>

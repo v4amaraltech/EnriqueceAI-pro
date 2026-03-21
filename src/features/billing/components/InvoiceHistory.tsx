@@ -40,8 +40,8 @@ export function InvoiceHistory({ invoices }: InvoiceHistoryProps) {
       <CardContent>
         {invoices.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <FileText className="size-8 text-[var(--muted-foreground)]" />
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <FileText className="size-8 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Nenhuma fatura ainda. As faturas aparecerão aqui após o primeiro pagamento.
             </p>
           </div>
@@ -59,7 +59,7 @@ export function InvoiceHistory({ invoices }: InvoiceHistoryProps) {
                       <p className="font-medium">
                         {new Date(inv.date).toLocaleDateString('pt-BR')}
                       </p>
-                      <p className="text-[var(--muted-foreground)]">
+                      <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         {formatCents(inv.amountCents)}
                       </p>
                     </div>

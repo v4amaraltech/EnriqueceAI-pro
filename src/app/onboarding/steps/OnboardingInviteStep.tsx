@@ -55,7 +55,7 @@ export function OnboardingInviteStep({ onNext, onBack }: OnboardingInviteStepPro
       <div className="text-center">
         <Users className="mx-auto h-10 w-10 text-[var(--primary)]" />
         <h1 className="mt-4 text-2xl font-bold">Convide sua equipe</h1>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Adicione membros da equipe. Você pode fazer isso depois também.
         </p>
       </div>
@@ -102,7 +102,7 @@ export function OnboardingInviteStep({ onNext, onBack }: OnboardingInviteStepPro
 
       {sentInvites.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-[var(--muted-foreground)]">Convites enviados:</p>
+          <p className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Convites enviados:</p>
           {sentInvites.map((inv) => (
             <div
               key={inv.email}

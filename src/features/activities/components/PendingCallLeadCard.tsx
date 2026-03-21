@@ -43,7 +43,7 @@ export function PendingCallLeadCard({ lead, selected, onToggle }: PendingCallLea
         className="h-4 w-4 rounded border-[var(--border)] accent-[var(--primary)]"
       />
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)]">
-        <User className="h-4 w-4 text-[var(--muted-foreground)]" />
+        <User className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
       </div>
       <span className="max-w-[120px] truncate text-sm font-medium">{lead.leadName}</span>
       <Badge variant="outline" className="gap-1 text-xs">

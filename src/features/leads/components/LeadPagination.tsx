@@ -56,12 +56,12 @@ export function LeadPagination({ total, page, perPage }: LeadPaginationProps) {
 
   return (
     <div className="flex items-center justify-between px-2">
-      <p className="text-sm text-[var(--muted-foreground)]">
+      <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Mostrando {from}–{to} de {total} lead{total !== 1 ? 's' : ''}
       </p>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--muted-foreground)]">Itens por página</span>
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Itens por página</span>
           <Select value={String(perPage)} onValueChange={handlePerPageChange}>
             <SelectTrigger className="h-8 w-[70px]">
               <SelectValue />

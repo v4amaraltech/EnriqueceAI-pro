@@ -89,7 +89,7 @@ export function LeadNotes({ leadId }: LeadNotesProps) {
             }}
           />
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--muted-foreground)]">
+            <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Ctrl+Enter para salvar
             </span>
             <Button
@@ -110,10 +110,10 @@ export function LeadNotes({ leadId }: LeadNotesProps) {
         {/* Notes list */}
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-[var(--muted-foreground)]" />
+            <Loader2 className="h-4 w-4 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
         ) : savedNotes.length === 0 ? (
-          <p className="py-4 text-center text-sm text-[var(--muted-foreground)]">
+          <p className="py-4 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Nenhuma anotação registrada.
           </p>
         ) : (
@@ -126,7 +126,7 @@ export function LeadNotes({ leadId }: LeadNotesProps) {
                 <p className="whitespace-pre-line text-sm text-[var(--foreground)]">
                   {note.text}
                 </p>
-                <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <span>{formatNoteDate(note.created_at)}</span>
                   {note.author_email && (
                     <>

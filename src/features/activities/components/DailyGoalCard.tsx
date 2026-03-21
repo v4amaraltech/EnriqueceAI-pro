@@ -19,7 +19,7 @@ export function DailyGoalCard({ target, completed }: DailyGoalCardProps) {
           <Trophy className="h-5 w-5 text-amber-500" />
         </div>
         <div className="flex-1">
-          <p className="text-sm text-[var(--muted-foreground)]">Objetivo Diário</p>
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Objetivo Diário</p>
           <p className="text-2xl font-bold">
             {target}
           </p>
@@ -31,7 +31,7 @@ export function DailyGoalCard({ target, completed }: DailyGoalCardProps) {
             Meta atingida! Continue assim.
           </p>
         ) : (
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Faltam <span className="font-semibold text-[var(--foreground)]">{target - completed}</span> atividades para atingir sua meta.
           </p>
         )}

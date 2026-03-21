@@ -39,8 +39,8 @@ export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2">
-        <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+        <Search className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Pesquisa — {leadName}
         </h3>
       </div>
@@ -57,7 +57,7 @@ export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip 
                 onChange={() => toggleCheck(i)}
                 className="h-4 w-4 rounded border-[var(--border)]"
               />
-              <span className={`text-sm ${checked.has(i) ? 'text-[var(--muted-foreground)] line-through' : ''}`}>
+              <span className={`text-sm ${checked.has(i) ? 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] line-through' : ''}`}>
                 {item}
               </span>
             </label>

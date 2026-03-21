@@ -23,7 +23,7 @@ export function BounceRateTrendChart({ data }: BounceRateTrendChartProps) {
 
   if (!hasData) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum bounce no período.
       </div>
     );

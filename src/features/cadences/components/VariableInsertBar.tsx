@@ -14,7 +14,7 @@ export function VariableInsertBar({ onInsert, disabled }: VariableInsertBarProps
   return (
     <div className="space-y-2">
       <div>
-        <Label className="text-xs text-[var(--muted-foreground)]">Variáveis do Lead</Label>
+        <Label className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Variáveis do Lead</Label>
         <div className="mt-1 flex flex-wrap gap-1">
           {AVAILABLE_TEMPLATE_VARIABLES.map((v) => (
             <Button
@@ -32,7 +32,7 @@ export function VariableInsertBar({ onInsert, disabled }: VariableInsertBarProps
         </div>
       </div>
       <div>
-        <Label className="text-xs text-[var(--muted-foreground)]">Variáveis do Vendedor</Label>
+        <Label className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Variáveis do Vendedor</Label>
         <div className="mt-1 flex flex-wrap gap-1">
           {VENDOR_TEMPLATE_VARIABLES.map((v) => (
             <Button

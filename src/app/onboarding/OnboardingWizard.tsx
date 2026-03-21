@@ -91,7 +91,7 @@ export function OnboardingWizard({
               className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                 i <= step
                   ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                  : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                  : 'bg-[var(--muted)] text-[var(--muted-foreground)] dark:text-[var(--foreground)]'
               }`}
             >
               {i + 1}
@@ -122,7 +122,7 @@ export function OnboardingWizard({
                 unoptimized
               />
               <h1 className="mt-4 text-2xl font-bold">Bem-vindo ao Enriquece AI!</h1>
-              <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+              <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Primeiro, como se chama sua empresa?
               </p>
             </div>

@@ -25,7 +25,7 @@ export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Ligações</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Análise detalhada de ligações por status, duração e horário.
           </p>
         </div>

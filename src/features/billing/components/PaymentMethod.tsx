@@ -51,13 +51,13 @@ export function PaymentMethod({ method, hasStripeSubscription }: PaymentMethodPr
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-[var(--muted)]">
-                <CreditCard className="size-5 text-[var(--muted-foreground)]" />
+                <CreditCard className="size-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               </div>
               <div>
                 <p className="text-sm font-medium">
                   {brandLabel(method.brand)} •••• {method.last4}
                 </p>
-                <p className="text-xs text-[var(--muted-foreground)]">
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Expira {String(method.expMonth).padStart(2, '0')}/{method.expYear}
                 </p>
               </div>
@@ -76,8 +76,8 @@ export function PaymentMethod({ method, hasStripeSubscription }: PaymentMethodPr
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <CreditCard className="size-8 text-[var(--muted-foreground)]" />
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <CreditCard className="size-8 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Nenhum método de pagamento cadastrado
             </p>
             {hasStripeSubscription && (

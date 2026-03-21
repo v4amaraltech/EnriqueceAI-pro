@@ -187,7 +187,7 @@ export function CrmFieldMappingModal({
                         </Select>
                       </td>
                       <td className="p-2 text-center">
-                        <ArrowRight className="mx-auto h-4 w-4 text-[var(--muted-foreground)]" />
+                        <ArrowRight className="mx-auto h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       </td>
                       <td className="p-2">
                         <Select
@@ -222,7 +222,7 @@ export function CrmFieldMappingModal({
               </table>
             </div>
           ) : (
-            <p className="text-sm text-[var(--muted-foreground)] py-4 text-center">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] py-4 text-center">
               Nenhum campo mapeado. Clique em &quot;Adicionar campo&quot; para começar.
             </p>
           )}

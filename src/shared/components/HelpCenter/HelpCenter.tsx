@@ -78,7 +78,7 @@ export function HelpCenter() {
                   className="rounded-md border bg-[var(--muted)] p-3"
                 >
                   <p className="text-sm font-medium">{tip.title}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">{tip.description}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{tip.description}</p>
                 </div>
               ))}
             </div>
@@ -100,10 +100,10 @@ export function HelpCenter() {
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[var(--accent)]"
                 >
-                  <qs.icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                  <qs.icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                   <div>
                     <p className="text-sm font-medium">{qs.label}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">{qs.description}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{qs.description}</p>
                   </div>
                 </Link>
               ))}
@@ -114,7 +114,7 @@ export function HelpCenter() {
 
           {/* Footer */}
           <div className="mt-auto px-4 py-4">
-            <p className="mb-2 text-xs text-[var(--muted-foreground)]">Precisa de mais ajuda?</p>
+            <p className="mb-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Precisa de mais ajuda?</p>
             <a
               href="mailto:suporte@enriqueceai.com"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"

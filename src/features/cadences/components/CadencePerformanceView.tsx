@@ -78,7 +78,7 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
           </Link>
           <div>
             <h1 className="text-2xl font-bold">{data.cadenceName}</h1>
-            <p className="text-sm text-[var(--muted-foreground)]">Performance detalhada por etapa</p>
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Performance detalhada por etapa</p>
           </div>
         </div>
         <div className="flex gap-1">
@@ -148,7 +148,7 @@ export function CadencePerformanceView({ data, period }: CadencePerformanceViewP
           </CardHeader>
           <CardContent>
             {donutData.length === 0 ? (
-              <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+              <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Nenhum enrollment no período.
               </div>
             ) : (
@@ -221,11 +221,11 @@ function KpiCard({
     <Card>
       <CardContent className="flex items-center gap-3 pt-6">
         <div className="rounded-lg bg-[var(--muted)] p-2">
-          <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <Icon className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
         </div>
         <div>
           <p className="text-2xl font-bold">{value}{isPercent ? '%' : ''}</p>
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {label}
             {rate !== undefined && ` · ${rate}% ${rateLabel ?? ''}`}
           </p>

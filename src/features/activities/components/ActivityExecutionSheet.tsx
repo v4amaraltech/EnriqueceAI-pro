@@ -169,7 +169,7 @@ export function ActivityExecutionSheet({
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
+                <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   {selectedIndex !== null ? selectedIndex + 1 : 0} de {activities.length}
                 </span>
                 <Button

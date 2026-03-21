@@ -11,7 +11,7 @@ interface ActivityTypeDonutChartProps {
 export function ActivityTypeDonutChart({ data }: ActivityTypeDonutChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma atividade no período.
       </div>
     );

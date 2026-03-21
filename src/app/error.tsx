@@ -19,11 +19,11 @@ export default function Error({
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-lg border bg-[var(--card)] p-8 text-center shadow-sm">
         <h2 className="text-xl font-semibold">Algo deu errado</h2>
-        <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Ocorreu um erro inesperado. Tente novamente ou entre em contato com o suporte.
         </p>
         {error.digest && (
-          <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+          <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Erro: {error.digest}
           </p>
         )}

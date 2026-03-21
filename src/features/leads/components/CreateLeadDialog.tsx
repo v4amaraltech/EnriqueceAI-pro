@@ -166,13 +166,13 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* SECTION 1: CONFIGURACOES DE ENTRADA */}
             <div>
-              <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Configurações de Entrada
               </h3>
               <div className="space-y-4">
@@ -202,7 +202,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                         <RadioGroupItem value="immediate" id="mode-immediate" className="mt-0.5" />
                         <div>
                           <span className="text-sm font-medium">Início imediato</span>
-                          <p className="text-xs text-[var(--muted-foreground)]">
+                          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                             Disponibilizar a execução do lead imediatamente.
                           </p>
                         </div>
@@ -214,7 +214,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                         <RadioGroupItem value="scheduled" id="mode-scheduled" className="mt-0.5" />
                         <div>
                           <span className="text-sm font-medium">Agendar início</span>
-                          <p className="text-xs text-[var(--muted-foreground)]">
+                          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                             O lead entrará na cadência na data e hora escolhidas.
                           </p>
                         </div>
@@ -226,7 +226,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                   {hasCadence && isScheduled && (
                     <div className="ml-7 space-y-2">
                       <Label className="flex items-center gap-1.5">
-                        <CalendarClock className="h-4 w-4 text-[var(--muted-foreground)]" />
+                        <CalendarClock className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                         Data e hora de início
                       </Label>
                       <Input
@@ -243,7 +243,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1.5">
-                      <UserRound className="h-4 w-4 text-[var(--muted-foreground)]" />
+                      <UserRound className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       Responsável <span className="text-red-500">*</span>
                     </Label>
                     <Select
@@ -265,7 +265,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
 
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1.5">
-                      <Radio className="h-4 w-4 text-[var(--muted-foreground)]" />
+                      <Radio className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       Cadência
                     </Label>
                     <Select
@@ -281,9 +281,9 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                       <SelectContent>
                         <div className="px-2 pb-2">
                           <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                             <input
-                              className="w-full rounded-md border border-[var(--border)] bg-transparent py-1.5 pl-7 pr-2 text-sm outline-none placeholder:text-[var(--muted-foreground)]"
+                              className="w-full rounded-md border border-[var(--border)] bg-transparent py-1.5 pl-7 pr-2 text-sm outline-none placeholder:text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
                               placeholder="Buscar cadência..."
                               value={cadenceSearch}
                               onChange={(e) => setCadenceSearch(e.target.value)}
@@ -308,7 +308,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
 
             {/* SECTION 2: INFORMACOES DO LEAD */}
             <div>
-              <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Informações do Lead
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -367,7 +367,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-job-title" className="flex items-center gap-1.5">
-                    <Briefcase className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                    <Briefcase className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                     Cargo <span className="text-red-500">*</span>
                   </Label>
                   <Input

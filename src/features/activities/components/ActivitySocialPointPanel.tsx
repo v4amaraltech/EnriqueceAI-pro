@@ -22,7 +22,7 @@ export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSk
 
   return (
     <div className="flex h-full flex-col">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Social Point
       </h3>
 
@@ -39,9 +39,9 @@ export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSk
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium">Procurar {leadName} no LinkedIn</p>
-            <p className="text-xs text-[var(--muted-foreground)]">Conecte-se, curta ou comente em uma publicação</p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Conecte-se, curta ou comente em uma publicação</p>
           </div>
-          <ExternalLink className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <ExternalLink className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
         </a>
 
         {/* WhatsApp link (if applicable) */}
@@ -51,7 +51,7 @@ export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSk
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium">Interação via WhatsApp</p>
-            <p className="text-xs text-[var(--muted-foreground)]">Envie uma mensagem rápida para iniciar contato</p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Envie uma mensagem rápida para iniciar contato</p>
           </div>
         </div>
 

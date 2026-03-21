@@ -22,7 +22,7 @@ export function DistributionCard({ title, data, maxItems = 8 }: DistributionCard
           <CardTitle className="text-base">{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-[var(--muted-foreground)]">Sem dados disponíveis</p>
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sem dados disponíveis</p>
         </CardContent>
       </Card>
     );
@@ -53,7 +53,7 @@ export function DistributionCard({ title, data, maxItems = 8 }: DistributionCard
               <div key={label} className="text-sm">
                 <div className="mb-0.5 flex items-center justify-between">
                   <span>{label}</span>
-                  <span className="text-[var(--muted-foreground)]">
+                  <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {count} ({pct}%)
                   </span>
                 </div>

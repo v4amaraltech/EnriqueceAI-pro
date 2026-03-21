@@ -22,7 +22,7 @@ const channelIcons: Record<ChannelType, typeof Mail> = {
 const statusColors = {
   completed: 'bg-green-500 text-white border-green-500',
   current: 'bg-orange-500 text-white border-orange-500',
-  future: 'bg-[var(--muted)] text-[var(--muted-foreground)] border-[var(--border)]',
+  future: 'bg-[var(--muted)] text-[var(--muted-foreground)] dark:text-[var(--foreground)] border-[var(--border)]',
 } as const;
 
 const lineColors = {
@@ -36,7 +36,7 @@ export function CadenceProgressBar({ steps, cadenceName }: CadenceProgressBarPro
 
   return (
     <div className="p-4">
-      <p className="mb-3 text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
+      <p className="mb-3 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)] uppercase tracking-wider">
         {cadenceName}
       </p>
       <div className="flex items-center">

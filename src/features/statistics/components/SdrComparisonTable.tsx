@@ -23,7 +23,7 @@ export function SdrComparisonTable({ data, previousData }: SdrComparisonTablePro
 
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum SDR encontrado.
       </div>
     );
@@ -60,11 +60,11 @@ export function SdrComparisonTable({ data, previousData }: SdrComparisonTablePro
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
-            <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)]">SDR</th>
+            <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">SDR</th>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="cursor-pointer px-4 py-2 text-right font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                className="cursor-pointer px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
                 onClick={() => toggleSort(col.key)}
               >
                 <span className="inline-flex items-center gap-1">

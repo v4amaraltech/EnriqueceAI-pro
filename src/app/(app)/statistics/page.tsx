@@ -60,7 +60,7 @@ export default async function StatisticsPage({ searchParams }: PageProps) {
       {/* Navigation cards */}
       <div>
         <h1 className="text-2xl font-bold">Estatísticas</h1>
-        <p className="mb-4 text-sm text-[var(--muted-foreground)]">
+        <p className="mb-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Visão geral e acesso rápido às análises detalhadas.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -69,10 +69,10 @@ export default async function StatisticsPage({ searchParams }: PageProps) {
               <Card className="transition-colors hover:border-[var(--primary)]">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">{page.title}</CardTitle>
-                  <page.icon className="h-4 w-4 text-[var(--muted-foreground)]" />
+                  <page.icon className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-[var(--muted-foreground)]">{page.description}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{page.description}</p>
                   <div className="mt-2 flex items-center text-xs font-medium text-[var(--primary)]">
                     Ver detalhes <ArrowRight className="ml-1 h-3 w-3" />
                   </div>

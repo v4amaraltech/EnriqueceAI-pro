@@ -111,9 +111,9 @@ export function ActivityTypeSidebar() {
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-[var(--accent)]"
               >
                 {isExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                  <ChevronDown className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 )}
                 <Icon className={`h-4 w-4 ${category.color}`} />
                 <span>{category.label}</span>

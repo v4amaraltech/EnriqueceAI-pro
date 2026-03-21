@@ -101,7 +101,7 @@ export function UserProfileSettings({ initialName, email, avatarUrl }: UserProfi
       {/* Profile Section */}
       <section>
         <h2 className="text-lg font-semibold">Perfil</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Atualize suas informações pessoais.
         </p>
 
@@ -140,7 +140,7 @@ export function UserProfileSettings({ initialName, email, avatarUrl }: UserProfi
               onChange={handleAvatarChange}
               className="hidden"
             />
-            <div className="text-sm text-[var(--muted-foreground)]">
+            <div className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Clique para alterar a foto. JPEG, PNG ou WebP, até 2MB.
             </div>
           </div>
@@ -177,7 +177,7 @@ export function UserProfileSettings({ initialName, email, avatarUrl }: UserProfi
       {/* Password Section */}
       <section>
         <h2 className="text-lg font-semibold">Alterar Senha</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Mantenha sua conta segura atualizando sua senha periodicamente.
         </p>
 

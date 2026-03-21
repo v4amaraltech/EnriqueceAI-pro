@@ -19,7 +19,7 @@ export function EnrichmentCard({ stats }: EnrichmentCardProps) {
         {/* Success rate */}
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="text-[var(--muted-foreground)]">Taxa de sucesso</span>
+            <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Taxa de sucesso</span>
             <span className="font-medium">{stats.successRate}%</span>
           </div>
           <Progress value={stats.successRate} className="h-2" />
@@ -41,7 +41,7 @@ function StatItem({ label, value, color }: { label: string; value: number; color
   return (
     <div>
       <p className={`text-lg font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
+      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
     </div>
   );
 }

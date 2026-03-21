@@ -41,7 +41,7 @@ export function SdrRankingSection({ rankings }: SdrRankingSectionProps) {
 
       {/* Chart */}
       {data.length === 0 ? (
-        <div className="flex h-48 items-center justify-center text-sm text-[var(--muted-foreground)]">
+        <div className="flex h-48 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Sem dados para este ranking.
         </div>
       ) : (

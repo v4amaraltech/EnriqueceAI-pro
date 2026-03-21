@@ -28,7 +28,7 @@ export function CallSettingsView({
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Ajustes de Ligações</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Configure o módulo de ligações da sua organização.
         </p>
       </div>

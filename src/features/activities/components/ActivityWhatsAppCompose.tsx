@@ -79,7 +79,7 @@ export function ActivityWhatsAppCompose({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Compor WhatsApp
         </h3>
         {aiPersonalized && (
@@ -92,8 +92,8 @@ export function ActivityWhatsAppCompose({
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
-          <span className="ml-2 text-sm text-[var(--muted-foreground)]">Preparando mensagem...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+          <span className="ml-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Preparando mensagem...</span>
         </div>
       ) : (
         <>
@@ -166,11 +166,11 @@ export function ActivityWhatsAppCompose({
             {/* Preview — always visible below */}
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <Eye className="h-3 w-3 text-[var(--muted-foreground)]" />
+                <Eye className="h-3 w-3 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 <Label className="text-xs">Preview</Label>
               </div>
               <div className="min-h-[80px] overflow-auto rounded-lg bg-[#dcf8c6] p-3 text-sm whitespace-pre-wrap dark:bg-[#025144] dark:text-[#e9edef]">
-                {renderedPreview || <span className="italic text-[var(--muted-foreground)]">Sem conteúdo</span>}
+                {renderedPreview || <span className="italic text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sem conteúdo</span>}
               </div>
             </div>
           </div>

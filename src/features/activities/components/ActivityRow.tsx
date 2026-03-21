@@ -77,7 +77,7 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
       <div className="flex items-center gap-2 min-w-0">
         <span
           className={`shrink-0 min-w-[50px] text-xs font-bold uppercase tabular-nums ${
-            isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)]'
+            isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]'
           }`}
         >
           {timeText}
@@ -93,7 +93,7 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
         <p className="truncate text-sm font-medium">
           {activity.cadenceName}
         </p>
-        <p className="text-xs text-[var(--muted-foreground)]">
+        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Passo {activity.stepOrder} de {activity.totalSteps}
         </p>
       </div>
@@ -105,7 +105,7 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
           <p className="truncate text-sm font-medium">
             {activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj}
           </p>
-          <p className="truncate text-xs text-[var(--muted-foreground)]">
+          <p className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {activity.lead.email
               ?? (activity.lead.socios as Array<{ emails?: Array<{ email: string; ranking: number }> }> | null)
                 ?.[0]?.emails?.sort((a, b) => a.ranking - b.ranking)[0]?.email

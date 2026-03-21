@@ -34,7 +34,7 @@ export function DeltaIndicator({
     ? 'text-green-600'
     : isNegative
       ? 'text-red-600'
-      : 'text-[var(--muted-foreground)]';
+      : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]';
 
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : null;
 

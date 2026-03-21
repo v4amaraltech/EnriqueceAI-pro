@@ -68,7 +68,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">Metas de Ligações por Vendedor</h2>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Defina metas individuais de ligações. Vendedores sem meta individual usam o padrão da organização ({orgDefault}).
         </p>
       </div>
@@ -87,7 +87,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
               {memberTargets.map((member) => (
                 <tr key={member.userId} className="border-b last:border-0">
                   <td className="p-3 text-sm">{member.name}</td>
-                  <td className="p-3 text-sm text-[var(--muted-foreground)]">
+                  <td className="p-3 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {member.role === 'manager' ? 'Manager' : 'SDR'}
                   </td>
                   <td className="p-3">
@@ -106,7 +106,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
           </table>
         </div>
       ) : (
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhum membro ativo na organização.
         </p>
       )}

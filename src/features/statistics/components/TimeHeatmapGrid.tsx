@@ -33,7 +33,7 @@ export function TimeHeatmapGrid({ data }: TimeHeatmapGridProps) {
 
   if (!hasData) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhuma ligação no período.
       </div>
     );
@@ -48,7 +48,7 @@ export function TimeHeatmapGrid({ data }: TimeHeatmapGridProps) {
           {HOUR_LABELS.map((label) => (
             <div
               key={label}
-              className="flex-1 text-center text-[10px] text-[var(--muted-foreground)]"
+              className="flex-1 text-center text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
             >
               {label}
             </div>
@@ -58,7 +58,7 @@ export function TimeHeatmapGrid({ data }: TimeHeatmapGridProps) {
         {/* Grid rows */}
         {DAY_LABELS.map((dayLabel, dayIdx) => (
           <div key={dayLabel} className="mb-1 flex items-center">
-            <div className="w-10 shrink-0 text-right text-xs font-medium text-[var(--muted-foreground)] pr-2">
+            <div className="w-10 shrink-0 text-right text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)] pr-2">
               {dayLabel}
             </div>
             {HOUR_LABELS.map((_, blockIdx) => {
@@ -85,7 +85,7 @@ export function TimeHeatmapGrid({ data }: TimeHeatmapGridProps) {
         ))}
 
         {/* Legend */}
-        <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-[var(--muted-foreground)]">
+        <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           <span>Menos</span>
           <div className="h-3 w-3 rounded-sm bg-[var(--muted)]" />
           <div className="h-3 w-3 rounded-sm bg-primary/15" />

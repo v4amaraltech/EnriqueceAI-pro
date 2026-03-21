@@ -35,7 +35,7 @@ export function ProspectingSidebarNav() {
 
   return (
     <div className="space-y-1">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Prospecção
       </h3>
       <nav className="flex flex-col gap-0.5">
@@ -50,7 +50,7 @@ export function ProspectingSidebarNav() {
                 'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
                 isActive
                   ? 'bg-[var(--accent)] font-medium text-[var(--accent-foreground)]'
-                  : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
+                  : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
               )}
             >
               <Icon className="h-4 w-4" />

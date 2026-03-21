@@ -92,7 +92,7 @@ function SortableStepItem({
     >
       <button
         type="button"
-        className="cursor-grab text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+        className="cursor-grab text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
         {...attributes}
         {...listeners}
       >
@@ -114,7 +114,7 @@ function SortableStepItem({
       <button
         type="button"
         onClick={onRemove}
-        className="text-[var(--muted-foreground)] hover:text-red-500"
+        className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -154,9 +154,9 @@ function DayContainer({
       <div className="flex w-full items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5 text-sm font-medium">
         <button type="button" onClick={onToggle} className="hover:text-[var(--foreground)]">
           {collapsed ? (
-            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           )}
         </button>
         <span>Dia</span>
@@ -172,7 +172,7 @@ function DayContainer({
           className="w-12 rounded border bg-[var(--background)] px-1.5 py-0.5 text-center text-sm font-medium [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           aria-label={`Número do dia ${dayData.day}`}
         />
-        <span className="text-xs text-[var(--muted-foreground)]">
+        <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           ({dayData.steps.length} {dayData.steps.length === 1 ? 'atividade' : 'atividades'})
         </span>
       </div>
@@ -193,7 +193,7 @@ function DayContainer({
             ))}
           </SortableContext>
           {dayData.steps.length === 0 && (
-            <p className="py-2 text-center text-xs text-[var(--muted-foreground)]">
+            <p className="py-2 text-center text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Arraste uma atividade aqui
             </p>
           )}

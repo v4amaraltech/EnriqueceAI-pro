@@ -166,7 +166,7 @@ export function TipTapToolbar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)]">
+          <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Lead
           </DropdownMenuLabel>
           {AVAILABLE_TEMPLATE_VARIABLES.map((v) => (
@@ -175,7 +175,7 @@ export function TipTapToolbar({
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)]">
+          <DropdownMenuLabel className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Vendedor
           </DropdownMenuLabel>
           {VENDOR_TEMPLATE_VARIABLES.map((v) => (

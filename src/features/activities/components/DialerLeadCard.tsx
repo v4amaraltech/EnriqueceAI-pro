@@ -74,16 +74,16 @@ export function DialerLeadCard({ item, onViewLead, onSkip }: DialerLeadCardProps
         {/* Content */}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{displayName}</p>
-          <p className="truncate text-xs text-[var(--muted-foreground)]">{item.companyName}</p>
+          <p className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{item.companyName}</p>
           <div className="mt-1.5 flex items-center gap-1.5">
-            <Phone className="h-3 w-3 text-[var(--muted-foreground)]" />
-            <span className="text-xs text-[var(--muted-foreground)]">{formatPhone(item.phone)}</span>
+            <Phone className="h-3 w-3 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+            <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{formatPhone(item.phone)}</span>
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               Ligacao
             </Badge>
-            <span className="truncate text-[10px] text-[var(--muted-foreground)]">{item.cadenceName}</span>
+            <span className="truncate text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{item.cadenceName}</span>
           </div>
         </div>
 

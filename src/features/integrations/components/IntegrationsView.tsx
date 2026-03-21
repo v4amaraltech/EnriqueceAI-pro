@@ -176,7 +176,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Integrações</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Conecte suas contas para enviar mensagens e sincronizar dados automaticamente.
         </p>
       </div>
@@ -191,7 +191,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">WhatsApp</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {whatsappConnected
                 ? (evolution.phone || evolutionInstance?.phone)
                   ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
@@ -206,7 +206,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                   onClick={() => setShowDisconnect('whatsapp')}
                 >
                   <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -233,7 +233,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">API4Com</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {api4com
                 ? `Ramal ${api4com.ramal} \u00b7 Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`
                 : 'Integração automática com sistema de ligações'}
@@ -254,7 +254,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnectApi4Com(true)}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -282,7 +282,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 </Badge>
               )}
             </div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {googleConnected
                 ? `${gmail?.email_address ?? calendar?.calendar_email} \u00b7 Conectado em ${new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}`
                 : checkFeature(planFeatures, 'calendar')
@@ -305,7 +305,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnect('google')}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -326,7 +326,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">Apollo.io</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {apollo
                 ? `Conectado em ${new Date(apollo.created_at).toLocaleDateString('pt-BR')}`
                 : 'Busque e importe leads qualificados do Apollo.io'}
@@ -337,7 +337,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                   onClick={() => setShowDisconnect('apollo')}
                 >
                   <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -369,7 +369,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
                 </div>
                 <div className="w-32 shrink-0 font-medium">{provider.name}</div>
-                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)]">
+                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   {connection ? (
                     <>
                       Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
@@ -407,7 +407,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-600"
+                        className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                         onClick={() => setShowDisconnect(provider.id)}
                       >
                         <Unplug className="mr-1.5 h-3.5 w-3.5" />

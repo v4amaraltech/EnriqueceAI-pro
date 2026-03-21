@@ -41,7 +41,7 @@ export function MetricCard({
           )}
         </div>
         {description && (
-          <p className="text-xs text-[var(--muted-foreground)]">{description}</p>
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{description}</p>
         )}
       </CardContent>
     </Card>

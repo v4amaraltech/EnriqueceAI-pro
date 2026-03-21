@@ -30,12 +30,12 @@ export function ActivityPagination({ total, page, perPage, onPageChange, onPerPa
 
   return (
     <div className="flex items-center justify-between px-2 pt-4">
-      <p className="text-sm text-[var(--muted-foreground)]">
+      <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Mostrando {from}–{to} de {total} atividade{total !== 1 ? 's' : ''}
       </p>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--muted-foreground)]">Itens por página</span>
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Itens por página</span>
           <Select value={String(perPage)} onValueChange={(v) => onPerPageChange(Number(v))}>
             <SelectTrigger className="h-8 w-[70px]">
               <SelectValue />

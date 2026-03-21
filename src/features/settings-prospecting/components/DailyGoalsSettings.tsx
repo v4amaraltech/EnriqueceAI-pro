@@ -62,10 +62,10 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
         </div>
         <div>
           <h1 className="text-xl font-semibold">Objetivo Diário de Atividades</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Configure o objetivo diário de atividades para cada membro da equipe.
           </p>
-          <p className="text-xs text-[var(--muted-foreground)] opacity-70 mt-0.5">
+          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] opacity-70 mt-0.5">
             Esta meta é para acompanhamento diário individual. A meta mensal exibida nos cards do Dashboard é configurada em Editar Metas no Dashboard.
           </p>
         </div>
@@ -82,11 +82,11 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
             onChange={(e) => setOrgDefault(Math.max(0, parseInt(e.target.value, 10) || 0))}
             className="w-24"
           />
-          <span className="text-sm text-[var(--muted-foreground)]">
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             atividades/dia
           </span>
         </div>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+        <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Membros sem meta individual usarão este valor como padrão.
         </p>
       </div>
@@ -123,7 +123,7 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
       )}
 
       {memberGoals.length === 0 && (
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhum membro ativo na organização.
         </p>
       )}

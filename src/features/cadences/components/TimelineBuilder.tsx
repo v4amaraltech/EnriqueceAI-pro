@@ -132,7 +132,7 @@ export function TimelineBuilder({ cadence }: TimelineBuilderProps) {
           </Button>
           <div>
             <p className="text-sm font-medium">{cadence.name}</p>
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {totalSteps} {totalSteps === 1 ? 'passo' : 'passos'} em {days.length} {days.length === 1 ? 'dia' : 'dias'}
             </p>
           </div>

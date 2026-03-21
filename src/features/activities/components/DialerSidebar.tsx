@@ -43,7 +43,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
           <div className="flex items-center justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="cursor-help text-xs text-[var(--muted-foreground)]">
+                <span className="cursor-help text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Telefones simultaneos
                 </span>
               </TooltipTrigger>
@@ -57,7 +57,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
           <div className="flex items-center justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="cursor-help text-xs text-[var(--muted-foreground)]">
+                <span className="cursor-help text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   Limite diario por lead
                 </span>
               </TooltipTrigger>
@@ -81,7 +81,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
           <div className="flex items-center justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <Phone className="h-3 w-3" />
                   Sem telefone
                 </span>
@@ -96,7 +96,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
           <div className="flex items-center justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <AlertTriangle className="h-3 w-3" />
                   Limite diario atingido
                 </span>
@@ -109,7 +109,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
           <div className="flex items-center justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+                <span className="flex cursor-help items-center gap-1.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <Clock className="h-3 w-3" />
                   Snooze ativo
                 </span>
@@ -129,7 +129,7 @@ export function DialerSidebar({ preferences, stats, isManager, onEditPreferences
         </h3>
 
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[var(--muted-foreground)]">Total disponivel</span>
+          <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Total disponivel</span>
           <Badge className="bg-green-100 text-xs text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-200">
             {stats.totalAvailable}
           </Badge>

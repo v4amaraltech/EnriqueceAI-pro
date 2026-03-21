@@ -26,7 +26,7 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
   const result = await fetchTemplates({ channel, search, is_system, page, sort_by, sort_dir });
 
   if (!result.success) {
-    return <p className="py-10 text-center text-[var(--muted-foreground)]">{result.error}</p>;
+    return <p className="py-10 text-center text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{result.error}</p>;
   }
 
   const uniqueUserIds = [

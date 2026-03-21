@@ -23,7 +23,7 @@ export default async function UpgradePage() {
   if (!result.success) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-[var(--muted-foreground)]">{result.error}</p>
+        <p className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{result.error}</p>
       </div>
     );
   }

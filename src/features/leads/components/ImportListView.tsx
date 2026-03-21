@@ -82,7 +82,7 @@ export function ImportListView({ result }: ImportListViewProps) {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">Listas de Importação</h1>
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {total} importaç{total !== 1 ? 'ões' : 'ão'} realizada{total !== 1 ? 's' : ''}
             </p>
           </div>
@@ -125,7 +125,7 @@ export function ImportListView({ result }: ImportListViewProps) {
                 <TableRow key={row.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <FileUp className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                      <FileUp className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                       <span className="truncate max-w-[200px]" title={row.file_name}>
                         {row.file_name}
                       </span>
@@ -142,16 +142,16 @@ export function ImportListView({ result }: ImportListViewProps) {
                     {row.error_count > 0 ? (
                       <Badge variant="destructive">{row.error_count}</Badge>
                     ) : (
-                      <span className="text-[var(--muted-foreground)]">0</span>
+                      <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">0</span>
                     )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={config.variant}>{config.label}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                  <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {getSourceLabel(row.lead_source)}
                   </TableCell>
-                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                  <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {row.created_by_name}
                   </TableCell>
                 </TableRow>

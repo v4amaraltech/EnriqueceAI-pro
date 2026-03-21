@@ -168,7 +168,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Templates de Mensagem</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -192,7 +192,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
         </Tabs>
 
         <div className="relative max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <Input
             placeholder="Buscar por nome, assunto ou corpo..."
             value={searchValue}
@@ -215,7 +215,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
           {searchValue && (
             <button
               type="button"
-              className="absolute right-2.5 top-2.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              className="absolute right-2.5 top-2.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
               onClick={() => {
                 setSearchValue('');
                 if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -246,10 +246,10 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
       {filteredTemplates.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <FileText className="h-10 w-10 text-[var(--muted-foreground)]" />
+            <FileText className="h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">Nenhum template encontrado</h3>
-          <p className="mb-6 max-w-sm text-sm text-[var(--muted-foreground)]">
+          <p className="mb-6 max-w-sm text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Crie seu primeiro template para usar nas cadências.
           </p>
           <Button onClick={() => router.push('/templates/new')}>
@@ -304,15 +304,15 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
                       <p className="text-sm font-medium truncate">
                         {template.subject || '(Sem assunto)'}
                       </p>
-                      <p className="text-xs text-[var(--muted-foreground)] truncate">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] truncate">
                         {bodyPreview}
                       </p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-[var(--muted-foreground)]">
+                  <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {template.created_by ? (userMap[template.created_by] ?? '—') : '—'}
                   </TableCell>
-                  <TableCell className="text-sm text-[var(--muted-foreground)] whitespace-nowrap">
+                  <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] whitespace-nowrap">
                     {formatShortDate(template.created_at)}
                   </TableCell>
                   <TableCell>
@@ -372,7 +372,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
           >
             Anterior
           </Button>
-          <span className="text-sm text-[var(--muted-foreground)]">
+          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Página {page} de {totalPages}
           </span>
           <Button

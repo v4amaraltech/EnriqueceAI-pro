@@ -28,10 +28,10 @@ export function ActivityEmptyState({ onStartActivities }: ActivityEmptyStateProp
 
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="max-w-lg text-2xl font-light text-[var(--muted-foreground)]">
+      <p className="max-w-lg text-2xl font-light text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         {quote.text}
       </p>
-      <p className="mt-3 text-sm text-[var(--muted-foreground)]/60">
+      <p className="mt-3 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]/60">
         — {quote.author}
       </p>
       {onStartActivities && (

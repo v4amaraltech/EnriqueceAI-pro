@@ -19,7 +19,7 @@ export function EmailAnalyticsView({ data }: EmailAnalyticsViewProps) {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">E-mails</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Métricas de envio, abertura, cliques e respostas de e-mails.
         </p>
       </div>

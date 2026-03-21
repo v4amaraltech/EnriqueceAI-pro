@@ -108,7 +108,7 @@ export function FitScoreConfig({ initial }: FitScoreConfigProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Fit Score</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Configure regras para calcular a qualidade dos leads automaticamente.
           Cada regra adiciona ou subtrai pontos com base em um campo do lead.
         </p>
@@ -116,7 +116,7 @@ export function FitScoreConfig({ initial }: FitScoreConfigProps) {
 
       {/* Explanation */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-4">
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           <strong>Como funciona:</strong> O Fit Score é calculado somando os pontos de todas as regras
           que um lead atende. Leads com pontuação mais alta são considerados mais qualificados.
           Use pontos positivos para critérios desejáveis e negativos para critérios indesejáveis.
@@ -187,7 +187,7 @@ export function FitScoreConfig({ initial }: FitScoreConfigProps) {
                   </td>
                   <td className="p-3">
                     {rule.operator === 'not_empty' ? (
-                      <span className="text-sm text-[var(--muted-foreground)] italic">—</span>
+                      <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] italic">—</span>
                     ) : (
                       <Input
                         value={rule.value ?? ''}
@@ -215,7 +215,7 @@ export function FitScoreConfig({ initial }: FitScoreConfigProps) {
       )}
 
       {rules.length === 0 && (
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Nenhuma regra configurada. Clique em &quot;Adicionar regra&quot; para começar.
         </p>
       )}
