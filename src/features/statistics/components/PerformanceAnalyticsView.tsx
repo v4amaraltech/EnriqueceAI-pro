@@ -19,7 +19,7 @@ export function PerformanceAnalyticsView({ data }: PerformanceAnalyticsViewProps
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Desempenho</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           Métricas de desempenho individual e da equipe de vendas.
         </p>
       </div>

@@ -9,7 +9,7 @@ interface SdrPerformanceTableProps {
 export function SdrPerformanceTable({ data }: SdrPerformanceTableProps) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)]">
+      <div className="flex h-32 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Nenhum SDR com atividade no período.
       </div>
     );

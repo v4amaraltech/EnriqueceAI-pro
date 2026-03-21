@@ -26,8 +26,8 @@ export function MetricCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-[var(--muted-foreground)]">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
+        <CardTitle className="text-sm font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline gap-2">
