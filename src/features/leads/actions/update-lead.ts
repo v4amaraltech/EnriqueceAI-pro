@@ -21,6 +21,7 @@ import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
 import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
 import { RDStationAdapter } from '@/features/integrations/services/rdstation.adapter';
+import { KommoAdapter } from '@/features/integrations/services/kommo.adapter';
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 
@@ -313,6 +314,15 @@ export async function fetchCrmPipelines(): Promise<
             name: p.name,
             stages: [],
           }));
+        } else if (connection.crm_provider === 'kommo') {
+          const adapter = new KommoAdapter();
+          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const rawPipelines = await adapter.fetchPipelines(credentials);
+          pipelines = rawPipelines.map((p) => ({
+            id: p.id.toString(),
+            name: p.name,
+            stages: [],
+          }));
         }
 
         return pipelines.length > 0
@@ -388,6 +398,18 @@ export async function fetchPipelineStages(
         data: rawStages
           .sort((a, b) => a.order - b.order)
           .map((s) => ({ id: s.id, name: s.name })),
+      };
+    }
+
+    if (provider === 'kommo') {
+      const adapter = new KommoAdapter();
+      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const rawStages = await adapter.fetchStages(credentials, Number(pipelineId));
+      return {
+        success: true,
+        data: rawStages
+          .sort((a, b) => a.sort - b.sort)
+          .map((s) => ({ id: s.id.toString(), name: s.name })),
       };
     }
 
@@ -673,6 +695,17 @@ export async function markLeadAsWon(
               organization_id: organizationId,
             });
             dealExternalId = rdDealResult.external_id;
+          } else if (crmOptions.provider === 'kommo') {
+            const kommoAdapter = adapter as KommoAdapter;
+
+            // Kommo creates leads with contacts via pushDeal
+            const result = await kommoAdapter.pushDeal(credentials, {
+              title: dealTitle,
+              contactExternalId,
+              pipelineId: parseInt(crmOptions.pipelineId, 10),
+              stageId: parseInt(crmOptions.stageId, 10),
+            });
+            dealExternalId = result.external_id;
           } else {
             // Unsupported provider for deal creation — skip
             dealExternalId = '';

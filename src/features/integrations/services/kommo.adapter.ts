@@ -422,6 +422,84 @@ export class KommoAdapter implements CRMAdapter {
     return { external_id: noteId?.toString() ?? '' };
   }
 
+  // --- Kommo-specific methods (not part of CRMAdapter interface) ---
+
+  async fetchPipelines(
+    credentials: CrmCredentials,
+  ): Promise<Array<{ id: number; name: string }>> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    const result = await kommoFetch<KommoListResponse<{ id: number; name: string; sort: number }>>(
+      subdomain,
+      '/leads/pipelines',
+      credentials.access_token,
+    );
+
+    return (result._embedded?.pipelines ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+    }));
+  }
+
+  async fetchStages(
+    credentials: CrmCredentials,
+    pipelineId: number,
+  ): Promise<Array<{ id: number; name: string; sort: number }>> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    const result = await kommoFetch<KommoListResponse<{ id: number; name: string; sort: number }>>(
+      subdomain,
+      `/leads/pipelines/${pipelineId}/statuses`,
+      credentials.access_token,
+    );
+
+    return (result._embedded?.statuses ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      sort: s.sort,
+    }));
+  }
+
+  async pushDeal(
+    credentials: CrmCredentials,
+    options: {
+      title: string;
+      contactExternalId: string;
+      pipelineId: number;
+      stageId: number;
+    },
+  ): Promise<{ external_id: string }> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    const payload = [
+      {
+        name: options.title,
+        pipeline_id: options.pipelineId,
+        status_id: options.stageId,
+        _embedded: {
+          contacts: [{ id: parseInt(options.contactExternalId, 10) }],
+        },
+      },
+    ];
+
+    const result = await kommoFetch<KommoCreateResponse>(
+      subdomain,
+      '/leads',
+      credentials.access_token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
+
+    const createdId = result._embedded?.leads?.[0]?.id;
+    if (!createdId) {
+      throw new Error('Kommo: failed to create deal/lead, no ID returned');
+    }
+
+    return { external_id: createdId.toString() };
+  }
+
   async validateConnection(credentials: CrmCredentials): Promise<boolean> {
     const subdomain = credentials.subdomain;
     if (!subdomain) return false;
