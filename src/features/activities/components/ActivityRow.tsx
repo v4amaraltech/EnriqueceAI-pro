@@ -2,13 +2,16 @@
 
 import {
   ChevronDown,
-  Clock,
+  Eye,
   Linkedin,
   Mail,
   MessageSquare,
   Phone,
   Play,
   Search,
+  UserCheck,
+  UserX,
+  X,
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -17,6 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
@@ -27,7 +31,10 @@ import type { PendingActivity } from '../types';
 interface ActivityRowProps {
   activity: PendingActivity;
   onExecute: () => void;
-  onSkip: () => void;
+  onIgnore: () => void;
+  onViewLead: () => void;
+  onLeadWon: () => void;
+  onLeadLost: () => void;
 }
 
 export function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean } {
@@ -66,7 +73,7 @@ const channelLabel: Record<string, string> = {
 /** Grid column definition shared with ActivityQueueView header */
 export const ACTIVITY_GRID_COLS = 'grid grid-cols-[minmax(140px,1.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_auto]';
 
-export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
+export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
   const Icon = channelIcon[activity.channel] ?? Mail;
   const label = channelLabel[activity.channel] ?? activity.channel;
@@ -127,9 +134,22 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onSkip}>
-              <Clock className="mr-2 h-3.5 w-3.5" />
-              Pular (+2h)
+            <DropdownMenuItem onClick={onIgnore}>
+              <X className="mr-2 h-3.5 w-3.5" />
+              Ignorar atividade
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onViewLead}>
+              <Eye className="mr-2 h-3.5 w-3.5" />
+              Visualizar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onLeadWon}>
+              <UserCheck className="mr-2 h-3.5 w-3.5" />
+              Lead ganho
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onLeadLost}>
+              <UserX className="mr-2 h-3.5 w-3.5" />
+              Lead perdido
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

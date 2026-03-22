@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
 import { ChevronDown, ListChecks, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 
@@ -84,6 +86,7 @@ const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, 
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
 export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0 }: ActivityQueueViewProps) {
+  const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
@@ -114,6 +117,34 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       return updated;
     });
   }, []);
+
+  const handleIgnore = useCallback((activity: PendingActivity) => {
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    import('../actions/ignore-activity').then(({ ignoreActivity }) =>
+      ignoreActivity(activity.enrollmentId).then((r) => {
+        if (!r.success) toast.error(r.error);
+        else toast.success('Atividade ignorada');
+      }),
+    );
+  }, [handleActivityDone]);
+
+  const handleViewLead = useCallback((leadId: string) => {
+    router.push(`/leads/${leadId}`);
+  }, [router]);
+
+  const handleLeadWon = useCallback((activity: PendingActivity) => {
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    import('@/features/leads/actions/update-lead').then(({ markLeadAsWon }) =>
+      markLeadAsWon(activity.lead.id).then((r) => {
+        if (!r.success) toast.error(r.error);
+        else toast.success('Lead marcado como ganho');
+      }),
+    );
+  }, [handleActivityDone]);
+
+  const handleLeadLost = useCallback((activity: PendingActivity) => {
+    router.push(`/leads/${activity.lead.id}`);
+  }, [router]);
 
   const handleClose = useCallback(() => {
     setSelectedIndex(null);
@@ -287,12 +318,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                           key={`${activity.enrollmentId}:${activity.stepId}`}
                           activity={activity}
                           onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
-                          onSkip={() => {
-                            handleActivityDone(activity.enrollmentId, activity.stepId);
-                            import('../actions/skip-activity').then(({ skipActivity }) =>
-                              skipActivity(activity.enrollmentId),
-                            );
-                          }}
+
+                          onIgnore={() => handleIgnore(activity)}
+                          onViewLead={() => handleViewLead(activity.lead.id)}
+                          onLeadWon={() => handleLeadWon(activity)}
+                          onLeadLost={() => handleLeadLost(activity)}
                         />
                       ))}
                     </div>
@@ -315,12 +345,10 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                   key={`${activity.enrollmentId}:${activity.stepId}`}
                   activity={activity}
                   onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
-                  onSkip={() => {
-                    handleActivityDone(activity.enrollmentId, activity.stepId);
-                    import('../actions/skip-activity').then(({ skipActivity }) =>
-                      skipActivity(activity.enrollmentId),
-                    );
-                  }}
+                  onIgnore={() => handleIgnore(activity)}
+                  onViewLead={() => handleViewLead(activity.lead.id)}
+                  onLeadWon={() => handleLeadWon(activity)}
+                  onLeadLost={() => handleLeadLost(activity)}
                 />
               ))}
               <ActivityPagination

@@ -1,5 +1,12 @@
 import type { CrmProvider } from '../types/crm';
 
+export const PROVIDER_NAMES: Record<CrmProvider, string> = {
+  hubspot: 'HubSpot',
+  pipedrive: 'Pipedrive',
+  rdstation: 'RD Station',
+  kommo: 'KommoCRM',
+};
+
 export const FLUX_LEAD_FIELDS = [
   { value: 'cnpj', label: 'CNPJ' },
   { value: 'razao_social', label: 'Razao Social' },

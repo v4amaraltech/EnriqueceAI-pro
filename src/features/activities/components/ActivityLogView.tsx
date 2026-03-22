@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ListChecks, SearchX, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -140,6 +141,34 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       return updated;
     });
   }, []);
+
+  const handleIgnore = useCallback((activity: PendingActivity) => {
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    import('../actions/ignore-activity').then(({ ignoreActivity }) =>
+      ignoreActivity(activity.enrollmentId).then((r) => {
+        if (!r.success) toast.error(r.error);
+        else toast.success('Atividade ignorada');
+      }),
+    );
+  }, [handleActivityDone]);
+
+  const handleViewLead = useCallback((leadId: string) => {
+    router.push(`/leads/${leadId}`);
+  }, [router]);
+
+  const handleLeadWon = useCallback((activity: PendingActivity) => {
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    import('@/features/leads/actions/update-lead').then(({ markLeadAsWon }) =>
+      markLeadAsWon(activity.lead.id).then((r) => {
+        if (!r.success) toast.error(r.error);
+        else toast.success('Lead marcado como ganho');
+      }),
+    );
+  }, [handleActivityDone]);
+
+  const handleLeadLost = useCallback((activity: PendingActivity) => {
+    router.push(`/leads/${activity.lead.id}`);
+  }, [router]);
 
   const handleClose = useCallback(() => {
     setSelectedIndex(null);
@@ -301,12 +330,11 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
               key={`${activity.enrollmentId}:${activity.stepId}`}
               activity={activity}
               onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
-              onSkip={() => {
-                handleActivityDone(activity.enrollmentId, activity.stepId);
-                import('../actions/skip-activity').then(({ skipActivity }) =>
-                  skipActivity(activity.enrollmentId),
-                );
-              }}
+
+              onIgnore={() => handleIgnore(activity)}
+              onViewLead={() => handleViewLead(activity.lead.id)}
+              onLeadWon={() => handleLeadWon(activity)}
+              onLeadLost={() => handleLeadLost(activity)}
             />
           ))}
           <ActivityPagination

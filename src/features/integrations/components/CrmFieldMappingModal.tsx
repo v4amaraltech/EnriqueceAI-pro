@@ -25,7 +25,7 @@ import {
 import type { CrmProvider, FieldMapping } from '../types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '../types/crm';
 import { updateCrmFieldMapping } from '../actions/manage-crm';
-import { FLUX_LEAD_FIELDS, CRM_TARGET_FIELDS } from '../constants/crm-fields';
+import { FLUX_LEAD_FIELDS, CRM_TARGET_FIELDS, PROVIDER_NAMES } from '../constants/crm-fields';
 
 interface MappingRow {
   tempId: string;
@@ -48,13 +48,6 @@ function buildInitialRows(
     crmField,
   }));
 }
-
-const PROVIDER_NAMES: Record<CrmProvider, string> = {
-  hubspot: 'HubSpot',
-  pipedrive: 'Pipedrive',
-  rdstation: 'RD Station',
-  kommo: 'KommoCRM',
-};
 
 interface CrmFieldMappingModalProps {
   open: boolean;

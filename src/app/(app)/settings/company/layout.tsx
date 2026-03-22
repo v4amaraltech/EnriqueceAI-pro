@@ -4,14 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import {
-  Activity,
-  ArrowLeftRight,
-  Ban,
-  Clock,
-  Lock,
-  Settings2,
-  Star,
-  XCircle,
+  Building2,
+  Mail,
+  Users,
+  UsersRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -26,17 +22,13 @@ interface SidebarItem {
 }
 
 const sidebarItems: SidebarItem[] = [
-  { label: 'Atividades Diárias', href: '/settings/prospecting/daily-goals', icon: Activity },
-  { label: 'Motivos de Perda', href: '/settings/prospecting/loss-reasons', icon: XCircle },
-  { label: 'Vendas Baseadas em Contas', href: '/settings/prospecting/abm', icon: Settings2 },
-  { label: 'Acesso aos Leads', href: '/settings/prospecting/access', icon: Lock },
-  { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: Settings2 },
-  { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
-  { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
-  { label: 'Associação de Campos', href: '/settings/prospecting/field-association', icon: ArrowLeftRight },
+  { label: 'Dados Gerais', href: '/settings/company', icon: Building2 },
+  { label: 'Usuários', href: '/settings/company/users', icon: Users },
+  { label: 'Times', href: '/settings/company/teams', icon: UsersRound, comingSoon: true },
+  { label: 'Config. de E-mail', href: '/settings/company/email', icon: Mail, comingSoon: true },
 ];
 
-export default function ProspectingSettingsLayout({
+export default function CompanySettingsLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -48,8 +40,8 @@ export default function ProspectingSettingsLayout({
       {/* Sidebar */}
       <aside className="w-64 shrink-0 border-r border-[var(--border)] bg-[var(--card)] p-4">
         <div className="mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-          <h2 className="text-sm font-semibold">Ajustes de Prospecção</h2>
+          <Building2 className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+          <h2 className="text-sm font-semibold">Empresa</h2>
         </div>
         <nav className="flex flex-col gap-1">
           {sidebarItems.map((item) => {

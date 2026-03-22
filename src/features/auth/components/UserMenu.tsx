@@ -57,7 +57,7 @@ export function UserMenu() {
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <a href="/settings" className="flex items-center gap-2">
+          <a href="/settings/company" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             Empresa
           </a>
