@@ -93,19 +93,26 @@ function extractCustomFieldValue(
   return field?.values[0]?.value ?? null;
 }
 
+/**
+ * Extract the subdomain from a Kommo referer value.
+ * Kommo sends the full domain (e.g. "myaccount.kommo.com") — we need just "myaccount".
+ */
+function extractSubdomain(referer: string): string {
+  return referer
+    .replace(/\.kommo\.com$/i, '')
+    .replace(/\.amocrm\.com$/i, '')
+    .trim();
+}
+
 export class KommoAdapter implements CRMAdapter {
   readonly provider: CrmProvider = 'kommo';
 
   getAuthUrl(redirectUri: string): string {
     const params = new URLSearchParams({
       client_id: KOMMO_CLIENT_ID,
+      redirect_uri: redirectUri,
       state: crypto.randomUUID(),
-      mode: 'popup',
     });
-
-    // Store redirect_uri for later use in exchangeCode
-    // Kommo doesn't take redirect_uri in auth URL, but needs it in token exchange
-    void redirectUri;
 
     return `${KOMMO_AUTH_URL}?${params.toString()}`;
   }
@@ -119,9 +126,12 @@ export class KommoAdapter implements CRMAdapter {
       throw new Error('Kommo requires subdomain (referer) from OAuth callback');
     }
 
-    const response = await fetch(
-      `https://${subdomain}.kommo.com/oauth2/access_token`,
-      {
+    const cleanSubdomain = extractSubdomain(subdomain);
+    const tokenUrl = `https://${cleanSubdomain}.kommo.com/oauth2/access_token`;
+
+    let response: Response;
+    try {
+      response = await fetch(tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,12 +141,15 @@ export class KommoAdapter implements CRMAdapter {
           code,
           redirect_uri: redirectUri,
         }),
-      },
-    );
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Kommo fetch to ${tokenUrl} failed: ${msg}`);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Kommo token exchange failed: ${errorText}`);
+      throw new Error(`Kommo token exchange failed (${response.status}): ${errorText}`);
     }
 
     const tokens = (await response.json()) as KommoTokenResponse;
@@ -147,7 +160,7 @@ export class KommoAdapter implements CRMAdapter {
       token_expires_at: new Date(
         Date.now() + tokens.expires_in * 1000,
       ).toISOString(),
-      subdomain,
+      subdomain: cleanSubdomain,
     };
   }
 

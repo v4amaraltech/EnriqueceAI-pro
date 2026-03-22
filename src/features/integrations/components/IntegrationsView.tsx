@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
 import {
   Check,
   FileSignature,
@@ -81,8 +81,22 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
 
 export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | CrmProvider | null>(null);
+
+  // Show toast for OAuth callback results
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const error = searchParams.get('error');
+    if (success) {
+      toast.success('Integração conectada com sucesso!');
+      router.replace('/settings/integrations');
+    } else if (error) {
+      toast.error(`Erro na conexão: ${decodeURIComponent(error)}`);
+      router.replace('/settings/integrations');
+    }
+  }, [searchParams, router]);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);

@@ -6,8 +6,12 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const error = url.searchParams.get('error');
+
   // Kommo sends the account subdomain as "referer" (single 'r')
-  const referer = url.searchParams.get('referer');
+  // Some Kommo versions may use different param names
+  const referer = url.searchParams.get('referer')
+    ?? url.searchParams.get('account_subdomain')
+    ?? url.searchParams.get('subdomain');
 
   if (error) {
     return NextResponse.redirect(
@@ -15,9 +19,15 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!code || !referer) {
+  if (!code) {
     return NextResponse.redirect(
       new URL('/settings/integrations?error=no_code', url.origin),
+    );
+  }
+
+  if (!referer) {
+    return NextResponse.redirect(
+      new URL('/settings/integrations?error=kommo_missing_subdomain', url.origin),
     );
   }
 
