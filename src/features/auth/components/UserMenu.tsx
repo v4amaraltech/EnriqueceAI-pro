@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut, Settings, User } from 'lucide-react';
+import { Building2, LogOut, Puzzle, User } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -58,8 +58,14 @@ export function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="/settings" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configurações
+            <Building2 className="h-4 w-4" />
+            Empresa
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/settings/integrations" className="flex items-center gap-2">
+            <Puzzle className="h-4 w-4" />
+            Integrações
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
