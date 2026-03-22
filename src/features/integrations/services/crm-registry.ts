@@ -1,5 +1,6 @@
 import type { CRMAdapter, CrmProvider } from '../types/crm';
 import { HubSpotAdapter } from './hubspot.adapter';
+import { KommoAdapter } from './kommo.adapter';
 import { PipedriveAdapter } from './pipedrive.adapter';
 import { RDStationAdapter } from './rdstation.adapter';
 
@@ -17,6 +18,9 @@ function getOrCreateAdapter(provider: CrmProvider): CRMAdapter {
       case 'rdstation':
         adapters[provider] = new RDStationAdapter();
         break;
+      case 'kommo':
+        adapters[provider] = new KommoAdapter();
+        break;
       default:
         throw new Error(`Unknown CRM provider: ${provider}`);
     }
@@ -28,10 +32,10 @@ export const CRMRegistry = {
   getAdapter: getOrCreateAdapter,
 
   getSupportedProviders(): CrmProvider[] {
-    return ['hubspot', 'pipedrive', 'rdstation'];
+    return ['hubspot', 'pipedrive', 'rdstation', 'kommo'];
   },
 
   isSupported(provider: string): provider is CrmProvider {
-    return ['hubspot', 'pipedrive', 'rdstation'].includes(provider);
+    return ['hubspot', 'pipedrive', 'rdstation', 'kommo'].includes(provider);
   },
 };

@@ -53,4 +53,13 @@ export const CRM_TARGET_FIELDS: Record<
     { value: 'name', label: 'name' },
     { value: 'title', label: 'title' },
   ],
+  kommo: [
+    { value: 'EMAIL', label: 'Email (EMAIL)' },
+    { value: 'PHONE', label: 'Telefone (PHONE)' },
+    { value: 'first_name', label: 'first_name' },
+    { value: 'last_name', label: 'last_name' },
+    { value: 'company_name', label: 'company_name' },
+    { value: 'name', label: 'name (contato)' },
+    { value: 'position', label: 'position (cargo)' },
+  ],
 };

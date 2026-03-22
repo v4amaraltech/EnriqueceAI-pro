@@ -52,13 +52,17 @@ export async function getCrmAuthUrl(
 export async function handleCrmCallback(
   provider: CrmProvider,
   code: string,
+  referer?: string,
 ): Promise<ActionResult<CrmConnectionSafe>> {
   try {
     const { orgId, supabase } = await getManagerOrgId();
 
     const adapter = CRMRegistry.getAdapter(provider);
     const redirectUri = getCrmRedirectUri(provider);
-    const credentials = await adapter.exchangeCode(code, redirectUri);
+    // Kommo adapter needs subdomain (referer) for token exchange
+    const credentials = provider === 'kommo' && 'exchangeCode' in adapter
+      ? await (adapter as import('../services/kommo.adapter').KommoAdapter).exchangeCode(code, redirectUri, referer)
+      : await adapter.exchangeCode(code, redirectUri);
 
     // Validate the connection works
     const valid = await adapter.validateConnection(credentials);

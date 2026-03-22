@@ -3,7 +3,7 @@
 import type { ConnectionStatus } from './index';
 
 // CRM provider enum matching database crm_type
-export type CrmProvider = 'hubspot' | 'pipedrive' | 'rdstation';
+export type CrmProvider = 'hubspot' | 'pipedrive' | 'rdstation' | 'kommo';
 
 // Sync direction matching database sync_direction
 export type SyncDirection = 'push' | 'pull';
@@ -57,7 +57,8 @@ export interface CrmCredentials {
   refresh_token?: string;
   token_expires_at?: string;
   portal_id?: string; // HubSpot portal ID
-  api_key?: string; // Alternative auth
+  api_key?: string; // Alternative auth (Pipedrive api_domain, RD Station token)
+  subdomain?: string; // Kommo account subdomain
 }
 
 // Field mapping: EnriqueceAI field name -> CRM field name
@@ -92,6 +93,15 @@ export const DEFAULT_FIELD_MAPPINGS: Record<CrmProvider, FieldMapping> = {
     leads: {
       email: 'email',
       telefone: 'phone',
+    },
+  },
+  kommo: {
+    leads: {
+      nome_fantasia: 'company_name',
+      first_name: 'first_name',
+      last_name: 'last_name',
+      email: 'EMAIL',
+      telefone: 'PHONE',
     },
   },
 };

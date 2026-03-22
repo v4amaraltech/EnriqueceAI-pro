@@ -57,6 +57,7 @@ const CRM_PROVIDERS = [
   { id: 'hubspot' as const, name: 'HubSpot', logo: '/logos/hubspot-icon.svg', description: 'Sincronize leads e atividades com o HubSpot CRM.' },
   { id: 'pipedrive' as const, name: 'Pipedrive', logo: '/logos/pipedrive-icon.png', description: 'Sincronize leads e negócios com o Pipedrive.' },
   { id: 'rdstation' as const, name: 'RD Station', logo: '/logos/rdstation-icon.png', description: 'Sincronize leads e oportunidades com o RD Station CRM.' },
+  { id: 'kommo' as const, name: 'Kommo', logo: '/logos/kommo-icon.svg', description: 'Sincronize leads e negócios com o Kommo CRM.' },
 ] as const;
 
 const statusConfig = {
@@ -81,7 +82,7 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
 export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | 'hubspot' | 'pipedrive' | 'rdstation' | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | 'apollo' | CrmProvider | null>(null);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);

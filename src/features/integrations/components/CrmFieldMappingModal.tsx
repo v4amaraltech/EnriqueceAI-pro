@@ -53,6 +53,7 @@ const PROVIDER_NAMES: Record<CrmProvider, string> = {
   hubspot: 'HubSpot',
   pipedrive: 'Pipedrive',
   rdstation: 'RD Station',
+  kommo: 'Kommo',
 };
 
 interface CrmFieldMappingModalProps {
