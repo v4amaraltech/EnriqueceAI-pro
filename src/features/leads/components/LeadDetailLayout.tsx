@@ -372,14 +372,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                           <SelectContent>
                             {crmConnections.map((conn) => (
                               <SelectItem key={conn.provider} value={conn.provider}>
-                                {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station', kommo: 'Kommo' } as Record<string, string>)[conn.provider] ?? conn.provider}
+                                {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station', kommo: 'KommoCRM' } as Record<string, string>)[conn.provider] ?? conn.provider}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       ) : selectedProvider && (
                         <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                          {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station', kommo: 'Kommo' } as Record<string, string>)[selectedProvider] ?? selectedProvider}
+                          {({ pipedrive: 'Pipedrive', hubspot: 'HubSpot', rdstation: 'RD Station', kommo: 'KommoCRM' } as Record<string, string>)[selectedProvider] ?? selectedProvider}
                         </p>
                       )}
                     </div>
