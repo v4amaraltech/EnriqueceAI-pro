@@ -143,7 +143,7 @@ export function CrmFieldMappingModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Mapeamento de Campos</DialogTitle>
           <DialogDescription>
