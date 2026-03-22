@@ -109,7 +109,6 @@ export async function exportReportPdf(params: PdfExportParams): Promise<void> {
   });
 
   // --- Cadence Section ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const afterOverall = (doc as any).lastAutoTable?.finalY ?? startY + 30;
   let cadenceY = afterOverall + 10;
 
@@ -157,7 +156,6 @@ export async function exportReportPdf(params: PdfExportParams): Promise<void> {
   });
 
   // --- SDR Section ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const afterCadence = (doc as any).lastAutoTable?.finalY ?? cadenceY + 30;
   let sdrY = afterCadence + 10;
 

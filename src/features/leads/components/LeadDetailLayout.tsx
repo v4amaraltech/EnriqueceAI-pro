@@ -28,7 +28,7 @@ import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator'
 import type { LeadContext } from '@/features/ai/types';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
-import type { CrmPipeline, CrmProvider } from '@/features/integrations/types/crm';
+import type { CrmProvider } from '@/features/integrations/types/crm';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
