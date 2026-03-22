@@ -33,4 +33,7 @@ export interface CadenceAnalyticsData {
   cadenceTable: CadencePerformanceRow[];
   enrollmentsByStatus: EnrollmentsByStatusEntry[];
   stepProgression: StepProgressionEntry[];
+  totalSent: number;
+  engagedLeads: number;
+  engagementRate: number;
 }

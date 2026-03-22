@@ -30,6 +30,11 @@ interface InteractionRow {
   cadence_id: string | null;
 }
 
+interface EngagementInteractionRow {
+  type: string;
+  lead_id: string;
+}
+
 interface StepRow {
   cadence_id: string;
   step_order: number;
@@ -97,10 +102,31 @@ export async function fetchCadenceAnalyticsData(
     .order('step_order', { ascending: true })) as { data: StepRow[] | null };
   const steps = rawSteps ?? [];
 
+  // Fetch engagement interactions (sent + opened + clicked + replied + meeting_scheduled) with lead_id
+  const { data: rawEngagement } = (await from(supabase, 'interactions')
+    .select('type, lead_id')
+    .eq('org_id', orgId)
+    .in('cadence_id', cadenceIds)
+    .gte('created_at', periodStart)
+    .lte('created_at', periodEnd)
+    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])) as { data: EngagementInteractionRow[] | null };
+  const engagementInteractions = rawEngagement ?? [];
+
   const activeCadences = cadences.filter((c) => c.status === 'active').length;
   const totalEnrolled = enrollments.length;
   const totalCompleted = enrollments.filter((e) => e.status === 'completed').length;
   const totalReplied = enrollments.filter((e) => e.status === 'replied').length;
+
+  // Engagement KPIs
+  const sentLeadIds = new Set(
+    engagementInteractions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
+  );
+  const engagedLeadIds = new Set(
+    engagementInteractions
+      .filter((i) => ['opened', 'clicked', 'replied', 'meeting_scheduled'].includes(i.type))
+      .map((i) => i.lead_id),
+  );
+  const totalSent = engagementInteractions.filter((i) => i.type === 'sent').length;
 
   return {
     activeCadences,
@@ -110,6 +136,9 @@ export async function fetchCadenceAnalyticsData(
     cadenceTable: buildCadenceTable(cadences, enrollments, interactions),
     enrollmentsByStatus: buildEnrollmentsByStatus(cadences, enrollments),
     stepProgression: buildStepProgression(steps, enrollments),
+    totalSent,
+    engagedLeads: engagedLeadIds.size,
+    engagementRate: safeRate(engagedLeadIds.size, sentLeadIds.size),
   };
 }
 
@@ -211,5 +240,8 @@ function emptyData(): CadenceAnalyticsData {
     cadenceTable: [],
     enrollmentsByStatus: [],
     stepProgression: [],
+    totalSent: 0,
+    engagedLeads: 0,
+    engagementRate: 0,
   };
 }

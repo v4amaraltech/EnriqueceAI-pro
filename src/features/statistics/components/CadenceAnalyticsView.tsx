@@ -1,6 +1,6 @@
 'use client';
 
-import { GitBranch, Reply, Target, Users } from 'lucide-react';
+import { GitBranch, Reply, Send, Target, TrendingUp, UserCheck, Users } from 'lucide-react';
 
 import { MetricCard } from '@/features/dashboard/components/MetricCard';
 
@@ -45,6 +45,25 @@ export function CadenceAnalyticsView({ data }: CadenceAnalyticsViewProps) {
           title="Taxa de Resposta"
           value={`${data.replyRate}%`}
           icon={Reply}
+        />
+      </div>
+
+      {/* Engagement KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          title="Total Enviados"
+          value={data.totalSent.toLocaleString('pt-BR')}
+          icon={Send}
+        />
+        <MetricCard
+          title="Engajados"
+          value={data.engagedLeads.toLocaleString('pt-BR')}
+          icon={UserCheck}
+        />
+        <MetricCard
+          title="Taxa de Engajamento"
+          value={`${data.engagementRate}%`}
+          icon={TrendingUp}
         />
       </div>
 
