@@ -2,10 +2,11 @@
 
 import { useActionState, useState, useTransition } from 'react';
 
-import { RotateCw, UserX } from 'lucide-react';
+import { RotateCw, Search, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
 
 import { resendInvite } from '../actions/resend-invite';
 import { revokeInvite } from '../actions/revoke-invite';
@@ -52,6 +53,7 @@ export function UserManagement({
   nameMap?: Record<string, string>;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const [statusState, statusAction, statusPending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
@@ -71,8 +73,16 @@ export function UserManagement({
     {} as FormState,
   );
 
-  const activeMembers = members.filter((m) => m.status !== 'invited' && m.status !== 'removed');
+  const allActive = members.filter((m) => m.status !== 'invited' && m.status !== 'removed');
   const pendingInvites = members.filter((m) => m.status === 'invited');
+
+  const searchLower = search.toLowerCase();
+  const activeMembers = searchLower
+    ? allActive.filter((m) => {
+        const name = (nameMap[m.user_id] ?? m.user_id).toLowerCase();
+        return name.includes(searchLower);
+      })
+    : allActive;
 
   return (
     <div className="space-y-6">
@@ -84,6 +94,16 @@ export function UserManagement({
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>Convidar membro</Button>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+        <Input
+          placeholder="Buscar por nome ou email"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
       {(statusState.error || roleState.error) && (

@@ -63,7 +63,7 @@ export default async function CompanyUsersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <UserManagement
         members={members ?? []}
         ownerId={org?.owner_id ?? ''}
