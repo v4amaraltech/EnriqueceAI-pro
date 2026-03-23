@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search, Trash2 } from 'lucide-react';
 
 import type { ChannelType } from '../types';
 
@@ -19,6 +19,8 @@ interface ActivityCategory {
   channel: ChannelType;
   defaultItems: ActivityTypeItem[];
 }
+
+const DEFAULT_IDS = new Set(['new-email', 'new-phone', 'new-linkedin', 'new-whatsapp', 'new-research']);
 
 const categories: ActivityCategory[] = [
   {
@@ -60,23 +62,92 @@ const categories: ActivityCategory[] = [
   },
 ];
 
-function DraggableItem({ item }: { item: ActivityTypeItem }) {
+function DraggableItem({
+  item,
+  isCustom,
+  onRename,
+  onRemove,
+}: {
+  item: ActivityTypeItem;
+  isCustom: boolean;
+  onRename?: (id: string, newLabel: string) => void;
+  onRemove?: (id: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
     data: { type: 'activity-type', channel: item.channel, label: item.label },
   });
 
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(item.label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const config = channelConfig[item.channel];
+
+  function startEditing() {
+    if (!isCustom) return;
+    setEditValue(item.label);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commitEdit() {
+    setEditing(false);
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== item.label) {
+      onRename?.(item.id, trimmed);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-[var(--ring)] px-3 py-1.5 text-sm">
+        <config.icon className={`h-4 w-4 shrink-0 ${config.color}`} />
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="min-w-0 flex-1 bg-transparent outline-none"
+          autoFocus
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex cursor-grab items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-[var(--accent)] ${isDragging ? 'opacity-50' : ''}`}
+      className={`group flex cursor-grab items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-[var(--accent)] ${isDragging ? 'opacity-50' : ''}`}
     >
-      <config.icon className={`h-4 w-4 ${config.color}`} />
-      <span>{item.label}</span>
+      <config.icon className={`h-4 w-4 shrink-0 ${config.color}`} />
+      <span
+        className={`flex-1 truncate ${isCustom ? 'cursor-text' : ''}`}
+        onDoubleClick={startEditing}
+      >
+        {item.label}
+      </span>
+      {isCustom && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onRemove?.(item.id);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="hidden rounded p-0.5 text-[var(--muted-foreground)] hover:text-red-500 group-hover:block"
+          title="Remover"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -124,8 +195,23 @@ export function ActivityTypeSidebar() {
       };
       return { ...prev, [category.label]: [...current, newItem] };
     });
-    // Ensure category is expanded to show the new item
     setExpanded((prev) => ({ ...prev, [category.label]: true }));
+  }
+
+  function renameItem(categoryLabel: string, itemId: string, newLabel: string) {
+    setCategoryItems((prev) => ({
+      ...prev,
+      [categoryLabel]: (prev[categoryLabel] ?? []).map((i) =>
+        i.id === itemId ? { ...i, label: newLabel } : i,
+      ),
+    }));
+  }
+
+  function removeItem(categoryLabel: string, itemId: string) {
+    setCategoryItems((prev) => ({
+      ...prev,
+      [categoryLabel]: (prev[categoryLabel] ?? []).filter((i) => i.id !== itemId),
+    }));
   }
 
   return (
@@ -174,7 +260,13 @@ export function ActivityTypeSidebar() {
               {isExpanded && (
                 <div className="ml-6 mt-1 space-y-1">
                   {items.map((item) => (
-                    <DraggableItem key={item.id} item={item} />
+                    <DraggableItem
+                      key={item.id}
+                      item={item}
+                      isCustom={!DEFAULT_IDS.has(item.id)}
+                      onRename={(id, newLabel) => renameItem(category.label, id, newLabel)}
+                      onRemove={(id) => removeItem(category.label, id)}
+                    />
                   ))}
                 </div>
               )}
