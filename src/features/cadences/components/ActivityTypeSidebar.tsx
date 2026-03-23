@@ -65,11 +65,15 @@ const categories: ActivityCategory[] = [
 function DraggableItem({
   item,
   isCustom,
+  showAdd,
+  onAdd,
   onRename,
   onRemove,
 }: {
   item: ActivityTypeItem;
   isCustom: boolean;
+  showAdd?: boolean;
+  onAdd?: (channel: ChannelType, label: string) => void;
   onRename?: (id: string, newLabel: string) => void;
   onRemove?: (id: string) => void;
 }) {
@@ -133,6 +137,21 @@ function DraggableItem({
       >
         {item.label}
       </span>
+      {showAdd && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onAdd?.(item.channel, item.label);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="hidden rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] group-hover:block"
+          title={`Adicionar ${item.label}`}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
       {isCustom && (
         <button
           type="button"
@@ -182,20 +201,30 @@ export function ActivityTypeSidebar() {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
   }
 
-  function addItemToCategory(category: ActivityCategory) {
+  function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string) {
     setCategoryItems((prev) => {
-      const current = prev[category.label] ?? [];
-      const baseLabel = channelConfig[category.channel].label;
-      const count = current.filter((i) => i.channel === category.channel).length;
+      const current = prev[categoryLabel] ?? [];
+      const count = current.filter((i) => i.channel === channel).length;
       const newLabel = `${baseLabel} ${count + 1}`;
       const newItem: ActivityTypeItem = {
-        id: `new-${category.channel}-${Date.now()}-${nextItemId++}`,
-        channel: category.channel,
+        id: `new-${channel}-${Date.now()}-${nextItemId++}`,
+        channel,
         label: newLabel,
       };
-      return { ...prev, [category.label]: [...current, newItem] };
+      return { ...prev, [categoryLabel]: [...current, newItem] };
     });
-    setExpanded((prev) => ({ ...prev, [category.label]: true }));
+    setExpanded((prev) => ({ ...prev, [categoryLabel]: true }));
+  }
+
+  function handleCategoryAdd(category: ActivityCategory) {
+    const isMultiType = category.defaultItems.length > 1;
+    if (isMultiType) {
+      // Multi-type: just expand to show per-item "+" buttons
+      setExpanded((prev) => ({ ...prev, [category.label]: true }));
+    } else {
+      const item = category.defaultItems[0]!;
+      addItemByChannel(category.label, item.channel, item.label);
+    }
   }
 
   function renameItem(categoryLabel: string, itemId: string, newLabel: string) {
@@ -234,12 +263,12 @@ export function ActivityTypeSidebar() {
                   tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
-                    addItemToCategory(category);
+                    handleCategoryAdd(category);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.stopPropagation();
-                      addItemToCategory(category);
+                      handleCategoryAdd(category);
                     }
                   }}
                   className="rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
@@ -259,15 +288,21 @@ export function ActivityTypeSidebar() {
               </button>
               {isExpanded && (
                 <div className="ml-6 mt-1 space-y-1">
-                  {items.map((item) => (
-                    <DraggableItem
-                      key={item.id}
-                      item={item}
-                      isCustom={!DEFAULT_IDS.has(item.id)}
-                      onRename={(id, newLabel) => renameItem(category.label, id, newLabel)}
-                      onRemove={(id) => removeItem(category.label, id)}
-                    />
-                  ))}
+                  {items.map((item) => {
+                    const isDefault = DEFAULT_IDS.has(item.id);
+                    const isMultiType = category.defaultItems.length > 1;
+                    return (
+                      <DraggableItem
+                        key={item.id}
+                        item={item}
+                        isCustom={!isDefault}
+                        showAdd={isDefault && isMultiType}
+                        onAdd={(channel, label) => addItemByChannel(category.label, channel, label)}
+                        onRename={(id, newLabel) => renameItem(category.label, id, newLabel)}
+                        onRemove={(id) => removeItem(category.label, id)}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
