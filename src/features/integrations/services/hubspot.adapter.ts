@@ -2,6 +2,7 @@ import type {
   CRMAdapter,
   CrmContact,
   CrmCredentials,
+  CrmFieldOption,
   CrmProvider,
 } from '../types/crm';
 
@@ -162,6 +163,28 @@ export class HubSpotAdapter implements CRMAdapter {
         Date.now() + tokens.expires_in * 1000,
       ).toISOString(),
     };
+  }
+
+  async listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]> {
+    const result = await hubspotFetch<{
+      results: Array<{
+        name: string;
+        label: string;
+        type: string;
+        groupName: string;
+        hidden: boolean;
+      }>;
+    }>('/crm/v3/properties/contacts', credentials.access_token);
+
+    return result.results
+      .filter((p) => !p.hidden)
+      .map((p) => ({
+        value: p.name,
+        label: p.label || p.name,
+        type: p.type,
+        isCustom: p.groupName !== 'contactinformation',
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   async pullContacts(

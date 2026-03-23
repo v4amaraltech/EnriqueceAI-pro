@@ -2,6 +2,7 @@ import type {
   CRMAdapter,
   CrmContact,
   CrmCredentials,
+  CrmFieldOption,
   CrmProvider,
 } from '../types/crm';
 
@@ -174,6 +175,29 @@ export class PipedriveAdapter implements CRMAdapter {
         Date.now() + tokens.expires_in * 1000,
       ).toISOString(),
     };
+  }
+
+  async listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]> {
+    const apiDomain = credentials.api_key ?? '';
+    const result = await pipedriveFetch<{
+      success: boolean;
+      data: Array<{
+        key: string;
+        name: string;
+        field_type: string;
+        active_flag: boolean;
+      }> | null;
+    }>(apiDomain, '/api/v1/personFields', credentials.access_token);
+
+    return (result.data ?? [])
+      .filter((f) => f.active_flag)
+      .map((f) => ({
+        value: f.key,
+        label: f.name,
+        type: f.field_type,
+        isCustom: /^[a-f0-9]{40}$/.test(f.key),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   async pullContacts(

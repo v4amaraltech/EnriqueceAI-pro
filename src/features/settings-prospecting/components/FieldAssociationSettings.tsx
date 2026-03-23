@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import Link from 'next/link';
-import { ArrowRight, Link2Off, Lock, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowRight, Link2Off, Loader2, Lock, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -16,9 +16,9 @@ import {
 } from '@/shared/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
-import type { CrmProvider, CrmConnectionSafe, FieldMapping } from '@/features/integrations/types/crm';
+import type { CrmProvider, CrmConnectionSafe, CrmFieldOption, FieldMapping } from '@/features/integrations/types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
-import { updateCrmFieldMapping } from '@/features/integrations/actions/manage-crm';
+import { fetchAppFieldsWithCustom, fetchCrmFields, updateCrmFieldMapping } from '@/features/integrations/actions/manage-crm';
 import {
   APP_LEAD_FIELDS,
   CRM_TARGET_FIELDS,
@@ -67,8 +67,31 @@ function ProviderMappingTable({
     buildInitialRows(provider, currentMapping),
   );
   const [isPending, startTransition] = useTransition();
+  const [crmFields, setCrmFields] = useState<CrmFieldOption[]>([]);
+  const [appFields, setAppFields] = useState<Array<{ value: string; label: string; isCustom?: boolean }>>([...APP_LEAD_FIELDS]);
+  const [isLoadingFields, setIsLoadingFields] = useState(true);
 
-  const targetFields = CRM_TARGET_FIELDS[provider];
+  useEffect(() => {
+    Promise.all([
+      fetchCrmFields(provider),
+      fetchAppFieldsWithCustom(),
+    ]).then(([crmResult, appResult]) => {
+      if (crmResult.success && crmResult.data.length > 0) {
+        setCrmFields(crmResult.data);
+      } else {
+        setCrmFields(CRM_TARGET_FIELDS[provider]);
+      }
+      if (appResult.success) {
+        setAppFields(appResult.data);
+      }
+    }).catch(() => {
+      setCrmFields(CRM_TARGET_FIELDS[provider]);
+    }).finally(() => {
+      setIsLoadingFields(false);
+    });
+  }, [provider]);
+
+  const targetFields = crmFields.length > 0 ? crmFields : CRM_TARGET_FIELDS[provider];
   const usedAppFields = new Set(rows.map((r) => r.appField).filter(Boolean));
 
   function addRow() {
@@ -96,11 +119,11 @@ function ProviderMappingTable({
       }
     }
 
-    const appFields = rows.map((r) => r.appField);
-    const duplicates = appFields.filter((f, i) => appFields.indexOf(f) !== i);
+    const usedFields = rows.map((r) => r.appField);
+    const duplicates = usedFields.filter((f, i) => usedFields.indexOf(f) !== i);
     if (duplicates.length > 0) {
       const label =
-        APP_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
+        appFields.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
       toast.error(`Campo "${label}" duplicado. Cada campo Enriquece AI pode ser mapeado apenas uma vez.`);
       return;
     }
@@ -118,6 +141,15 @@ function ProviderMappingTable({
         toast.error(result.error);
       }
     });
+  }
+
+  if (isLoadingFields) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
+        <span className="ml-2 text-sm text-[var(--muted-foreground)]">Carregando campos...</span>
+      </div>
+    );
   }
 
   return (
@@ -148,7 +180,7 @@ function ProviderMappingTable({
                     <SelectContent>
                       {targetFields.map((f) => (
                         <SelectItem key={f.value} value={f.value}>
-                          {f.label}
+                          {f.label}{'isCustom' in f && f.isCustom ? ' (custom)' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -166,13 +198,13 @@ function ProviderMappingTable({
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {APP_LEAD_FIELDS.map((f) => (
+                      {appFields.map((f) => (
                         <SelectItem
                           key={f.value}
                           value={f.value}
                           disabled={usedAppFields.has(f.value) && row.appField !== f.value}
                         >
-                          {f.label}
+                          {f.label}{f.isCustom ? ' (personalizado)' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>

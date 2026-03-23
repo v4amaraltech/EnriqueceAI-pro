@@ -2,6 +2,7 @@ import type {
   CRMAdapter,
   CrmContact,
   CrmCredentials,
+  CrmFieldOption,
   CrmProvider,
 } from '../types/crm';
 
@@ -84,6 +85,34 @@ export class RDStationAdapter implements CRMAdapter {
   async refreshToken(credentials: CrmCredentials): Promise<CrmCredentials> {
     // API token does not expire — return as-is
     return credentials;
+  }
+
+  async listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]> {
+    const token = credentials.api_key ?? credentials.access_token;
+    const standard: CrmFieldOption[] = [
+      { value: 'email', label: 'Email', isCustom: false },
+      { value: 'phone', label: 'Telefone', isCustom: false },
+      { value: 'mobile_phone', label: 'Celular', isCustom: false },
+      { value: 'name', label: 'Nome', isCustom: false },
+      { value: 'title', label: 'Cargo', isCustom: false },
+    ];
+    let custom: CrmFieldOption[] = [];
+    try {
+      const result = await rdCrmFetch<
+        Array<{ id: string; label: string; field_type: string }>
+      >('/contacts/custom_fields', token);
+      custom = result.map((f) => ({
+        value: `cf_${f.id}`,
+        label: f.label,
+        type: f.field_type,
+        isCustom: true,
+      }));
+    } catch {
+      /* fallback sem custom */
+    }
+    return [...standard, ...custom].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
   }
 
   async validateConnection(credentials: CrmCredentials): Promise<boolean> {

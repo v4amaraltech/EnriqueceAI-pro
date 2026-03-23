@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
-import { ArrowRight, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowRight, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -22,9 +22,9 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import type { CrmProvider, FieldMapping } from '../types/crm';
+import type { CrmFieldOption, CrmProvider, FieldMapping } from '../types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '../types/crm';
-import { updateCrmFieldMapping } from '../actions/manage-crm';
+import { fetchAppFieldsWithCustom, fetchCrmFields, updateCrmFieldMapping } from '../actions/manage-crm';
 import { APP_LEAD_FIELDS, CRM_TARGET_FIELDS, PROVIDER_NAMES } from '../constants/crm-fields';
 
 interface MappingRow {
@@ -68,11 +68,36 @@ export function CrmFieldMappingModal({
     buildInitialRows(provider, currentMapping),
   );
   const [isPending, startTransition] = useTransition();
+  const [crmFields, setCrmFields] = useState<CrmFieldOption[]>([]);
+  const [appFields, setAppFields] = useState<Array<{ value: string; label: string; isCustom?: boolean }>>([...APP_LEAD_FIELDS]);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([
+      fetchCrmFields(provider),
+      fetchAppFieldsWithCustom(),
+    ]).then(([crmResult, appResult]) => {
+      if (crmResult.success && crmResult.data.length > 0) {
+        setCrmFields(crmResult.data);
+      } else {
+        setCrmFields(CRM_TARGET_FIELDS[provider]);
+      }
+      if (appResult.success) {
+        setAppFields(appResult.data);
+      }
+    }).catch(() => {
+      setCrmFields(CRM_TARGET_FIELDS[provider]);
+    }).finally(() => {
+      setIsLoadingFields(false);
+    });
+  }, [open, provider]);
 
   // Reset rows when modal opens with new data
   function handleOpenChange(isOpen: boolean) {
     if (isOpen) {
       setRows(buildInitialRows(provider, currentMapping));
+      setIsLoadingFields(true);
     }
     onOpenChange(isOpen);
   }
@@ -104,10 +129,10 @@ export function CrmFieldMappingModal({
     }
 
     // Validate: no duplicate app fields
-    const appFields = rows.map((r) => r.appField);
-    const duplicates = appFields.filter((f, i) => appFields.indexOf(f) !== i);
+    const usedFields = rows.map((r) => r.appField);
+    const duplicates = usedFields.filter((f, i) => usedFields.indexOf(f) !== i);
     if (duplicates.length > 0) {
-      const label = APP_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
+      const label = appFields.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
       toast.error(`Campo "${label}" duplicado. Cada campo Enriquece AI pode ser mapeado apenas uma vez.`);
       return;
     }
@@ -129,7 +154,7 @@ export function CrmFieldMappingModal({
     });
   }
 
-  const targetFields = CRM_TARGET_FIELDS[provider];
+  const targetFields = crmFields.length > 0 ? crmFields : CRM_TARGET_FIELDS[provider];
 
   // Get already-used app fields to disable in other selects
   const usedAppFields = new Set(rows.map((r) => r.appField).filter(Boolean));
@@ -145,7 +170,12 @@ export function CrmFieldMappingModal({
         </DialogHeader>
 
         <div className="max-h-[50vh] overflow-y-auto">
-          {rows.length > 0 ? (
+          {isLoadingFields ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
+              <span className="ml-2 text-sm text-[var(--muted-foreground)]">Carregando campos...</span>
+            </div>
+          ) : rows.length > 0 ? (
             <div className="rounded-lg border border-[var(--border)] overflow-hidden">
               <table className="w-full">
                 <thead>
@@ -168,13 +198,13 @@ export function CrmFieldMappingModal({
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {APP_LEAD_FIELDS.map((f) => (
+                            {appFields.map((f) => (
                               <SelectItem
                                 key={f.value}
                                 value={f.value}
                                 disabled={usedAppFields.has(f.value) && row.appField !== f.value}
                               >
-                                {f.label}
+                                {f.label}{f.isCustom ? ' (personalizado)' : ''}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -194,7 +224,7 @@ export function CrmFieldMappingModal({
                           <SelectContent>
                             {targetFields.map((f) => (
                               <SelectItem key={f.value} value={f.value}>
-                                {f.label}
+                                {f.label}{'isCustom' in f && f.isCustom ? ' (custom)' : ''}
                               </SelectItem>
                             ))}
                           </SelectContent>

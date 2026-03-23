@@ -106,6 +106,14 @@ export const DEFAULT_FIELD_MAPPINGS: Record<CrmProvider, FieldMapping> = {
   },
 };
 
+// CRM field option for dynamic field listing
+export interface CrmFieldOption {
+  value: string;
+  label: string;
+  type?: string;
+  isCustom?: boolean;
+}
+
 // Sync result returned by adapter sync methods
 export interface SyncResult {
   synced: number;
@@ -177,6 +185,9 @@ export interface CRMAdapter {
       timestamp: string;
     },
   ): Promise<{ external_id: string }>;
+
+  // Field discovery
+  listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]>;
 
   // Validation
   validateConnection(credentials: CrmCredentials): Promise<boolean>;

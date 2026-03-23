@@ -2,6 +2,7 @@ import type {
   CRMAdapter,
   CrmContact,
   CrmCredentials,
+  CrmFieldOption,
   CrmProvider,
 } from '../types/crm';
 
@@ -203,6 +204,47 @@ export class KommoAdapter implements CRMAdapter {
         Date.now() + tokens.expires_in * 1000,
       ).toISOString(),
     };
+  }
+
+  async listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    const standard: CrmFieldOption[] = [
+      { value: 'first_name', label: 'Nome', isCustom: false },
+      { value: 'last_name', label: 'Sobrenome', isCustom: false },
+      { value: 'name', label: 'Nome Completo', isCustom: false },
+      { value: 'company_name', label: 'Empresa', isCustom: false },
+      { value: 'position', label: 'Cargo', isCustom: false },
+      { value: 'EMAIL', label: 'Email', isCustom: false },
+      { value: 'PHONE', label: 'Telefone', isCustom: false },
+    ];
+    let custom: CrmFieldOption[] = [];
+    try {
+      const result = await kommoFetch<
+        KommoListResponse<{
+          id: number;
+          name: string;
+          type: string;
+          code: string | null;
+        }>
+      >(subdomain, '/contacts/custom_fields?limit=250', credentials.access_token);
+
+      const fields = result._embedded?.custom_fields ?? [];
+      custom = fields
+        .filter((f) => f.code !== 'EMAIL' && f.code !== 'PHONE')
+        .map((f) => ({
+          value: f.code ?? f.id.toString(),
+          label: f.name,
+          type: f.type,
+          isCustom: true,
+        }));
+    } catch {
+      /* fallback sem custom */
+    }
+    return [...standard, ...custom].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
   }
 
   async pullContacts(

@@ -9,6 +9,7 @@ import { from } from '@/lib/supabase/from';
 import type {
   CrmConnectionRow,
   CrmConnectionSafe,
+  CrmFieldOption,
   CrmProvider,
   CrmSyncLogRow,
   FieldMapping,
@@ -16,6 +17,9 @@ import type {
 import { DEFAULT_FIELD_MAPPINGS } from '../types/crm';
 import { CRMRegistry } from '../services/crm-registry';
 import { CrmSyncService } from '../services/crm-sync.service';
+import { ensureFreshCredentials } from '../services/crm-token';
+import { APP_LEAD_FIELDS } from '../constants/crm-fields';
+import { listCustomFields } from '@/features/settings-prospecting/actions/custom-fields-crud';
 
 function getCrmRedirectUri(provider: CrmProvider): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
@@ -251,6 +255,54 @@ export async function fetchCrmSyncLogs(
       error: error instanceof Error ? error.message : 'Erro ao buscar logs',
     };
   }
+}
+
+export async function fetchCrmFields(
+  provider: CrmProvider,
+): Promise<ActionResult<CrmFieldOption[]>> {
+  try {
+    const { orgId, supabase } = await getManagerOrgId();
+
+    const { data: connection } = (await from(supabase, 'crm_connections')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('crm_provider', provider)
+      .single()) as { data: CrmConnectionRow | null };
+
+    if (!connection) {
+      return { success: false, error: 'Conexão CRM não encontrada' };
+    }
+
+    const adapter = CRMRegistry.getAdapter(provider);
+    const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+    const fields = await adapter.listFields(credentials);
+    return { success: true, data: fields };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao buscar campos do CRM',
+    };
+  }
+}
+
+export async function fetchAppFieldsWithCustom(): Promise<
+  ActionResult<Array<{ value: string; label: string; isCustom?: boolean }>>
+> {
+  const baseFields = APP_LEAD_FIELDS.map((f) => ({ ...f, isCustom: false }));
+  try {
+    const customResult = await listCustomFields();
+    if (customResult.success && customResult.data.length > 0) {
+      const customFields = customResult.data.map((cf) => ({
+        value: `custom_${cf.id}`,
+        label: cf.field_name,
+        isCustom: true,
+      }));
+      return { success: true, data: [...baseFields, ...customFields] };
+    }
+  } catch {
+    /* fallback */
+  }
+  return { success: true, data: baseFields };
 }
 
 export async function triggerCrmSync(
