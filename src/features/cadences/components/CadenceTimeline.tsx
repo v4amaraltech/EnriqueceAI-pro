@@ -219,7 +219,7 @@ function DragOverlayContent({ channel, label }: { channel: ChannelType; label: s
 // ── Main Component ───────────────────────────────────────────────────────
 
 let nextStepId = 1;
-function generateStepId(): string {
+export function generateStepId(): string {
   return `step-${Date.now()}-${nextStepId++}`;
 }
 

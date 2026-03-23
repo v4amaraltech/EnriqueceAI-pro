@@ -28,7 +28,7 @@ import { activateCadence, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
 import { saveTimelineSteps } from '../actions/save-timeline-steps';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
-import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
+import { CadenceTimeline, generateStepId, type DayData, type TimelineStep } from './CadenceTimeline';
 import { EnrollmentsList } from './EnrollmentsList';
 import { StepEditorDialog } from './StepEditorDialog';
 
@@ -175,6 +175,22 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
   function handleStepClick(step: TimelineStep) {
     setEditingStep(step);
     setStepEditorOpen(true);
+  }
+
+  function handleQuickAddStep(channel: ChannelType, label: string) {
+    const newStep: TimelineStep = { id: generateStepId(), channel, label };
+    setDays((prev) => {
+      if (prev.length === 0) {
+        return [{ day: 1, steps: [newStep] }];
+      }
+      const updated = [...prev];
+      const lastIndex = updated.length - 1;
+      updated[lastIndex] = {
+        ...updated[lastIndex]!,
+        steps: [...updated[lastIndex]!.steps, newStep],
+      };
+      return updated;
+    });
   }
 
   function handleStepEditorSave(stepId: string, activityName: string | null, instructions: string | null) {
@@ -378,7 +394,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
           <CadenceTimeline
             days={days}
             onDaysChange={setDays}
-            sidebarSlot={isEditable ? <ActivityTypeSidebar /> : undefined}
+            sidebarSlot={isEditable ? <ActivityTypeSidebar onAddStep={handleQuickAddStep} /> : undefined}
             onStepClick={handleStepClick}
           />
         </div>

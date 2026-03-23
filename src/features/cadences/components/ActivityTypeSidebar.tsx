@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search } from 'lucide-react';
 
 import type { ChannelType } from '../types';
 
@@ -55,7 +55,7 @@ const categories: ActivityCategory[] = [
   },
 ];
 
-function DraggableItem({ item }: { item: ActivityTypeItem }) {
+function DraggableItem({ item, onAddStep }: { item: ActivityTypeItem; onAddStep?: (channel: ChannelType, label: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
     data: { type: 'activity-type', channel: item.channel, label: item.label },
@@ -71,7 +71,22 @@ function DraggableItem({ item }: { item: ActivityTypeItem }) {
       className={`flex cursor-grab items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-[var(--accent)] ${isDragging ? 'opacity-50' : ''}`}
     >
       <config.icon className={`h-4 w-4 ${config.color}`} />
-      <span>{item.label}</span>
+      <span className="flex-1">{item.label}</span>
+      {onAddStep && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onAddStep(item.channel, item.label);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+          title={`Adicionar ${item.label}`}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -84,7 +99,11 @@ export const channelConfig: Record<ChannelType, { icon: typeof Mail; color: stri
   research: { icon: Search, color: 'text-orange-700 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-500/15', label: 'Pesquisa' },
 };
 
-export function ActivityTypeSidebar() {
+interface ActivityTypeSidebarProps {
+  onAddStep?: (channel: ChannelType, label: string) => void;
+}
+
+export function ActivityTypeSidebar({ onAddStep }: ActivityTypeSidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     'E-mail': true,
     'Ligação': true,
@@ -94,6 +113,17 @@ export function ActivityTypeSidebar() {
 
   function toggleCategory(label: string) {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
+  }
+
+  function handleCategoryAdd(e: React.MouseEvent, category: ActivityCategory) {
+    e.stopPropagation();
+    if (category.items.length === 1) {
+      const item = category.items[0]!;
+      onAddStep?.(item.channel, item.label);
+    } else {
+      // Multi-item category: expand to show options
+      setExpanded((prev) => ({ ...prev, [category.label]: true }));
+    }
   }
 
   return (
@@ -110,18 +140,34 @@ export function ActivityTypeSidebar() {
                 onClick={() => toggleCategory(category.label)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-[var(--accent)]"
               >
+                {onAddStep && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => handleCategoryAdd(e, category)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCategoryAdd(e as unknown as React.MouseEvent, category); }}
+                    className="rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                    title={`Adicionar ${category.label}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </span>
+                )}
+                <Icon className={`h-4 w-4 ${category.color}`} />
+                <span className="flex-1 text-left">{category.label}</span>
                 {isExpanded ? (
                   <ChevronDown className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                 )}
-                <Icon className={`h-4 w-4 ${category.color}`} />
-                <span>{category.label}</span>
               </button>
               {isExpanded && (
                 <div className="ml-6 mt-1 space-y-1">
                   {category.items.map((item) => (
-                    <DraggableItem key={item.id} item={item} />
+                    <DraggableItem
+                      key={item.id}
+                      item={item}
+                      onAddStep={category.items.length > 1 ? onAddStep : undefined}
+                    />
                   ))}
                 </div>
               )}
