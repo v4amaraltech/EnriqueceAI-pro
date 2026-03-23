@@ -305,7 +305,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
 
       {/* Loss reason dialog */}
       <Dialog open={showLostDialog} onOpenChange={setShowLostDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl">Desqualificar lead</DialogTitle>
           </DialogHeader>
