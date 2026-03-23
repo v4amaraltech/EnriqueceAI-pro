@@ -272,7 +272,11 @@ export function FieldAssociationSettings({ connections }: FieldAssociationSettin
       <Tabs defaultValue={connectedCrms[0]!.crm_provider}>
         <TabsList>
           {connectedCrms.map((conn) => (
-            <TabsTrigger key={conn.id} value={conn.crm_provider}>
+            <TabsTrigger
+              key={conn.id}
+              value={conn.crm_provider}
+              className="data-[state=active]:bg-red-600 data-[state=active]:text-white dark:data-[state=active]:bg-red-600 dark:data-[state=active]:text-white"
+            >
               {PROVIDER_NAMES[conn.crm_provider]}
             </TabsTrigger>
           ))}
