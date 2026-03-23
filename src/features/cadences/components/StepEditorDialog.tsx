@@ -20,24 +20,24 @@ import type { TimelineStep } from './CadenceTimeline';
 
 const channelInstructions: Record<ChannelType, { label: string; placeholder: string }> = {
   email: {
-    label: 'Instruções / Roteiro',
-    placeholder: 'Descreva como abordar o lead neste e-mail...',
+    label: 'Instruções',
+    placeholder: 'Descreva como abordar o lead neste e-mail. Ex: Esse e-mail é o e-mail de interesse. É o primeiro e-mail da cadência de 4 disparos.',
   },
   phone: {
     label: 'Roteiro da Ligação',
-    placeholder: 'Script: 1. Apresentação 2. Contexto 3. Proposta...',
+    placeholder: 'Script de abordagem:\n1. Apresentação — quem você é e por que está ligando\n2. Contexto — referência ao e-mail/interação anterior\n3. Proposta de valor — como pode ajudar\n4. Próximos passos — agendar reunião',
   },
   whatsapp: {
     label: 'Mensagem / Instruções',
-    placeholder: 'Mensagem modelo ou instruções de abordagem...',
+    placeholder: 'Mensagem modelo ou instruções de abordagem via WhatsApp...',
   },
   linkedin: {
     label: 'Instruções de Abordagem',
-    placeholder: 'Como abordar: 1. Enviar convite 2. Mensagem de apresentação...',
+    placeholder: 'Como abordar:\n1. Enviar convite com nota personalizada\n2. Mensagem de apresentação após aceite\n3. Follow-up com conteúdo relevante',
   },
   research: {
     label: 'O que pesquisar',
-    placeholder: 'Itens: Site da empresa, LinkedIn do contato, notícias recentes...',
+    placeholder: 'Itens a pesquisar:\n• Site da empresa\n• LinkedIn do contato\n• Notícias recentes\n• Concorrentes\n• Dores do segmento',
   },
 };
 
@@ -73,36 +73,48 @@ function StepEditorForm({
   }
 
   return (
-    <DialogContent className="sm:max-w-md">
+    <DialogContent className="sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          <div className={`flex h-6 w-6 items-center justify-center rounded ${config.bgColor}`}>
-            <Icon className={`h-3.5 w-3.5 ${config.color}`} />
+        <DialogTitle className="flex items-center gap-3 text-lg">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${config.bgColor}`}>
+            <Icon className={`h-5 w-5 ${config.color}`} />
           </div>
-          Editar atividade de {config.label}
+          Editar atividade de {config.label.toLowerCase()}
         </DialogTitle>
       </DialogHeader>
 
-      <div className="space-y-4 py-2">
-        <div className="space-y-2">
-          <Label htmlFor="step-activity-name">Nome da Atividade</Label>
+      <div className="space-y-6 py-2">
+        {/* Dados Gerais section */}
+        <div>
+          <h3 className="text-sm font-semibold">Dados Gerais</h3>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Estas informações não são exibidas para seu cliente.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="step-activity-name" className="text-sm font-semibold">
+            Nome da atividade:
+          </Label>
           <Input
             id="step-activity-name"
             value={activityName}
             onChange={(e) => setActivityName(e.target.value)}
-            placeholder={config.label}
+            placeholder={step.label || config.label}
             maxLength={200}
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="step-instructions">{instrConfig.label}</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="step-instructions" className="text-sm font-semibold">
+            {instrConfig.label}
+          </Label>
           <Textarea
             id="step-instructions"
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             placeholder={instrConfig.placeholder}
-            rows={5}
+            rows={8}
             maxLength={5000}
           />
         </div>
