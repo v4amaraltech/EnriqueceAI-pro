@@ -24,8 +24,8 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { label: 'Dados Gerais', href: '/settings/company', icon: Building2 },
   { label: 'Usuários', href: '/settings/company/users', icon: Users },
-  { label: 'Times', href: '/settings/company/teams', icon: UsersRound, comingSoon: true },
-  { label: 'Config. de E-mail', href: '/settings/company/email', icon: Mail, comingSoon: true },
+  { label: 'Times', href: '/settings/company/teams', icon: UsersRound },
+  { label: 'Config. de E-mail', href: '/settings/company/email', icon: Mail },
 ];
 
 export default function CompanySettingsLayout({
