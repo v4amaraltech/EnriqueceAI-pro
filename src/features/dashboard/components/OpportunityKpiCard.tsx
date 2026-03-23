@@ -22,15 +22,25 @@ const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
+const MONTH_ABBR = [
+  'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+  'jul', 'ago', 'set', 'out', 'nov', 'dez',
+];
+
 function getMonthName(month: string): string {
   const [, mon] = month.split('-').map(Number) as [number, number];
   return MONTH_NAMES[mon - 1] ?? month;
 }
 
-function formatXAxis(day: number, daysInMonth: number): string {
-  if (day === 1) return '1';
-  if (day === Math.round(daysInMonth / 2)) return `${day}`;
-  if (day === daysInMonth) return `${day}`;
+function getMonthAbbr(month: string): string {
+  const [, mon] = month.split('-').map(Number) as [number, number];
+  return MONTH_ABBR[mon - 1] ?? '';
+}
+
+function formatXAxis(day: number, daysInMonth: number, monthAbbr: string): string {
+  if (day === 1) return `1. ${monthAbbr}`;
+  if (day === Math.round(daysInMonth / 2)) return `${day}. ${monthAbbr}`;
+  if (day === daysInMonth) return `${day}. ${monthAbbr}`;
   return '';
 }
 
@@ -42,6 +52,7 @@ interface OpportunityKpiCardProps {
 export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
   const monthName = getMonthName(month);
   const monthNameLower = monthName.toLowerCase();
+  const monthAbbr = getMonthAbbr(month);
   const isAbove = kpi.percentOfTarget >= 0;
   const absPercent = Math.abs(kpi.percentOfTarget);
   const expectedByNow = kpi.monthTarget > 0
@@ -75,6 +86,21 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                 Meta de oportunidades para {monthNameLower}:{' '}
                 <span className="font-semibold">{kpi.monthTarget}</span>
               </p>
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {kpi.monthTarget > 0 && (
+            <div className="mt-3 ml-12">
+              <div className="h-2 w-full rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-2 rounded-full transition-all',
+                    isAbove ? 'bg-emerald-500' : 'bg-gradient-to-r from-red-500 to-amber-400',
+                  )}
+                  style={{ width: `${Math.min((kpi.totalOpportunities / kpi.monthTarget) * 100, 100)}%` }}
+                />
+              </div>
             </div>
           )}
 
@@ -114,15 +140,15 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
               <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                 <defs>
                   <linearGradient id="gradientOpp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                 <XAxis
                   dataKey="day"
                   tick={{ fontSize: 11, fill: 'var(--foreground)' }}
-                  tickFormatter={(day: number) => formatXAxis(day, kpi.daysInMonth)}
+                  tickFormatter={(day: number) => formatXAxis(day, kpi.daysInMonth, monthAbbr)}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -150,20 +176,20 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   dataKey="actual"
                   name="Oportunidades"
                   stroke="#22c55e"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   fill="url(#gradientOpp)"
-                  dot={false}
+                  dot={{ r: 2, fill: '#22c55e', strokeWidth: 0 }}
                   connectNulls={false}
                 />
                 <Line
                   type="monotone"
                   dataKey="target"
                   name="Meta"
-                  stroke="var(--foreground)"
+                  stroke="var(--muted-foreground)"
                   strokeWidth={1.5}
                   strokeDasharray="5 5"
                   dot={false}
-                  strokeOpacity={0.5}
+                  strokeOpacity={0.35}
                 />
               </AreaChart>
             </ResponsiveContainer>
