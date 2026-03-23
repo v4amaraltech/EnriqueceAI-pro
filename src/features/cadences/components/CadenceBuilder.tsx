@@ -189,7 +189,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/cadences')}>
