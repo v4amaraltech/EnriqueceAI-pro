@@ -37,30 +37,27 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
   const [fields, setFields] = useState<CustomFieldRow[]>(initial);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<'text' | 'number' | 'date' | 'select'>('text');
-  const [newOptions, setNewOptions] = useState('');
+  const [newOptionsList, setNewOptionsList] = useState<string[]>(['']);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editType, setEditType] = useState<'text' | 'number' | 'date' | 'select'>('text');
-  const [editOptions, setEditOptions] = useState('');
+  const [editOptionsList, setEditOptionsList] = useState<string[]>(['']);
   const [isPending, startTransition] = useTransition();
-
-  function parseOptions(raw: string): string[] {
-    return raw
-      .split(',')
-      .map((o) => o.trim())
-      .filter(Boolean);
-  }
 
   function handleAdd() {
     if (!newName.trim()) return;
-    const opts = newType === 'select' ? parseOptions(newOptions) : undefined;
+    const opts = newType === 'select' ? newOptionsList.map((o) => o.trim()).filter(Boolean) : undefined;
+    if (newType === 'select' && (!opts || opts.length === 0)) {
+      toast.error('Adicione pelo menos uma opção');
+      return;
+    }
     startTransition(async () => {
       const result = await addCustomField(newName, newType, opts);
       if (result.success) {
         setFields((prev) => [...prev, result.data]);
         setNewName('');
         setNewType('text');
-        setNewOptions('');
+        setNewOptionsList(['']);
         toast.success('Campo adicionado');
       } else {
         toast.error(result.error);
@@ -72,12 +69,16 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
     setEditingId(field.id);
     setEditName(field.field_name);
     setEditType(field.field_type);
-    setEditOptions(field.options?.join(', ') ?? '');
+    setEditOptionsList(field.options && field.options.length > 0 ? [...field.options] : ['']);
   }
 
   function handleSaveEdit(id: string) {
     if (!editName.trim()) return;
-    const opts = editType === 'select' ? parseOptions(editOptions) : undefined;
+    const opts = editType === 'select' ? editOptionsList.map((o) => o.trim()).filter(Boolean) : undefined;
+    if (editType === 'select' && (!opts || opts.length === 0)) {
+      toast.error('Adicione pelo menos uma opção');
+      return;
+    }
     startTransition(async () => {
       const result = await updateCustomField(id, editName, editType, opts);
       if (result.success) {
@@ -125,7 +126,7 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
           </div>
           <div className="w-40">
             <label className="mb-1 block text-sm font-medium">Tipo</label>
-            <Select value={newType} onValueChange={(v) => setNewType(v as typeof newType)}>
+            <Select value={newType} onValueChange={(v) => { setNewType(v as typeof newType); if (v === 'select') setNewOptionsList((prev) => prev.length === 0 ? [''] : prev); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -144,14 +145,41 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
           </Button>
         </div>
         {newType === 'select' && (
-          <div>
-            <label className="mb-1 block text-sm font-medium">Opções (separadas por vírgula)</label>
-            <Input
-              placeholder="Opção 1, Opção 2, Opção 3"
-              value={newOptions}
-              onChange={(e) => setNewOptions(e.target.value)}
-              className="max-w-md"
-            />
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Adicione as opções</label>
+            {newOptionsList.map((opt, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-6 text-right text-sm text-[var(--muted-foreground)]">{idx + 1}</span>
+                <Input
+                  placeholder={`Opção ${idx + 1}`}
+                  value={opt}
+                  onChange={(e) => {
+                    const updated = [...newOptionsList];
+                    updated[idx] = e.target.value;
+                    setNewOptionsList(updated);
+                  }}
+                  className="max-w-sm"
+                />
+                {newOptionsList.length > 1 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => setNewOptionsList((prev) => prev.filter((_, i) => i !== idx))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setNewOptionsList((prev) => [...prev, ''])}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Adicionar opção
+            </Button>
           </div>
         )}
       </div>
@@ -202,12 +230,42 @@ export function CustomFieldsSettings({ initial }: CustomFieldsSettingsProps) {
                       </Button>
                     </div>
                     {editType === 'select' && (
-                      <Input
-                        placeholder="Opções separadas por vírgula"
-                        value={editOptions}
-                        onChange={(e) => setEditOptions(e.target.value)}
-                        className="max-w-md"
-                      />
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">Opções</label>
+                        {editOptionsList.map((opt, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="w-6 text-right text-sm text-[var(--muted-foreground)]">{idx + 1}</span>
+                            <Input
+                              placeholder={`Opção ${idx + 1}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const updated = [...editOptionsList];
+                                updated[idx] = e.target.value;
+                                setEditOptionsList(updated);
+                              }}
+                              className="max-w-sm"
+                            />
+                            {editOptionsList.length > 1 && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => setEditOptionsList((prev) => prev.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditOptionsList((prev) => [...prev, ''])}
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Adicionar opção
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ) : (
