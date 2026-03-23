@@ -263,6 +263,76 @@ export async function markLeadAsLost(
   return { success: true, data: undefined };
 }
 
+export async function scheduleNewProspection(
+  leadId: string,
+  cadenceId: string,
+  startDate: string,
+): Promise<ActionResult<void>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Validate cadence is active and belongs to org
+  const { data: cadence } = (await from(supabase, 'cadences')
+    .select('id, status')
+    .eq('id', cadenceId)
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null)
+    .single()) as { data: { id: string; status: string } | null };
+
+  if (!cadence) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  if (cadence.status !== 'active') {
+    return { success: false, error: 'Cadência precisa estar ativa' };
+  }
+
+  // Complete any existing active/paused enrollment for this lead in this cadence
+  await from(supabase, 'cadence_enrollments')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    } as Record<string, unknown>)
+    .eq('cadence_id', cadenceId)
+    .eq('lead_id', leadId)
+    .in('status', ['active', 'paused']);
+
+  // Create paused enrollment with scheduled_start_at
+  const { data: enrollment, error: insertError } = (await from(supabase, 'cadence_enrollments')
+    .insert({
+      cadence_id: cadenceId,
+      lead_id: leadId,
+      current_step: 1,
+      status: 'paused',
+      enrolled_by: user.id,
+      scheduled_start_at: startDate,
+    } as Record<string, unknown>)
+    .select('id')
+    .single()) as { data: { id: string } | null; error: { message: string } | null };
+
+  if (insertError || !enrollment) {
+    return { success: false, error: 'Erro ao agendar prospecção' };
+  }
+
+  // Set next_step_due to scheduled date (trigger won't fire — not updating status or current_step)
+  await from(supabase, 'cadence_enrollments')
+    .update({ next_step_due: startDate } as Record<string, unknown>)
+    .eq('id', enrollment.id);
+
+  return { success: true, data: undefined };
+}
+
 export interface CrmPipelinesEntry {
   provider: CrmProvider;
   pipelines: CrmPipeline[];

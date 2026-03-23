@@ -63,7 +63,7 @@ export async function exportReportPdf(params: PdfExportParams): Promise<void> {
       doc.setFontSize(8);
       doc.setTextColor(140);
       doc.text(
-        `Gerado em ${timestamp} — Flux`,
+        `Gerado em ${timestamp} — Enriquece AI`,
         margin,
         pageHeight - 8,
       );

@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
-interface ActiveCadence {
+export interface ActiveCadence {
   id: string;
   name: string;
   total_steps: number;

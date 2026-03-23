@@ -11,7 +11,7 @@ import type { SubscriptionStatus } from '@/features/billing/types';
 import { PlanComparisonView } from '@/features/billing/components/PlanComparison';
 
 export const metadata: Metadata = {
-  title: 'Escolha um plano | Flux',
+  title: 'Escolha um plano | Enriquece AI',
 };
 
 export default async function UpgradePage() {
@@ -38,7 +38,7 @@ export default async function UpgradePage() {
               Seu período de avaliação terminou
             </p>
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              Escolha um plano abaixo para continuar usando o Flux.
+              Escolha um plano abaixo para continuar usando o Enriquece AI.
             </p>
           </div>
         </div>

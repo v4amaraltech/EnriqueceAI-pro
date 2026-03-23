@@ -7,7 +7,7 @@ export const PROVIDER_NAMES: Record<CrmProvider, string> = {
   kommo: 'KommoCRM',
 };
 
-export const FLUX_LEAD_FIELDS = [
+export const APP_LEAD_FIELDS = [
   { value: 'cnpj', label: 'CNPJ' },
   { value: 'razao_social', label: 'Razao Social' },
   { value: 'nome_fantasia', label: 'Nome Fantasia' },

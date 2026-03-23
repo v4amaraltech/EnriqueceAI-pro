@@ -61,7 +61,7 @@ export default function DemoPage() {
             F
           </div>
           <div>
-            <h1 className="text-lg font-semibold">Flux</h1>
+            <h1 className="text-lg font-semibold">Enriquece AI</h1>
             <p className="text-xs text-muted-foreground">Plataforma de Sales Engagement</p>
           </div>
         </div>

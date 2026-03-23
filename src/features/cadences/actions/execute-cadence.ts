@@ -188,6 +188,29 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   const startTime = Date.now();
 
+  // Pre-step: activate scheduled prospections whose date has arrived
+  const { data: scheduledEnrollments } = (await from(supabase, 'cadence_enrollments')
+    .select('id, lead_id')
+    .eq('status', 'paused')
+    .not('scheduled_start_at', 'is', null)
+    .lte('scheduled_start_at', new Date().toISOString())
+    .limit(50)) as { data: Array<{ id: string; lead_id: string }> | null };
+
+  for (const scheduled of scheduledEnrollments ?? []) {
+    // Reactivate lead if still unqualified
+    await from(supabase, 'leads')
+      .update({ status: 'new' } as Record<string, unknown>)
+      .eq('id', scheduled.lead_id)
+      .eq('status', 'unqualified');
+
+    // Activate enrollment — DB trigger recalculates next_step_due
+    await from(supabase, 'cadence_enrollments')
+      .update({ status: 'active', scheduled_start_at: null } as Record<string, unknown>)
+      .eq('id', scheduled.id);
+
+    console.warn(`[cadence-engine] scheduled enrollment=${scheduled.id} activated, lead=${scheduled.lead_id} reactivated`);
+  }
+
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
     .select('*, lead:leads(*), cadence:cadences!inner(status, name, type)')

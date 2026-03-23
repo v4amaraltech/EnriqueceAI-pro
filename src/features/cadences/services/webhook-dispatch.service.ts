@@ -87,7 +87,7 @@ export async function dispatchWebhookEvent(
 async function deliverWebhook(endpoint: WebhookEndpoint, body: string): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'User-Agent': 'Flux-Webhooks/1.0',
+    'User-Agent': 'EnriqueceAI-Webhooks/1.0',
   };
 
   if (endpoint.secret) {

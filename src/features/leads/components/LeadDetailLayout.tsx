@@ -4,7 +4,11 @@ import { useCallback, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
+import { format } from 'date-fns';
+import { CalendarIcon } from 'lucide-react';
+
 import { Button } from '@/shared/components/ui/button';
+import { Calendar } from '@/shared/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +18,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Label } from '@/shared/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -21,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Switch } from '@/shared/components/ui/switch';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
@@ -32,8 +38,9 @@ import type { CrmProvider } from '@/features/integrations/types/crm';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
+import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active-cadences';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, fetchCrmPipelines, fetchPipelineStages, fetchLossReasons, markLeadAsLost, markLeadAsWon, type CrmPipelinesEntry } from '../actions/update-lead';
+import { archiveLead, fetchCrmPipelines, fetchPipelineStages, fetchLossReasons, markLeadAsLost, markLeadAsWon, scheduleNewProspection, type CrmPipelinesEntry } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -64,6 +71,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
   const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
   const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
   const [lossNotes, setLossNotes] = useState('');
+
+  // Schedule new prospection state
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
+  const [scheduleCadenceId, setScheduleCadenceId] = useState<string | null>(null);
+  const [cadences, setCadences] = useState<ActiveCadence[]>([]);
 
   // Won dialog state
   const [showWonDialog, setShowWonDialog] = useState(false);
@@ -129,11 +142,20 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     setShowLostDialog(true);
     setSelectedReasonId(null);
     setLossNotes('');
-    const result = await fetchLossReasons();
-    if (result.success) {
-      setLossReasons(result.data);
+    setScheduleEnabled(false);
+    setScheduleDate(undefined);
+    setScheduleCadenceId(null);
+    const [reasonsResult, cadencesResult] = await Promise.all([
+      fetchLossReasons(),
+      fetchActiveCadences(),
+    ]);
+    if (reasonsResult.success) {
+      setLossReasons(reasonsResult.data);
     } else {
-      toast.error(result.error);
+      toast.error(reasonsResult.error);
+    }
+    if (cadencesResult.success) {
+      setCadences(cadencesResult.data);
     }
   }, []);
 
@@ -142,14 +164,27 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     startTransition(async () => {
       const result = await markLeadAsLost(lead.id, selectedReasonId, lossNotes.trim() || undefined);
       if (result.success) {
-        toast.success('Lead marcado como perdido');
+        if (scheduleEnabled && scheduleDate && scheduleCadenceId) {
+          const schedResult = await scheduleNewProspection(
+            lead.id,
+            scheduleCadenceId,
+            scheduleDate.toISOString(),
+          );
+          if (schedResult.success) {
+            toast.success(`Prospecção agendada para ${format(scheduleDate, 'dd/MM/yyyy')}`);
+          } else {
+            toast.error(schedResult.error);
+          }
+        } else {
+          toast.success('Lead marcado como perdido');
+        }
         router.refresh();
       } else {
         toast.error(result.error);
       }
     });
     setShowLostDialog(false);
-  }, [lead.id, selectedReasonId, lossNotes, router]);
+  }, [lead.id, selectedReasonId, lossNotes, scheduleEnabled, scheduleDate, scheduleCadenceId, router]);
 
   const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string) => {
     setLoadingStages(true);
@@ -302,17 +337,83 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
                 rows={6}
               />
             </div>
+
+            {/* Schedule new prospection */}
+            <div className="space-y-3 rounded-lg border border-[var(--border)] p-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="schedule-toggle" className="text-sm font-semibold cursor-pointer">
+                  Agendar nova prospecção
+                </Label>
+                <Switch
+                  id="schedule-toggle"
+                  checked={scheduleEnabled}
+                  onCheckedChange={setScheduleEnabled}
+                />
+              </div>
+
+              {scheduleEnabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--muted-foreground)]">Data de início</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {scheduleDate
+                              ? format(scheduleDate, 'dd/MM/yyyy')
+                              : 'Selecionar data'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={scheduleDate}
+                            onSelect={setScheduleDate}
+                            disabled={(date) => date < new Date()}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--muted-foreground)]">Cadência</Label>
+                      <Select
+                        value={scheduleCadenceId ?? undefined}
+                        onValueChange={setScheduleCadenceId}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecionar cadência" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cadences.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Uma nova prospecção será iniciada na data e cadência especificada e você permanecerá como o responsável pelo lead.
+                  </p>
+                </>
+              )}
+            </div>
           </div>
           <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setShowLostDialog(false)}>
-              Cancelar
+              Fechar
             </Button>
             <Button
               variant="destructive"
               onClick={handleConfirmLost}
-              disabled={!selectedReasonId || isPending}
+              disabled={!selectedReasonId || isPending || (scheduleEnabled && (!scheduleDate || !scheduleCadenceId))}
             >
-              Desqualificar lead
+              Marcar como perdido
             </Button>
           </DialogFooter>
         </DialogContent>

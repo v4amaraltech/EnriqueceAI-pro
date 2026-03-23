@@ -25,7 +25,7 @@ import {
 import type { CrmProvider, FieldMapping } from '../types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '../types/crm';
 import { updateCrmFieldMapping } from '../actions/manage-crm';
-import { FLUX_LEAD_FIELDS, CRM_TARGET_FIELDS, PROVIDER_NAMES } from '../constants/crm-fields';
+import { APP_LEAD_FIELDS, CRM_TARGET_FIELDS, PROVIDER_NAMES } from '../constants/crm-fields';
 
 interface MappingRow {
   tempId: string;
@@ -107,8 +107,8 @@ export function CrmFieldMappingModal({
     const appFields = rows.map((r) => r.appField);
     const duplicates = appFields.filter((f, i) => appFields.indexOf(f) !== i);
     if (duplicates.length > 0) {
-      const label = FLUX_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
-      toast.error(`Campo "${label}" duplicado. Cada campo Flux pode ser mapeado apenas uma vez.`);
+      const label = APP_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
+      toast.error(`Campo "${label}" duplicado. Cada campo Enriquece AI pode ser mapeado apenas uma vez.`);
       return;
     }
 
@@ -140,7 +140,7 @@ export function CrmFieldMappingModal({
         <DialogHeader>
           <DialogTitle>Mapeamento de Campos</DialogTitle>
           <DialogDescription>
-            Configure quais campos do Flux correspondem aos campos do {PROVIDER_NAMES[provider]}.
+            Configure quais campos do Enriquece AI correspondem aos campos do {PROVIDER_NAMES[provider]}.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,7 +150,7 @@ export function CrmFieldMappingModal({
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-[var(--muted)]/50">
-                    <th className="p-3 text-left text-sm font-medium">Campo Flux</th>
+                    <th className="p-3 text-left text-sm font-medium">Campo Enriquece AI</th>
                     <th className="p-3 text-center text-sm font-medium w-8" />
                     <th className="p-3 text-left text-sm font-medium">Campo CRM</th>
                     <th className="p-3 text-right text-sm font-medium w-12" />
@@ -168,7 +168,7 @@ export function CrmFieldMappingModal({
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {FLUX_LEAD_FIELDS.map((f) => (
+                            {APP_LEAD_FIELDS.map((f) => (
                               <SelectItem
                                 key={f.value}
                                 value={f.value}

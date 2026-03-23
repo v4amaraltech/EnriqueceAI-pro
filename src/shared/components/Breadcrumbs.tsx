@@ -35,6 +35,7 @@ const pathLabels: Record<string, string> = {
   blacklist: 'Blacklist de E-mails',
   'custom-fields': 'Campos Personalizados',
   'fit-score': 'Fit Score',
+  'field-association': 'Associação de Campos',
   teams: 'Times',
   email: 'Config. de E-mail',
   import: 'Importar',

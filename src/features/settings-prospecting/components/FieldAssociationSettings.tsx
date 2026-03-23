@@ -20,7 +20,7 @@ import type { CrmProvider, CrmConnectionSafe, FieldMapping } from '@/features/in
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { updateCrmFieldMapping } from '@/features/integrations/actions/manage-crm';
 import {
-  FLUX_LEAD_FIELDS,
+  APP_LEAD_FIELDS,
   CRM_TARGET_FIELDS,
   PROVIDER_NAMES,
 } from '@/features/integrations/constants/crm-fields';
@@ -100,8 +100,8 @@ function ProviderMappingTable({
     const duplicates = appFields.filter((f, i) => appFields.indexOf(f) !== i);
     if (duplicates.length > 0) {
       const label =
-        FLUX_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
-      toast.error(`Campo "${label}" duplicado. Cada campo Flux pode ser mapeado apenas uma vez.`);
+        APP_LEAD_FIELDS.find((f) => f.value === duplicates[0])?.label ?? duplicates[0];
+      toast.error(`Campo "${label}" duplicado. Cada campo Enriquece AI pode ser mapeado apenas uma vez.`);
       return;
     }
 
@@ -130,7 +130,7 @@ function ProviderMappingTable({
                 Campo {PROVIDER_NAMES[provider]}
               </th>
               <th className="p-3 text-center text-sm font-medium w-8" />
-              <th className="p-3 text-left text-sm font-medium">Campo Flux</th>
+              <th className="p-3 text-left text-sm font-medium">Campo Enriquece AI</th>
               <th className="p-3 text-right text-sm font-medium w-12" />
             </tr>
           </thead>
@@ -166,7 +166,7 @@ function ProviderMappingTable({
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {FLUX_LEAD_FIELDS.map((f) => (
+                      {APP_LEAD_FIELDS.map((f) => (
                         <SelectItem
                           key={f.value}
                           value={f.value}
@@ -223,7 +223,7 @@ export function FieldAssociationSettings({ connections }: FieldAssociationSettin
         <div>
           <h1 className="text-2xl font-bold">Associação de Campos</h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            Configure o mapeamento entre campos do CRM e do Flux.
+            Configure o mapeamento entre campos do CRM e do Enriquece AI.
           </p>
         </div>
 
@@ -248,7 +248,7 @@ export function FieldAssociationSettings({ connections }: FieldAssociationSettin
         <div>
           <h1 className="text-2xl font-bold">Associação de Campos</h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            Configure o mapeamento entre campos do {PROVIDER_NAMES[conn.crm_provider]} e do Flux.
+            Configure o mapeamento entre campos do {PROVIDER_NAMES[conn.crm_provider]} e do Enriquece AI.
           </p>
         </div>
 
@@ -265,7 +265,7 @@ export function FieldAssociationSettings({ connections }: FieldAssociationSettin
       <div>
         <h1 className="text-2xl font-bold">Associação de Campos</h1>
         <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-          Configure o mapeamento entre campos do CRM e do Flux.
+          Configure o mapeamento entre campos do CRM e do Enriquece AI.
         </p>
       </div>
 

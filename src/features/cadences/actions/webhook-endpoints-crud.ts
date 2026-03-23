@@ -199,7 +199,7 @@ export async function testWebhookEndpoint(id: string): Promise<ActionResult<{ st
   const payload = JSON.stringify({
     event: 'test',
     timestamp: new Date().toISOString(),
-    data: { message: 'Webhook test from Flux' },
+    data: { message: 'Webhook test from Enriquece AI' },
   });
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
