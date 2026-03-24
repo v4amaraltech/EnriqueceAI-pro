@@ -32,10 +32,8 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
-import {
-  initiateApi4ComCall,
-  hangupApi4ComCall,
-} from '@/features/calls/actions/initiate-api4com-call';
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
@@ -51,6 +49,7 @@ interface ActivityPhonePanelProps {
   onSkip: () => void;
   activityName?: string | null;
   callScript?: string | null;
+  dialerProvider?: DialerProvider;
 }
 
 function formatTimer(seconds: number): string {
@@ -69,12 +68,13 @@ export function ActivityPhonePanel({
   onSkip,
   activityName,
   callScript,
+  dialerProvider = 'api4com',
 }: ActivityPhonePanelProps) {
   // Use first resolved phone or fallback to lead.telefone
   const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
   const [selectedPhone, setSelectedPhone] = useState(initialPhone);
   const [callState, setCallState] = useState<CallState>('idle');
-  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
+  const [providerCallId, setProviderCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -102,7 +102,8 @@ export function ActivityPhonePanel({
     startTransition(async () => {
       setCallState('calling');
 
-      const result = await initiateApi4ComCall({
+      const result = await initiateCall({
+        provider: dialerProvider,
         phone: selectedPhone,
         leadId,
       });
@@ -113,7 +114,7 @@ export function ActivityPhonePanel({
         return;
       }
 
-      setApi4comCallId(result.data.api4comId);
+      setProviderCallId(result.data.providerCallId);
       setCallState('connected');
     });
   }
@@ -121,13 +122,13 @@ export function ActivityPhonePanel({
   function handleHangup() {
     setCallDuration(elapsed);
 
-    if (!api4comCallId) {
+    if (!providerCallId && dialerProvider !== 'threecplus') {
       setCallState('ended');
       return;
     }
 
     startTransition(async () => {
-      const result = await hangupApi4ComCall(api4comCallId);
+      const result = await hangupCall(dialerProvider, providerCallId ?? undefined);
       if (!result.success) {
         toast.error(result.error);
       }
@@ -140,7 +141,7 @@ export function ActivityPhonePanel({
     setCallStatus('');
     setNotes('');
     setCallState('idle');
-    setApi4comCallId(null);
+    setProviderCallId(null);
     setElapsed(0);
   }
 
@@ -148,7 +149,7 @@ export function ActivityPhonePanel({
     setCallState('idle');
     setCallStatus('');
     setNotes('');
-    setApi4comCallId(null);
+    setProviderCallId(null);
     setElapsed(0);
   }
 
@@ -231,7 +232,7 @@ export function ActivityPhonePanel({
                   onClick={handleInitiateCall}
                   disabled={isPending}
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95 disabled:opacity-50"
-                  title="Ligar via API4COM"
+                  title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
                 >
                   <Phone className="h-7 w-7" />
                 </button>
@@ -266,7 +267,7 @@ export function ActivityPhonePanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && 'Clique para ligar via API4COM'}
+              {callState === 'idle' && (dialerProvider === 'threecplus' ? 'Clique para ligar via 3CPlus' : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
             </p>

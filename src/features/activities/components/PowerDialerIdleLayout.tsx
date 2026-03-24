@@ -3,9 +3,12 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { Phone, Play } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
+import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
@@ -27,6 +30,7 @@ interface PowerDialerIdleLayoutProps {
   preferences: DialerPreferences;
   onStart: () => void;
   onPreferencesSaved: (updated: DialerPreferences) => void;
+  dialerProvider?: DialerProvider;
 }
 
 export function PowerDialerIdleLayout({
@@ -35,6 +39,7 @@ export function PowerDialerIdleLayout({
   preferences,
   onStart,
   onPreferencesSaved,
+  dialerProvider,
 }: PowerDialerIdleLayoutProps) {
   const { isManager } = useOrganization();
   const router = useRouter();
@@ -62,9 +67,26 @@ export function PowerDialerIdleLayout({
             <Phone className="h-5 w-5 text-green-700 dark:text-green-300" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Power Dialer</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Power Dialer</h2>
+              {dialerProvider === 'api4com' && (
+                <Badge variant="outline" className="text-[10px]">via API4Com</Badge>
+              )}
+              {dialerProvider === 'threecplus' && (
+                <Badge variant="outline" className="text-[10px]">via 3CPlus</Badge>
+              )}
+            </div>
             <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Discador automatico para acelerar suas ligacoes
+              {!dialerProvider ? (
+                <span>
+                  Nenhum provedor configurado.{' '}
+                  <Link href="/settings/integrations" className="text-[var(--primary)] underline">
+                    Configurar telefonia
+                  </Link>
+                </span>
+              ) : (
+                'Discador automatico para acelerar suas ligacoes'
+              )}
             </p>
           </div>
         </div>

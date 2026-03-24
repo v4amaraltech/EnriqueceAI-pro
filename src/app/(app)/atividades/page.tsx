@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 
 import { EmptyState } from '@/shared/components/EmptyState';
 
+import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { fetchAvailableLeadsCount } from '@/features/activities/actions/fetch-available-leads-count';
 import { fetchDailyProgress } from '@/features/activities/actions/fetch-daily-progress';
 import { fetchDialerPreferences } from '@/features/activities/actions/fetch-dialer-preferences';
@@ -16,7 +17,7 @@ import { ActivityQueueView } from '@/features/activities';
 export default async function AtividadesPage() {
   await requireAuth();
 
-  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult] = await Promise.all([
+  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
     fetchPendingCalls(),
@@ -24,6 +25,7 @@ export default async function AtividadesPage() {
     fetchAvailableLeadsCount(),
     fetchDialerStats(),
     fetchDialerPreferences(),
+    getDialerProvider(),
   ]);
 
   if (!activitiesResult.success) {
@@ -59,6 +61,7 @@ export default async function AtividadesPage() {
     : { count: 0, leadIds: [] as string[] };
   const dialerStats = statsResult.success ? statsResult.data : undefined;
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
+  const dialerProvider = providerResult.success ? providerResult.data.provider : null;
 
   return (
     <div>
@@ -70,6 +73,7 @@ export default async function AtividadesPage() {
         dialerQueue={dialerQueue}
         dialerStats={dialerStats}
         dialerPreferences={dialerPreferences}
+        dialerProvider={dialerProvider}
         availableLeadsCount={availableLeads.count}
       />
     </div>

@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+
 import type { PendingCallLead } from '../actions/fetch-pending-calls';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
@@ -35,6 +37,7 @@ interface ActivityQueueViewProps {
   dialerQueue?: DialerQueueItem[];
   dialerStats?: DialerStats;
   dialerPreferences?: DialerPreferences;
+  dialerProvider?: DialerProvider;
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
 }
@@ -85,7 +88,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0 }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0 }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -254,6 +257,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           initialQueue={dialerQueue}
           stats={dialerStats ?? defaultStats}
           preferences={dialerPreferences ?? defaultPrefs}
+          dialerProvider={dialerProvider}
         />
       ) : (
         <>
@@ -368,6 +372,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
+            dialerProvider={dialerProvider}
           />
         </>
       )}

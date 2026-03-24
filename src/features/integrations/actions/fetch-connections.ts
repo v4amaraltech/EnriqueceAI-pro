@@ -4,7 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, ThreeCPlusConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
@@ -12,6 +12,7 @@ export interface ConnectionsOverview {
   crmConnections: CrmConnectionSafe[];
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
+  threecplus: ThreeCPlusConnectionSafe | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
   apollo: ApolloConnectionSafe | null;
 }
@@ -59,6 +60,13 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('org_id', orgId)
     .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
 
+  // Fetch 3CPlus connection (per user) — exclude encrypted token
+  const { data: threecplusRaw } = (await from(supabase, 'threecplus_connections' as never)
+    .select('id, login, domain, api_token_encrypted, status, created_at, updated_at')
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .maybeSingle()) as { data: { id: string; login: string; domain: string; api_token_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
+
   // Fetch Apollo connection (per org) — exclude encrypted api key
   const { data: apolloRow } = (await from(supabase, 'apollo_connections' as never)
     .select('id, status, created_at, updated_at')
@@ -85,6 +93,17 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       crmConnections: crmRows ?? [],
       calendar: calendarRow ?? null,
       api4com: api4comRow ?? null,
+      threecplus: threecplusRaw
+        ? {
+            id: threecplusRaw.id,
+            login: threecplusRaw.login,
+            domain: threecplusRaw.domain,
+            has_api_token: !!threecplusRaw.api_token_encrypted,
+            status: threecplusRaw.status as ThreeCPlusConnectionSafe['status'],
+            created_at: threecplusRaw.created_at,
+            updated_at: threecplusRaw.updated_at,
+          }
+        : null,
       evolutionInstance: evolutionRow ?? null,
       apollo: apolloRow ?? null,
     },

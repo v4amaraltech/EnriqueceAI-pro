@@ -12,6 +12,8 @@ import {
   SheetTitle,
 } from '@/shared/components/ui/sheet';
 
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+
 import { executeActivity } from '../actions/execute-activity';
 import { skipActivity } from '../actions/skip-activity';
 import type { PendingActivity } from '../types';
@@ -26,6 +28,7 @@ interface ActivityExecutionSheetProps {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onActivityDone: (enrollmentId: string, stepId: string) => void;
+  dialerProvider?: DialerProvider;
 }
 
 export function ActivityExecutionSheet({
@@ -34,6 +37,7 @@ export function ActivityExecutionSheet({
   onClose,
   onNavigate,
   onActivityDone,
+  dialerProvider,
 }: ActivityExecutionSheetProps) {
   const [isSending, startSendTransition] = useTransition();
 
@@ -198,6 +202,7 @@ export function ActivityExecutionSheet({
                 onSend={handleSend}
                 onSkip={handleSkip}
                 onMarkDone={handleMarkDone}
+                dialerProvider={dialerProvider}
               />
             </div>
           </div>

@@ -14,6 +14,8 @@ import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/
 import { resolveWhatsAppPhone, getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+
 import { ActivityEmailCompose } from './ActivityEmailCompose';
 import { ActivityPhonePanel } from './ActivityPhonePanel';
 import { ActivityResearchPanel } from './ActivityResearchPanel';
@@ -26,6 +28,7 @@ interface ActivityExecutionSheetContentProps {
   onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string) => void;
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
+  dialerProvider?: DialerProvider;
 }
 
 export function ActivityExecutionSheetContent({
@@ -34,6 +37,7 @@ export function ActivityExecutionSheetContent({
   onSend,
   onSkip,
   onMarkDone,
+  dialerProvider,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
@@ -205,6 +209,7 @@ export function ActivityExecutionSheetContent({
         onSkip={onSkip}
         activityName={activity.activityName}
         callScript={activity.callScript}
+        dialerProvider={dialerProvider}
       />
     );
   }

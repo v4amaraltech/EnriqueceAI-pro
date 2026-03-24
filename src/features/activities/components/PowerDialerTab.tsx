@@ -13,13 +13,12 @@ import {
   TooltipTrigger,
 } from '@/shared/components/ui/tooltip';
 
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
+
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import { completeDialerCall } from '../actions/complete-dialer-call';
-import {
-  initiateApi4ComCall,
-  hangupApi4ComCall,
-} from '@/features/calls/actions/initiate-api4com-call';
 
 import { DialerCallPanel, type CallState } from './DialerCallPanel';
 import { DialerProgressBar } from './DialerProgressBar';
@@ -30,9 +29,10 @@ interface PowerDialerTabProps {
   initialQueue: DialerQueueItem[];
   stats: DialerStats;
   preferences: DialerPreferences;
+  dialerProvider?: DialerProvider;
 }
 
-export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences }: PowerDialerTabProps) {
+export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com' }: PowerDialerTabProps) {
   const [queue] = useState<DialerQueueItem[]>(initialQueue);
   const [currentPreferences, setCurrentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -41,7 +41,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   const [isPending, startTransition] = useTransition();
 
   const [callState, setCallState] = useState<CallState>('idle');
-  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
+  const [providerCallId, setProviderCallId] = useState<string | null>(null);
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -62,7 +62,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   function resetCallState() {
     setCallState('idle');
-    setApi4comCallId(null);
+    setProviderCallId(null);
   }
 
   function handleStart() {
@@ -100,7 +100,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     startTransition(async () => {
       setCallState('calling');
 
-      const result = await initiateApi4ComCall({
+      const result = await initiateCall({
+        provider: dialerProvider,
         phone: currentItem.phone ?? '',
         leadId: currentItem.leadId,
       });
@@ -111,19 +112,19 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         return;
       }
 
-      setApi4comCallId(result.data.api4comId);
+      setProviderCallId(result.data.providerCallId);
       setCallState('connected');
     });
   }
 
   function handleHangup() {
-    if (!api4comCallId) {
+    if (!providerCallId && dialerProvider !== 'threecplus') {
       setCallState('ended');
       return;
     }
 
     startTransition(async () => {
-      const result = await hangupApi4ComCall(api4comCallId);
+      const result = await hangupCall(dialerProvider, providerCallId ?? undefined);
       if (!result.success) {
         toast.error(result.error);
       }
@@ -181,6 +182,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         preferences={currentPreferences}
         onStart={handleStart}
         onPreferencesSaved={setCurrentPreferences}
+        dialerProvider={dialerProvider}
       />
     );
   }
