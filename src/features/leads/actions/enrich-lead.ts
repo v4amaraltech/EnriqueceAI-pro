@@ -3,28 +3,16 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
 import { LemitCpfProvider } from '../services/lemit-cpf-provider';
 
 export async function enrichLeadAction(leadId: string): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Verify lead belongs to user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data: lead } = (await supabase
     .from('leads')
@@ -32,7 +20,7 @@ export async function enrichLeadAction(leadId: string): Promise<ActionResult<voi
     .eq('id', leadId)
     .single()) as { data: { id: string; cnpj: string; org_id: string } | null };
 
-  if (!lead || lead.org_id !== member.org_id) {
+  if (!lead || lead.org_id !== orgId) {
     return { success: false, error: 'Lead não encontrado' };
   }
 

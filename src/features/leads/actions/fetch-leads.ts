@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LeadListResult } from '../leads.contract';
@@ -12,9 +11,6 @@ import { leadFiltersSchema } from '../schemas/lead.schemas';
 export async function fetchLeads(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<LeadListResult>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   // Validate filters
   const parsed = leadFiltersSchema.safeParse(rawFilters);
   if (!parsed.success) {
@@ -22,17 +18,9 @@ export async function fetchLeads(
   }
   const filters: LeadFilters = parsed.data;
 
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const rangeFrom = (filters.page - 1) * filters.per_page;
   const to = rangeFrom + filters.per_page - 1;
@@ -40,7 +28,7 @@ export async function fetchLeads(
   // Build query
   let query = from(supabase, 'leads')
     .select('*', { count: 'exact' })
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null);
 
   // Apply filters
@@ -141,23 +129,13 @@ export interface LeadStatusCounts {
 }
 
 export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCounts>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'leads')
     .select('status')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)) as {
     data: Array<{ status: string }> | null;
     error: { message: string } | null;
@@ -181,29 +159,19 @@ export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCo
 export async function fetchFilteredLeadIds(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<string[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = leadFiltersSchema.safeParse(rawFilters);
   if (!parsed.success) {
     return { success: false, error: 'Filtros inválidos' };
   }
   const filters: LeadFilters = parsed.data;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   let query = from(supabase, 'leads')
     .select('id')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null);
 
   if (filters.status) {
@@ -251,23 +219,13 @@ export async function fetchFilteredLeadIds(
 }
 
 export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'leads')
     .select('cnae')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)
     .not('cnae', 'is', null)
     .not('cnae', 'eq', '')

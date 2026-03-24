@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CallStatus } from '@/features/calls/types';
@@ -35,29 +34,18 @@ const statusMap: Record<string, CallStatus> = {
 export async function completeDialerCall(
   input: CompleteDialerCallInput,
 ): Promise<ActionResult<{ callId: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = input;
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organizacao nao encontrada' };
-  }
 
   // 1. Create call record
   const { data: call, error: callError } = (await supabase
     .from('calls')
     .insert({
-      org_id: member.org_id,
-      user_id: user.id,
+      org_id: orgId,
+      user_id: userId,
       lead_id: leadId,
       origin: 'power_dialer',
       destination: phone,
@@ -77,7 +65,7 @@ export async function completeDialerCall(
   // Dispatch call.completed or call.missed webhook
   const missedStatuses = ['no_answer', 'busy', 'wrong_number'];
   const callWebhookEvent = missedStatuses.includes(callStatus) ? 'call.missed' : 'call.completed';
-  dispatchWebhookEvent(supabase, member.org_id, callWebhookEvent, {
+  dispatchWebhookEvent(supabase, orgId, callWebhookEvent, {
     lead_id: leadId,
     call_id: call.id,
     call_status: callStatus,
@@ -87,7 +75,7 @@ export async function completeDialerCall(
   // 2. Create interaction record
   await from(supabase, 'interactions')
     .insert({
-      org_id: member.org_id,
+      org_id: orgId,
       lead_id: leadId,
       cadence_id: cadenceId,
       step_id: stepId,

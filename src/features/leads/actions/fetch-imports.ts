@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { LeadImportRow } from '../types';
 
@@ -13,24 +12,14 @@ export interface ImportListResult {
 }
 
 export async function fetchImports(): Promise<ActionResult<ImportListResult>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, count, error } = (await supabase
     .from('lead_imports')
     .select('*', { count: 'exact' })
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .order('created_at', { ascending: false })) as {
     data: LeadImportRow[] | null;
     count: number | null;

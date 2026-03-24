@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { calculateUsageLimits } from '../services/feature-flags';
 import type {
@@ -16,24 +15,14 @@ import type {
 } from '../types';
 
 export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboardData>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Fetch subscription
   const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('*')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .maybeSingle()) as { data: SubscriptionRow | null };
 
   if (!subscription) {
@@ -59,33 +48,33 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
       // Lead count
       from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .is('deleted_at', null) as Promise<{ count: number | null }>,
 
       // AI usage today
       from(supabase, 'ai_usage')
         .select('generation_count, daily_limit')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .eq('usage_date', today)
         .maybeSingle() as Promise<{ data: AiUsageRow | null }>,
 
       // WhatsApp credits
       from(supabase, 'whatsapp_credits')
         .select('used_credits, plan_credits, period')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .eq('period', currentPeriod)
         .maybeSingle() as Promise<{ data: WhatsAppCreditsRow | null }>,
 
       // Member count
       from(supabase, 'organization_members')
         .select('id', { count: 'exact', head: true })
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .eq('status', 'active') as Promise<{ count: number | null }>,
 
       // AI history (last 30 days)
       from(supabase, 'ai_usage')
         .select('usage_date, generation_count')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .gte('usage_date', getDateDaysAgo(30))
         .order('usage_date', { ascending: true }) as Promise<{
           data: Array<{ usage_date: string; generation_count: number }> | null;

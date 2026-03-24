@@ -1,27 +1,15 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { GoalsData } from '../types';
 
 export async function getGoals(month: string): Promise<ActionResult<GoalsData>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const monthDate = `${month}-01`;
 
@@ -34,7 +22,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   const { data: orgGoal } = (await supabase
     .from('goals')
     .select('opportunity_target, activities_target, conversion_target')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('month', monthDate)
     .maybeSingle()) as { data: { opportunity_target: number; activities_target: number | null; conversion_target: number } | null };
 
@@ -42,7 +30,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   const { data: sdrs } = (await supabase
     .from('organization_members')
     .select('user_id, role')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('status', 'active')) as { data: { user_id: string; role: string }[] | null };
 
   if (!sdrs || sdrs.length === 0) {
@@ -83,14 +71,14 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   const { data: currentUserGoals } = (await supabase
     .from('goals_per_user')
     .select('user_id, opportunity_target')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('month', monthDate)) as { data: { user_id: string; opportunity_target: number }[] | null };
 
   // Fetch user goals for previous month (reference)
   const { data: prevUserGoals } = (await supabase
     .from('goals_per_user')
     .select('user_id, opportunity_target')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('month', prevMonth)) as { data: { user_id: string; opportunity_target: number }[] | null };
 
   const currentMap = new Map(currentUserGoals?.map((g) => [g.user_id, g.opportunity_target]) ?? []);

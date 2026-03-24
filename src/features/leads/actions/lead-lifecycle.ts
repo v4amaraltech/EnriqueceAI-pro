@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
@@ -13,24 +12,14 @@ import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispa
 export async function archiveLead(
   leadId: string,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'leads')
     .update({ status: 'archived' } as Record<string, unknown>)
     .eq('id', leadId)
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   if (error) {
     return { success: false, error: 'Erro ao arquivar lead' };
@@ -43,24 +32,14 @@ export async function archiveLead(
 }
 
 export async function fetchLossReasons(): Promise<ActionResult<LossReasonRow[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await supabase
     .from('loss_reasons')
     .select('*')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })) as { data: LossReasonRow[] | null; error: unknown };
 
@@ -73,32 +52,22 @@ export async function markLeadAsLost(
   lossReasonId: string,
   lossNotes?: string,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // 1. Update lead status to unqualified
   const { error: leadError } = await from(supabase, 'leads')
     .update({ status: 'unqualified' } as Record<string, unknown>)
     .eq('id', leadId)
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   if (leadError) {
     return { success: false, error: 'Erro ao marcar lead como perdido' };
   }
 
   // Dispatch lead.unqualified webhook
-  dispatchWebhookEvent(supabase, member.org_id, 'lead.unqualified', {
+  dispatchWebhookEvent(supabase, orgId, 'lead.unqualified', {
     lead_id: leadId,
     loss_reason_id: lossReasonId,
     loss_notes: lossNotes ?? null,
@@ -130,25 +99,15 @@ export async function scheduleNewProspection(
   cadenceId: string,
   startDate: string,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Validate cadence is active and belongs to org
   const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, status')
     .eq('id', cadenceId)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)
     .single()) as { data: { id: string; status: string } | null };
 
@@ -177,7 +136,7 @@ export async function scheduleNewProspection(
       lead_id: leadId,
       current_step: 1,
       status: 'paused',
-      enrolled_by: user.id,
+      enrolled_by: userId,
       scheduled_start_at: startDate,
     } as Record<string, unknown>)
     .select('id')

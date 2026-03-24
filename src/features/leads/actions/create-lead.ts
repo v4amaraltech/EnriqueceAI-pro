@@ -3,9 +3,8 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { ERR_LEAD_LIMIT_REACHED } from '@/lib/constants/error-codes';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 
@@ -21,25 +20,15 @@ import { enrichLeadAction } from './enrich-lead';
 export async function createLead(
   rawData: Record<string, unknown>,
 ): Promise<ActionResult<{ id: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = createLeadSchema.safeParse(rawData);
   if (!parsed.success) {
     const firstError = parsed.error.errors[0];
     return { success: false, error: firstError?.message ?? 'Dados inválidos' };
   }
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Check lead limit
   let currentLeads = 0;
@@ -48,7 +37,7 @@ export async function createLead(
 
   const { data: sub } = (await from(supabase, 'subscriptions')
     .select('plan_id')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .maybeSingle()) as { data: { plan_id: string } | null };
 
   if (sub) {
@@ -61,7 +50,7 @@ export async function createLead(
       maxLeads = plan.max_leads;
       const { count: leadCount } = (await from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .is('deleted_at', null)) as { count: number | null };
 
       currentLeads = leadCount ?? 0;
@@ -82,7 +71,7 @@ export async function createLead(
     .from('organization_members')
     .select('user_id')
     .eq('user_id', parsed.data.assigned_to)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('status', 'active')
     .single()) as { data: { user_id: string } | null };
 
@@ -93,7 +82,7 @@ export async function createLead(
   // 1. Create the lead
   const { data: lead, error } = await from(supabase, 'leads')
     .insert({
-      org_id: member.org_id,
+      org_id: orgId,
       first_name: parsed.data.first_name,
       last_name: parsed.data.last_name,
       nome_fantasia: parsed.data.empresa,
@@ -103,7 +92,7 @@ export async function createLead(
       lead_source: parsed.data.lead_source,
       is_inbound: parsed.data.is_inbound,
       assigned_to: parsed.data.assigned_to,
-      created_by: user.id,
+      created_by: userId,
     } as Record<string, unknown>)
     .select('id')
     .single();
@@ -115,7 +104,7 @@ export async function createLead(
   const leadId = (lead as { id: string }).id;
 
   // Dispatch lead.created webhook
-  dispatchWebhookEvent(supabase, member.org_id, 'lead.created', {
+  dispatchWebhookEvent(supabase, orgId, 'lead.created', {
     lead_id: leadId,
     email: parsed.data.email ?? null,
     first_name: parsed.data.first_name,
@@ -151,7 +140,7 @@ export async function createLead(
     const newCount = currentLeads + 1;
     const threshold = Math.floor(maxLeads * RESOURCE_ALERT_THRESHOLD);
     if (currentLeads < threshold && newCount >= threshold) {
-      fireLeadThresholdAlert(member.org_id, newCount, maxLeads).catch((err) =>
+      fireLeadThresholdAlert(orgId, newCount, maxLeads).catch((err) =>
         console.error('[leads] Failed to send threshold alert:', err),
       );
     }

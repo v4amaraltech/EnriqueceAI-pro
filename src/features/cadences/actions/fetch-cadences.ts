@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceDetail, CadenceListResult } from '../cadences.contract';
@@ -29,19 +28,9 @@ export interface CadenceTabCounts {
 export async function fetchCadences(
   params: FetchCadencesParams = {},
 ): Promise<ActionResult<CadenceListResult>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const page = params.page ?? 1;
   const per_page = params.per_page ?? 20;
@@ -50,7 +39,7 @@ export async function fetchCadences(
 
   let query = from(supabase, 'cadences')
     .select('*', { count: 'exact' })
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null);
 
   if (params.status) {
@@ -103,30 +92,20 @@ export async function fetchCadences(
 }
 
 export async function fetchCadenceTabCounts(): Promise<ActionResult<CadenceTabCounts>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const baseQuery = from(supabase, 'cadences')
     .select('id', { count: 'exact', head: true })
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null);
 
   const [standardResult, autoEmailResult] = await Promise.all([
     baseQuery.eq('type', 'standard') as Promise<{ count: number | null }>,
     from(supabase, 'cadences')
       .select('id', { count: 'exact', head: true })
-      .eq('org_id', member.org_id)
+      .eq('org_id', orgId)
       .is('deleted_at', null)
       .eq('type', 'auto_email') as Promise<{ count: number | null }>,
   ]);
@@ -147,8 +126,9 @@ export async function fetchCadenceEnrollmentCounts(
     return { success: true, data: {} };
   }
 
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'cadence_enrollments')
     .select('cadence_id')
@@ -173,25 +153,15 @@ export async function fetchCadenceEnrollmentCounts(
 export async function fetchCadenceDetail(
   cadenceId: string,
 ): Promise<ActionResult<CadenceDetail>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Fetch cadence
   const { data: cadence, error: cadenceError } = (await from(supabase, 'cadences')
     .select('*')
     .eq('id', cadenceId)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)
     .single()) as { data: CadenceRow | null; error: { message: string } | null };
 

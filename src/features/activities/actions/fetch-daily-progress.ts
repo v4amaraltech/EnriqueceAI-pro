@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 export interface DailyProgress {
@@ -13,20 +12,9 @@ export interface DailyProgress {
 }
 
 export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Count today's completed activities (interactions created today by this user)
   const todayStart = new Date();
@@ -34,8 +22,8 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
 
   const { count: completed } = (await from(supabase, 'interactions')
     .select('id', { count: 'exact', head: true })
-    .eq('org_id', member.org_id)
-    .eq('performed_by', user.id)
+    .eq('org_id', orgId)
+    .eq('performed_by', userId)
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
   // Count pending activities — must match fetchPendingActivities logic exactly:
@@ -95,8 +83,8 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   const { data: userGoal } = (await supabase
     .from('daily_activity_goals')
     .select('target')
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id)
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .single()) as { data: { target: number } | null };
 
   let target = userGoal?.target ?? null;
@@ -105,7 +93,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     const { data: orgGoal } = (await supabase
       .from('daily_activity_goals')
       .select('target')
-      .eq('org_id', member.org_id)
+      .eq('org_id', orgId)
       .is('user_id', null)
       .single()) as { data: { target: number } | null };
 

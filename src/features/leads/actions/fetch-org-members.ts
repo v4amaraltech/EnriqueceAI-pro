@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface OrgMemberOption {
   userId: string;
@@ -12,24 +11,14 @@ export interface OrgMemberOption {
 }
 
 export async function fetchOrgMembersAuth(): Promise<ActionResult<OrgMemberOption[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!currentMember) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data: members } = (await supabase
     .from('organization_members')
     .select('user_id')
-    .eq('org_id', currentMember.org_id)
+    .eq('org_id', orgId)
     .eq('status', 'active')) as { data: Array<{ user_id: string }> | null };
 
   if (!members || members.length === 0) {

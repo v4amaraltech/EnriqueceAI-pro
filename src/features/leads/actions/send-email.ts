@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { EmailService } from '@/features/integrations/services/email.service';
 
@@ -18,19 +17,9 @@ export async function sendManualEmail(
   leadId: string,
   input: SendManualEmailInput,
 ): Promise<ActionResult<{ messageId?: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   if (!input.to || !input.subject || !input.body) {
     return { success: false, error: 'Preencha todos os campos' };
@@ -39,7 +28,7 @@ export async function sendManualEmail(
   // Create interaction record first
   const { data: interaction, error: interactionError } = (await from(supabase, 'interactions')
     .insert({
-      org_id: member.org_id,
+      org_id: orgId,
       lead_id: leadId,
       channel: 'email',
       type: 'sent',
@@ -55,8 +44,8 @@ export async function sendManualEmail(
 
   // Send the email
   const result = await EmailService.sendEmail(
-    user.id,
-    member.org_id,
+    userId,
+    orgId,
     {
       to: input.to,
       subject: input.subject,

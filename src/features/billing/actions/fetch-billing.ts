@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { calculateMonthlyTotal } from '../services/feature-flags';
 import type {
@@ -16,24 +15,14 @@ import type {
 } from '../types';
 
 export async function fetchBillingOverview(): Promise<ActionResult<BillingOverview>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Fetch subscription with plan
   const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('*')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .maybeSingle()) as { data: SubscriptionRow | null };
 
   if (!subscription) {
@@ -53,7 +42,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   // Fetch member count
   const { count: memberCount } = (await from(supabase, 'organization_members')
     .select('id', { count: 'exact', head: true })
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('status', 'active')) as { count: number | null };
 
   const totalMembers = memberCount ?? 1;
@@ -63,7 +52,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   const today = new Date().toISOString().split('T')[0];
   const { data: aiUsage } = (await from(supabase, 'ai_usage')
     .select('generation_count, daily_limit')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('usage_date', today)
     .maybeSingle()) as { data: AiUsageRow | null };
 
@@ -71,7 +60,7 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
   const currentPeriod = new Date().toISOString().slice(0, 7); // YYYY-MM
   const { data: waCredits } = (await from(supabase, 'whatsapp_credits')
     .select('used_credits, plan_credits, period')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .eq('period', currentPeriod)
     .maybeSingle()) as { data: WhatsAppCreditsRow | null };
 
@@ -97,19 +86,9 @@ export async function fetchBillingOverview(): Promise<ActionResult<BillingOvervi
 }
 
 export async function fetchPlanComparison(): Promise<ActionResult<PlanComparison>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Fetch all active plans
   const { data: plans } = (await from(supabase, 'plans')
@@ -120,7 +99,7 @@ export async function fetchPlanComparison(): Promise<ActionResult<PlanComparison
   // Get current subscription
   const { data: subscription } = (await from(supabase, 'subscriptions')
     .select('plan_id')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .maybeSingle()) as { data: { plan_id: string } | null };
 
   // Find current plan slug

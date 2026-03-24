@@ -5,8 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
@@ -57,19 +56,9 @@ export async function updateLead(
   leadId: string,
   updates: Record<string, unknown>,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
   const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'is_inbound', 'email_bounced_at'];
@@ -88,7 +77,7 @@ export async function updateLead(
   const { data: currentLead } = (await from(supabase, 'leads')
     .select('email, telefone, email_bounced_at')
     .eq('id', leadId)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .single()) as { data: { email: string | null; telefone: string | null; email_bounced_at: string | null } | null };
 
   // If email is being updated and it changed, clear bounce flag
@@ -101,7 +90,7 @@ export async function updateLead(
   const { error } = await from(supabase, 'leads')
     .update(safeUpdates as Record<string, unknown>)
     .eq('id', leadId)
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   if (error) {
     return { success: false, error: 'Erro ao atualizar lead' };
@@ -124,7 +113,7 @@ export async function updateLead(
   const fitScoreFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'notes'];
   const hasRelevantChange = fitScoreFields.some((f) => f in safeUpdates);
   if (hasRelevantChange) {
-    recalcFitScoreForLead(supabase, leadId, member.org_id).catch(() => {
+    recalcFitScoreForLead(supabase, leadId, orgId).catch(() => {
       // Fire-and-forget: don't block the update response
     });
   }

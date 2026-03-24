@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { DashboardMetrics, EnrichmentStats, ImportSummary } from '../dashboard.contract';
 
@@ -19,27 +18,16 @@ function getPeriodDate(period: Period): string {
 export async function fetchDashboardMetrics(
   period: Period = '30d',
 ): Promise<ActionResult<DashboardMetrics>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const sinceDate = getPeriodDate(period);
 
   // Fetch leads (non-deleted) for the org within period
   const { data: leads, error: leadsError } = (await from(supabase, 'leads')
     .select('status, enrichment_status, porte, endereco, created_at')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', sinceDate)) as {
     data: Array<{
@@ -102,7 +90,7 @@ export async function fetchDashboardMetrics(
   // Recent imports (last 5)
   const { data: imports } = (await from(supabase, 'lead_imports')
     .select('id, file_name, total_rows, success_count, error_count, status, created_at')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .limit(5)) as { data: ImportSummary[] | null };
 

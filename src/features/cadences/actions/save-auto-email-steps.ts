@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { saveAutoEmailCadenceSchema } from '../cadence.schemas';
@@ -22,26 +21,15 @@ export async function saveAutoEmailSteps(
   }
 
   const { cadence_id, steps } = parsed.data;
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Verify org membership
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Verify cadence belongs to org and is editable
   const { data: cadence } = (await from(supabase, 'cadences')
     .select('id, status, type')
     .eq('id', cadence_id)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .is('deleted_at', null)
     .single()) as { data: { id: string; status: string; type: string } | null };
 
@@ -80,7 +68,7 @@ export async function saveAutoEmailSteps(
     await from(supabase, 'message_templates')
       .delete()
       .in('id', templateIds)
-      .eq('org_id', member.org_id);
+      .eq('org_id', orgId);
   }
 
   // Create templates and steps for each new step
@@ -93,14 +81,14 @@ export async function saveAutoEmailSteps(
     // Create inline template
     const { data: template, error: templateError } = (await from(supabase, 'message_templates')
       .insert({
-        org_id: member.org_id,
+        org_id: orgId,
         name: `Auto Email - Step ${i + 1}`,
         channel: 'email',
         subject: step.subject,
         body: step.body,
         variables_used: variablesUsed,
         is_system: false,
-        created_by: user.id,
+        created_by: userId,
       } as Record<string, unknown>)
       .select('id')
       .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -117,14 +105,14 @@ export async function saveAutoEmailSteps(
       const variablesUsedB = extractVariables(`${step.subject_b ?? ''} ${step.body_b}`);
       const { data: templateB, error: templateBError } = (await from(supabase, 'message_templates')
         .insert({
-          org_id: member.org_id,
+          org_id: orgId,
           name: `Auto Email - Step ${i + 1} (B)`,
           channel: 'email',
           subject: step.subject_b ?? '',
           body: step.body_b,
           variables_used: variablesUsedB,
           is_system: false,
-          created_by: user.id,
+          created_by: userId,
         } as Record<string, unknown>)
         .select('id')
         .single()) as { data: { id: string } | null; error: { message: string } | null };

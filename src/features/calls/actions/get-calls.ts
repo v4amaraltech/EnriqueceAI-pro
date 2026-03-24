@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import type { CallRow } from '../types';
 import { callFiltersSchema, type CallFilters } from '../schemas/call.schemas';
@@ -17,33 +16,22 @@ export interface CallListResult {
 export async function getCalls(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<CallListResult>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = callFiltersSchema.safeParse(rawFilters);
   if (!parsed.success) {
     return { success: false, error: 'Filtros inválidos' };
   }
   const filters: CallFilters = parsed.data;
 
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const from = (filters.page - 1) * filters.per_page;
   const to = from + filters.per_page - 1;
 
   let query = supabase.from('calls')
     .select('*', { count: 'exact' })
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   // Status filter
   if (filters.status) {
