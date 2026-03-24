@@ -33,7 +33,7 @@ export function ActivityTemplateCategorySidebar({ active, onSelect, templates }:
               'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               isActive
                 ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                : 'text-foreground/80 hover:bg-muted hover:text-foreground',
             )}
           >
             <cat.icon className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function ActivityTemplateCategorySidebar({ active, onSelect, templates }:
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-xs',
-                isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground',
+                isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-foreground/60',
               )}
             >
               {count}

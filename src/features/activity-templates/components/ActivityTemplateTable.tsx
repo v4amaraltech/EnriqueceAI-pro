@@ -90,7 +90,7 @@ export function ActivityTemplateTable({ activeCategory, templates, onTemplatesCh
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-semibold">{cat.label}</h2>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-foreground/60 text-sm">
             {filtered.length} {filtered.length === 1 ? 'template' : 'templates'}
           </p>
         </div>
@@ -102,7 +102,7 @@ export function ActivityTemplateTable({ activeCategory, templates, onTemplatesCh
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="text-muted-foreground flex flex-1 items-center justify-center py-12 text-sm">
+        <div className="text-foreground/50 flex flex-1 items-center justify-center py-12 text-sm">
           Nenhum template nesta categoria. Clique em &ldquo;Novo template&rdquo; para criar.
         </div>
       ) : (
