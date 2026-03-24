@@ -7,11 +7,11 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 
-import { authenticate } from '../services/threecplus.service';
+import { validateToken } from '../services/threecplus.service';
 
 interface SaveThreeCPlusInput {
   login: string;
-  password: string;
+  apiToken: string;
   domain: string;
 }
 
@@ -23,8 +23,8 @@ export async function saveThreeCPlusConfig(
   const { orgId, userId, supabase } = auth.data;
 
   const login = input.login.trim();
-  const password = input.password.trim();
-  // Sanitize domain: strip protocol, trailing slashes, and .3c.fluxcloud.com.br suffix if pasted
+  const apiToken = input.apiToken.trim();
+  // Sanitize domain: strip protocol, trailing slashes, and .3cplus.com.br suffix if pasted
   const domain = input.domain
     .trim()
     .toLowerCase()
@@ -33,18 +33,16 @@ export async function saveThreeCPlusConfig(
     .replace(/\/$/, '');
 
   if (!login) return { success: false, error: 'Login é obrigatório' };
-  if (!password) return { success: false, error: 'Senha é obrigatória' };
+  if (!apiToken) return { success: false, error: 'API Token é obrigatório' };
   if (!domain) return { success: false, error: 'Domínio é obrigatório' };
 
-  // Authenticate to get API token
-  let apiToken: string;
+  // Validate token with a test API call
   try {
-    const authResult = await authenticate(domain, login, password);
-    apiToken = authResult.data.api_token;
+    await validateToken(domain, apiToken);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Falha na autenticação';
-    console.error('[3cplus] Authentication failed:', message);
-    return { success: false, error: 'Falha na autenticação com o 3CPlus. Verifique suas credenciais e domínio.' };
+    const message = err instanceof Error ? err.message : 'Token inválido';
+    console.error('[3cplus] Token validation failed:', message);
+    return { success: false, error: 'Token inválido ou domínio incorreto. Verifique suas credenciais.' };
   }
 
   // Check for existing connection

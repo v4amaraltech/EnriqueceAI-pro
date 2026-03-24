@@ -35,28 +35,28 @@ export function ThreeCPlusConfigModal({
 }: ThreeCPlusConfigModalProps) {
   const [isPending, startTransition] = useTransition();
   const [login, setLogin] = useState(defaultLogin);
-  const [password, setPassword] = useState('');
+  const [apiToken, setApiToken] = useState('');
   const [domain, setDomain] = useState(defaultDomain);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showToken, setShowToken] = useState(false);
 
   function handleSave() {
-    if (!login.trim()) {
-      toast.error('Login é obrigatório');
-      return;
-    }
-    if (!password.trim()) {
-      toast.error('Senha é obrigatória');
-      return;
-    }
     if (!domain.trim()) {
       toast.error('Domínio é obrigatório');
+      return;
+    }
+    if (!login.trim()) {
+      toast.error('Login do agente é obrigatório');
+      return;
+    }
+    if (!apiToken.trim()) {
+      toast.error('API Token é obrigatório');
       return;
     }
 
     startTransition(async () => {
       const result = await saveThreeCPlusConfig({
         login: login.trim(),
-        password: password.trim(),
+        apiToken: apiToken.trim(),
         domain: domain.trim(),
       });
 
@@ -93,7 +93,7 @@ export function ThreeCPlusConfigModal({
             <p className="mb-2 text-sm font-semibold text-orange-500">Pré-requisitos:</p>
             <ul className="space-y-1 text-sm text-orange-500/80">
               <li>• Conta ativa no painel 3CPlus</li>
-              <li>• Usuário do tipo Agente cadastrado</li>
+              <li>• API Token gerado no painel (Configurações &gt; API)</li>
               <li>• Pelo menos uma campanha ativa</li>
             </ul>
           </div>
@@ -123,41 +123,44 @@ export function ThreeCPlusConfigModal({
 
           {/* Credentials */}
           <div className="space-y-4">
-            <p className="font-semibold">Credenciais do Agente</p>
+            <p className="font-semibold">Credenciais</p>
 
             {/* Login */}
             <div className="space-y-2">
-              <Label htmlFor="threecplus-login">Login</Label>
+              <Label htmlFor="threecplus-login">Login do Agente</Label>
               <Input
                 id="threecplus-login"
-                placeholder="Seu login de agente"
+                placeholder="Ex: 1009"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
               />
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                Número do ramal ou login do agente no 3CPlus
+              </p>
             </div>
 
-            {/* Password */}
+            {/* API Token */}
             <div className="space-y-2">
-              <Label htmlFor="threecplus-password">Senha</Label>
+              <Label htmlFor="threecplus-token">API Token</Label>
               <div className="relative">
                 <Input
-                  id="threecplus-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Sua senha de agente"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="threecplus-token"
+                  type={showToken ? 'text' : 'password'}
+                  placeholder="Cole o token da API aqui"
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
                   className="pr-10"
                 />
                 <button
                   type="button"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowToken(!showToken)}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                A senha é usada apenas para autenticação. O token gerado é armazenado de forma criptografada.
+                Gere o token no painel 3CPlus. O token é armazenado de forma criptografada.
               </p>
             </div>
           </div>

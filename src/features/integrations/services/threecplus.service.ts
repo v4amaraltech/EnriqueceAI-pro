@@ -3,7 +3,6 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type {
-  ThreeCPlusAuthResponse,
   ThreeCPlusCampaign,
   ThreeCPlusCampaignsResponse,
   ThreeCPlusManualCallResponse,
@@ -68,28 +67,21 @@ async function threecplusFetch<T>(
 }
 
 /**
- * Authenticate with 3CPlus API to get an api_token.
- * Used during setup to validate credentials.
+ * Validate an API token by making a test call to /campaigns.
+ * Throws if the token is invalid or the domain is wrong.
  */
-export async function authenticate(
-  domain: string,
-  login: string,
-  password: string,
-): Promise<ThreeCPlusAuthResponse> {
-  const url = `${baseUrl(domain)}/authenticate`;
+export async function validateToken(domain: string, apiToken: string): Promise<void> {
+  const url = `${baseUrl(domain)}/campaigns?api_token=${encodeURIComponent(apiToken)}`;
 
   const response = await fetch(url, {
-    method: 'POST',
+    method: 'GET',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user: login, password }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`3CPlus authentication failed (${response.status}): ${text}`);
+    throw new Error(`3CPlus token validation failed (${response.status}): ${text}`);
   }
-
-  return response.json() as Promise<ThreeCPlusAuthResponse>;
 }
 
 /**
