@@ -77,7 +77,7 @@ export async function getAvailability(
 ): Promise<ActionResult<BusySlot[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  const { orgId, userId } = auth.data;
 
   const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {

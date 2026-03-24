@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mockSupabase, mockSupabaseFrom, resetMocks } from '@tests/mocks/supabase';
-
-const mockFrom = mockSupabaseFrom as ReturnType<typeof vi.fn>;
+import { mockSupabase, resetMocks } from '@tests/mocks/supabase';
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
@@ -20,14 +18,6 @@ vi.mock('../services/insights-metrics.service', () => ({
 }));
 
 import { getInsightsData } from './get-insights-data';
-
-function createChainMock(finalResult: unknown = { data: null }) {
-  return {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockImplementation(() => Promise.resolve(finalResult)),
-  };
-}
 
 describe('getInsightsData', () => {
   beforeEach(() => {

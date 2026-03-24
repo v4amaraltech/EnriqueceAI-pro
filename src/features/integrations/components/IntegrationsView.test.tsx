@@ -6,6 +6,7 @@ import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => ({ get: vi.fn().mockReturnValue(null) }),
 }));
 
 vi.mock('next/image', () => ({
@@ -19,6 +20,46 @@ vi.mock('../actions/manage-gmail', () => ({
 
 vi.mock('../actions/manage-apollo', () => ({
   deleteApolloConnection: vi.fn(),
+}));
+
+vi.mock('../actions/manage-whatsapp', () => ({
+  disconnectEvolutionWhatsApp: vi.fn(),
+}));
+
+vi.mock('../actions/manage-api4com', () => ({
+  disconnectApi4Com: vi.fn(),
+}));
+
+vi.mock('@/features/billing/services/feature-flags', () => ({
+  checkFeature: vi.fn().mockReturnValue(true),
+}));
+
+vi.mock('@/features/cadences/components/WebhookEndpointsManager', () => ({
+  WebhookEndpointsManager: () => <div data-testid="webhook-manager" />,
+}));
+
+vi.mock('./Api4ComConfigModal', () => ({
+  Api4ComConfigModal: () => null,
+}));
+
+vi.mock('./ApolloConfigModal', () => ({
+  ApolloConfigModal: () => null,
+}));
+
+vi.mock('./CrmFieldMappingModal', () => ({
+  CrmFieldMappingModal: () => null,
+}));
+
+vi.mock('./RdStationTokenModal', () => ({
+  RdStationTokenModal: () => null,
+}));
+
+vi.mock('./SignatureEditor', () => ({
+  SignatureEditor: () => null,
+}));
+
+vi.mock('./WhatsAppEvolutionModal', () => ({
+  WhatsAppEvolutionModal: () => null,
 }));
 
 vi.mock('../actions/manage-crm', () => ({

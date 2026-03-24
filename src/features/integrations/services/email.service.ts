@@ -57,7 +57,6 @@ function injectClickTracking(html: string, interactionId: string): string {
  * Encodes a subject line with RFC 2047 for non-ASCII characters.
  */
 function encodeSubject(subject: string): string {
-  // eslint-disable-next-line no-control-regex
   if (/^[\x00-\x7F]*$/.test(subject)) return subject;
   return `=?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
 }

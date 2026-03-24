@@ -18,25 +18,28 @@ const HASH_ERROR_MESSAGES: Record<string, string> = {
 
 export function LoginForm({ error: initialError }: { error?: string }) {
   const router = useRouter();
-  const [hashError, setHashError] = useState<string | undefined>();
-
-  // Extract error from hash fragments (Supabase redirects with #error=...)
-  useEffect(() => {
+  const [hashError] = useState<string | undefined>(() => {
+    if (typeof window === 'undefined') return undefined;
     const hash = window.location.hash;
-    if (!hash || !hash.includes('error')) return;
+    if (!hash || !hash.includes('error')) return undefined;
 
     const params = new URLSearchParams(hash.replace('#', ''));
     const errorCode = params.get('error_code') || params.get('error');
 
     if (errorCode && HASH_ERROR_MESSAGES[errorCode]) {
-      setHashError(HASH_ERROR_MESSAGES[errorCode]);
+      return HASH_ERROR_MESSAGES[errorCode];
     } else if (errorCode) {
-      setHashError('Erro na autenticação. Faça login com seu email e senha.');
+      return 'Erro na autenticação. Faça login com seu email e senha.';
     }
+    return undefined;
+  });
 
-    // Clean the hash from URL
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }, []);
+  // Clean the hash from URL after reading it
+  useEffect(() => {
+    if (hashError) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, [hashError]);
 
   const [state, formAction, pending] = useActionState(
     async (_prev: { error?: string }, formData: FormData) => {
