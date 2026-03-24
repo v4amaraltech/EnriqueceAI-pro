@@ -181,11 +181,22 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold">Campos Personalizados</h1>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            Configure a visibilidade e obrigatoriedade dos campos dos seus leads.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Campos Personalizados</h1>
+            <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Configure a visibilidade e obrigatoriedade dos campos dos seus leads.
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              setEditingField(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Criar campo
+          </Button>
         </div>
 
         <Tabs defaultValue="custom">
