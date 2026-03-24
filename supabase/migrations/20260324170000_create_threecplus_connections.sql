@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS threecplus_connections (
 
 ALTER TABLE threecplus_connections ENABLE ROW LEVEL SECURITY;
 
+DROP TRIGGER IF EXISTS set_updated_at ON threecplus_connections;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON threecplus_connections
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
