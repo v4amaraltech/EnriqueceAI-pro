@@ -15,7 +15,7 @@ interface ThreeCPlusCredentials {
 }
 
 function baseUrl(domain: string): string {
-  return `https://${domain}.3cplus.com.br/api/v1`;
+  return `https://${domain}.3c.plus/api/v1`;
 }
 
 export async function getCredentials(userId: string): Promise<ThreeCPlusCredentials | null> {

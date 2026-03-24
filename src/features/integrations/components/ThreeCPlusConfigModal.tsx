@@ -111,7 +111,7 @@ export function ThreeCPlusConfigModal({
                 onChange={(e) => setDomain(e.target.value.replace(/^https?:\/\//, ''))}
               />
               <span className="shrink-0 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                .3cplus.com.br
+                .3c.plus
               </span>
             </div>
             <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">

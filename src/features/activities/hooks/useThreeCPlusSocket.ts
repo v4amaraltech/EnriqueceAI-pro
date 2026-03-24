@@ -38,7 +38,7 @@ export function useThreeCPlusSocket({
     if (!domain || !token) return;
 
     // 3CPlus Socket.io server — uses api_token as query param
-    const socketUrl = `https://${domain}.3cplus.com.br`;
+    const socketUrl = `https://${domain}.3c.plus`;
 
     const socket = io(socketUrl, {
       query: { api_token: token },
