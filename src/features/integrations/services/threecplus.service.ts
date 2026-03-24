@@ -39,19 +39,22 @@ export async function getCredentials(userId: string): Promise<ThreeCPlusCredenti
   };
 }
 
+/**
+ * 3CPlus API uses api_token as a query parameter for authentication.
+ */
 async function threecplusFetch<T>(
   creds: ThreeCPlusCredentials,
   method: string,
   path: string,
   body?: Record<string, unknown>,
 ): Promise<T> {
-  const url = `${baseUrl(creds.domain)}${path}`;
+  const separator = path.includes('?') ? '&' : '?';
+  const url = `${baseUrl(creds.domain)}${path}${separator}api_token=${encodeURIComponent(creds.apiToken)}`;
 
   const response = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${creds.apiToken}`,
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -65,7 +68,7 @@ async function threecplusFetch<T>(
 }
 
 /**
- * Authenticate with 3CPlus API to get a token.
+ * Authenticate with 3CPlus API to get an api_token.
  * Used during setup to validate credentials.
  */
 export async function authenticate(
@@ -73,7 +76,7 @@ export async function authenticate(
   login: string,
   password: string,
 ): Promise<ThreeCPlusAuthResponse> {
-  const url = `${baseUrl(domain)}/auth/login`;
+  const url = `${baseUrl(domain)}/authenticate`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -96,7 +99,7 @@ export async function getCampaigns(userId: string): Promise<ThreeCPlusCampaign[]
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  const result = await threecplusFetch<ThreeCPlusCampaignsResponse>(creds, 'GET', '/campaigns');
+  const result = await threecplusFetch<ThreeCPlusCampaignsResponse>(creds, 'GET', '/agent/campaigns');
   return result.data;
 }
 
@@ -110,6 +113,16 @@ export async function agentLogin(userId: string, campaignId: number): Promise<vo
   await threecplusFetch(creds, 'POST', '/agent/login', {
     campaign_id: campaignId,
   });
+}
+
+/**
+ * Webphone login — required before receiving audio via WebRTC.
+ */
+export async function agentWebphoneLogin(userId: string): Promise<void> {
+  const creds = await getCredentials(userId);
+  if (!creds) throw new Error('3CPlus não configurado para este usuário');
+
+  await threecplusFetch(creds, 'POST', '/agent/webphone/login');
 }
 
 /**
@@ -129,7 +142,7 @@ export async function manualCallEnter(userId: string): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  await threecplusFetch(creds, 'POST', '/agent/manual-call/enter');
+  await threecplusFetch(creds, 'POST', '/agent/manual_call/enter');
 }
 
 /**
@@ -142,7 +155,7 @@ export async function manualCallDial(
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  return threecplusFetch<ThreeCPlusManualCallResponse>(creds, 'POST', '/agent/manual-call/dial', {
+  return threecplusFetch<ThreeCPlusManualCallResponse>(creds, 'POST', '/agent/manual_call/dial', {
     phone,
   });
 }
@@ -154,17 +167,17 @@ export async function manualCallExit(userId: string): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  await threecplusFetch(creds, 'POST', '/agent/manual-call/exit');
+  await threecplusFetch(creds, 'POST', '/agent/manual_call/exit');
 }
 
 /**
- * Hangup current call.
+ * Hangup a specific call by its ID.
  */
-export async function hangupCall(userId: string): Promise<void> {
+export async function hangupCall(userId: string, callId: string): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  await threecplusFetch(creds, 'POST', '/agent/hangup');
+  await threecplusFetch(creds, 'POST', `/agent/call/${encodeURIComponent(callId)}/hangup`);
 }
 
 /**
@@ -172,12 +185,13 @@ export async function hangupCall(userId: string): Promise<void> {
  */
 export async function qualifyCall(
   userId: string,
+  callId: string,
   qualificationId: number,
 ): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('3CPlus não configurado para este usuário');
 
-  await threecplusFetch(creds, 'POST', '/agent/qualify', {
+  await threecplusFetch(creds, 'POST', `/agent/call/${encodeURIComponent(callId)}/qualify`, {
     qualification_id: qualificationId,
   });
 }

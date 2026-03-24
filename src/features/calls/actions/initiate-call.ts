@@ -68,8 +68,9 @@ export async function hangupCall(
   }
 
   if (provider === 'threecplus') {
+    if (!providerCallId) return { success: false, error: 'ID da chamada 3CPlus não fornecido' };
     const { hangupThreeCPlusCall } = await import('./initiate-threecplus-call');
-    return hangupThreeCPlusCall();
+    return hangupThreeCPlusCall(providerCallId);
   }
 
   return { success: false, error: `Provedor desconhecido: ${provider as string}` };

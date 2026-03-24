@@ -24,7 +24,13 @@ export async function saveThreeCPlusConfig(
 
   const login = input.login.trim();
   const password = input.password.trim();
-  const domain = input.domain.trim().toLowerCase();
+  // Sanitize domain: strip protocol, trailing slashes, and .3c.fluxcloud.com.br suffix if pasted
+  const domain = input.domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\.3c\.fluxcloud\.com\.br.*$/, '')
+    .replace(/\/$/, '');
 
   if (!login) return { success: false, error: 'Login é obrigatório' };
   if (!password) return { success: false, error: 'Senha é obrigatória' };
@@ -34,7 +40,7 @@ export async function saveThreeCPlusConfig(
   let apiToken: string;
   try {
     const authResult = await authenticate(domain, login, password);
-    apiToken = authResult.token;
+    apiToken = authResult.data.api_token;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Falha na autenticação';
     console.error('[3cplus] Authentication failed:', message);

@@ -24,9 +24,18 @@ export interface ThreeCPlusConnectionSafe {
   updated_at: string;
 }
 
+// 3CPlus API standard response wrapper
+export interface ThreeCPlusApiResponse<T> {
+  status: number;
+  title?: string;
+  detail?: string;
+  transaction_id?: string;
+  data: T;
+}
+
 // 3CPlus API types
-export interface ThreeCPlusAuthResponse {
-  token: string;
+export interface ThreeCPlusAuthData {
+  api_token: string;
   user: {
     id: number;
     name: string;
@@ -34,23 +43,17 @@ export interface ThreeCPlusAuthResponse {
   };
 }
 
+export type ThreeCPlusAuthResponse = ThreeCPlusApiResponse<ThreeCPlusAuthData>;
+
 export interface ThreeCPlusCampaign {
   id: number;
   name: string;
   status: string;
 }
 
-export interface ThreeCPlusCampaignsResponse {
-  data: ThreeCPlusCampaign[];
-}
-
-export interface ThreeCPlusAgentLoginResponse {
-  success: boolean;
-  message?: string;
-}
+export type ThreeCPlusCampaignsResponse = ThreeCPlusApiResponse<ThreeCPlusCampaign[]>;
 
 export interface ThreeCPlusManualCallResponse {
-  success: boolean;
   call_id?: string;
   message?: string;
 }
@@ -63,6 +66,7 @@ export type ThreeCPlusAgentStatus =
   | 'manual_mode'
   | 'work_break'
   | 'login_failed'
+  | 'logged_out'
   | 'disconnected';
 
 export interface ThreeCPlusSocketCallData {

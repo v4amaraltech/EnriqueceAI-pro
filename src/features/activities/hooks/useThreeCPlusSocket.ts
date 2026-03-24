@@ -37,10 +37,11 @@ export function useThreeCPlusSocket({
     if (socketRef.current?.connected) return;
     if (!domain || !token) return;
 
-    const socketUrl = `wss://${domain}.3c.fluxcloud.com.br`;
+    // 3CPlus Socket.io server — uses api_token as query param
+    const socketUrl = `https://${domain}.3c.fluxcloud.com.br`;
 
     const socket = io(socketUrl, {
-      auth: { token },
+      query: { api_token: token },
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -49,13 +50,11 @@ export function useThreeCPlusSocket({
 
     socket.on('connect', () => {
       setIsConnected(true);
-      // connected
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
       setStatus('disconnected');
-      // disconnected
     });
 
     socket.on('connect_error', (err) => {
@@ -63,7 +62,7 @@ export function useThreeCPlusSocket({
       setIsConnected(false);
     });
 
-    // Agent status events
+    // Agent status events (per official 3CPlus API docs)
     socket.on('agent-is-idle', () => {
       setStatus('idle');
       setCurrentCallData(null);
@@ -74,16 +73,17 @@ export function useThreeCPlusSocket({
       console.error('[3cplus-socket] Login failed:', data.message);
     });
 
-    socket.on('agent-entered-manual-mode', () => {
+    socket.on('agent-was-logged-out', () => {
+      setStatus('logged_out');
+      setCurrentCallData(null);
+    });
+
+    socket.on('agent-entered-manual', () => {
       setStatus('manual_mode');
     });
 
     socket.on('agent-entered-work-break', () => {
       setStatus('work_break');
-    });
-
-    socket.on('agent-left-work-break', () => {
-      setStatus('idle');
     });
 
     // Call events
@@ -102,7 +102,7 @@ export function useThreeCPlusSocket({
       });
     });
 
-    socket.on('call-was-finished', () => {
+    socket.on('call-was-ended', () => {
       setStatus('acw');
     });
 
@@ -110,8 +110,13 @@ export function useThreeCPlusSocket({
       setStatus('acw');
     });
 
-    socket.on('call-history-was-created', () => {
-      // Logged for debug, data already processed via call-was-connected
+    socket.on('call-was-answered', () => {
+      // Call answered by remote party — status already 'connected' from call-was-connected
+    });
+
+    socket.on('call-was-abandoned', () => {
+      setStatus('idle');
+      setCurrentCallData(null);
     });
 
     socketRef.current = socket;

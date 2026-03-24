@@ -68,14 +68,14 @@ export async function initiateThreeCPlusCall(
   }
 }
 
-export async function hangupThreeCPlusCall(): Promise<ActionResult<void>> {
+export async function hangupThreeCPlusCall(providerCallId: string): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { userId } = auth.data;
 
   try {
     const { hangupCall } = await import('@/features/integrations/services/threecplus.service');
-    await hangupCall(userId);
+    await hangupCall(userId, providerCallId);
     return { success: true, data: undefined };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao desligar chamada';
