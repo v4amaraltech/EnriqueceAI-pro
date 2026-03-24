@@ -186,6 +186,7 @@ function ActivityTemplateDialogContent({
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={8}
+            className="min-h-[160px]"
           />
         </div>
 
