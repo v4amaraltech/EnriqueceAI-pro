@@ -48,6 +48,7 @@ export async function getRankingData(
     }
 
     const userNameMap = new Map<string, string>();
+    const userAvatarMap = new Map<string, string>();
     if (allUserIds.size > 0) {
       try {
         const adminClient = createAdminSupabaseClient();
@@ -55,9 +56,12 @@ export async function getRankingData(
         if (usersData?.users) {
           for (const u of usersData.users) {
             if (allUserIds.has(u.id)) {
-              const meta = u.user_metadata as { full_name?: string } | undefined;
+              const meta = u.user_metadata as { full_name?: string; avatar_url?: string } | undefined;
               const name = meta?.full_name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
               userNameMap.set(u.id, name);
+              if (meta?.avatar_url) {
+                userAvatarMap.set(u.id, meta.avatar_url);
+              }
             }
           }
         }
@@ -70,6 +74,7 @@ export async function getRankingData(
       return entries.map((e) => ({
         ...e,
         userName: userNameMap.get(e.userId) ?? e.userId.slice(0, 8),
+        avatarUrl: userAvatarMap.get(e.userId),
       }));
     }
 

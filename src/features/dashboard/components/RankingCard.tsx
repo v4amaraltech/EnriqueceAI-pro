@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 
 import type { RankingCardData } from '../types';
 
@@ -117,6 +117,7 @@ export function RankingCard({
               {data.sdrBreakdown.map((sdr, index) => (
                 <div key={sdr.userId} className="flex items-center">
                   <Avatar size="sm" className="mr-3 shrink-0">
+                    {sdr.avatarUrl && <AvatarImage src={sdr.avatarUrl} alt={sdr.userName} />}
                     <AvatarFallback
                       className={cn(
                         'text-[10px] font-medium',

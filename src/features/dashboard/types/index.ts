@@ -36,6 +36,7 @@ export interface DashboardData {
 export interface SdrRankingEntry {
   userId: string;
   userName: string;
+  avatarUrl?: string;
   value: number;
   secondaryValue?: number; // e.g., "prospecting" count for leads card
 }
