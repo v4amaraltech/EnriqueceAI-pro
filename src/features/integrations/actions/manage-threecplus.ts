@@ -42,7 +42,7 @@ export async function saveThreeCPlusConfig(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Token inválido';
     console.error('[3cplus] Token validation failed:', message);
-    return { success: false, error: 'Token inválido ou domínio incorreto. Verifique suas credenciais.' };
+    return { success: false, error: `Falha ao validar token: ${message}` };
   }
 
   // Check for existing connection

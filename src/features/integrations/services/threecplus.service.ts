@@ -67,20 +67,20 @@ async function threecplusFetch<T>(
 }
 
 /**
- * Validate an API token by making a test call to /campaigns.
- * Throws if the token is invalid or the domain is wrong.
+ * Validate an API token by making a test call to /agent/campaigns.
+ * Throws with the actual API error if the token is invalid.
  */
 export async function validateToken(domain: string, apiToken: string): Promise<void> {
-  const url = `${baseUrl(domain)}/campaigns?api_token=${encodeURIComponent(apiToken)}`;
+  const url = `${baseUrl(domain)}/agent/campaigns?api_token=${encodeURIComponent(apiToken)}`;
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { Accept: 'application/json' },
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`3CPlus token validation failed (${response.status}): ${text}`);
+    throw new Error(`(${response.status}) ${text}`);
   }
 }
 
