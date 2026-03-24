@@ -66,13 +66,13 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
   }));
 
   return (
-    <div className="rounded-lg border bg-card p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2">
+    <div className="rounded-xl border bg-card p-8 shadow-sm">
+      <div className="flex flex-col gap-6 lg:flex-row">
         {/* Left side — KPI info */}
-        <div className="flex flex-col justify-center">
+        <div className="flex max-w-sm shrink-0 flex-col justify-center">
           {/* Big number */}
-          <p className="text-5xl font-bold">{kpi.totalOpportunities}</p>
-          <p className="mt-1 text-sm">
+          <p className="text-6xl font-bold tracking-tight">{kpi.totalOpportunities}</p>
+          <p className="mt-1.5 text-sm text-foreground/70">
             Oportunidades em {monthName}
           </p>
 
@@ -134,14 +134,14 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
         </div>
 
         {/* Right side — Chart */}
-        <div className="flex items-center">
+        <div className="flex min-w-0 flex-1 items-center">
           {kpi.dailyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={340}>
               <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                 <defs>
                   <linearGradient id="gradientOpp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05} />
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.7} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.08} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -189,7 +189,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   strokeWidth={1.5}
                   strokeDasharray="5 5"
                   dot={false}
-                  strokeOpacity={0.35}
+                  strokeOpacity={0.6}
                 />
               </AreaChart>
             </ResponsiveContainer>
