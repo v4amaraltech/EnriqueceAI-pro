@@ -11,7 +11,7 @@ interface ThreeCPlusWebRTCProps {
  * unmounted during a call (which would drop the audio connection).
  */
 export function ThreeCPlusWebRTC({ domain, token }: ThreeCPlusWebRTCProps) {
-  const iframeSrc = `https://${domain}.3c.fluxcloud.com.br/webphone?api_token=${encodeURIComponent(token)}`;
+  const iframeSrc = `https://${domain}.3cplus.com.br/webphone?api_token=${encodeURIComponent(token)}`;
 
   return (
     <iframe

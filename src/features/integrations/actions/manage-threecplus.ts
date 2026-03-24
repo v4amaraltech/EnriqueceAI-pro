@@ -29,7 +29,7 @@ export async function saveThreeCPlusConfig(
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, '')
-    .replace(/\.3c\.fluxcloud\.com\.br.*$/, '')
+    .replace(/\.3cplus\.com\.br.*$/, '')
     .replace(/\/$/, '');
 
   if (!login) return { success: false, error: 'Login é obrigatório' };

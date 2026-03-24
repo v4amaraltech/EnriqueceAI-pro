@@ -16,7 +16,7 @@ interface ThreeCPlusCredentials {
 }
 
 function baseUrl(domain: string): string {
-  return `https://${domain}.3c.fluxcloud.com.br/api/v1`;
+  return `https://${domain}.3cplus.com.br/api/v1`;
 }
 
 export async function getCredentials(userId: string): Promise<ThreeCPlusCredentials | null> {
@@ -81,7 +81,7 @@ export async function authenticate(
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login, password }),
+    body: JSON.stringify({ user: login, password }),
   });
 
   if (!response.ok) {
