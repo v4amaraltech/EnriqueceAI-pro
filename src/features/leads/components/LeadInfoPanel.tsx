@@ -3,44 +3,20 @@
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import {
-  Bell,
-  Calendar,
   CalendarDays,
-  Check,
-  ChevronDown,
   Clock,
-  ExternalLink,
   FileText,
-  Linkedin,
-  Mail,
-  MessageSquare,
-  MousePointerClick,
   Pencil,
-  Phone,
   Plus,
-  Reply,
   Save,
-  Search,
-  Send,
   Trash2,
   User,
-  Video,
   X,
-  XCircle,
 } from 'lucide-react';
 
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -48,12 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-
-import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
-
-import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
-import type { LeadPhone } from '../types';
-import { updateLead } from '../actions/update-lead';
 import {
   Tooltip,
   TooltipContent,
@@ -62,13 +32,17 @@ import {
 } from '@/shared/components/ui/tooltip';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
-import type { InteractionType } from '@/features/cadences/types';
 
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import type { LeadPhone } from '../types';
+import { updateLead } from '../actions/update-lead';
 
 import { LeadNotes } from './LeadNotes';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
-import { EngagementScoreBadge } from './EngagementScoreBadge';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
+import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
+import { LeadTimelineTab } from './LeadTimelineTab';
+import { LeadScheduleTab } from './LeadScheduleTab';
 
 export interface LeadInfoPanelProps {
   data: LeadInfoPanelData;
@@ -81,68 +55,6 @@ export interface LeadInfoPanelProps {
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
-
-const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; className: string }> = {
-  sent: { label: 'Enviado', icon: Send, className: 'text-blue-500' },
-  delivered: { label: 'Entregue', icon: Check, className: 'text-green-500' },
-  opened: { label: 'Aberto', icon: Mail, className: 'text-[var(--primary)]' },
-  clicked: { label: 'Clicou', icon: MousePointerClick, className: 'text-orange-500' },
-  replied: { label: 'Respondeu', icon: Reply, className: 'text-emerald-600' },
-  bounced: { label: 'Bounce', icon: XCircle, className: 'text-red-500' },
-  failed: { label: 'Falhou', icon: XCircle, className: 'text-red-600' },
-  meeting_scheduled: { label: 'Reunião', icon: Calendar, className: 'text-indigo-500' },
-};
-
-const channelIcon: Record<string, typeof Mail> = {
-  email: Mail,
-  whatsapp: MessageSquare,
-  phone: Phone,
-  linkedin: Linkedin,
-  research: Search,
-};
-
-function formatTimelineDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatRelativeDate(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  const diffH = Math.floor(diffMs / 3_600_000);
-
-  if (diffMin < 5) return 'AGORA';
-  if (diffMin < 60) return `${diffMin}min`;
-  if (diffH < 24 && date.getDate() === now.getDate()) return 'HOJE';
-
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) return 'ONTEM';
-
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-const channelLabel: Record<string, string> = {
-  email: 'E-mail',
-  whatsapp: 'WhatsApp',
-  phone: 'Telefone',
-  linkedin: 'LinkedIn',
-  research: 'Pesquisa',
-};
-
-const channelColor: Record<string, string> = {
-  email: 'bg-blue-500',
-  whatsapp: 'bg-emerald-500',
-  phone: 'bg-amber-500',
-  linkedin: 'bg-[#0A66C2]',
-  research: 'bg-violet-500',
-};
 
 export function LeadInfoPanel({
   data: initialData,
@@ -175,15 +87,6 @@ export function LeadInfoPanel({
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
   const [isEditing, setIsEditing] = useState(false);
-
-  // Meeting scheduling states
-  const [meetingDate, setMeetingDate] = useState('');
-  const [meetingTime, setMeetingTime] = useState('09:00');
-  const [meetingDuration, setMeetingDuration] = useState('30');
-  const [meetingTitle, setMeetingTitle] = useState('');
-  const [meetingAttendee, setMeetingAttendee] = useState('');
-  const [meetingMeetLink, setMeetingMeetLink] = useState(true);
-  const [isMeetingPending, startMeetingTransition] = useTransition();
 
   // Primary contact (first socio)
   const primarySocio = data.socios?.[0] ?? null;
@@ -373,104 +276,20 @@ export function LeadInfoPanel({
   const headerName = fullName ?? companyName ?? data.cnpj ?? '—';
   const headerCompany = fullName && companyName && fullName !== companyName ? companyName : null;
 
-  // Notable events for bell icon (replies, meetings, bounces)
-  const notableTypes: InteractionType[] = ['replied', 'meeting_scheduled', 'bounced'];
-  const notableEvents = (timeline ?? []).filter((e) => notableTypes.includes(e.type));
-  const notableCount = notableEvents.length;
-
   return (
     <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-80'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
       {showLeadHeader && (
-      <div className="mb-20 flex items-center gap-3">
-        <div className="relative">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--primary)]/10 text-lg font-semibold text-[var(--primary)]">
-            {avatarInitial}
-          </div>
-          {data.fit_score != null && data.fit_score > 0 && (
-            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
-              {data.fit_score}
-            </span>
-          )}
-          {data.engagement_score != null && (
-            <span className="absolute -top-1 -left-1">
-              <EngagementScoreBadge score={data.engagement_score} size={22} />
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight">{headerName}</p>
-          {headerCompany && (
-            <p className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{headerCompany}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-8 w-8" title="Notificações do lead">
-              <Bell className="h-4 w-4" />
-              {notableCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
-                  {notableCount}
-                </span>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <p className="px-2 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Notificações do Lead
-            </p>
-            {notableCount === 0 ? (
-              <div className="px-2 py-3 text-center text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Nenhuma notificação
-              </div>
-            ) : (
-              notableEvents.slice(0, 8).map((entry) => {
-                const config = typeConfig[entry.type];
-                const Icon = config.icon;
-                const ChannelIcon = channelIcon[entry.channel] ?? Mail;
-                return (
-                  <DropdownMenuItem key={entry.id} className="flex gap-2 py-2" onSelect={() => setActiveTab('timeline')}>
-                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] ${config.className}`}>
-                      <Icon className="h-3 w-3" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-medium">{config.label}</span>
-                        <ChannelIcon className="h-3 w-3 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-                      </div>
-                      {entry.cadence_name && (
-                        <p className="truncate text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                          {entry.cadence_name}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                        {formatTimelineDate(entry.created_at)}
-                      </p>
-                    </div>
-                  </DropdownMenuItem>
-                );
-              })
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => window.open(`/leads/${data.id}`, '_blank')}
-            >
-              <ExternalLink className="mr-2 h-3.5 w-3.5" />
-              Ver lead completo
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        </div>
-      </div>
+        <LeadInfoPanelHeader
+          leadId={data.id}
+          avatarInitial={avatarInitial}
+          headerName={headerName}
+          headerCompany={headerCompany}
+          fitScore={data.fit_score}
+          engagementScore={data.engagement_score}
+          timeline={timeline}
+          onNavigateToTimeline={() => setActiveTab('timeline')}
+        />
       )}
 
       {/* KPIs */}
@@ -768,70 +587,7 @@ export function LeadInfoPanel({
         )}
 
         {/* Tab Timeline */}
-        {activeTab === 'timeline' && (
-          <div className="space-y-1">
-            {!timeline || timeline.length === 0 ? (
-              <p className="py-4 text-center text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Nenhuma interação registrada.
-              </p>
-            ) : (
-              timeline.map((entry) => {
-                const ChannelIcon = channelIcon[entry.channel] ?? Mail;
-                const label = channelLabel[entry.channel] ?? entry.channel;
-                const bgColor = channelColor[entry.channel] ?? 'bg-[var(--muted)]';
-                const relDate = formatRelativeDate(entry.created_at);
-                const stepLabel = entry.step_order != null ? ` ${entry.step_order}` : '';
-
-                return (
-                  <div key={entry.id} className="flex gap-3 rounded-lg p-3 hover:bg-[var(--muted)]/50 transition-colors">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${bgColor} text-white`}>
-                      <ChannelIcon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          {relDate === 'AGORA' && (
-                            <span className="rounded bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                              AGORA
-                            </span>
-                          )}
-                          <span className="text-sm font-semibold">
-                            {label}{stepLabel}
-                          </span>
-                          {entry.ai_generated && (
-                            <Badge variant="outline" className="h-4 px-1 text-[10px]">IA</Badge>
-                          )}
-                        </div>
-                        {relDate !== 'AGORA' && (
-                          <span className="shrink-0 text-[11px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                            {relDate}
-                          </span>
-                        )}
-                      </div>
-                      {entry.message_content ? (
-                        <div
-                          className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_a]:text-[var(--primary)] [&_a]:underline"
-                          dangerouslySetInnerHTML={{
-                            __html: sanitizeHtml(
-                              entry.message_content
-                                .replace(/\{\{[^}]+\}\}/g, '')
-                                .replace(/\s{2,}/g, ' ')
-                                .trim(),
-                            ),
-                          }}
-                        />
-                      ) : (
-                        <p className="mt-1 text-xs italic text-[var(--muted-foreground)] dark:text-[var(--foreground)]/60">
-                          Nenhuma anotação
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+        {activeTab === 'timeline' && <LeadTimelineTab timeline={timeline} />}
 
         {/* Tab Notas */}
         {activeTab === 'notas' && (
@@ -840,114 +596,11 @@ export function LeadInfoPanel({
 
         {/* Tab Agendar */}
         {activeTab === 'agendar' && (
-          <div className="space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Agendar Reunião
-            </h4>
-
-            <div>
-              <Label className="text-xs">Título</Label>
-              <Input
-                value={meetingTitle}
-                onChange={(e) => setMeetingTitle(e.target.value)}
-                placeholder={`Reunião com ${data.nome_fantasia ?? data.razao_social ?? 'Lead'}`}
-                className="mt-1"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Data</Label>
-                <Input
-                  type="date"
-                  value={meetingDate}
-                  onChange={(e) => setMeetingDate(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Hora</Label>
-                <Input
-                  type="time"
-                  value={meetingTime}
-                  onChange={(e) => setMeetingTime(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs">Duração</Label>
-              <select
-                className="mt-1 flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1 text-sm"
-                value={meetingDuration}
-                onChange={(e) => setMeetingDuration(e.target.value)}
-              >
-                <option value="15">15 min</option>
-                <option value="30">30 min</option>
-                <option value="45">45 min</option>
-                <option value="60">1 hora</option>
-                <option value="90">1h30</option>
-              </select>
-            </div>
-
-            <div>
-              <Label className="text-xs">Email do closer (participante)</Label>
-              <Input
-                type="email"
-                value={meetingAttendee}
-                onChange={(e) => setMeetingAttendee(e.target.value)}
-                placeholder="closer@empresa.com"
-                className="mt-1"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={meetingMeetLink}
-                onChange={(e) => setMeetingMeetLink(e.target.checked)}
-                className="rounded"
-              />
-              <Video className="h-3.5 w-3.5" />
-              Gerar link do Google Meet
-            </label>
-
-            <Button
-              className="w-full"
-              disabled={!meetingDate || !meetingTime || isMeetingPending}
-              onClick={() => {
-                const startDateTime = new Date(`${meetingDate}T${meetingTime}:00`);
-                const endDateTime = new Date(startDateTime.getTime() + parseInt(meetingDuration, 10) * 60 * 1000);
-                const title = meetingTitle || `Reunião com ${data.nome_fantasia ?? data.razao_social ?? 'Lead'}`;
-
-                startMeetingTransition(async () => {
-                  const result = await scheduleMeeting(data.id, {
-                    title,
-                    startTime: startDateTime.toISOString(),
-                    endTime: endDateTime.toISOString(),
-                    attendeeEmails: (meetingAttendee || data.email)
-                      ? (meetingAttendee || data.email || '').split(',').map((e: string) => e.trim()).filter(Boolean)
-                      : undefined,
-                    generateMeetLink: meetingMeetLink,
-                  });
-
-                  if (result.success) {
-                    const meetInfo = result.data.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
-                    toast.success(`Reunião agendada!${meetInfo}`);
-                    setMeetingDate('');
-                    setMeetingTitle('');
-                    router.refresh();
-                  } else {
-                    toast.error(result.error);
-                  }
-                });
-              }}
-            >
-              <Calendar className="mr-2 h-4 w-4" />
-              {isMeetingPending ? 'Agendando...' : 'Agendar Reunião'}
-            </Button>
-          </div>
+          <LeadScheduleTab
+            leadId={data.id}
+            leadEmail={data.email}
+            companyName={data.nome_fantasia ?? data.razao_social}
+          />
         )}
       </div>
 
