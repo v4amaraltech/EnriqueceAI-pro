@@ -62,7 +62,10 @@ export async function saveThreeCPlusConfig(
       } as Record<string, unknown>)
       .eq('id', existing.id);
 
-    if (error) return { success: false, error: 'Erro ao atualizar configurações' };
+    if (error) {
+      console.error('[3cplus] Update failed:', error.message, error.code, error.details);
+      return { success: false, error: `Erro ao atualizar: ${error.message}` };
+    }
   } else {
     const { error } = await from(supabase, 'threecplus_connections' as never)
       .insert({
@@ -74,7 +77,10 @@ export async function saveThreeCPlusConfig(
         status: 'connected',
       } as Record<string, unknown>);
 
-    if (error) return { success: false, error: 'Erro ao salvar configurações' };
+    if (error) {
+      console.error('[3cplus] Insert failed:', error.message, error.code, error.details);
+      return { success: false, error: `Erro ao salvar: ${error.message}` };
+    }
   }
 
   revalidatePath('/settings/integrations');
