@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FetchDrilldownInput } from '@/shared/schemas/drilldown.schema';
 
 vi.mock('@/lib/auth/get-org-id', () => ({
-  getAuthOrgId: vi.fn(),
+  getAuthOrgIdResult: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/from', () => ({
@@ -33,7 +33,7 @@ describe('fetchDrilldownData', () => {
   });
 
   it('returns data for overall_contacted metric', async () => {
-    const { getAuthOrgId } = await import('@/lib/auth/get-org-id');
+    const { getAuthOrgIdResult } = await import('@/lib/auth/get-org-id');
     const { from } = await import('@/lib/supabase/from');
 
     const mockData = [
@@ -50,10 +50,9 @@ describe('fetchDrilldownData', () => {
 
     const chain = createChainableMock({ data: mockData, count: 1 });
     vi.mocked(from).mockReturnValue(chain);
-    vi.mocked(getAuthOrgId).mockResolvedValue({
-      orgId: 'org-1',
-      userId: 'u-1',
-      supabase: {} as any,
+    vi.mocked(getAuthOrgIdResult).mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');
@@ -74,7 +73,7 @@ describe('fetchDrilldownData', () => {
   });
 
   it('returns data for conversion_stage metric', async () => {
-    const { getAuthOrgId } = await import('@/lib/auth/get-org-id');
+    const { getAuthOrgIdResult } = await import('@/lib/auth/get-org-id');
     const { from } = await import('@/lib/supabase/from');
 
     const mockData = [
@@ -83,10 +82,9 @@ describe('fetchDrilldownData', () => {
 
     const chain = createChainableMock({ data: mockData, count: 1 });
     vi.mocked(from).mockReturnValue(chain);
-    vi.mocked(getAuthOrgId).mockResolvedValue({
-      orgId: 'org-1',
-      userId: 'u-1',
-      supabase: {} as any,
+    vi.mocked(getAuthOrgIdResult).mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');
@@ -106,7 +104,7 @@ describe('fetchDrilldownData', () => {
   });
 
   it('returns data for overall_leads metric', async () => {
-    const { getAuthOrgId } = await import('@/lib/auth/get-org-id');
+    const { getAuthOrgIdResult } = await import('@/lib/auth/get-org-id');
     const { from } = await import('@/lib/supabase/from');
 
     // First two calls return lead_ids, third returns leads
@@ -133,10 +131,9 @@ describe('fetchDrilldownData', () => {
       return leadsChain;
     });
 
-    vi.mocked(getAuthOrgId).mockResolvedValue({
-      orgId: 'org-1',
-      userId: 'u-1',
-      supabase: {} as any,
+    vi.mocked(getAuthOrgIdResult).mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');

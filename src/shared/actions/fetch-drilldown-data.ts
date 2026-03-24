@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { DrilldownResult } from '@/shared/components/drilldown/drilldown.types';
@@ -30,8 +30,11 @@ export async function fetchDrilldownData(
     return { success: false, error: 'Parâmetros inválidos' };
   }
 
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
   try {
-    const { orgId, supabase } = await getAuthOrgId();
     const { metric, filters, page } = parsed.data;
     const offset = (page - 1) * PAGE_SIZE;
     const rangeStart = offset;

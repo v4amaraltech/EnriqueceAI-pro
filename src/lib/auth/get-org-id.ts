@@ -36,6 +36,7 @@ export async function getAuthOrgIdResult(): Promise<ActionResult<OrgContext>> {
 }
 
 /**
+ * @deprecated Use `getAuthOrgIdResult()` instead — it returns ActionResult<T> for proper error handling.
  * Get org ID for an authenticated user. Calls requireAuth() internally.
  * Returns { orgId, userId, supabase } or throws redirect to /login.
  */

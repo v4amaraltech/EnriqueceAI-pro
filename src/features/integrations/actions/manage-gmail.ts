@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { decrypt, encrypt } from '@/lib/security/encryption';
 
@@ -16,7 +15,8 @@ const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? '';
 export async function getGmailAuthUrl(
   redirectAfter?: string,
 ): Promise<ActionResult<{ url: string }>> {
-  await requireAuth();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
     return { success: false, error: 'Configuração do Google OAuth não encontrada' };
@@ -49,22 +49,12 @@ export async function getGmailAuthUrl(
 export async function handleGmailCallback(
   code: string,
 ): Promise<ActionResult<GmailConnectionSafe>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
     return { success: false, error: 'Configuração do Google OAuth não encontrada' };
-  }
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
   }
 
   // Exchange code for tokens
@@ -111,8 +101,8 @@ export async function handleGmailCallback(
   if (!refreshToken) {
     const { data: existing } = (await from(supabase, 'gmail_connections')
       .select('refresh_token_encrypted')
-      .eq('org_id', member.org_id)
-      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .eq('user_id', userId)
       .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
     // Existing value may already be encrypted — keep as-is for storage
     refreshToken = existing?.refresh_token_encrypted ?? '';
@@ -125,8 +115,8 @@ export async function handleGmailCallback(
   const { data, error } = (await from(supabase, 'gmail_connections')
     .upsert(
       {
-        org_id: member.org_id,
-        user_id: user.id,
+        org_id: orgId,
+        user_id: userId,
         access_token_encrypted: encryptedAccessToken,
         refresh_token_encrypted: encryptedRefreshToken,
         token_expires_at: expiresAt,
@@ -146,8 +136,8 @@ export async function handleGmailCallback(
   await from(supabase, 'calendar_connections')
     .upsert(
       {
-        org_id: member.org_id,
-        user_id: user.id,
+        org_id: orgId,
+        user_id: userId,
         access_token_encrypted: encryptedAccessToken,
         refresh_token_encrypted: encryptedRefreshToken,
         token_expires_at: expiresAt,
@@ -161,24 +151,14 @@ export async function handleGmailCallback(
 }
 
 export async function disconnectGmail(): Promise<ActionResult<{ disconnected: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'gmail_connections')
     .delete()
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id);
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
 
   if (error) {
     return { success: false, error: 'Erro ao desconectar Gmail' };
@@ -187,8 +167,8 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
   // Also disconnect calendar (unified OAuth)
   await from(supabase, 'calendar_connections')
     .delete()
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id);
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
 
   return { success: true, data: { disconnected: true } };
 }
@@ -196,8 +176,9 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
 export async function refreshGmailToken(
   connectionId: string,
 ): Promise<ActionResult<{ refreshed: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { userId, supabase } = auth.data;
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return { success: false, error: 'Configuração do Google OAuth não encontrada' };
@@ -207,7 +188,7 @@ export async function refreshGmailToken(
   const { data: connection } = (await from(supabase, 'gmail_connections')
     .select('*')
     .eq('id', connectionId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single()) as { data: { refresh_token_encrypted: string } | null };
 
   if (!connection) {
@@ -256,7 +237,7 @@ export async function refreshGmailToken(
       token_expires_at: expiresAt,
       status: 'connected',
     } as Record<string, unknown>)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   return { success: true, data: { refreshed: true } };
 }

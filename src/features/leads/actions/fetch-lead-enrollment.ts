@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { ChannelType } from '@/features/cadences/types';
@@ -39,8 +38,9 @@ export interface LeadEnrollmentData {
 export async function fetchLeadEnrollment(
   leadId: string,
 ): Promise<ActionResult<LeadEnrollmentData>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // Get all active/paused enrollments with cadence info
   const { data: enrollmentRows } = await supabase

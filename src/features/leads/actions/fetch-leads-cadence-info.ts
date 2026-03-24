@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import type { LeadCadenceInfo } from '../types';
 
@@ -13,8 +12,9 @@ export async function fetchLeadsCadenceInfo(
     return { success: true, data: {} };
   }
 
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { data, error } = await supabase
     .from('cadence_enrollments')
