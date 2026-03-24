@@ -67,6 +67,7 @@ export interface LeadRow {
   fit_score: number | null;
   engagement_score: number | null;
   enriched_at: string | null;
+  custom_field_values: Record<string, string> | null;
   email_bounced_at: string | null;
   created_by: string | null;
   assigned_to: string | null;

@@ -34,13 +34,15 @@ import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator'
 import type { LeadContext } from '@/features/ai/types';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 import type { CrmProvider } from '@/features/integrations/types/crm';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active-cadences';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, fetchCrmPipelines, fetchPipelineStages, fetchLossReasons, markLeadAsLost, markLeadAsWon, scheduleNewProspection, type CrmPipelinesEntry } from '../actions/update-lead';
+import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
+import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -53,9 +55,10 @@ interface LeadDetailLayoutProps {
   lead: LeadRow;
   timeline: TimelineEntry[];
   enrollmentData: LeadEnrollmentData;
+  customFieldDefs?: CustomFieldRow[];
 }
 
-export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailLayoutProps) {
+export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs }: LeadDetailLayoutProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -279,7 +282,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       )}
 
       <div className="flex gap-6">
-        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} />
+        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
 

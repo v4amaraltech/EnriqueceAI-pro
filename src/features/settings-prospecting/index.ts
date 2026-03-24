@@ -3,7 +3,8 @@ export type { LossReasonRow } from './actions/loss-reasons-crud';
 
 // Actions
 export { getDailyGoals } from './actions/get-daily-goals';
-export { listCustomFields } from './actions/custom-fields-crud';
+export { listCustomFields, listVisibleCustomFields } from './actions/custom-fields-crud';
+export type { CustomFieldRow } from './types/custom-field';
 export { listBlacklistDomains } from './actions/email-blacklist-crud';
 export { listLossReasons, addLossReason } from './actions/loss-reasons-crud';
 export { getOrgSettings } from './actions/org-settings-crud';

@@ -28,6 +28,7 @@ export interface LeadInfoPanelData {
   instagram: string | null;
   linkedin: string | null;
   website: string | null;
+  custom_field_values: Record<string, string> | null;
 }
 
 export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
@@ -57,6 +58,7 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     instagram: lead.instagram,
     linkedin: lead.linkedin,
     website: lead.website,
+    custom_field_values: lead.custom_field_values,
   };
 }
 
@@ -87,5 +89,6 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     instagram: lead.instagram,
     linkedin: lead.linkedin,
     website: lead.website,
+    custom_field_values: (lead as ActivityLead & { custom_field_values?: Record<string, string> | null }).custom_field_values ?? null,
   };
 }

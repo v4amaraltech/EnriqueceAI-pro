@@ -1,18 +1,11 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
-export interface CustomFieldRow {
-  id: string;
-  org_id: string;
-  field_name: string;
-  field_type: 'text' | 'number' | 'date' | 'select';
-  options: string[] | null;
-  sort_order: number;
-  created_at: string;
-}
+export type { CustomFieldRow } from '../types/custom-field';
+import type { CustomFieldRow } from '../types/custom-field';
 
 function customFieldsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
   return supabase.from('custom_fields');
@@ -133,4 +126,44 @@ export async function deleteCustomField(id: string): Promise<ActionResult<{ dele
 
   if (error) return { success: false, error: 'Erro ao remover campo' };
   return { success: true, data: { deleted: true } };
+}
+
+export async function updateCustomFieldSettings(
+  id: string,
+  settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
+): Promise<ActionResult<CustomFieldRow>> {
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { data, error } = (await customFieldsFrom(supabase)
+    .update(settings as Record<string, unknown>)
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .select()
+    .single()) as { data: CustomFieldRow | null; error: unknown };
+
+  if (error || !data) return { success: false, error: 'Erro ao atualizar configuração do campo' };
+  return { success: true, data };
+}
+
+/** List visible custom fields — readable by any org member (not just managers). */
+export async function listVisibleCustomFields(): Promise<ActionResult<CustomFieldRow[]>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  const { data, error } = (await customFieldsFrom(supabase)
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('is_visible', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })) as { data: CustomFieldRow[] | null; error: unknown };
+
+  if (error) return { success: false, error: 'Erro ao listar campos personalizados' };
+  return { success: true, data: data ?? [] };
 }

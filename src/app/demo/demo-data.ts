@@ -285,6 +285,7 @@ export const enrichedLead: LeadInfoPanelData = {
   instagram: '@technovasolucoes',
   linkedin: 'https://linkedin.com/company/technova',
   website: 'https://technova.com.br',
+  custom_field_values: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -305,6 +306,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 85, engagement_score: null, enriched_at: '2026-03-05T12:00:00Z', email_bounced_at: null,
     created_by: 'u1', assigned_to: 'u1', import_id: null, deleted_at: null,
     created_at: '2026-03-01T09:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l2', org_id: 'org1', cnpj: '98.765.432/0001-10', status: 'contacted', enrichment_status: 'enriched',
@@ -317,6 +319,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 72, engagement_score: null, enriched_at: '2026-03-04T10:00:00Z', email_bounced_at: null,
     created_by: 'u2', assigned_to: 'u2', import_id: null, deleted_at: null,
     created_at: '2026-03-02T11:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l3', org_id: 'org1', cnpj: '11.222.333/0001-44', status: 'new', enrichment_status: 'enriched',
@@ -329,6 +332,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 91, engagement_score: null, enriched_at: '2026-03-06T08:00:00Z', email_bounced_at: null,
     created_by: 'u1', assigned_to: 'u3', import_id: null, deleted_at: null,
     created_at: '2026-03-03T14:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l4', org_id: 'org1', cnpj: '44.555.666/0001-77', status: 'contacted', enrichment_status: 'enriched',
@@ -341,6 +345,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 68, engagement_score: null, enriched_at: '2026-03-04T15:00:00Z', email_bounced_at: null,
     created_by: 'u3', assigned_to: 'u1', import_id: null, deleted_at: null,
     created_at: '2026-03-02T16:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l5', org_id: 'org1', cnpj: '77.888.999/0001-11', status: 'qualified', enrichment_status: 'enriched',
@@ -353,6 +358,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 88, engagement_score: null, enriched_at: '2026-03-05T09:00:00Z', email_bounced_at: null,
     created_by: 'u2', assigned_to: 'u2', import_id: null, deleted_at: null,
     created_at: '2026-03-01T10:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l6', org_id: 'org1', cnpj: '22.333.444/0001-55', status: 'unqualified', enrichment_status: 'enriched',
@@ -365,6 +371,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 32, engagement_score: null, enriched_at: '2026-03-03T11:00:00Z', email_bounced_at: null,
     created_by: 'u1', assigned_to: 'u1', import_id: null, deleted_at: null,
     created_at: '2026-03-04T08:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l7', org_id: 'org1', cnpj: '55.666.777/0001-33', status: 'new', enrichment_status: 'pending',
@@ -377,6 +384,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: null, engagement_score: null, enriched_at: null, email_bounced_at: null,
     created_by: 'u3', assigned_to: 'u3', import_id: null, deleted_at: null,
     created_at: '2026-03-06T15:00:00Z', updated_at: now,
+    custom_field_values: null,
   },
   {
     id: 'l8', org_id: 'org1', cnpj: '88.999.000/0001-66', status: 'contacted', enrichment_status: 'enriched',
@@ -389,6 +397,7 @@ export const demoLeads: LeadRow[] = [
     fit_score: 76, engagement_score: null, enriched_at: '2026-03-06T14:00:00Z', email_bounced_at: null,
     created_by: 'u2', assigned_to: 'u1', import_id: null, deleted_at: null,
     created_at: '2026-03-05T09:30:00Z', updated_at: now,
+    custom_field_values: null,
   },
 ];
 

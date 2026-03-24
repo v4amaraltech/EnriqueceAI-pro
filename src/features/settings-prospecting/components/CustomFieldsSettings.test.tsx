@@ -3,12 +3,17 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../actions/custom-fields-crud', () => ({
-  addCustomField: vi.fn().mockResolvedValue({ success: true, data: { id: 'f-new', org_id: 'org-1', field_name: 'Test', field_type: 'text', options: null, sort_order: 1, created_at: '2026-01-01' } }),
+  addCustomField: vi.fn().mockResolvedValue({ success: true, data: { id: 'f-new', org_id: 'org-1', field_name: 'Test', field_type: 'text', options: null, sort_order: 1, is_visible: true, is_required_won: false, is_required_lost: false, created_at: '2026-01-01' } }),
   updateCustomField: vi.fn().mockResolvedValue({ success: true, data: {} }),
   deleteCustomField: vi.fn().mockResolvedValue({ success: true, data: { deleted: true } }),
+  updateCustomFieldSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
 }));
 
-import type { CustomFieldRow } from '../actions/custom-fields-crud';
+vi.mock('../actions/standard-field-settings', () => ({
+  upsertStandardFieldSetting: vi.fn().mockResolvedValue({ success: true, data: {} }),
+}));
+
+import type { CustomFieldRow } from '../types/custom-field';
 
 import { CustomFieldsSettings } from './CustomFieldsSettings';
 
@@ -19,44 +24,49 @@ const makeField = (overrides: Partial<CustomFieldRow> = {}): CustomFieldRow => (
   field_type: 'text',
   options: null,
   sort_order: 1,
+  is_visible: true,
+  is_required_won: false,
+  is_required_lost: false,
   created_at: '2026-01-01',
   ...overrides,
 });
 
 describe('CustomFieldsSettings', () => {
   it('should render title', () => {
-    render(<CustomFieldsSettings initial={[]} />);
+    render(<CustomFieldsSettings initial={[]} standardSettings={[]} />);
     expect(screen.getByText('Campos Personalizados')).toBeInTheDocument();
   });
 
-  it('should show empty state', () => {
-    render(<CustomFieldsSettings initial={[]} />);
+  it('should show empty state when no custom fields', () => {
+    render(<CustomFieldsSettings initial={[]} standardSettings={[]} />);
     expect(screen.getByText(/Nenhum campo personalizado/)).toBeInTheDocument();
   });
 
-  it('should render existing fields', () => {
-    render(<CustomFieldsSettings initial={[makeField()]} />);
+  it('should render existing fields in table', () => {
+    render(<CustomFieldsSettings initial={[makeField()]} standardSettings={[]} />);
     expect(screen.getByText('Segmento')).toBeInTheDocument();
   });
 
-  it('should show field type badge', () => {
-    render(<CustomFieldsSettings initial={[makeField({ field_type: 'select', options: ['A', 'B'] })]} />);
-    expect(screen.getByText('Seleção')).toBeInTheDocument();
-    expect(screen.getByText('(A, B)')).toBeInTheDocument();
+  it('should show field type and options', () => {
+    render(<CustomFieldsSettings initial={[makeField({ field_type: 'select', options: ['A', 'B'] })]} standardSettings={[]} />);
+    expect(screen.getByText(/Seleção/)).toBeInTheDocument();
+    expect(screen.getByText(/(A, B)/)).toBeInTheDocument();
   });
 
-  it('should show add form', () => {
-    render(<CustomFieldsSettings initial={[]} />);
-    expect(screen.getByPlaceholderText(/Segmento/)).toBeInTheDocument();
-    expect(screen.getByText('Adicionar')).toBeInTheDocument();
+  it('should show tabs with counts', () => {
+    render(<CustomFieldsSettings initial={[makeField()]} standardSettings={[]} />);
+    expect(screen.getByText('Campos personalizados')).toBeInTheDocument();
+    expect(screen.getByText('Campos padrão')).toBeInTheDocument();
   });
 
-  it('should enter edit mode', async () => {
+  it('should open create dialog on + button click', async () => {
     const user = userEvent.setup();
-    render(<CustomFieldsSettings initial={[makeField()]} />);
-    const editButtons = screen.getAllByRole('button');
-    const pencilButton = editButtons.find((b) => b.querySelector('.lucide-pencil'));
-    if (pencilButton) await user.click(pencilButton);
-    expect(screen.getByText('Salvar')).toBeInTheDocument();
+    render(<CustomFieldsSettings initial={[]} standardSettings={[]} />);
+    const plusButtons = screen.getAllByRole('button');
+    const plusBtn = plusButtons.find((b) => b.querySelector('.lucide-plus'));
+    if (plusBtn) {
+      await user.click(plusBtn);
+      expect(screen.getByText('Novo campo personalizado')).toBeInTheDocument();
+    }
   });
 });

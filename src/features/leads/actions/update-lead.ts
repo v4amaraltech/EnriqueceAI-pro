@@ -10,11 +10,6 @@ import { from } from '@/lib/supabase/from';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
-// Re-export lifecycle and CRM actions for backward compatibility
-export { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from './lead-lifecycle';
-export { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon } from './lead-crm';
-export type { CrmPipelinesEntry } from './lead-crm';
-
 /**
  * Resume paused enrollments when lead data is updated.
  * Finds enrollments paused due to missing email/phone and reactivates them.
@@ -61,7 +56,7 @@ export async function updateLead(
   const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'is_inbound', 'email_bounced_at'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'is_inbound', 'email_bounced_at', 'custom_field_values'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {

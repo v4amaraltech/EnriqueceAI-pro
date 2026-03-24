@@ -1,6 +1,7 @@
 'use client';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
+import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import type { LeadRow } from '../types';
@@ -11,9 +12,10 @@ interface LeadDetailSidebarProps {
   lead: LeadRow;
   enrollmentData: LeadEnrollmentData;
   timeline: TimelineEntry[];
+  customFieldDefs?: CustomFieldRow[];
 }
 
-export function LeadDetailSidebar({ lead, enrollmentData, timeline }: LeadDetailSidebarProps) {
+export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldDefs }: LeadDetailSidebarProps) {
   const { enrollment, enrollments, kpis } = enrollmentData;
 
   return (
@@ -23,6 +25,7 @@ export function LeadDetailSidebar({ lead, enrollmentData, timeline }: LeadDetail
       enrollments={enrollments}
       timeline={timeline}
       kpis={kpis}
+      customFieldDefs={customFieldDefs}
     />
   );
 }

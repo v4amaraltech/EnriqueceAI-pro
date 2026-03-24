@@ -158,8 +158,8 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
 
   const handleLeadWon = useCallback((activity: PendingActivity) => {
     handleActivityDone(activity.enrollmentId, activity.stepId);
-    import('@/features/leads/actions/update-lead').then(({ markLeadAsWon }) =>
-      markLeadAsWon(activity.lead.id).then((r) => {
+    import('@/features/leads/actions/lead-crm').then(({ markLeadAsWon }) =>
+      markLeadAsWon(activity.lead.id).then((r: { success: boolean; error?: string }) => {
         if (!r.success) toast.error(r.error);
         else toast.success('Lead marcado como ganho');
       }),

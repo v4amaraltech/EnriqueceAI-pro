@@ -32,6 +32,7 @@ import {
 } from '@/shared/components/ui/tooltip';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
+import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
@@ -52,6 +53,7 @@ export interface LeadInfoPanelProps {
   showLeadHeader?: boolean;
   cadenceConfig?: { cadenceName: string; stepOrder: number; totalSteps: number };
   kpis?: { completed: number; open: number; conversations: number };
+  customFieldDefs?: CustomFieldRow[];
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
@@ -64,6 +66,7 @@ export function LeadInfoPanel({
   showLeadHeader = false,
   cadenceConfig: _cadenceConfig,
   kpis,
+  customFieldDefs,
 }: LeadInfoPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -104,6 +107,10 @@ export function LeadInfoPanel({
     linkedin: data.linkedin ?? '',
     website: data.website ?? '',
   });
+
+  const [editCustomFieldValues, setEditCustomFieldValues] = useState<Record<string, string>>(
+    data.custom_field_values ?? {},
+  );
 
   // Build initial phone entries from phones JSONB (preferred) + telefone fallback
   const buildInitialPhones = useCallback((): LeadPhone[] => {
@@ -168,6 +175,7 @@ export function LeadInfoPanel({
         email: editEmail,
         telefone: primaryPhone,
         phones: validPhones,
+        custom_field_values: editCustomFieldValues,
       });
       if (result.success) {
         setData((prev) => ({
@@ -183,6 +191,7 @@ export function LeadInfoPanel({
           instagram: editFields.instagram || null,
           linkedin: editFields.linkedin || null,
           website: editFields.website || null,
+          custom_field_values: editCustomFieldValues,
         }));
         toast.success('Lead atualizado');
         setIsEditing(false);
@@ -191,7 +200,7 @@ export function LeadInfoPanel({
         toast.error(result.error);
       }
     });
-  }, [data.id, editFields, phoneEntries, router]);
+  }, [data.id, editFields, editCustomFieldValues, phoneEntries, router]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({
@@ -206,6 +215,7 @@ export function LeadInfoPanel({
       website: data.website ?? '',
     });
     setPhoneEntries(buildInitialPhones());
+    setEditCustomFieldValues(data.custom_field_values ?? {});
     setIsEditing(false);
   }, [data, primarySocio, primaryEmail, buildInitialPhones]);
 
@@ -583,6 +593,63 @@ export function LeadInfoPanel({
                 />
               )}
             </div>
+
+            {/* CUSTOM FIELDS */}
+            {customFieldDefs && customFieldDefs.length > 0 && (
+              <>
+                <hr className="border-t-2 border-[var(--border)]" />
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    Campos personalizados
+                  </h4>
+                  {isEditing ? (
+                    customFieldDefs.map((cf) => (
+                      <div key={cf.id} className="space-y-1">
+                        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{cf.field_name}</p>
+                        {cf.field_type === 'select' && cf.options && cf.options.length > 0 ? (
+                          <Select
+                            value={editCustomFieldValues[cf.id] ?? 'none'}
+                            onValueChange={(v) =>
+                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: v === 'none' ? '' : v }))
+                            }
+                          >
+                            <SelectTrigger className="w-full text-sm">
+                              <SelectValue placeholder="Selecione..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">—</SelectItem>
+                              {cf.options.map((opt) => (
+                                <SelectItem key={opt} value={opt}>
+                                  {opt}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={editCustomFieldValues[cf.id] ?? ''}
+                            onChange={(e) =>
+                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
+                            }
+                            className="h-8 text-sm"
+                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                            placeholder={cf.field_name}
+                          />
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    customFieldDefs.map((cf) => (
+                      <MeetimeFieldRow
+                        key={cf.id}
+                        label={cf.field_name}
+                        value={data.custom_field_values?.[cf.id] || '—'}
+                      />
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
