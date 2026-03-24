@@ -8,27 +8,12 @@ import { toast } from 'sonner';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
 import {
   Table,
   TableBody,
@@ -47,6 +32,7 @@ import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
 import { EngagementScoreBadge } from './EngagementScoreBadge';
 import { LeadAvatar } from './LeadAvatar';
 import { LeadSourceBadge, LeadStatusBadge } from './LeadStatusBadge';
+import { AssignDialog, ConfirmDialog, EnrichConfirmDialog, StatusDialog } from './LeadTableDialogs';
 
 interface LeadTableProps {
   leads: LeadRow[];
@@ -622,158 +608,72 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         </Table>
       </div>
 
-      {/* Archive confirmation dialog */}
-      <Dialog open={showArchiveConfirm} onOpenChange={setShowArchiveConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Arquivar leads</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja arquivar {selected.size} lead{selected.size > 1 ? 's' : ''}? Os leads arquivados não aparecerão mais na lista principal.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowArchiveConfirm(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleArchiveConfirmed} disabled={isPending}>
-              {isPending ? 'Arquivando...' : 'Arquivar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Confirmation dialogs */}
+      <ConfirmDialog
+        open={showArchiveConfirm}
+        onOpenChange={setShowArchiveConfirm}
+        title="Arquivar leads"
+        description={`Tem certeza que deseja arquivar ${selected.size} lead${selected.size > 1 ? 's' : ''}? Os leads arquivados não aparecerão mais na lista principal.`}
+        confirmLabel="Arquivar"
+        pendingLabel="Arquivando..."
+        onConfirm={handleArchiveConfirmed}
+        isPending={isPending}
+      />
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir leads</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir {selected.size} lead{selected.size > 1 ? 's' : ''}? Esta ação não pode ser desfeita.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirmed} disabled={isPending}>
-              {isPending ? 'Excluindo...' : 'Excluir'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Excluir leads"
+        description={`Tem certeza que deseja excluir ${selected.size} lead${selected.size > 1 ? 's' : ''}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        pendingLabel="Excluindo..."
+        onConfirm={handleDeleteConfirmed}
+        isPending={isPending}
+      />
 
-      {/* Enrich confirmation dialog */}
-      <Dialog open={!!showEnrichConfirm} onOpenChange={(open) => !open && setShowEnrichConfirm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Enriquecer leads</DialogTitle>
-            <DialogDescription>
-              {showEnrichConfirm === 'cnpj'
-                ? `Deseja enriquecer ${selected.size} lead${selected.size > 1 ? 's' : ''} via CNPJ? Essa operação pode levar alguns minutos.`
-                : `Deseja enriquecer ${selected.size} lead${selected.size > 1 ? 's' : ''} via Apollo? Cada enriquecimento consome 1 crédito.`
-              }
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEnrichConfirm(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (showEnrichConfirm === 'cnpj') handleEnrich();
-                else handleEnrichApollo();
-                setShowEnrichConfirm(null);
-              }}
-              disabled={isPending}
-            >
-              Enriquecer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EnrichConfirmDialog
+        enrichType={showEnrichConfirm}
+        onClose={() => setShowEnrichConfirm(null)}
+        onConfirm={() => {
+          if (showEnrichConfirm === 'cnpj') handleEnrich();
+          else handleEnrichApollo();
+          setShowEnrichConfirm(null);
+        }}
+        selectedSize={selected.size}
+        isPending={isPending}
+      />
 
-      {/* Single archive confirmation dialog */}
-      <Dialog open={!!singleArchiveId} onOpenChange={(open) => !open && setSingleArchiveId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Arquivar lead</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja arquivar este lead? Ele não aparecerá mais na lista principal.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSingleArchiveId(null)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleSingleArchiveConfirmed} disabled={isPending}>
-              {isPending ? 'Arquivando...' : 'Arquivar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!singleArchiveId}
+        onOpenChange={(open) => !open && setSingleArchiveId(null)}
+        title="Arquivar lead"
+        description="Tem certeza que deseja arquivar este lead? Ele não aparecerá mais na lista principal."
+        confirmLabel="Arquivar"
+        pendingLabel="Arquivando..."
+        onConfirm={handleSingleArchiveConfirmed}
+        isPending={isPending}
+      />
 
-      {/* Assign dialog */}
-      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reatribuir leads</DialogTitle>
-            <DialogDescription>
-              Selecione o responsável para {selected.size} lead{selected.size > 1 ? 's' : ''}.
-            </DialogDescription>
-          </DialogHeader>
-          <Select value={assignTarget} onValueChange={setAssignTarget}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um responsável" />
-            </SelectTrigger>
-            <SelectContent>
-              {assignMembers.map((m) => (
-                <SelectItem key={m.userId} value={m.userId}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAssign} disabled={!assignTarget || isPending}>
-              {isPending ? 'Reatribuindo...' : 'Reatribuir'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AssignDialog
+        open={showAssignDialog}
+        onOpenChange={setShowAssignDialog}
+        members={assignMembers}
+        assignTarget={assignTarget}
+        onTargetChange={setAssignTarget}
+        onConfirm={handleAssign}
+        selectedSize={selected.size}
+        isPending={isPending}
+      />
 
-      {/* Status change dialog */}
-      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Alterar status</DialogTitle>
-            <DialogDescription>
-              Selecione o novo status para {selected.size} lead{selected.size > 1 ? 's' : ''}.
-            </DialogDescription>
-          </DialogHeader>
-          <Select value={statusTarget} onValueChange={setStatusTarget}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">Novo</SelectItem>
-              <SelectItem value="contacted">Contatado</SelectItem>
-              <SelectItem value="qualified">Qualificado</SelectItem>
-              <SelectItem value="unqualified">Não Qualificado</SelectItem>
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStatusDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleBulkStatusChange} disabled={!statusTarget || isPending}>
-              {isPending ? 'Alterando...' : 'Alterar status'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <StatusDialog
+        open={showStatusDialog}
+        onOpenChange={setShowStatusDialog}
+        statusTarget={statusTarget}
+        onTargetChange={setStatusTarget}
+        onConfirm={handleBulkStatusChange}
+        selectedSize={selected.size}
+        isPending={isPending}
+      />
 
       {/* Enroll in cadence dialog */}
       <EnrollInCadenceDialog

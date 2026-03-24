@@ -3,21 +3,12 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
 import {
-  Archive,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  BarChart3,
-  Copy,
-  Info,
   Mail,
-  MoreHorizontal,
-  Pause,
-  Pencil,
-  Play,
   Plus,
   Search,
-  Trash2,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,7 +27,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
@@ -47,19 +37,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/shared/components/ui/tooltip';
+import { TooltipProvider } from '@/shared/components/ui/tooltip';
 
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 import type { CadenceTabCounts } from '../actions/fetch-cadences';
 import { activateCadence, deleteCadence, duplicateCadence, updateCadence } from '../actions/manage-cadences';
-import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
+import type { CadenceRow, CadenceType } from '../types';
 import { AutoEmailTable } from './AutoEmailTable';
-import { PriorityIcon } from './PriorityIcon';
+import { CadenceTableRow } from './CadenceTableRow';
 
 interface CadenceListViewProps {
   cadences: CadenceRow[];
@@ -74,25 +59,6 @@ interface CadenceListViewProps {
 }
 
 const ALL_VALUE = '__all__';
-
-const statusConfig: Record<CadenceStatus, { label: string; className: string }> = {
-  draft: {
-    label: 'Rascunho',
-    className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-  },
-  active: {
-    label: 'Ativa',
-    className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  },
-  paused: {
-    label: 'Pausada',
-    className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-  },
-  archived: {
-    label: 'Arquivada',
-    className: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-  },
-};
 
 export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {}, members, enrollmentCounts = {} }: CadenceListViewProps) {
   const router = useRouter();
@@ -452,148 +418,20 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             </div>
 
             {/* Table rows */}
-            {cadences.map((cadence, index) => {
-              const config = statusConfig[cadence.status];
-              return (
-                <div
-                  key={cadence.id}
-                  className={`group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--muted)]/30 ${
-                    index < cadences.length - 1 ? 'border-b border-[var(--border)]' : ''
-                  }`}
-                >
-                  {/* Info icon */}
-                  <div className="w-7 shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]">
-                          <Info className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <div className="space-y-1 text-xs">
-                          <p><span className="font-medium">Prioridade:</span> {cadence.priority === 'high' ? 'Alta' : cadence.priority === 'medium' ? 'Média' : 'Baixa'}</p>
-                          <p><span className="font-medium">Origem:</span> {cadence.origin === 'inbound_active' ? 'Inbound Ativo' : cadence.origin === 'inbound_passive' ? 'Inbound Passivo' : 'Outbound'}</p>
-                          <p><span className="font-medium">Criada:</span> {new Date(cadence.created_at).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-
-                  {/* Priority arrow */}
-                  <div className="w-6 shrink-0">
-                    <PriorityIcon priority={cadence.priority} className="h-5 w-5" />
-                  </div>
-
-                  {/* Name */}
-                  <div className="w-48 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/cadences/${cadence.id}`)}
-                      className="truncate text-sm font-medium text-[var(--foreground)] hover:text-[var(--primary)] hover:underline"
-                    >
-                      {cadence.name}
-                    </button>
-                  </div>
-
-                  {/* Description */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm italic text-[var(--foreground)]/80">
-                      {cadence.description || ''}
-                    </p>
-                  </div>
-
-                  {/* Status badge */}
-                  <div className="w-20 shrink-0 text-center">
-                    <Badge variant="outline" className={`text-[10px] ${config.className}`}>
-                      {config.label}
-                    </Badge>
-                  </div>
-
-                  {/* Steps count */}
-                  <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
-                    {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
-                  </div>
-
-                  {/* Enrollment count */}
-                  <div className="w-16 shrink-0 text-center text-xs text-[var(--foreground)]">
-                    {enrollmentCounts[cadence.id] ?? 0}
-                  </div>
-
-                  {/* Creator */}
-                  <div className="w-28 shrink-0 truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    {cadence.created_by ? (userMap[cadence.created_by] ?? '—') : '—'}
-                  </div>
-
-                  {/* Performance link */}
-                  <div className="w-8 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                      onClick={() => router.push(`/cadences/${cadence.id}/performance`)}
-                      aria-label={`Performance de ${cadence.name}`}
-                    >
-                      <BarChart3 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-
-                  {/* Actions menu */}
-                  <div className="w-8 shrink-0">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                          aria-label={`Ações para ${cadence.name}`}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/cadences/${cadence.id}`)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                        {cadence.status === 'draft' && cadence.total_steps >= 2 && (
-                          <DropdownMenuItem onClick={() => handleActivateDraft(cadence)}>
-                            <Zap className="mr-2 h-4 w-4" />
-                            Ativar
-                          </DropdownMenuItem>
-                        )}
-                        {(cadence.status === 'active' || cadence.status === 'paused') && (
-                          <DropdownMenuItem onClick={() => handleToggleStatus(cadence)}>
-                            {cadence.status === 'active' ? (
-                              <><Pause className="mr-2 h-4 w-4" />Pausar</>
-                            ) : (
-                              <><Play className="mr-2 h-4 w-4" />Ativar</>
-                            )}
-                          </DropdownMenuItem>
-                        )}
-                        {cadence.status !== 'archived' && (
-                          <DropdownMenuItem onClick={() => handleArchive(cadence)}>
-                            <Archive className="mr-2 h-4 w-4" />
-                            Arquivar
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={() => handleDuplicate(cadence)}>
-                          <Copy className="mr-2 h-4 w-4" />
-                          Duplicar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-red-600"
-                          onClick={() => setDeleteId(cadence.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Deletar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              );
-            })}
+            {cadences.map((cadence, index) => (
+              <CadenceTableRow
+                key={cadence.id}
+                cadence={cadence}
+                isLast={index === cadences.length - 1}
+                enrollmentCount={enrollmentCounts[cadence.id] ?? 0}
+                creatorName={cadence.created_by ? (userMap[cadence.created_by] ?? '—') : '—'}
+                onToggleStatus={handleToggleStatus}
+                onArchive={handleArchive}
+                onActivateDraft={handleActivateDraft}
+                onDuplicate={handleDuplicate}
+                onDeleteRequest={setDeleteId}
+              />
+            ))}
           </div>
         </TooltipProvider>
       )}
