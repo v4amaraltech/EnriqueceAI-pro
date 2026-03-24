@@ -90,7 +90,7 @@ export function CustomFieldDialog({
                 if (v === 'select' && optionsList.length === 0) setOptionsList(['']);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
