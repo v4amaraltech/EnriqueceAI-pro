@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import {
@@ -34,10 +35,14 @@ import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator'
 import type { LeadContext } from '@/features/ai/types';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import { listStandardFieldSettingsForMember } from '@/features/settings-prospecting/actions/standard-field-settings';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 import type { CrmProvider } from '@/features/integrations/types/crm';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
+import { updateLead } from '../actions/update-lead';
+import type { MissingRequiredField } from '../utils/required-field-validation';
+import { getMissingRequiredFields } from '../utils/required-field-validation';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active-cadences';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
@@ -91,6 +96,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
   const [loadingStages, setLoadingStages] = useState(false);
+
+  // Won dialog — required fields validation
+  const [wonMissingFields, setWonMissingFields] = useState<MissingRequiredField[]>([]);
+  const [wonFieldValues, setWonFieldValues] = useState<Record<string, string>>({});
+  const [loadingRequiredFields, setLoadingRequiredFields] = useState(false);
 
   const handleArchive = useCallback(() => {
     startTransition(async () => {
@@ -213,12 +223,20 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setSelectedStageId(null);
     setStages([]);
     setCrmConnections([]);
+    setWonMissingFields([]);
+    setWonFieldValues({});
     setLoadingPipelines(true);
-    const result = await fetchCrmPipelines();
+    setLoadingRequiredFields(true);
+
+    const [pipelinesResult, stdSettingsResult] = await Promise.all([
+      fetchCrmPipelines(),
+      listStandardFieldSettingsForMember(),
+    ]);
+
     setLoadingPipelines(false);
-    if (result.success && result.data.connections.length > 0) {
-      setCrmConnections(result.data.connections);
-      const firstConn = result.data.connections[0]!;
+    if (pipelinesResult.success && pipelinesResult.data.connections.length > 0) {
+      setCrmConnections(pipelinesResult.data.connections);
+      const firstConn = pipelinesResult.data.connections[0]!;
       setSelectedProvider(firstConn.provider);
       setSendToCrm(true);
       if (firstConn.pipelines.length === 1) {
@@ -227,10 +245,48 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         void loadStages(firstConn.provider, pipeline.id);
       }
     }
-  }, [loadStages]);
+
+    if (stdSettingsResult.success) {
+      const missing = getMissingRequiredFields(lead, customFieldDefs ?? [], stdSettingsResult.data, 'won');
+      setWonMissingFields(missing);
+    }
+    setLoadingRequiredFields(false);
+  }, [loadStages, lead, customFieldDefs]);
 
   const handleConfirmWon = useCallback(() => {
     startTransition(async () => {
+      // Save required field values before marking as won
+      if (wonMissingFields.length > 0 && Object.keys(wonFieldValues).length > 0) {
+        const standardUpdates: Record<string, unknown> = {};
+        const customUpdates: Record<string, string> = {};
+
+        for (const field of wonMissingFields) {
+          const value = wonFieldValues[field.key];
+          if (!value) continue;
+          if (field.isCustom) {
+            customUpdates[field.key] = value;
+          } else {
+            standardUpdates[field.key] = value;
+          }
+        }
+
+        const updates: Record<string, unknown> = { ...standardUpdates };
+        if (Object.keys(customUpdates).length > 0) {
+          updates.custom_field_values = {
+            ...(lead.custom_field_values ?? {}),
+            ...customUpdates,
+          };
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const updateResult = await updateLead(lead.id, updates);
+          if (!updateResult.success) {
+            toast.error(updateResult.error);
+            return;
+          }
+        }
+      }
+
       const crmOptions = sendToCrm && selectedProvider && selectedPipelineId && selectedStageId
         ? { provider: selectedProvider, pipelineId: selectedPipelineId, stageId: selectedStageId }
         : undefined;
@@ -248,7 +304,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       }
     });
     setShowWonDialog(false);
-  }, [lead.id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, router]);
+  }, [lead.id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, router, wonMissingFields, wonFieldValues, lead.custom_field_values]);
 
   return (
     <div className="space-y-4">
@@ -424,7 +480,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
 
       {/* Won dialog */}
       <Dialog open={showWonDialog} onOpenChange={setShowWonDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl">Marcar lead como ganho</DialogTitle>
           </DialogHeader>
@@ -547,6 +603,65 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                 {'Nenhum CRM conectado. O lead será marcado como ganho sem enviar ao CRM.'}
               </p>
             )}
+
+            {/* Required fields */}
+            {loadingRequiredFields ? (
+              <p className="text-sm text-[var(--muted-foreground)]">Verificando campos obrigatórios...</p>
+            ) : wonMissingFields.length > 0 && (
+              <div className="space-y-3 rounded-lg border border-[var(--border)] p-4">
+                <p className="text-sm font-semibold">Preencha os campos obrigatórios</p>
+                {wonMissingFields.map((field) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label className="text-xs text-[var(--muted-foreground)]">{field.label}</Label>
+                    {field.fieldType === 'select' && field.options ? (
+                      <Select
+                        value={wonFieldValues[field.key] ?? ''}
+                        onValueChange={(value) => setWonFieldValues((prev) => ({ ...prev, [field.key]: value }))}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={`Selecione ${field.label.toLowerCase()}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : field.fieldType === 'date' ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {wonFieldValues[field.key]
+                              ? format(new Date(wonFieldValues[field.key]!), 'dd/MM/yyyy')
+                              : `Selecione ${field.label.toLowerCase()}`}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={wonFieldValues[field.key] ? new Date(wonFieldValues[field.key]!) : undefined}
+                            onSelect={(date) => setWonFieldValues((prev) => ({
+                              ...prev,
+                              [field.key]: date ? date.toISOString().split('T')[0]! : '',
+                            }))}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <Input
+                        type={field.fieldType === 'number' ? 'number' : 'text'}
+                        placeholder={field.label}
+                        value={wonFieldValues[field.key] ?? ''}
+                        onChange={(e) => setWonFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setShowWonDialog(false)}>
@@ -555,7 +670,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
             <Button
               className="bg-green-600 hover:bg-green-700"
               onClick={handleConfirmWon}
-              disabled={isPending || (sendToCrm && (!selectedPipelineId || !selectedStageId))}
+              disabled={
+                isPending
+                || (sendToCrm && (!selectedPipelineId || !selectedStageId))
+                || loadingRequiredFields
+                || wonMissingFields.some((f) => !wonFieldValues[f.key]?.trim())
+              }
             >
               Confirmar ganho
             </Button>

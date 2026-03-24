@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 
 export interface StandardFieldSettingRow {
@@ -20,6 +21,19 @@ export async function listStandardFieldSettings(): Promise<ActionResult<Standard
   } catch {
     return { success: false, error: 'Organização não encontrada' };
   }
+
+  const { data, error } = (await (supabase as any).from('standard_field_settings')
+    .select('*')
+    .eq('org_id', orgId)) as { data: StandardFieldSettingRow[] | null; error: unknown };
+
+  if (error) return { success: false, error: 'Erro ao listar configurações de campos padrão' };
+  return { success: true, data: data ?? [] };
+}
+
+export async function listStandardFieldSettingsForMember(): Promise<ActionResult<StandardFieldSettingRow[]>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await (supabase as any).from('standard_field_settings')
     .select('*')

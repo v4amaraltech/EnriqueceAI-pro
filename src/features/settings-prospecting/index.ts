@@ -8,6 +8,7 @@ export type { CustomFieldRow } from './types/custom-field';
 export { listBlacklistDomains } from './actions/email-blacklist-crud';
 export { listLossReasons, addLossReason } from './actions/loss-reasons-crud';
 export { getOrgSettings } from './actions/org-settings-crud';
+export { listStandardFieldSettingsForMember } from './actions/standard-field-settings';
 export { getFitScoreRules } from './actions/get-fit-score-rules';
 
 // Components
