@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 /**
  * Save or clear a custom email signature.
@@ -12,24 +11,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 export async function saveCustomSignature(
   signatureHtml: string | null,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single();
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'gmail_connections')
     .update({ custom_signature: signatureHtml } as Record<string, unknown>)
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id);
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
 
   if (error) {
     return { success: false, error: 'Erro ao salvar assinatura' };

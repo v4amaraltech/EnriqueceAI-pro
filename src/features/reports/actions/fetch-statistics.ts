@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import type { StatisticsData, StatisticsFilters } from '../services/statistics.service';
 import {
@@ -41,19 +40,9 @@ export async function fetchStatisticsData(
   thresholdMinutes?: number,
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<StatisticsData>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { start, end } = dateRange
     ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
@@ -67,9 +56,9 @@ export async function fetchStatisticsData(
   };
 
   const [lossReasons, conversionByOrigin, responseTime] = await Promise.all([
-    fetchLossReasonStats(supabase, member.org_id, filters),
-    fetchConversionByOrigin(supabase, member.org_id, filters),
-    fetchResponseTimeData(supabase, member.org_id, filters),
+    fetchLossReasonStats(supabase, orgId, filters),
+    fetchConversionByOrigin(supabase, orgId, filters),
+    fetchResponseTimeData(supabase, orgId, filters),
   ]);
 
   return {

@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
@@ -19,21 +18,11 @@ export async function scheduleMeeting(
   leadId: string,
   input: CreateEventInput,
 ): Promise<ActionResult<CalendarEvent>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  const connection = await getCalendarConnection(user.id, member.org_id);
+  const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
     return { success: false, error: 'Google Calendar não conectado. Conecte em Configurações > Integrações.' };
   }
@@ -44,7 +33,7 @@ export async function scheduleMeeting(
     // Register interaction as meeting_scheduled
     await from(supabase, 'interactions')
       .insert({
-        org_id: member.org_id,
+        org_id: orgId,
         lead_id: leadId,
         type: 'meeting_scheduled',
         channel: 'calendar',
@@ -61,11 +50,11 @@ export async function scheduleMeeting(
           meet_link: event.meetLink,
           attendees: input.attendeeEmails ?? [],
         },
-        performed_by: user.id,
+        performed_by: userId,
       } as Record<string, unknown>);
 
     // Dispatch call.scheduled webhook
-    dispatchWebhookEvent(supabase, member.org_id, 'call.scheduled', {
+    dispatchWebhookEvent(supabase, orgId, 'call.scheduled', {
       lead_id: leadId,
       calendar_event_id: event.id,
       title: input.title,
@@ -86,21 +75,11 @@ export async function getAvailability(
   timeMin: string,
   timeMax: string,
 ): Promise<ActionResult<BusySlot[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  const connection = await getCalendarConnection(user.id, member.org_id);
+  const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
     return { success: false, error: 'Google Calendar não conectado' };
   }

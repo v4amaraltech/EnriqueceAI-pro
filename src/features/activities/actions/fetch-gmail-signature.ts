@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
@@ -61,24 +61,14 @@ async function refreshAccessToken(
 }
 
 export async function fetchGmailSignature(): Promise<ActionResult<string>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single();
-
-  if (!member) {
-    return { success: true, data: '' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return { success: true, data: '' };
+  const { orgId, userId, supabase } = auth.data;
 
   const { data: connection } = (await from(supabase, 'gmail_connections')
     .select('*')
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id)
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .in('status', ['connected', 'error'])
     .single()) as { data: GmailConnection | null };
 

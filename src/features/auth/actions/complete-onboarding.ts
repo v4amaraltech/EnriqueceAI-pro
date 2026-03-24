@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -13,21 +13,23 @@ interface OnboardingInput {
 export async function completeOnboarding(
   input: OnboardingInput,
 ): Promise<ActionResult<{ orgId: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const orgName = input.orgName.trim();
   if (!orgName || orgName.length < 2) {
     return { success: false, error: 'Nome da empresa deve ter pelo menos 2 caracteres' };
   }
 
-  // Fetch current org
+  // Fetch role for permission check
   const { data: member } = (await supabase
     .from('organization_members')
-    .select('org_id, role')
-    .eq('user_id', user.id)
+    .select('role')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .eq('status', 'active')
-    .single()) as { data: { org_id: string; role: string } | null };
+    .single()) as { data: { role: string } | null };
 
   if (!member) {
     return { success: false, error: 'Organização não encontrada' };
@@ -49,13 +51,13 @@ export async function completeOnboarding(
   // Update organization name and advance to step 1
   const { error: updateError } = await from(supabase, 'organizations')
     .update({ name: orgName, slug, onboarding_step: 1 } as Record<string, unknown>)
-    .eq('id', member.org_id);
+    .eq('id', orgId);
 
   if (updateError) {
     return { success: false, error: 'Falha ao atualizar organização' };
   }
 
-  return { success: true, data: { orgId: member.org_id } };
+  return { success: true, data: { orgId } };
 }
 
 /**

@@ -3,10 +3,9 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SaveApi4ComInput {
   ramal: string;
@@ -17,19 +16,9 @@ interface SaveApi4ComInput {
 export async function saveApi4ComConfig(
   input: SaveApi4ComInput,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const ramal = input.ramal.trim();
   if (!ramal) {
@@ -41,8 +30,8 @@ export async function saveApi4ComConfig(
   // Check for existing connection
   const { data: existing } = (await from(supabase, 'api4com_connections' as never)
     .select('id')
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id)
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string } | null };
 
   if (existing) {
@@ -69,8 +58,8 @@ export async function saveApi4ComConfig(
     // Insert new
     const { error } = await from(supabase, 'api4com_connections' as never)
       .insert({
-        org_id: member.org_id,
-        user_id: user.id,
+        org_id: orgId,
+        user_id: userId,
         ramal,
         base_url: baseUrl,
         api_key_encrypted: input.apiToken?.trim() ? encrypt(input.apiToken.trim()) : null,
@@ -95,24 +84,14 @@ export async function saveApi4ComConfig(
 }
 
 export async function disconnectApi4Com(): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'api4com_connections' as never)
     .delete()
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id);
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
 
   if (error) {
     return { success: false, error: 'Erro ao desconectar API4Com' };

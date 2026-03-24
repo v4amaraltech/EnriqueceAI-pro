@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
@@ -15,7 +15,9 @@ export async function createCadence(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, userId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'cadences')
     .insert({
@@ -50,7 +52,9 @@ export async function updateCadence(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'cadences')
     .update(parsed.data as Record<string, unknown>)
@@ -70,7 +74,9 @@ export async function updateCadence(
 export async function deleteCadence(
   cadenceId: string,
 ): Promise<ActionResult<{ deleted: boolean }>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Soft delete
   const { error } = await from(supabase, 'cadences')
@@ -88,7 +94,9 @@ export async function deleteCadence(
 export async function activateCadence(
   cadenceId: string,
 ): Promise<ActionResult<CadenceRow>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Check minimum 2 steps
   const { count } = (await from(supabase, 'cadence_steps')
@@ -123,7 +131,9 @@ export async function addCadenceStep(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Verify cadence belongs to org
   const { data: cadence } = (await from(supabase, 'cadences')
@@ -166,7 +176,9 @@ export async function removeCadenceStep(
   cadenceId: string,
   stepId: string,
 ): Promise<ActionResult<{ removed: boolean }>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Verify cadence belongs to org
   const { data: cadence } = (await from(supabase, 'cadences')
@@ -201,7 +213,9 @@ export async function removeCadenceStep(
 export async function duplicateCadence(
   cadenceId: string,
 ): Promise<ActionResult<CadenceRow>> {
-  const { orgId, userId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Fetch source cadence
   const { data: source, error: srcErr } = (await from(supabase, 'cadences')
@@ -282,7 +296,9 @@ export async function enrollLeads(
   leadIds: string[],
   initialStatus: 'active' | 'paused' = 'active',
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
-  const { orgId, userId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   // Verify cadence is active
   const { data: cadence } = (await from(supabase, 'cadences')

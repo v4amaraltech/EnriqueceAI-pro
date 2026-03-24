@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId, getManagerOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 
 import { encryptJson } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
@@ -201,7 +201,9 @@ export async function updateCrmFieldMapping(
 
 export async function fetchCrmConnections(): Promise<ActionResult<CrmConnectionSafe[]>> {
   try {
-    const { orgId, supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
     const { data, error } = (await from(supabase, 'crm_connections')
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
@@ -225,7 +227,9 @@ export async function fetchCrmSyncLogs(
   limit = 10,
 ): Promise<ActionResult<CrmSyncLogRow[]>> {
   try {
-    const { orgId, supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
     // Get connection ID for this provider
     const { data: connection } = (await from(supabase, 'crm_connections')

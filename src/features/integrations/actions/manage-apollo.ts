@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireManager } from '@/lib/auth/require-manager';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
@@ -92,23 +92,13 @@ export async function deleteApolloConnection(): Promise<ActionResult<void>> {
 }
 
 export async function fetchApolloConnection(): Promise<ActionResult<{ connected: boolean }>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', (await supabase.auth.getUser()).data.user!.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organizacao nao encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data } = (await from(supabase, 'apollo_connections' as never)
     .select('id, status')
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .maybeSingle()) as { data: { id: string; status: string } | null };
 
   return {

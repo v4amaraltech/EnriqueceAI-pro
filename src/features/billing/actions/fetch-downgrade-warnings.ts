@@ -1,9 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { PlanRow } from '../types';
 
@@ -16,26 +15,16 @@ export interface DowngradeWarnings {
 export async function fetchDowngradeWarnings(
   targetPlan: PlanRow,
 ): Promise<ActionResult<{ warnings: string[] }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const warnings: string[] = [];
 
   // Check lead count vs target plan limit
   const { count: leadCount } = (await from(supabase, 'leads')
     .select('id', { count: 'exact', head: true })
-    .eq('org_id', member.org_id)) as { count: number | null };
+    .eq('org_id', orgId)) as { count: number | null };
 
   if (leadCount && leadCount > targetPlan.max_leads) {
     warnings.push(
@@ -47,7 +36,7 @@ export async function fetchDowngradeWarnings(
   if (!targetPlan.features.crm) {
     const { count: crmCount } = (await from(supabase, 'crm_connections')
       .select('id', { count: 'exact', head: true })
-      .eq('org_id', member.org_id)
+      .eq('org_id', orgId)
       .eq('status', 'connected')) as { count: number | null };
 
     if (crmCount && crmCount > 0) {
@@ -61,7 +50,7 @@ export async function fetchDowngradeWarnings(
   if (!targetPlan.features.calendar) {
     const { count: calendarCount } = (await from(supabase, 'gmail_connections')
       .select('id', { count: 'exact', head: true })
-      .eq('org_id', member.org_id)
+      .eq('org_id', orgId)
       .eq('status', 'connected')) as { count: number | null };
 
     if (calendarCount && calendarCount > 0) {

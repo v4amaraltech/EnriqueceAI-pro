@@ -1,10 +1,9 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { stripe } from '@/lib/stripe';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface InvoiceItem {
   id: string;
@@ -15,23 +14,13 @@ export interface InvoiceItem {
 }
 
 export async function fetchInvoices(): Promise<ActionResult<InvoiceItem[]>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data: org } = (await from(supabase, 'organizations')
     .select('stripe_customer_id')
-    .eq('id', member.org_id)
+    .eq('id', orgId)
     .single()) as { data: { stripe_customer_id: string | null } | null };
 
   if (!org?.stripe_customer_id) {

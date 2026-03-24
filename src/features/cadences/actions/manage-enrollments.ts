@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { EnrollmentListResult, EnrollmentWithLead } from '../cadences.contract';
@@ -12,7 +12,9 @@ export async function fetchCadenceEnrollments(
   page = 1,
   perPage = 50,
 ): Promise<ActionResult<EnrollmentListResult>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Verify cadence belongs to org
   const { data: cadence } = (await from(supabase, 'cadences')
@@ -66,7 +68,9 @@ export async function fetchAvailableLeads(
   search?: string,
   limit = 20,
 ): Promise<ActionResult<Array<{ id: string; name: string; cnpj: string; email: string | null }>>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Get leads already enrolled in this cadence
   const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
@@ -116,7 +120,9 @@ export async function updateEnrollmentStatus(
   enrollmentId: string,
   status: EnrollmentStatus,
 ): Promise<ActionResult<void>> {
-  const { supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .update({ status } as Record<string, unknown>)
@@ -132,7 +138,9 @@ export async function updateEnrollmentStatus(
 export async function removeEnrollment(
   enrollmentId: string,
 ): Promise<ActionResult<void>> {
-  const { supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .delete()

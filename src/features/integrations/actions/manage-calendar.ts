@@ -2,9 +2,9 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CalendarConnectionSafe } from '../types';
 
@@ -51,24 +51,14 @@ export async function getCalendarAuthUrl(): Promise<ActionResult<{ url: string }
 export async function handleCalendarCallback(
   code: string,
 ): Promise<ActionResult<CalendarConnectionSafe>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const clientId = getGcalClientId();
   const clientSecret = getGcalClientSecret();
   if (!clientId || !clientSecret) {
     return { success: false, error: 'Configuração do Google Calendar OAuth não encontrada' };
-  }
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
   }
 
   // Exchange code for tokens
@@ -118,8 +108,8 @@ export async function handleCalendarCallback(
   if (!encryptedRefreshToken) {
     const { data: existing } = (await from(supabase, 'calendar_connections')
       .select('refresh_token_encrypted')
-      .eq('org_id', member.org_id)
-      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .eq('user_id', userId)
       .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
     encryptedRefreshToken = existing?.refresh_token_encrypted ?? '';
   }
@@ -128,8 +118,8 @@ export async function handleCalendarCallback(
   const { data, error } = (await from(supabase, 'calendar_connections')
     .upsert(
       {
-        org_id: member.org_id,
-        user_id: user.id,
+        org_id: orgId,
+        user_id: userId,
         access_token_encrypted: encryptedAccessToken,
         refresh_token_encrypted: encryptedRefreshToken,
         token_expires_at: expiresAt,
@@ -149,24 +139,14 @@ export async function handleCalendarCallback(
 }
 
 export async function disconnectCalendar(): Promise<ActionResult<{ disconnected: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'calendar_connections')
     .delete()
-    .eq('org_id', member.org_id)
-    .eq('user_id', user.id);
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
 
   if (error) {
     return { success: false, error: 'Erro ao desconectar Google Calendar' };

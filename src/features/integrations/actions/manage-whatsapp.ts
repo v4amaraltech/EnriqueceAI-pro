@@ -1,10 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-
 import { encrypt } from '@/lib/security/encryption';
 
 import type { WhatsAppConnectionSafe } from '../types';
@@ -18,21 +16,18 @@ interface WhatsAppConfig {
 export async function connectWhatsApp(
   config: WhatsAppConfig,
 ): Promise<ActionResult<WhatsAppConnectionSafe>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
-  const { data: member } = (await supabase
+  const { data: roleData } = (await supabase
     .from('organization_members')
-    .select('org_id, role')
-    .eq('user_id', user.id)
+    .select('role')
+    .eq('user_id', userId)
     .eq('status', 'active')
-    .single()) as { data: { org_id: string; role: string } | null };
+    .single()) as { data: { role: string } | null };
 
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  if (member.role !== 'owner' && member.role !== 'admin') {
+  if (roleData?.role !== 'owner' && roleData?.role !== 'admin') {
     return { success: false, error: 'Apenas administradores podem configurar WhatsApp' };
   }
 
@@ -44,7 +39,7 @@ export async function connectWhatsApp(
   const { data, error } = (await from(supabase, 'whatsapp_connections')
     .upsert(
       {
-        org_id: member.org_id,
+        org_id: orgId,
         phone_number_id: config.phone_number_id,
         business_account_id: config.business_account_id,
         access_token_encrypted: encrypt(config.access_token),
@@ -63,27 +58,24 @@ export async function connectWhatsApp(
 }
 
 export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
 
-  const { data: member } = (await supabase
+  const { data: roleData } = (await supabase
     .from('organization_members')
-    .select('org_id, role')
-    .eq('user_id', user.id)
+    .select('role')
+    .eq('user_id', userId)
     .eq('status', 'active')
-    .single()) as { data: { org_id: string; role: string } | null };
+    .single()) as { data: { role: string } | null };
 
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  if (member.role !== 'owner' && member.role !== 'admin') {
+  if (roleData?.role !== 'owner' && roleData?.role !== 'admin') {
     return { success: false, error: 'Apenas administradores podem desconectar WhatsApp' };
   }
 
   const { error } = await from(supabase, 'whatsapp_connections')
     .delete()
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   if (error) {
     return { success: false, error: 'Erro ao desconectar WhatsApp' };
@@ -93,23 +85,13 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
 }
 
 export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disconnected: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'whatsapp_instances' as never)
     .delete()
-    .eq('org_id', member.org_id);
+    .eq('org_id', orgId);
 
   if (error) {
     return { success: false, error: 'Erro ao desconectar WhatsApp' };

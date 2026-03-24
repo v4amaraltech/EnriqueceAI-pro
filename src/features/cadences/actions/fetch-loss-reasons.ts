@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 export interface LossReasonOption {
   id: string;
@@ -9,7 +9,9 @@ export interface LossReasonOption {
 }
 
 export async function fetchLossReasonsForCadence(): Promise<ActionResult<LossReasonOption[]>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = (await supabase
     .from('loss_reasons')

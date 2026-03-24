@@ -1,28 +1,16 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 export async function declareAbWinner(params: {
   stepId: string;
   variant: 'A' | 'B';
 }): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Verify org membership
-  const { data: member } = await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single();
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Verify step belongs to org via cadence
   const { data: step } = (await from(supabase, 'cadence_steps')
@@ -44,7 +32,7 @@ export async function declareAbWinner(params: {
     .from('cadences')
     .select('id')
     .eq('id', step.cadence_id)
-    .eq('org_id', member.org_id)
+    .eq('org_id', orgId)
     .single();
 
   if (!cadence) {

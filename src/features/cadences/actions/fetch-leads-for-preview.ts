@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import type { LeadForVariables } from '../utils/build-template-variables';
 
@@ -27,7 +27,9 @@ export async function fetchLeadsForPreview(
   limit = 20,
 ): Promise<ActionResult<PreviewLead[]>> {
   try {
-    const { supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { supabase } = auth.data;
 
     let query = from(supabase, 'leads')
       .select('id, razao_social, nome_fantasia, cnpj, email, telefone, porte, endereco, socios')

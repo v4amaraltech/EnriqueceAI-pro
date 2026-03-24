@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LeadFilters } from '../schemas/lead.schemas';
@@ -10,15 +10,9 @@ import { leadFiltersSchema } from '../schemas/lead.schemas';
 export async function exportAllFilteredLeadsCsv(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<{ csv: string; filename: string }>> {
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof getAuthOrgId>>['supabase'];
-  try {
-    const auth = await getAuthOrgId();
-    orgId = auth.orgId;
-    supabase = auth.supabase;
-  } catch {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const parsed = leadFiltersSchema.safeParse(rawFilters);
   const filters: Partial<LeadFilters> = parsed.success ? parsed.data : {};

@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import type { DialerPreferences } from '../schemas/dialer-preferences.schemas';
 
@@ -11,13 +11,9 @@ const DEFAULTS: DialerPreferences = {
 };
 
 export async function fetchDialerPreferences(): Promise<ActionResult<DialerPreferences>> {
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>;
-  try {
-    ({ orgId, supabase } = await getAuthOrgId());
-  } catch {
-    return { success: true, data: DEFAULTS };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return { success: true, data: DEFAULTS };
+  const { orgId, supabase } = auth.data;
 
   const { data } = (await supabase
     .from('organization_call_settings')

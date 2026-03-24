@@ -3,30 +3,20 @@
 import { redirect } from 'next/navigation';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { stripe } from '@/lib/stripe';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function createCheckoutSession(
   planId: string,
   returnPath?: string,
 ): Promise<ActionResult<{ url: string }>> {
   const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Get the plan to find its Stripe price
   const { data: plan } = (await from(supabase, 'plans')
@@ -41,7 +31,7 @@ export async function createCheckoutSession(
   // Get or create Stripe customer
   const { data: org } = (await from(supabase, 'organizations')
     .select('id, name, stripe_customer_id')
-    .eq('id', member.org_id)
+    .eq('id', orgId)
     .single()) as { data: { id: string; name: string; stripe_customer_id: string | null } | null };
 
   if (!org) {

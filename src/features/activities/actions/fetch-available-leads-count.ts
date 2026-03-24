@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 interface AvailableLeadsData {
@@ -14,7 +14,9 @@ interface AvailableLeadsData {
  * Returns their IDs so the UI can pass them to EnrollInCadenceDialog.
  */
 export async function fetchAvailableLeadsCount(): Promise<ActionResult<AvailableLeadsData>> {
-  const { orgId, supabase } = await getAuthOrgId();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   // Get lead IDs already enrolled in active or paused cadences
   const { data: enrolled } = (await from(supabase, 'cadence_enrollments')

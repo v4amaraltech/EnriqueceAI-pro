@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -31,7 +31,9 @@ export async function fetchCrmPipelines(): Promise<
   ActionResult<{ connections: CrmPipelinesEntry[] }>
 > {
   try {
-    const { orgId, supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
     const { data: rows } = (await from(supabase, 'crm_connections')
       .select('*')
@@ -111,7 +113,9 @@ export async function fetchPipelineStages(
   pipelineId: string,
 ): Promise<ActionResult<CrmStage[]>> {
   try {
-    const { orgId, supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
     const { data: connection } = (await from(supabase, 'crm_connections')
       .select('*')
@@ -184,7 +188,9 @@ export async function markLeadAsWon(
   crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string },
 ): Promise<ActionResult<{ dealCreated?: boolean }>> {
   try {
-    const { orgId, supabase } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
     // 1. Update lead status to qualified
     const { error: leadError } = await from(supabase, 'leads')

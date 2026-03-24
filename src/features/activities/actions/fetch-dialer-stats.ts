@@ -1,21 +1,19 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import type { DialerStats } from '../schemas/dialer-preferences.schemas';
 
 export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>;
-  try {
-    ({ orgId, supabase } = await getAuthOrgId());
-  } catch {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) {
     return {
       success: true,
       data: { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 },
     };
   }
+  const { orgId, supabase } = auth.data;
 
   // Get dialer daily limit setting
   const { data: settings } = (await supabase

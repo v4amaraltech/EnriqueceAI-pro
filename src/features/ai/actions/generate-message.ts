@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { ERR_INVALID_PARAMS, ERR_MISSING_LEAD_NAME, ERR_NOT_CONFIGURED, ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
 
 import { AIService } from '../services/ai.service';
@@ -11,7 +11,9 @@ export async function generateMessageAction(
   request: GenerateMessageRequest,
 ): Promise<ActionResult<GenerateMessageResult>> {
   try {
-    const { orgId } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId } = auth.data;
 
     // Validate input
     if (!request.channel || !request.tone || !request.leadContext) {
@@ -40,7 +42,9 @@ export async function generateMessageAction(
 
 export async function getAIUsageAction(): Promise<ActionResult<AIUsageInfo>> {
   try {
-    const { orgId } = await getAuthOrgId();
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId } = auth.data;
 
     const usage = await AIService.getUsage(orgId);
     return { success: true, data: usage };

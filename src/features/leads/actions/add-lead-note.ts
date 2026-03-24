@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 export interface LeadNote {
@@ -18,29 +17,21 @@ export async function addLeadNote(
   leadId: string,
   text: string,
 ): Promise<ActionResult<LeadNote>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   if (!text.trim()) {
     return { success: false, error: 'A anotação não pode estar vazia' };
   }
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  const authorEmail = user.email ?? null;
+  // Fetch user email for note authorship
+  const { data: { user } } = await supabase.auth.getUser();
+  const authorEmail = user?.email ?? null;
 
   const { data: interaction, error } = (await from(supabase, 'interactions')
     .insert({
-      org_id: member.org_id,
+      org_id: orgId,
       lead_id: leadId,
       cadence_id: null,
       step_id: null,
