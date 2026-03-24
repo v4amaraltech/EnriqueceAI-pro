@@ -3,12 +3,10 @@
 import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
+import { RESEND_LIMIT, RESEND_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-
-// 2 resend attempts per 5 minutes per IP
-const RESEND_LIMIT = 2;
-const RESEND_WINDOW_MS = 5 * 60 * 1000;
 
 export async function resendVerification(email: string): Promise<ActionResult<null>> {
   const headerStore = await headers();
@@ -20,7 +18,7 @@ export async function resendVerification(email: string): Promise<ActionResult<nu
     return {
       success: false,
       error: `Aguarde ${retryMinutes} minuto(s) antes de tentar novamente.`,
-      code: 'RATE_LIMITED',
+      code: ERR_RATE_LIMITED,
     };
   }
 

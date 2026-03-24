@@ -3,14 +3,12 @@
 import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
+import { SIGNUP_LIMIT, SIGNUP_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { signUpSchema } from '../schemas/auth.schemas';
-
-// 3 signup attempts per 15 minutes per IP
-const SIGNUP_LIMIT = 3;
-const SIGNUP_WINDOW_MS = 15 * 60 * 1000;
 
 export async function signUp(formData: FormData): Promise<ActionResult<{ userId: string }>> {
   const headerStore = await headers();
@@ -22,7 +20,7 @@ export async function signUp(formData: FormData): Promise<ActionResult<{ userId:
     return {
       success: false,
       error: `Muitas tentativas de cadastro. Tente novamente em ${retryMinutes} minuto(s).`,
-      code: 'RATE_LIMITED',
+      code: ERR_RATE_LIMITED,
     };
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { ERR_ALREADY_EXECUTED } from '@/lib/constants/error-codes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
@@ -63,7 +64,7 @@ export async function executeActivity(
     .maybeSingle()) as { data: { id: string } | null };
 
   if (existingInteraction) {
-    return { success: false, error: 'Esta atividade já foi executada', code: 'ALREADY_EXECUTED' };
+    return { success: false, error: 'Esta atividade já foi executada', code: ERR_ALREADY_EXECUTED };
   }
 
   // Record interaction

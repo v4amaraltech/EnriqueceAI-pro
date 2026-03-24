@@ -2,9 +2,8 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { MAX_AVATAR_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-
-const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const EXTENSION_MAP: Record<string, string> = {
@@ -28,7 +27,7 @@ export async function uploadAvatar(
     return { success: false, error: 'Formato inválido. Use JPEG, PNG ou WebP' };
   }
 
-  if (file.size > MAX_SIZE) {
+  if (file.size > MAX_AVATAR_SIZE) {
     return { success: false, error: 'Arquivo muito grande. Máximo 2MB' };
   }
 

@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { ERR_MEMBER_LIMIT_REACHED } from '@/lib/constants/error-codes';
+import { INVITE_EXPIRY_DAYS } from '@/lib/constants/limits';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -11,8 +13,6 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 
 import { inviteMemberSchema } from '../schemas/member.schemas';
 import { checkMemberLimit } from '../services/member-limits.service';
-
-const INVITE_EXPIRY_DAYS = 7;
 
 export async function inviteMember(
   formData: FormData,
@@ -50,7 +50,7 @@ export async function inviteMember(
       return {
         success: false,
         error: `Limite de membros atingido (${limit.current}/${limit.max}). Faça upgrade do plano para adicionar mais membros.`,
-        code: 'MEMBER_LIMIT_REACHED',
+        code: ERR_MEMBER_LIMIT_REACHED,
       };
     }
 

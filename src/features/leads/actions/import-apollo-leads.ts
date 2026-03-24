@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { ERR_LEAD_LIMIT_EXCEEDED } from '@/lib/constants/error-codes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 import { getEnv } from '@/config/env';
@@ -71,7 +72,7 @@ export async function importApolloLeads(
         return {
           success: false,
           error: `Você tem espaço para ${availableSlots} leads, mas selecionou ${people.length}. Reduza a seleção ou faça upgrade.`,
-          code: 'LEAD_LIMIT_EXCEEDED',
+          code: ERR_LEAD_LIMIT_EXCEEDED,
         };
       }
     }

@@ -3,14 +3,12 @@
 import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
+import { LOGIN_LIMIT, LOGIN_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit, resetRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { signInSchema } from '../schemas/auth.schemas';
-
-// 5 attempts per 15 minutes per IP
-const LOGIN_LIMIT = 5;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   const headerStore = await headers();
@@ -23,7 +21,7 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
     return {
       success: false,
       error: `Muitas tentativas de login. Tente novamente em ${retryMinutes} minuto(s).`,
-      code: 'RATE_LIMITED',
+      code: ERR_RATE_LIMITED,
     };
   }
 

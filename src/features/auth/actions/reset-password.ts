@@ -3,14 +3,12 @@
 import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
+import { RESET_LIMIT, RESET_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { forgotPasswordSchema } from '../schemas/auth.schemas';
-
-// 3 reset attempts per 15 minutes per IP
-const RESET_LIMIT = 3;
-const RESET_WINDOW_MS = 15 * 60 * 1000;
 
 export async function resetPassword(formData: FormData): Promise<ActionResult<void>> {
   const headerStore = await headers();
@@ -22,7 +20,7 @@ export async function resetPassword(formData: FormData): Promise<ActionResult<vo
     return {
       success: false,
       error: `Muitas tentativas. Tente novamente em ${retryMinutes} minuto(s).`,
-      code: 'RATE_LIMITED',
+      code: ERR_RATE_LIMITED,
     };
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { ERR_LEAD_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
@@ -12,10 +13,10 @@ import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
+import { RESOURCE_ALERT_THRESHOLD } from '@/lib/constants/limits';
+
 import { createLeadSchema } from '../schemas/lead.schemas';
 import { enrichLeadAction } from './enrich-lead';
-
-const ALERT_THRESHOLD = 0.8;
 
 export async function createLead(
   rawData: Record<string, unknown>,
@@ -70,7 +71,7 @@ export async function createLead(
         return {
           success: false,
           error: `Limite de leads atingido (${currentLeads}/${maxLeads}). Faça upgrade para adicionar mais.`,
-          code: 'LEAD_LIMIT_REACHED',
+          code: ERR_LEAD_LIMIT_REACHED,
         };
       }
     }
@@ -148,7 +149,7 @@ export async function createLead(
   // 4. Fire 80% lead threshold alert (fire-and-forget)
   if (hasLimitInfo && maxLeads > 0) {
     const newCount = currentLeads + 1;
-    const threshold = Math.floor(maxLeads * ALERT_THRESHOLD);
+    const threshold = Math.floor(maxLeads * RESOURCE_ALERT_THRESHOLD);
     if (currentLeads < threshold && newCount >= threshold) {
       fireLeadThresholdAlert(member.org_id, newCount, maxLeads).catch((err) =>
         console.error('[leads] Failed to send threshold alert:', err),
