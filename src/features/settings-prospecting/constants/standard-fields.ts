@@ -3,6 +3,8 @@ export interface StandardFieldDef {
   label: string;
   type: 'text' | 'number' | 'date' | 'select';
   defaultOptions?: string[];
+  /** When true, options are loaded dynamically (e.g. org members) and cannot be edited here. */
+  dynamicOptions?: boolean;
 }
 
 export const STANDARD_FIELDS: StandardFieldDef[] = [
@@ -30,6 +32,7 @@ export const STANDARD_FIELDS: StandardFieldDef[] = [
       'Outro',
     ],
   },
+  { key: 'assigned_to', label: 'SDR Responsável', type: 'select', dynamicOptions: true },
   { key: 'instagram', label: 'Instagram', type: 'text' },
   { key: 'linkedin', label: 'LinkedIn', type: 'text' },
   { key: 'website', label: 'Website', type: 'text' },

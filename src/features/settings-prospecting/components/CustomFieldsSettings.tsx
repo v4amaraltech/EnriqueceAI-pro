@@ -380,11 +380,12 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             {STANDARD_FIELDS.map((field) => {
               const setting = getStdSetting(field.key);
               const isSelect = field.type === 'select';
-              const fieldOptions = isSelect ? getStdFieldOptions(field.key) : [];
+              const isEditable = isSelect && !field.dynamicOptions;
+              const fieldOptions = isEditable ? getStdFieldOptions(field.key) : [];
               return (
                 <div key={field.key} className="flex items-center border-b border-border py-5">
                   <div className="flex-1 min-w-0">
-                    {isSelect ? (
+                    {isEditable ? (
                       <button
                         type="button"
                         className="font-medium hover:underline text-left"
@@ -397,8 +398,9 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {field.key}{isSelect ? ` \u00B7 ${FIELD_TYPE_LABELS.select}` : ''}
+                      {field.dynamicOptions ? ' \u00B7 Opções dinâmicas' : ''}
                     </p>
-                    {isSelect && fieldOptions.length > 0 && (
+                    {isEditable && fieldOptions.length > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {fieldOptions.slice(0, 5).map((opt) => (
                           <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
