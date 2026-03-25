@@ -12,6 +12,7 @@ import {
   PhoneOff,
   User,
 } from 'lucide-react';
+import Image from 'next/image';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -231,17 +232,25 @@ export function ActivityPhonePanel({
                 <button
                   onClick={handleInitiateCall}
                   disabled={isPending}
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95 disabled:opacity-50"
+                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 ${dialerProvider === 'api4com' ? 'bg-white hover:bg-gray-50 border border-[var(--border)]' : 'bg-green-600 text-white hover:bg-green-500'}`}
                   title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
                 >
-                  <Phone className="h-7 w-7" />
+                  {dialerProvider === 'api4com' ? (
+                    <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                  ) : (
+                    <Phone className="h-7 w-7" />
+                  )}
                 </button>
               )}
 
               {callState === 'calling' && (
                 <>
-                  <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-yellow-500 text-white shadow-lg">
-                    <Phone className="h-7 w-7" />
+                  <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-white border border-[var(--border)]' : 'bg-yellow-500 text-white'}`}>
+                    {dialerProvider === 'api4com' ? (
+                      <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                    ) : (
+                      <Phone className="h-7 w-7" />
+                    )}
                   </div>
                   <button
                     onClick={handleHangup}

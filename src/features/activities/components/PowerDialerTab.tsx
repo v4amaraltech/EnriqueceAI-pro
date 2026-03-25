@@ -250,6 +250,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
                 onSkip={handleSkip}
                 onInitiateCall={handleInitiateCall}
                 onHangup={handleHangup}
+                dialerProvider={dialerProvider}
               />
             </div>
           ) : (

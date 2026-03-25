@@ -12,6 +12,9 @@ import {
   SkipForward,
   User,
 } from 'lucide-react';
+import Image from 'next/image';
+
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -37,6 +40,7 @@ interface DialerCallPanelProps {
   onSkip: () => void;
   onInitiateCall: () => void;
   onHangup: () => void;
+  dialerProvider?: DialerProvider;
 }
 
 function formatTimer(seconds: number): string {
@@ -53,6 +57,7 @@ export function DialerCallPanel({
   onSkip,
   onInitiateCall,
   onHangup,
+  dialerProvider = 'api4com',
 }: DialerCallPanelProps) {
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -147,17 +152,25 @@ export function DialerCallPanel({
               {callState === 'idle' && (
                 <button
                   onClick={onInitiateCall}
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95"
-                  title="Clique para ligar"
+                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-white hover:bg-gray-50 border border-[var(--border)]' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                  title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
                 >
-                  <Phone className="h-7 w-7" />
+                  {dialerProvider === 'api4com' ? (
+                    <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                  ) : (
+                    <Phone className="h-7 w-7" />
+                  )}
                 </button>
               )}
 
               {callState === 'calling' && (
                 <>
-                  <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-yellow-500 text-white shadow-lg">
-                    <Phone className="h-7 w-7" />
+                  <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-white border border-[var(--border)]' : 'bg-yellow-500 text-white'}`}>
+                    {dialerProvider === 'api4com' ? (
+                      <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                    ) : (
+                      <Phone className="h-7 w-7" />
+                    )}
                   </div>
                   <button
                     onClick={onHangup}
@@ -187,7 +200,7 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && 'Clique para ligar'}
+              {callState === 'idle' && (dialerProvider === 'threecplus' ? 'Clique para ligar via 3CPlus' : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
