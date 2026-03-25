@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -20,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Switch } from '@/shared/components/ui/switch';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Texto' },
@@ -30,14 +32,21 @@ const FIELD_TYPES = [
 
 type FieldType = 'text' | 'number' | 'date' | 'select';
 
+export interface CustomFieldSettings {
+  is_visible: boolean;
+  is_required_won: boolean;
+  is_required_lost: boolean;
+}
+
 interface CustomFieldDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (name: string, type: FieldType, options?: string[]) => void;
+  onSave: (name: string, type: FieldType, options: string[] | undefined, settings: CustomFieldSettings) => void;
   isPending: boolean;
   initialName?: string;
   initialType?: FieldType;
   initialOptions?: string[];
+  initialSettings?: CustomFieldSettings;
   title?: string;
 }
 
@@ -49,6 +58,7 @@ export function CustomFieldDialog({
   initialName = '',
   initialType = 'text',
   initialOptions,
+  initialSettings,
   title = 'Novo campo personalizado',
 }: CustomFieldDialogProps) {
   const [name, setName] = useState(initialName);
@@ -56,11 +66,14 @@ export function CustomFieldDialog({
   const [optionsList, setOptionsList] = useState<string[]>(
     initialOptions && initialOptions.length > 0 ? [...initialOptions] : [''],
   );
+  const [isVisible, setIsVisible] = useState(initialSettings?.is_visible ?? true);
+  const [isRequiredWon, setIsRequiredWon] = useState(initialSettings?.is_required_won ?? false);
+  const [isRequiredLost, setIsRequiredLost] = useState(initialSettings?.is_required_lost ?? false);
 
   function handleSave() {
     if (!name.trim()) return;
     const opts = type === 'select' ? optionsList.map((o) => o.trim()).filter(Boolean) : undefined;
-    onSave(name, type, opts);
+    onSave(name, type, opts, { is_visible: isVisible, is_required_won: isRequiredWon, is_required_lost: isRequiredLost });
   }
 
   return (
@@ -142,6 +155,23 @@ export function CustomFieldDialog({
               </Button>
             </div>
           )}
+
+          {/* Settings section */}
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <p className="text-sm font-medium text-muted-foreground">Configurações do campo</p>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="field-visible" className="text-sm font-normal">Visível no formulário</Label>
+              <Switch id="field-visible" checked={isVisible} onCheckedChange={setIsVisible} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="field-required-won" className="text-sm font-normal">Obrigatório para ganho</Label>
+              <Switch id="field-required-won" checked={isRequiredWon} onCheckedChange={setIsRequiredWon} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="field-required-lost" className="text-sm font-normal">Obrigatório para perdido</Label>
+              <Switch id="field-required-lost" checked={isRequiredLost} onCheckedChange={setIsRequiredLost} />
+            </div>
+          </div>
         </div>
 
         <DialogFooter>

@@ -34,7 +34,7 @@ import {
 } from '../actions/standard-field-settings';
 import { STANDARD_FIELDS } from '../constants/standard-fields';
 
-import { CustomFieldDialog } from './CustomFieldDialog';
+import { CustomFieldDialog, type CustomFieldSettings } from './CustomFieldDialog';
 import { StandardFieldOptionsDialog } from './StandardFieldOptionsDialog';
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -181,9 +181,9 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
     });
   }
 
-  function handleAddField(name: string, type: 'text' | 'number' | 'date' | 'select', options?: string[]) {
+  function handleAddField(name: string, type: 'text' | 'number' | 'date' | 'select', options: string[] | undefined, settings: CustomFieldSettings) {
     startTransition(async () => {
-      const result = await addCustomField(name, type, options);
+      const result = await addCustomField(name, type, options, settings);
       if (result.success) {
         setFields((prev) => [...prev, result.data]);
         setDialogOpen(false);
@@ -194,10 +194,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
     });
   }
 
-  function handleEditField(name: string, type: 'text' | 'number' | 'date' | 'select', options?: string[]) {
+  function handleEditField(name: string, type: 'text' | 'number' | 'date' | 'select', options: string[] | undefined, settings: CustomFieldSettings) {
     if (!editingField) return;
     startTransition(async () => {
-      const result = await updateCustomField(editingField.id, name, type, options);
+      const result = await updateCustomField(editingField.id, name, type, options, settings);
       if (result.success) {
         setFields((prev) => prev.map((f) => (f.id === editingField.id ? result.data : f)));
         setEditingField(null);
@@ -449,6 +449,11 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             initialName={editingField.field_name}
             initialType={editingField.field_type}
             initialOptions={editingField.options ?? undefined}
+            initialSettings={{
+              is_visible: editingField.is_visible,
+              is_required_won: editingField.is_required_won,
+              is_required_lost: editingField.is_required_lost,
+            }}
             title="Editar campo personalizado"
           />
         )}

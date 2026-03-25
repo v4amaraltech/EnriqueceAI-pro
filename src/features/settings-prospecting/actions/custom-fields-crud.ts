@@ -34,6 +34,7 @@ export async function addCustomField(
   fieldName: string,
   fieldType: 'text' | 'number' | 'date' | 'select',
   options?: string[],
+  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -66,6 +67,9 @@ export async function addCustomField(
       field_type: fieldType,
       options: fieldType === 'select' ? options : null,
       sort_order: nextOrder,
+      is_visible: settings?.is_visible ?? true,
+      is_required_won: settings?.is_required_won ?? false,
+      is_required_lost: settings?.is_required_lost ?? false,
     })
     .select()
     .single()) as { data: CustomFieldRow | null; error: unknown };
@@ -79,6 +83,7 @@ export async function updateCustomField(
   fieldName: string,
   fieldType: 'text' | 'number' | 'date' | 'select',
   options?: string[],
+  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -100,6 +105,11 @@ export async function updateCustomField(
       field_name: trimmed,
       field_type: fieldType,
       options: fieldType === 'select' ? options : null,
+      ...(settings && {
+        is_visible: settings.is_visible,
+        is_required_won: settings.is_required_won,
+        is_required_lost: settings.is_required_lost,
+      }),
     })
     .eq('id', id)
     .eq('org_id', orgId)

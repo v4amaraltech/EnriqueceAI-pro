@@ -73,7 +73,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
     <div className="rounded-lg border border-border bg-card">
       <div className="flex flex-col gap-6 p-6 lg:flex-row lg:p-8">
         {/* Left column — Stats */}
-        <div className="flex w-full max-w-xs shrink-0 flex-col justify-center lg:w-[280px]">
+        <div className="flex w-full shrink-0 flex-col justify-center lg:w-[320px]">
           {/* Big number */}
           <p className="text-6xl font-bold tracking-tight text-foreground">{kpi.totalOpportunities}</p>
           <p className="mt-1.5 flex items-center gap-1.5 text-sm text-foreground/70">
@@ -125,7 +125,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
         </div>
 
         {/* Right column — Chart */}
-        <div className="flex min-w-0 flex-1 items-center lg:max-w-[60%]">
+        <div className="flex min-w-0 flex-1 items-center lg:max-w-[55%]">
           {kpi.dailyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -15 }}>
