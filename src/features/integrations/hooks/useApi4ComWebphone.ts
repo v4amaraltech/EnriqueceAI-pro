@@ -11,6 +11,10 @@ export interface WebphoneCall {
   direction: 'inbound' | 'outbound';
   startedAt: number;
   isApiInitiated: boolean;
+  /** DB call record ID, set via webphone:call-context event */
+  callRecordId?: string;
+  /** Lead ID, set via webphone:call-context event */
+  leadId?: string;
 }
 
 interface UseApi4ComWebphoneOptions {
@@ -24,11 +28,15 @@ interface UseApi4ComWebphoneReturn {
   webphoneStatus: WebphoneStatus;
   callStatus: CallStatus;
   currentCall: WebphoneCall | null;
+  /** Call info retained after call.ended for classification dialog */
+  endedCall: WebphoneCall | null;
   isMuted: boolean;
   toggleMute: () => void;
   hangup: () => void;
   answer: () => void;
   reject: () => void;
+  /** Dismiss the ended state and return to idle */
+  dismissEnded: () => void;
 }
 
 interface LibWebphoneInstance {
@@ -67,7 +75,20 @@ export function useApi4ComWebphone({
   const [webphoneStatus, setWebphoneStatus] = useState<WebphoneStatus>('disconnected');
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
   const [currentCall, setCurrentCall] = useState<WebphoneCall | null>(null);
+  const [endedCall, setEndedCall] = useState<WebphoneCall | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Listen for call context events (callRecordId + leadId from initiateCall callers)
+  useEffect(() => {
+    function handleCallContext(e: Event) {
+      const detail = (e as CustomEvent<{ callRecordId: string; leadId?: string }>).detail;
+      setCurrentCall((prev) =>
+        prev ? { ...prev, callRecordId: detail.callRecordId, leadId: detail.leadId } : prev,
+      );
+    }
+    window.addEventListener('webphone:call-context', handleCallContext);
+    return () => window.removeEventListener('webphone:call-context', handleCallContext);
+  }, []);
 
   // Initialize libwebphone SIP/WebRTC instance
   useEffect(() => {
@@ -168,9 +189,23 @@ export function useApi4ComWebphone({
 
       lwp.on('call.ended', () => {
         activeCallRef.current = null;
-        setCallStatus('idle');
-        setCurrentCall(null);
         setIsMuted(false);
+        setCurrentCall((prev) => {
+          // For API-initiated calls (from ActivityPhonePanel/PowerDialer),
+          // the calling component handles classification — go straight to idle.
+          if (prev?.isApiInitiated) {
+            setCallStatus('idle');
+            return null;
+          }
+          // For non-API calls (inbound), retain info for classification dialog
+          if (prev) {
+            setEndedCall(prev);
+            setCallStatus('ended');
+          } else {
+            setCallStatus('idle');
+          }
+          return null;
+        });
       });
 
       lwp.on('call.failed', () => {
@@ -233,15 +268,22 @@ export function useApi4ComWebphone({
     try { call.reject(); } catch { /* ignore */ }
   }, []);
 
+  const dismissEnded = useCallback(() => {
+    setEndedCall(null);
+    setCallStatus('idle');
+  }, []);
+
   return {
     webphoneStatus,
     callStatus,
     currentCall,
+    endedCall,
     isMuted,
     toggleMute,
     hangup,
     answer,
     reject,
+    dismissEnded,
   };
 }
 

@@ -26,7 +26,10 @@ const hangupCauseToStatus: Record<string, CallStatus> = {
   CALL_REJECTED: 'not_connected',
   UNALLOCATED_NUMBER: 'not_connected',
   INVALID_NUMBER_FORMAT: 'not_connected',
-  // NORMAL_CLEARING and ORIGINATOR_CANCEL keep the existing status
+  ORIGINATOR_CANCEL: 'not_connected',
+  NORMAL_TEMPORARY_FAILURE: 'not_connected',
+  RECOVERY_ON_TIMER_EXPIRE: 'not_connected',
+  // NORMAL_CLEARING handled separately below (depends on answeredAt)
 };
 
 /** Process an API4COM event (runs in background via after()) */
@@ -151,6 +154,11 @@ async function updateCallFromWebhook(
   // If the call was answered and has duration, it was connected
   if (payload.answeredAt && payload.duration > 0 && currentStatus === 'not_connected') {
     updates.status = 'significant';
+  }
+
+  // NORMAL_CLEARING without answeredAt means it rang but was not answered
+  if (payload.hangupCause === 'NORMAL_CLEARING' && !payload.answeredAt && currentStatus === 'not_connected') {
+    updates.status = 'no_contact';
   }
 
   await from(supabase, 'calls')

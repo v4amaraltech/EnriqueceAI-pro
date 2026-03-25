@@ -7,6 +7,7 @@ import { Button } from '@/shared/components/ui/button';
 
 import { getApi4ComSipCredentials } from '@/features/calls/actions/get-api4com-sip-credentials';
 import type { Api4ComSipCredentials } from '@/features/calls/actions/get-api4com-sip-credentials';
+import { PostCallClassificationDialog } from '@/features/calls/components/PostCallClassificationDialog';
 
 import { useLibWebphoneLoader } from '../hooks/useLibWebphoneLoader';
 import { useApi4ComWebphone } from '../hooks/useApi4ComWebphone';
@@ -80,11 +81,13 @@ export function Api4ComWebphone() {
     webphoneStatus,
     callStatus,
     currentCall,
+    endedCall,
     isMuted,
     toggleMute,
     hangup,
     answer,
     reject,
+    dismissEnded,
   } = useApi4ComWebphone({
     sipDomain: credentials?.sipDomain ?? '',
     ramal: credentials?.ramal ?? '',
@@ -187,6 +190,18 @@ export function Api4ComWebphone() {
             {scriptError ?? 'Erro na conexão SIP. Verifique suas credenciais.'}
           </p>
         </div>
+      )}
+
+      {/* Post-call classification dialog for non-API-initiated calls (inbound) */}
+      {endedCall && (
+        <PostCallClassificationDialog
+          open={callStatus === 'ended'}
+          phone={endedCall.phone}
+          startedAt={endedCall.startedAt}
+          callRecordId={endedCall.callRecordId}
+          leadId={endedCall.leadId}
+          onClose={dismissEnded}
+        />
       )}
     </div>
   );

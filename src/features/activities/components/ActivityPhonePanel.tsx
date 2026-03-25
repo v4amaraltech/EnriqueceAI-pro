@@ -34,8 +34,10 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import type { CallStatus } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
+import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
 import type { CallAttempt } from '../types/call-attempt';
@@ -43,6 +45,17 @@ import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt'
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
+
+// Map dialer UI status to calls table status (same as complete-dialer-call.ts)
+const uiStatusToCallStatus: Record<string, CallStatus> = {
+  connected: 'significant',
+  gatekeeper: 'significant',
+  meeting_scheduled: 'significant',
+  voicemail: 'not_connected',
+  no_answer: 'no_contact',
+  busy: 'busy',
+  wrong_number: 'not_connected',
+};
 
 interface ActivityPhonePanelProps {
   leadName: string;
@@ -126,6 +139,13 @@ export function ActivityPhonePanel({
       setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
+
+      // Notify the webphone about the call context for classification
+      window.dispatchEvent(
+        new CustomEvent('webphone:call-context', {
+          detail: { callRecordId: result.data.callId, leadId },
+        }),
+      );
     });
   }
 
@@ -158,6 +178,19 @@ export function ActivityPhonePanel({
 
   function handleRetryAttempt() {
     const attempt = buildCurrentAttempt();
+
+    // Update the call record status for this attempt before retrying
+    if (callId && callStatus) {
+      const mappedStatus = uiStatusToCallStatus[callStatus] ?? 'not_connected';
+      classifyWebphoneCall({
+        callId,
+        status: mappedStatus,
+        clientDurationSeconds: callDuration,
+        notes: notes || undefined,
+        leadId,
+      }).catch(() => {});
+    }
+
     setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
     setNotes('');
@@ -171,6 +204,19 @@ export function ActivityPhonePanel({
   function handleSubmitResult() {
     const allAttempts = [...attempts, buildCurrentAttempt()];
     const aggregatedNotes = formatAggregatedNotes(allAttempts);
+
+    // Update the call record status in the calls table
+    if (callId && callStatus) {
+      const mappedStatus = uiStatusToCallStatus[callStatus] ?? 'not_connected';
+      classifyWebphoneCall({
+        callId,
+        status: mappedStatus,
+        clientDurationSeconds: callDuration,
+        notes: notes || undefined,
+        leadId,
+      }).catch(() => {});
+    }
+
     onMarkDone(aggregatedNotes);
     setCallStatus('');
     setNotes('');
