@@ -2,7 +2,7 @@
 
 import { BarChart3, CalendarDays, HelpCircle, TrendingDown, TrendingUp } from 'lucide-react';
 import {
-  Bar,
+  Area,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -42,24 +42,6 @@ function formatXAxis(day: number, daysInMonth: number, monthAbbr: string): strin
   return '';
 }
 
-// Custom bar shape — accepts recharts BarShapeProps
-function renderBarShape(props: { x?: number; y?: number; width?: number; height?: number }): React.ReactElement | null {
-  const { x = 0, y = 0, width = 0, height = 0 } = props;
-  if (!height || height <= 0) return null;
-  const barWidth = Math.min(width, 8);
-  const barX = x + (width - barWidth) / 2;
-  return (
-    <rect
-      x={barX}
-      y={y}
-      width={barWidth}
-      height={height}
-      rx={2}
-      fill="url(#gradientBar)"
-    />
-  );
-}
-
 interface OpportunityKpiCardProps {
   kpi: OpportunityKpiData;
   month: string;
@@ -75,11 +57,10 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
     ? Math.round((kpi.monthTarget / kpi.daysInMonth) * kpi.currentDay)
     : 0;
 
-  // Chart data — daily (non-cumulative) for bar chart, show only up to current day
+  // Chart data — cumulative for line chart, show only up to current day
   const chartData = kpi.dailyData.map((point: DailyDataPoint) => ({
     day: point.day,
     target: point.target,
-    // For bars: show daily actual values (non-cumulative difference)
     actual: point.day <= kpi.currentDay ? point.actual : null,
   }));
 
@@ -149,9 +130,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
             <ResponsiveContainer width="100%" height={280}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -15 }}>
                 <defs>
-                  <linearGradient id="gradientBar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.2} />
+                  <linearGradient id="gradientArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid horizontal={false} vertical={false} />
@@ -187,22 +168,37 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   }}
                   filterNull
                 />
-                {/* Meta line — solid (not dashed), light gray, diagonal */}
+                {/* Meta line — gray diagonal showing expected pace */}
                 <Line
                   type="linear"
                   dataKey="target"
                   name="Meta"
                   stroke="var(--muted-foreground)"
-                  strokeWidth={1}
+                  strokeWidth={1.5}
                   strokeOpacity={0.35}
+                  strokeDasharray="6 3"
                   dot={false}
                   activeDot={false}
                 />
-                {/* Actual bars — thin green bars for days with value > 0 */}
-                <Bar
+                {/* Area fill under the green line */}
+                <Area
+                  type="monotone"
+                  dataKey="actual"
+                  fill="url(#gradientArea)"
+                  stroke="none"
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+                {/* Actual line — green with dots at each data point */}
+                <Line
+                  type="monotone"
                   dataKey="actual"
                   name="Oportunidades"
-                  shape={renderBarShape}
+                  stroke="#22c55e"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: '#22c55e', stroke: '#22c55e', strokeWidth: 1 }}
+                  activeDot={{ r: 5, fill: '#22c55e', stroke: '#fff', strokeWidth: 2 }}
+                  connectNulls={false}
                   isAnimationActive={false}
                 />
               </ComposedChart>
@@ -219,11 +215,11 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
       {kpi.dailyData.length > 0 && (
         <div className="flex items-center justify-center gap-6 border-t border-border px-6 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-sm bg-emerald-500" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
             <span className="text-xs text-muted-foreground">Oportunidades</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="inline-block h-px w-4 bg-muted-foreground/40" />
+            <span className="inline-block h-px w-4 border-t border-dashed border-muted-foreground/40" />
             <span className="text-xs text-muted-foreground">Meta</span>
           </div>
         </div>
