@@ -213,8 +213,8 @@ export function ActivityPhonePanel({
         </div>
       </div>
 
-      {/* Phone selector — only when multiple phones */}
-      {hasMultiplePhones && (
+      {/* Phone selector — show when multiple phones or retrying */}
+      {phones.length > 0 && (hasMultiplePhones || attempts.length > 0) && (
         <div className="mt-4 space-y-1.5">
           <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Selecionar telefone
@@ -350,7 +350,7 @@ export function ActivityPhonePanel({
 
       {/* Post-call result modal */}
       <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Resultado da Ligação</DialogTitle>
           </DialogHeader>

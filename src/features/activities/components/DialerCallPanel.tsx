@@ -156,8 +156,8 @@ export function DialerCallPanel({
         </span>
       </div>
 
-      {/* Phone selector — only when multiple phones */}
-      {hasMultiplePhones && (
+      {/* Phone selector — show when multiple phones or retrying */}
+      {(item.phones?.length ?? 0) > 0 && (hasMultiplePhones || attempts.length > 0) && (
         <div className="mt-3 space-y-1.5">
           <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Selecionar telefone
