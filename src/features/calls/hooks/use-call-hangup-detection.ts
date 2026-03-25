@@ -43,10 +43,9 @@ export function useCallHangupDetection({
           const newRecord = payload.new as { duration_seconds?: number; status?: string };
           const duration = newRecord.duration_seconds ?? 0;
 
-          // Only trigger hangup if duration was actually set by the webhook
-          if (duration > 0) {
-            onHangupRef.current(duration);
-          }
+          // Any UPDATE from the webhook means the call has ended
+          // (channel-hangup is the only event the webhook processes)
+          onHangupRef.current(duration);
         },
       )
       .subscribe();
