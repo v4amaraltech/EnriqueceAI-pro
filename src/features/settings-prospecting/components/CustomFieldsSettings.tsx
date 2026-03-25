@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { HelpCircle, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, HelpCircle, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -13,15 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { Switch } from '@/shared/components/ui/switch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/shared/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import {
   Tooltip,
@@ -58,6 +49,33 @@ function isRecentField(createdAt: string): boolean {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   return created > sevenDaysAgo;
+}
+
+function CheckToggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-[var(--accent)]'}`}
+      disabled={disabled}
+    >
+      {checked && <Check className="h-5 w-5 text-foreground" strokeWidth={2.5} />}
+    </button>
+  );
+}
+
+function ColumnHeader({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      <span>{label}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
 }
 
 interface CustomFieldsSettingsProps {
@@ -212,314 +230,201 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Campos Personalizados</h1>
-            <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Configure a visibilidade e obrigatoriedade dos campos dos seus leads.
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              setEditingField(null);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Criar campo
-          </Button>
+        <div>
+          <h1 className="text-xl font-semibold">Campos Personalizados</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure a visibilidade e obrigatoriedade dos campos dos seus leads.
+          </p>
         </div>
 
         <Tabs defaultValue="custom">
           <TabsList>
             <TabsTrigger value="custom">
               Campos personalizados
-              <Badge variant="secondary" className="ml-2">
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
                 {fields.length}
-              </Badge>
+              </span>
             </TabsTrigger>
             <TabsTrigger value="standard">
               Campos padrão
-              <Badge variant="secondary" className="ml-2">
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
                 {STANDARD_FIELDS.length}
-              </Badge>
+              </span>
             </TabsTrigger>
           </TabsList>
 
           {/* Tab: Custom Fields */}
-          <TabsContent value="custom" className="mt-4">
-            <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">Nome e tipo do campo</TableHead>
-                    <TableHead className="w-[120px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Obrig. ganho</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.required_won}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[120px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Obrig. perdido</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.required_lost}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[100px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Visível</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.visible}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[50px]" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fields.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                        Nenhum campo personalizado cadastrado.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    fields.map((field) => (
-                      <TableRow key={field.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  className="font-medium hover:underline text-left"
-                                  onClick={() => {
-                                    setEditingField(field);
-                                    setDialogOpen(true);
-                                  }}
-                                >
-                                  {field.field_name}
-                                </button>
-                                {isRecentField(field.created_at) && (
-                                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                                    NOVO
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                                {FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}
-                              </p>
-                              {field.field_type === 'select' && field.options && field.options.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {field.options.slice(0, 5).map((opt) => (
-                                    <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                                      {opt}
-                                    </Badge>
-                                  ))}
-                                  {field.options.length > 5 && (
-                                    <button
-                                      type="button"
-                                      className="text-[10px] text-[var(--primary)] hover:underline"
-                                      onClick={() => {
-                                        setEditingField(field);
-                                        setDialogOpen(true);
-                                      }}
-                                    >
-                                      +{field.options.length - 5} mais
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={field.is_required_won}
-                            onCheckedChange={(v) => handleCustomToggle(field.id, 'is_required_won', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={field.is_required_lost}
-                            onCheckedChange={(v) => handleCustomToggle(field.id, 'is_required_lost', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={field.is_visible}
-                            onCheckedChange={(v) => handleCustomToggle(field.id, 'is_visible', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setEditingField(field);
-                                  setDialogOpen(true);
-                                }}
-                              >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(field.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Excluir
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+          <TabsContent value="custom" className="mt-6">
+            {/* Header row */}
+            <div className="flex items-center border-b border-border pb-3 text-sm font-medium text-muted-foreground">
+              <div className="flex-1">Nome e tipo do campo</div>
+              <div className="w-[180px] text-center">
+                <ColumnHeader label="Obrigatório para ganho" tooltip={columnTooltips.required_won} />
+              </div>
+              <div className="w-[180px] text-center">
+                <ColumnHeader label="Obrigatório para perdido" tooltip={columnTooltips.required_lost} />
+              </div>
+              <div className="w-[160px] text-center">
+                <ColumnHeader label="Visível no formulário" tooltip={columnTooltips.visible} />
+              </div>
+              <div className="w-10 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setEditingField(null); setDialogOpen(true); }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
+
+            {/* Rows */}
+            {fields.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Nenhum campo personalizado cadastrado.
+              </div>
+            ) : (
+              fields.map((field) => (
+                <div key={field.id} className="flex items-center border-b border-border py-5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="font-medium hover:underline text-left"
+                        onClick={() => { setEditingField(field); setDialogOpen(true); }}
+                      >
+                        {field.field_name}
+                      </button>
+                      {isRecentField(field.created_at) && (
+                        <Badge className="text-[10px] px-1.5 py-0 bg-blue-500 text-white border-0">
+                          NOVO
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}
+                    </p>
+                    {field.field_type === 'select' && field.options && field.options.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {field.options.slice(0, 5).map((opt) => (
+                          <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                            {opt}
+                          </Badge>
+                        ))}
+                        {field.options.length > 5 && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline"
+                            onClick={() => { setEditingField(field); setDialogOpen(true); }}
+                          >
+                            +{field.options.length - 5} mais
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-[180px] flex justify-center">
+                    <CheckToggle checked={field.is_required_won} onChange={(v) => handleCustomToggle(field.id, 'is_required_won', v)} disabled={isPending} />
+                  </div>
+                  <div className="w-[180px] flex justify-center">
+                    <CheckToggle checked={field.is_required_lost} onChange={(v) => handleCustomToggle(field.id, 'is_required_lost', v)} disabled={isPending} />
+                  </div>
+                  <div className="w-[160px] flex justify-center">
+                    <CheckToggle checked={field.is_visible} onChange={(v) => handleCustomToggle(field.id, 'is_visible', v)} disabled={isPending} />
+                  </div>
+                  <div className="w-10 flex justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setEditingField(field); setDialogOpen(true); }}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDelete(field.id)} className="text-destructive focus:text-destructive">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))
+            )}
           </TabsContent>
 
           {/* Tab: Standard Fields */}
-          <TabsContent value="standard" className="mt-4">
-            <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">Nome do campo</TableHead>
-                    <TableHead className="w-[120px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Obrig. ganho</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.required_won}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[120px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Obrig. perdido</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.required_lost}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[100px] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span>Visível</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                          </TooltipTrigger>
-                          <TooltipContent>{columnTooltips.visible}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {STANDARD_FIELDS.map((field) => {
-                    const setting = getStdSetting(field.key);
-                    const isSelect = field.type === 'select';
-                    const fieldOptions = isSelect ? getStdFieldOptions(field.key) : [];
-                    return (
-                      <TableRow key={field.key}>
-                        <TableCell>
-                          <div className="min-w-0">
-                            {isSelect ? (
-                              <button
-                                type="button"
-                                className="font-medium hover:underline text-left"
-                                onClick={() => {
-                                  setEditingStdFieldKey(field.key);
-                                  setStdOptionsDialogOpen(true);
-                                }}
-                              >
-                                {field.label}
-                              </button>
-                            ) : (
-                              <span className="font-medium">{field.label}</span>
-                            )}
-                            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                              {field.key}{isSelect ? ` \u00B7 ${FIELD_TYPE_LABELS.select}` : ''}
-                            </p>
-                            {isSelect && fieldOptions.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {fieldOptions.slice(0, 5).map((opt) => (
-                                  <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                                    {opt}
-                                  </Badge>
-                                ))}
-                                {fieldOptions.length > 5 && (
-                                  <button
-                                    type="button"
-                                    className="text-[10px] text-[var(--primary)] hover:underline"
-                                    onClick={() => {
-                                      setEditingStdFieldKey(field.key);
-                                      setStdOptionsDialogOpen(true);
-                                    }}
-                                  >
-                                    +{fieldOptions.length - 5} mais
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={setting?.is_required_won ?? false}
-                            onCheckedChange={(v) => handleStdToggle(field.key, 'is_required_won', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={setting?.is_required_lost ?? false}
-                            onCheckedChange={(v) => handleStdToggle(field.key, 'is_required_lost', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch
-                            checked={setting?.is_visible ?? true}
-                            onCheckedChange={(v) => handleStdToggle(field.key, 'is_visible', v)}
-                            disabled={isPending}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+          <TabsContent value="standard" className="mt-6">
+            {/* Header row */}
+            <div className="flex items-center border-b border-border pb-3 text-sm font-medium text-muted-foreground">
+              <div className="flex-1">Nome e tipo do campo</div>
+              <div className="w-[180px] text-center">
+                <ColumnHeader label="Obrigatório para ganho" tooltip={columnTooltips.required_won} />
+              </div>
+              <div className="w-[180px] text-center">
+                <ColumnHeader label="Obrigatório para perdido" tooltip={columnTooltips.required_lost} />
+              </div>
+              <div className="w-[160px] text-center">
+                <ColumnHeader label="Visível no formulário" tooltip={columnTooltips.visible} />
+              </div>
             </div>
+
+            {/* Rows */}
+            {STANDARD_FIELDS.map((field) => {
+              const setting = getStdSetting(field.key);
+              const isSelect = field.type === 'select';
+              const fieldOptions = isSelect ? getStdFieldOptions(field.key) : [];
+              return (
+                <div key={field.key} className="flex items-center border-b border-border py-5">
+                  <div className="flex-1 min-w-0">
+                    {isSelect ? (
+                      <button
+                        type="button"
+                        className="font-medium hover:underline text-left"
+                        onClick={() => { setEditingStdFieldKey(field.key); setStdOptionsDialogOpen(true); }}
+                      >
+                        {field.label}
+                      </button>
+                    ) : (
+                      <span className="font-medium">{field.label}</span>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {field.key}{isSelect ? ` \u00B7 ${FIELD_TYPE_LABELS.select}` : ''}
+                    </p>
+                    {isSelect && fieldOptions.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {fieldOptions.slice(0, 5).map((opt) => (
+                          <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                            {opt}
+                          </Badge>
+                        ))}
+                        {fieldOptions.length > 5 && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline"
+                            onClick={() => { setEditingStdFieldKey(field.key); setStdOptionsDialogOpen(true); }}
+                          >
+                            +{fieldOptions.length - 5} mais
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-[180px] flex justify-center">
+                    <CheckToggle checked={setting?.is_required_won ?? false} onChange={(v) => handleStdToggle(field.key, 'is_required_won', v)} disabled={isPending} />
+                  </div>
+                  <div className="w-[180px] flex justify-center">
+                    <CheckToggle checked={setting?.is_required_lost ?? false} onChange={(v) => handleStdToggle(field.key, 'is_required_lost', v)} disabled={isPending} />
+                  </div>
+                  <div className="w-[160px] flex justify-center">
+                    <CheckToggle checked={setting?.is_visible ?? true} onChange={(v) => handleStdToggle(field.key, 'is_visible', v)} disabled={isPending} />
+                  </div>
+                </div>
+              );
+            })}
           </TabsContent>
         </Tabs>
 
