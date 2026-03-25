@@ -56,10 +56,14 @@ function CheckToggle({ checked, onChange, disabled }: { checked: boolean; onChan
     <button
       type="button"
       onClick={() => !disabled && onChange(!checked)}
-      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-[var(--accent)]'}`}
+      className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
+        checked
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-muted-foreground/40 bg-transparent'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary/70'}`}
       disabled={disabled}
     >
-      {checked && <Check className="h-5 w-5 text-foreground" strokeWidth={2.5} />}
+      {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
     </button>
   );
 }
