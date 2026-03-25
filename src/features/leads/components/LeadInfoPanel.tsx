@@ -416,6 +416,27 @@ export function LeadInfoPanel({
                       placeholder="Cargo"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
+                    <Select
+                      value={editFields.lead_source ?? 'none'}
+                      onValueChange={(value) => {
+                        setEditFields((prev) => ({ ...prev, lead_source: value === 'none' ? '' : value }));
+                      }}
+                    >
+                      <SelectTrigger className="w-full text-sm">
+                        <SelectValue placeholder="Selecione a origem" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        {sourceOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </>
               ) : (
                 <>
@@ -428,6 +449,10 @@ export function LeadInfoPanel({
                   {primaryEmail && <MeetimeFieldRow label="E-mail" value={primaryEmail} href={`mailto:${primaryEmail}`} />}
                   {companyName && <MeetimeFieldRow label="Empresa" value={companyName} />}
                   <MeetimeFieldRow label="Cargo" value={cargo || '—'} />
+                  <MeetimeFieldRow
+                    label="Origem"
+                    value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
+                  />
                 </>
               )}
             </div>
@@ -558,43 +583,6 @@ export function LeadInfoPanel({
                   <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />
                   <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />
                 </>
-              )}
-            </div>
-
-            <hr className="border-t-2 border-[var(--border)]" />
-
-            {/* STATUS — metadados internos */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Status
-              </h4>
-              {isEditing ? (
-                <div className="space-y-1">
-                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
-                  <Select
-                    value={editFields.lead_source ?? 'none'}
-                    onValueChange={(value) => {
-                      setEditFields((prev) => ({ ...prev, lead_source: value === 'none' ? '' : value }));
-                    }}
-                  >
-                    <SelectTrigger className="w-full text-sm">
-                      <SelectValue placeholder="Selecione a origem" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {sourceOptions.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <MeetimeFieldRow
-                  label="Origem"
-                  value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
-                />
               )}
             </div>
 

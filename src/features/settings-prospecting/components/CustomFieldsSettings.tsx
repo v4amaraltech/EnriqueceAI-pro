@@ -397,7 +397,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                       <span className="font-medium">{field.label}</span>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {field.key}{isSelect ? ` \u00B7 ${FIELD_TYPE_LABELS.select}` : ''}
+                      {FIELD_TYPE_LABELS[field.type] ?? field.type}
                       {field.dynamicOptions ? ' \u00B7 Opções dinâmicas' : ''}
                     </p>
                     {isEditable && fieldOptions.length > 0 && (
