@@ -37,9 +37,13 @@ vi.mock('recharts', () => ({
   AreaChart: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="area-chart">{children}</div>
   ),
+  ComposedChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="composed-chart">{children}</div>
+  ),
   Line: () => <div data-testid="line" />,
   Bar: () => <div data-testid="bar" />,
   Area: () => <div data-testid="area" />,
+  Scatter: () => <div data-testid="scatter" />,
   XAxis: () => <div />,
   YAxis: () => <div />,
   CartesianGrid: () => <div />,
@@ -123,29 +127,29 @@ describe('DashboardView', () => {
 
   it('should render "Editar metas" button (enabled)', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    const btn = screen.getByText('Editar metas');
+    const btn = screen.getByRole('button', { name: 'Editar metas' });
     expect(btn).toBeInTheDocument();
-    expect(btn.closest('button')).not.toBeDisabled();
+    expect(btn).not.toBeDisabled();
   });
 
   it('should render chart section', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByTestId('area-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('composed-chart')).toBeInTheDocument();
   });
 
   it('should render month selector with current month', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText('Fevereiro 2026')).toBeInTheDocument();
+    expect(screen.getByText('fevereiro 2026')).toBeInTheDocument();
   });
 
-  it('should render cadence filter button', () => {
+  it('should render cadence filter dropdown', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText('Cadências')).toBeInTheDocument();
+    expect(screen.getByText('2 cadências')).toBeInTheDocument();
   });
 
-  it('should render user filter button when multiple members', () => {
+  it('should render user filter dropdown when multiple members', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText('Vendedores')).toBeInTheDocument();
+    expect(screen.getByText('2 vendedores')).toBeInTheDocument();
   });
 
   it('should render empty chart state when no data points', () => {

@@ -4,11 +4,10 @@ import { useCallback } from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { Filter } from 'lucide-react';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
 
-import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -35,6 +34,10 @@ function getLast12Months(): { value: string; label: string }[] {
     months.push({ value, label: label ?? value });
   }
   return months;
+}
+
+function GreenDot() {
+  return <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />;
 }
 
 interface DashboardFiltersProps {
@@ -84,14 +87,24 @@ export function DashboardFilters({
 
   const sdrMembers = members.filter((m) => m.status === 'active');
 
+  const cadenceCount = currentFilters.cadenceIds.length > 0
+    ? currentFilters.cadenceIds.length
+    : availableCadences.length;
+
+  const userCount = currentFilters.userIds.length > 0
+    ? currentFilters.userIds.length
+    : sdrMembers.length;
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Month selector */}
+    <div className="flex flex-wrap items-center gap-1">
+      {/* Month selector — inline dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            {currentMonthLabel}
-          </Button>
+          <button className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>{currentMonthLabel.toLowerCase()}</span>
+            <ChevronDown className="h-3 w-3 opacity-50" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {months.map((m) => (
@@ -108,74 +121,70 @@ export function DashboardFilters({
 
       {/* Cadence filter */}
       {availableCadences.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Cadências
-              {currentFilters.cadenceIds.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
-                  {currentFilters.cadenceIds.length}
-                </span>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-            <DropdownMenuLabel>Filtrar por cadência</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {availableCadences.map((c) => (
-              <DropdownMenuCheckboxItem
-                key={c.id}
-                checked={currentFilters.cadenceIds.includes(c.id)}
-                onCheckedChange={() =>
-                  toggleArrayParam(
-                    'cadenceIds',
-                    c.id,
-                    currentFilters.cadenceIds,
-                  )
-                }
-              >
-                {c.name}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <GreenDot />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+                <span>{cadenceCount} cadências</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+              <DropdownMenuLabel>Filtrar por cadência</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {availableCadences.map((c) => (
+                <DropdownMenuCheckboxItem
+                  key={c.id}
+                  checked={currentFilters.cadenceIds.includes(c.id)}
+                  onCheckedChange={() =>
+                    toggleArrayParam(
+                      'cadenceIds',
+                      c.id,
+                      currentFilters.cadenceIds,
+                    )
+                  }
+                >
+                  {c.name}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
 
       {/* User filter — only visible to managers */}
       {isManager && sdrMembers.length > 1 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Vendedores
-              {currentFilters.userIds.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
-                  {currentFilters.userIds.length}
-                </span>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-            <DropdownMenuLabel>Filtrar por vendedor</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {sdrMembers.map((m) => (
-              <DropdownMenuCheckboxItem
-                key={m.user_id}
-                checked={currentFilters.userIds.includes(m.user_id)}
-                onCheckedChange={() =>
-                  toggleArrayParam(
-                    'userIds',
-                    m.user_id,
-                    currentFilters.userIds,
-                  )
-                }
-              >
-                {m.name ?? m.user_id.slice(0, 8)}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <GreenDot />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+                <span>{userCount} vendedores</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+              <DropdownMenuLabel>Filtrar por vendedor</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {sdrMembers.map((m) => (
+                <DropdownMenuCheckboxItem
+                  key={m.user_id}
+                  checked={currentFilters.userIds.includes(m.user_id)}
+                  onCheckedChange={() =>
+                    toggleArrayParam(
+                      'userIds',
+                      m.user_id,
+                      currentFilters.userIds,
+                    )
+                  }
+                >
+                  {m.name ?? m.user_id.slice(0, 8)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
     </div>
   );

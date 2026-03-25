@@ -1,20 +1,19 @@
 'use client';
 
-import { BarChart3, CalendarDays, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart3, CalendarDays, HelpCircle, TrendingDown, TrendingUp } from 'lucide-react';
 import {
-  Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
-  Legend,
+  ComposedChart,
   Line,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 
 import { cn } from '@/lib/utils';
-
 import type { DailyDataPoint, OpportunityKpiData } from '../types';
 
 const MONTH_NAMES = [
@@ -23,8 +22,8 @@ const MONTH_NAMES = [
 ];
 
 const MONTH_ABBR = [
-  'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
-  'jul', 'ago', 'set', 'out', 'nov', 'dez',
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
 ];
 
 function getMonthName(month: string): string {
@@ -44,6 +43,33 @@ function formatXAxis(day: number, daysInMonth: number, monthAbbr: string): strin
   return '';
 }
 
+// Custom dot for Scatter — accepts recharts ScatterShapeProps
+function renderDot(props: { cx?: number; cy?: number }): React.ReactElement | null {
+  const { cx, cy } = props;
+  if (typeof cx !== 'number' || typeof cy !== 'number') return null;
+  return (
+    <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#fff" strokeWidth={1.5} />
+  );
+}
+
+// Custom bar shape — accepts recharts BarShapeProps
+function renderBarShape(props: { x?: number; y?: number; width?: number; height?: number }): React.ReactElement | null {
+  const { x = 0, y = 0, width = 0, height = 0 } = props;
+  if (!height || height <= 0) return null;
+  const barWidth = Math.min(width, 8);
+  const barX = x + (width - barWidth) / 2;
+  return (
+    <rect
+      x={barX}
+      y={y}
+      width={barWidth}
+      height={height}
+      rx={2}
+      fill="url(#gradientBar)"
+    />
+  );
+}
+
 interface OpportunityKpiCardProps {
   kpi: OpportunityKpiData;
   month: string;
@@ -59,103 +85,99 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
     ? Math.round((kpi.monthTarget / kpi.daysInMonth) * kpi.currentDay)
     : 0;
 
-  // Chart data — only show "actual" up to current day
+  // Chart data — daily (non-cumulative) for bar chart, show only up to current day
   const chartData = kpi.dailyData.map((point: DailyDataPoint) => ({
-    ...point,
+    day: point.day,
+    target: point.target,
+    // For bars: show daily actual values (non-cumulative difference)
     actual: point.day <= kpi.currentDay ? point.actual : null,
   }));
 
+  // Y-axis domain: proportional to target, with a small buffer
+  const maxTarget = kpi.monthTarget > 0 ? kpi.monthTarget : 5;
+  const maxActual = Math.max(...kpi.dailyData.map((d) => d.actual));
+  const yMax = Math.max(maxTarget, maxActual) + 1;
+
   return (
-    <div className="rounded-xl border bg-card p-8 shadow-sm">
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Left side — KPI info */}
-        <div className="flex max-w-sm shrink-0 flex-col justify-center">
+    <div className="rounded-lg border border-border bg-card">
+      <div className="flex flex-col gap-6 p-6 lg:flex-row lg:p-8">
+        {/* Left column — Stats */}
+        <div className="flex w-full max-w-xs shrink-0 flex-col justify-center lg:w-[280px]">
           {/* Big number */}
-          <p className="text-6xl font-bold tracking-tight">{kpi.totalOpportunities}</p>
-          <p className="mt-1.5 text-sm text-foreground/70">
+          <p className="text-6xl font-bold tracking-tight text-foreground">{kpi.totalOpportunities}</p>
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm text-foreground/70">
             Oportunidades em {monthName}
+            <span title="Leads convertidos em oportunidades no mês">
+              <HelpCircle className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
+            </span>
           </p>
 
           {/* Meta row */}
           {kpi.monthTarget > 0 && (
             <div className="mt-6 flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <CalendarDays className="h-4 w-4 text-primary" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+                <CalendarDays className="h-4 w-4 text-emerald-500" />
               </div>
               <p className="text-sm leading-relaxed">
                 Meta de oportunidades para {monthNameLower}:{' '}
-                <span className="font-semibold">{kpi.monthTarget}</span>
+                <span className="font-semibold text-emerald-600">{kpi.monthTarget}</span>
               </p>
             </div>
           )}
 
-          {/* Progress bar */}
-          {kpi.monthTarget > 0 && (
-            <div className="mt-3 ml-12">
-              <div className="h-2 w-full rounded-full bg-muted">
-                <div
-                  className={cn(
-                    'h-2 rounded-full transition-all',
-                    isAbove ? 'bg-emerald-500' : 'bg-gradient-to-r from-red-500 to-amber-400',
-                  )}
-                  style={{ width: `${Math.min((kpi.totalOpportunities / kpi.monthTarget) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* % indicator row */}
+          {/* % indicator row — NO progress bar */}
           {kpi.monthTarget > 0 && (
             <div className="mt-3 flex items-start gap-3">
-              <div className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-                isAbove ? 'bg-emerald-500/10' : 'bg-red-500/10',
-              )}>
-                <BarChart3 className={cn('h-4 w-4', isAbove ? 'text-emerald-500' : 'text-red-500')} />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
+                <BarChart3 className="h-4 w-4 text-blue-500" />
               </div>
-              <div className="flex items-center gap-1.5">
-                {isAbove ? (
-                  <TrendingUp className="h-4 w-4 text-emerald-500" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-red-500" />
-                )}
-                <p className={cn('text-sm font-medium', isAbove ? 'text-emerald-500' : 'text-red-500')}>
+              <p className="text-sm leading-relaxed">
+                <span className={cn('inline-flex items-center gap-0.5 font-medium', isAbove ? 'text-emerald-600' : 'text-red-500')}>
+                  {isAbove ? (
+                    <TrendingUp className="inline h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="inline h-3.5 w-3.5" />
+                  )}
                   {absPercent}% {isAbove ? 'acima' : 'abaixo'} do previsto até hoje ({expectedByNow})
-                </p>
-              </div>
+                </span>
+                {' '}
+                <span className="text-foreground/60">para alcançar a meta mensal</span>
+              </p>
             </div>
           )}
 
           {kpi.monthTarget === 0 && (
-            <p className="mt-4 text-sm">
+            <p className="mt-6 text-sm text-muted-foreground">
               Nenhuma meta definida para {monthNameLower}
             </p>
           )}
         </div>
 
-        {/* Right side — Chart */}
+        {/* Right column — Chart */}
         <div className="flex min-w-0 flex-1 items-center">
           {kpi.dailyData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={340}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -15 }}>
                 <defs>
-                  <linearGradient id="gradientOpp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.7} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.08} />
+                  <linearGradient id="gradientBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.2} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                <CartesianGrid horizontal={false} vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fontSize: 11, fill: 'var(--foreground)' }}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                   tickFormatter={(day: number) => formatXAxis(day, kpi.daysInMonth, monthAbbr)}
-                  axisLine={false}
+                  axisLine={{ stroke: 'var(--border)' }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: 'var(--foreground)' }}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                   axisLine={false}
                   tickLine={false}
+                  domain={[0, yMax]}
+                  allowDecimals={false}
                 />
                 <Tooltip
                   contentStyle={{
@@ -166,40 +188,62 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                     color: 'var(--foreground)',
                   }}
                   labelFormatter={(day) => `Dia ${day}`}
+                  formatter={(value?: number, name?: string) => {
+                    const v = value ?? 0;
+                    const n = name ?? '';
+                    if (n === 'Meta') return [Math.round(v), n];
+                    return [v, n];
+                  }}
                 />
-                <Legend
-                  iconType="plainline"
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px', color: 'var(--foreground)' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="actual"
-                  name="Oportunidades"
-                  stroke="#22c55e"
-                  strokeWidth={2.5}
-                  fill="url(#gradientOpp)"
-                  dot={{ r: 2, fill: '#22c55e', strokeWidth: 0 }}
-                  connectNulls={false}
-                />
+                {/* Meta line — solid (not dashed), light gray, diagonal */}
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="target"
                   name="Meta"
                   stroke="var(--muted-foreground)"
-                  strokeWidth={1.5}
-                  strokeDasharray="5 5"
+                  strokeWidth={1}
+                  strokeOpacity={0.35}
                   dot={false}
-                  strokeOpacity={0.6}
+                  activeDot={false}
                 />
-              </AreaChart>
+                {/* Actual bars — thin green bars for days with value > 0 */}
+                <Bar
+                  dataKey="actual"
+                  name="Oportunidades"
+                  shape={renderBarShape}
+                  isAnimationActive={false}
+                />
+                {/* Scatter dots on top of data points */}
+                <Scatter
+                  dataKey="actual"
+                  name="_dots"
+                  shape={renderDot}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-[340px] w-full items-center justify-center">
+            <div className="flex h-[280px] w-full items-center justify-center">
               <p className="text-sm text-muted-foreground">Sem dados para exibir</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Legend — below the chart area */}
+      {kpi.dailyData.length > 0 && (
+        <div className="flex items-center justify-center gap-6 border-t border-border px-6 py-3">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-sm bg-emerald-500" />
+            <span className="text-xs text-muted-foreground">Oportunidades</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-px w-4 bg-muted-foreground/40" />
+            <span className="text-xs text-muted-foreground">Meta</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,9 +2,8 @@
 
 import { Suspense, useState } from 'react';
 
-import { CheckCircle2, Settings, TrendingUp, Users } from 'lucide-react';
+import { CheckCircle2, TrendingUp, Users } from 'lucide-react';
 
-import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
 import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
@@ -27,19 +26,24 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
 
   return (
     <div className="space-y-6">
-      {/* Header: Filters + Edit goals button */}
+      {/* Header: Title + Filters (inline) + Edit goals button */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Suspense fallback={<Skeleton className="h-8 w-64" />}>
-          <DashboardFiltersComponent
-            currentFilters={filters}
-            availableCadences={data.availableCadences}
-          />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-lg font-normal text-foreground">Visão geral</h1>
+          <Suspense fallback={<Skeleton className="h-6 w-64" />}>
+            <DashboardFiltersComponent
+              currentFilters={filters}
+              availableCadences={data.availableCadences}
+            />
+          </Suspense>
+        </div>
 
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => setGoalsOpen(true)}>
-          <Settings className="h-3.5 w-3.5" />
+        <button
+          onClick={() => setGoalsOpen(true)}
+          className="rounded-full border border-emerald-500 px-4 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+        >
           Editar metas
-        </Button>
+        </button>
       </div>
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
