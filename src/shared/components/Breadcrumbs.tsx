@@ -52,6 +52,7 @@ const pathLabels: Record<string, string> = {
   emails: 'E-mails',
   history: 'Histórico',
   ajustes: 'Ajustes',
+  extrato: 'Extrato',
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
