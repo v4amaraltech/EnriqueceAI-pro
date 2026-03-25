@@ -24,6 +24,7 @@ import { TooltipProvider } from '@/shared/components/ui/tooltip';
 import { Api4ComWebphoneWrapper } from '@/features/integrations/components/Api4ComWebphone';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  try {
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
@@ -151,4 +152,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </TooltipProvider>
     </ThemeProvider>
   );
+  } catch (error) {
+    // NEXT_REDIRECT must be re-thrown
+    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
+    console.error('[AppLayout] LAYOUT_CRASH:', error);
+    console.error('[AppLayout] LAYOUT_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
+    throw error;
+  }
 }
