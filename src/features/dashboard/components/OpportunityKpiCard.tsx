@@ -125,9 +125,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
         </div>
 
         {/* Right column — Chart */}
-        <div className="flex min-w-0 flex-1 items-center">
+        <div className="flex min-w-0 flex-1 items-center lg:max-w-[60%]">
           {kpi.dailyData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -15 }}>
                 <defs>
                   <linearGradient id="gradientArea" x1="0" y1="0" x2="0" y2="1">
