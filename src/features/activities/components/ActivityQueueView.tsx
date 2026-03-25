@@ -101,24 +101,9 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
   const handleActivityDone = useCallback((enrollmentId: string, stepId: string) => {
-    setActivities((prev) => {
-      // Remove the completed activity
-      const updated = prev.filter(
-        (a) => !(a.enrollmentId === enrollmentId && a.stepId === stepId),
-      );
-      // Promote the next step of the same enrollment to isCurrentStep
-      const nextStep = updated.find(
-        (a) => a.enrollmentId === enrollmentId && !a.isCurrentStep,
-      );
-      if (nextStep) {
-        return updated.map((a) =>
-          a.enrollmentId === enrollmentId && a.stepId === nextStep.stepId
-            ? { ...a, isCurrentStep: true }
-            : a,
-        );
-      }
-      return updated;
-    });
+    setActivities((prev) =>
+      prev.filter((a) => !(a.enrollmentId === enrollmentId && a.stepId === stepId)),
+    );
   }, []);
 
   const handleIgnore = useCallback((activity: PendingActivity) => {
