@@ -5,6 +5,12 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
+export interface DialerQueuePhone {
+  formatted: string;
+  raw: string;
+  label: string;
+}
+
 export interface DialerQueueItem {
   enrollmentId: string;
   leadId: string;
@@ -13,6 +19,7 @@ export interface DialerQueueItem {
   lastName: string | null;
   companyName: string;
   phone: string | null;
+  phones: DialerQueuePhone[];
   cadenceName: string;
   cadenceId: string;
   stepId: string;
@@ -98,6 +105,40 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     return `(${best.ddd}) ${best.numero}`;
   }
 
+  // Helper: resolve ALL phones from lead for multi-attempt retry
+  function resolveAllPhones(lead: EnrollmentLead): DialerQueuePhone[] {
+    const phones: DialerQueuePhone[] = [];
+    const seen = new Set<string>();
+
+    // Sócio celulares sorted by ranking
+    const allCelulares: Array<{ ddd: number; numero: string; ranking: number }> = [];
+    for (const socio of lead.socios ?? []) {
+      for (const cel of socio.celulares ?? []) {
+        allCelulares.push(cel);
+      }
+    }
+    allCelulares.sort((a, b) => a.ranking - b.ranking);
+
+    for (const cel of allCelulares) {
+      const cleaned = `${cel.numero}`.replace(/\D/g, '');
+      const raw = `55${cel.ddd}${cleaned}`;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      const formatted = `(${cel.ddd}) ${cleaned}`;
+      phones.push({ formatted, raw, label: formatted });
+    }
+
+    // Lead.telefone as fallback
+    if (lead.telefone) {
+      const cleaned = lead.telefone.replace(/\D/g, '');
+      if (!seen.has(cleaned)) {
+        phones.push({ formatted: lead.telefone, raw: cleaned, label: `${lead.telefone} (Fixo)` });
+      }
+    }
+
+    return phones;
+  }
+
   // Filter enrollments from cadences that have ANY phone step
   // (not just enrollments whose current step is phone)
   type Enrollment = (typeof enrollments)[0];
@@ -159,6 +200,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       lastName: e.lead.last_name,
       companyName: e.lead.razao_social ?? e.lead.cnpj,
       phone,
+      phones: resolveAllPhones(e.lead),
       cadenceName: e.cadence.name,
       cadenceId: e.cadence_id,
       stepId: stepInfo.id,

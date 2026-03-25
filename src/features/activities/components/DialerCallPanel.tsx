@@ -9,6 +9,7 @@ import {
   Phone,
   PhoneCall,
   PhoneOff,
+  RotateCcw,
   SkipForward,
   User,
 } from 'lucide-react';
@@ -29,6 +30,8 @@ import {
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
+import type { CallAttempt } from '../types/call-attempt';
+import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
 
 export type CallState = 'idle' | 'calling' | 'connected' | 'ended';
 
@@ -38,8 +41,9 @@ interface DialerCallPanelProps {
   callState: CallState;
   onComplete: (callStatus: string, notes: string, durationSeconds: number) => void;
   onSkip: () => void;
-  onInitiateCall: () => void;
+  onInitiateCall: (phone: string) => void;
   onHangup: () => void;
+  onRetry: () => void;
   dialerProvider?: DialerProvider;
 }
 
@@ -57,12 +61,19 @@ export function DialerCallPanel({
   onSkip,
   onInitiateCall,
   onHangup,
+  onRetry,
   dialerProvider = 'api4com',
 }: DialerCallPanelProps) {
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [attempts, setAttempts] = useState<CallAttempt[]>([]);
+  const [selectedPhone, setSelectedPhone] = useState(item.phone ?? '');
+
+  const currentAttemptNumber = attempts.length + 1;
+  const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
+  const hasMultiplePhones = (item.phones?.length ?? 0) > 1;
 
   // Timer for call duration — starts on calling/connected, resets on idle
   useEffect(() => {
@@ -78,11 +89,34 @@ export function DialerCallPanel({
     return () => clearTimeout(resetId);
   }, [callState]);
 
-  function handleComplete() {
-    onComplete(callStatus, notes, elapsed);
+  function buildCurrentAttempt(): CallAttempt {
+    return {
+      attemptNumber: currentAttemptNumber,
+      phone: selectedPhone,
+      status: callStatus,
+      notes,
+      durationSeconds: elapsed,
+    };
+  }
+
+  function handleRetry() {
+    const attempt = buildCurrentAttempt();
+    setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
     setNotes('');
     setElapsed(0);
+    onRetry();
+  }
+
+  function handleComplete() {
+    const allAttempts = [...attempts, buildCurrentAttempt()];
+    const aggregatedNotes = formatAggregatedNotes(allAttempts);
+    const totalDuration = allAttempts.reduce((sum, a) => sum + a.durationSeconds, 0);
+    onComplete(callStatus, aggregatedNotes, totalDuration);
+    setCallStatus('');
+    setNotes('');
+    setElapsed(0);
+    setAttempts([]);
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
@@ -122,6 +156,41 @@ export function DialerCallPanel({
         </span>
       </div>
 
+      {/* Phone selector — only when multiple phones */}
+      {hasMultiplePhones && (
+        <div className="mt-3 space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            Selecionar telefone
+          </Label>
+          <Select value={selectedPhone} onValueChange={setSelectedPhone} disabled={isInCall}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um telefone..." />
+            </SelectTrigger>
+            <SelectContent>
+              {item.phones?.map((p) => (
+                <SelectItem key={p.raw} value={p.formatted}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Previous attempts summary */}
+      {attempts.length > 0 && (
+        <div className="mt-3 rounded-lg border border-[var(--border)] bg-amber-500/5 p-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            Tentativas anteriores ({attempts.length})
+          </p>
+          {attempts.map((a) => (
+            <p key={a.attemptNumber} className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              #{a.attemptNumber} — {a.phone} — [{a.status}] {a.notes ? `${a.notes} ` : ''}({a.durationSeconds}s)
+            </p>
+          ))}
+        </div>
+      )}
+
       {/* Call script / Roteiro */}
       {item.callScript && (
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3">
@@ -134,10 +203,15 @@ export function DialerCallPanel({
 
       {/* Call section — centered */}
       <div className="flex flex-col items-center py-6">
-        {item.phone ? (
+        {selectedPhone ? (
           <>
+            {/* Attempt indicator */}
+            <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Tentativa {currentAttemptNumber} de {MAX_CALL_ATTEMPTS}
+            </p>
+
             <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
-              {item.phone}
+              {selectedPhone}
             </p>
 
             {/* Timer display during call */}
@@ -151,7 +225,7 @@ export function DialerCallPanel({
             <div className="mt-3 flex items-center gap-4">
               {callState === 'idle' && (
                 <button
-                  onClick={onInitiateCall}
+                  onClick={() => onInitiateCall(selectedPhone)}
                   className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
                   title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
                 >
@@ -256,13 +330,19 @@ export function DialerCallPanel({
               <SkipForward className="mr-2 h-4 w-4" />
               Pular
             </Button>
+            {canRetry && (
+              <Button variant="secondary" onClick={handleRetry} disabled={!callStatus}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Tentar novamente
+              </Button>
+            )}
             <Button onClick={handleComplete} disabled={isSending || !callStatus}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <CheckCircle2 className="mr-2 h-4 w-4" />
               )}
-              Concluir e avancar
+              Concluir atividade
             </Button>
           </div>
         </>

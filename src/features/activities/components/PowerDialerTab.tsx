@@ -94,16 +94,17 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     }
   }
 
-  function handleInitiateCall() {
-    if (!currentItem?.phone) return;
+  function handleInitiateCall(phone?: string) {
+    const phoneToCall = phone ?? currentItem?.phone;
+    if (!phoneToCall) return;
 
     startTransition(async () => {
       setCallState('calling');
 
       const result = await initiateCall({
         provider: dialerProvider,
-        phone: currentItem.phone ?? '',
-        leadId: currentItem.leadId,
+        phone: phoneToCall,
+        leadId: currentItem?.leadId ?? '',
       });
 
       if (!result.success) {
@@ -115,6 +116,10 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
     });
+  }
+
+  function handleRetry() {
+    resetCallState();
   }
 
   function handleHangup() {
@@ -250,6 +255,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
                 onSkip={handleSkip}
                 onInitiateCall={handleInitiateCall}
                 onHangup={handleHangup}
+                onRetry={handleRetry}
                 dialerProvider={dialerProvider}
               />
             </div>

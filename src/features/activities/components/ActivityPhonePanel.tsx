@@ -10,6 +10,7 @@ import {
   Phone,
   PhoneCall,
   PhoneOff,
+  RotateCcw,
   User,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -36,6 +37,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 
+import type { CallAttempt } from '../types/call-attempt';
+import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
@@ -82,7 +85,10 @@ export function ActivityPhonePanel({
   const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [attempts, setAttempts] = useState<CallAttempt[]>([]);
 
+  const currentAttemptNumber = attempts.length + 1;
+  const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
   const hasMultiplePhones = phones.length > 1;
   const hasAnyPhone = selectedPhone !== '';
 
@@ -137,21 +143,48 @@ export function ActivityPhonePanel({
     });
   }
 
-  function handleSubmitResult() {
-    onMarkDone(`[${callStatus}] ${notes}`.trim());
+  function buildCurrentAttempt(): CallAttempt {
+    return {
+      attemptNumber: currentAttemptNumber,
+      phone: selectedPhone,
+      status: callStatus,
+      notes,
+      durationSeconds: callDuration,
+    };
+  }
+
+  function handleRetryAttempt() {
+    const attempt = buildCurrentAttempt();
+    setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
     setNotes('');
     setCallState('idle');
     setProviderCallId(null);
     setElapsed(0);
+    setCallDuration(0);
+  }
+
+  function handleSubmitResult() {
+    const allAttempts = [...attempts, buildCurrentAttempt()];
+    const aggregatedNotes = formatAggregatedNotes(allAttempts);
+    onMarkDone(aggregatedNotes);
+    setCallStatus('');
+    setNotes('');
+    setCallState('idle');
+    setProviderCallId(null);
+    setElapsed(0);
+    setCallDuration(0);
+    setAttempts([]);
   }
 
   function handleDismissModal() {
+    // Keep previous attempts when dismissing (user might want to retry)
     setCallState('idle');
     setCallStatus('');
     setNotes('');
     setProviderCallId(null);
     setElapsed(0);
+    setCallDuration(0);
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
@@ -211,10 +244,29 @@ export function ActivityPhonePanel({
         </div>
       )}
 
+      {/* Previous attempts summary */}
+      {attempts.length > 0 && (
+        <div className="mt-3 rounded-lg border border-[var(--border)] bg-amber-500/5 p-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            Tentativas anteriores ({attempts.length})
+          </p>
+          {attempts.map((a) => (
+            <p key={a.attemptNumber} className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              #{a.attemptNumber} — {a.phone} — [{a.status}] {a.notes ? `${a.notes} ` : ''}({a.durationSeconds}s)
+            </p>
+          ))}
+        </div>
+      )}
+
       {/* Call section — centered */}
       <div className="flex flex-1 flex-col items-center justify-center py-8">
         {hasAnyPhone ? (
           <>
+            {/* Attempt indicator */}
+            <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Tentativa {currentAttemptNumber} de {MAX_CALL_ATTEMPTS}
+            </p>
+
             <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
               {selectedPhone}
             </p>
@@ -354,17 +406,23 @@ export function ActivityPhonePanel({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
             <Button variant="outline" onClick={handleDismissModal}>
               Cancelar
             </Button>
+            {canRetry && (
+              <Button variant="secondary" onClick={handleRetryAttempt} disabled={!callStatus}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Tentar novamente
+              </Button>
+            )}
             <Button onClick={handleSubmitResult} disabled={isSending || !callStatus}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <CheckCircle2 className="mr-2 h-4 w-4" />
               )}
-              Concluir ligação
+              Concluir atividade
             </Button>
           </DialogFooter>
         </DialogContent>
