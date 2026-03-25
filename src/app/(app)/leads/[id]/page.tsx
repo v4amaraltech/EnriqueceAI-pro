@@ -8,6 +8,7 @@ import { fetchLeadEnrollment } from '@/features/leads/actions/fetch-lead-enrollm
 import { getLeadSourceOptions } from '@/features/leads/actions/get-lead-source-options';
 import { LeadDetailLayout } from '@/features/leads/components/LeadDetailLayout';
 import { listVisibleCustomFields } from '@/features/settings-prospecting/actions/custom-fields-crud';
+import { listStandardFieldSettingsForMember } from '@/features/settings-prospecting/actions/standard-field-settings';
 
 interface LeadDetailPageProps {
   params: Promise<{ id: string }>;
@@ -17,12 +18,13 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   await requireAuth();
 
   const { id } = await params;
-  const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions] = await Promise.all([
+  const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions, stdFieldsResult] = await Promise.all([
     fetchLead(id),
     fetchLeadTimeline(id),
     fetchLeadEnrollment(id),
     listVisibleCustomFields(),
     getLeadSourceOptions(),
+    listStandardFieldSettingsForMember(),
   ]);
 
   if (!leadResult.success) {
@@ -34,6 +36,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     ? enrollmentResult.data
     : { enrollment: null, steps: [], enrollments: [], kpis: { completed: 0, open: 0, conversations: 0 } };
   const customFieldDefs = customFieldsResult.success ? customFieldsResult.data : [];
+  const standardFieldSettings = stdFieldsResult.success ? stdFieldsResult.data : [];
 
   return (
     <LeadDetailLayout
@@ -42,6 +45,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       enrollmentData={enrollmentData}
       customFieldDefs={customFieldDefs}
       leadSourceOptions={leadSourceOptions}
+      standardFieldSettings={standardFieldSettings}
     />
   );
 }

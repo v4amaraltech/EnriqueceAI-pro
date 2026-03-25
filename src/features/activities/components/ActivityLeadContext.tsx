@@ -9,6 +9,7 @@ import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadInfoPanel } from '@/features/leads/components/LeadInfoPanel';
 import { activityLeadToInfoPanelData } from '@/features/leads/components/lead-info-panel.utils';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
+import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
 
 import type { ActivityLead } from '../types';
 
@@ -23,6 +24,7 @@ interface ActivityLeadContextProps {
 export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, customFieldDefs: propDefs }: ActivityLeadContextProps) {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldRow[]>(propDefs ?? []);
+  const [standardFieldSettings, setStandardFieldSettings] = useState<StandardFieldSettingRow[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -49,6 +51,14 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
         setCustomFieldDefs(data ?? []);
       })();
     }
+
+    // Fetch standard field settings for visibility
+    (async () => {
+      const { data } = (await (supabase as any).from('standard_field_settings')
+        .select('*')) as { data: StandardFieldSettingRow[] | null };
+
+      setStandardFieldSettings(data ?? []);
+    })();
   }, [lead.id, propDefs]);
 
   return (
@@ -58,6 +68,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
       showLeadHeader
       cadenceConfig={{ cadenceName, stepOrder, totalSteps }}
       customFieldDefs={customFieldDefs}
+      standardFieldSettings={standardFieldSettings}
     />
   );
 }

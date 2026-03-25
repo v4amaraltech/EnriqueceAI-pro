@@ -286,6 +286,7 @@ export const enrichedLead: LeadInfoPanelData = {
   linkedin: 'https://linkedin.com/company/technova',
   website: 'https://technova.com.br',
   custom_field_values: null,
+  assigned_to: null,
 };
 
 // ---------------------------------------------------------------------------

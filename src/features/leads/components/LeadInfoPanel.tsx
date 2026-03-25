@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
+import { useCallback, useContext, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -33,6 +33,8 @@ import {
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
+import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
+import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
@@ -56,6 +58,7 @@ export interface LeadInfoPanelProps {
   kpis?: { completed: number; open: number; conversations: number };
   customFieldDefs?: CustomFieldRow[];
   leadSourceOptions?: LeadSourceOption[];
+  standardFieldSettings?: StandardFieldSettingRow[];
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
@@ -70,10 +73,24 @@ export function LeadInfoPanel({
   kpis,
   customFieldDefs,
   leadSourceOptions,
+  standardFieldSettings,
 }: LeadInfoPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
+
+  const orgContext = useContext(OrgContext);
+  const members = orgContext?.members ?? [];
+
+  const isFieldVisible = useCallback((key: string) => {
+    if (!standardFieldSettings || standardFieldSettings.length === 0) return true;
+    const setting = standardFieldSettings.find((s) => s.field_key === key);
+    return setting?.is_visible ?? true;
+  }, [standardFieldSettings]);
+
+  const assignedMemberName = initialData.assigned_to
+    ? members.find((m) => m.user_id === initialData.assigned_to)?.name ?? null
+    : null;
 
   // Local state for lead data — survives router.refresh() in activity execution context
   const [data, setData] = useState(initialData);
@@ -372,91 +389,111 @@ export function LeadInfoPanel({
               </h4>
               {isEditing ? (
                 <>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Primeiro nome</p>
-                    <Input
-                      value={editFields.first_name}
-                      onChange={(e) => setEditFields({ ...editFields, first_name: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="Primeiro nome"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sobrenome</p>
-                    <Input
-                      value={editFields.last_name}
-                      onChange={(e) => setEditFields({ ...editFields, last_name: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="Sobrenome"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>
-                    <Input
-                      value={editFields.email}
-                      onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="email@empresa.com"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Empresa</p>
-                    <Input
-                      value={editFields.nome_fantasia}
-                      onChange={(e) => setEditFields({ ...editFields, nome_fantasia: e.target.value })}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
-                    <Input
-                      value={editFields.job_title}
-                      onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="Cargo"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
-                    <Select
-                      value={editFields.lead_source ?? 'none'}
-                      onValueChange={(value) => {
-                        setEditFields((prev) => ({ ...prev, lead_source: value === 'none' ? '' : value }));
-                      }}
-                    >
-                      <SelectTrigger className="w-full text-sm">
-                        <SelectValue placeholder="Selecione a origem" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">—</SelectItem>
-                        {sourceOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {isFieldVisible('first_name') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Primeiro nome</p>
+                      <Input
+                        value={editFields.first_name}
+                        onChange={(e) => setEditFields({ ...editFields, first_name: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="Primeiro nome"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('last_name') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sobrenome</p>
+                      <Input
+                        value={editFields.last_name}
+                        onChange={(e) => setEditFields({ ...editFields, last_name: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="Sobrenome"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('email') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>
+                      <Input
+                        value={editFields.email}
+                        onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="email@empresa.com"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('nome_fantasia') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Empresa</p>
+                      <Input
+                        value={editFields.nome_fantasia}
+                        onChange={(e) => setEditFields({ ...editFields, nome_fantasia: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('job_title') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
+                      <Input
+                        value={editFields.job_title}
+                        onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="Cargo"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('lead_source') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
+                      <Select
+                        value={editFields.lead_source ?? 'none'}
+                        onValueChange={(value) => {
+                          setEditFields((prev) => ({ ...prev, lead_source: value === 'none' ? '' : value }));
+                        }}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Selecione a origem" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {sourceOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
-                  {firstName && <MeetimeFieldRow label="Primeiro nome" value={firstName} />}
-                  {data.last_name ? (
+                  {isFieldVisible('first_name') && firstName && <MeetimeFieldRow label="Primeiro nome" value={firstName} />}
+                  {isFieldVisible('last_name') && (data.last_name ? (
                     <MeetimeFieldRow label="Sobrenome" value={data.last_name} />
                   ) : fullName && fullName !== firstName ? (
                     <MeetimeFieldRow label="Nome completo" value={fullName} />
-                  ) : null}
-                  {primaryEmail && <MeetimeFieldRow label="E-mail" value={primaryEmail} href={`mailto:${primaryEmail}`} />}
-                  {companyName && <MeetimeFieldRow label="Empresa" value={companyName} />}
-                  <MeetimeFieldRow label="Cargo" value={cargo || '—'} />
-                  <MeetimeFieldRow
-                    label="Origem"
-                    value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
-                  />
+                  ) : null)}
+                  {isFieldVisible('email') && primaryEmail && <MeetimeFieldRow label="E-mail" value={primaryEmail} href={`mailto:${primaryEmail}`} />}
+                  {isFieldVisible('nome_fantasia') && companyName && <MeetimeFieldRow label="Empresa" value={companyName} />}
+                  {isFieldVisible('job_title') && <MeetimeFieldRow label="Cargo" value={cargo || '—'} />}
+                  {isFieldVisible('lead_source') && (
+                    <MeetimeFieldRow
+                      label="Origem"
+                      value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
+                    />
+                  )}
+                  {isFieldVisible('cnpj') && data.cnpj && <MeetimeFieldRow label="CNPJ" value={data.cnpj} />}
+                  {isFieldVisible('razao_social') && data.razao_social && <MeetimeFieldRow label="Razão Social" value={data.razao_social} />}
+                  {isFieldVisible('porte') && data.porte && <MeetimeFieldRow label="Porte" value={data.porte} />}
+                  {isFieldVisible('assigned_to') && assignedMemberName && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName} />}
                 </>
               )}
             </div>
 
+            {isFieldVisible('telefone') && (
+            <>
             <hr className="border-t-2 border-[var(--border)]" />
 
             {/* TELEFONE(S) — with type descriptor */}
@@ -539,52 +576,63 @@ export function LeadInfoPanel({
                 ))
               )}
             </div>
-
-            <hr className="border-t-2 border-[var(--border)]" />
+            </>
+            )}
 
             {/* SOCIAL */}
+            {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website')) && (
+            <>
+            <hr className="border-t-2 border-[var(--border)]" />
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Social
               </h4>
               {isEditing ? (
                 <>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Instagram</p>
-                    <Input
-                      value={editFields.instagram}
-                      onChange={(e) => setEditFields({ ...editFields, instagram: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="@usuario"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">LinkedIn</p>
-                    <Input
-                      value={editFields.linkedin}
-                      onChange={(e) => setEditFields({ ...editFields, linkedin: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="https://linkedin.com/in/..."
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Site</p>
-                    <Input
-                      value={editFields.website}
-                      onChange={(e) => setEditFields({ ...editFields, website: e.target.value })}
-                      className="h-8 text-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
+                  {isFieldVisible('instagram') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Instagram</p>
+                      <Input
+                        value={editFields.instagram}
+                        onChange={(e) => setEditFields({ ...editFields, instagram: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="@usuario"
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('linkedin') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">LinkedIn</p>
+                      <Input
+                        value={editFields.linkedin}
+                        onChange={(e) => setEditFields({ ...editFields, linkedin: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="https://linkedin.com/in/..."
+                      />
+                    </div>
+                  )}
+                  {isFieldVisible('website') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Site</p>
+                      <Input
+                        value={editFields.website}
+                        onChange={(e) => setEditFields({ ...editFields, website: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="https://..."
+                      />
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
-                  <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram ? `https://instagram.com/${data.instagram.replace('@', '')}` : undefined} />
-                  <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />
-                  <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />
+                  {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram ? `https://instagram.com/${data.instagram.replace('@', '')}` : undefined} />}
+                  {isFieldVisible('linkedin') && <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />}
+                  {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />}
                 </>
               )}
             </div>
+            </>
+            )}
 
             {/* CUSTOM FIELDS */}
             {customFieldDefs && customFieldDefs.length > 0 && (
