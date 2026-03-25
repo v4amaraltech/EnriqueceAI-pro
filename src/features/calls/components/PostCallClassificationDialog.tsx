@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useState, useTransition } from 'react';
 import { CheckCircle2, Loader2, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,8 +40,8 @@ function formatDuration(ms: number): string {
 interface PostCallClassificationDialogProps {
   open: boolean;
   phone: string;
-  /** Call start timestamp (Date.now()) */
-  startedAt: number;
+  /** Call duration in milliseconds (pre-computed when call ended) */
+  durationMs: number;
   /** DB call record ID */
   callRecordId?: string;
   /** Lead ID for interaction record */
@@ -52,7 +52,7 @@ interface PostCallClassificationDialogProps {
 export function PostCallClassificationDialog({
   open,
   phone,
-  startedAt,
+  durationMs,
   callRecordId,
   leadId,
   onClose,
@@ -61,8 +61,6 @@ export function PostCallClassificationDialog({
   const [notes, setNotes] = useState('');
   const [isPending, startTransition] = useTransition();
 
-  // Compute duration once when dialog opens (startedAt changes)
-  const durationMs = useMemo(() => Date.now() - startedAt, [startedAt]);
   const clientDurationSeconds = Math.max(0, Math.floor(durationMs / 1000));
 
   const handleSubmit = useCallback(() => {

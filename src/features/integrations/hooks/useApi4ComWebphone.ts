@@ -15,6 +15,8 @@ export interface WebphoneCall {
   callRecordId?: string;
   /** Lead ID, set via webphone:call-context event */
   leadId?: string;
+  /** Duration in ms, computed when call ends */
+  durationMs?: number;
 }
 
 interface UseApi4ComWebphoneOptions {
@@ -199,7 +201,7 @@ export function useApi4ComWebphone({
           }
           // For non-API calls (inbound), retain info for classification dialog
           if (prev) {
-            setEndedCall(prev);
+            setEndedCall({ ...prev, durationMs: Date.now() - prev.startedAt });
             setCallStatus('ended');
           } else {
             setCallStatus('idle');

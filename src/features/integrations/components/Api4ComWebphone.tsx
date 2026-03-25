@@ -197,7 +197,7 @@ export function Api4ComWebphone() {
         <PostCallClassificationDialog
           open={callStatus === 'ended'}
           phone={endedCall.phone}
-          startedAt={endedCall.startedAt}
+          durationMs={endedCall.durationMs ?? 0}
           callRecordId={endedCall.callRecordId}
           leadId={endedCall.leadId}
           onClose={dismissEnded}
