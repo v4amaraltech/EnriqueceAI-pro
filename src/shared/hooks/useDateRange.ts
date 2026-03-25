@@ -2,39 +2,11 @@
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format, subDays } from 'date-fns';
 
-const DEFAULT_DAYS = 30;
+import { defaultFrom, periodToRange, todayStr } from '@/shared/utils/date-range';
 
-function todayStr(): string {
-  return format(new Date(), 'yyyy-MM-dd');
-}
-
-function defaultFrom(): string {
-  return format(subDays(new Date(), DEFAULT_DAYS), 'yyyy-MM-dd');
-}
-
-function periodToRange(period: string): { from: string; to: string } {
-  const today = new Date();
-  const to = format(today, 'yyyy-MM-dd');
-  let days: number;
-  switch (period) {
-    case 'today':
-      days = 0;
-      break;
-    case '7d':
-      days = 7;
-      break;
-    case '90d':
-      days = 90;
-      break;
-    case '30d':
-    default:
-      days = 30;
-  }
-  const from = days === 0 ? to : format(subDays(today, days), 'yyyy-MM-dd');
-  return { from, to };
-}
+// Re-export for backward compatibility with client components
+export { parseDateRangeParams } from '@/shared/utils/date-range';
 
 export function useDateRange(basePath?: string) {
   const router = useRouter();
@@ -88,21 +60,4 @@ export function useDateRange(basePath?: string) {
   );
 
   return { from, to, setRange, compare, setCompare };
-}
-
-/** Server-side helper: parse from/to from searchParams with backward compat */
-export function parseDateRangeParams(params: {
-  from?: string;
-  to?: string;
-  period?: string;
-  compare?: string;
-}): { from: string; to: string; compare: boolean } {
-  const compare = params.compare === 'true';
-  if (params.from && params.to) {
-    return { from: params.from, to: params.to, compare };
-  }
-  if (params.period) {
-    return { ...periodToRange(params.period), compare };
-  }
-  return { from: defaultFrom(), to: todayStr(), compare };
 }

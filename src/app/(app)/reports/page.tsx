@@ -3,7 +3,7 @@ import { BarChart3 } from 'lucide-react';
 import { requireAuth } from '@/lib/auth/require-auth';
 
 import { EmptyState } from '@/shared/components/EmptyState';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 import { fetchReportData } from '@/features/reports/actions/fetch-reports';

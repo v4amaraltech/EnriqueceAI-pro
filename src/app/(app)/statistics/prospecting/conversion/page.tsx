@@ -9,7 +9,6 @@ interface PageProps {
 }
 
 export default async function ProspectingConversionPage({ searchParams }: PageProps) {
-  try {
   await requireManager();
   const params = await searchParams;
   const userIds = params.user ? [params.user] : undefined;
@@ -29,12 +28,4 @@ export default async function ProspectingConversionPage({ searchParams }: PagePr
   }
 
   return <ConversionAnalyticsView data={result.data} members={members} hideFilters />;
-  } catch (error) {
-    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
-      throw error;
-    }
-    console.error('[ConversionPage] PAGE_CRASH:', error);
-    console.error('[ConversionPage] PAGE_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
-    throw error;
-  }
 }

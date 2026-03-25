@@ -12,7 +12,6 @@ interface CallsPageProps {
 }
 
 export default async function CallsPage({ searchParams }: CallsPageProps) {
-  try {
   await requireAuth();
 
   const params = await searchParams;
@@ -41,12 +40,4 @@ export default async function CallsPage({ searchParams }: CallsPageProps) {
   }
 
   return <CallsListView result={result.data} hasFilters={hasFilters} currentFilters={filters} />;
-  } catch (error) {
-    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
-      throw error;
-    }
-    console.error('[CallsPage] PAGE_CRASH:', error);
-    console.error('[CallsPage] PAGE_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
-    throw error;
-  }
 }

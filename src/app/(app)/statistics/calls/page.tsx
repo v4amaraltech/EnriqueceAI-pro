@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchCallStatistics } from '@/features/statistics/actions/fetch-call-statistics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { CallStatisticsView } from '@/features/statistics/components/CallStatisticsView';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; sdr?: string }>;

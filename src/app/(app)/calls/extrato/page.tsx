@@ -3,14 +3,13 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchExtrato } from '@/features/calls/actions/fetch-extrato';
 import { ExtratoView } from '@/features/calls/components/ExtratoView';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; period?: string; user?: string; sdr?: string }>;
 }
 
 export default async function ExtratoPage({ searchParams }: PageProps) {
-  try {
   await requireAuth();
   const params = await searchParams;
   const { from, to } = parseDateRangeParams(params);
@@ -60,12 +59,4 @@ export default async function ExtratoPage({ searchParams }: PageProps) {
       />
     </div>
   );
-  } catch (error) {
-    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
-      throw error;
-    }
-    console.error('[ExtratoPage] PAGE_CRASH:', error);
-    console.error('[ExtratoPage] PAGE_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
-    throw error;
-  }
 }

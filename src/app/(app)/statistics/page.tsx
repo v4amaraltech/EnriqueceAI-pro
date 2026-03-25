@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { fetchStatisticsData } from '@/features/reports/actions/fetch-statistics';
 import { StatisticsView } from '@/features/reports/components/StatisticsView';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 
 const statisticsPages = [
   {

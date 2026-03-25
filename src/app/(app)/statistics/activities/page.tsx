@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchActivityAnalytics } from '@/features/statistics/actions/fetch-activity-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ActivityAnalyticsView } from '@/features/statistics/components/ActivityAnalyticsView';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {

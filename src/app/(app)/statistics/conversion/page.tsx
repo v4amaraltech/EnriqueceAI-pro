@@ -4,7 +4,7 @@ import { fetchActiveCadenceOptions } from '@/features/statistics/actions/fetch-a
 import { fetchConversionAnalytics } from '@/features/statistics/actions/fetch-conversion-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ConversionAnalyticsView } from '@/features/statistics/components/ConversionAnalyticsView';
-import { parseDateRangeParams } from '@/shared/hooks/useDateRange';
+import { parseDateRangeParams } from '@/shared/utils/date-range';
 import { calculatePreviousPeriod } from '@/shared/utils/comparison';
 
 interface PageProps {
