@@ -49,7 +49,15 @@ export async function getDashboardData(
       success: true,
       data: { kpi, availableCadences },
     };
-  } catch {
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Erro ao buscar dados do dashboard' };
   }
 }

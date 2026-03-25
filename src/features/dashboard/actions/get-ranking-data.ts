@@ -83,7 +83,15 @@ export async function getRankingData(
     ranking.conversionRate.sdrBreakdown = resolveNames(ranking.conversionRate.sdrBreakdown);
 
     return { success: true, data: ranking };
-  } catch {
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Erro ao buscar dados de ranking' };
   }
 }

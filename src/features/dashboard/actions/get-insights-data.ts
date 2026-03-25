@@ -38,7 +38,15 @@ export async function getInsightsData(
   try {
     const insights = await fetchInsightsData(supabase, orgId, filters);
     return { success: true, data: insights };
-  } catch {
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Erro ao buscar dados de insights' };
   }
 }
