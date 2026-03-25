@@ -71,35 +71,44 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/onboarding');
   }
 
-  // Fetch subscription status for canceled guard
-  const { data: subscriptionData } = (await from(supabase, 'subscriptions')
-    .select('status, current_period_end')
-    .eq('org_id', memberData.organization.id)
-    .maybeSingle()) as { data: { status: SubscriptionStatus; current_period_end: string } | null };
+  // Fetch subscription, members and user names in parallel
+  const orgId = memberData.organization.id;
 
+  const [subscriptionResult, membersResult, namesResult] = await Promise.all([
+    (from(supabase, 'subscriptions')
+      .select('status, current_period_end')
+      .eq('org_id', orgId)
+      .maybeSingle() as unknown as Promise<{ data: { status: SubscriptionStatus; current_period_end: string } | null }>),
+
+    (supabase
+      .from('organization_members')
+      .select('*')
+      .eq('org_id', orgId) as unknown as Promise<{ data: OrganizationMemberRow[] | null }>),
+
+    (async () => {
+      const map = new Map<string, string>();
+      try {
+        const adminClient = createAdminSupabaseClient();
+        const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
+        if (usersData?.users) {
+          for (const u of usersData.users) {
+            const meta = u.user_metadata as Record<string, unknown> | undefined;
+            const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+            map.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
+          }
+        }
+      } catch {
+        // Fallback: names will be undefined, consumers use user_id slice
+      }
+      return map;
+    })(),
+  ]);
+
+  const subscriptionData = subscriptionResult.data;
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
   const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
-
-  const { data: members } = (await supabase
-    .from('organization_members')
-    .select('*')
-    .eq('org_id', memberData.organization.id)) as { data: OrganizationMemberRow[] | null };
-
-  // Enrich members with user names from auth.users
-  const nameMap = new Map<string, string>();
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-    if (usersData?.users) {
-      for (const u of usersData.users) {
-        const meta = u.user_metadata as Record<string, unknown> | undefined;
-        const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-        nameMap.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
-      }
-    }
-  } catch {
-    // Fallback: names will be undefined, consumers use user_id slice
-  }
+  const members = membersResult.data;
+  const nameMap = namesResult;
 
   const enrichedMembers = (members ?? []).map((m) => ({
     ...m,

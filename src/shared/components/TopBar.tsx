@@ -103,6 +103,7 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
             <DropdownMenuItem key={item.label} asChild>
               <Link
                 href={item.href!}
+                prefetch
                 className={cn(
                   pathname === item.href && 'font-medium text-primary',
                 )}
@@ -140,6 +141,7 @@ export function TopBar() {
               <Link
                 key={section.label}
                 href={section.href}
+                prefetch
                 className={cn(
                   'rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   pathname === section.href ||
