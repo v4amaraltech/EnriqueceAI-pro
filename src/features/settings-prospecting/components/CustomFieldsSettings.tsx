@@ -252,22 +252,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">
-                      <div className="flex items-center justify-between">
-                        <span>Nome e tipo do campo</span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setEditingField(null);
-                            setDialogOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableHead>
+                    <TableHead className="min-w-[200px]">Nome e tipo do campo</TableHead>
                     <TableHead className="w-[120px] text-center">
                       <div className="flex items-center justify-center gap-1">
                         <span>Obrig. ganho</span>
