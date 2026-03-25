@@ -39,7 +39,7 @@ function NoteContent({ text }: { text: string }) {
 
   return (
     <>
-      <p className="whitespace-pre-line text-sm text-[var(--foreground)]">
+      <p className="whitespace-pre-line break-words text-sm text-[var(--foreground)]">
         {collapsible && !expanded ? truncateText(text) + '…' : text}
       </p>
       {collapsible && (
@@ -169,10 +169,10 @@ export function LeadNotes({ leadId }: LeadNotesProps) {
             {savedNotes.map((note) => (
               <div
                 key={note.id}
-                className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-3"
+                className="min-w-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-3"
               >
                 <NoteContent text={note.text} />
-                <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <span>{formatNoteDate(note.created_at)}</span>
                   {note.author_email && (
                     <>
