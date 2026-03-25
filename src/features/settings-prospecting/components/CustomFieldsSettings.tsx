@@ -44,6 +44,7 @@ import {
 import { STANDARD_FIELDS } from '../constants/standard-fields';
 
 import { CustomFieldDialog } from './CustomFieldDialog';
+import { StandardFieldOptionsDialog } from './StandardFieldOptionsDialog';
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   text: 'Texto',
@@ -72,6 +73,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<CustomFieldRow | null>(null);
+
+  // Standard field options dialog state
+  const [stdOptionsDialogOpen, setStdOptionsDialogOpen] = useState(false);
+  const [editingStdFieldKey, setEditingStdFieldKey] = useState<string | null>(null);
 
   // Helpers for standard field settings
   function getStdSetting(fieldKey: string) {
@@ -106,6 +111,32 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
         toast.error(result.error);
         // Revert optimistic update
         setStdSettings((prev) => prev.filter((s) => s.field_key !== fieldKey || s.id !== ''));
+      }
+    });
+  }
+
+  function getStdFieldOptions(fieldKey: string): string[] {
+    const setting = getStdSetting(fieldKey);
+    if (setting?.options && setting.options.length > 0) return setting.options;
+    const fieldDef = STANDARD_FIELDS.find((f) => f.key === fieldKey);
+    return fieldDef?.defaultOptions ?? [];
+  }
+
+  function handleSaveStdOptions(fieldKey: string, options: string[]) {
+    // Optimistic update
+    setStdSettings((prev) => {
+      const existing = prev.find((s) => s.field_key === fieldKey);
+      if (existing) {
+        return prev.map((s) => (s.field_key === fieldKey ? { ...s, options } : s));
+      }
+      return [...prev, { id: '', org_id: '', field_key: fieldKey, is_visible: true, is_required_won: false, is_required_lost: false, options } as StandardFieldSettingRow];
+    });
+    setStdOptionsDialogOpen(false);
+
+    startTransition(async () => {
+      const result = await upsertStandardFieldSetting(fieldKey, { options });
+      if (!result.success) {
+        toast.error(result.error);
       }
     });
   }
@@ -431,13 +462,51 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                 <TableBody>
                   {STANDARD_FIELDS.map((field) => {
                     const setting = getStdSetting(field.key);
+                    const isSelect = field.type === 'select';
+                    const fieldOptions = isSelect ? getStdFieldOptions(field.key) : [];
                     return (
                       <TableRow key={field.key}>
                         <TableCell>
-                          <span className="font-medium">{field.label}</span>
-                          <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                            {field.key}
-                          </p>
+                          <div className="min-w-0">
+                            {isSelect ? (
+                              <button
+                                type="button"
+                                className="font-medium hover:underline text-left"
+                                onClick={() => {
+                                  setEditingStdFieldKey(field.key);
+                                  setStdOptionsDialogOpen(true);
+                                }}
+                              >
+                                {field.label}
+                              </button>
+                            ) : (
+                              <span className="font-medium">{field.label}</span>
+                            )}
+                            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                              {field.key}{isSelect ? ` \u00B7 ${FIELD_TYPE_LABELS.select}` : ''}
+                            </p>
+                            {isSelect && fieldOptions.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {fieldOptions.slice(0, 5).map((opt) => (
+                                  <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                    {opt}
+                                  </Badge>
+                                ))}
+                                {fieldOptions.length > 5 && (
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-[var(--primary)] hover:underline"
+                                    onClick={() => {
+                                      setEditingStdFieldKey(field.key);
+                                      setStdOptionsDialogOpen(true);
+                                    }}
+                                  >
+                                    +{fieldOptions.length - 5} mais
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Switch
@@ -491,6 +560,21 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             initialType={editingField.field_type}
             initialOptions={editingField.options ?? undefined}
             title="Editar campo personalizado"
+          />
+        )}
+
+        {/* Standard field options dialog */}
+        {stdOptionsDialogOpen && editingStdFieldKey && (
+          <StandardFieldOptionsDialog
+            open={stdOptionsDialogOpen}
+            onOpenChange={(open) => {
+              setStdOptionsDialogOpen(open);
+              if (!open) setEditingStdFieldKey(null);
+            }}
+            fieldLabel={STANDARD_FIELDS.find((f) => f.key === editingStdFieldKey)?.label ?? editingStdFieldKey}
+            initialOptions={getStdFieldOptions(editingStdFieldKey)}
+            onSave={(options) => handleSaveStdOptions(editingStdFieldKey, options)}
+            isPending={isPending}
           />
         )}
       </div>

@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { enrichmentStatusValues, LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
 
 const statusLabels: Record<string, string> = {
@@ -51,11 +52,13 @@ interface LeadFiltersProps {
   members?: { userId: string; name: string }[];
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
+  leadSourceOptions?: LeadSourceOption[];
 }
 
-export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
 
   const currentSearch = searchParams.get('search') ?? '';
   const currentStatus = searchParams.get('status') ?? '';
@@ -240,7 +243,7 @@ export function LeadFilters({ members, cadences, cnaes }: LeadFiltersProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-              {LEAD_SOURCE_OPTIONS.map((o) => (
+              {sourceOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
                 </SelectItem>

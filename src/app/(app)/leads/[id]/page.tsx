@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { fetchLeadTimeline } from '@/features/cadences/actions/fetch-interactions';
 import { fetchLead } from '@/features/leads/actions/fetch-lead';
 import { fetchLeadEnrollment } from '@/features/leads/actions/fetch-lead-enrollment';
+import { getLeadSourceOptions } from '@/features/leads/actions/get-lead-source-options';
 import { LeadDetailLayout } from '@/features/leads/components/LeadDetailLayout';
 import { listVisibleCustomFields } from '@/features/settings-prospecting/actions/custom-fields-crud';
 
@@ -16,11 +17,12 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   await requireAuth();
 
   const { id } = await params;
-  const [leadResult, timelineResult, enrollmentResult, customFieldsResult] = await Promise.all([
+  const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions] = await Promise.all([
     fetchLead(id),
     fetchLeadTimeline(id),
     fetchLeadEnrollment(id),
     listVisibleCustomFields(),
+    getLeadSourceOptions(),
   ]);
 
   if (!leadResult.success) {
@@ -39,6 +41,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       timeline={timeline}
       enrollmentData={enrollmentData}
       customFieldDefs={customFieldDefs}
+      leadSourceOptions={leadSourceOptions}
     />
   );
 }

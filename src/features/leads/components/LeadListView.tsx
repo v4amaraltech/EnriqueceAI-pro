@@ -10,6 +10,7 @@ import { Button } from '@/shared/components/ui/button';
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import { exportAllFilteredLeadsCsv } from '../actions/bulk-actions';
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import type { LeadStatusCounts } from '../actions/fetch-leads';
 import type { LeadListResult } from '../leads.contract';
 import type { LeadCadenceInfo } from '../types';
@@ -37,9 +38,10 @@ interface LeadListViewProps {
   statusCounts?: LeadStatusCounts;
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
+  leadSourceOptions?: LeadSourceOption[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions }: LeadListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -170,7 +172,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} />
+        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} />
       </Suspense>
 
       {/* Table or filtered empty */}
@@ -195,7 +197,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
         <LeadPagination total={total} page={page} perPage={per_page} />
       </Suspense>
 
-      <CreateLeadDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} currentUserId={currentUserId} />
+      <CreateLeadDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} currentUserId={currentUserId} leadSourceOptions={leadSourceOptions} />
     </div>
   );
 }

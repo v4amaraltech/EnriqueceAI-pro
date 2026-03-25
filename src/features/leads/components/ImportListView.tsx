@@ -15,12 +15,14 @@ import {
 } from '@/shared/components/ui/table';
 import { EmptyState } from '@/shared/components/EmptyState';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import type { ImportListResult } from '../actions/fetch-imports';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { ImportStatus } from '../types';
 
 interface ImportListViewProps {
   result: ImportListResult;
+  leadSourceOptions?: LeadSourceOption[];
 }
 
 const statusConfig: Record<ImportStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -29,9 +31,9 @@ const statusConfig: Record<ImportStatus, { label: string; variant: 'default' | '
   failed: { label: 'Falhou', variant: 'destructive' },
 };
 
-function getSourceLabel(value: string | null): string {
+function getSourceLabel(value: string | null, options: LeadSourceOption[]): string {
   if (!value) return '—';
-  const opt = LEAD_SOURCE_OPTIONS.find((o) => o.value === value);
+  const opt = options.find((o) => o.value === value);
   return opt?.label ?? value;
 }
 
@@ -46,7 +48,8 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function ImportListView({ result }: ImportListViewProps) {
+export function ImportListView({ result, leadSourceOptions }: ImportListViewProps) {
+  const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
   const { data: imports, total } = result;
 
   if (imports.length === 0) {
@@ -149,7 +152,7 @@ export function ImportListView({ result }: ImportListViewProps) {
                     <Badge variant={config.variant}>{config.label}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    {getSourceLabel(row.lead_source)}
+                    {getSourceLabel(row.lead_source, sourceOptions)}
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                     {row.created_by_name}

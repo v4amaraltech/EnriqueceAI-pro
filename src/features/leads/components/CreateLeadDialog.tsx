@@ -27,6 +27,7 @@ import {
 } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
@@ -42,6 +43,7 @@ interface CreateLeadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentUserId: string;
+  leadSourceOptions?: LeadSourceOption[];
 }
 
 const INITIAL_FORM = {
@@ -59,9 +61,10 @@ const INITIAL_FORM = {
   scheduled_start: '',
 };
 
-export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLeadDialogProps) {
+export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSourceOptions }: CreateLeadDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
   const [form, setForm] = useState({ ...INITIAL_FORM, assigned_to: currentUserId });
 
   // Data loading states
@@ -388,7 +391,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                       <SelectValue placeholder="Selecione a fonte" />
                     </SelectTrigger>
                     <SelectContent>
-                      {LEAD_SOURCE_OPTIONS.map((o) => (
+                      {sourceOptions.map((o) => (
                         <SelectItem key={o.value} value={o.value}>
                           {o.label}
                         </SelectItem>

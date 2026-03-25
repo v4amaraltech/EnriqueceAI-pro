@@ -34,6 +34,7 @@ import {
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
@@ -54,6 +55,7 @@ export interface LeadInfoPanelProps {
   cadenceConfig?: { cadenceName: string; stepOrder: number; totalSteps: number };
   kpis?: { completed: number; open: number; conversations: number };
   customFieldDefs?: CustomFieldRow[];
+  leadSourceOptions?: LeadSourceOption[];
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
@@ -67,9 +69,11 @@ export function LeadInfoPanel({
   cadenceConfig: _cadenceConfig,
   kpis,
   customFieldDefs,
+  leadSourceOptions,
 }: LeadInfoPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
 
   // Local state for lead data — survives router.refresh() in activity execution context
   const [data, setData] = useState(initialData);
@@ -578,7 +582,7 @@ export function LeadInfoPanel({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">—</SelectItem>
-                      {LEAD_SOURCE_OPTIONS.map((opt) => (
+                      {sourceOptions.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>
@@ -589,7 +593,7 @@ export function LeadInfoPanel({
               ) : (
                 <MeetimeFieldRow
                   label="Origem"
-                  value={LEAD_SOURCE_OPTIONS.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
+                  value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
                 />
               )}
             </div>

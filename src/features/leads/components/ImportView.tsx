@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { importLeads, type ImportLeadsResult } from '../actions/import-leads';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { CsvParseResult } from '../utils/csv-parser';
@@ -26,7 +27,12 @@ import { ImportReport } from './ImportReport';
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'report';
 
-export function ImportView() {
+interface ImportViewProps {
+  leadSourceOptions?: LeadSourceOption[];
+}
+
+export function ImportView({ leadSourceOptions }: ImportViewProps) {
+  const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
   const [step, setStep] = useState<ImportStep>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<CsvParseResult | null>(null);
@@ -110,7 +116,7 @@ export function ImportView() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">—</SelectItem>
-              {LEAD_SOURCE_OPTIONS.map((opt) => (
+              {sourceOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>

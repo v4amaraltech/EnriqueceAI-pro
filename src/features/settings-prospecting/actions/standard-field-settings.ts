@@ -11,6 +11,7 @@ export interface StandardFieldSettingRow {
   is_visible: boolean;
   is_required_won: boolean;
   is_required_lost: boolean;
+  options: string[] | null;
 }
 
 export async function listStandardFieldSettings(): Promise<ActionResult<StandardFieldSettingRow[]>> {
@@ -45,7 +46,7 @@ export async function listStandardFieldSettingsForMember(): Promise<ActionResult
 
 export async function upsertStandardFieldSetting(
   fieldKey: string,
-  settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
+  settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean; options?: string[] | null },
 ): Promise<ActionResult<StandardFieldSettingRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>;
@@ -55,17 +56,19 @@ export async function upsertStandardFieldSetting(
     return { success: false, error: 'Organização não encontrada' };
   }
 
+  const payload: Record<string, unknown> = {
+    org_id: orgId,
+    field_key: fieldKey,
+    is_visible: settings.is_visible ?? true,
+    is_required_won: settings.is_required_won ?? false,
+    is_required_lost: settings.is_required_lost ?? false,
+  };
+  if (settings.options !== undefined) {
+    payload.options = settings.options;
+  }
+
   const { data, error } = (await (supabase as any).from('standard_field_settings')
-    .upsert(
-      {
-        org_id: orgId,
-        field_key: fieldKey,
-        is_visible: settings.is_visible ?? true,
-        is_required_won: settings.is_required_won ?? false,
-        is_required_lost: settings.is_required_lost ?? false,
-      },
-      { onConflict: 'org_id,field_key' },
-    )
+    .upsert(payload, { onConflict: 'org_id,field_key' })
     .select()
     .single()) as { data: StandardFieldSettingRow | null; error: unknown };
 

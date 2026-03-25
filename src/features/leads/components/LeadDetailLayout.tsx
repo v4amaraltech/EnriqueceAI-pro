@@ -39,6 +39,7 @@ import { listStandardFieldSettingsForMember } from '@/features/settings-prospect
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 import type { CrmProvider } from '@/features/integrations/types/crm';
 
+import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { updateLead } from '../actions/update-lead';
 import type { MissingRequiredField } from '../utils/required-field-validation';
@@ -61,9 +62,10 @@ interface LeadDetailLayoutProps {
   timeline: TimelineEntry[];
   enrollmentData: LeadEnrollmentData;
   customFieldDefs?: CustomFieldRow[];
+  leadSourceOptions?: LeadSourceOption[];
 }
 
-export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs }: LeadDetailLayoutProps) {
+export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions }: LeadDetailLayoutProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -338,7 +340,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       )}
 
       <div className="flex gap-6">
-        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} />
+        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
 

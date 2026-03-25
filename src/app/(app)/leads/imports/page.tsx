@@ -1,12 +1,16 @@
 import { requireAuth } from '@/lib/auth/require-auth';
 
 import { fetchImports } from '@/features/leads/actions/fetch-imports';
+import { getLeadSourceOptions } from '@/features/leads/actions/get-lead-source-options';
 import { ImportListView } from '@/features/leads/components/ImportListView';
 
 export default async function ImportHistoryPage() {
   await requireAuth();
 
-  const result = await fetchImports();
+  const [result, leadSourceOptions] = await Promise.all([
+    fetchImports(),
+    getLeadSourceOptions(),
+  ]);
 
   if (!result.success) {
     return (
@@ -16,5 +20,5 @@ export default async function ImportHistoryPage() {
     );
   }
 
-  return <ImportListView result={result.data} />;
+  return <ImportListView result={result.data} leadSourceOptions={leadSourceOptions} />;
 }
