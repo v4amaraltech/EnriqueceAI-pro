@@ -11,6 +11,7 @@ interface PageProps {
 }
 
 export default async function TeamAnalyticsPage({ searchParams }: PageProps) {
+  try {
   await requireAuth();
   const params = await searchParams;
   const { from, to, compare } = parseDateRangeParams(params);
@@ -37,4 +38,12 @@ export default async function TeamAnalyticsPage({ searchParams }: PageProps) {
       <TeamAnalyticsView data={result.data} members={members} previousData={previousData} />
     </div>
   );
+  } catch (error) {
+    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
+    console.error('[TeamAnalyticsPage] PAGE_CRASH:', error);
+    console.error('[TeamAnalyticsPage] PAGE_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
+    throw error;
+  }
 }

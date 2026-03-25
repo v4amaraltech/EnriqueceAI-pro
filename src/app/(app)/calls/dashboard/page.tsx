@@ -10,6 +10,7 @@ interface PageProps {
 }
 
 export default async function CallDashboardPage({ searchParams }: PageProps) {
+  try {
   await requireAuth();
   const params = await searchParams;
   const { from, to } = parseDateRangeParams(params);
@@ -55,4 +56,12 @@ export default async function CallDashboardPage({ searchParams }: PageProps) {
       <CallDashboardView data={result.data} members={members} />
     </div>
   );
+  } catch (error) {
+    if (error instanceof Error && 'digest' in error && typeof (error as { digest: unknown }).digest === 'string' && ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
+    console.error('[CallDashboardPage] PAGE_CRASH:', error);
+    console.error('[CallDashboardPage] PAGE_CRASH_STACK:', error instanceof Error ? error.stack : 'no stack');
+    throw error;
+  }
 }
