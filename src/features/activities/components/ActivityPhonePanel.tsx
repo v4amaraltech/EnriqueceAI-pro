@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   CheckCircle2,
@@ -36,6 +36,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
+import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
@@ -79,6 +80,7 @@ export function ActivityPhonePanel({
   const [selectedPhone, setSelectedPhone] = useState(initialPhone);
   const [callState, setCallState] = useState<CallState>('idle');
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
+  const [callId, setCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -121,6 +123,7 @@ export function ActivityPhonePanel({
         return;
       }
 
+      setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
     });
@@ -159,6 +162,7 @@ export function ActivityPhonePanel({
     setCallStatus('');
     setNotes('');
     setCallState('idle');
+    setCallId(null);
     setProviderCallId(null);
     setElapsed(0);
     setCallDuration(0);
@@ -171,6 +175,7 @@ export function ActivityPhonePanel({
     setCallStatus('');
     setNotes('');
     setCallState('idle');
+    setCallId(null);
     setProviderCallId(null);
     setElapsed(0);
     setCallDuration(0);
@@ -182,12 +187,25 @@ export function ActivityPhonePanel({
     setCallState('idle');
     setCallStatus('');
     setNotes('');
+    setCallId(null);
     setProviderCallId(null);
     setElapsed(0);
     setCallDuration(0);
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
+
+  const handleRemoteHangup = useCallback((durationSeconds: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setCallDuration(durationSeconds);
+    setCallState('ended');
+  }, []);
+
+  useCallHangupDetection({
+    callId,
+    isActive: isInCall,
+    onHangup: handleRemoteHangup,
+  });
 
   return (
     <div className="flex h-full flex-col">

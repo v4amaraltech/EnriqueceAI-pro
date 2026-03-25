@@ -15,6 +15,7 @@ import {
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
+import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
@@ -42,6 +43,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
+  const [callId, setCallId] = useState<string | null>(null);
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -62,8 +64,21 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   function resetCallState() {
     setCallState('idle');
+    setCallId(null);
     setProviderCallId(null);
   }
+
+  const isInCall = callState === 'calling' || callState === 'connected';
+
+  const handleRemoteHangup = useCallback((_durationSeconds: number) => {
+    setCallState('ended');
+  }, []);
+
+  useCallHangupDetection({
+    callId,
+    isActive: isInCall,
+    onHangup: handleRemoteHangup,
+  });
 
   function handleStart() {
     setIsActive(true);
@@ -113,6 +128,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         return;
       }
 
+      setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
     });
