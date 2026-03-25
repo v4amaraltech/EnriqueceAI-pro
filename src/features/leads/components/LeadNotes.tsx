@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Send, StickyNote } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Send, StickyNote } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -15,6 +15,54 @@ import { fetchLeadNotes } from '../actions/fetch-lead-notes';
 interface LeadNotesProps {
   leadId: string;
   notes: string | null;
+}
+
+const NOTE_COLLAPSE_LINES = 4;
+
+function shouldCollapse(text: string): boolean {
+  return text.split('\n').length > NOTE_COLLAPSE_LINES || text.length > 200;
+}
+
+function truncateText(text: string): string {
+  const lines = text.split('\n');
+  if (lines.length > NOTE_COLLAPSE_LINES) {
+    return lines.slice(0, NOTE_COLLAPSE_LINES).join('\n');
+  }
+  return text.slice(0, 200);
+}
+
+function NoteContent({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = shouldCollapse(text);
+
+  const toggle = useCallback(() => setExpanded((v) => !v), []);
+
+  return (
+    <>
+      <p className="whitespace-pre-line text-sm text-[var(--foreground)]">
+        {collapsible && !expanded ? truncateText(text) + '…' : text}
+      </p>
+      {collapsible && (
+        <button
+          type="button"
+          onClick={toggle}
+          className="mt-1 flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3 w-3" />
+              Ver menos
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3" />
+              Ver mais
+            </>
+          )}
+        </button>
+      )}
+    </>
+  );
 }
 
 function formatNoteDate(dateStr: string): string {
@@ -123,9 +171,7 @@ export function LeadNotes({ leadId }: LeadNotesProps) {
                 key={note.id}
                 className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-3"
               >
-                <p className="whitespace-pre-line text-sm text-[var(--foreground)]">
-                  {note.text}
-                </p>
+                <NoteContent text={note.text} />
                 <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   <span>{formatNoteDate(note.created_at)}</span>
                   {note.author_email && (
