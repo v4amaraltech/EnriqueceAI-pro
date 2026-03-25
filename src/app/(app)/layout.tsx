@@ -21,6 +21,8 @@ import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
 
+import { Api4ComWebphoneWrapper } from '@/features/integrations/components/Api4ComWebphone';
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
@@ -141,6 +143,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </div>
             </SubscriptionGuard>
             <Toaster />
+            <Suspense fallback={null}>
+              <Api4ComWebphoneWrapper />
+            </Suspense>
           </NotificationProvider>
         </OrganizationProvider>
       </TooltipProvider>

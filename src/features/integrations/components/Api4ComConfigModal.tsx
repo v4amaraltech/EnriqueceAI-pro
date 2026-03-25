@@ -25,6 +25,8 @@ interface Api4ComConfigModalProps {
   defaultRamal?: string;
   defaultBaseUrl?: string;
   hasExistingApiKey?: boolean;
+  defaultSipDomain?: string;
+  hasExistingSipPassword?: boolean;
 }
 
 const DEFAULT_BASE_URL = 'https://api.api4com.com/api/v1/';
@@ -36,12 +38,17 @@ export function Api4ComConfigModal({
   defaultRamal = '',
   defaultBaseUrl = DEFAULT_BASE_URL,
   hasExistingApiKey = false,
+  defaultSipDomain = '',
+  hasExistingSipPassword = false,
 }: Api4ComConfigModalProps) {
   const [isPending, startTransition] = useTransition();
   const [ramal, setRamal] = useState(defaultRamal);
   const [apiToken, setApiToken] = useState('');
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl || DEFAULT_BASE_URL);
+  const [sipDomain, setSipDomain] = useState(defaultSipDomain);
+  const [sipPassword, setSipPassword] = useState('');
   const [showToken, setShowToken] = useState(false);
+  const [showSipPassword, setShowSipPassword] = useState(false);
 
   function handleSave() {
     if (!ramal.trim()) {
@@ -54,6 +61,8 @@ export function Api4ComConfigModal({
         ramal: ramal.trim(),
         apiToken: apiToken || undefined,
         baseUrl: baseUrl || undefined,
+        sipDomain: sipDomain || undefined,
+        sipPassword: sipPassword || undefined,
       });
 
       if (result.success) {
@@ -156,6 +165,59 @@ export function Api4ComConfigModal({
               />
               <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 URL padrão: {DEFAULT_BASE_URL}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-[var(--border)]" />
+
+          {/* Webphone SIP config */}
+          <div className="space-y-4">
+            <p className="font-semibold">Webphone SIP (Opcional)</p>
+
+            {/* SIP Domain */}
+            <div className="space-y-2">
+              <Label htmlFor="sip-domain">Domínio SIP</Label>
+              <Input
+                id="sip-domain"
+                placeholder="empresa.api4com.com"
+                value={sipDomain}
+                onChange={(e) => setSipDomain(e.target.value)}
+              />
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                Domínio da sua conta API4COM (ex: empresa.api4com.com)
+              </p>
+            </div>
+
+            {/* SIP Password */}
+            <div className="space-y-2">
+              <Label htmlFor="sip-password">
+                Senha do Ramal{' '}
+                {hasExistingSipPassword && (
+                  <span className="font-normal text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    (deixe vazio para manter a atual)
+                  </span>
+                )}
+              </Label>
+              <div className="relative">
+                <Input
+                  id="sip-password"
+                  type={showSipPassword ? 'text' : 'password'}
+                  placeholder={hasExistingSipPassword ? '••••••••••••••' : 'Senha do ramal SIP'}
+                  value={sipPassword}
+                  onChange={(e) => setSipPassword(e.target.value)}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
+                  onClick={() => setShowSipPassword(!showSipPassword)}
+                >
+                  {showSipPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                Senha do ramal para conexão do webphone. Encontre no painel API4COM.
               </p>
             </div>
           </div>

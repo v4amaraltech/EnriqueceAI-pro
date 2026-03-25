@@ -77,6 +77,8 @@ export interface Api4ComConnectionRow {
   api_key_encrypted: string | null;
   ramal: string;
   base_url: string;
+  sip_domain: string | null;
+  sip_password_encrypted: string | null;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
@@ -86,7 +88,9 @@ export interface Api4ComConnectionSafe {
   id: string;
   ramal: string;
   base_url: string;
+  sip_domain: string | null;
   has_api_key: boolean;
+  has_sip_password: boolean;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;

@@ -49,10 +49,10 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
 
   // Fetch API4Com connection (per user) — exclude encrypted api key
   const { data: api4comRaw } = (await from(supabase, 'api4com_connections' as never)
-    .select('id, ramal, base_url, api_key_encrypted, status, created_at, updated_at')
+    .select('id, ramal, base_url, api_key_encrypted, sip_domain, sip_password_encrypted, status, created_at, updated_at')
     .eq('org_id', orgId)
     .eq('user_id', userId)
-    .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
+    .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; sip_domain: string | null; sip_password_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
   // Fetch WhatsApp Evolution instance (per org)
   const { data: evolutionRow } = (await from(supabase, 'whatsapp_instances' as never)
@@ -78,7 +78,9 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
         id: api4comRaw.id,
         ramal: api4comRaw.ramal,
         base_url: api4comRaw.base_url,
+        sip_domain: api4comRaw.sip_domain,
         has_api_key: !!api4comRaw.api_key_encrypted,
+        has_sip_password: !!api4comRaw.sip_password_encrypted,
         status: api4comRaw.status as Api4ComConnectionSafe['status'],
         created_at: api4comRaw.created_at,
         updated_at: api4comRaw.updated_at,

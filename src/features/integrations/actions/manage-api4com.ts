@@ -11,6 +11,8 @@ interface SaveApi4ComInput {
   ramal: string;
   apiToken?: string;
   baseUrl?: string;
+  sipDomain?: string;
+  sipPassword?: string;
 }
 
 export async function saveApi4ComConfig(
@@ -47,6 +49,14 @@ export async function saveApi4ComConfig(
       updates.api_key_encrypted = encrypt(input.apiToken.trim());
     }
 
+    // SIP fields for webphone
+    if (input.sipDomain !== undefined) {
+      updates.sip_domain = input.sipDomain.trim() || null;
+    }
+    if (input.sipPassword && input.sipPassword.trim()) {
+      updates.sip_password_encrypted = encrypt(input.sipPassword.trim());
+    }
+
     const { error } = await from(supabase, 'api4com_connections' as never)
       .update(updates as Record<string, unknown>)
       .eq('id', existing.id);
@@ -63,6 +73,8 @@ export async function saveApi4ComConfig(
         ramal,
         base_url: baseUrl,
         api_key_encrypted: input.apiToken?.trim() ? encrypt(input.apiToken.trim()) : null,
+        sip_domain: input.sipDomain?.trim() || null,
+        sip_password_encrypted: input.sipPassword?.trim() ? encrypt(input.sipPassword.trim()) : null,
         status: 'connected',
       } as Record<string, unknown>);
 
