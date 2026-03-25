@@ -70,11 +70,11 @@ function CheckToggle({ checked, onChange, disabled }: { checked: boolean; onChan
 
 function ColumnHeader({ label, tooltip }: { label: string; tooltip: string }) {
   return (
-    <div className="flex items-center justify-center gap-1.5">
+    <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
       <span>{label}</span>
       <Tooltip>
         <TooltipTrigger asChild>
-          <HelpCircle className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+          <HelpCircle className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
         </TooltipTrigger>
         <TooltipContent>{tooltip}</TooltipContent>
       </Tooltip>
@@ -262,10 +262,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             {/* Header row */}
             <div className="flex items-center border-b border-border pb-3 text-sm font-medium text-muted-foreground">
               <div className="flex-1">Nome e tipo do campo</div>
-              <div className="w-[180px] text-center">
+              <div className="w-[200px] text-center">
                 <ColumnHeader label="Obrigatório para ganho" tooltip={columnTooltips.required_won} />
               </div>
-              <div className="w-[180px] text-center">
+              <div className="w-[200px] text-center">
                 <ColumnHeader label="Obrigatório para perdido" tooltip={columnTooltips.required_lost} />
               </div>
               <div className="w-[160px] text-center">
@@ -327,10 +327,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                       </div>
                     )}
                   </div>
-                  <div className="w-[180px] flex justify-center">
+                  <div className="w-[200px] flex justify-center">
                     <CheckToggle checked={field.is_required_won} onChange={(v) => handleCustomToggle(field.id, 'is_required_won', v)} disabled={isPending} />
                   </div>
-                  <div className="w-[180px] flex justify-center">
+                  <div className="w-[200px] flex justify-center">
                     <CheckToggle checked={field.is_required_lost} onChange={(v) => handleCustomToggle(field.id, 'is_required_lost', v)} disabled={isPending} />
                   </div>
                   <div className="w-[160px] flex justify-center">
@@ -365,10 +365,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             {/* Header row */}
             <div className="flex items-center border-b border-border pb-3 text-sm font-medium text-muted-foreground">
               <div className="flex-1">Nome e tipo do campo</div>
-              <div className="w-[180px] text-center">
+              <div className="w-[200px] text-center">
                 <ColumnHeader label="Obrigatório para ganho" tooltip={columnTooltips.required_won} />
               </div>
-              <div className="w-[180px] text-center">
+              <div className="w-[200px] text-center">
                 <ColumnHeader label="Obrigatório para perdido" tooltip={columnTooltips.required_lost} />
               </div>
               <div className="w-[160px] text-center">
@@ -419,10 +419,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                       </div>
                     )}
                   </div>
-                  <div className="w-[180px] flex justify-center">
+                  <div className="w-[200px] flex justify-center">
                     <CheckToggle checked={setting?.is_required_won ?? false} onChange={(v) => handleStdToggle(field.key, 'is_required_won', v)} disabled={isPending} />
                   </div>
-                  <div className="w-[180px] flex justify-center">
+                  <div className="w-[200px] flex justify-center">
                     <CheckToggle checked={setting?.is_required_lost ?? false} onChange={(v) => handleStdToggle(field.key, 'is_required_lost', v)} disabled={isPending} />
                   </div>
                   <div className="w-[160px] flex justify-center">
