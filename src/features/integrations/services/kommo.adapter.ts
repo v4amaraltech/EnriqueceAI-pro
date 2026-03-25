@@ -385,44 +385,38 @@ export class KommoAdapter implements CRMAdapter {
       return { external_id: externalId };
     }
 
-    // Create via /leads/complex (lead + contact + company in one call)
+    // Create contact via POST /contacts
     const companyNameField = Object.keys(fieldMapping).find(
       (k) => fieldMapping[k] === 'company_name',
     );
     const companyName = companyNameField ? lead[companyNameField] : null;
 
-    const complexPayload = [
+    const contactPayload = [
       {
-        name: companyName || contactName,
-        _embedded: {
-          contacts: [
-            {
-              name: contactName,
-              first_name: firstName || undefined,
-              last_name: lastName || undefined,
-              custom_fields_values: customFields.map((f) => ({
-                field_code: f.field_code,
-                values: f.values,
-              })),
-            },
-          ],
-          ...(companyName
-            ? { companies: [{ name: companyName }] }
-            : {}),
-        },
+        name: contactName,
+        first_name: firstName || undefined,
+        last_name: lastName || undefined,
+        custom_fields_values: customFields.map((f) => ({
+          field_code: f.field_code,
+          values: f.values,
+        })),
+        ...(companyName
+          ? { _embedded: { companies: [{ name: companyName }] } }
+          : {}),
       },
     ];
 
     const result = await kommoFetch<KommoCreateResponse>(
       subdomain,
-      '/leads/complex',
+      '/contacts',
       credentials.access_token,
-      { method: 'POST', body: JSON.stringify(complexPayload) },
+      { method: 'POST', body: JSON.stringify(contactPayload) },
     );
 
-    const createdId = result._embedded?.leads?.[0]?.id;
+    const createdId = result._embedded?.contacts?.[0]?.id;
     if (!createdId) {
-      throw new Error('Kommo: failed to create lead, no ID returned');
+      console.error('[kommo] POST /contacts unexpected response:', JSON.stringify(result));
+      throw new Error('Kommo: failed to create contact, no ID returned');
     }
 
     return { external_id: createdId.toString() };
