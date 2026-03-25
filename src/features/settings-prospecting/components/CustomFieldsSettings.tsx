@@ -285,19 +285,48 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                       <TableRow key={field.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div>
-                              <span className="font-medium">{field.field_name}</span>
-                              {isRecentField(field.created_at) && (
-                                <Badge variant="default" className="ml-2 text-[10px] px-1.5 py-0">
-                                  NOVO
-                                </Badge>
-                              )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="font-medium hover:underline text-left"
+                                  onClick={() => {
+                                    setEditingField(field);
+                                    setDialogOpen(true);
+                                  }}
+                                >
+                                  {field.field_name}
+                                </button>
+                                {isRecentField(field.created_at) && (
+                                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                                    NOVO
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                                 {FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}
-                                {field.options && field.options.length > 0 && (
-                                  <span className="ml-1">({field.options.join(', ')})</span>
-                                )}
                               </p>
+                              {field.field_type === 'select' && field.options && field.options.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {field.options.slice(0, 5).map((opt) => (
+                                    <Badge key={opt} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                      {opt}
+                                    </Badge>
+                                  ))}
+                                  {field.options.length > 5 && (
+                                    <button
+                                      type="button"
+                                      className="text-[10px] text-[var(--primary)] hover:underline"
+                                      onClick={() => {
+                                        setEditingField(field);
+                                        setDialogOpen(true);
+                                      }}
+                                    >
+                                      +{field.options.length - 5} mais
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </TableCell>
