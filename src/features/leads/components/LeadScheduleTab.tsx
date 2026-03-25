@@ -9,6 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
+import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 
 interface LeadScheduleTabProps {
@@ -128,6 +129,14 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
               setMeetingDate('');
               setMeetingTitle('');
               router.refresh();
+            } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
+              toast.info('Reconectando ao Google Calendar...');
+              const authResult = await getCalendarAuthUrl();
+              if (authResult.success) {
+                window.location.href = authResult.data.url;
+              } else {
+                toast.error('Não foi possível reconectar. Vá em Configurações > Integrações.');
+              }
             } else {
               toast.error(result.error);
             }
