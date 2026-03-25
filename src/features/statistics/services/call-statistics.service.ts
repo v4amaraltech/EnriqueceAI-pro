@@ -13,6 +13,7 @@ import type {
   SdrCallEntry,
 } from '../types/call-statistics.types';
 import { safeRate } from '../types/shared';
+import { buildMemberNameMap } from './member-lookup';
 
 const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -31,11 +32,6 @@ interface CallRow {
   status: CallStatus;
   duration_seconds: number;
   started_at: string;
-}
-
-interface MemberRow {
-  user_id: string;
-  user_email: string;
 }
 
 export async function fetchCallStatisticsData(
@@ -58,14 +54,8 @@ export async function fetchCallStatisticsData(
   const { data: rawCalls } = (await query) as { data: CallRow[] | null };
   const calls = rawCalls ?? [];
 
-  const { data: rawMembers } = (await supabase
-    .from('organization_members')
-    .select('user_id, user_email')
-    .eq('org_id', orgId)
-    .eq('status', 'active')) as { data: MemberRow[] | null };
-  const memberMap = new Map(
-    (rawMembers ?? []).map((m) => [m.user_id, m.user_email.split('@')[0] ?? m.user_email]),
-  );
+  // Fetch members for name mapping (via admin client — org_members has no email column)
+  const memberMap = await buildMemberNameMap(supabase, orgId);
 
   const kpis = calculateKpis(calls);
   const outcomes = calculateOutcomes(calls);

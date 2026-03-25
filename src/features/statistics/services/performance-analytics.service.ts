@@ -9,6 +9,7 @@ import type {
   SdrPerformanceRow,
 } from '../types/performance-analytics.types';
 import { safeRate } from '../types/shared';
+import { buildMemberNameMap } from './member-lookup';
 
 interface InteractionRow {
   type: string;
@@ -24,11 +25,6 @@ interface LeadRow {
   created_by: string | null;
 }
 
-interface MemberRow {
-  user_id: string;
-  user_email: string;
-}
-
 export async function fetchPerformanceAnalyticsData(
   supabase: SupabaseClient,
   orgId: string,
@@ -37,20 +33,23 @@ export async function fetchPerformanceAnalyticsData(
   userIds?: string[],
   cadenceId?: string,
 ): Promise<PerformanceAnalyticsData> {
-  // Fetch org members
-  const { data: rawMembers } = (await from(supabase, 'organization_members')
-    .select('user_id, user_email')
-    .eq('org_id', orgId)
-    .eq('status', 'active')) as { data: MemberRow[] | null };
-  const members = rawMembers ?? [];
+  // Fetch member name map (via admin client — org_members has no email column)
+  const nameMap = await buildMemberNameMap(supabase, orgId);
 
-  if (members.length === 0) {
+  // Get member user_ids
+  const { data: rawMemberIds } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('status', 'active')) as { data: { user_id: string }[] | null };
+  const memberIds = rawMemberIds ?? [];
+
+  if (memberIds.length === 0) {
     return emptyData();
   }
 
-  const memberIds = userIds && userIds.length > 0
+  const filteredIds = userIds && userIds.length > 0
     ? userIds
-    : members.map((m) => m.user_id);
+    : memberIds.map((m) => m.user_id);
 
   // Fetch interactions
   let intQuery = from(supabase, 'interactions')
@@ -58,7 +57,7 @@ export async function fetchPerformanceAnalyticsData(
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
-    .in('performed_by', memberIds);
+    .in('performed_by', filteredIds);
 
   if (cadenceId) {
     intQuery = intQuery.eq('cadence_id', cadenceId);
@@ -68,23 +67,26 @@ export async function fetchPerformanceAnalyticsData(
   const interactions = rawInteractions ?? [];
 
   // Fetch leads created in period
-  let leadsQuery = from(supabase, 'leads')
+  const leadsQuery = from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
-    .in('created_by', memberIds);
+    .in('created_by', filteredIds);
 
   const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
   const leads = rawLeads ?? [];
 
-  const memberLookup = new Map(members.map((m) => [m.user_id, m.user_email]));
+  // memberLookup: user_id → email/name for display
+  const memberLookup = new Map(
+    memberIds.map((m) => [m.user_id, nameMap.get(m.user_id) ?? m.user_id.slice(0, 8)]),
+  );
 
   const totalActivities = interactions.length;
   const totalLeadsCreated = leads.length;
   const totalQualified = leads.filter((l) => l.status === 'qualified').length;
 
-  const sdrTable = buildSdrTable(memberIds, memberLookup, interactions, leads);
+  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactions, leads);
   const sdrComparison = buildSdrComparison(sdrTable);
   const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
 
@@ -108,7 +110,7 @@ function buildSdrTable(
 ): SdrPerformanceRow[] {
   return memberIds
     .map((userId) => {
-      const userEmail = memberLookup.get(userId) ?? userId;
+      const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
       const userInteractions = interactions.filter((i) => i.performed_by === userId);
       const userLeads = leads.filter((l) => l.created_by === userId);
       const qualified = userLeads.filter((l) => l.status === 'qualified').length;
@@ -130,7 +132,7 @@ function buildSdrTable(
 
 function buildSdrComparison(sdrTable: SdrPerformanceRow[]): SdrActivityComparisonEntry[] {
   return sdrTable.map((s) => ({
-    userEmail: s.userEmail.split('@')[0] ?? s.userEmail,
+    userEmail: s.userEmail,
     activities: s.activities,
   }));
 }
@@ -145,26 +147,25 @@ function buildDailySdrTrend(
 
   for (const interaction of interactions) {
     if (!interaction.performed_by) continue;
-    const email = memberLookup.get(interaction.performed_by);
-    if (!email) continue;
+    const displayName = memberLookup.get(interaction.performed_by);
+    if (!displayName) continue;
 
-    const shortEmail = email.split('@')[0] ?? email;
     const dateStr = interaction.created_at.slice(0, 10);
 
-    sdrTotals.set(shortEmail, (sdrTotals.get(shortEmail) ?? 0) + 1);
+    sdrTotals.set(displayName, (sdrTotals.get(displayName) ?? 0) + 1);
 
     if (!sdrDayMap.has(dateStr)) {
       sdrDayMap.set(dateStr, new Map());
     }
     const dayMap = sdrDayMap.get(dateStr)!;
-    dayMap.set(shortEmail, (dayMap.get(shortEmail) ?? 0) + 1);
+    dayMap.set(displayName, (dayMap.get(displayName) ?? 0) + 1);
   }
 
   // Get top 5 SDRs by total activity
   const topSdrs = Array.from(sdrTotals.entries())
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
-    .map(([email]) => email);
+    .map(([name]) => name);
 
   const dailySdrTrend: DailySdrPerformanceEntry[] = Array.from(sdrDayMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))

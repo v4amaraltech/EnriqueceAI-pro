@@ -11,10 +11,11 @@ import type {
   TeamAnalyticsData,
 } from '../types/team-analytics.types';
 import { safeRate } from '../types/shared';
+import { buildMemberNameMap } from './member-lookup';
 
-interface MemberRow {
+interface MemberInfo {
   user_id: string;
-  user_email: string;
+  displayName: string;
 }
 
 interface InteractionRow {
@@ -49,12 +50,20 @@ export async function fetchTeamAnalyticsData(
   periodStart: string,
   periodEnd: string,
 ): Promise<TeamAnalyticsData> {
-  // Fetch all data
-  const { data: rawMembers } = (await supabase
+  // Fetch member name map (via admin client — org_members has no email column)
+  const nameMap = await buildMemberNameMap(supabase, orgId);
+
+  // Get member user_ids
+  const { data: rawMemberIds } = (await supabase
     .from('organization_members')
-    .select('user_id, user_email')
+    .select('user_id')
     .eq('org_id', orgId)
-    .eq('status', 'active')) as { data: MemberRow[] | null };
+    .eq('status', 'active')) as { data: { user_id: string }[] | null };
+
+  const members: MemberInfo[] = (rawMemberIds ?? []).map((m) => ({
+    user_id: m.user_id,
+    displayName: nameMap.get(m.user_id) ?? m.user_id.slice(0, 8),
+  }));
 
   const { data: rawInteractions } = (await from(supabase, 'interactions')
     .select('id, type, lead_id, performed_by, created_at')
@@ -80,7 +89,6 @@ export async function fetchTeamAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: LeadRow[] | null };
 
-  const members = rawMembers ?? [];
   const interactions = rawInteractions ?? [];
   const enrollments = rawEnrollments ?? [];
   const calls = rawCalls ?? [];
@@ -98,12 +106,10 @@ export async function fetchTeamAnalyticsData(
   }
   const defaultTarget = goalMap.get(null) ?? 20;
 
-  const memberMap = new Map(
-    members.map((m) => [m.user_id, m.user_email.split('@')[0] ?? m.user_email]),
-  );
+  const memberMap = new Map(members.map((m) => [m.user_id, m.displayName]));
 
   const comparison = buildComparison(members, interactions, enrollments, calls, leads, goalMap, defaultTarget);
-  const sdrNames = members.map((m) => memberMap.get(m.user_id) ?? m.user_email);
+  const sdrNames = members.map((m) => m.displayName);
   const trends = buildTrends(members, interactions, periodStart, periodEnd, memberMap);
   const rankings = buildRankings(comparison);
   const goals = buildGoals(members, interactions, goalMap, defaultTarget, memberMap);
@@ -112,7 +118,7 @@ export async function fetchTeamAnalyticsData(
 }
 
 function buildComparison(
-  members: MemberRow[],
+  members: MemberInfo[],
   interactions: InteractionRow[],
   enrollments: EnrollmentRow[],
   calls: CallRow[],
@@ -122,7 +128,7 @@ function buildComparison(
 ): SdrComparisonRow[] {
   return members.map((member) => {
     const userId = member.user_id;
-    const userName = member.user_email.split('@')[0] ?? member.user_email;
+    const userName = member.displayName;
 
     const sdrInteractions = interactions.filter((i) => i.performed_by === userId);
     const sdrCalls = calls.filter((c) => c.user_id === userId);
@@ -158,7 +164,7 @@ function buildComparison(
 }
 
 function buildTrends(
-  members: MemberRow[],
+  members: MemberInfo[],
   interactions: InteractionRow[],
   periodStart: string,
   periodEnd: string,
@@ -194,7 +200,7 @@ function buildTrends(
     };
 
     for (const member of members) {
-      const name = memberMap.get(member.user_id) ?? member.user_email;
+      const name = memberMap.get(member.user_id) ?? member.displayName;
       const dayMap = sdrDayMap.get(member.user_id);
       entry[name] = dayMap?.get(key) ?? 0;
     }
@@ -232,7 +238,7 @@ function buildRankings(
 }
 
 function buildGoals(
-  members: MemberRow[],
+  members: MemberInfo[],
   interactions: InteractionRow[],
   goalMap: Map<string | null, number>,
   defaultTarget: number,
@@ -249,7 +255,7 @@ function buildGoals(
 
     return {
       userId: member.user_id,
-      userName: memberMap.get(member.user_id) ?? member.user_email,
+      userName: memberMap.get(member.user_id) ?? member.displayName,
       target,
       actual,
       percentage: safeRate(actual, target),

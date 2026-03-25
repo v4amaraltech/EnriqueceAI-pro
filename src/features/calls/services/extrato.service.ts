@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
+import { buildMemberNameMap } from '@/features/statistics/services/member-lookup';
 
 import type {
   ExtratoData,
@@ -18,11 +19,6 @@ interface CallRow {
   duration_seconds: number;
   cost: number | null;
   started_at: string;
-}
-
-interface MemberRow {
-  user_id: string;
-  user_email: string;
 }
 
 export async function fetchExtratoData(
@@ -46,15 +42,8 @@ export async function fetchExtratoData(
   const { data: rawCalls } = (await callsQuery) as { data: CallRow[] | null };
   const calls = rawCalls ?? [];
 
-  const { data: rawMembers } = (await supabase
-    .from('organization_members')
-    .select('user_id, user_email')
-    .eq('org_id', orgId)
-    .eq('status', 'active')) as { data: MemberRow[] | null };
-
-  const memberMap = new Map(
-    (rawMembers ?? []).map((m) => [m.user_id, m.user_email.split('@')[0] ?? m.user_email]),
-  );
+  // Fetch members for name mapping (via admin client — org_members has no email column)
+  const memberMap = await buildMemberNameMap(supabase, orgId);
 
   const kpis = calculateKpis(calls, periodStart, periodEnd);
   const dailyBreakdown = calculateDailyBreakdown(calls);

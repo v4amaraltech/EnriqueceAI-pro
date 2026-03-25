@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { fetchExtratoData } from './extrato.service';
 
+vi.mock('@/features/statistics/services/member-lookup', () => ({
+  buildMemberNameMap: vi.fn().mockResolvedValue(
+    new Map([
+      ['u1', 'alice'],
+      ['u2', 'bob'],
+    ]),
+  ),
+}));
+
 function createMockSupabase(calls: Record<string, unknown>[], members: Record<string, unknown>[]) {
   const callsChain: Record<string, unknown> = {};
   callsChain.select = vi.fn().mockReturnValue(callsChain);

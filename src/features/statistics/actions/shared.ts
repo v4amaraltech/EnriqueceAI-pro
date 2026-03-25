@@ -1,5 +1,7 @@
 'use server';
 
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/auth/require-auth';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -21,24 +23,65 @@ export async function getManagerOrgId(): Promise<{ orgId: string }> {
   return { orgId: member.org_id };
 }
 
+/**
+ * Fetch organization members for filter dropdowns.
+ * Uses safe auth (no redirect) to avoid crashing Promise.all in pages.
+ * Returns [] on any auth/query failure — page-level guards handle redirects.
+ */
 export async function fetchOrgMembers(): Promise<OrgMember[]> {
-  const user = await requireManager();
-  const supabase = await createServerSupabaseClient();
+  try {
+    const user = await requireAuth();
+    const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
+    const { data: member } = (await supabase
+      .from('organization_members')
+      .select('org_id, role')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single()) as { data: { org_id: string; role: string } | null };
 
-  if (!member) return [];
+    // Only managers see the member filter
+    if (!member || member.role !== 'manager') return [];
 
-  const { data: members } = (await supabase
-    .from('organization_members')
-    .select('user_id, user_email')
-    .eq('org_id', member.org_id)
-    .eq('status', 'active')) as { data: { user_id: string; user_email: string }[] | null };
+    const { data: members } = (await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('org_id', member.org_id)
+      .eq('status', 'active')) as { data: { user_id: string }[] | null };
 
-  return (members ?? []).map((m) => ({ userId: m.user_id, email: m.user_email }));
+    if (!members?.length) return [];
+
+    // Look up emails via admin client (organization_members has no email column)
+    const emailMap = new Map<string, string>();
+    try {
+      const admin = createAdminSupabaseClient();
+      const memberIds = new Set(members.map((m) => m.user_id));
+      const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 });
+      if (usersData?.users) {
+        for (const u of usersData.users) {
+          if (memberIds.has(u.id)) {
+            emailMap.set(u.id, u.email ?? u.id.slice(0, 8));
+          }
+        }
+      }
+    } catch {
+      // Admin client unavailable — fallback to truncated IDs
+    }
+
+    return members.map((m) => ({
+      userId: m.user_id,
+      email: emailMap.get(m.user_id) ?? m.user_id.slice(0, 8),
+    }));
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so they propagate correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
+    return [];
+  }
 }

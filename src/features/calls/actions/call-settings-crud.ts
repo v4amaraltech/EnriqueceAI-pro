@@ -24,7 +24,16 @@ export async function getCallSettings(): Promise<ActionResult<CallSettingsData>>
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Organização não encontrada' };
   }
 
@@ -60,7 +69,16 @@ export async function saveCallSettings(
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Organização não encontrada' };
   }
 
@@ -111,7 +129,16 @@ export async function saveCallDailyTargets(
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Organização não encontrada' };
   }
 
@@ -154,7 +181,16 @@ export async function addPhoneBlacklist(
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Organização não encontrada' };
   }
 
@@ -184,7 +220,16 @@ export async function deletePhoneBlacklist(id: string): Promise<ActionResult<{ d
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Organização não encontrada' };
   }
 

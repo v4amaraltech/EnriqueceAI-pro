@@ -74,7 +74,16 @@ export async function exportExtratoCsv(
     const filename = `extrato-ligacoes-${date}.csv`;
 
     return { success: true, data: { csv, filename } };
-  } catch {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: 'Erro ao exportar extrato' };
   }
 }

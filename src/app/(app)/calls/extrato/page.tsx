@@ -17,10 +17,30 @@ export default async function ExtratoPage({ searchParams }: PageProps) {
   const sdrParam = params.sdr ?? params.user;
   const userIds = sdrParam ? [sdrParam] : undefined;
 
-  const [result, members] = await Promise.all([
-    fetchExtrato('30d', userIds, dateRange),
-    fetchOrgMembers(),
-  ]);
+  let result: Awaited<ReturnType<typeof fetchExtrato>>;
+  let members: Awaited<ReturnType<typeof fetchOrgMembers>>;
+
+  try {
+    [result, members] = await Promise.all([
+      fetchExtrato('30d', userIds, dateRange),
+      fetchOrgMembers(),
+    ]);
+  } catch (error: unknown) {
+    // Re-throw Next.js redirects
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
+    return (
+      <div className="p-6">
+        <p className="text-[var(--destructive)]">Erro ao carregar dados</p>
+      </div>
+    );
+  }
 
   if (!result.success) {
     return (

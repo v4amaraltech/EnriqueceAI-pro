@@ -22,7 +22,16 @@ export async function fetchTeamAnalytics(
     const data = await fetchTeamAnalyticsData(supabase, orgId, start, end);
 
     return { success: true, data };
-  } catch (error) {
+  } catch (error: unknown) {
+    // Re-throw Next.js redirect errors so navigation works correctly
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
   }
 }
