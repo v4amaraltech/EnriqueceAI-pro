@@ -36,50 +36,79 @@ export async function saveApi4ComConfig(
     .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string } | null };
 
+  // Build core fields (always present)
+  const coreFields: Record<string, unknown> = {
+    ramal,
+    base_url: baseUrl,
+    status: 'connected',
+  };
+
+  if (input.apiToken && input.apiToken.trim()) {
+    coreFields.api_key_encrypted = encrypt(input.apiToken.trim());
+  }
+
+  // SIP fields for webphone (optional — columns may not exist yet)
+  const sipFields: Record<string, unknown> = {};
+  if (input.sipDomain !== undefined) {
+    sipFields.sip_domain = input.sipDomain.trim() || null;
+  }
+  if (input.sipPassword && input.sipPassword.trim()) {
+    sipFields.sip_password_encrypted = encrypt(input.sipPassword.trim());
+  }
+
   if (existing) {
-    // Update existing
-    const updates: Record<string, unknown> = {
-      ramal,
-      base_url: baseUrl,
-      status: 'connected',
-    };
-
-    // Only update api_key if a new one was provided
-    if (input.apiToken && input.apiToken.trim()) {
-      updates.api_key_encrypted = encrypt(input.apiToken.trim());
-    }
-
-    // SIP fields for webphone
-    if (input.sipDomain !== undefined) {
-      updates.sip_domain = input.sipDomain.trim() || null;
-    }
-    if (input.sipPassword && input.sipPassword.trim()) {
-      updates.sip_password_encrypted = encrypt(input.sipPassword.trim());
-    }
-
+    // Update existing — core fields first
     const { error } = await from(supabase, 'api4com_connections' as never)
-      .update(updates as Record<string, unknown>)
+      .update({ ...coreFields, ...sipFields } as Record<string, unknown>)
       .eq('id', existing.id);
 
     if (error) {
-      return { success: false, error: 'Erro ao atualizar configurações' };
+      // Retry without SIP fields if they caused the error (columns may not exist)
+      if (Object.keys(sipFields).length > 0) {
+        const { error: retryError } = await from(supabase, 'api4com_connections' as never)
+          .update(coreFields as Record<string, unknown>)
+          .eq('id', existing.id);
+
+        if (retryError) {
+          console.error('[api4com] Save failed:', retryError);
+          return { success: false, error: 'Erro ao atualizar configurações' };
+        }
+        // Core saved, SIP fields skipped
+        console.warn('[api4com] SIP columns not available yet — run migration 20260324210000');
+      } else {
+        console.error('[api4com] Save failed:', error);
+        return { success: false, error: 'Erro ao atualizar configurações' };
+      }
     }
   } else {
-    // Insert new
+    // Insert new — try with all fields
+    const insertData: Record<string, unknown> = {
+      org_id: orgId,
+      user_id: userId,
+      ...coreFields,
+      api_key_encrypted: input.apiToken?.trim() ? encrypt(input.apiToken.trim()) : null,
+      ...sipFields,
+    };
+
     const { error } = await from(supabase, 'api4com_connections' as never)
-      .insert({
-        org_id: orgId,
-        user_id: userId,
-        ramal,
-        base_url: baseUrl,
-        api_key_encrypted: input.apiToken?.trim() ? encrypt(input.apiToken.trim()) : null,
-        sip_domain: input.sipDomain?.trim() || null,
-        sip_password_encrypted: input.sipPassword?.trim() ? encrypt(input.sipPassword.trim()) : null,
-        status: 'connected',
-      } as Record<string, unknown>);
+      .insert(insertData as Record<string, unknown>);
 
     if (error) {
-      return { success: false, error: 'Erro ao salvar configurações' };
+      // Retry without SIP fields
+      if (Object.keys(sipFields).length > 0) {
+        const { sip_domain: _a, sip_password_encrypted: _b, ...insertWithoutSip } = insertData;
+        const { error: retryError } = await from(supabase, 'api4com_connections' as never)
+          .insert(insertWithoutSip as Record<string, unknown>);
+
+        if (retryError) {
+          console.error('[api4com] Insert failed:', retryError);
+          return { success: false, error: 'Erro ao salvar configurações' };
+        }
+        console.warn('[api4com] SIP columns not available yet — run migration 20260324210000');
+      } else {
+        console.error('[api4com] Insert failed:', error);
+        return { success: false, error: 'Erro ao salvar configurações' };
+      }
     }
   }
 
