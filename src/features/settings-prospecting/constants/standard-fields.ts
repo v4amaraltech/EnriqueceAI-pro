@@ -8,7 +8,7 @@ export interface StandardFieldDef {
 }
 
 export const STANDARD_FIELDS: StandardFieldDef[] = [
-  { key: 'first_name', label: 'Nome do Contato', type: 'text' },
+  { key: 'first_name', label: 'Nome', type: 'text' },
   { key: 'last_name', label: 'Sobrenome', type: 'text' },
   { key: 'email', label: 'E-mail', type: 'text' },
   { key: 'telefone', label: 'Telefone', type: 'text' },
