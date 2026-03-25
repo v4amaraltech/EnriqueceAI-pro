@@ -16,6 +16,7 @@ import type { SubscriptionStatus } from '@/features/billing/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
+import { ClientErrorBoundary } from '@/shared/components/ClientErrorBoundary';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
 import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
@@ -144,9 +145,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </div>
             </SubscriptionGuard>
             <Toaster />
-            <Suspense fallback={null}>
-              <Api4ComWebphoneWrapper />
-            </Suspense>
+            <ClientErrorBoundary>
+              <Suspense fallback={null}>
+                <Api4ComWebphoneWrapper />
+              </Suspense>
+            </ClientErrorBoundary>
           </NotificationProvider>
         </OrganizationProvider>
       </TooltipProvider>
