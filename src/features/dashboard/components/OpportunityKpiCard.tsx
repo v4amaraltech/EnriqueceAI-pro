@@ -7,7 +7,6 @@ import {
   ComposedChart,
   Line,
   ResponsiveContainer,
-  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -41,15 +40,6 @@ function formatXAxis(day: number, daysInMonth: number, monthAbbr: string): strin
   if (day === Math.round(daysInMonth / 2)) return `${day}. ${monthAbbr}`;
   if (day === daysInMonth) return `${day}. ${monthAbbr}`;
   return '';
-}
-
-// Custom dot for Scatter — accepts recharts ScatterShapeProps
-function renderDot(props: { cx?: number; cy?: number }): React.ReactElement | null {
-  const { cx, cy } = props;
-  if (typeof cx !== 'number' || typeof cy !== 'number') return null;
-  return (
-    <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#fff" strokeWidth={1.5} />
-  );
 }
 
 // Custom bar shape — accepts recharts BarShapeProps
@@ -192,8 +182,10 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                     const v = value ?? 0;
                     const n = name ?? '';
                     if (n === 'Meta') return [Math.round(v), n];
+                    if (v === null || v === undefined) return [null, null];
                     return [v, n];
                   }}
+                  filterNull
                 />
                 {/* Meta line — solid (not dashed), light gray, diagonal */}
                 <Line
@@ -212,14 +204,6 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   name="Oportunidades"
                   shape={renderBarShape}
                   isAnimationActive={false}
-                />
-                {/* Scatter dots on top of data points */}
-                <Scatter
-                  dataKey="actual"
-                  name="_dots"
-                  shape={renderDot}
-                  isAnimationActive={false}
-                  legendType="none"
                 />
               </ComposedChart>
             </ResponsiveContainer>
