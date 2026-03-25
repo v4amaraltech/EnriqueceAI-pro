@@ -141,9 +141,10 @@ export async function POST(request: Request) {
         }
 
         const data = (await response.json()) as Api4ComCallListResponse;
+        const records = data.data ?? [];
 
         // 4. Match and update
-        for (const record of data.data) {
+        for (const record of records) {
           totalChecked++;
           const localCall = localByApi4ComId.get(record.id);
           if (!localCall) continue;
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
         }
 
         // Check if we still have unmatched local calls and more pages
-        hasMore = data.metadata.nextPage !== null && localByApi4ComId.size > 0;
+        hasMore = (data.metadata?.nextPage ?? null) !== null && localByApi4ComId.size > 0;
         page++;
 
         // Safety limit: don't fetch more than 20 pages
