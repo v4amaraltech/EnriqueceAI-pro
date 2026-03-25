@@ -152,11 +152,11 @@ export function DialerCallPanel({
               {callState === 'idle' && (
                 <button
                   onClick={onInitiateCall}
-                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-white hover:bg-gray-50 border border-[var(--border)]' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
                   title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
                 >
                   {dialerProvider === 'api4com' ? (
-                    <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                    <Image src="/logos/api4com-logo.png" alt="API4COM" width={40} height={40} className="rounded-full brightness-0 invert" />
                   ) : (
                     <Phone className="h-7 w-7" />
                   )}
@@ -165,9 +165,9 @@ export function DialerCallPanel({
 
               {callState === 'calling' && (
                 <>
-                  <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-white border border-[var(--border)]' : 'bg-yellow-500 text-white'}`}>
+                  <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-yellow-500 text-white'}`}>
                     {dialerProvider === 'api4com' ? (
-                      <Image src="/logos/api4com-logo.png" alt="API4COM" width={36} height={36} className="rounded" />
+                      <Image src="/logos/api4com-logo.png" alt="API4COM" width={40} height={40} className="rounded-full brightness-0 invert" />
                     ) : (
                       <Phone className="h-7 w-7" />
                     )}
