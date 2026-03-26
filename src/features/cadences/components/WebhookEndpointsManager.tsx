@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { ChevronRight, Globe, Loader2, Minus, Plus, Search, TestTube2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Globe, Loader2, Minus, Plus, Search, Settings2, TestTube2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent } from '@/shared/components/ui/card';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -76,6 +75,7 @@ const ALL_EVENT_OPTIONS = EVENT_GROUPS.flatMap((g) => g.events);
 
 export function WebhookEndpointsManager() {
   const [endpoints, setEndpoints] = useState<WebhookEndpointRow[]>([]);
+  const [expanded, setExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
@@ -153,158 +153,178 @@ export function WebhookEndpointsManager() {
   }
 
   return (
-    <Card className="mt-6">
-      <CardContent className="pt-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/10 p-2">
-              <Globe className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold">Webhooks</h3>
-              <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Receba notificações em tempo real sobre eventos via HTTP POST.
-              </p>
-            </div>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
-            <Plus className="mr-1 h-4 w-4" />
+    <div>
+      {/* Row header — same style as other integration rows */}
+      <div
+        className="group flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
+          <Globe className="h-5 w-5 text-[var(--muted-foreground)]" />
+        </div>
+        <div className="w-32 shrink-0 font-medium">Webhooks</div>
+        <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          Receba notificações em tempo real sobre eventos via HTTP POST
+        </div>
+        {endpoints.length > 0 && (
+          <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+            {endpoints.length} ativo{endpoints.length !== 1 ? 's' : ''}
+          </Badge>
+        )}
+        <div className="ml-auto shrink-0 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(true);
+              setShowForm(true);
+            }}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
             Novo
           </Button>
+          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+          </Button>
         </div>
+      </div>
 
-        {/* Create Form */}
-        {showForm && (
-          <div className="mt-5 space-y-4 rounded-lg border p-5">
-            <div className="space-y-1">
-              <Label>URL (HTTPS)</Label>
-              <Input
-                placeholder="https://example.com/webhook"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                O endpoint deve aceitar requisições POST e retornar status 2xx.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>Secret (opcional)</Label>
-              <Input
-                placeholder="whsec_..."
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Usado para gerar a assinatura HMAC-SHA256 no header X-Webhook-Signature.
-              </p>
-            </div>
-
-            <Separator />
-
-            <WebhookEventPicker
-              selectedEvents={selectedEvents}
-              onToggleEvent={toggleEvent}
-              onSetEvents={setSelectedEvents}
-            />
-
-            <Separator />
-
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleCreate} disabled={isPending || !url}>
-                {isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-                Criar webhook
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {endpoints.length === 0 && !showForm && (
-          <div className="mt-6 flex flex-col items-center justify-center rounded-lg border border-dashed py-10">
-            <div className="rounded-lg bg-muted p-3">
-              <Globe className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <p className="mt-3 text-sm font-medium">Nenhum webhook configurado</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Crie um webhook para receber eventos em tempo real.
-            </p>
-            <Button size="sm" variant="outline" className="mt-4" onClick={() => setShowForm(true)}>
-              <Plus className="mr-1 h-4 w-4" />
-              Criar primeiro webhook
-            </Button>
-          </div>
-        )}
-
-        {/* Endpoints List */}
-        {endpoints.length > 0 && (
-          <div className="mt-5 overflow-hidden rounded-lg border">
-            {endpoints.map((ep, index) => (
-              <div
-                key={ep.id}
-                className={`group flex items-center justify-between p-3 transition-colors hover:bg-muted/50 ${
-                  index < endpoints.length - 1 ? 'border-b' : ''
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{ep.url}</p>
-                    <Badge variant={ep.is_active ? 'default' : 'secondary'} className="shrink-0 text-xs">
-                      {ep.is_active ? 'Ativo' : 'Inativo'}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {ep.events.length === 0 ? (
-                      <Badge variant="outline" className="text-xs">
-                        Todos os eventos
-                      </Badge>
-                    ) : (
-                      ep.events.map((e) => (
-                        <Badge key={e} variant="secondary" className="text-xs">
-                          {ALL_EVENT_OPTIONS.find((o) => o.value === e)?.label ?? e}
-                        </Badge>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="ml-4 flex items-center gap-2">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => handleTest(ep.id)}
-                    disabled={testingId === ep.id}
-                    title="Testar"
-                  >
-                    {testingId === ep.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <TestTube2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Switch
-                    checked={ep.is_active}
-                    onCheckedChange={(checked) => handleToggle(ep.id, checked)}
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-red-500 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
-                    onClick={() => handleDelete(ep.id)}
-                    title="Remover"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-[var(--border)] bg-[var(--muted)]/20 px-4 py-4 space-y-4">
+          {/* Create Form */}
+          {showForm && (
+            <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+              <div className="space-y-1">
+                <Label>URL (HTTPS)</Label>
+                <Input
+                  placeholder="https://example.com/webhook"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  O endpoint deve aceitar requisições POST e retornar status 2xx.
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              <div className="space-y-1">
+                <Label>Secret (opcional)</Label>
+                <Input
+                  placeholder="whsec_..."
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usado para gerar a assinatura HMAC-SHA256 no header X-Webhook-Signature.
+                </p>
+              </div>
+
+              <Separator />
+
+              <WebhookEventPicker
+                selectedEvents={selectedEvents}
+                onToggleEvent={toggleEvent}
+                onSetEvents={setSelectedEvents}
+              />
+
+              <Separator />
+
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleCreate} disabled={isPending || !url}>
+                  {isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+                  Criar webhook
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {endpoints.length === 0 && !showForm && (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[var(--border)] py-10">
+              <div className="rounded-lg bg-[var(--muted)] p-3">
+                <Globe className="h-6 w-6 text-[var(--muted-foreground)]" />
+              </div>
+              <p className="mt-3 text-sm font-medium">Nenhum webhook configurado</p>
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                Crie um webhook para receber eventos em tempo real.
+              </p>
+              <Button size="sm" variant="outline" className="mt-4" onClick={() => setShowForm(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Criar primeiro webhook
+              </Button>
+            </div>
+          )}
+
+          {/* Endpoints List */}
+          {endpoints.length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+              {endpoints.map((ep, index) => (
+                <div
+                  key={ep.id}
+                  className={`group/ep flex items-center justify-between p-3 transition-colors hover:bg-[var(--muted)]/50 ${
+                    index < endpoints.length - 1 ? 'border-b border-[var(--border)]' : ''
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{ep.url}</p>
+                      <Badge variant={ep.is_active ? 'default' : 'secondary'} className="shrink-0 text-xs">
+                        {ep.is_active ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {ep.events.length === 0 ? (
+                        <Badge variant="outline" className="text-xs">
+                          Todos os eventos
+                        </Badge>
+                      ) : (
+                        ep.events.map((e) => (
+                          <Badge key={e} variant="secondary" className="text-xs">
+                            {ALL_EVENT_OPTIONS.find((o) => o.value === e)?.label ?? e}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div className="ml-4 flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 opacity-0 transition-opacity group-hover/ep:opacity-100"
+                      onClick={() => handleTest(ep.id)}
+                      disabled={testingId === ep.id}
+                      title="Testar"
+                    >
+                      {testingId === ep.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <TestTube2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Switch
+                      checked={ep.is_active}
+                      onCheckedChange={(checked) => handleToggle(ep.id, checked)}
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-red-500 opacity-0 transition-opacity hover:text-red-600 group-hover/ep:opacity-100"
+                      onClick={() => handleDelete(ep.id)}
+                      title="Remover"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

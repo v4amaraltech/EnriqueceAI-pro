@@ -735,11 +735,12 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         </Dialog>
       ))}
 
-      {/* API de Inbound Leads */}
+      {/* API & Webhooks */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold">API</h2>
+        <h2 className="mb-3 text-lg font-semibold">API & Webhooks</h2>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-          <div className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30">
+          {/* Inbound API */}
+          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
               <Key className="h-5 w-5 text-[var(--muted-foreground)]" />
             </div>
@@ -756,10 +757,10 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               </Link>
             </div>
           </div>
+          {/* Webhooks */}
+          <WebhookEndpointsManager />
         </div>
       </div>
-
-      <WebhookEndpointsManager />
 
       {/* WhatsApp Evolution QR Code modal */}
       {showEvolutionModal && evolution.step !== 'idle' && (
