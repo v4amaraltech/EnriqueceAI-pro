@@ -12,7 +12,7 @@ const validInput = {
   telefone: '11999999999',
   empresa: 'Acme Ltda',
   job_title: 'Gerente Comercial',
-  lead_source: 'cold_outbound',
+  lead_source: 'outbound',
   assigned_to: validUserId,
 };
 
@@ -143,7 +143,7 @@ describe('lead schemas', () => {
     });
 
     it('should accept all valid lead_source values', () => {
-      const sources = ['cold_outbound', 'inbound_marketing', 'indicacao', 'linkedin', 'evento', 'site', 'outro'];
+      const sources = ['outbound', 'leadbroker', 'blackbox', 'indicacao', 'recomendacao', 'apollo', 'reativacao', 'recuperacao'];
       for (const source of sources) {
         const result = createLeadSchema.safeParse({ ...validInput, lead_source: source });
         expect(result.success).toBe(true);

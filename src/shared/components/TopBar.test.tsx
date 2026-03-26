@@ -110,7 +110,7 @@ describe('TopBar', () => {
     expect(navSections).toHaveLength(4);
     expect(navSections[0]?.label).toBe('Dashboard');
     expect(navSections[1]?.label).toBe('Prospecção');
-    expect(navSections[1]?.items).toHaveLength(6);
+    expect(navSections[1]?.items).toHaveLength(5);
     expect(navSections[2]?.label).toBe('Ligações');
     expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');

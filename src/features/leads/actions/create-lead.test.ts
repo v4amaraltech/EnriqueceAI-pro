@@ -100,7 +100,7 @@ const validInput = {
   telefone: '11999999999',
   empresa: 'Acme Ltda',
   job_title: 'Gerente Comercial',
-  lead_source: 'cold_outbound',
+  lead_source: 'outbound',
   assigned_to: VALID_UUID,
 };
 

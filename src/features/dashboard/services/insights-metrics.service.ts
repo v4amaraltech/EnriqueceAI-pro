@@ -84,14 +84,16 @@ export async function fetchLossReasons(
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  cold_outbound: 'Outbound',
-  inbound_marketing: 'Inbound Marketing',
+  outbound: 'Outbound',
+  leadbroker: 'Leadbroker',
+  blackbox: 'Blackbox',
   indicacao: 'Indicação',
-  linkedin: 'LinkedIn',
-  evento: 'Evento',
-  site: 'Site',
-  apollo: 'Apollo.io',
-  outro: 'Outro',
+  recomendacao: 'Recomendação',
+  apollo: 'Apollo',
+  reativacao: 'Reativação',
+  recuperacao: 'Recuperação',
+  api: 'API',
+  webhook: 'Webhook',
 };
 
 /**
@@ -143,7 +145,7 @@ export async function fetchConversionByOrigin(
   const sourceStats = new Map<string, { converted: number; lost: number }>();
 
   for (const lead of leads ?? []) {
-    const source = lead.lead_source || 'outro';
+    const source = lead.lead_source || 'unknown';
 
     if (lead.status === 'qualified') {
       const stats = sourceStats.get(source) ?? { converted: 0, lost: 0 };

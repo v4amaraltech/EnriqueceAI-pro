@@ -34,16 +34,16 @@ export const leadAddressSchema = z.object({
 });
 
 export const LEAD_SOURCE_OPTIONS = [
-  { value: 'cold_outbound', label: 'Outbound' },
-  { value: 'inbound_marketing', label: 'Inbound Marketing' },
+  { value: 'outbound', label: 'Outbound' },
+  { value: 'leadbroker', label: 'Leadbroker' },
+  { value: 'blackbox', label: 'Blackbox' },
   { value: 'indicacao', label: 'Indicação' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'evento', label: 'Evento' },
-  { value: 'site', label: 'Site' },
-  { value: 'apollo', label: 'Apollo.io' },
+  { value: 'recomendacao', label: 'Recomendação' },
+  { value: 'apollo', label: 'Apollo' },
+  { value: 'reativacao', label: 'Reativação' },
+  { value: 'recuperacao', label: 'Recuperação' },
   { value: 'api', label: 'API' },
   { value: 'webhook', label: 'Webhook' },
-  { value: 'outro', label: 'Outro' },
 ] as const;
 
 export const leadSourceValues = LEAD_SOURCE_OPTIONS.map((o) => o.value) as [string, ...string[]];

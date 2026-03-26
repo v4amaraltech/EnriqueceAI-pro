@@ -133,9 +133,9 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'qualified', lead_source: 'cold_outbound' },
-        { id: 'l2', status: 'unqualified', lead_source: 'cold_outbound' },
-        { id: 'l3', status: 'qualified', lead_source: 'linkedin' },
+        { id: 'l1', status: 'qualified', lead_source: 'outbound' },
+        { id: 'l2', status: 'unqualified', lead_source: 'outbound' },
+        { id: 'l3', status: 'qualified', lead_source: 'indicacao' },
       ],
     });
 
@@ -149,13 +149,13 @@ describe('fetchConversionByOrigin', () => {
 
     expect(result).toHaveLength(2);
 
-    const coldOutbound = result.find((e) => e.origin === 'Outbound');
-    expect(coldOutbound?.converted).toBe(1);
-    expect(coldOutbound?.lost).toBe(1);
+    const outbound = result.find((e) => e.origin === 'Outbound');
+    expect(outbound?.converted).toBe(1);
+    expect(outbound?.lost).toBe(1);
 
-    const linkedin = result.find((e) => e.origin === 'LinkedIn');
-    expect(linkedin?.converted).toBe(1);
-    expect(linkedin?.lost).toBe(0);
+    const indicacao = result.find((e) => e.origin === 'Indicação');
+    expect(indicacao?.converted).toBe(1);
+    expect(indicacao?.lost).toBe(0);
   });
 
   it('should skip leads with non-terminal status (new, contacted)', async () => {
@@ -167,8 +167,8 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'new', lead_source: 'cold_outbound' },
-        { id: 'l2', status: 'contacted', lead_source: 'linkedin' },
+        { id: 'l1', status: 'new', lead_source: 'outbound' },
+        { id: 'l2', status: 'contacted', lead_source: 'indicacao' },
       ],
     });
 
@@ -195,9 +195,9 @@ describe('fetchConversionByOrigin', () => {
     const leadsChain = createChainMock({
       data: [
         { id: 'l1', status: 'qualified', lead_source: 'indicacao' },
-        { id: 'l2', status: 'qualified', lead_source: 'cold_outbound' },
-        { id: 'l3', status: 'unqualified', lead_source: 'cold_outbound' },
-        { id: 'l4', status: 'archived', lead_source: 'cold_outbound' },
+        { id: 'l2', status: 'qualified', lead_source: 'outbound' },
+        { id: 'l3', status: 'unqualified', lead_source: 'outbound' },
+        { id: 'l4', status: 'archived', lead_source: 'outbound' },
       ],
     });
 
@@ -213,7 +213,7 @@ describe('fetchConversionByOrigin', () => {
     expect(result[1]?.origin).toBe('Indicação'); // 1 total
   });
 
-  it('should fallback to "Outro" for leads without lead_source', async () => {
+  it('should fallback to "unknown" for leads without lead_source', async () => {
     const enrollmentChain = createChainMock({
       data: [{ lead_id: 'l1', cadence_id: 'c1' }],
     });
@@ -229,7 +229,7 @@ describe('fetchConversionByOrigin', () => {
 
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
-    expect(result[0]?.origin).toBe('Outro');
+    expect(result[0]?.origin).toBe('unknown');
   });
 });
 

@@ -50,7 +50,8 @@ describe('CustomFieldsSettings', () => {
   it('should show field type and options', () => {
     render(<CustomFieldsSettings initial={[makeField({ field_type: 'select', options: ['A', 'B'] })]} standardSettings={[]} />);
     expect(screen.getByText(/Seleção/)).toBeInTheDocument();
-    expect(screen.getByText(/(A, B)/)).toBeInTheDocument();
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('B')).toBeInTheDocument();
   });
 
   it('should show tabs with counts', () => {
