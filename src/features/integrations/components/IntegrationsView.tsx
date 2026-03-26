@@ -1,11 +1,13 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Check,
   FileSignature,
+  Key,
   RefreshCw,
   Settings2,
   Unplug,
@@ -732,6 +734,30 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
           </DialogContent>
         </Dialog>
       ))}
+
+      {/* API de Inbound Leads */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">API</h2>
+        <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+          <div className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
+              <Key className="h-5 w-5 text-[var(--muted-foreground)]" />
+            </div>
+            <div className="w-32 shrink-0 font-medium">Inbound API</div>
+            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Receba leads de plataformas externas via API REST e webhooks
+            </div>
+            <div className="ml-auto shrink-0">
+              <Link href="/settings/integrations/api">
+                <Button size="sm" variant="outline">
+                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                  Configurar
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <WebhookEndpointsManager />
 

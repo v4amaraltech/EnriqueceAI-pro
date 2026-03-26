@@ -41,6 +41,8 @@ export const LEAD_SOURCE_OPTIONS = [
   { value: 'evento', label: 'Evento' },
   { value: 'site', label: 'Site' },
   { value: 'apollo', label: 'Apollo.io' },
+  { value: 'api', label: 'API' },
+  { value: 'webhook', label: 'Webhook' },
   { value: 'outro', label: 'Outro' },
 ] as const;
 
