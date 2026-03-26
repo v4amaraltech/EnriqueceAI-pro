@@ -126,7 +126,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, threecplus: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true } };
+const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, threecplus: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true }, isManager: true };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {

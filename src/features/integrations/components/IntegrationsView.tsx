@@ -56,6 +56,7 @@ interface IntegrationsViewProps {
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
   apollo: ApolloConnectionSafe | null;
   planFeatures: PlanFeatures;
+  isManager: boolean;
 }
 
 const CRM_PROVIDERS = [
@@ -84,7 +85,7 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
   );
 }
 
-export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, threecplus, evolutionInstance, apollo, planFeatures }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, threecplus, evolutionInstance, apollo, planFeatures, isManager }: IntegrationsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -448,37 +449,39 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 {connection && <StatusBadge status={connection.status} />}
                 <div className="ml-auto shrink-0 flex items-center gap-2">
                   {connection ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100"
-                        disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
-                        onClick={() => handleSyncCrm(provider.id)}
-                      >
-                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                        Sincronizar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100"
-                        onClick={() => setFieldMappingProvider(provider.id)}
-                      >
-                        <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                        Campos
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                        onClick={() => setShowDisconnect(provider.id)}
-                      >
-                        <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                        Desconectar
-                      </Button>
-                    </>
-                  ) : (
+                    isManager && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100"
+                          disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
+                          onClick={() => handleSyncCrm(provider.id)}
+                        >
+                          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                          Sincronizar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100"
+                          onClick={() => setFieldMappingProvider(provider.id)}
+                        >
+                          <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                          Campos
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                          onClick={() => setShowDisconnect(provider.id)}
+                        >
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                          Desconectar
+                        </Button>
+                      </>
+                    )
+                  ) : isManager ? (
                     <Button
                       size="sm"
                       onClick={() => handleConnectCrm(provider.id)}
@@ -486,7 +489,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     >
                       {activeCrmAction === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );

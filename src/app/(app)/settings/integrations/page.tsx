@@ -1,4 +1,4 @@
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 
 import { getOrgPlan } from '@/features/billing/actions/get-org-plan';
 import type { PlanFeatures } from '@/features/billing/types';
@@ -8,7 +8,7 @@ import { IntegrationsView } from '@/features/integrations/components/Integration
 const DEFAULT_FEATURES: PlanFeatures = { enrichment: 'basic', crm: false, calendar: false };
 
 export default async function IntegrationsPage() {
-  await requireAuth();
+  const auth = await requireAuthWithMember();
 
   const [result, planResult] = await Promise.all([
     fetchConnections(),
@@ -32,6 +32,7 @@ export default async function IntegrationsPage() {
       evolutionInstance={result.data.evolutionInstance}
       apollo={result.data.apollo}
       planFeatures={planFeatures}
+      isManager={auth.role === 'manager'}
     />
   );
 }
