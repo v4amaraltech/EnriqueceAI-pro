@@ -19,4 +19,4 @@ export { LossReasonsSettings } from './components/LossReasonsSettings';
 export { LeadAccessSettings } from './components/LeadAccessSettings';
 export { FitScoreConfig } from './components/FitScoreConfig';
 export { AbmSettings } from './components/AbmSettings';
-export { FieldAssociationSettings } from './components/FieldAssociationSettings';
+

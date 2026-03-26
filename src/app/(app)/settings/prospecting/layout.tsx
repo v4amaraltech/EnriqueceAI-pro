@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import {
   Activity,
-  ArrowLeftRight,
+
   Ban,
   Clock,
   ListChecks,
@@ -32,7 +32,7 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Vendas Baseadas em Contas', href: '/settings/prospecting/abm', icon: Settings2 },
   { label: 'Acesso aos Leads', href: '/settings/prospecting/access', icon: Lock },
   { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: ListChecks },
-  { label: 'Associação de Campos', href: '/settings/prospecting/field-association', icon: ArrowLeftRight },
+
   { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
   { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
 ];
