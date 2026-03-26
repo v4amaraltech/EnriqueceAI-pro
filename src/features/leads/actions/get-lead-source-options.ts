@@ -24,5 +24,12 @@ export async function getLeadSourceOptions(): Promise<LeadSourceOption[]> {
     return DEFAULT_OPTIONS;
   }
 
-  return data.options.map((label) => ({ value: label, label }));
+  // Map custom labels to their enum values when possible, otherwise slugify
+  const knownMap = new Map(LEAD_SOURCE_OPTIONS.map((o) => [o.label.toLowerCase(), o.value]));
+
+  return data.options.map((label) => {
+    const knownValue = knownMap.get(label.toLowerCase());
+    const value = knownValue ?? label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    return { value, label };
+  });
 }
