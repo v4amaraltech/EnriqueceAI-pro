@@ -236,7 +236,16 @@ export async function markLeadAsWon(
           .single()) as { data: Record<string, string | null> | null };
 
         if (lead) {
-          const fieldMapping = DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
+          const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
+
+          // Build flat lead with custom field values resolved as top-level keys
+          const flatLead: Record<string, string | null> = { ...lead };
+          const cfValues = lead.custom_field_values as unknown as Record<string, string> | null;
+          if (cfValues && typeof cfValues === 'object') {
+            for (const [cfId, cfVal] of Object.entries(cfValues)) {
+              flatLead[`custom_${cfId}`] = typeof cfVal === 'string' ? cfVal : String(cfVal ?? '');
+            }
+          }
 
           // Check if Contact/Person already synced (dedup)
           const { data: existingSync } = (await from(supabase, 'interactions')
@@ -248,7 +257,7 @@ export async function markLeadAsWon(
           // Create/update Contact/Person
           const { external_id: contactExternalId } = await adapter.pushContact(
             credentials,
-            lead,
+            flatLead,
             fieldMapping,
             existingSync?.external_id ?? undefined,
           );
@@ -463,12 +472,41 @@ export async function markLeadAsWon(
           } else if (crmOptions.provider === 'kommo') {
             const kommoAdapter = adapter as KommoAdapter;
 
-            // Kommo creates leads with contacts via pushDeal
+            // Standard contact fields are handled by pushContact — everything else goes to the deal
+            const KOMMO_CONTACT_FIELDS = new Set([
+              'first_name', 'last_name', 'name', 'company_name', 'position', 'EMAIL', 'PHONE',
+            ]);
+
+            // Build deal custom fields from mapping
+            const customFieldsValues: Array<{
+              field_id?: number;
+              field_code?: string;
+              values: Array<{ value: string }>;
+            }> = [];
+
+            for (const [appField, crmField] of Object.entries(fieldMapping)) {
+              if (KOMMO_CONTACT_FIELDS.has(crmField)) continue;
+
+              // Use flatLead which already has custom_ fields resolved
+              const value = flatLead[appField];
+              if (!value) continue;
+
+              // Determine if crmField is a numeric ID or a field code
+              const numericId = parseInt(crmField, 10);
+              if (!isNaN(numericId) && crmField === numericId.toString()) {
+                customFieldsValues.push({ field_id: numericId, values: [{ value }] });
+              } else {
+                customFieldsValues.push({ field_code: crmField, values: [{ value }] });
+              }
+            }
+
+            // Kommo creates leads (deals) with contacts via pushDeal
             const result = await kommoAdapter.pushDeal(credentials, {
               title: dealTitle,
               contactExternalId,
               pipelineId: parseInt(crmOptions.pipelineId, 10),
               stageId: parseInt(crmOptions.stageId, 10),
+              customFieldsValues: customFieldsValues.length > 0 ? customFieldsValues : undefined,
             });
             dealExternalId = result.external_id;
           } else {

@@ -503,6 +503,11 @@ export class KommoAdapter implements CRMAdapter {
       contactExternalId: string;
       pipelineId: number;
       stageId: number;
+      customFieldsValues?: Array<{
+        field_id?: number;
+        field_code?: string;
+        values: Array<{ value: string }>;
+      }>;
     },
   ): Promise<{ external_id: string }> {
     const subdomain = credentials.subdomain;
@@ -516,6 +521,9 @@ export class KommoAdapter implements CRMAdapter {
         _embedded: {
           contacts: [{ id: parseInt(options.contactExternalId, 10) }],
         },
+        ...(options.customFieldsValues?.length
+          ? { custom_fields_values: options.customFieldsValues }
+          : {}),
       },
     ];
 
