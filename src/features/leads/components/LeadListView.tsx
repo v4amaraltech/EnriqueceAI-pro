@@ -3,13 +3,11 @@
 import { Suspense, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, FileUp, Plus, SearchX, Users } from 'lucide-react';
-import { toast } from 'sonner';
+import { FileUp, Plus, SearchX, Users } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { EmptyState } from '@/shared/components/EmptyState';
 
-import { exportAllFilteredLeadsCsv } from '../actions/bulk-actions';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import type { LeadStatusCounts } from '../actions/fetch-leads';
 import type { LeadListResult } from '../leads.contract';
@@ -46,7 +44,6 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isTabPending, startTabTransition] = useTransition();
-  const [isExporting, startExportTransition] = useTransition();
   const { data: leads, total, page, per_page } = result;
 
   const urlStatusTab = searchParams.get('status') ?? '';
@@ -68,30 +65,6 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
     params.delete('page');
     startTabTransition(() => {
       router.push(`/leads?${params.toString()}`);
-    });
-  };
-
-  const handleExportAll = () => {
-    const filters: Record<string, unknown> = {};
-    searchParams.forEach((value, key) => {
-      if (key !== 'page' && key !== 'per_page' && key !== 'sort_by' && key !== 'sort_dir') {
-        filters[key] = value;
-      }
-    });
-    startExportTransition(async () => {
-      const result = await exportAllFilteredLeadsCsv(filters);
-      if (result.success) {
-        const blob = new Blob([result.data.csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = result.data.filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success(`${total} leads exportados`);
-      } else {
-        toast.error(result.error);
-      }
     });
   };
 
@@ -119,12 +92,6 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {leads.length > 0 && (
-            <Button variant="outline" onClick={handleExportAll} disabled={isExporting}>
-              <Download className="mr-2 h-4 w-4" />
-              {isExporting ? 'Exportando...' : 'Exportar CSV'}
-            </Button>
-          )}
           <Button asChild>
             <Link href="/leads/imports">
               <FileUp className="mr-2 h-4 w-4" />
