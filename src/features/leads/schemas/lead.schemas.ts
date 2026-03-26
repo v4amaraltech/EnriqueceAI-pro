@@ -55,7 +55,7 @@ export const createLeadSchema = z.object({
   telefone: z.string().min(1, 'Telefone é obrigatório'),
   empresa: z.string().min(1, 'Empresa é obrigatória'),
   job_title: z.string().min(1, 'Cargo é obrigatório'),
-  lead_source: z.enum(leadSourceValues as [string, ...string[]], { required_error: 'Fonte é obrigatória' }),
+  lead_source: z.string().min(1, 'Fonte é obrigatória'),
   is_inbound: z.boolean().default(false),
   assigned_to: z.string().uuid('Responsável inválido'),
   cadence_id: z.string().uuid('Cadência inválida').optional().or(z.literal('')),

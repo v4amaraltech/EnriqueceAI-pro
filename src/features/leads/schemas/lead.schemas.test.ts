@@ -126,8 +126,13 @@ describe('lead schemas', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject invalid lead_source value', () => {
-      const result = createLeadSchema.safeParse({ ...validInput, lead_source: 'invalid_source' });
+    it('should accept custom lead_source values', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, lead_source: 'Leadbroker' });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject empty lead_source', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, lead_source: '' });
       expect(result.success).toBe(false);
     });
 
