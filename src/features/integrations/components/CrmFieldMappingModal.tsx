@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { ArrowRight, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -84,11 +84,15 @@ export function CrmFieldMappingModal({
         setCrmFields(crmResult.data);
       } else {
         setCrmFields(CRM_TARGET_FIELDS[provider]);
+        if (!crmResult.success) {
+          console.warn('[CrmFieldMapping] Failed to fetch CRM fields:', crmResult.error);
+        }
       }
       if (appResult.success) {
         setAppFields(appResult.data);
       }
-    }).catch(() => {
+    }).catch((err) => {
+      console.warn('[CrmFieldMapping] Error loading fields:', err);
       setCrmFields(CRM_TARGET_FIELDS[provider]);
     }).finally(() => {
       setIsLoadingFields(false);
@@ -156,7 +160,24 @@ export function CrmFieldMappingModal({
     });
   }
 
-  const targetFields = crmFields.length > 0 ? crmFields : CRM_TARGET_FIELDS[provider];
+  // Build target fields: loaded CRM fields (or fallback) + any saved values not in the list
+  const targetFields = useMemo(() => {
+    const base = crmFields.length > 0 ? crmFields : CRM_TARGET_FIELDS[provider];
+    const existingValues = new Set(base.map((f) => f.value));
+
+    // Add saved CRM field values that aren't in the loaded options (e.g. numeric IDs when API fails)
+    const missing: CrmFieldOption[] = [];
+    if (currentMapping?.leads) {
+      for (const crmValue of Object.values(currentMapping.leads)) {
+        if (!existingValues.has(crmValue)) {
+          missing.push({ value: crmValue, label: `#${crmValue}`, isCustom: true });
+          existingValues.add(crmValue);
+        }
+      }
+    }
+
+    return missing.length > 0 ? [...base, ...missing] : base;
+  }, [crmFields, provider, currentMapping]);
 
   // Get already-used app fields to disable in other selects
   const usedAppFields = new Set(rows.map((r) => r.appField).filter(Boolean));
@@ -171,7 +192,7 @@ export function CrmFieldMappingModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[50vh] overflow-y-auto">
+        <div className="max-h-[65vh] overflow-y-auto">
           {isLoadingFields ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
