@@ -538,7 +538,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                           <LeadSourceBadge source={lead.lead_source} />
                         </div>
                         {secondaryName && (
-                          <div className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                          <div className="truncate text-xs text-[var(--muted-foreground)]">
                             {secondaryName}
                           </div>
                         )}
@@ -570,7 +570,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                     </div>
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    <span className="text-sm text-[var(--muted-foreground)]">
                       {responsible ?? '—'}
                     </span>
                   </TableCell>
