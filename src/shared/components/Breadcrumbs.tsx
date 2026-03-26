@@ -55,6 +55,7 @@ const pathLabels: Record<string, string> = {
   extrato: 'Extrato',
   'daily-targets': 'Metas Diárias',
   general: 'Geral',
+  upgrade: 'Upgrade',
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
