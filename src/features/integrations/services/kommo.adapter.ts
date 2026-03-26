@@ -207,8 +207,8 @@ export class KommoAdapter implements CRMAdapter {
   }
 
   async listFields(credentials: CrmCredentials): Promise<CrmFieldOption[]> {
-    const subdomain = credentials.subdomain;
-    if (!subdomain) throw new Error('Kommo subdomain missing');
+    if (!credentials.subdomain) throw new Error('Kommo subdomain missing');
+    const sub: string = credentials.subdomain;
 
     const standard: CrmFieldOption[] = [
       { value: 'first_name', label: 'Nome', isCustom: false },
@@ -219,30 +219,41 @@ export class KommoAdapter implements CRMAdapter {
       { value: 'EMAIL', label: 'Email', isCustom: false },
       { value: 'PHONE', label: 'Telefone', isCustom: false },
     ];
-    let custom: CrmFieldOption[] = [];
-    try {
-      const result = await kommoFetch<
-        KommoListResponse<{
-          id: number;
-          name: string;
-          type: string;
-          code: string | null;
-        }>
-      >(subdomain, '/contacts/custom_fields?limit=250', credentials.access_token);
 
-      const fields = result._embedded?.custom_fields ?? [];
-      custom = fields
-        .filter((f) => f.code !== 'EMAIL' && f.code !== 'PHONE')
-        .map((f) => ({
-          value: f.code ?? f.id.toString(),
-          label: f.name,
-          type: f.type,
-          isCustom: true,
-        }));
-    } catch {
-      /* fallback sem custom */
+    type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
+    const accessToken = credentials.access_token;
+
+    async function fetchCustomFields(
+      entity: 'contacts' | 'leads',
+      label: string,
+    ): Promise<CrmFieldOption[]> {
+      try {
+        const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
+          sub,
+          `/${entity}/custom_fields?limit=250`,
+          accessToken,
+        );
+        const fields = result._embedded?.custom_fields ?? [];
+        return fields
+          .filter((f) => f.code !== 'EMAIL' && f.code !== 'PHONE')
+          .map((f) => ({
+            value: f.code ?? f.id.toString(),
+            label: `${f.name} (${label})`,
+            type: f.type,
+            isCustom: true,
+          }));
+      } catch (err) {
+        console.warn(`[kommo] Failed to fetch ${entity} custom fields:`, err);
+        return [];
+      }
     }
-    return [...standard, ...custom].sort((a, b) =>
+
+    const [contactFields, leadFields] = await Promise.all([
+      fetchCustomFields('contacts', 'Contato'),
+      fetchCustomFields('leads', 'Lead'),
+    ]);
+
+    return [...standard, ...contactFields, ...leadFields].sort((a, b) =>
       a.label.localeCompare(b.label),
     );
   }
