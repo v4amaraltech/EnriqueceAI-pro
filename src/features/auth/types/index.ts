@@ -24,6 +24,7 @@ export interface OrganizationMemberRow {
   created_at: string;
   updated_at: string;
   name?: string;
+  avatar_url?: string;
 }
 
 export interface OrganizationWithMembers extends OrganizationRow {

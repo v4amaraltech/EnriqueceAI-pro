@@ -86,7 +86,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .eq('org_id', orgId) as unknown as Promise<{ data: OrganizationMemberRow[] | null }>),
 
     (async () => {
-      const map = new Map<string, string>();
+      const map = new Map<string, { name: string; avatar_url?: string }>();
       try {
         const adminClient = createAdminSupabaseClient();
         const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
@@ -94,7 +94,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           for (const u of usersData.users) {
             const meta = u.user_metadata as Record<string, unknown> | undefined;
             const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-            map.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
+            const avatarUrl = (meta?.avatar_url ?? '') as string;
+            map.set(u.id, {
+              name: fullName || u.email?.split('@')[0] || u.id.slice(0, 8),
+              avatar_url: avatarUrl || undefined,
+            });
           }
         }
       } catch {
@@ -108,11 +112,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
   const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
   const members = membersResult.data;
-  const nameMap = namesResult;
+  const userInfoMap = namesResult;
 
   const enrichedMembers = (members ?? []).map((m) => ({
     ...m,
-    name: nameMap.get(m.user_id),
+    name: userInfoMap.get(m.user_id)?.name,
+    avatar_url: userInfoMap.get(m.user_id)?.avatar_url,
   }));
 
   const currentMember: OrganizationMemberRow = {
@@ -126,7 +131,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     invited_expires_at: memberData.invited_expires_at ?? null,
     created_at: memberData.created_at,
     updated_at: memberData.updated_at,
-    name: nameMap.get(memberData.user_id),
+    name: userInfoMap.get(memberData.user_id)?.name,
+    avatar_url: userInfoMap.get(memberData.user_id)?.avatar_url,
   };
 
   return (

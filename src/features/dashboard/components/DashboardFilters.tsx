@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 
 import {
   DropdownMenu,
@@ -167,21 +168,34 @@ export function DashboardFilters({
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               <DropdownMenuLabel>Filtrar por vendedor</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {sdrMembers.map((m) => (
-                <DropdownMenuCheckboxItem
-                  key={m.user_id}
-                  checked={currentFilters.userIds.includes(m.user_id)}
-                  onCheckedChange={() =>
-                    toggleArrayParam(
-                      'userIds',
-                      m.user_id,
-                      currentFilters.userIds,
-                    )
-                  }
-                >
-                  {m.name ?? m.user_id.slice(0, 8)}
-                </DropdownMenuCheckboxItem>
-              ))}
+              {sdrMembers.map((m) => {
+                const displayName = m.name ?? m.user_id.slice(0, 8);
+                const initials = displayName
+                  .split(' ')
+                  .map((w) => w[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase();
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={m.user_id}
+                    checked={currentFilters.userIds.includes(m.user_id)}
+                    onCheckedChange={() =>
+                      toggleArrayParam(
+                        'userIds',
+                        m.user_id,
+                        currentFilters.userIds,
+                      )
+                    }
+                  >
+                    <Avatar className="mr-2 h-5 w-5 text-[10px]">
+                      <AvatarImage src={m.avatar_url} alt={displayName} />
+                      <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+                    </Avatar>
+                    {displayName}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </>
