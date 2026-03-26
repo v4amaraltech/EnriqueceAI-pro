@@ -179,8 +179,20 @@ export async function updateCrmFieldMapping(
   try {
     const { orgId, supabase } = await getManagerOrgId();
 
+    // Preserve existing crmFieldCache when saving mapping
+    const { data: existing } = (await from(supabase, 'crm_connections')
+      .select('field_mapping')
+      .eq('org_id', orgId)
+      .eq('crm_provider', provider)
+      .single()) as { data: { field_mapping: FieldMapping | null } | null };
+
+    const merged = {
+      ...fieldMapping,
+      crmFieldCache: existing?.field_mapping?.crmFieldCache,
+    };
+
     const { data, error } = (await from(supabase, 'crm_connections')
-      .update({ field_mapping: fieldMapping } as Record<string, unknown>)
+      .update({ field_mapping: merged } as Record<string, unknown>)
       .eq('org_id', orgId)
       .eq('crm_provider', provider)
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
@@ -280,6 +292,20 @@ export async function fetchCrmFields(
     const adapter = CRMRegistry.getAdapter(provider);
     const credentials = await ensureFreshCredentials(connection, adapter, supabase);
     const fields = await adapter.listFields(credentials);
+
+    // Cache field labels for fallback when API is unavailable (only if custom fields were returned)
+    const hasCustomFields = fields.some((f) => f.isCustom);
+    if (hasCustomFields) {
+      const crmFieldCache: Record<string, string> = {};
+      for (const f of fields) {
+        crmFieldCache[f.value] = f.label;
+      }
+      const existingMapping = (connection.field_mapping ?? { leads: {} }) as FieldMapping;
+      await from(supabase, 'crm_connections')
+        .update({ field_mapping: { ...existingMapping, crmFieldCache } } as Record<string, unknown>)
+        .eq('id', connection.id);
+    }
+
     return { success: true, data: fields };
   } catch (error) {
     return {

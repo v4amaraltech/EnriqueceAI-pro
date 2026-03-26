@@ -65,6 +65,7 @@ export interface CrmCredentials {
 export interface FieldMapping {
   leads: Record<string, string>;
   activities?: Record<string, string>;
+  crmFieldCache?: Record<string, string>; // CRM field value → label cache (populated on successful API fetch)
 }
 
 // Default field mappings per provider

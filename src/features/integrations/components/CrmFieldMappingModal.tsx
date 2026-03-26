@@ -167,10 +167,15 @@ export function CrmFieldMappingModal({
 
     // Add saved CRM field values that aren't in the loaded options (e.g. numeric IDs when API fails)
     const missing: CrmFieldOption[] = [];
+    const labelCache = currentMapping?.crmFieldCache;
     if (currentMapping?.leads) {
       for (const crmValue of Object.values(currentMapping.leads)) {
         if (!existingValues.has(crmValue)) {
-          missing.push({ value: crmValue, label: `#${crmValue}`, isCustom: true });
+          missing.push({
+            value: crmValue,
+            label: labelCache?.[crmValue] ?? `#${crmValue}`,
+            isCustom: true,
+          });
           existingValues.add(crmValue);
         }
       }
