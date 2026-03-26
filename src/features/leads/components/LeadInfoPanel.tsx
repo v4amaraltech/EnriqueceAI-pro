@@ -627,7 +627,7 @@ export function LeadInfoPanel({
                 </>
               ) : (
                 <>
-                  {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram ? `https://instagram.com/${data.instagram.replace('@', '')}` : undefined} />}
+                  {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram ? (data.instagram.startsWith('http') ? data.instagram : `https://instagram.com/${data.instagram.replace('@', '')}`) : undefined} />}
                   {isFieldVisible('linkedin') && <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />}
                   {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />}
                 </>

@@ -75,6 +75,7 @@ export default async function AtividadesPage() {
         dialerPreferences={dialerPreferences}
         dialerProvider={dialerProvider}
         availableLeadsCount={availableLeads.count}
+        availableLeadIds={availableLeads.leadIds}
       />
     </div>
   );

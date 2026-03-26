@@ -40,6 +40,7 @@ interface ActivityQueueViewProps {
   dialerProvider?: DialerProvider;
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
+  availableLeadIds?: string[];
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -88,7 +89,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0 }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -206,7 +207,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       {/* Progress cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ProgressCard completed={progress.completed} total={progress.total} />
-        <DailyGoalCard target={progress.target} completed={progress.completed} />
+        <DailyGoalCard target={progress.target} completed={progress.completed} availableLeadIds={availableLeadIds} />
       </div>
 
       {/* Tabs */}
