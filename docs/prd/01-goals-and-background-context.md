@@ -13,7 +13,7 @@
 
 O mercado brasileiro de Sales Engagement é dominado pela Meetime, que atende bem operações tradicionais de outbound por email e telefone. No entanto, a realidade do vendedor B2B brasileiro mudou: WhatsApp se tornou o canal principal de comunicação comercial, e times menores (2-50 reps) precisam de ferramentas que maximizem a produtividade individual sem exigir processos complexos.
 
-A Flux Sales Engagement 2.0 nasce para preencher esse gap — uma plataforma com IA embarcada que enriquece leads automaticamente via CNPJ, gera mensagens personalizadas para cada canal, e orquestra cadências simples mas eficazes. O foco no MVP é demonstrar valor imediato através de enriquecimento em massa + dashboard inteligente, evoluindo para cadências automatizadas e geração com IA nas fases seguintes.
+A EnriqueceAI nasce para preencher esse gap — uma plataforma com IA embarcada que enriquece leads automaticamente via CNPJ, gera mensagens personalizadas para cada canal, e orquestra cadências simples mas eficazes. O foco no MVP é demonstrar valor imediato através de enriquecimento em massa + dashboard inteligente, evoluindo para cadências automatizadas e geração com IA nas fases seguintes.
 
 ## Change Log
 

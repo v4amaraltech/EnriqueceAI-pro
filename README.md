@@ -1,4 +1,4 @@
-# Flux Sales Engagement
+# EnriqueceAI
 
 Plataforma de Sales Engagement para equipes de vendas B2B brasileiras.
 

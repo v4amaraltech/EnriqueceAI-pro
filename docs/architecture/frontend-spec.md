@@ -1,6 +1,6 @@
-# Flux Sales Engagement 2.0 — UI/UX Specification
+# EnriqueceAI — UI/UX Specification
 
-This document defines the user experience goals, information architecture, user flows, and visual design specifications for Flux Sales Engagement 2.0. It serves as the foundation for visual design and frontend development, ensuring a cohesive and user-centered experience.
+This document defines the user experience goals, information architecture, user flows, and visual design specifications for EnriqueceAI. It serves as the foundation for visual design and frontend development, ensuring a cohesive and user-centered experience.
 
 ---
 
@@ -262,7 +262,7 @@ graph TD
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ [Logo Flux]  Dashboard          🔔  Carolina ▾  [Org: Acme Co] │
+│ [Logo EnriqueceAI]  Dashboard          🔔  Carolina ▾  [Org: Acme Co] │
 ├────────┬────────────────────────────────────────────────────────┤
 │        │                                                        │
 │ 📊     │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │

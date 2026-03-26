@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Flux** is a B2B Sales Engagement platform for Brazilian sales teams. It manages leads (identified by CNPJ), multi-channel outreach cadences (email + WhatsApp), AI-powered message generation, CRM integrations, and billing via Stripe.
+**EnriqueceAI** is a B2B Sales Engagement platform for Brazilian sales teams. It manages leads (identified by CNPJ), multi-channel outreach cadences (email + WhatsApp), AI-powered message generation, CRM integrations, and billing via Stripe.
 
 ## Tech Stack
 

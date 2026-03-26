@@ -1,4 +1,4 @@
-# Competitive Intelligence Report — Flux Sales Engagement 2.0
+# Competitive Intelligence Report — EnriqueceAI
 
 **Prepared by:** Atlas (Analyst) | **Date:** 2026-02-18 | **Status:** Complete
 
@@ -222,7 +222,7 @@ A Meetime (agora parte do ecossistema Sankhya) pode acelerar features de IA e Wh
 
 ## 2. Feature Comparison Matrix
 
-| Feature | **Flux (Plan)** | **Meetime** | **Exact Spotter** | **Apollo.io** | **Lemlist** |
+| Feature | **EnriqueceAI (Plan)** | **Meetime** | **Exact Spotter** | **Apollo.io** | **Lemlist** |
 |---------|:-:|:-:|:-:|:-:|:-:|
 | **Cadências Email** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Cadências WhatsApp** | ✅ Nativo | ⚠️ Básico | ✅ Integrado | ❌ | ❌ |
@@ -253,7 +253,7 @@ A Meetime (agora parte do ecossistema Sankhya) pode acelerar features de IA e Wh
 
 | Plataforma | Plano Base | Por Usuário/mês | Implementação | Moeda |
 |------------|-----------|-----------------|---------------|-------|
-| **Flux (Plan)** | 3 SDRs + 1 gerente | + R$/adicional (TBD) | Sem custo | BRL |
+| **EnriqueceAI (Plan)** | 3 SDRs + 1 gerente | + R$/adicional (TBD) | Sem custo | BRL |
 | **Meetime** | Não público | ~R$200-400 (estimativa) | Não público | BRL |
 | **Exact Spotter** | 4 usuários (não público) | R$211/adicional | R$5.000 obrigatório | BRL |
 | **Apollo.io** | Free / $49/user | $49-119/user | Sem custo | USD |
@@ -261,7 +261,7 @@ A Meetime (agora parte do ecossistema Sankhya) pode acelerar features de IA e Wh
 | **Outreach** | Enterprise | ~$100+/user (estimativa) | Custom | USD |
 | **Salesloft** | Enterprise | ~$100+/user (estimativa) | Custom | USD |
 
-### Recomendação de Pricing para Flux
+### Recomendação de Pricing para EnriqueceAI
 
 Baseado no benchmark:
 - **Starter:** R$149/mês base (3 SDRs + 1 gerente) + R$49/usuário adicional
@@ -292,7 +292,7 @@ Baseado no benchmark:
 | **Empresas B2B com time comercial** | ~500.000-800.000 | Estimativa (PME + Mid-market com vendas ativas) |
 | **Empresas com SDR (2-50 reps)** | ~50.000-100.000 | Estimativa conservadora (10-15% do B2B ativo) |
 | **TAM Brasil (Sales Engagement)** | ~R$500M-1B/ano | 50-100k empresas × R$500-1000/mês médio |
-| **SAM (Startups + PME + Mid-market)** | ~R$200-400M/ano | Foco no ICP do Flux |
+| **SAM (Startups + PME + Mid-market)** | ~R$200-400M/ano | Foco no ICP do EnriqueceAI |
 | **SOM (capturável em 3 anos)** | ~R$5-15M/ano | 1-3% do SAM com execução agressiva |
 
 ### Tendências Relevantes
@@ -331,7 +331,7 @@ Baseado no benchmark:
 - **Primeiro contato:** Obrigatoriamente via Template Message (não pode ser mensagem livre)
 - **Rate limits:** Existem limites de envio que escalam conforme qualidade da conta
 
-### Custo Estimado para Flux
+### Custo Estimado para EnriqueceAI
 
 | Cenário | Volume/mês | Custo Estimado |
 |---------|-----------|---------------|
@@ -339,7 +339,7 @@ Baseado no benchmark:
 | PME (5 SDRs) | 2.500 mensagens marketing | ~R$875/mês |
 | Mid-market (20 SDRs) | 10.000 mensagens marketing | ~R$3.500/mês |
 
-**Implicação para Flux:** O custo de WhatsApp API é significativo e deve ser repassado ao cliente ou incluído no plano. Sugestão: créditos de WhatsApp incluídos por plano, com cobrança adicional por excedente.
+**Implicação para EnriqueceAI:** O custo de WhatsApp API é significativo e deve ser repassado ao cliente ou incluído no plano. Sugestão: créditos de WhatsApp incluídos por plano, com cobrança adicional por excedente.
 
 **Sources:** [WhatsApp Business Pricing](https://business.whatsapp.com/products/platform-pricing?lang=pt_BR) | [Zydon](https://www.zydon.com.br/blog/custos-da-api-whatsapp-business-para-vendas-b2b-no-brasil) | [Aspa Chat](https://aspa.chat/blog/whatsapp-business-api-oficial-custos-funcionamento-limites-brasil) | [JetChat](https://jetchat.com.br/whatsapp-business-api-e-cloud/blog-custos-whatsapp-business-api-precificacao-2025/) | [SleekFlow](https://sleekflow.io/pt-br/blog/atualizacoes-de-precos-whatsapp-business-api)
 
@@ -357,7 +357,7 @@ Baseado no benchmark:
 | **CPF.CNPJ** | Comercial | Dados cadastrais + score Serasa + análise de crédito | Sob consulta | ✅ REST API |
 | **Serasa Experian** | Comercial | Score, risco, dados financeiros | Premium (alto custo) | ✅ REST API |
 
-### Estratégia Recomendada para Flux (Enrichment em Camadas)
+### Estratégia Recomendada para EnriqueceAI (Enrichment em Camadas)
 
 1. **Camada Gratuita (básica):** CNPJ.ws ou ReceitaWS para dados cadastrais (razão social, CNAE, endereço, porte, situação)
 2. **Camada Paga (contato):** Lemit para emails, telefones validados, sócios, faturamento estimado
@@ -369,7 +369,7 @@ Baseado no benchmark:
 
 ---
 
-## 7. SWOT Analysis — Flux vs Mercado
+## 7. SWOT Analysis — EnriqueceAI vs Mercado
 
 ### Strengths (Forças)
 
@@ -417,9 +417,9 @@ Baseado no benchmark:
 
 **Tagline:** "Prospecção inteligente com IA e WhatsApp nativo"
 
-**Positioning Statement:** Flux é a plataforma de Sales Engagement brasileira para times de SDR que querem prospectar com mais inteligência — com enriquecimento automático via CNPJ, geração de mensagens com IA e cadências nativas em WhatsApp e Email.
+**Positioning Statement:** EnriqueceAI é a plataforma de Sales Engagement brasileira para times de SDR que querem prospectar com mais inteligência — com enriquecimento automático via CNPJ, geração de mensagens com IA e cadências nativas em WhatsApp e Email.
 
-**Diferenciação vs Meetime:** "Meetime para quem prospecta por telefone. Flux para quem prospecta por WhatsApp."
+**Diferenciação vs Meetime:** "Meetime para quem prospecta por telefone. EnriqueceAI para quem prospecta por WhatsApp."
 
 ### 8.2 Features Prioritárias para Diferenciação
 

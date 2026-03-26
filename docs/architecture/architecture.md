@@ -1,4 +1,4 @@
-# Flux Sales Engagement 2.0 — Architecture Document
+# EnriqueceAI — Architecture Document
 
 > **Version:** 1.0 | **Date:** 2026-02-19 | **Author:** Aria (Architect)
 > **Status:** Draft | **Preset:** nextjs-react v1.0.0
@@ -34,7 +34,7 @@
 
 ### Project Overview
 
-**Flux Sales Engagement 2.0** é uma plataforma brasileira de sales engagement focada em SDRs/BDRs de empresas B2B (Startups, PMEs e Mid-market). A plataforma combina enriquecimento automático de leads via CNPJ, geração de mensagens com IA (Claude API), cadências omnichannel (WhatsApp + Email) e integrações com CRMs existentes.
+**EnriqueceAI** é uma plataforma brasileira de sales engagement focada em SDRs/BDRs de empresas B2B (Startups, PMEs e Mid-market). A plataforma combina enriquecimento automático de leads via CNPJ, geração de mensagens com IA (Claude API), cadências omnichannel (WhatsApp + Email) e integrações com CRMs existentes.
 
 ### Project Type
 
@@ -63,7 +63,7 @@
 
 ### Technical Summary
 
-Flux é uma aplicação web fullstack construída com **Next.js 16+** (App Router) hospedada na **Vercel**, utilizando **Supabase Cloud** como Backend-as-a-Service (BaaS). A arquitetura elimina a necessidade de um servidor backend tradicional — toda a lógica de negócio roda via Server Actions (mutações), API Routes (webhooks), e Edge Functions (processamento assíncrono).
+EnriqueceAI é uma aplicação web fullstack construída com **Next.js 16+** (App Router) hospedada na **Vercel**, utilizando **Supabase Cloud** como Backend-as-a-Service (BaaS). A arquitetura elimina a necessidade de um servidor backend tradicional — toda a lógica de negócio roda via Server Actions (mutações), API Routes (webhooks), e Edge Functions (processamento assíncrono).
 
 ### Architecture Style
 
@@ -2499,7 +2499,7 @@ const ROLE_PERMISSIONS: Record<MemberRole, Permission[]> = {
 ## 12. Unified Project Structure
 
 ```
-flux/
+enriqueceai/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                    # Test + lint + typecheck

@@ -10,7 +10,7 @@
 
 ## Epic Goal
 
-Elevar os relatórios e estatísticas do Flux de funcional para profissional, permitindo que managers escolham períodos customizados, comparem performance entre períodos, exportem relatórios em PDF, façam drill-down de métricas agregadas para dados granulares, e tenham uma experiência de filtros unificada entre Reports e Statistics.
+Elevar os relatórios e estatísticas do EnriqueceAI de funcional para profissional, permitindo que managers escolham períodos customizados, comparem performance entre períodos, exportem relatórios em PDF, façam drill-down de métricas agregadas para dados granulares, e tenham uma experiência de filtros unificada entre Reports e Statistics.
 
 ## Existing System Context
 

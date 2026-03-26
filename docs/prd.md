@@ -1,4 +1,4 @@
-# Flux Sales Engagement 2.0 — Product Requirements Document (PRD)
+# EnriqueceAI — Product Requirements Document (PRD)
 
 ## Goals and Background Context
 
@@ -15,7 +15,7 @@
 
 O mercado brasileiro de Sales Engagement é dominado pela Meetime, que atende bem operações tradicionais de outbound por email e telefone. No entanto, a realidade do vendedor B2B brasileiro mudou: WhatsApp se tornou o canal principal de comunicação comercial, e times menores (2-50 reps) precisam de ferramentas que maximizem a produtividade individual sem exigir processos complexos.
 
-A Flux Sales Engagement 2.0 nasce para preencher esse gap — uma plataforma com IA embarcada que enriquece leads automaticamente via CNPJ, gera mensagens personalizadas para cada canal, e orquestra cadências simples mas eficazes. O foco no MVP é demonstrar valor imediato através de enriquecimento em massa + dashboard inteligente, evoluindo para cadências automatizadas e geração com IA nas fases seguintes.
+A EnriqueceAI nasce para preencher esse gap — uma plataforma com IA embarcada que enriquece leads automaticamente via CNPJ, gera mensagens personalizadas para cada canal, e orquestra cadências simples mas eficazes. O foco no MVP é demonstrar valor imediato através de enriquecimento em massa + dashboard inteligente, evoluindo para cadências automatizadas e geração com IA nas fases seguintes.
 
 ### Change Log
 
@@ -32,11 +32,11 @@ A Flux Sales Engagement 2.0 nasce para preencher esse gap — uma plataforma com
 
 ### Market Landscape
 
-O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025), com projeção de USD $25-36 bilhões até 2033 (CAGR 13-16%). No Brasil, o TAM estimado é de R$500M-1B/ano, com SAM de R$200-400M/ano para o ICP do Flux (Startups, PMEs e Mid-market B2B).
+O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025), com projeção de USD $25-36 bilhões até 2033 (CAGR 13-16%). No Brasil, o TAM estimado é de R$500M-1B/ano, com SAM de R$200-400M/ano para o ICP do EnriqueceAI (Startups, PMEs e Mid-market B2B).
 
 ### Competitive Positioning
 
-| Dimensão | **Flux** | **Meetime** | **Exact Spotter** | **Apollo.io** |
+| Dimensão | **EnriqueceAI** | **Meetime** | **Exact Spotter** | **Apollo.io** |
 |----------|:-:|:-:|:-:|:-:|
 | WhatsApp Nativo | ✅ 1st class | ⚠️ Básico | ✅ Integrado | ❌ |
 | IA Geração de Mensagens | ✅ | ❌ | ❌ | ⚠️ Básico |
@@ -56,7 +56,7 @@ O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025
 
 ### CNPJ Enrichment Strategy (Camadas)
 
-| Camada | Provider | Dados | Custo | Plano Flux |
+| Camada | Provider | Dados | Custo | Plano EnriqueceAI |
 |--------|----------|-------|-------|-----------|
 | **Básica** | CNPJ.ws / ReceitaWS | Razão social, CNAE, endereço, porte, situação | Gratuito (rate limited) | Starter |
 | **Contato** | Lemit | Emails, telefones validados, sócios, faturamento | Sob consulta (pré/pós-pago) | Pro |
@@ -84,7 +84,7 @@ O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025
 
 ### Success Metrics & KPIs
 
-| KPI | Baseline (Mercado) | Meta Flux (12 meses) |
+| KPI | Baseline (Mercado) | Meta EnriqueceAI (12 meses) |
 |-----|-------------------|---------------------|
 | Conversão lead → reunião | 5-8% (média BR) | 12-15% (com IA + WhatsApp) |
 | Produtividade SDR (leads/dia) | 30-50 | 80-120 (com enrichment + IA) |
@@ -176,7 +176,7 @@ Web Responsive com prioridade desktop — SDRs trabalham primariamente em deskto
 Monorepo com Next.js — frontend e API routes no mesmo projeto. Supabase como backend-as-a-service elimina a necessidade de um serviço backend separado.
 
 ```
-flux/
+enriqueceai/
 ├── src/
 │   ├── app/            # Next.js App Router (pages, layouts)
 │   ├── components/     # UI components (shadcn/ui)
@@ -701,7 +701,7 @@ flux/
 
 > As a **SDR**,
 > I want to schedule meetings directly from the platform to my Google Calendar,
-> so that I convert leads to meetings without leaving Flux.
+> so that I convert leads to meetings without leaving EnriqueceAI.
 
 **Acceptance Criteria:**
 
@@ -821,8 +821,8 @@ flux/
 
 ### UX Expert Prompt
 
-> @ux-design-expert — Revise o PRD em `docs/prd.md` para o projeto Flux Sales Engagement 2.0. Foco em: (1) validar as 10 core screens propostas e propor wireframes low-fidelity, (2) definir o design system base (paleta azul/roxo, tipografia Inter, ícones Lucide, componentes shadcn/ui), (3) mapear os user flows críticos: importação de leads, criação de cadência, geração de mensagem com IA, (4) garantir WCAG AA compliance. Output: `docs/architecture/frontend-spec.md`.
+> @ux-design-expert — Revise o PRD em `docs/prd.md` para o projeto EnriqueceAI. Foco em: (1) validar as 10 core screens propostas e propor wireframes low-fidelity, (2) definir o design system base (paleta azul/roxo, tipografia Inter, ícones Lucide, componentes shadcn/ui), (3) mapear os user flows críticos: importação de leads, criação de cadência, geração de mensagem com IA, (4) garantir WCAG AA compliance. Output: `docs/architecture/frontend-spec.md`.
 
 ### Architect Prompt
 
-> @architect — Revise o PRD em `docs/prd.md` para o projeto Flux Sales Engagement 2.0. Stack: Next.js (App Router) + Supabase + shadcn/ui + Tailwind. Foco em: (1) criar o documento de arquitetura com ER diagram, (2) detalhar a estratégia de multi-tenancy com RLS, (3) definir a arquitetura de integrações (Lemit, WhatsApp Business API, Gmail API, CRMs, Claude API), (4) planejar a estratégia de filas e jobs assíncronos (Edge Functions + pg_cron), (5) definir padrões de código e estrutura de projeto. Output: `docs/architecture/architecture.md`.
+> @architect — Revise o PRD em `docs/prd.md` para o projeto EnriqueceAI. Stack: Next.js (App Router) + Supabase + shadcn/ui + Tailwind. Foco em: (1) criar o documento de arquitetura com ER diagram, (2) detalhar a estratégia de multi-tenancy com RLS, (3) definir a arquitetura de integrações (Lemit, WhatsApp Business API, Gmail API, CRMs, Claude API), (4) planejar a estratégia de filas e jobs assíncronos (Edge Functions + pg_cron), (5) definir padrões de código e estrutura de projeto. Output: `docs/architecture/architecture.md`.

@@ -44,7 +44,7 @@
 
 > As a **SDR**,
 > I want to schedule meetings directly from the platform to my Google Calendar,
-> so that I convert leads to meetings without leaving Flux.
+> so that I convert leads to meetings without leaving EnriqueceAI.
 
 **Acceptance Criteria:**
 

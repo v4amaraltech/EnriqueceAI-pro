@@ -11,7 +11,7 @@
 
 ## Epic Goal
 
-Replicar 100% dos fluxos e layout do Meetime Flow no Flux, com design system próprio (cores Flux), transformando o Flux em uma plataforma de Sales Engagement equivalente ao Meetime para equipes B2B brasileiras.
+Replicar 100% dos fluxos e layout do Meetime Flow no EnriqueceAI, com design system próprio (cores EnriqueceAI), transformando o EnriqueceAI em uma plataforma de Sales Engagement equivalente ao Meetime para equipes B2B brasileiras.
 
 ## Existing System Context
 
@@ -51,12 +51,12 @@ Todas as stories seguem o padrão CodeRabbit self-healing:
 
 **Executor:** @dev | **Quality Gate:** @architect + CodeRabbit | **Points:** 8
 
-**Objetivo:** Trocar a navegação lateral (sidebar) do Flux para uma **top bar** horizontal idêntica ao Meetime.
+**Objetivo:** Trocar a navegação lateral (sidebar) do EnriqueceAI para uma **top bar** horizontal idêntica ao Meetime.
 
 **Meetime Reference:** Screenshots 1-2
 
 **Layout da Top Bar:**
-- Logo Flux (esquerda)
+- Logo EnriqueceAI (esquerda)
 - Menu principal: **Dashboard** | **Prospecção** ▼ | **Ligações** ▼ | **Estatísticas** ▼
 - Direita: Notificações (bell), Help (?), Avatar do usuário ▼
 - Sub-bar: "Ligar" button, "Usuário" link
@@ -417,7 +417,7 @@ Then posso arrastar um step de pesquisa para a timeline
 
 **Meetime Reference:** Screenshots 9, 10
 
-**Nota:** O Flux já possui `ActivityExecutionSheet.tsx` com split view parcial. Esta story evolui o existente.
+**Nota:** O EnriqueceAI já possui `ActivityExecutionSheet.tsx` com split view parcial. Esta story evolui o existente.
 
 **Painel Esquerdo (Lead Info):**
 - Avatar + nome do lead + empresa
@@ -892,7 +892,7 @@ Wave 4: (depende de Wave 1-2 concluídas)
 
 - [ ] Todas as 17 stories completed com AC met
 - [ ] Navegação, dashboard, cadências, execução, leads, ajustes, ligações, estatísticas replicam o Meetime
-- [ ] Design system Flux (cores próprias, não verde Meetime)
+- [ ] Design system EnriqueceAI (cores próprias, não verde Meetime)
 - [ ] Testes unitários para novas features
 - [ ] CodeRabbit: 0 CRITICAL, 0 HIGH em cada story
 - [ ] Lint + typecheck + build passando
@@ -916,7 +916,7 @@ Wave 4: (depende de Wave 1-2 concluídas)
 
 "Please develop detailed user stories for this epic. Key considerations:
 
-- This is a brownfield enhancement to Flux (Next.js 16 + Supabase + Tailwind)
+- This is a brownfield enhancement to EnriqueceAI (Next.js 16 + Supabase + Tailwind)
 - Integration points: existing auth, leads, cadences, activities, dashboard features
 - Follow existing feature module pattern (`src/features/{name}/`)
 - Server Actions with `ActionResult<T>` for all mutations
@@ -926,6 +926,6 @@ Wave 4: (depende de Wave 1-2 concluídas)
 - Stories already have AC, IN/OUT, and points — SM should add technical details and Given/When/Then where still using checkboxes
 - Total: 17 stories, 94 story points, 4 waves
 
-The epic should maintain system integrity while transforming Flux into a Meetime-equivalent Sales Engagement platform."
+The epic should maintain system integrity while transforming EnriqueceAI into a Meetime-equivalent Sales Engagement platform."
 
 — Pax, equilibrando prioridades 🎯

@@ -10,7 +10,7 @@
 
 ## Epic Goal
 
-Preparar o Flux para lançamento com clientes reais, garantindo que planos existam no banco, trials expirem corretamente, features sejam bloqueadas por plano, limites sejam enforced, onboarding inclua checkout, e o sistema de billing esteja completo e seguro.
+Preparar o EnriqueceAI para lançamento com clientes reais, garantindo que planos existam no banco, trials expirem corretamente, features sejam bloqueadas por plano, limites sejam enforced, onboarding inclua checkout, e o sistema de billing esteja completo e seguro.
 
 ## Existing System Context
 
@@ -398,6 +398,6 @@ Wave 2: (depende de Wave 1 concluída)
 - Trial lifecycle is critical path — users must not get permanent free access
 - Total: 7 stories, 34 story points, 2 waves
 
-The epic should ensure Flux is ready for real paying customers while maintaining system integrity."
+The epic should ensure EnriqueceAI is ready for real paying customers while maintaining system integrity."
 
 — Morgan, preparando o lançamento

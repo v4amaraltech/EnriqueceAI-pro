@@ -4,11 +4,11 @@
 
 ## Market Landscape
 
-O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025), com projeção de USD $25-36 bilhões até 2033 (CAGR 13-16%). No Brasil, o TAM estimado é de R$500M-1B/ano, com SAM de R$200-400M/ano para o ICP do Flux (Startups, PMEs e Mid-market B2B).
+O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025), com projeção de USD $25-36 bilhões até 2033 (CAGR 13-16%). No Brasil, o TAM estimado é de R$500M-1B/ano, com SAM de R$200-400M/ano para o ICP do EnriqueceAI (Startups, PMEs e Mid-market B2B).
 
 ## Competitive Positioning
 
-| Dimensão | **Flux** | **Meetime** | **Exact Spotter** | **Apollo.io** |
+| Dimensão | **EnriqueceAI** | **Meetime** | **Exact Spotter** | **Apollo.io** |
 |----------|:-:|:-:|:-:|:-:|
 | WhatsApp Nativo | ✅ 1st class | ⚠️ Básico | ✅ Integrado | ❌ |
 | IA Geração de Mensagens | ✅ | ❌ | ❌ | ⚠️ Básico |
@@ -28,7 +28,7 @@ O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025
 
 ## CNPJ Enrichment Strategy (Camadas)
 
-| Camada | Provider | Dados | Custo | Plano Flux |
+| Camada | Provider | Dados | Custo | Plano EnriqueceAI |
 |--------|----------|-------|-------|-----------|
 | **Básica** | CNPJ.ws / ReceitaWS | Razão social, CNAE, endereço, porte, situação | Gratuito (rate limited) | Starter |
 | **Contato** | Lemit | Emails, telefones validados, sócios, faturamento | Sob consulta (pré/pós-pago) | Pro |
@@ -56,7 +56,7 @@ O mercado global de Sales Engagement está avaliado em ~USD $9-10 bilhões (2025
 
 ## Success Metrics & KPIs
 
-| KPI | Baseline (Mercado) | Meta Flux (12 meses) |
+| KPI | Baseline (Mercado) | Meta EnriqueceAI (12 meses) |
 |-----|-------------------|---------------------|
 | Conversão lead → reunião | 5-8% (média BR) | 12-15% (com IA + WhatsApp) |
 | Produtividade SDR (leads/dia) | 30-50 | 80-120 (com enrichment + IA) |

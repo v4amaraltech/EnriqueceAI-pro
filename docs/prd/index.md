@@ -1,4 +1,4 @@
-# Flux Sales Engagement 2.0 — PRD Index
+# EnriqueceAI — PRD Index
 
 > Source: [`docs/prd.md`](../prd.md) | Version: 0.2 | Date: 2026-02-18
 
