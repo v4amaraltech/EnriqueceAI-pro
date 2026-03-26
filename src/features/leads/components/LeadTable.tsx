@@ -486,10 +486,10 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                   <SortIcon column="status" currentSort={currentSortBy} currentDir={currentSortDir} />
                 </button>
               </TableHead>
-              <TableHead className="w-[70px]">
+              <TableHead className="w-[70px] text-center">
                 <button
                   type="button"
-                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  className="mx-auto flex items-center font-medium hover:text-[var(--foreground)]"
                   onClick={() => handleSort('engagement_score')}
                 >
                   Engajamento
@@ -548,8 +548,10 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <LeadStatusBadge status={lead.status} variant="meetime" />
                   </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <EngagementScoreBadge score={lead.engagement_score} size={28} />
+                  <TableCell onClick={() => navigateToLead(lead.id)} className="text-center">
+                    <div className="flex justify-center">
+                      <EngagementScoreBadge score={lead.engagement_score} size={28} />
+                    </div>
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <div className="flex items-center gap-1.5">
