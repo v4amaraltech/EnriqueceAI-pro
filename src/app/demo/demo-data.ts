@@ -287,6 +287,7 @@ export const enrichedLead: LeadInfoPanelData = {
   website: 'https://technova.com.br',
   custom_field_values: null,
   assigned_to: null,
+  created_at: '2026-03-01T10:00:00.000Z',
 };
 
 // ---------------------------------------------------------------------------

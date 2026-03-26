@@ -41,6 +41,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   text: 'Texto',
   textarea: 'Texto Longo',
   number: 'Número',
+  currency: 'Valor',
   date: 'Data',
   datetime: 'Data e Hora',
   select: 'Seleção',

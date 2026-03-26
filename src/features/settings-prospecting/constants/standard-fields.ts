@@ -1,7 +1,7 @@
 export interface StandardFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
+  type: 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select';
   defaultOptions?: string[];
   /** When true, options are loaded dynamically (e.g. org members) and cannot be edited here. */
   dynamicOptions?: boolean;
@@ -36,4 +36,5 @@ export const STANDARD_FIELDS: StandardFieldDef[] = [
   { key: 'instagram', label: 'Instagram', type: 'text' },
   { key: 'linkedin', label: 'LinkedIn', type: 'text' },
   { key: 'website', label: 'Website', type: 'text' },
+  { key: 'created_at', label: 'Data de Inscrição', type: 'date' },
 ];

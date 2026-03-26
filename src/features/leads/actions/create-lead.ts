@@ -79,6 +79,24 @@ export async function createLead(
     return { success: false, error: 'Responsável não pertence à organização' };
   }
 
+  // Check duplicate by email within same org
+  if (parsed.data.email) {
+    const { data: existingLead } = await from(supabase, 'leads')
+      .select('id, email, first_name, last_name')
+      .eq('org_id', orgId)
+      .eq('email', parsed.data.email)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (existingLead) {
+      const name = [existingLead.first_name, existingLead.last_name].filter(Boolean).join(' ');
+      return {
+        success: false,
+        error: `Já existe um lead com o email ${parsed.data.email}${name ? ` (${name})` : ''}`,
+      };
+    }
+  }
+
   // 1. Create the lead
   const { data: lead, error } = await from(supabase, 'leads')
     .insert({

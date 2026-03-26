@@ -30,6 +30,7 @@ export interface LeadInfoPanelData {
   website: string | null;
   custom_field_values: Record<string, string> | null;
   assigned_to: string | null;
+  created_at: string | null;
 }
 
 export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
@@ -61,6 +62,7 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     website: lead.website,
     custom_field_values: lead.custom_field_values,
     assigned_to: lead.assigned_to,
+    created_at: lead.created_at,
   };
 }
 
@@ -93,5 +95,6 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     website: lead.website,
     custom_field_values: (lead as ActivityLead & { custom_field_values?: Record<string, string> | null }).custom_field_values ?? null,
     assigned_to: (lead as ActivityLead & { assigned_to?: string | null }).assigned_to ?? null,
+    created_at: (lead as ActivityLead & { created_at?: string | null }).created_at ?? null,
   };
 }

@@ -41,6 +41,7 @@ import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
 
+import { CurrencyInput, formatBRL } from './CurrencyInput';
 import { LeadNotes } from './LeadNotes';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
@@ -490,6 +491,12 @@ export function LeadInfoPanel({
                   {isFieldVisible('razao_social') && data.razao_social && <MeetimeFieldRow label="Razão Social" value={data.razao_social} />}
                   {isFieldVisible('porte') && data.porte && <MeetimeFieldRow label="Porte" value={data.porte} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
+                  {isFieldVisible('created_at') && (
+                    <MeetimeFieldRow
+                      label="Data de Inscrição"
+                      value={data.created_at ? new Date(data.created_at).toLocaleDateString('pt-BR') : '—'}
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -676,6 +683,15 @@ export function LeadInfoPanel({
                             className="w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] min-h-[80px] resize-y"
                             placeholder={cf.field_name}
                           />
+                        ) : cf.field_type === 'currency' ? (
+                          <CurrencyInput
+                            value={editCustomFieldValues[cf.id] ?? ''}
+                            onChange={(raw) =>
+                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: raw }))
+                            }
+                            placeholder={cf.field_name}
+                            className="h-8 text-sm"
+                          />
                         ) : (
                           <Input
                             value={editCustomFieldValues[cf.id] ?? ''}
@@ -694,7 +710,11 @@ export function LeadInfoPanel({
                       <MeetimeFieldRow
                         key={cf.id}
                         label={cf.field_name}
-                        value={data.custom_field_values?.[cf.id] || '—'}
+                        value={
+                          cf.field_type === 'currency'
+                            ? formatBRL(data.custom_field_values?.[cf.id])
+                            : data.custom_field_values?.[cf.id] || '—'
+                        }
                       />
                     ))
                   )}

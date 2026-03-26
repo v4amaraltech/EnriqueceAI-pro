@@ -90,6 +90,15 @@ function makeLeadCountChain(count: number) {
   return { select: selectMock };
 }
 
+function makeDuplicateCheckChain(existing: { id: string; first_name: string; last_name: string | null } | null) {
+  const maybeSingleMock = vi.fn().mockResolvedValue({ data: existing });
+  const isMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+  const eqEmailMock = vi.fn().mockReturnValue({ is: isMock });
+  const eqOrgMock = vi.fn().mockReturnValue({ eq: eqEmailMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
+  return { select: selectMock };
+}
+
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const CADENCE_UUID = '660e8400-e29b-41d4-a716-446655440000';
 
@@ -119,6 +128,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null); // skip limit check
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -140,6 +150,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -167,8 +178,9 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
-      if (callCount === 4) return makeInsertChain('new-lead-id');
-      // 5th call: update enrollment next_step_due
+      if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makeInsertChain('new-lead-id');
+      // 6th call: update enrollment next_step_due
       return { update: updateMock };
     });
 
@@ -212,6 +224,25 @@ describe('createLead', () => {
     }
   });
 
+  it('should return error when lead with same email already exists', async () => {
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
+      return makeDuplicateCheckChain({ id: 'existing-id', first_name: 'Maria', last_name: 'Santos' });
+    });
+
+    const result = await createLead(validInput);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('Já existe um lead com o email');
+      expect(result.error).toContain('Maria Santos');
+    }
+  });
+
   it('should return error for invalid input (missing required fields)', async () => {
     const result = await createLead({ assigned_to: VALID_UUID });
 
@@ -230,6 +261,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -250,6 +282,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -265,6 +298,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain(null, { message: 'Insert failed' });
     });
 
@@ -304,6 +338,7 @@ describe('createLead', () => {
       if (callCount === 3) return makePlanChain(100);
       if (callCount === 4) return makeLeadCountChain(50); // under limit
       if (callCount === 5) return makeAssigneeChain(true);
+      if (callCount === 6) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -319,6 +354,7 @@ describe('createLead', () => {
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
       return makeInsertChain('new-lead-id');
     });
 
@@ -350,6 +386,7 @@ describe('createLead', () => {
         if (callCount === 3) return makePlanChain(100);
         if (callCount === 4) return makeLeadCountChain(79);
         if (callCount === 5) return makeAssigneeChain(true);
+        if (callCount === 6) return makeDuplicateCheckChain(null);
         return makeInsertChain('new-lead-id');
       });
 
@@ -381,6 +418,7 @@ describe('createLead', () => {
         if (callCount === 3) return makePlanChain(100);
         if (callCount === 4) return makeLeadCountChain(50);
         if (callCount === 5) return makeAssigneeChain(true);
+        if (callCount === 6) return makeDuplicateCheckChain(null);
         return makeInsertChain('new-lead-id');
       });
 
@@ -400,6 +438,7 @@ describe('createLead', () => {
         if (callCount === 3) return makePlanChain(100);
         if (callCount === 4) return makeLeadCountChain(85);
         if (callCount === 5) return makeAssigneeChain(true);
+        if (callCount === 6) return makeDuplicateCheckChain(null);
         return makeInsertChain('new-lead-id');
       });
 
@@ -419,6 +458,7 @@ describe('createLead', () => {
         if (callCount === 3) return makePlanChain(100);
         if (callCount === 4) return makeLeadCountChain(79);
         if (callCount === 5) return makeAssigneeChain(true);
+        if (callCount === 6) return makeDuplicateCheckChain(null);
         return makeInsertChain('new-lead-id');
       });
 
@@ -441,6 +481,7 @@ describe('createLead', () => {
         if (callCount === 1) return makeOrgMemberChain('org-1');
         if (callCount === 2) return makeSubscriptionChain(null);
         if (callCount === 3) return makeAssigneeChain(true);
+        if (callCount === 4) return makeDuplicateCheckChain(null);
         return makeInsertChain('new-lead-id');
       });
 

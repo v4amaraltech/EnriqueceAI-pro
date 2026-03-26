@@ -40,6 +40,7 @@ import type { CustomFieldRow } from '@/features/settings-prospecting/types/custo
 import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
 import type { CrmProvider } from '@/features/integrations/types/crm';
 
+import { CurrencyInput } from './CurrencyInput';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { updateLead } from '../actions/update-lead';
@@ -667,6 +668,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                         value={wonFieldValues[field.key] ?? ''}
                         onChange={(e) => setWonFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                         className="w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] min-h-[80px] resize-y"
+                      />
+                    ) : field.fieldType === 'currency' ? (
+                      <CurrencyInput
+                        value={wonFieldValues[field.key] ?? ''}
+                        onChange={(raw) => setWonFieldValues((prev) => ({ ...prev, [field.key]: raw }))}
+                        placeholder={field.label}
                       />
                     ) : (
                       <Input

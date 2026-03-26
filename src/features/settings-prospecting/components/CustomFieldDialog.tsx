@@ -27,12 +27,13 @@ const FIELD_TYPES = [
   { value: 'text', label: 'Texto' },
   { value: 'textarea', label: 'Texto Longo' },
   { value: 'number', label: 'Número' },
+  { value: 'currency', label: 'Valor' },
   { value: 'date', label: 'Data' },
   { value: 'datetime', label: 'Data e Hora' },
   { value: 'select', label: 'Seleção' },
 ] as const;
 
-type FieldType = 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
+type FieldType = 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select';
 
 export interface CustomFieldSettings {
   is_visible: boolean;
