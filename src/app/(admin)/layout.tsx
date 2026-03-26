@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes';
 
 import { requireAdmin } from '@/lib/auth/require-admin';
 
+import { AdminNav } from '@/features/admin/components/AdminNav';
 import { Toaster } from '@/shared/components/ui/sonner';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <div className="flex min-h-screen flex-col">
         <header className="flex items-center justify-between border-b px-6 py-3">
-          <span className="text-sm font-semibold tracking-tight">Enriquece AI — Admin</span>
+          <div className="flex items-center gap-6">
+            <span className="text-sm font-semibold tracking-tight">Enriquece AI — Admin</span>
+            <AdminNav />
+          </div>
           <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
             ← Voltar ao app
           </Link>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { ChevronDown, ChevronRight, Globe, Loader2, Minus, Plus, Search, Settings2, TestTube2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Globe, Loader2, Minus, Plus, Search, TestTube2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -184,9 +184,11 @@ export function WebhookEndpointsManager() {
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Novo
           </Button>
-          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
-          </Button>
+          {expanded && (
+            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setExpanded(false); }}>
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
