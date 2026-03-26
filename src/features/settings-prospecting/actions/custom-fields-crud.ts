@@ -32,7 +32,7 @@ export async function listCustomFields(): Promise<ActionResult<CustomFieldRow[]>
 
 export async function addCustomField(
   fieldName: string,
-  fieldType: 'text' | 'number' | 'date' | 'select',
+  fieldType: CustomFieldRow['field_type'],
   options?: string[],
   settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
@@ -81,7 +81,7 @@ export async function addCustomField(
 export async function updateCustomField(
   id: string,
   fieldName: string,
-  fieldType: 'text' | 'number' | 'date' | 'select',
+  fieldType: CustomFieldRow['field_type'],
   options?: string[],
   settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {

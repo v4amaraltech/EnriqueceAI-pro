@@ -25,12 +25,14 @@ import { Switch } from '@/shared/components/ui/switch';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Texto' },
+  { value: 'textarea', label: 'Texto Longo' },
   { value: 'number', label: 'Número' },
   { value: 'date', label: 'Data' },
+  { value: 'datetime', label: 'Data e Hora' },
   { value: 'select', label: 'Seleção' },
 ] as const;
 
-type FieldType = 'text' | 'number' | 'date' | 'select';
+type FieldType = 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
 
 export interface CustomFieldSettings {
   is_visible: boolean;

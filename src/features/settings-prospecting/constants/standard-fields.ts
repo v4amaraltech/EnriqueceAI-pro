@@ -1,7 +1,7 @@
 export interface StandardFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'date' | 'select';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
   defaultOptions?: string[];
   /** When true, options are loaded dynamically (e.g. org members) and cannot be edited here. */
   dynamicOptions?: boolean;

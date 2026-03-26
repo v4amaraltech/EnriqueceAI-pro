@@ -39,8 +39,10 @@ import { StandardFieldOptionsDialog } from './StandardFieldOptionsDialog';
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   text: 'Texto',
+  textarea: 'Texto Longo',
   number: 'Número',
   date: 'Data',
+  datetime: 'Data e Hora',
   select: 'Seleção',
 };
 
@@ -185,7 +187,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
     });
   }
 
-  function handleAddField(name: string, type: 'text' | 'number' | 'date' | 'select', options: string[] | undefined, settings: CustomFieldSettings) {
+  function handleAddField(name: string, type: CustomFieldRow['field_type'], options: string[] | undefined, settings: CustomFieldSettings) {
     startTransition(async () => {
       const result = await addCustomField(name, type, options, settings);
       if (result.success) {
@@ -198,7 +200,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
     });
   }
 
-  function handleEditField(name: string, type: 'text' | 'number' | 'date' | 'select', options: string[] | undefined, settings: CustomFieldSettings) {
+  function handleEditField(name: string, type: CustomFieldRow['field_type'], options: string[] | undefined, settings: CustomFieldSettings) {
     if (!editingField) return;
     startTransition(async () => {
       const result = await updateCustomField(editingField.id, name, type, options, settings);

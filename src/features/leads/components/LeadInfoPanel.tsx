@@ -667,6 +667,15 @@ export function LeadInfoPanel({
                               ))}
                             </SelectContent>
                           </Select>
+                        ) : cf.field_type === 'textarea' ? (
+                          <textarea
+                            value={editCustomFieldValues[cf.id] ?? ''}
+                            onChange={(e) =>
+                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
+                            }
+                            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] min-h-[80px] resize-y"
+                            placeholder={cf.field_name}
+                          />
                         ) : (
                           <Input
                             value={editCustomFieldValues[cf.id] ?? ''}
@@ -674,7 +683,7 @@ export function LeadInfoPanel({
                               setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
                             }
                             className="h-8 text-sm"
-                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'datetime' ? 'datetime-local' : 'text'}
                             placeholder={cf.field_name}
                           />
                         )}

@@ -654,6 +654,20 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                           />
                         </PopoverContent>
                       </Popover>
+                    ) : field.fieldType === 'datetime' ? (
+                      <Input
+                        type="datetime-local"
+                        placeholder={field.label}
+                        value={wonFieldValues[field.key] ?? ''}
+                        onChange={(e) => setWonFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      />
+                    ) : field.fieldType === 'textarea' ? (
+                      <textarea
+                        placeholder={field.label}
+                        value={wonFieldValues[field.key] ?? ''}
+                        onChange={(e) => setWonFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        className="w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] min-h-[80px] resize-y"
+                      />
                     ) : (
                       <Input
                         type={field.fieldType === 'number' ? 'number' : 'text'}
