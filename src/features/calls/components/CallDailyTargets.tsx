@@ -79,7 +79,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
             <thead>
               <tr className="border-b bg-[var(--muted)]/50">
                 <th className="p-3 text-left text-sm font-medium">Vendedor</th>
-                <th className="p-3 text-left text-sm font-medium">Role</th>
+                <th className="p-3 text-left text-sm font-medium">Função</th>
                 <th className="p-3 text-left text-sm font-medium">Meta Individual</th>
               </tr>
             </thead>
@@ -88,7 +88,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
                 <tr key={member.userId} className="border-b last:border-0">
                   <td className="p-3 text-sm">{member.name}</td>
                   <td className="p-3 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    {member.role === 'manager' ? 'Manager' : 'SDR'}
+                    {member.role === 'manager' ? 'Gerente' : 'SDR'}
                   </td>
                   <td className="p-3">
                     <Input
