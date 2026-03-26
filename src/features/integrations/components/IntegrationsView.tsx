@@ -487,7 +487,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                       onClick={() => handleConnectCrm(provider.id)}
                       disabled={activeCrmAction === provider.id}
                     >
-                      {activeCrmAction === provider.id ? 'Conectando...' : `Conectar ${provider.name}`}
+                      {activeCrmAction === provider.id ? 'Conectando...' : 'Conectar'}
                     </Button>
                   ) : null}
                 </div>
