@@ -221,26 +221,46 @@ export class KommoAdapter implements CRMAdapter {
     ];
 
     type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
+    const accessToken = credentials.access_token;
 
-    let leadFields: CrmFieldOption[] = [];
-    try {
-      const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
-        sub,
-        '/leads/custom_fields?limit=250',
-        credentials.access_token,
-      );
-      const fields = result._embedded?.custom_fields ?? [];
-      leadFields = fields.map((f) => ({
-        value: f.code ?? f.id.toString(),
-        label: f.name,
-        type: f.type,
-        isCustom: true,
-      }));
-    } catch (err) {
-      console.warn('[kommo] Failed to fetch lead custom fields:', err);
+    async function fetchCustomFields(entity: 'contacts' | 'leads'): Promise<CrmFieldOption[]> {
+      try {
+        const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
+          sub,
+          `/${entity}/custom_fields?limit=250`,
+          accessToken,
+        );
+        const fields = result._embedded?.custom_fields ?? [];
+        return fields
+          .filter((f) => f.code !== 'EMAIL' && f.code !== 'PHONE')
+          .map((f) => ({
+            value: f.code ?? f.id.toString(),
+            label: f.name,
+            type: f.type,
+            isCustom: true,
+          }));
+      } catch (err) {
+        console.warn(`[kommo] Failed to fetch ${entity} custom fields:`, err);
+        return [];
+      }
     }
 
-    return [...standard, ...leadFields].sort((a, b) =>
+    const [contactFields, leadFields] = await Promise.all([
+      fetchCustomFields('contacts'),
+      fetchCustomFields('leads'),
+    ]);
+
+    // Deduplicate by value (contact fields take priority)
+    const seen = new Set<string>();
+    const allCustom: CrmFieldOption[] = [];
+    for (const f of [...contactFields, ...leadFields]) {
+      if (!seen.has(f.value)) {
+        seen.add(f.value);
+        allCustom.push(f);
+      }
+    }
+
+    return [...standard, ...allCustom].sort((a, b) =>
       a.label.localeCompare(b.label),
     );
   }
