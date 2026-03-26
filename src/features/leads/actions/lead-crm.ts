@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type {
   CrmConnectionRow,
@@ -33,12 +34,19 @@ export async function fetchCrmPipelines(): Promise<
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
-    const { orgId, supabase } = auth.data;
+    const { orgId } = auth.data;
 
-    const { data: rows } = (await from(supabase, 'crm_connections')
+    // Use service role to read encrypted credentials (bypasses RLS — auth already verified above)
+    const serviceSupabase = createServiceRoleClient();
+
+    const { data: rows, error: queryError } = (await from(serviceSupabase, 'crm_connections')
       .select('*')
       .eq('org_id', orgId)
-      .eq('status', 'connected')) as { data: CrmConnectionRow[] | null };
+      .eq('status', 'connected')) as { data: CrmConnectionRow[] | null; error: { message: string } | null };
+
+    if (queryError) {
+      console.error('[fetchCrmPipelines] Query error:', queryError.message);
+    }
 
     if (!rows?.length) {
       return { success: true, data: { connections: [] } };
@@ -50,7 +58,7 @@ export async function fetchCrmPipelines(): Promise<
 
         if (connection.crm_provider === 'pipedrive') {
           const adapter = new PipedriveAdapter();
-          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
           const rawPipelines = await adapter.fetchPipelines(credentials);
           pipelines = rawPipelines.map((p) => ({
             id: p.id.toString(),
@@ -59,7 +67,7 @@ export async function fetchCrmPipelines(): Promise<
           }));
         } else if (connection.crm_provider === 'hubspot') {
           const adapter = new HubSpotAdapter();
-          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
           const rawPipelines = await adapter.fetchPipelines(credentials);
           pipelines = rawPipelines.map((p) => ({
             id: p.id,
@@ -68,7 +76,7 @@ export async function fetchCrmPipelines(): Promise<
           }));
         } else if (connection.crm_provider === 'rdstation') {
           const adapter = new RDStationAdapter();
-          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
           const rawPipelines = await adapter.fetchPipelines(credentials);
           pipelines = rawPipelines.map((p) => ({
             id: p.id,
@@ -77,7 +85,7 @@ export async function fetchCrmPipelines(): Promise<
           }));
         } else if (connection.crm_provider === 'kommo') {
           const adapter = new KommoAdapter();
-          const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+          const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
           const rawPipelines = await adapter.fetchPipelines(credentials);
           pipelines = rawPipelines.map((p) => ({
             id: p.id.toString(),
@@ -115,9 +123,11 @@ export async function fetchPipelineStages(
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
-    const { orgId, supabase } = auth.data;
+    const { orgId } = auth.data;
 
-    const { data: connection } = (await from(supabase, 'crm_connections')
+    const serviceSupabase = createServiceRoleClient();
+
+    const { data: connection } = (await from(serviceSupabase, 'crm_connections')
       .select('*')
       .eq('org_id', orgId)
       .eq('crm_provider', provider)
@@ -130,7 +140,7 @@ export async function fetchPipelineStages(
 
     if (provider === 'pipedrive') {
       const adapter = new PipedriveAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
       const rawStages = await adapter.fetchStages(credentials, Number(pipelineId));
       return {
         success: true,
@@ -142,7 +152,7 @@ export async function fetchPipelineStages(
 
     if (provider === 'hubspot') {
       const adapter = new HubSpotAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
       const rawStages = await adapter.fetchStages(credentials, pipelineId);
       return {
         success: true,
@@ -154,7 +164,7 @@ export async function fetchPipelineStages(
 
     if (provider === 'rdstation') {
       const adapter = new RDStationAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
       const rawStages = await adapter.fetchStages(credentials, pipelineId);
       return {
         success: true,
@@ -166,7 +176,7 @@ export async function fetchPipelineStages(
 
     if (provider === 'kommo') {
       const adapter = new KommoAdapter();
-      const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+      const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
       const rawStages = await adapter.fetchStages(credentials, Number(pipelineId));
       return {
         success: true,
@@ -217,7 +227,8 @@ export async function markLeadAsWon(
     // 3. Push to CRM if requested
     let dealCreated = false;
     if (crmOptions) {
-      const { data: connection } = (await from(supabase, 'crm_connections')
+      const serviceSupabase = createServiceRoleClient();
+      const { data: connection } = (await from(serviceSupabase, 'crm_connections')
         .select('*')
         .eq('org_id', orgId)
         .eq('crm_provider', crmOptions.provider)
@@ -226,7 +237,7 @@ export async function markLeadAsWon(
 
       if (connection) {
         const adapter = CRMRegistry.getAdapter(crmOptions.provider);
-        const credentials = await ensureFreshCredentials(connection, adapter, supabase);
+        const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
 
         // Fetch lead data for pushContact
         const { data: lead } = (await from(supabase, 'leads')
