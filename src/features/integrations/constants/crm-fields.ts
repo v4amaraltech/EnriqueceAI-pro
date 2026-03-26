@@ -26,6 +26,7 @@ export const APP_LEAD_FIELDS = [
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'website', label: 'Website' },
   { value: 'notes', label: 'Notas' },
+  { value: 'created_at', label: 'Data de Inscrição' },
 ] as const;
 
 export const CRM_TARGET_FIELDS: Record<
