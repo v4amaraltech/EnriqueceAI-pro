@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth/require-auth';
 
-import { UserProfileSettings } from '@/features/auth/components/UserProfileSettings';
+import { ProfileInfoForm } from '@/features/auth/components/ProfileInfoForm';
 
 export default async function ProfilePage() {
   const user = await requireAuth();
@@ -10,9 +10,8 @@ export default async function ProfilePage() {
   const avatarUrl = metadata?.avatar_url;
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold">Meu Perfil</h1>
-      <UserProfileSettings initialName={fullName} email={user.email ?? ''} avatarUrl={avatarUrl} />
+    <div className="mx-auto max-w-2xl">
+      <ProfileInfoForm initialName={fullName} email={user.email ?? ''} avatarUrl={avatarUrl} />
     </div>
   );
 }
