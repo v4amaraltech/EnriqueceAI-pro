@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
@@ -36,8 +37,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single()) as { data: MemberWithOrganization | null };
 
   // Auto-activate invited members who logged in (clicked magic link)
+  // Uses service role to bypass RLS (invited members can't read/update their own record)
   if (!memberData) {
-    const { data: invitedData } = (await supabase
+    const serviceClient = createServiceRoleClient();
+    const { data: invitedData } = (await serviceClient
       .from('organization_members')
       .select('*, organization:organizations(*)')
       .eq('user_id', user.id)
@@ -45,7 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .single()) as { data: MemberWithOrganization | null };
 
     if (invitedData) {
-      await supabase
+      await serviceClient
         .from('organization_members')
         .update({ status: 'active', accepted_at: new Date().toISOString() })
         .eq('id', invitedData.id);

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
@@ -17,9 +18,12 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
       return { success: false, error: 'Não autenticado' };
     }
 
+    // Use service role to bypass RLS — invited members can't read/update their own record
+    const serviceClient = createServiceRoleClient();
+
     // Check for pending invite matching user email
     // The invite was created with status='invited' before the user signed up
-    const { data: invites } = (await from(supabase, 'organization_members')
+    const { data: invites } = (await from(serviceClient, 'organization_members')
       .select('id, org_id')
       .eq('user_id', user.id)
       .eq('status', 'invited')) as { data: Array<{ id: string; org_id: string }> | null };
@@ -31,7 +35,7 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
     const invite = invites[0]!;
 
     // Find the auto-created org (where user is manager)
-    const { data: autoOrgMember } = (await from(supabase, 'organization_members')
+    const { data: autoOrgMember } = (await from(serviceClient, 'organization_members')
       .select('id, org_id')
       .eq('user_id', user.id)
       .eq('role', 'manager')
@@ -40,13 +44,13 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
 
     if (autoOrgMember && autoOrgMember.org_id !== invite.org_id) {
       // Delete auto-created org member record (cascade will clean up)
-      await from(supabase, 'organizations')
+      await from(serviceClient, 'organizations')
         .delete()
         .eq('id', autoOrgMember.org_id);
     }
 
     // Accept the invite
-    const { error } = await from(supabase, 'organization_members')
+    const { error } = await from(serviceClient, 'organization_members')
       .update({ status: 'active', accepted_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', invite.id);
 
