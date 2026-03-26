@@ -37,7 +37,7 @@ export function DailyGoalCard({ target, completed }: DailyGoalCardProps) {
         )}
       </div>
       <Link
-        href="/leads"
+        href="/activities"
         className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
       >
         <Rocket className="h-3.5 w-3.5" />
