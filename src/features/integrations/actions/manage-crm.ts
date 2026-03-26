@@ -74,8 +74,14 @@ export async function handleCrmCallback(
       return { success: false, error: 'Não foi possível validar a conexão com o CRM' };
     }
 
-    // Get default field mapping
-    const fieldMapping = DEFAULT_FIELD_MAPPINGS[provider];
+    // Preserve existing field mapping on reconnect, use defaults only for new connections
+    const { data: existingConn } = (await from(supabase, 'crm_connections')
+      .select('field_mapping')
+      .eq('org_id', orgId)
+      .eq('crm_provider', provider)
+      .maybeSingle()) as { data: { field_mapping: FieldMapping | null } | null };
+
+    const fieldMapping = existingConn?.field_mapping ?? DEFAULT_FIELD_MAPPINGS[provider];
 
     // Upsert connection
     const { data, error } = (await from(supabase, 'crm_connections')
