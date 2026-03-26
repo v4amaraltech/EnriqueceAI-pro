@@ -9,12 +9,18 @@ import { isEventProcessed, markEventProcessed } from '@/lib/webhooks/idempotency
 
 export const maxDuration = 30;
 
-// Limit request body size to 1MB
-export const config = {
-  api: { bodyParser: { sizeLimit: '1mb' } },
-};
+const MAX_BODY_SIZE = 1_048_576; // 1MB
 
 export async function POST(request: Request) {
+  // 0. Check body size
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return NextResponse.json(
+      { success: false, error: 'Payload excede o limite de 1MB' },
+      { status: 413 },
+    );
+  }
+
   // 1. Authenticate
   const auth = await authenticateApiKey(request);
   if (!auth) {
