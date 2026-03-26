@@ -17,7 +17,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
@@ -198,15 +200,32 @@ export function CrmFieldMappingModal({
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {appFields.map((f) => (
-                              <SelectItem
-                                key={f.value}
-                                value={f.value}
-                                disabled={usedAppFields.has(f.value) && row.appField !== f.value}
-                              >
-                                {f.label}{f.isCustom ? ' (personalizado)' : ''}
-                              </SelectItem>
-                            ))}
+                            <SelectGroup>
+                              <SelectLabel>Padrão</SelectLabel>
+                              {appFields.filter((f) => !f.isCustom).map((f) => (
+                                <SelectItem
+                                  key={f.value}
+                                  value={f.value}
+                                  disabled={usedAppFields.has(f.value) && row.appField !== f.value}
+                                >
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                            {appFields.some((f) => f.isCustom) && (
+                              <SelectGroup>
+                                <SelectLabel>Personalizado</SelectLabel>
+                                {appFields.filter((f) => f.isCustom).map((f) => (
+                                  <SelectItem
+                                    key={f.value}
+                                    value={f.value}
+                                    disabled={usedAppFields.has(f.value) && row.appField !== f.value}
+                                  >
+                                    {f.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
                           </SelectContent>
                         </Select>
                       </td>
@@ -222,11 +241,24 @@ export function CrmFieldMappingModal({
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {targetFields.map((f) => (
-                              <SelectItem key={f.value} value={f.value}>
-                                {f.label}{'isCustom' in f && f.isCustom ? ' (custom)' : ''}
-                              </SelectItem>
-                            ))}
+                            <SelectGroup>
+                              <SelectLabel>Padrão</SelectLabel>
+                              {targetFields.filter((f) => !('isCustom' in f && f.isCustom)).map((f) => (
+                                <SelectItem key={f.value} value={f.value}>
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                            {targetFields.some((f) => 'isCustom' in f && f.isCustom) && (
+                              <SelectGroup>
+                                <SelectLabel>Personalizado</SelectLabel>
+                                {targetFields.filter((f) => 'isCustom' in f && f.isCustom).map((f) => (
+                                  <SelectItem key={f.value} value={f.value}>
+                                    {f.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
                           </SelectContent>
                         </Select>
                       </td>
