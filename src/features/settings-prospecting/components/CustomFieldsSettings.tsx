@@ -189,11 +189,11 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
   }
 
   function handleAddField(name: string, type: CustomFieldRow['field_type'], options: string[] | undefined, settings: CustomFieldSettings) {
+    setDialogOpen(false);
     startTransition(async () => {
       const result = await addCustomField(name, type, options, settings);
       if (result.success) {
         setFields((prev) => [...prev, result.data]);
-        setDialogOpen(false);
         toast.success('Campo adicionado');
       } else {
         toast.error(result.error);
@@ -203,11 +203,12 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
 
   function handleEditField(name: string, type: CustomFieldRow['field_type'], options: string[] | undefined, settings: CustomFieldSettings) {
     if (!editingField) return;
+    setEditingField(null);
+    setDialogOpen(false);
     startTransition(async () => {
       const result = await updateCustomField(editingField.id, name, type, options, settings);
       if (result.success) {
         setFields((prev) => prev.map((f) => (f.id === editingField.id ? result.data : f)));
-        setEditingField(null);
         toast.success('Campo atualizado');
       } else {
         toast.error(result.error);
