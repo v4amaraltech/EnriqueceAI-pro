@@ -88,9 +88,11 @@ export function LeadInfoPanel({
     return setting?.is_visible ?? true;
   }, [standardFieldSettings]);
 
-  const assignedMemberName = initialData.assigned_to
-    ? members.find((m) => m.user_id === initialData.assigned_to)?.name ?? null
+  const assignedMember = initialData.assigned_to
+    ? members.find((m) => m.user_id === initialData.assigned_to)
     : null;
+  const assignedMemberName = assignedMember?.name
+    ?? (initialData.assigned_to ? initialData.assigned_to.slice(0, 8) : null);
 
   // Local state for lead data — survives router.refresh() in activity execution context
   const [data, setData] = useState(initialData);
