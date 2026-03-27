@@ -15,16 +15,6 @@ export interface CloserFeedbackData {
   closer_email: string;
 }
 
-const RESULT_LABELS: Record<string, string> = {
-  meeting_done: 'Reunião realizada',
-  no_show: 'Não compareceu',
-  rescheduled: 'Remarcou',
-};
-
-export function getResultLabel(result: string): string {
-  return RESULT_LABELS[result] ?? result;
-}
-
 export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<CloserFeedbackData | null>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;

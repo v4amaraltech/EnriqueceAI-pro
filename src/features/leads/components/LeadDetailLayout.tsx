@@ -52,7 +52,13 @@ import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
 import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
-import { fetchCloserFeedback, getResultLabel, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
+import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
+
+const FEEDBACK_RESULT_LABELS: Record<string, string> = {
+  meeting_done: 'Reunião realizada',
+  no_show: 'Não compareceu',
+  rescheduled: 'Remarcou',
+};
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -377,7 +383,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
             </div>
             <div>
               <p className="text-xs text-[var(--muted-foreground)]">Resultado</p>
-              <p className="font-medium">{closerFeedback.result ? getResultLabel(closerFeedback.result) : '-'}</p>
+              <p className="font-medium">{closerFeedback.result ? (FEEDBACK_RESULT_LABELS[closerFeedback.result] ?? closerFeedback.result) : '-'}</p>
             </div>
             <div>
               <p className="text-xs text-[var(--muted-foreground)]">Nota</p>
