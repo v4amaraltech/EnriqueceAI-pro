@@ -14,7 +14,7 @@ import { TimeIntervalModal } from './TimeIntervalModal';
 
 interface StatisticsViewProps {
   data: StatisticsData;
-  members: { userId: string; email: string }[];
+  members: { userId: string; email: string; name?: string }[];
 }
 
 export function StatisticsView({ data, members }: StatisticsViewProps) {
@@ -44,7 +44,7 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
     [router, searchParams, startTransition],
   );
 
-  const memberNames = new Map(members.map((m) => [m.userId, m.email.split('@')[0] ?? m.email]));
+  const memberNames = new Map(members.map((m) => [m.userId, m.name ?? m.email.split('@')[0] ?? m.email]));
 
   return (
     <div className={`space-y-6 ${isPending ? 'opacity-70' : ''}`}>
@@ -67,7 +67,7 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
             <option value="">Todos os vendedores</option>
             {members.map((m) => (
               <option key={m.userId} value={m.userId}>
-                {m.email.split('@')[0]}
+                {m.name ?? m.email.split('@')[0]}
               </option>
             ))}
           </select>

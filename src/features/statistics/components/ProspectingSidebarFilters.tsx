@@ -166,7 +166,7 @@ export function ProspectingSidebarFilters({
           <option value="">Todos os vendedores</option>
           {members.map((m) => (
             <option key={m.userId} value={m.userId}>
-              {m.email.split('@')[0]}
+              {m.name ?? m.email.split('@')[0]}
             </option>
           ))}
         </select>

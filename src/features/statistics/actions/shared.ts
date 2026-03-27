@@ -51,8 +51,8 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
 
     if (!members?.length) return [];
 
-    // Look up emails via admin client (organization_members has no email column)
-    const emailMap = new Map<string, string>();
+    // Look up emails and names via admin client (organization_members has no email/name column)
+    const userMap = new Map<string, { email: string; name?: string }>();
     try {
       const admin = createAdminSupabaseClient();
       const memberIds = new Set(members.map((m) => m.user_id));
@@ -60,7 +60,8 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
       if (usersData?.users) {
         for (const u of usersData.users) {
           if (memberIds.has(u.id)) {
-            emailMap.set(u.id, u.email ?? u.id.slice(0, 8));
+            const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || undefined;
+            userMap.set(u.id, { email: u.email ?? u.id.slice(0, 8), name });
           }
         }
       }
@@ -68,10 +69,14 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
       // Admin client unavailable — fallback to truncated IDs
     }
 
-    return members.map((m) => ({
-      userId: m.user_id,
-      email: emailMap.get(m.user_id) ?? m.user_id.slice(0, 8),
-    }));
+    return members.map((m) => {
+      const info = userMap.get(m.user_id);
+      return {
+        userId: m.user_id,
+        email: info?.email ?? m.user_id.slice(0, 8),
+        name: info?.name,
+      };
+    });
   } catch (error: unknown) {
     // Re-throw Next.js redirect errors so they propagate correctly
     if (

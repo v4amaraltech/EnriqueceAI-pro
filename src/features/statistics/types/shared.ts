@@ -15,6 +15,7 @@ export const periodOptions: PeriodOption[] = [
 export interface OrgMember {
   userId: string;
   email: string;
+  name?: string;
 }
 
 export function getPeriodDates(period: string): { start: string; end: string } {
