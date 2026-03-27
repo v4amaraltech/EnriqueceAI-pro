@@ -10,7 +10,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
@@ -79,8 +79,45 @@ serve(async (req)=>{
           status: "connecting"
         });
       }
-      // Se está em connecting ou error, tentar buscar novo QR
+      // Se está em connecting, error ou disconnected, verificar estado real antes de gerar QR
       if (existingInstance.status === "connecting" || existingInstance.status === "error" || existingInstance.status === "disconnected") {
+        // Check real state first — instance might actually be connected
+        console.log("[create-instance] DB status:", existingInstance.status, "— checking real state...");
+        const stateCheck = await getConnectionState(existingInstance.instance_name);
+        const actualState = stateCheck.ok ? normalizeConnectionState(stateCheck.data.instance.state) : null;
+        console.log("[create-instance] Actual Evolution state:", actualState);
+
+        if (actualState === "connected") {
+          // DB says not connected but Evolution says connected — stale session.
+          // User clicked "Conectar" so they want a fresh QR. Force logout + reconnect.
+          console.log("[create-instance] Stale connected session, forcing logout for fresh QR...");
+          await logoutInstance(existingInstance.instance_name);
+          await updateWhatsAppInstance(existingInstance.id, {
+            status: "connecting",
+            phone: null,
+            qr_base64: null,
+            last_error: null,
+          });
+          const freshConnect = await connectInstance(existingInstance.instance_name);
+          if (freshConnect.ok && freshConnect.data.base64) {
+            console.log("[create-instance] Got fresh QR after logout");
+            await updateWhatsAppInstance(existingInstance.id, {
+              qr_base64: freshConnect.data.base64,
+            });
+            return jsonResponse({
+              instance_name: existingInstance.instance_name,
+              qr_base64: freshConnect.data.base64,
+              status: "connecting"
+            });
+          }
+          return jsonResponse({
+            instance_name: existingInstance.instance_name,
+            qr_base64: null,
+            status: "connecting"
+          });
+        }
+
+        // Not connected — try to get QR code
         console.log("[create-instance] Trying to get new QR code...");
         const connectResult = await connectInstance(existingInstance.instance_name);
         if (connectResult.ok && connectResult.data.base64) {
@@ -124,26 +161,20 @@ serve(async (req)=>{
         console.log("[create-instance] Orphan instance state:", evolutionState);
 
         if (evolutionState === "connected") {
-          // Instance is already connected — extract phone and save
-          let phone: string | null = null;
-          const instanceDetails = await fetchInstance(instanceName);
-          if (instanceDetails.ok) {
-            phone = extractPhoneFromPayload(instanceDetails.data);
-          }
-          const savedInstance = await createWhatsAppInstance(organizationId, instanceName);
-          if (savedInstance) {
-            await updateWhatsAppInstance(savedInstance.id, {
-              status: "connected",
-              phone,
-              qr_base64: null,
-              last_error: null,
-            });
+          // Orphaned instance connected in Evolution but no DB record.
+          // User explicitly clicked "Conectar" — force logout and get fresh QR.
+          console.log("[create-instance] Orphan connected, forcing logout for fresh QR...");
+          await logoutInstance(instanceName);
+          const freshConnect = await connectInstance(instanceName);
+          const freshQr = freshConnect.ok ? (freshConnect.data.base64 || null) : null;
+          const savedInstance = await createWhatsAppInstance(organizationId, instanceName, freshQr || undefined);
+          if (!savedInstance) {
+            return errorResponse("Failed to save instance to database", 500);
           }
           return jsonResponse({
             instance_name: instanceName,
-            status: "connected",
-            phone,
-            message: "Recovered existing connected instance"
+            qr_base64: freshQr,
+            status: "connecting"
           });
         }
 

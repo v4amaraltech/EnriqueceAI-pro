@@ -18,7 +18,19 @@ import { Label } from '@/shared/components/ui/label';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
-import { scheduleMeeting, getLoggedUserEmail } from '../actions/schedule-meeting';
+import { scheduleMeeting, updateMeeting, getLoggedUserEmail } from '../actions/schedule-meeting';
+
+export interface MeetingEditData {
+  interactionId: string;
+  title: string;
+  description?: string;
+  date: string;
+  startTime: string;
+  duration: string;
+  attendeeEmails: string;
+  closerId?: string;
+  generateMeetLink: boolean;
+}
 
 interface ScheduleMeetingModalProps {
   open: boolean;
@@ -26,6 +38,7 @@ interface ScheduleMeetingModalProps {
   leadId: string;
   leadEmail?: string | null;
   leadName?: string | null;
+  editData?: MeetingEditData | null;
 }
 
 export function ScheduleMeetingModal({
@@ -34,9 +47,11 @@ export function ScheduleMeetingModal({
   leadId,
   leadEmail,
   leadName,
+  editData,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const isEditing = !!editData;
   const [title, setTitle] = useState(`V4 Company + ${leadName ?? 'Lead'}`);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
@@ -70,18 +85,40 @@ export function ScheduleMeetingModal({
     }
   }, [open, closersLoaded]);
 
-  // Pre-fill attendees every time modal opens
+  // Pre-fill fields when modal opens
   useEffect(() => {
     if (open) {
-      getLoggedUserEmail().then((result) => {
-        const userEmail = result.success ? result.data : '';
-        setSdrEmail(userEmail);
-        setAttendeeEmails(buildAttendees(undefined, userEmail));
-        setSelectedCloserId('');
-      });
+      if (editData) {
+        // Edit mode: pre-fill with existing data
+        setTitle(editData.title);
+        setDescription(editData.description ?? '');
+        setDate(editData.date);
+        setStartTime(editData.startTime);
+        setDuration(editData.duration);
+        setAttendeeEmails(editData.attendeeEmails);
+        setSelectedCloserId(editData.closerId ?? '');
+        setGenerateMeetLink(editData.generateMeetLink);
+        getLoggedUserEmail().then((result) => {
+          if (result.success) setSdrEmail(result.data);
+        });
+      } else {
+        // Create mode: reset to defaults
+        setTitle(`V4 Company + ${leadName ?? 'Lead'}`);
+        setDescription('');
+        setDate('');
+        setStartTime('09:00');
+        setDuration('30');
+        setGenerateMeetLink(true);
+        getLoggedUserEmail().then((result) => {
+          const userEmail = result.success ? result.data : '';
+          setSdrEmail(userEmail);
+          setAttendeeEmails(buildAttendees(undefined, userEmail));
+          setSelectedCloserId('');
+        });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, editData]);
 
   function handleSubmit() {
     if (!date || !startTime) {
@@ -98,7 +135,7 @@ export function ScheduleMeetingModal({
         .map((e) => e.trim())
         .filter(Boolean);
 
-      const result = await scheduleMeeting(leadId, {
+      const eventInput = {
         title,
         description: description || undefined,
         startTime: startDateTime.toISOString(),
@@ -106,13 +143,17 @@ export function ScheduleMeetingModal({
         attendeeEmails: emails.length > 0 ? emails : undefined,
         generateMeetLink,
         closerId: selectedCloserId || undefined,
-      });
+      };
+
+      const result = editData
+        ? await updateMeeting(editData.interactionId, leadId, eventInput)
+        : await scheduleMeeting(leadId, eventInput);
 
       if (result.success) {
-        const meetInfo = result.data.meetLink
+        const meetInfo = result.data?.meetLink
           ? ` | Meet: ${result.data.meetLink}`
           : '';
-        toast.success(`Reunião agendada!${meetInfo}`);
+        toast.success(editData ? 'Reunião atualizada!' : `Reunião agendada!${meetInfo}`);
         setSelectedCloserId('');
         onOpenChange(false);
         router.refresh();
@@ -136,7 +177,7 @@ export function ScheduleMeetingModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Agendar Reunião
+            {isEditing ? 'Editar Reunião' : 'Agendar Reunião'}
           </DialogTitle>
         </DialogHeader>
 
@@ -261,7 +302,9 @@ export function ScheduleMeetingModal({
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>
             <Calendar className="mr-2 h-4 w-4" />
-            {isPending ? 'Agendando...' : 'Agendar'}
+            {isPending
+              ? (isEditing ? 'Salvando...' : 'Agendando...')
+              : (isEditing ? 'Salvar' : 'Agendar')}
           </Button>
         </DialogFooter>
       </DialogContent>

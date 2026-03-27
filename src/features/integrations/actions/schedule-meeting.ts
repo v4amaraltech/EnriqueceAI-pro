@@ -12,7 +12,9 @@ import type { CalendarEvent, CreateEventInput } from '../services/calendar.servi
 import {
   checkFreeBusy,
   createCalendarEvent,
+  deleteCalendarEvent,
   getCalendarConnection,
+  updateCalendarEvent,
 } from '../services/calendar.service';
 import type { BusySlot } from '../services/calendar.service';
 
@@ -102,6 +104,127 @@ export async function getLoggedUserEmail(): Promise<ActionResult<string>> {
     return { success: true, data: user.email ?? '' };
   } catch {
     return { success: false, error: 'Usuário não autenticado' };
+  }
+}
+
+export async function deleteMeeting(
+  interactionId: string,
+): Promise<ActionResult<void>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+
+  // Fetch interaction and validate org ownership
+  const { data: interaction, error: fetchError } = await from(supabase, 'interactions')
+    .select('id, metadata')
+    .eq('id', interactionId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+
+  if (fetchError || !interaction) {
+    return { success: false, error: 'Reunião não encontrada' };
+  }
+
+  const meta = interaction.metadata as Record<string, unknown> | null;
+  const calendarEventId = meta?.calendar_event_id as string | undefined;
+
+  // Try to delete from Google Calendar (best-effort)
+  if (calendarEventId) {
+    try {
+      const connection = await getCalendarConnection(userId, orgId);
+      if (connection) {
+        await deleteCalendarEvent(connection, calendarEventId);
+      }
+    } catch (err) {
+      console.warn('[deleteMeeting] Failed to delete from Google Calendar:', err);
+    }
+  }
+
+  // Delete the interaction record
+  const { error: deleteError } = await from(supabase, 'interactions')
+    .delete()
+    .eq('id', interactionId)
+    .eq('org_id', orgId);
+
+  if (deleteError) {
+    return { success: false, error: 'Erro ao excluir reunião' };
+  }
+
+  return { success: true, data: undefined };
+}
+
+export async function updateMeeting(
+  interactionId: string,
+  leadId: string,
+  input: CreateEventInput,
+): Promise<ActionResult<CalendarEvent>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+
+  // Fetch interaction and validate org ownership
+  const { data: interaction, error: fetchError } = await from(supabase, 'interactions')
+    .select('id, metadata')
+    .eq('id', interactionId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+
+  if (fetchError || !interaction) {
+    return { success: false, error: 'Reunião não encontrada' };
+  }
+
+  const meta = interaction.metadata as Record<string, unknown> | null;
+  const calendarEventId = meta?.calendar_event_id as string | undefined;
+
+  const connection = await getCalendarConnection(userId, orgId);
+  if (!connection) {
+    return { success: false, error: 'Google Calendar não conectado. Conecte em Configurações > Integrações.' };
+  }
+
+  try {
+    let event: CalendarEvent;
+
+    if (calendarEventId) {
+      event = await updateCalendarEvent(connection, calendarEventId, input);
+    } else {
+      // No calendar event yet — create a new one
+      event = await createCalendarEvent(connection, input);
+    }
+
+    // Update interaction record
+    await from(supabase, 'interactions')
+      .update({
+        message_content: [
+          input.title,
+          input.description ?? '',
+          event.meetLink ? `Google Meet: ${event.meetLink}` : '',
+          `Horário: ${new Date(event.startTime).toLocaleString('pt-BR')} - ${new Date(event.endTime).toLocaleString('pt-BR')}`,
+        ].filter(Boolean).join('\n'),
+        metadata: {
+          subject: input.title,
+          calendar_event_id: event.id,
+          calendar_link: event.htmlLink,
+          meet_link: event.meetLink,
+          attendees: input.attendeeEmails ?? [],
+          closer_id: input.closerId ?? null,
+        },
+      } as Record<string, unknown>)
+      .eq('id', interactionId)
+      .eq('org_id', orgId);
+
+    // Update closer_id on lead if provided
+    if (input.closerId) {
+      await from(supabase, 'leads')
+        .update({ closer_id: input.closerId } as Record<string, unknown>)
+        .eq('id', leadId)
+        .eq('org_id', orgId);
+    }
+
+    return { success: true, data: event };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao atualizar evento';
+    const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
+    return { success: false, error: message, code };
   }
 }
 

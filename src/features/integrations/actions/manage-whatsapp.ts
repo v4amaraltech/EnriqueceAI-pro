@@ -87,13 +87,15 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
 export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disconnected: boolean }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { supabase } = auth.data;
 
-  const { error } = await from(supabase, 'whatsapp_instances' as never)
-    .delete()
-    .eq('org_id', orgId);
+  // Call edge function that handles Evolution API logout + DB delete
+  const { error } = await supabase.functions.invoke('evolution-disconnect', {
+    method: 'POST',
+  });
 
   if (error) {
+    console.error('[disconnectEvolutionWhatsApp] Edge function error:', error);
     return { success: false, error: 'Erro ao desconectar WhatsApp' };
   }
 

@@ -200,6 +200,87 @@ export async function createCalendarEvent(
   };
 }
 
+export async function deleteCalendarEvent(
+  connection: CalendarConnectionTokens,
+  eventId: string,
+): Promise<void> {
+  const accessToken = await ensureValidToken(connection);
+
+  const response = await fetch(
+    `${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  // 204 = success, 410 = already deleted (treat as success)
+  if (!response.ok && response.status !== 410) {
+    const errorText = await response.text();
+    throw new Error(`Erro ao excluir evento: ${errorText}`);
+  }
+}
+
+export async function updateCalendarEvent(
+  connection: CalendarConnectionTokens,
+  eventId: string,
+  input: CreateEventInput,
+): Promise<CalendarEvent> {
+  const accessToken = await ensureValidToken(connection);
+
+  const event: Record<string, unknown> = {
+    summary: input.title,
+    description: input.description ?? '',
+    start: { dateTime: input.startTime, timeZone: 'America/Sao_Paulo' },
+    end: { dateTime: input.endTime, timeZone: 'America/Sao_Paulo' },
+  };
+
+  if (input.attendeeEmails && input.attendeeEmails.length > 0) {
+    event.attendees = input.attendeeEmails.map((email) => ({ email }));
+  }
+
+  const params = input.generateMeetLink
+    ? '?conferenceDataVersion=1&sendUpdates=all'
+    : '?sendUpdates=all';
+
+  if (input.generateMeetLink) {
+    event.conferenceData = {
+      createRequest: {
+        requestId: `enriqueceai-${Date.now()}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
+
+  const response = await fetch(
+    `${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}${params}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(event),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Erro ao atualizar evento: ${errorText}`);
+  }
+
+  const updated = (await response.json()) as GCalEvent;
+
+  return {
+    id: updated.id,
+    htmlLink: updated.htmlLink,
+    meetLink: updated.hangoutLink ?? null,
+    summary: updated.summary,
+    startTime: updated.start.dateTime,
+    endTime: updated.end.dateTime,
+  };
+}
+
 export async function checkFreeBusy(
   connection: CalendarConnectionTokens,
   timeMin: string,

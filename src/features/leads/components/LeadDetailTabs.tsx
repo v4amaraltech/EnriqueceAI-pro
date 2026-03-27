@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Calendar,
   Clock,
@@ -8,16 +9,20 @@ import {
   Linkedin,
   Mail,
   MessageSquare,
+  Pencil,
   Phone,
   Search,
+  Trash2,
   Video,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadTimeline } from '@/features/cadences/components/LeadTimeline';
+import { deleteMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 
 import type { LeadRow } from '../types';
@@ -42,7 +47,31 @@ const channelFilters: { value: ChannelFilter; label: string; icon: typeof Mail }
 ];
 
 export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChange }: LeadDetailTabsProps) {
+  const router = useRouter();
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
+  const [editingMeeting, setEditingMeeting] = useState<TimelineEntry | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, startDeleteTransition] = useTransition();
+
+  function handleDeleteMeeting(interactionId: string) {
+    if (!confirm('Tem certeza que deseja excluir esta reunião? Ela também será removida do Google Calendar.')) return;
+    setDeletingId(interactionId);
+    startDeleteTransition(async () => {
+      const result = await deleteMeeting(interactionId);
+      if (result.success) {
+        toast.success('Reunião excluída');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+      setDeletingId(null);
+    });
+  }
+
+  function handleEditMeeting(meeting: TimelineEntry) {
+    setEditingMeeting(meeting);
+    onShowMeetingChange(true);
+  }
 
   const filteredTimeline = useMemo(() => {
     if (channelFilter === 'all') return timeline;
@@ -125,9 +154,30 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
                         <p className="text-sm font-medium text-[var(--foreground)]">
                           {(meta?.subject as string) ?? m.subject ?? 'Reunião'}
                         </p>
-                        <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
-                          {new Date(m.created_at).toLocaleDateString('pt-BR')}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="text-xs text-[var(--muted-foreground)]">
+                            {new Date(m.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleEditMeeting(m)}
+                            title="Editar reunião"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteMeeting(m.id)}
+                            disabled={isDeleting && deletingId === m.id}
+                            title="Excluir reunião"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                       {m.message_content && (
                         <p className="text-xs text-[var(--muted-foreground)] whitespace-pre-line">
@@ -170,11 +220,51 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
       </Tabs>
 
       <ScheduleMeetingModal
-        open={showMeeting}
-        onOpenChange={onShowMeetingChange}
+        open={showMeeting || !!editingMeeting}
+        onOpenChange={(open) => {
+          if (!open) setEditingMeeting(null);
+          onShowMeetingChange(open);
+        }}
         leadId={lead.id}
         leadEmail={lead.email}
         leadName={lead.nome_fantasia ?? lead.razao_social}
+        editData={editingMeeting ? (() => {
+          const meta = editingMeeting.metadata as Record<string, unknown> | undefined;
+          // Parse start/end time from message_content (format: "Horário: DD/MM/YYYY HH:mm:ss - DD/MM/YYYY HH:mm:ss")
+          const content = editingMeeting.message_content ?? '';
+          const horarioMatch = content.match(/Horário: (.+?) - (.+)$/m);
+          let dateStr = '';
+          let timeStr = '09:00';
+          let durationStr = '30';
+          if (horarioMatch?.[1] && horarioMatch?.[2]) {
+            // Parse pt-BR date format
+            const startParts = horarioMatch[1].trim().split(/[/\s:]/);
+            if (startParts.length >= 5) {
+              const day = startParts[0];
+              const month = startParts[1];
+              const year = startParts[2];
+              dateStr = `${year}-${month}-${day}`;
+              timeStr = `${startParts[3]}:${startParts[4]}`;
+            }
+            const endParts = horarioMatch[2].trim().split(/[/\s:]/);
+            if (startParts.length >= 5 && endParts.length >= 5) {
+              const startMin = parseInt(startParts[3] ?? '0') * 60 + parseInt(startParts[4] ?? '0');
+              const endMin = parseInt(endParts[3] ?? '0') * 60 + parseInt(endParts[4] ?? '0');
+              durationStr = String(endMin - startMin > 0 ? endMin - startMin : 30);
+            }
+          }
+          return {
+            interactionId: editingMeeting.id,
+            title: (meta?.subject as string) ?? editingMeeting.subject ?? '',
+            description: undefined,
+            date: dateStr,
+            startTime: timeStr,
+            duration: durationStr,
+            attendeeEmails: ((meta?.attendees as string[]) ?? []).join(', '),
+            closerId: (meta?.closer_id as string) ?? undefined,
+            generateMeetLink: !!meta?.meet_link,
+          };
+        })() : null}
       />
     </>
   );
