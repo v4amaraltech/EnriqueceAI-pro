@@ -2,7 +2,7 @@
 
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
-import type { createServiceRoleClient } from '@/lib/supabase/service';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
 
@@ -93,8 +93,10 @@ export async function sendMeetingBriefingEmail(
     const timeStr = `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
     // Create feedback request so the closer can respond after the meeting
+    // Uses service role because closer_feedback_requests has no INSERT policy for members
     let feedbackUrl: string | null = null;
-    const { data: feedbackReq } = (await from(supabase, 'closer_feedback_requests')
+    const serviceSupabase = createServiceRoleClient();
+    const { data: feedbackReq } = (await from(serviceSupabase, 'closer_feedback_requests')
       .insert({ org_id: orgId, lead_id: leadId, closer_id: closerId })
       .select('token')
       .single()) as { data: { token: string } | null };
