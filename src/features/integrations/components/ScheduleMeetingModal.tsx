@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Video } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
 import { scheduleMeeting } from '../actions/schedule-meeting';
@@ -44,6 +45,18 @@ export function ScheduleMeetingModal({
   const [attendeeEmails, setAttendeeEmails] = useState(leadEmail ?? '');
   const [generateMeetLink, setGenerateMeetLink] = useState(true);
 
+  // Closer selection
+  const [closers, setClosers] = useState<CloserRow[]>([]);
+  const [selectedCloserId, setSelectedCloserId] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      listClosers().then((result) => {
+        if (result.success) setClosers(result.data);
+      });
+    }
+  }, [open]);
+
   function handleSubmit() {
     if (!date || !startTime) {
       toast.error('Preencha a data e hora');
@@ -66,6 +79,7 @@ export function ScheduleMeetingModal({
         endTime: endDateTime.toISOString(),
         attendeeEmails: emails.length > 0 ? emails : undefined,
         generateMeetLink,
+        closerId: selectedCloserId || undefined,
       });
 
       if (result.success) {
@@ -73,6 +87,7 @@ export function ScheduleMeetingModal({
           ? ` | Meet: ${result.data.meetLink}`
           : '';
         toast.success(`Reunião agendada!${meetInfo}`);
+        setSelectedCloserId('');
         onOpenChange(false);
         router.refresh();
       } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
@@ -156,6 +171,32 @@ export function ScheduleMeetingModal({
               <option value="90">1h30</option>
             </select>
           </div>
+
+          {closers.length > 0 && (
+            <div>
+              <Label htmlFor="meeting-closer">Closer (participante)</Label>
+              <select
+                id="meeting-closer"
+                className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+                value={selectedCloserId}
+                onChange={(e) => {
+                  const closerId = e.target.value;
+                  setSelectedCloserId(closerId);
+                  const closer = closers.find((c) => c.id === closerId);
+                  if (closer) {
+                    setAttendeeEmails(closer.email);
+                  }
+                }}
+              >
+                <option value="">Selecione um closer...</option>
+                {closers.map((closer) => (
+                  <option key={closer.id} value={closer.id}>
+                    {closer.name} ({closer.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="meeting-email">Emails dos participantes</Label>
