@@ -80,6 +80,24 @@ serve(async (req)=>{
     console.log("[create-instance] Calling Evolution API to create:", instanceName);
     const createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
     if (!createResult.ok) {
+      // Handle "already in use" — orphaned instance exists in Evolution but not in our DB
+      const isAlreadyInUse = createResult.error?.includes("already in use");
+      if (isAlreadyInUse) {
+        console.log("[create-instance] Instance already exists in Evolution API, recovering...");
+        // Try to connect to existing instance and get QR code
+        const connectResult = await connectInstance(instanceName);
+        const recoveredQr = connectResult.ok ? (connectResult.data.base64 || null) : null;
+        // Save to our database
+        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, recoveredQr || undefined);
+        if (!savedInstance) {
+          return errorResponse("Failed to save recovered instance to database", 500);
+        }
+        return jsonResponse({
+          instance_name: instanceName,
+          qr_base64: recoveredQr,
+          status: "connecting"
+        });
+      }
       console.error("[create-instance] Evolution API error:", createResult.error);
       return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
     }
