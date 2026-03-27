@@ -47,15 +47,17 @@ export function ScheduleMeetingModal({
 
   // Closer selection
   const [closers, setClosers] = useState<CloserRow[]>([]);
+  const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
 
   useEffect(() => {
-    if (open) {
+    if (open && !closersLoaded) {
       listClosers().then((result) => {
         if (result.success) setClosers(result.data);
+        setClosersLoaded(true);
       });
     }
-  }, [open]);
+  }, [open, closersLoaded]);
 
   function handleSubmit() {
     if (!date || !startTime) {
@@ -172,31 +174,38 @@ export function ScheduleMeetingModal({
             </select>
           </div>
 
-          {closers.length > 0 && (
-            <div>
-              <Label htmlFor="meeting-closer">Closer (participante)</Label>
-              <select
-                id="meeting-closer"
-                className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-                value={selectedCloserId}
-                onChange={(e) => {
-                  const closerId = e.target.value;
-                  setSelectedCloserId(closerId);
-                  const closer = closers.find((c) => c.id === closerId);
-                  if (closer) {
-                    setAttendeeEmails(closer.email);
-                  }
-                }}
-              >
-                <option value="">Selecione um closer...</option>
-                {closers.map((closer) => (
-                  <option key={closer.id} value={closer.id}>
-                    {closer.name} ({closer.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div>
+            <Label htmlFor="meeting-closer">Closer (participante)</Label>
+            <select
+              id="meeting-closer"
+              className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+              value={selectedCloserId}
+              disabled={!closersLoaded}
+              onChange={(e) => {
+                const closerId = e.target.value;
+                setSelectedCloserId(closerId);
+                const closer = closers.find((c) => c.id === closerId);
+                if (closer) {
+                  setAttendeeEmails(closer.email);
+                }
+              }}
+            >
+              {!closersLoaded ? (
+                <option value="">Carregando closers...</option>
+              ) : closers.length === 0 ? (
+                <option value="">Nenhum closer cadastrado</option>
+              ) : (
+                <>
+                  <option value="">Selecione um closer...</option>
+                  {closers.map((closer) => (
+                    <option key={closer.id} value={closer.id}>
+                      {closer.name} ({closer.email})
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+          </div>
 
           <div>
             <Label htmlFor="meeting-email">Emails dos participantes</Label>
