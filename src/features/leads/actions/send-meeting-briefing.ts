@@ -92,6 +92,16 @@ export async function sendMeetingBriefingEmail(
     const dateStr = startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
+    // Create feedback request so the closer can respond after the meeting
+    let feedbackUrl: string | null = null;
+    const { data: feedbackReq } = (await from(supabase, 'closer_feedback_requests')
+      .insert({ org_id: orgId, lead_id: leadId, closer_id: closerId })
+      .select('token')
+      .single()) as { data: { token: string } | null };
+    if (feedbackReq) {
+      feedbackUrl = `${appUrl}/feedback/${feedbackReq.token}`;
+    }
+
     const html = buildBriefingHtml({
       closerName: closer.name,
       leadName,
@@ -101,6 +111,7 @@ export async function sendMeetingBriefingEmail(
       dateStr,
       timeStr,
       meetLink: meetLink ?? null,
+      feedbackUrl,
       leadUrl: `${appUrl}/leads/${leadId}`,
       customFields: customFieldsResult.data ?? [],
     });
@@ -129,10 +140,11 @@ function buildBriefingHtml(data: {
   dateStr: string;
   timeStr: string;
   meetLink: string | null;
+  feedbackUrl: string | null;
   leadUrl: string;
   customFields: CustomFieldDef[];
 }): string {
-  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, leadUrl, customFields } = data;
+  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl, customFields } = data;
 
   const contactName = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
 
@@ -255,7 +267,7 @@ function buildBriefingHtml(data: {
               </table>
               ` : ''}
 
-              <!-- CTA -->
+              <!-- CTAs -->
               <table cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center" style="padding: 8px 0 0;">
@@ -264,6 +276,18 @@ function buildBriefingHtml(data: {
                     </a>
                   </td>
                 </tr>
+                ${feedbackUrl ? `
+                <tr>
+                  <td align="center" style="padding: 16px 0 0;">
+                    <a href="${feedbackUrl}" style="display: inline-block; background: #1a1a1a; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                      Enviar feedback da reunião
+                    </a>
+                    <p style="color: #9ca3af; font-size: 12px; margin: 8px 0 0;">
+                      Após a reunião, clique acima para avaliar o lead (expira em 7 dias)
+                    </p>
+                  </td>
+                </tr>
+                ` : ''}
               </table>
             </td>
           </tr>
