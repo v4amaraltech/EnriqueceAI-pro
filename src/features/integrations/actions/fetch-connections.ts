@@ -22,6 +22,15 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
+  // Check user role — org-level connections are only visible to managers
+  const { data: memberRow } = (await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
+    .single()) as { data: { role: string } | null };
+  const isManager = memberRow?.role === 'manager';
+
   // Fetch Gmail connection (per user) — exclude encrypted tokens
   const { data: gmailRow } = (await from(supabase, 'gmail_connections')
     .select('id, email_address, custom_signature, status, created_at, updated_at')
@@ -29,16 +38,24 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', userId)
     .maybeSingle()) as { data: GmailConnectionSafe | null };
 
-  // Fetch WhatsApp connection (per org) — exclude encrypted tokens
-  const { data: whatsappRow } = (await from(supabase, 'whatsapp_connections')
-    .select('id, phone_number_id, business_account_id, status, created_at, updated_at')
-    .eq('org_id', orgId)
-    .maybeSingle()) as { data: WhatsAppConnectionSafe | null };
+  // Fetch WhatsApp connection (per org, manager-only)
+  let whatsappRow: WhatsAppConnectionSafe | null = null;
+  if (isManager) {
+    const { data } = (await from(supabase, 'whatsapp_connections')
+      .select('id, phone_number_id, business_account_id, status, created_at, updated_at')
+      .eq('org_id', orgId)
+      .maybeSingle()) as { data: WhatsAppConnectionSafe | null };
+    whatsappRow = data;
+  }
 
-  // Fetch CRM connections (per org) — exclude encrypted credentials
-  const { data: crmRows } = (await from(supabase, 'crm_connections')
-    .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
-    .eq('org_id', orgId)) as { data: CrmConnectionSafe[] | null };
+  // Fetch CRM connections (per org, manager-only)
+  let crmRows: CrmConnectionSafe[] = [];
+  if (isManager) {
+    const { data } = (await from(supabase, 'crm_connections')
+      .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
+      .eq('org_id', orgId)) as { data: CrmConnectionSafe[] | null };
+    crmRows = data ?? [];
+  }
 
   // Fetch Calendar connection (per user) — exclude encrypted tokens
   const { data: calendarRow } = (await from(supabase, 'calendar_connections')
@@ -54,11 +71,15 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; sip_domain: string | null; sip_password_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
-  // Fetch WhatsApp Evolution instance (per org)
-  const { data: evolutionRow } = (await from(supabase, 'whatsapp_instances' as never)
-    .select('id, instance_name, status, phone, created_at, updated_at')
-    .eq('org_id', orgId)
-    .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
+  // Fetch WhatsApp Evolution instance (per org, manager-only)
+  let evolutionRow: WhatsAppEvolutionInstanceSafe | null = null;
+  if (isManager) {
+    const { data } = (await from(supabase, 'whatsapp_instances' as never)
+      .select('id, instance_name, status, phone, created_at, updated_at')
+      .eq('org_id', orgId)
+      .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
+    evolutionRow = data;
+  }
 
   // Fetch 3CPlus connection (per user) — exclude encrypted token
   const { data: threecplusRaw } = (await from(supabase, 'threecplus_connections' as never)
@@ -67,11 +88,15 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string; login: string; domain: string; api_token_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
-  // Fetch Apollo connection (per org) — exclude encrypted api key
-  const { data: apolloRow } = (await from(supabase, 'apollo_connections' as never)
-    .select('id, status, created_at, updated_at')
-    .eq('org_id', orgId)
-    .maybeSingle()) as { data: ApolloConnectionSafe | null };
+  // Fetch Apollo connection (per org, manager-only)
+  let apolloRow: ApolloConnectionSafe | null = null;
+  if (isManager) {
+    const { data } = (await from(supabase, 'apollo_connections' as never)
+      .select('id, status, created_at, updated_at')
+      .eq('org_id', orgId)
+      .maybeSingle()) as { data: ApolloConnectionSafe | null };
+    apolloRow = data;
+  }
 
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {
