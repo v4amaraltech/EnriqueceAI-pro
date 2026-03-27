@@ -23,6 +23,7 @@ interface LeadRow {
   id: string;
   status: string;
   created_by: string | null;
+  assigned_to: string | null;
 }
 
 export async function fetchPerformanceAnalyticsData(
@@ -66,13 +67,13 @@ export async function fetchPerformanceAnalyticsData(
   const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
   const interactions = rawInteractions ?? [];
 
-  // Fetch leads created in period
+  // Fetch leads assigned to filtered SDRs in period
   const leadsQuery = from(supabase, 'leads')
-    .select('id, status, created_by')
+    .select('id, status, created_by, assigned_to')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
-    .in('created_by', filteredIds);
+    .in('assigned_to', filteredIds);
 
   const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
   const leads = rawLeads ?? [];
@@ -112,7 +113,7 @@ function buildSdrTable(
     .map((userId) => {
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
       const userInteractions = interactions.filter((i) => i.performed_by === userId);
-      const userLeads = leads.filter((l) => l.created_by === userId);
+      const userLeads = leads.filter((l) => l.assigned_to === userId);
       const qualified = userLeads.filter((l) => l.status === 'qualified').length;
       const meetings = userInteractions.filter((i) => i.type === 'meeting_scheduled').length;
 

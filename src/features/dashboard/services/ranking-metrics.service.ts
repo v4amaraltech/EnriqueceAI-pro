@@ -217,21 +217,21 @@ export async function fetchConversionRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get all leads updated in the month, attributed to their creator (SDR)
+  // Get all leads updated in the month, attributed to assigned SDR
   let leadsQuery = supabase
     .from('leads')
-    .select('id, status, created_by')
+    .select('id, status, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('updated_at', start)
     .lt('updated_at', end);
 
   if (filters.userIds.length > 0) {
-    leadsQuery = leadsQuery.in('created_by', filters.userIds);
+    leadsQuery = leadsQuery.in('assigned_to', filters.userIds);
   }
 
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; status: string; created_by: string }> | null;
+    data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
   };
 
   const leadRows = leads ?? [];
@@ -262,11 +262,11 @@ export async function fetchConversionRanking(
     filteredLeadIds = new Set((enrollments ?? []).map((e) => e.lead_id));
   }
 
-  // Count qualified and total per SDR (attributed via created_by)
+  // Count qualified and total per SDR (attributed via assigned_to)
   const sdrStats = new Map<string, { qualified: number; total: number }>();
   for (const lead of leadRows) {
     if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
-    const sdr = lead.created_by;
+    const sdr = lead.assigned_to;
     if (!sdr) continue;
     const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
     stats.total++;
