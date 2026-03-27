@@ -51,7 +51,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
   if (submitted) {
     return (
       <div className="text-center py-8">
-        <div className="text-4xl mb-4">&#10003;</div>
+        <div className="text-4xl mb-4 text-[#E53935]">&#10003;</div>
         <h2 className="text-xl font-semibold text-gray-800 dark:text-[var(--foreground)] mb-2">Feedback enviado!</h2>
         <p className="text-gray-600 dark:text-[var(--muted-foreground)]">Obrigado pela sua avaliação.</p>
       </div>
@@ -63,7 +63,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       {/* Result */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 dark:text-[var(--foreground)] mb-3">
-          Como foi a reunião? <span className="text-red-500">*</span>
+          Como foi a reunião? <span className="text-[#E53935]">*</span>
         </label>
         <div className="space-y-2">
           {RESULT_OPTIONS.map((option) => (
@@ -71,7 +71,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
               key={option.value}
               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 result === option.value
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
+                  ? 'border-[#E53935] bg-red-50 dark:bg-[#E53935]/10'
                   : 'border-gray-200 dark:border-[var(--border)] hover:border-gray-300 dark:hover:border-[var(--muted-foreground)]'
               }`}
             >
@@ -81,7 +81,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
                 value={option.value}
                 checked={result === option.value}
                 onChange={() => setResult(option.value)}
-                className="text-blue-600"
+                className="accent-[#E53935]"
               />
               <span className="text-sm text-gray-700 dark:text-[var(--foreground)]">{option.label}</span>
             </label>
@@ -92,7 +92,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       {/* Rating */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 dark:text-[var(--foreground)] mb-3">
-          Qualidade do lead (1-5) <span className="text-red-500">*</span>
+          Qualidade do lead (1-5) <span className="text-[#E53935]">*</span>
         </label>
         <div className="flex gap-2">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -104,7 +104,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
               onMouseLeave={() => setHoverRating(0)}
               className="text-3xl transition-transform hover:scale-110 focus:outline-none"
             >
-              <span style={{ color: star <= (hoverRating || rating) ? '#f59e0b' : '#d1d5db' }}>
+              <span style={{ color: star <= (hoverRating || rating) ? '#E53935' : '#d1d5db' }}>
                 &#9733;
               </span>
             </button>
@@ -131,7 +131,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
           onChange={(e) => setComment(e.target.value)}
           placeholder="Alguma observação sobre a reunião ou o lead..."
           rows={3}
-          className="w-full rounded-lg border border-gray-200 dark:border-[var(--border)] dark:bg-[var(--input)] px-4 py-3 text-sm text-gray-700 dark:text-[var(--foreground)] placeholder:text-gray-400 dark:placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+          className="w-full rounded-lg border border-gray-200 dark:border-[var(--border)] dark:bg-[var(--input)] px-4 py-3 text-sm text-gray-700 dark:text-[var(--foreground)] placeholder:text-gray-400 dark:placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[#E53935]/50 focus:border-[#E53935] resize-y"
         />
       </div>
 
@@ -142,7 +142,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       <button
         type="submit"
         disabled={submitting || !result || !rating}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+        className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar Feedback'}
       </button>
