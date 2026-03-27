@@ -141,6 +141,10 @@ export class WhatsAppService {
     const result = (await response.json()) as { messages?: { id: string }[] };
     const messageId = result.messages?.[0]?.id;
 
+    if (!messageId) {
+      return { success: false, error: 'WhatsApp API não retornou ID da mensagem' };
+    }
+
     return { success: true, messageId };
   }
 }

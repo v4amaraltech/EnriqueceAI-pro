@@ -9,6 +9,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
+import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { WhatsAppService } from '@/features/integrations/services/whatsapp.service';
 import type { InteractionRow } from '@/features/cadences/types';
@@ -39,11 +40,13 @@ export async function executeActivity(
   } = input;
 
   // Idempotency check: skip if interaction already exists for this step + lead
+  // Allow retry if previous attempt failed
   const { data: existingInteraction } = (await from(supabase, 'interactions')
     .select('id')
     .eq('cadence_id', cadenceId)
     .eq('step_id', stepId)
     .eq('lead_id', leadId)
+    .neq('type', 'failed')
     .limit(1)
     .maybeSingle()) as { data: { id: string } | null };
 
@@ -78,21 +81,32 @@ export async function executeActivity(
 
   // Send via appropriate channel
   if (channel === 'whatsapp') {
-    // Check and deduct credit
-    const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
-    if (!creditResult.allowed) {
-      // Mark interaction as failed before returning
-      await from(supabase, 'interactions')
-        .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
-        .eq('id', interaction.id);
-      return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
+    // Check and deduct credit (only for Meta API — Evolution doesn't use credits)
+    const { data: hasMetaConnection } = (await from(supabase, 'whatsapp_connections')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('status', 'connected')
+      .limit(1)
+      .maybeSingle()) as { data: { id: string } | null };
+
+    if (hasMetaConnection) {
+      const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
+      if (!creditResult.allowed) {
+        await from(supabase, 'interactions')
+          .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
+          .eq('id', interaction.id);
+        return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
+      }
     }
 
-    const waResult = await WhatsAppService.sendMessage(
-      orgId,
-      { to, body },
-      supabase,
-    );
+    // Try Meta WhatsApp API first, then Evolution API
+    let waResult: { success: boolean; messageId?: string; error?: string };
+
+    if (hasMetaConnection) {
+      waResult = await WhatsAppService.sendMessage(orgId, { to, body }, supabase);
+    } else {
+      waResult = await EvolutionWhatsAppService.sendMessage(orgId, { to, body }, supabase);
+    }
 
     if (waResult.success && waResult.messageId) {
       await from(supabase, 'interactions')

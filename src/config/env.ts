@@ -25,6 +25,8 @@ const envSchema = z.object({
     .length(64)
     .regex(/^[0-9a-f]+$/i)
     .optional(),
+  EVOLUTION_API_URL: z.string().url().optional(),
+  EVOLUTION_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
