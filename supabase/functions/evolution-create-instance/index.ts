@@ -35,14 +35,48 @@ serve(async (req)=>{
     const existingInstance = await getWhatsAppInstance(organizationId);
     if (existingInstance) {
       console.log("[create-instance] Found existing instance:", existingInstance.instance_name, "status:", existingInstance.status);
-      // Se já está conectado, retornar os dados existentes
+      // Se o banco diz "connected", verificar estado real na Evolution API
       if (existingInstance.status === "connected") {
-        console.log("[create-instance] Already connected, returning");
+        console.log("[create-instance] DB says connected, verifying with Evolution API...");
+        const stateResult = await getConnectionState(existingInstance.instance_name);
+        const realState = stateResult.ok ? normalizeConnectionState(stateResult.data.instance.state) : "error";
+        console.log("[create-instance] Real state from Evolution:", realState);
+
+        if (realState === "connected") {
+          console.log("[create-instance] Confirmed connected, returning");
+          return jsonResponse({
+            instance_name: existingInstance.instance_name,
+            status: "connected",
+            phone: existingInstance.phone,
+            message: "Instance already connected"
+          });
+        }
+
+        // Not actually connected — update DB and fall through to get new QR
+        console.log("[create-instance] Not actually connected, getting new QR...");
+        await updateWhatsAppInstance(existingInstance.id, {
+          status: "connecting",
+          phone: null,
+          qr_base64: null,
+          last_error: null,
+        });
+        const connectResult = await connectInstance(existingInstance.instance_name);
+        if (connectResult.ok && connectResult.data.base64) {
+          console.log("[create-instance] Got new QR code after stale connected state");
+          await updateWhatsAppInstance(existingInstance.id, {
+            qr_base64: connectResult.data.base64,
+          });
+          return jsonResponse({
+            instance_name: existingInstance.instance_name,
+            qr_base64: connectResult.data.base64,
+            status: "connecting"
+          });
+        }
+        // Fallback: return connecting without QR, polling will pick it up
         return jsonResponse({
           instance_name: existingInstance.instance_name,
-          status: existingInstance.status,
-          phone: existingInstance.phone,
-          message: "Instance already connected"
+          qr_base64: null,
+          status: "connecting"
         });
       }
       // Se está em connecting ou error, tentar buscar novo QR
