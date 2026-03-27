@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface CloserRow {
@@ -14,7 +15,7 @@ export interface CloserRow {
 }
 
 function closersFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('closers');
+  return from(supabase, 'closers');
 }
 
 /** List all active closers for the org — available to all members (SDRs need this). */

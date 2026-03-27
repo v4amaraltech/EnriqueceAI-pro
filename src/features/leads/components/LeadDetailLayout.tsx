@@ -51,6 +51,7 @@ import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
 import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
+import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -101,6 +102,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
   const [loadingStages, setLoadingStages] = useState(false);
+
+  // Won dialog — closer info
+  const [wonCloserName, setWonCloserName] = useState<string | null>(null);
 
   // Won dialog — required fields validation
   const [wonMissingFields, setWonMissingFields] = useState<MissingRequiredField[]>([]);
@@ -230,13 +234,21 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setCrmConnections([]);
     setWonMissingFields([]);
     setWonFieldValues({});
+    setWonCloserName(null);
     setLoadingPipelines(true);
     setLoadingRequiredFields(true);
 
-    const [pipelinesResult, stdSettingsResult] = await Promise.all([
+    const [pipelinesResult, stdSettingsResult, closersResult] = await Promise.all([
       fetchCrmPipelines(),
       listStandardFieldSettingsForMember(),
+      lead.closer_id ? listClosers() : Promise.resolve(null),
     ]);
+
+    // Resolve closer name from lead.closer_id
+    if (closersResult && closersResult.success && lead.closer_id) {
+      const closer = closersResult.data.find((c) => c.id === lead.closer_id);
+      if (closer) setWonCloserName(`${closer.name} (${closer.email})`);
+    }
 
     setLoadingPipelines(false);
     if (pipelinesResult.success && pipelinesResult.data.connections.length > 0) {
@@ -490,6 +502,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
             <DialogTitle className="text-xl">Marcar lead como ganho</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
+            {wonCloserName && (
+              <div className="rounded-lg border border-[var(--border)] p-3">
+                <p className="text-xs text-[var(--muted-foreground)]">Closer da reunião</p>
+                <p className="text-sm font-medium">{wonCloserName}</p>
+              </div>
+            )}
             {loadingPipelines ? (
               <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando funis do CRM...</p>
             ) : crmConnections.length > 0 ? (
