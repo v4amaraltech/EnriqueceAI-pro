@@ -10,7 +10,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance } from "../_shared/evolution.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
@@ -84,10 +84,38 @@ serve(async (req)=>{
       const isAlreadyInUse = createResult.error?.includes("already in use");
       if (isAlreadyInUse) {
         console.log("[create-instance] Instance already exists in Evolution API, recovering...");
-        // Try to connect to existing instance and get QR code
+        // Check actual connection state in Evolution API
+        const stateResult = await getConnectionState(instanceName);
+        const evolutionState = stateResult.ok ? normalizeConnectionState(stateResult.data.instance.state) : "error";
+        console.log("[create-instance] Orphan instance state:", evolutionState);
+
+        if (evolutionState === "connected") {
+          // Instance is already connected — extract phone and save
+          let phone: string | null = null;
+          const instanceDetails = await fetchInstance(instanceName);
+          if (instanceDetails.ok) {
+            phone = extractPhoneFromPayload(instanceDetails.data);
+          }
+          const savedInstance = await createWhatsAppInstance(organizationId, instanceName);
+          if (savedInstance) {
+            await updateWhatsAppInstance(savedInstance.id, {
+              status: "connected",
+              phone,
+              qr_base64: null,
+              last_error: null,
+            });
+          }
+          return jsonResponse({
+            instance_name: instanceName,
+            status: "connected",
+            phone,
+            message: "Recovered existing connected instance"
+          });
+        }
+
+        // Not connected — try to get QR code for scanning
         const connectResult = await connectInstance(instanceName);
         const recoveredQr = connectResult.ok ? (connectResult.data.base64 || null) : null;
-        // Save to our database
         const savedInstance = await createWhatsAppInstance(organizationId, instanceName, recoveredQr || undefined);
         if (!savedInstance) {
           return errorResponse("Failed to save recovered instance to database", 500);

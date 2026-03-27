@@ -11,7 +11,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
+import { getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, connectInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, updateWhatsAppInstance } from "../_shared/supabase.ts";
 serve(async (req)=>{
   // Handle CORS preflight
