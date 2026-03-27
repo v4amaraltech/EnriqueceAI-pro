@@ -217,21 +217,19 @@ export async function fetchConversionRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get all leads updated in the month, attributed to assigned SDR
+  // Get all leads updated in the month — use won_by for qualified attribution
   let leadsQuery = supabase
     .from('leads')
-    .select('id, status, assigned_to')
+    .select('id, status, assigned_to, won_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('updated_at', start)
     .lt('updated_at', end);
 
-  if (filters.userIds.length > 0) {
-    leadsQuery = leadsQuery.in('assigned_to', filters.userIds);
-  }
+  // Note: don't filter by assigned_to here because won_by may differ from assigned_to
 
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
+    data: Array<{ id: string; status: string; assigned_to: string | null; won_by: string | null }> | null;
   };
 
   const leadRows = leads ?? [];
@@ -262,15 +260,22 @@ export async function fetchConversionRanking(
     filteredLeadIds = new Set((enrollments ?? []).map((e) => e.lead_id));
   }
 
-  // Count qualified and total per SDR (attributed via assigned_to)
+  // Count qualified and total per SDR
+  // For qualified leads: use won_by (who marked as won), fallback to assigned_to
+  // For other leads: use assigned_to
   const sdrStats = new Map<string, { qualified: number; total: number }>();
   for (const lead of leadRows) {
     if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
-    const sdr = lead.assigned_to;
+    const isQualified = lead.status === 'qualified';
+    const sdr = isQualified
+      ? (lead.won_by ?? lead.assigned_to)
+      : lead.assigned_to;
     if (!sdr) continue;
+    // If userIds filter is active, skip leads not belonging to filtered users
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
     stats.total++;
-    if (lead.status === 'qualified') {
+    if (isQualified) {
       stats.qualified++;
     }
     sdrStats.set(sdr, stats);

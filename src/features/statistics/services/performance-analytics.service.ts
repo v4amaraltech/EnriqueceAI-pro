@@ -24,6 +24,7 @@ interface LeadRow {
   status: string;
   created_by: string | null;
   assigned_to: string | null;
+  won_by: string | null;
 }
 
 export async function fetchPerformanceAnalyticsData(
@@ -67,13 +68,12 @@ export async function fetchPerformanceAnalyticsData(
   const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
   const interactions = rawInteractions ?? [];
 
-  // Fetch leads assigned to filtered SDRs in period
+  // Fetch leads in period (don't filter by assigned_to here — won_by may differ)
   const leadsQuery = from(supabase, 'leads')
-    .select('id, status, created_by, assigned_to')
+    .select('id, status, created_by, assigned_to, won_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .in('assigned_to', filteredIds);
+    .lte('created_at', periodEnd);
 
   const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
   const leads = rawLeads ?? [];
@@ -84,8 +84,15 @@ export async function fetchPerformanceAnalyticsData(
   );
 
   const totalActivities = interactions.length;
-  const totalLeadsCreated = leads.length;
-  const totalQualified = leads.filter((l) => l.status === 'qualified').length;
+  // Filter leads belonging to filtered SDRs (by assigned_to)
+  const filteredLeads = leads.filter((l) => l.assigned_to && filteredIds.includes(l.assigned_to));
+  const totalLeadsCreated = filteredLeads.length;
+  // Qualified: attributed to who marked as won (won_by), fallback to assigned_to
+  const totalQualified = leads.filter((l) => {
+    if (l.status !== 'qualified') return false;
+    const responsible = l.won_by ?? l.assigned_to;
+    return responsible && filteredIds.includes(responsible);
+  }).length;
 
   const sdrTable = buildSdrTable(filteredIds, memberLookup, interactions, leads);
   const sdrComparison = buildSdrComparison(sdrTable);
@@ -114,7 +121,12 @@ function buildSdrTable(
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
       const userInteractions = interactions.filter((i) => i.performed_by === userId);
       const userLeads = leads.filter((l) => l.assigned_to === userId);
-      const qualified = userLeads.filter((l) => l.status === 'qualified').length;
+      // Qualified: count leads where this user is won_by (or assigned_to if won_by is null)
+      const qualified = leads.filter((l) => {
+        if (l.status !== 'qualified') return false;
+        const responsible = l.won_by ?? l.assigned_to;
+        return responsible === userId;
+      }).length;
       const meetings = userInteractions.filter((i) => i.type === 'meeting_scheduled').length;
 
       return {
