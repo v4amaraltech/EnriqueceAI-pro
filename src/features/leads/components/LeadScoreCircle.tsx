@@ -6,14 +6,14 @@ interface LeadScoreCircleProps {
 }
 
 function getScoreColor(score: number | null): string {
-  if (score === null) return 'text-gray-300 dark:text-gray-600';
+  if (score === null) return 'text-gray-300 dark:text-gray-400';
   if (score >= 7) return 'text-green-500';
   if (score >= 4) return 'text-yellow-500';
   return 'text-red-500';
 }
 
 function getStrokeColor(score: number | null): string {
-  if (score === null) return 'stroke-gray-300 dark:stroke-gray-600';
+  if (score === null) return 'stroke-gray-300 dark:stroke-gray-500';
   if (score >= 7) return 'stroke-green-500';
   if (score >= 4) return 'stroke-yellow-500';
   return 'stroke-red-500';
@@ -36,7 +36,7 @@ export function LeadScoreCircle({ score, size = 36 }: LeadScoreCircleProps) {
           r={radius}
           fill="none"
           strokeWidth={2.5}
-          className="stroke-gray-200 dark:stroke-gray-700"
+          className="stroke-gray-200 dark:stroke-gray-500"
         />
         {/* Score ring */}
         {score !== null && (

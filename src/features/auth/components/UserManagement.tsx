@@ -18,10 +18,10 @@ import { InviteMemberDialog } from './InviteMemberDialog';
 type FormState = { error?: string; success?: boolean };
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  active: { label: 'Ativo', className: 'bg-green-100 text-green-800' },
-  invited: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800' },
-  suspended: { label: 'Desativado', className: 'bg-red-100 text-red-800' },
-  removed: { label: 'Removido', className: 'bg-gray-100 text-gray-500' },
+  active: { label: 'Ativo', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
+  invited: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  suspended: { label: 'Desativado', className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
+  removed: { label: 'Removido', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300' },
 };
 
 const ROLE_LABELS: Record<string, string> = {

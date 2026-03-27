@@ -9,7 +9,7 @@ import type { CadencePriority } from '../types';
 const priorityConfig: Record<CadencePriority, { className: string; label: string }> = {
   high: { className: 'text-green-600', label: 'Alta' },
   medium: { className: 'text-yellow-500', label: 'Média' },
-  low: { className: 'text-gray-400', label: 'Baixa' },
+  low: { className: 'text-gray-400 dark:text-gray-300', label: 'Baixa' },
 };
 
 interface PriorityIconProps {

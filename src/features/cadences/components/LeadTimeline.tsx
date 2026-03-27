@@ -27,11 +27,11 @@ const channelConfig: Record<string, { label: string; icon: typeof Mail; bg: stri
   whatsapp: { label: 'WhatsApp', icon: MessageSquare, bg: 'bg-green-100 dark:bg-green-950', text: 'text-green-600 dark:text-green-400' },
   phone: { label: 'Ligação', icon: Phone, bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-600 dark:text-orange-400' },
   linkedin: { label: 'LinkedIn', icon: MessageSquare, bg: 'bg-purple-100 dark:bg-purple-950', text: 'text-purple-600 dark:text-purple-400' },
-  research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' },
+  research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-300' },
 };
 
 const noteConfig = { label: 'Anotação', icon: StickyNote, bg: 'bg-yellow-100 dark:bg-yellow-950', text: 'text-yellow-600 dark:text-yellow-400' };
-const defaultChannel = { label: 'Atividade', icon: Mail, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' };
+const defaultChannel = { label: 'Atividade', icon: Mail, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-300' };
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);

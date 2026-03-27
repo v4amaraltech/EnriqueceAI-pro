@@ -29,7 +29,7 @@ function LeadAvatar({ name, status }: { name: string; status: DialerItemStatus }
   if (status === 'skipped') {
     return (
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-        <SkipForward className="h-4 w-4 text-gray-400" />
+        <SkipForward className="h-4 w-4 text-gray-400 dark:text-gray-300" />
       </div>
     );
   }
@@ -57,7 +57,7 @@ const statusBadge: Record<DialerItemStatus, { label: string; className: string }
   pending: null,
   active: { label: 'Ativo', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
   completed: { label: 'Concluido', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
-  skipped: { label: 'Pulado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
+  skipped: { label: 'Pulado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300' },
 };
 
 export function DialerQueueList({ items, itemStatuses, currentIndex, isActive, onSelect }: DialerQueueListProps) {

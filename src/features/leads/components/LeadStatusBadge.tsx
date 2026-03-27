@@ -9,16 +9,16 @@ const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
   contacted: { label: 'Contatado', className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' },
   qualified: { label: 'Qualificado', className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' },
   unqualified: { label: 'Não Qualificado', className: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300' },
-  archived: { label: 'Arquivado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400' },
+  archived: { label: 'Arquivado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-300' },
 };
 
 // Meetime-style engagement labels
 const meetimeConfig: Record<LeadStatus, { label: string; className: string }> = {
-  new: { label: 'ESPERANDO INÍCIO', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+  new: { label: 'ESPERANDO INÍCIO', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
   contacted: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
   qualified: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
-  unqualified: { label: 'DESCARTADO', className: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400' },
-  archived: { label: 'ARQUIVADO', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
+  unqualified: { label: 'DESCARTADO', className: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' },
+  archived: { label: 'ARQUIVADO', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300' },
 };
 
 const enrichmentConfig: Record<EnrichmentStatus, { label: string; className: string }> = {

@@ -80,7 +80,7 @@ const HEALTH_STYLES: Record<HealthLevel, string> = {
   green: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
   yellow: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
   red: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-  gray: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+  gray: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300',
 };
 
 function MetricCell({ value, isPercent = false }: { value: number; isPercent?: boolean }) {
