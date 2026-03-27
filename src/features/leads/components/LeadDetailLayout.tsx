@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -52,6 +52,7 @@ import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
 import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
+import { fetchCloserFeedback, getResultLabel, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -102,6 +103,17 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
   const [loadingStages, setLoadingStages] = useState(false);
+
+  // Closer feedback
+  const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
+
+  useEffect(() => {
+    if (lead.status === 'qualified') {
+      fetchCloserFeedback(lead.id).then((result) => {
+        if (result.success && result.data) setCloserFeedback(result.data);
+      });
+    }
+  }, [lead.id, lead.status]);
 
   // Won dialog — closer info
   const [wonCloserName, setWonCloserName] = useState<string | null>(null);
@@ -351,6 +363,40 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               />
             )
           ))}
+        </div>
+      )}
+
+      {/* Closer feedback card */}
+      {closerFeedback && closerFeedback.responded_at && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+          <h3 className="text-sm font-semibold mb-3">Feedback do Closer</h3>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-[var(--muted-foreground)]">Closer</p>
+              <p className="font-medium">{closerFeedback.closer_name}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted-foreground)]">Resultado</p>
+              <p className="font-medium">{closerFeedback.result ? getResultLabel(closerFeedback.result) : '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted-foreground)]">Nota</p>
+              <p className="font-medium">{closerFeedback.rating ? '★'.repeat(closerFeedback.rating) + '☆'.repeat(5 - closerFeedback.rating) : '-'}</p>
+            </div>
+          </div>
+          {closerFeedback.comment && (
+            <div className="mt-3 pt-3 border-t border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-1">Observações</p>
+              <p className="text-sm">{closerFeedback.comment}</p>
+            </div>
+          )}
+        </div>
+      )}
+      {closerFeedback && !closerFeedback.responded_at && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong>
+          </p>
         </div>
       )}
 

@@ -3,8 +3,9 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo'];
+const PUBLIC_PREFIXES = ['/feedback/'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
-const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1'];
+const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1', '/api/feedback'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -61,8 +62,10 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
   const isOnboarding = pathname === '/onboarding';
 
+  const isPublicPrefix = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
   // Not authenticated → redirect to login (unless already on public route)
-  if (!user && !isPublicRoute && !isOnboarding) {
+  if (!user && !isPublicRoute && !isPublicPrefix && !isOnboarding) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);

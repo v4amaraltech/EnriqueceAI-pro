@@ -7,6 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
   CrmConnectionRow,
   CrmPipeline,
@@ -570,6 +571,33 @@ export async function markLeadAsWon(
             }).catch(() => {});
           }
         }
+      }
+    }
+
+    // 4. Send closer feedback email (fire-and-forget)
+    const { data: leadForFeedback } = (await from(supabase, 'leads')
+      .select('closer_id, nome_fantasia, razao_social')
+      .eq('id', leadId)
+      .eq('org_id', orgId)
+      .single()) as { data: { closer_id: string | null; nome_fantasia: string | null; razao_social: string | null } | null };
+
+    if (leadForFeedback?.closer_id) {
+      const { data: closer } = (await from(supabase, 'closers')
+        .select('id, name, email')
+        .eq('id', leadForFeedback.closer_id)
+        .single()) as { data: { id: string; name: string; email: string } | null };
+
+      if (closer) {
+        const leadName = leadForFeedback.nome_fantasia ?? leadForFeedback.razao_social ?? 'Lead';
+        sendCloserFeedbackEmail({
+          leadId,
+          orgId,
+          closerId: closer.id,
+          closerName: closer.name,
+          closerEmail: closer.email,
+          leadName,
+          senderUserId: auth.data.userId,
+        }).catch((err) => console.error('[markLeadAsWon] Feedback email error:', err));
       }
     }
 
