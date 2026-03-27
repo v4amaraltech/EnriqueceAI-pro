@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   CalendarDays,
+  ChevronDown,
   Clock,
   FileText,
   Pencil,
@@ -48,6 +49,25 @@ import type { LeadInfoPanelData } from './lead-info-panel.utils';
 import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
 import { LeadTimelineTab } from './LeadTimelineTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
+
+function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between group"
+      >
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          {title}
+        </h4>
+        <ChevronDown className={`h-3.5 w-3.5 text-[var(--muted-foreground)] transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+      </button>
+      {isOpen && children}
+    </div>
+  );
+}
 
 export interface LeadInfoPanelProps {
   data: LeadInfoPanelData;
@@ -386,10 +406,7 @@ export function LeadInfoPanel({
           <div className="space-y-4">
 
             {/* GERAL — contact principal */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Geral
-              </h4>
+            <CollapsibleSection title="Geral">
               {isEditing ? (
                 <>
                   {isFieldVisible('first_name') && (
@@ -499,17 +516,14 @@ export function LeadInfoPanel({
                   )}
                 </>
               )}
-            </div>
+            </CollapsibleSection>
 
             {isFieldVisible('telefone') && (
             <>
             <hr className="border-t-2 border-[var(--border)]" />
 
             {/* TELEFONE(S) — with type descriptor */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Telefone(s)
-              </h4>
+            <CollapsibleSection title="Telefone(s)">
               {isEditing ? (
                 <div className="space-y-2">
                   {phoneEntries.map((entry, index) => (
@@ -584,7 +598,7 @@ export function LeadInfoPanel({
                   </div>
                 ))
               )}
-            </div>
+            </CollapsibleSection>
             </>
             )}
 
@@ -592,10 +606,7 @@ export function LeadInfoPanel({
             {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website')) && (
             <>
             <hr className="border-t-2 border-[var(--border)]" />
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Social
-              </h4>
+            <CollapsibleSection title="Social">
               {isEditing ? (
                 <>
                   {isFieldVisible('instagram') && (
@@ -639,7 +650,7 @@ export function LeadInfoPanel({
                   {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />}
                 </>
               )}
-            </div>
+            </CollapsibleSection>
             </>
             )}
 
@@ -647,10 +658,7 @@ export function LeadInfoPanel({
             {customFieldDefs && customFieldDefs.length > 0 && (
               <>
                 <hr className="border-t-2 border-[var(--border)]" />
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    Campos personalizados
-                  </h4>
+                <CollapsibleSection title="Campos personalizados">
                   {isEditing ? (
                     customFieldDefs.map((cf) => (
                       <div key={cf.id} className="space-y-1">
@@ -722,7 +730,7 @@ export function LeadInfoPanel({
                       );
                     })
                   )}
-                </div>
+                </CollapsibleSection>
               </>
             )}
           </div>
