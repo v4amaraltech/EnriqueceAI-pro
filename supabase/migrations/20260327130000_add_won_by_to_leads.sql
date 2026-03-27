@@ -1,5 +1,5 @@
 BEGIN;
 
-ALTER TABLE leads ADD COLUMN won_by UUID REFERENCES auth.users(id);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS won_by UUID REFERENCES auth.users(id);
 
 COMMIT;
