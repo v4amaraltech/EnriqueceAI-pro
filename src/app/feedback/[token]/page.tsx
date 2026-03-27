@@ -72,15 +72,15 @@ export default async function FeedbackPage({
   const leadName = leadResult.data?.nome_fantasia ?? leadResult.data?.razao_social ?? 'Lead';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-[var(--card)] rounded-xl shadow-sm border border-gray-200 dark:border-[var(--border)] overflow-hidden">
           <div className="bg-[#1a1a2e] px-8 py-6">
             <h1 className="text-white text-xl font-semibold">EnriqueceAI</h1>
             <p className="text-gray-300 text-sm mt-1">Feedback da Reunião</p>
           </div>
           <div className="p-8">
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 dark:text-[var(--muted-foreground)] mb-6">
               Olá, <strong>{closerName}</strong>! Como foi a reunião com <strong>{leadName}</strong>?
             </p>
             <FeedbackForm token={token} />
@@ -93,14 +93,14 @@ export default async function FeedbackPage({
 
 function ErrorPage({ message }: { message: string }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-[var(--card)] rounded-xl shadow-sm border border-gray-200 dark:border-[var(--border)] overflow-hidden">
           <div className="bg-[#1a1a2e] px-8 py-6">
             <h1 className="text-white text-xl font-semibold">EnriqueceAI</h1>
           </div>
           <div className="p-8 text-center">
-            <p className="text-gray-600">{message}</p>
+            <p className="text-gray-600 dark:text-[var(--muted-foreground)]">{message}</p>
           </div>
         </div>
       </div>

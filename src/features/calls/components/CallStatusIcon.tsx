@@ -31,7 +31,7 @@ const statusConfig: Record<CallStatus, StatusConfig> = {
   not_significant: {
     label: 'Não Significativa',
     icon: ArrowDown,
-    className: 'text-gray-500 dark:text-gray-400',
+    className: 'text-gray-500 dark:text-gray-300',
   },
   no_contact: {
     label: 'Sem Contato',
