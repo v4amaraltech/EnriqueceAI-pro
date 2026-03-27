@@ -217,11 +217,11 @@ export async function markLeadAsWon(
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
-    const { orgId, supabase } = auth.data;
+    const { orgId, userId, supabase } = auth.data;
 
-    // 1. Update lead status to qualified
+    // 1. Update lead status to qualified + record who won it
     const { error: leadError } = await from(supabase, 'leads')
-      .update({ status: 'qualified' } as Record<string, unknown>)
+      .update({ status: 'qualified', won_by: userId } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
 

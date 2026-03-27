@@ -217,17 +217,21 @@ export async function fetchConversionRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get all leads updated in the month
+  // Get all leads updated in the month, attributed to their creator (SDR)
   let leadsQuery = supabase
     .from('leads')
-    .select('id, status')
+    .select('id, status, created_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('updated_at', start)
     .lt('updated_at', end);
 
+  if (filters.userIds.length > 0) {
+    leadsQuery = leadsQuery.in('created_by', filters.userIds);
+  }
+
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; status: string }> | null;
+    data: Array<{ id: string; status: string; created_by: string }> | null;
   };
 
   const leadRows = leads ?? [];
@@ -244,36 +248,25 @@ export async function fetchConversionRanking(
     return buildRankingCardData([], 0, goal?.conversion_target ?? 0, filters.month);
   }
 
-  // Map lead → SDR
-  const leadIds = leadRows.map((l) => l.id);
-
-  let enrollmentQuery = supabase
-    .from('cadence_enrollments')
-    .select('lead_id, enrolled_by')
-    .in('lead_id', leadIds);
-
+  // If cadence filter is active, narrow down to leads enrolled in those cadences
+  let filteredLeadIds: Set<string> | null = null;
   if (filters.cadenceIds.length > 0) {
-    enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
-  }
-  if (filters.userIds.length > 0) {
-    enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-  }
-
-  const { data: enrollments } = (await enrollmentQuery) as {
-    data: Array<{ lead_id: string; enrolled_by: string }> | null;
-  };
-
-  const leadToSdr = new Map<string, string>();
-  for (const e of enrollments ?? []) {
-    if (e.enrolled_by) {
-      leadToSdr.set(e.lead_id, e.enrolled_by);
-    }
+    const leadIds = leadRows.map((l) => l.id);
+    const { data: enrollments } = (await supabase
+      .from('cadence_enrollments')
+      .select('lead_id')
+      .in('lead_id', leadIds)
+      .in('cadence_id', filters.cadenceIds)) as {
+      data: Array<{ lead_id: string }> | null;
+    };
+    filteredLeadIds = new Set((enrollments ?? []).map((e) => e.lead_id));
   }
 
-  // Count qualified and total per SDR
+  // Count qualified and total per SDR (attributed via created_by)
   const sdrStats = new Map<string, { qualified: number; total: number }>();
   for (const lead of leadRows) {
-    const sdr = leadToSdr.get(lead.id);
+    if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
+    const sdr = lead.created_by;
     if (!sdr) continue;
     const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
     stats.total++;

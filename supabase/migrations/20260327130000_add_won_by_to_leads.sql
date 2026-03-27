@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE leads ADD COLUMN won_by UUID REFERENCES auth.users(id);
+
+COMMIT;
