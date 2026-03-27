@@ -67,60 +67,44 @@ export async function fetchOpportunityKpi(
   const { start, end } = getMonthRange(filters.month);
   const days = getDaysInMonth(filters.month);
 
-  // Determine lead IDs to filter by (cadence/user filters)
-  let filteredLeadIds: string[] | null = null;
-
-  if (filters.cadenceIds.length > 0 || filters.userIds.length > 0) {
-    let enrollmentQuery = supabase
-      .from('cadence_enrollments')
-      .select('lead_id');
-
-    if (filters.cadenceIds.length > 0) {
-      enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
-    }
-    if (filters.userIds.length > 0) {
-      enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-    }
-
-    const { data: enrollments } = (await enrollmentQuery) as {
-      data: Array<{ lead_id: string }> | null;
-    };
-
-    filteredLeadIds = [
-      ...new Set(enrollments?.map((e) => e.lead_id) ?? []),
-    ];
-
-    if (filteredLeadIds.length === 0) {
-      return {
-        totalOpportunities: 0,
-        monthTarget: 0,
-        conversionTarget: 0,
-        percentOfTarget: 0,
-        currentDay: new Date().getDate(),
-        daysInMonth: days,
-        dailyData: computeDailyData([], filters.month, 0),
-      };
-    }
-  }
-
   // Query qualified leads in the month
   let leadsQuery = from(supabase, 'leads')
-    .select('id, updated_at')
+    .select('id, updated_at, assigned_to, won_by')
     .eq('org_id', orgId)
     .eq('status', 'qualified')
     .is('deleted_at', null)
     .gte('updated_at', start)
     .lt('updated_at', end);
 
-  if (filteredLeadIds) {
-    leadsQuery = leadsQuery.in('id', filteredLeadIds);
-  }
-
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; updated_at: string }> | null;
+    data: Array<{ id: string; updated_at: string; assigned_to: string | null; won_by: string | null }> | null;
   };
 
-  const qualifiedLeads = leads ?? [];
+  let qualifiedLeads = leads ?? [];
+
+  // Filter by cadence if active
+  if (filters.cadenceIds.length > 0) {
+    const leadIds = qualifiedLeads.map((l) => l.id);
+    if (leadIds.length > 0) {
+      const { data: enrollments } = (await supabase
+        .from('cadence_enrollments')
+        .select('lead_id')
+        .in('lead_id', leadIds)
+        .in('cadence_id', filters.cadenceIds)) as {
+        data: Array<{ lead_id: string }> | null;
+      };
+      const enrolledIds = new Set((enrollments ?? []).map((e) => e.lead_id));
+      qualifiedLeads = qualifiedLeads.filter((l) => enrolledIds.has(l.id));
+    }
+  }
+
+  // Filter by user: attribute via won_by (who marked as won), fallback to assigned_to
+  if (filters.userIds.length > 0) {
+    qualifiedLeads = qualifiedLeads.filter((l) => {
+      const sdr = l.won_by ?? l.assigned_to;
+      return sdr && filters.userIds.includes(sdr);
+    });
+  }
   const totalOpportunities = qualifiedLeads.length;
 
   // Query goal for the month

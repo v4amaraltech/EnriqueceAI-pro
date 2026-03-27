@@ -48,7 +48,7 @@ function buildRankingCardData(
 }
 
 /**
- * Card 1: Leads Finalizados — enrollments completed/replied by SDR
+ * Card 1: Leads Finalizados — enrollments completed/replied, attributed to lead's assigned_to
  */
 export async function fetchLeadsFinishedRanking(
   supabase: SupabaseClient,
@@ -57,39 +57,56 @@ export async function fetchLeadsFinishedRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Query enrollments in the period, grouped by enrolled_by
+  // Query enrollments in the period with lead_id for attribution
   let query = supabase
     .from('cadence_enrollments')
-    .select('enrolled_by, status');
+    .select('lead_id, enrolled_by, status');
 
-  // Filter by date: use enrolled_at for active, completed_at/updated_at for finished
-  // We filter enrollments updated in the month range
   query = query.gte('updated_at', start).lt('updated_at', end);
 
   if (filters.cadenceIds.length > 0) {
     query = query.in('cadence_id', filters.cadenceIds);
   }
-  if (filters.userIds.length > 0) {
-    query = query.in('enrolled_by', filters.userIds);
-  }
 
   const { data: enrollments } = (await query) as {
-    data: Array<{ enrolled_by: string; status: string }> | null;
+    data: Array<{ lead_id: string; enrolled_by: string; status: string }> | null;
   };
 
   const rows = enrollments ?? [];
+  if (rows.length === 0) {
+    const monthStart = `${filters.month}-01`;
+    const { data: goal } = (await supabase
+      .from('goals')
+      .select('opportunity_target')
+      .eq('org_id', orgId)
+      .eq('month', monthStart)
+      .maybeSingle()) as { data: { opportunity_target: number } | null };
+    return buildRankingCardData([], 0, goal?.opportunity_target ?? 0, filters.month);
+  }
 
-  // Group by SDR
+  // Get lead assigned_to for attribution
+  const leadIds = [...new Set(rows.map((r) => r.lead_id))];
+  const { data: leadData } = (await supabase
+    .from('leads')
+    .select('id, assigned_to')
+    .in('id', leadIds)) as {
+    data: Array<{ id: string; assigned_to: string | null }> | null;
+  };
+  const leadAssignedTo = new Map((leadData ?? []).map((l) => [l.id, l.assigned_to]));
+
+  // Group by SDR (use lead's assigned_to, fallback to enrolled_by)
   const sdrMap = new Map<string, { finished: number; prospecting: number }>();
   for (const e of rows) {
-    if (!e.enrolled_by) continue;
-    const entry = sdrMap.get(e.enrolled_by) ?? { finished: 0, prospecting: 0 };
+    const sdr = leadAssignedTo.get(e.lead_id) ?? e.enrolled_by;
+    if (!sdr) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
+    const entry = sdrMap.get(sdr) ?? { finished: 0, prospecting: 0 };
     if (e.status === 'completed' || e.status === 'replied') {
       entry.finished++;
     } else if (e.status === 'active') {
       entry.prospecting++;
     }
-    sdrMap.set(e.enrolled_by, entry);
+    sdrMap.set(sdr, entry);
   }
 
   const entries: SdrRankingEntry[] = [];
@@ -117,7 +134,7 @@ export async function fetchLeadsFinishedRanking(
 }
 
 /**
- * Card 2: Atividades Realizadas — interactions count by SDR
+ * Card 2: Atividades Realizadas — interactions count by SDR (via performed_by)
  */
 export async function fetchActivitiesRanking(
   supabase: SupabaseClient,
@@ -126,10 +143,10 @@ export async function fetchActivitiesRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get interactions in the period
+  // Get interactions in the period with performed_by for direct attribution
   let interactionsQuery = supabase
     .from('interactions')
-    .select('lead_id, type')
+    .select('lead_id, type, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', start)
     .lt('created_at', end);
@@ -139,15 +156,12 @@ export async function fetchActivitiesRanking(
   }
 
   const { data: interactions } = (await interactionsQuery) as {
-    data: Array<{ lead_id: string; type: string }> | null;
+    data: Array<{ lead_id: string; type: string; performed_by: string | null }> | null;
   };
 
   const interactionRows = interactions ?? [];
 
-  // Map lead_id → enrolled_by via cadence_enrollments
-  const leadIds = [...new Set(interactionRows.map((i) => i.lead_id))];
-
-  if (leadIds.length === 0) {
+  if (interactionRows.length === 0) {
     const monthStart = `${filters.month}-01`;
     const { data: goal } = (await supabase
       .from('goals')
@@ -159,32 +173,29 @@ export async function fetchActivitiesRanking(
     return buildRankingCardData([], 0, goal?.activities_target ?? 0, filters.month);
   }
 
-  let enrollmentQuery = supabase
-    .from('cadence_enrollments')
-    .select('lead_id, enrolled_by')
-    .in('lead_id', leadIds);
-
-  if (filters.userIds.length > 0) {
-    enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-  }
-
-  const { data: enrollments } = (await enrollmentQuery) as {
-    data: Array<{ lead_id: string; enrolled_by: string }> | null;
-  };
-
-  // Build lead → SDR map
-  const leadToSdr = new Map<string, string>();
-  for (const e of enrollments ?? []) {
-    if (e.enrolled_by) {
-      leadToSdr.set(e.lead_id, e.enrolled_by);
+  // For interactions without performed_by, fallback to lead's assigned_to
+  const leadIdsWithoutPerformer = [
+    ...new Set(interactionRows.filter((i) => !i.performed_by).map((i) => i.lead_id)),
+  ];
+  const leadAssignedTo = new Map<string, string>();
+  if (leadIdsWithoutPerformer.length > 0) {
+    const { data: leadData } = (await supabase
+      .from('leads')
+      .select('id, assigned_to')
+      .in('id', leadIdsWithoutPerformer)) as {
+      data: Array<{ id: string; assigned_to: string | null }> | null;
+    };
+    for (const l of leadData ?? []) {
+      if (l.assigned_to) leadAssignedTo.set(l.id, l.assigned_to);
     }
   }
 
-  // Count activities per SDR
+  // Count activities per SDR (performed_by, fallback to lead's assigned_to)
   const sdrCounts = new Map<string, number>();
   for (const interaction of interactionRows) {
-    const sdr = leadToSdr.get(interaction.lead_id);
+    const sdr = interaction.performed_by ?? leadAssignedTo.get(interaction.lead_id);
     if (!sdr) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     sdrCounts.set(sdr, (sdrCounts.get(sdr) ?? 0) + 1);
   }
 
