@@ -41,7 +41,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
     });
   }, []);
 
-  const defaultTitle = `Reunião com ${companyName ?? 'Lead'}`;
+  const defaultTitle = `V4 Company + ${companyName ?? 'Lead'}`;
 
   return (
     <div className="space-y-4">

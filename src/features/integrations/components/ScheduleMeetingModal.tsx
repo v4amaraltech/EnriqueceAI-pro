@@ -37,7 +37,7 @@ export function ScheduleMeetingModal({
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [title, setTitle] = useState(`Reunião com ${leadName ?? 'Lead'}`);
+  const [title, setTitle] = useState(`V4 Company + ${leadName ?? 'Lead'}`);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
