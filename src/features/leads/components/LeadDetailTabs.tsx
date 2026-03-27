@@ -123,7 +123,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-[var(--foreground)]">
-                          {m.subject ?? 'Reunião'}
+                          {(meta?.subject as string) ?? m.subject ?? 'Reunião'}
                         </p>
                         <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
                           {new Date(m.created_at).toLocaleDateString('pt-BR')}

@@ -38,14 +38,14 @@ export async function scheduleMeeting(
         lead_id: leadId,
         type: 'meeting_scheduled',
         channel: 'calendar',
-        direction: 'outbound',
-        subject: input.title,
-        body: [
+        message_content: [
+          input.title,
           input.description ?? '',
           event.meetLink ? `Google Meet: ${event.meetLink}` : '',
           `Horário: ${new Date(event.startTime).toLocaleString('pt-BR')} - ${new Date(event.endTime).toLocaleString('pt-BR')}`,
         ].filter(Boolean).join('\n'),
         metadata: {
+          subject: input.title,
           calendar_event_id: event.id,
           calendar_link: event.htmlLink,
           meet_link: event.meetLink,
