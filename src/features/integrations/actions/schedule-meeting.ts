@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
 import {
@@ -61,6 +62,20 @@ export async function scheduleMeeting(
         .update({ closer_id: input.closerId } as Record<string, unknown>)
         .eq('id', leadId)
         .eq('org_id', orgId);
+    }
+
+    // Send meeting briefing email to closer (fire-and-forget)
+    if (input.closerId) {
+      sendMeetingBriefingEmail(supabase, {
+        leadId,
+        orgId,
+        closerId: input.closerId,
+        sdrUserId: userId,
+        meetingTitle: input.title,
+        meetingStart: event.startTime,
+        meetingEnd: event.endTime,
+        meetLink: event.meetLink,
+      }).catch((err) => console.error('[scheduleMeeting] Briefing email error:', err));
     }
 
     // Dispatch call.scheduled webhook
