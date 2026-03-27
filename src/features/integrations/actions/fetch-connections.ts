@@ -71,15 +71,11 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; sip_domain: string | null; sip_password_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
-  // Fetch WhatsApp Evolution instance (per org, manager-only)
-  let evolutionRow: WhatsAppEvolutionInstanceSafe | null = null;
-  if (isManager) {
-    const { data } = (await from(supabase, 'whatsapp_instances' as never)
-      .select('id, instance_name, status, phone, created_at, updated_at')
-      .eq('org_id', orgId)
-      .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
-    evolutionRow = data;
-  }
+  // Fetch WhatsApp Evolution instance (per org, all members — no sensitive data)
+  const { data: evolutionRow } = (await from(supabase, 'whatsapp_instances' as never)
+    .select('id, instance_name, status, phone, created_at, updated_at')
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
 
   // Fetch 3CPlus connection (per user) — exclude encrypted token
   const { data: threecplusRaw } = (await from(supabase, 'threecplus_connections' as never)
