@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
+import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-
-import { EmailService } from '@/features/integrations/services/email.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
@@ -199,17 +198,9 @@ async function notifySdr(
   const sdrEmail = authData?.user?.email;
   if (!sdrEmail) return;
 
-  await EmailService.sendEmail(
-    sdrUserId,
-    feedbackReq.org_id,
-    {
-      to: sdrEmail,
-      subject: `Feedback da reunião: ${leadName} — ${resultLabel}`,
-      htmlBody,
-      trackOpens: false,
-      trackClicks: false,
-    },
-    undefined,
-    supabase,
-  );
+  await sendPlatformEmail({
+    to: sdrEmail,
+    subject: `Feedback da reunião: ${leadName} — ${resultLabel}`,
+    html: htmlBody,
+  });
 }

@@ -2,8 +2,7 @@
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-
-import { EmailService } from '@/features/integrations/services/email.service';
+import { sendPlatformEmail } from '@/lib/email/platform-email';
 
 interface SendFeedbackParams {
   leadId: string;
@@ -16,11 +15,11 @@ interface SendFeedbackParams {
 }
 
 /**
- * Creates a feedback request and sends email to the closer.
+ * Creates a feedback request and sends email to the closer via platform email (Resend).
  * Called fire-and-forget after markLeadAsWon — errors are logged but don't block the flow.
  */
 export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promise<void> {
-  const { leadId, orgId, closerId, closerName, closerEmail, leadName, senderUserId } = params;
+  const { leadId, orgId, closerId, closerName, closerEmail, leadName } = params;
   const supabase = createServiceRoleClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -41,23 +40,14 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
     }
 
     const feedbackUrl = `${appUrl}/feedback/${request.token}`;
+    const html = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl);
 
-    const htmlBody = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl);
-
-    // Send email via SDR's Gmail
-    const result = await EmailService.sendEmail(
-      senderUserId,
-      orgId,
-      {
-        to: closerEmail,
-        subject: `Feedback da reunião: ${leadName}`,
-        htmlBody,
-        trackOpens: false,
-        trackClicks: false,
-      },
-      undefined,
-      supabase,
-    );
+    // Send via platform email (Resend) — no Gmail dependency
+    const result = await sendPlatformEmail({
+      to: closerEmail,
+      subject: `Feedback da reunião: ${leadName}`,
+      html,
+    });
 
     if (!result.success) {
       console.error('[closer-feedback] Failed to send email:', result.error);
