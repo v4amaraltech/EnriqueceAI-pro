@@ -27,6 +27,7 @@ interface Props {
 export function ApiKeyCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const [name, setName] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [neverExpires, setNeverExpires] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -35,7 +36,7 @@ export function ApiKeyCreateDialog({ open, onOpenChange, onCreated }: Props) {
     startTransition(async () => {
       const result = await createApiKeyAction({
         name,
-        expires_at: expiresAt || undefined,
+        expires_at: neverExpires ? undefined : (expiresAt || undefined),
       });
 
       if (result.success) {
@@ -58,6 +59,7 @@ export function ApiKeyCreateDialog({ open, onOpenChange, onCreated }: Props) {
   function handleClose() {
     setName('');
     setExpiresAt('');
+    setNeverExpires(false);
     setCreatedKey(null);
     setCopied(false);
     onOpenChange(false);
@@ -90,14 +92,28 @@ export function ApiKeyCreateDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
 
             <div>
-              <Label htmlFor="key-expires">Data de expiração (opcional)</Label>
+              <Label htmlFor="key-expires">Data de expiração</Label>
               <Input
                 id="key-expires"
                 type="date"
                 value={expiresAt ? expiresAt.split('T')[0] : ''}
                 onChange={(e) => setExpiresAt(e.target.value ? `${e.target.value}T23:59:59Z` : '')}
-                disabled={isPending}
+                disabled={isPending || neverExpires}
+                className={neverExpires ? 'opacity-40' : ''}
               />
+              <label className="mt-2 flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={neverExpires}
+                  onChange={(e) => {
+                    setNeverExpires(e.target.checked);
+                    if (e.target.checked) setExpiresAt('');
+                  }}
+                  disabled={isPending}
+                  className="rounded accent-[#E53935]"
+                />
+                Nunca expira
+              </label>
             </div>
 
             <DialogFooter>
