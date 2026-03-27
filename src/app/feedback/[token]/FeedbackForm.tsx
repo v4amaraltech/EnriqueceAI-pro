@@ -142,7 +142,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       <button
         type="submit"
         disabled={submitting || !result || !rating}
-        className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+        className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar Feedback'}
       </button>
