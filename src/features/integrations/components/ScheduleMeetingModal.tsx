@@ -18,7 +18,7 @@ import { Label } from '@/shared/components/ui/label';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
-import { scheduleMeeting } from '../actions/schedule-meeting';
+import { scheduleMeeting, getLoggedUserEmail } from '../actions/schedule-meeting';
 
 interface ScheduleMeetingModalProps {
   open: boolean;
@@ -49,14 +49,28 @@ export function ScheduleMeetingModal({
   const [closers, setClosers] = useState<CloserRow[]>([]);
   const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
+  const [sdrEmail, setSdrEmail] = useState('');
+
+  function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
+    const emails = [
+      leadEmail,
+      closerEmail,
+      currentSdrEmail ?? sdrEmail,
+    ].filter((e): e is string => !!e && e.trim() !== '');
+    return [...new Set(emails)].join(', ');
+  }
 
   useEffect(() => {
     if (open && !closersLoaded) {
-      listClosers().then((result) => {
-        if (result.success) setClosers(result.data);
+      Promise.all([listClosers(), getLoggedUserEmail()]).then(([closersResult, emailResult]) => {
+        if (closersResult.success) setClosers(closersResult.data);
         setClosersLoaded(true);
+        const userEmail = emailResult.success ? emailResult.data : '';
+        setSdrEmail(userEmail);
+        setAttendeeEmails(buildAttendees(undefined, userEmail));
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, closersLoaded]);
 
   function handleSubmit() {
@@ -185,9 +199,7 @@ export function ScheduleMeetingModal({
                 const closerId = e.target.value;
                 setSelectedCloserId(closerId);
                 const closer = closers.find((c) => c.id === closerId);
-                if (closer) {
-                  setAttendeeEmails(closer.email);
-                }
+                setAttendeeEmails(buildAttendees(closer?.email));
               }}
             >
               {!closersLoaded ? (

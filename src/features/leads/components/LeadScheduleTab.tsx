@@ -10,7 +10,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
-import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
+import { scheduleMeeting, getLoggedUserEmail } from '@/features/integrations/actions/schedule-meeting';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 interface LeadScheduleTabProps {
@@ -33,12 +33,29 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [closers, setClosers] = useState<CloserRow[]>([]);
   const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
+  const [sdrEmail, setSdrEmail] = useState('');
+
+  // Build attendee list from available emails
+  function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
+    const emails = [
+      leadEmail,
+      closerEmail,
+      currentSdrEmail ?? sdrEmail,
+    ].filter((e): e is string => !!e && e.trim() !== '');
+    // Deduplicate
+    return [...new Set(emails)].join(', ');
+  }
 
   useEffect(() => {
-    listClosers().then((result) => {
-      if (result.success) setClosers(result.data);
+    Promise.all([listClosers(), getLoggedUserEmail()]).then(([closersResult, emailResult]) => {
+      if (closersResult.success) setClosers(closersResult.data);
       setClosersLoaded(true);
+      const userEmail = emailResult.success ? emailResult.data : '';
+      setSdrEmail(userEmail);
+      // Pre-fill attendees with lead email + SDR email
+      setMeetingAttendee(buildAttendees(undefined, userEmail));
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const defaultTitle = `V4 Company + ${companyName ?? 'Lead'}`;
@@ -105,11 +122,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
             const closerId = e.target.value;
             setSelectedCloserId(closerId);
             const closer = closers.find((c) => c.id === closerId);
-            if (closer) {
-              setMeetingAttendee(closer.email);
-            } else {
-              setMeetingAttendee('');
-            }
+            setMeetingAttendee(buildAttendees(closer?.email));
           }}
         >
           {!closersLoaded ? (
@@ -127,6 +140,17 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
             </>
           )}
         </select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Emails dos participantes</Label>
+        <Input
+          value={meetingAttendee}
+          onChange={(e) => setMeetingAttendee(e.target.value)}
+          placeholder="lead@exemplo.com, sdr@empresa.com"
+          className="mt-1"
+        />
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1">Separe múltiplos emails com vírgula</p>
       </div>
 
       <label className="flex items-center gap-2 text-xs">

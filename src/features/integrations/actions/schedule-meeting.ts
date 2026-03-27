@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
@@ -77,6 +78,15 @@ export async function scheduleMeeting(
     const message = err instanceof Error ? err.message : 'Erro ao criar evento';
     const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
     return { success: false, error: message, code };
+  }
+}
+
+export async function getLoggedUserEmail(): Promise<ActionResult<string>> {
+  try {
+    const user = await requireAuth();
+    return { success: true, data: user.email ?? '' };
+  } catch {
+    return { success: false, error: 'Usuário não autenticado' };
   }
 }
 
