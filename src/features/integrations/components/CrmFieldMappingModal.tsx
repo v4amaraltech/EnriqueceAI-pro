@@ -73,9 +73,11 @@ export function CrmFieldMappingModal({
   const [crmFields, setCrmFields] = useState<CrmFieldOption[]>([]);
   const [appFields, setAppFields] = useState<Array<{ value: string; label: string; isCustom?: boolean }>>([...APP_LEAD_FIELDS]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [fieldsLoaded, setFieldsLoaded] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setFieldsLoaded(false);
     Promise.all([
       fetchCrmFields(provider),
       fetchAppFieldsWithCustom(),
@@ -91,9 +93,11 @@ export function CrmFieldMappingModal({
       if (appResult.success) {
         setAppFields(appResult.data);
       }
+      setFieldsLoaded(true);
     }).catch((err) => {
       console.warn('[CrmFieldMapping] Error loading fields:', err);
       setCrmFields(CRM_TARGET_FIELDS[provider]);
+      setFieldsLoaded(true);
     }).finally(() => {
       setIsLoadingFields(false);
     });
@@ -198,7 +202,7 @@ export function CrmFieldMappingModal({
         </DialogHeader>
 
         <div className="max-h-[65vh] overflow-y-auto">
-          {isLoadingFields ? (
+          {isLoadingFields || !fieldsLoaded ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
               <span className="ml-2 text-sm text-[var(--muted-foreground)]">Carregando campos...</span>
