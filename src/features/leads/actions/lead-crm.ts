@@ -23,6 +23,22 @@ import { ensureFreshCredentials } from '@/features/integrations/services/crm-tok
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
+/**
+ * Format date/datetime values to ISO 8601 with timezone (Y-m-d\TH:i:sP) for Kommo API.
+ * Kommo rejects bare date strings like "2026-03-27" or "2026-03-27T10:00".
+ * Detects date-like values by pattern and converts them; non-date values pass through unchanged.
+ */
+function formatValueForKommo(value: string): string {
+  // Match YYYY-MM-DD or YYYY-MM-DDTHH:MM(:SS)
+  if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/.test(value)) {
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().replace('.000Z', '+00:00');
+    }
+  }
+  return value;
+}
+
 export interface CrmPipelinesEntry {
   provider: CrmProvider;
   pipelines: CrmPipeline[];
@@ -504,10 +520,11 @@ export async function markLeadAsWon(
 
               // Determine if crmField is a numeric ID or a field code
               const numericId = parseInt(crmField, 10);
+              const formatted = formatValueForKommo(value);
               if (!isNaN(numericId) && crmField === numericId.toString()) {
-                customFieldsValues.push({ field_id: numericId, values: [{ value }] });
+                customFieldsValues.push({ field_id: numericId, values: [{ value: formatted }] });
               } else {
-                customFieldsValues.push({ field_code: crmField, values: [{ value }] });
+                customFieldsValues.push({ field_code: crmField, values: [{ value: formatted }] });
               }
             }
 

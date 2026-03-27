@@ -45,6 +45,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   date: 'Data',
   datetime: 'Data e Hora',
   select: 'Seleção',
+  url: 'URL',
 };
 
 function isRecentField(createdAt: string): boolean {

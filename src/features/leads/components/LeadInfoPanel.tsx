@@ -699,24 +699,28 @@ export function LeadInfoPanel({
                               setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
                             }
                             className="h-8 text-sm"
-                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'datetime' ? 'datetime-local' : 'text'}
-                            placeholder={cf.field_name}
+                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'datetime' ? 'datetime-local' : cf.field_type === 'url' ? 'url' : 'text'}
+                            placeholder={cf.field_type === 'url' ? 'https://...' : cf.field_name}
                           />
                         )}
                       </div>
                     ))
                   ) : (
-                    customFieldDefs.map((cf) => (
-                      <MeetimeFieldRow
-                        key={cf.id}
-                        label={cf.field_name}
-                        value={
-                          cf.field_type === 'currency'
-                            ? formatBRL(data.custom_field_values?.[cf.id])
-                            : data.custom_field_values?.[cf.id] || '—'
-                        }
-                      />
-                    ))
+                    customFieldDefs.map((cf) => {
+                      const rawVal = data.custom_field_values?.[cf.id];
+                      return (
+                        <MeetimeFieldRow
+                          key={cf.id}
+                          label={cf.field_name}
+                          value={
+                            cf.field_type === 'currency'
+                              ? formatBRL(rawVal)
+                              : rawVal || '—'
+                          }
+                          href={cf.field_type === 'url' && rawVal ? rawVal : undefined}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </>
