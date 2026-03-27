@@ -60,18 +60,28 @@ export function ScheduleMeetingModal({
     return [...new Set(emails)].join(', ');
   }
 
+  // Load closers once
   useEffect(() => {
     if (open && !closersLoaded) {
-      Promise.all([listClosers(), getLoggedUserEmail()]).then(([closersResult, emailResult]) => {
-        if (closersResult.success) setClosers(closersResult.data);
+      listClosers().then((result) => {
+        if (result.success) setClosers(result.data);
         setClosersLoaded(true);
-        const userEmail = emailResult.success ? emailResult.data : '';
+      });
+    }
+  }, [open, closersLoaded]);
+
+  // Pre-fill attendees every time modal opens
+  useEffect(() => {
+    if (open) {
+      getLoggedUserEmail().then((result) => {
+        const userEmail = result.success ? result.data : '';
         setSdrEmail(userEmail);
         setAttendeeEmails(buildAttendees(undefined, userEmail));
+        setSelectedCloserId('');
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, closersLoaded]);
+  }, [open]);
 
   function handleSubmit() {
     if (!date || !startTime) {
