@@ -81,13 +81,13 @@ function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUr
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background: #1a1a2e; padding: 24px 32px;">
+            <td style="background: #1a1a1a; padding: 24px 32px;">
               <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
             </td>
           </tr>
           <tr>
             <td style="padding: 32px;">
-              <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a2e;">
+              <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">
                 Olá, ${closerName}!
               </h2>
               <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px;">
@@ -99,7 +99,7 @@ function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUr
               <table cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center">
-                    <a href="${feedbackUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    <a href="${feedbackUrl}" style="display: inline-block; background: #E53935; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
                       Enviar Feedback
                     </a>
                   </td>
