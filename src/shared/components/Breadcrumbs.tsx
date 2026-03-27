@@ -34,6 +34,7 @@ const pathLabels: Record<string, string> = {
   access: 'Acesso aos Leads',
   blacklist: 'Blacklist de E-mails',
   'custom-fields': 'Campos Personalizados',
+  closers: 'Closers',
   'fit-score': 'Fit Score',
 
   teams: 'Times',

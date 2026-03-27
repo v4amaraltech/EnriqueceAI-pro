@@ -45,6 +45,7 @@ export interface CreateEventInput {
   endTime: string; // ISO 8601
   attendeeEmails?: string[];
   generateMeetLink?: boolean;
+  closerId?: string;
 }
 
 export interface CalendarEvent {

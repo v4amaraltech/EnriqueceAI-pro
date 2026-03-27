@@ -72,6 +72,7 @@ export interface LeadRow {
   created_by: string | null;
   assigned_to: string | null;
   import_id: string | null;
+  closer_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

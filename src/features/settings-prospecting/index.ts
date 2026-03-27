@@ -7,6 +7,8 @@ export { listCustomFields, listVisibleCustomFields } from './actions/custom-fiel
 export type { CustomFieldRow } from './types/custom-field';
 export { listBlacklistDomains } from './actions/email-blacklist-crud';
 export { listLossReasons, addLossReason } from './actions/loss-reasons-crud';
+export { listClosers } from './actions/closers-crud';
+export type { CloserRow } from './actions/closers-crud';
 export { getOrgSettings } from './actions/org-settings-crud';
 export { listStandardFieldSettingsForMember } from './actions/standard-field-settings';
 export { getFitScoreRules } from './actions/get-fit-score-rules';
@@ -19,4 +21,5 @@ export { LossReasonsSettings } from './components/LossReasonsSettings';
 export { LeadAccessSettings } from './components/LeadAccessSettings';
 export { FitScoreConfig } from './components/FitScoreConfig';
 export { AbmSettings } from './components/AbmSettings';
+export { ClosersSettings } from './components/ClosersSettings';
 

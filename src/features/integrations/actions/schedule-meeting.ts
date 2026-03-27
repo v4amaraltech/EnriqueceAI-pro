@@ -49,9 +49,18 @@ export async function scheduleMeeting(
           calendar_link: event.htmlLink,
           meet_link: event.meetLink,
           attendees: input.attendeeEmails ?? [],
+          closer_id: input.closerId ?? null,
         },
         performed_by: userId,
       } as Record<string, unknown>);
+
+    // Save closer_id on lead if provided
+    if (input.closerId) {
+      await from(supabase, 'leads')
+        .update({ closer_id: input.closerId } as Record<string, unknown>)
+        .eq('id', leadId)
+        .eq('org_id', orgId);
+    }
 
     // Dispatch call.scheduled webhook
     dispatchWebhookEvent(supabase, orgId, 'call.scheduled', {

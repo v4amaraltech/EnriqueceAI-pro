@@ -12,6 +12,7 @@ import {
   Lock,
   Settings2,
   Star,
+  UserCheck,
   XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -33,6 +34,7 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Acesso aos Leads', href: '/settings/prospecting/access', icon: Lock },
   { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: ListChecks },
 
+  { label: 'Closers', href: '/settings/prospecting/closers', icon: UserCheck },
   { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
   { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
 ];

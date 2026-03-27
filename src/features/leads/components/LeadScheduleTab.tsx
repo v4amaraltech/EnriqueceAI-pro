@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Calendar, Video } from 'lucide-react';
@@ -11,6 +11,7 @@ import { Label } from '@/shared/components/ui/label';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
+import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 interface LeadScheduleTabProps {
   leadId: string;
@@ -27,6 +28,16 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [meetingAttendee, setMeetingAttendee] = useState('');
   const [meetingMeetLink, setMeetingMeetLink] = useState(true);
   const [isMeetingPending, startMeetingTransition] = useTransition();
+
+  // Closer selection
+  const [closers, setClosers] = useState<CloserRow[]>([]);
+  const [selectedCloserId, setSelectedCloserId] = useState('');
+
+  useEffect(() => {
+    listClosers().then((result) => {
+      if (result.success) setClosers(result.data);
+    });
+  }, []);
 
   const defaultTitle = `Reunião com ${companyName ?? 'Lead'}`;
 
@@ -83,14 +94,38 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       </div>
 
       <div>
-        <Label className="text-xs">Email do closer (participante)</Label>
-        <Input
-          type="email"
-          value={meetingAttendee}
-          onChange={(e) => setMeetingAttendee(e.target.value)}
-          placeholder="closer@empresa.com"
-          className="mt-1"
-        />
+        <Label className="text-xs">Closer (participante)</Label>
+        {closers.length > 0 ? (
+          <select
+            className="mt-1 flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1 text-sm"
+            value={selectedCloserId}
+            onChange={(e) => {
+              const closerId = e.target.value;
+              setSelectedCloserId(closerId);
+              const closer = closers.find((c) => c.id === closerId);
+              if (closer) {
+                setMeetingAttendee(closer.email);
+              } else {
+                setMeetingAttendee('');
+              }
+            }}
+          >
+            <option value="">Selecione um closer...</option>
+            {closers.map((closer) => (
+              <option key={closer.id} value={closer.id}>
+                {closer.name} ({closer.email})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            type="email"
+            value={meetingAttendee}
+            onChange={(e) => setMeetingAttendee(e.target.value)}
+            placeholder="closer@empresa.com"
+            className="mt-1"
+          />
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-xs">
@@ -121,6 +156,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
                 ? (meetingAttendee || leadEmail || '').split(',').map((e: string) => e.trim()).filter(Boolean)
                 : undefined,
               generateMeetLink: meetingMeetLink,
+              closerId: selectedCloserId || undefined,
             });
 
             if (result.success) {
@@ -128,6 +164,8 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
               toast.success(`Reunião agendada!${meetInfo}`);
               setMeetingDate('');
               setMeetingTitle('');
+              setSelectedCloserId('');
+              setMeetingAttendee('');
               router.refresh();
             } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
               toast.info('Reconectando ao Google Calendar...');

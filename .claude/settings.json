@@ -1,3 +1,34 @@
 {
-  "language": "portuguese"
+  "language": "portuguese",
+  "permissions": {
+    "allow": [
+      "Edit(.claude/approved-plans/**)",
+      "Read(**/*)",
+      "Write(**/*)",
+      "Edit(**/*)",
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "Bash(git pull:*)",
+      "Skill(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf /*)",
+      "Bash(sudo rm -rf:*)",
+      "Bash(mkfs:*)",
+      "Bash(dd if=/dev/zero:*)",
+      "Bash(chmod -R 777 /)"
+    ]
+  },
+  "hooks": {},
+  "outputStyle": "default",
+  "sandbox": {
+    "enabled": false
+  }
 }
