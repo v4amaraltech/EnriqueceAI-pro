@@ -717,7 +717,7 @@ export function LeadInfoPanel({
                               ? formatBRL(rawVal)
                               : rawVal || '—'
                           }
-                          href={cf.field_type === 'url' && rawVal ? rawVal : undefined}
+                          href={cf.field_type === 'url' && rawVal ? (rawVal.startsWith('http://') || rawVal.startsWith('https://') ? rawVal : `https://${rawVal}`) : undefined}
                         />
                       );
                     })
