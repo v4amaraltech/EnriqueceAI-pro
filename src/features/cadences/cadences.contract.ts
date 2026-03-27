@@ -172,4 +172,5 @@ export interface TimelineEntry {
   step_order?: number;
   step_activity_name?: string;
   step_instructions?: string;
+  metadata?: Record<string, unknown> | null;
 }

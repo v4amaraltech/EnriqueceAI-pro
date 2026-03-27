@@ -4,11 +4,13 @@ import { useMemo, useState } from 'react';
 import {
   Calendar,
   Clock,
+  ExternalLink,
   Linkedin,
   Mail,
   MessageSquare,
   Phone,
   Search,
+  Video,
 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -46,6 +48,11 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
     if (channelFilter === 'all') return timeline;
     return timeline.filter((e) => e.channel === channelFilter);
   }, [timeline, channelFilter]);
+
+  const meetings = useMemo(
+    () => timeline.filter((e) => e.type === 'meeting_scheduled'),
+    [timeline],
+  );
 
   return (
     <>
@@ -94,13 +101,70 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         {/* Agendar reunião Tab */}
         <TabsContent value="reuniao" className="pt-4">
           <div className="space-y-4">
-            <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Agende uma reunião com este lead via Google Calendar.
-            </p>
             <Button onClick={() => onShowMeetingChange(true)}>
               <Calendar className="mr-2 h-4 w-4" />
               Agendar Reunião
             </Button>
+
+            {/* Reuniões agendadas */}
+            {meetings.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                  Reuniões agendadas ({meetings.length})
+                </h4>
+                {meetings.map((m) => {
+                  const meta = m.metadata as Record<string, unknown> | undefined;
+                  const meetLink = meta?.meet_link as string | undefined;
+                  const calendarLink = meta?.calendar_link as string | undefined;
+                  return (
+                    <div
+                      key={m.id}
+                      className="rounded-lg border border-[var(--border)] p-3 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-[var(--foreground)]">
+                          {m.subject ?? 'Reunião'}
+                        </p>
+                        <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
+                          {new Date(m.created_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      {m.message_content && (
+                        <p className="text-xs text-[var(--muted-foreground)] whitespace-pre-line">
+                          {m.message_content}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {meetLink && (
+                          <a
+                            href={meetLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                          >
+                            <Video className="h-3 w-3" />
+                            Google Meet
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                        {calendarLink && (
+                          <a
+                            href={calendarLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                          >
+                            <Calendar className="h-3 w-3" />
+                            Ver no Calendar
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

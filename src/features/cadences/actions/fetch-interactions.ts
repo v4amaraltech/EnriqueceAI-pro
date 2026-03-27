@@ -71,6 +71,7 @@ export async function fetchLeadTimeline(
       step_order: stepData?.step_order,
       step_activity_name: stepData?.activity_name ?? undefined,
       step_instructions: stepData?.instructions ?? undefined,
+      metadata: meta,
     };
   });
 
