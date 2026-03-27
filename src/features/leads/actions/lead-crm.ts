@@ -30,11 +30,13 @@ import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispa
  * Detects date-like values by pattern and converts them; non-date values pass through unchanged.
  */
 function formatValueForKommo(value: string): string {
-  // Match YYYY-MM-DD or YYYY-MM-DDTHH:MM(:SS)
-  if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/.test(value)) {
+  // Detect date-like values in various formats and convert to Kommo's required ISO 8601 with timezone
+  // Covers: 2026-03-27, 2026-03-27T10:00, 2026-03-27T10:00:00, 2026-03-27T10:00:00.000Z, etc.
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
     const date = new Date(value);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().replace('.000Z', '+00:00');
+      // Kommo requires Y-m-d\TH:i:sP format — e.g. 2026-03-27T00:00:00+00:00
+      return date.toISOString().replace(/\.\d{3}Z$/, '+00:00');
     }
   }
   return value;
