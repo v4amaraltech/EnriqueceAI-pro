@@ -275,6 +275,12 @@ export async function markLeadAsWon(
             }
           }
 
+          // Resolve assigned_to UUID to member name for CRM mapping
+          if (lead.assigned_to) {
+            const { data: authUser } = await serviceSupabase.auth.admin.getUserById(lead.assigned_to as string);
+            flatLead.assigned_to_name = authUser?.user?.user_metadata?.name ?? authUser?.user?.email ?? null;
+          }
+
           // Check if Contact/Person already synced (dedup)
           const { data: existingSync } = (await from(supabase, 'interactions')
             .select('external_id')
