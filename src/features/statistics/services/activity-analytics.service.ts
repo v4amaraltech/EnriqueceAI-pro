@@ -20,6 +20,7 @@ import type {
   UserActivityRow,
 } from '../types/activity-analytics.types';
 import { safeRate } from '../types/shared';
+import { buildMemberNameMap } from './member-lookup';
 
 interface InteractionRow {
   id: string;
@@ -271,21 +272,7 @@ async function calculateUserBreakdown(
 
   if (userMap.size === 0) return [];
 
-  // Fetch user names via admin client (server client can't list auth.users)
-  const nameMap = new Map<string, string>();
-  try {
-    const { createAdminSupabaseClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminSupabaseClient();
-    const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 100 });
-    if (authUsers?.users) {
-      for (const u of authUsers.users) {
-        const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
-        nameMap.set(u.id, name);
-      }
-    }
-  } catch {
-    // Fallback: names will show as truncated UUIDs
-  }
+  const nameMap = await buildMemberNameMap(supabase, orgId);
 
   // Group leads by assigned_to
   const userLeadCount = new Map<string, number>();

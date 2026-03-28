@@ -44,3 +44,18 @@ export function getPeriodDates(period: string): { start: string; end: string } {
 
 // Re-export shared formatters from canonical location
 export { safeRate, formatDuration, formatDurationLong } from '@/lib/utils/format';
+
+/** Group items by a key function — O(n) lookup map builder. */
+export function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const arr = map.get(key);
+    if (arr) {
+      arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+  return map;
+}

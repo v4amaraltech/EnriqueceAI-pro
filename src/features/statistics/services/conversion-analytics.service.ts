@@ -11,7 +11,7 @@ import type {
   PipelineVelocity,
   StageConversion,
 } from '../types/conversion-analytics.types';
-import { safeRate } from '../types/shared';
+import { groupBy, safeRate } from '../types/shared';
 
 interface LeadRow {
   id: string;
@@ -191,10 +191,13 @@ function calculateCadenceConversion(
     leads.filter((l) => l.status === 'qualified').map((l) => l.id),
   );
 
+  const enrollmentsByCadence = groupBy(enrollments, (e) => e.cadence_id);
+  const interactionsByCadence = groupBy(interactions, (i) => i.cadence_id ?? '');
+
   return cadences
     .map((cadence) => {
-      const cadenceEnrollments = enrollments.filter((e) => e.cadence_id === cadence.id);
-      const cadenceInteractions = interactions.filter((i) => i.cadence_id === cadence.id);
+      const cadenceEnrollments = enrollmentsByCadence.get(cadence.id) ?? [];
+      const cadenceInteractions = interactionsByCadence.get(cadence.id) ?? [];
 
       const replies = cadenceInteractions.filter((i) => i.type === 'replied').length;
       const meetings = cadenceInteractions.filter((i) => i.type === 'meeting_scheduled').length;

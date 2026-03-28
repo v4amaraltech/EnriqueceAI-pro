@@ -10,7 +10,7 @@ import type {
   EnrollmentsByStatusEntry,
   StepProgressionEntry,
 } from '../types/cadence-analytics.types';
-import { safeRate } from '../types/shared';
+import { groupBy, safeRate } from '../types/shared';
 
 interface CadenceRow {
   id: string;
@@ -41,20 +41,6 @@ interface StepRow {
   cadence_id: string;
   step_order: number;
   channel: string;
-}
-
-function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    const arr = map.get(key);
-    if (arr) {
-      arr.push(item);
-    } else {
-      map.set(key, [item]);
-    }
-  }
-  return map;
 }
 
 export async function fetchCadenceAnalyticsData(

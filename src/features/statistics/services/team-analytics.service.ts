@@ -10,7 +10,7 @@ import type {
   SdrTrendEntry,
   TeamAnalyticsData,
 } from '../types/team-analytics.types';
-import { safeRate } from '../types/shared';
+import { groupBy, safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
 
 interface MemberInfo {
@@ -42,20 +42,6 @@ interface LeadRow {
   id: string;
   status: string;
   created_by: string | null;
-}
-
-function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    const arr = map.get(key);
-    if (arr) {
-      arr.push(item);
-    } else {
-      map.set(key, [item]);
-    }
-  }
-  return map;
 }
 
 export async function fetchTeamAnalyticsData(
