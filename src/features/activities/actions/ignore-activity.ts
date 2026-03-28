@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -24,10 +25,8 @@ export async function ignoreActivity(
     .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', enrollmentId);
 
-  if (error) {
-    console.error('[activities] Failed to ignore activity:', error.message);
-    return { success: false, error: 'Erro ao ignorar atividade' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao ignorar atividade', 'activities');
+  if (qErr) return qErr;
 
   revalidatePath('/atividades');
 

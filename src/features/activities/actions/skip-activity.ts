@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -26,10 +27,8 @@ export async function skipActivity(
     .update({ next_step_due: nextStepDue } as Record<string, unknown>)
     .eq('id', enrollmentId);
 
-  if (error) {
-    console.error('[activities] Failed to skip activity:', error.message);
-    return { success: false, error: 'Erro ao pular atividade' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao pular atividade', 'activities');
+  if (qErr) return qErr;
 
   revalidatePath('/atividades');
 

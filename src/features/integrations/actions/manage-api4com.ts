@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
@@ -134,9 +135,8 @@ export async function disconnectApi4Com(): Promise<ActionResult<void>> {
     .eq('org_id', orgId)
     .eq('user_id', userId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao desconectar API4Com' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao desconectar API4Com', 'api4com');
+  if (qErr) return qErr;
 
   revalidatePath('/settings/integrations');
   return { success: true, data: undefined };

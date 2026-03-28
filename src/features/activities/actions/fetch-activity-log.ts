@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -77,10 +78,8 @@ export async function fetchActivityLog(
     error: { message: string } | null;
   };
 
-  if (enrollError) {
-    console.error('[activity-log] Failed to fetch enrollments:', enrollError.message);
-    return { success: false, error: 'Erro ao buscar atividades' };
-  }
+  const qErr = handleQueryError(enrollError, 'Erro ao buscar atividades', 'activity-log');
+  if (qErr) return qErr;
 
   if (!enrollments || enrollments.length === 0) {
     return { success: true, data: { activities: [], total: 0 } };

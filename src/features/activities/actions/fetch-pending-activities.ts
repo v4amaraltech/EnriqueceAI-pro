@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -60,10 +61,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .order('next_step_due', { ascending: true })
     .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
-  if (enrollError) {
-    console.error('[activities] Failed to fetch enrollments:', enrollError.message);
-    return { success: false, error: 'Erro ao buscar atividades pendentes' };
-  }
+  const qErr = handleQueryError(enrollError, 'Erro ao buscar atividades pendentes', 'activities');
+  if (qErr) return qErr;
 
   if (!enrollments || enrollments.length === 0) {
     return { success: true, data: [] };

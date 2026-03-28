@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { ERR_ALREADY_EXECUTED } from '@/lib/constants/error-codes';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
@@ -18,11 +19,30 @@ import { toPlainText } from '@/lib/utils/html-to-plaintext';
 
 import type { ExecuteActivityInput } from '../types';
 
+const executeActivitySchema = z.object({
+  enrollmentId: z.string().uuid(),
+  cadenceId: z.string().uuid(),
+  stepId: z.string().uuid(),
+  leadId: z.string().uuid(),
+  orgId: z.string().uuid(),
+  cadenceCreatedBy: z.string().min(1),
+  channel: z.string().min(1),
+  to: z.string().min(1),
+  subject: z.string(),
+  body: z.string(),
+  aiGenerated: z.boolean(),
+  templateId: z.string().uuid().nullable(),
+});
+
 export async function executeActivity(
   input: ExecuteActivityInput,
 ): Promise<ActionResult<{ interactionId: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const parsed = executeActivitySchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Dados inválidos' };
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { userId, supabase } = auth.data;
 
   const {
     enrollmentId,
@@ -70,7 +90,7 @@ export async function executeActivity(
       },
       ai_generated: aiGenerated,
       original_template_id: templateId,
-      performed_by: user.id,
+      performed_by: userId,
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: Pick<InteractionRow, 'id'> | null };

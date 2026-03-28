@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -38,9 +39,8 @@ export async function createCadence(
     .select('*')
     .single()) as { data: CadenceRow | null; error: { message: string } | null };
 
-  if (error) {
-    return { success: false, error: 'Erro ao criar cadência' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao criar cadência', 'cadences');
+  if (qErr) return qErr;
 
   return { success: true, data: data! };
 }
@@ -66,9 +66,8 @@ export async function updateCadence(
     .select('*')
     .single()) as { data: CadenceRow | null; error: { message: string } | null };
 
-  if (error) {
-    return { success: false, error: 'Erro ao atualizar cadência' };
-  }
+  const qErr2 = handleQueryError(error, 'Erro ao atualizar cadência', 'cadences');
+  if (qErr2) return qErr2;
 
   return { success: true, data: data! };
 }
@@ -88,10 +87,8 @@ export async function deleteCadence(
     .select('id')
     .maybeSingle();
 
-  if (error) {
-    console.error('[deleteCadence] Error:', error);
-    return { success: false, error: 'Erro ao deletar cadência' };
-  }
+  const qErr3 = handleQueryError(error, 'Erro ao deletar cadência', 'deleteCadence');
+  if (qErr3) return qErr3;
 
   if (!updated) {
     console.error('[deleteCadence] No rows affected for cadenceId:', cadenceId);
@@ -126,9 +123,8 @@ export async function activateCadence(
     .select('*')
     .single()) as { data: CadenceRow | null; error: { message: string } | null };
 
-  if (error) {
-    return { success: false, error: 'Erro ao ativar cadência' };
-  }
+  const qErr4 = handleQueryError(error, 'Erro ao ativar cadência', 'cadences');
+  if (qErr4) return qErr4;
 
   return { success: true, data: data! };
 }
@@ -171,9 +167,8 @@ export async function addCadenceStep(
     .select('*')
     .single()) as { data: CadenceStepRow | null; error: { message: string } | null };
 
-  if (error) {
-    return { success: false, error: 'Erro ao adicionar passo' };
-  }
+  const qErr5 = handleQueryError(error, 'Erro ao adicionar passo', 'cadences');
+  if (qErr5) return qErr5;
 
   // Update total_steps
   const { error: countErr } = await from(supabase, 'cadences')
@@ -209,9 +204,8 @@ export async function removeCadenceStep(
     .eq('id', stepId)
     .eq('cadence_id', cadenceId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao remover passo' };
-  }
+  const qErr6 = handleQueryError(error, 'Erro ao remover passo', 'cadences');
+  if (qErr6) return qErr6;
 
   // Update total_steps
   const newTotal = Math.max(0, cadence.total_steps - 1);

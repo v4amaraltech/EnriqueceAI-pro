@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -62,10 +63,8 @@ export async function completeDialerCall(
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
 
-  if (callError || !call) {
-    console.error('[power-dialer] Failed to create call:', callError?.message);
-    return { success: false, error: 'Erro ao registrar ligacao' };
-  }
+  const qErr = handleQueryError(callError, 'Erro ao registrar ligação', 'power-dialer');
+  if (qErr || !call) return qErr ?? { success: false, error: 'Erro ao registrar ligação' };
 
   // Dispatch call.completed or call.missed webhook
   const missedStatuses = ['no_answer', 'busy', 'wrong_number'];

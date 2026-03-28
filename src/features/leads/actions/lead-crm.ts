@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -228,9 +229,8 @@ export async function markLeadAsWon(
       .eq('id', leadId)
       .eq('org_id', orgId);
 
-    if (leadError) {
-      return { success: false, error: 'Erro ao marcar lead como ganho' };
-    }
+    const qErr = handleQueryError(leadError, 'Erro ao marcar lead como ganho', 'lead-crm');
+    if (qErr) return qErr;
 
     // Dispatch lead.qualified webhook
     dispatchWebhookEvent(supabase, orgId, 'lead.qualified', {

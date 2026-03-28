@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -41,10 +42,8 @@ export async function fetchAvailableLeadsCount(): Promise<ActionResult<Available
     error: { message: string } | null;
   };
 
-  if (error) {
-    console.error('[activities] Failed to fetch available leads count:', error.message);
-    return { success: false, error: 'Erro ao contar leads disponíveis' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao contar leads disponíveis', 'activities');
+  if (qErr) return qErr;
 
   const leadIds = (data ?? []).map((l) => l.id);
 

@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -63,10 +64,8 @@ export async function initiateApi4ComCall(
       .select('id')
       .single()) as { data: { id: string } | null; error: { message: string } | null };
 
-    if (callError || !call) {
-      console.error('[api4com] Failed to create call record:', callError?.message);
-      return { success: false, error: 'Erro ao registrar chamada' };
-    }
+    const qErr = handleQueryError(callError, 'Erro ao registrar chamada', 'api4com');
+    if (qErr || !call) return qErr ?? { success: false, error: 'Erro ao registrar chamada' };
 
     return {
       success: true,

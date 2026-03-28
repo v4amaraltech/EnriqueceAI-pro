@@ -1,7 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 import { AIService } from '@/features/ai/services/ai.service';
@@ -40,7 +40,9 @@ async function resolveVendorVariables(userId: string): Promise<{ nome_vendedor: 
 export async function prepareActivityEmail(
   input: PrepareInput,
 ): Promise<ActionResult<PreparedEmail>> {
-  const user = await requireAuth();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { userId } = auth.data;
 
   const { lead, templateSubject, templateBody, aiPersonalization, channel } = input;
 
@@ -63,7 +65,7 @@ export async function prepareActivityEmail(
     };
   }
 
-  const vendorVars = await resolveVendorVariables(user.id);
+  const vendorVars = await resolveVendorVariables(userId);
   const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
     ...buildLeadTemplateVariables(lead, socioNome),
@@ -107,7 +109,9 @@ export async function prepareActivityEmail(
 export async function prepareActivityWhatsApp(
   input: PrepareInput,
 ): Promise<ActionResult<PreparedWhatsApp>> {
-  const user = await requireAuth();
+  const auth2 = await getAuthOrgIdResult();
+  if (!auth2.success) return auth2;
+  const { userId: userId2 } = auth2.data;
 
   const { lead, templateBody, aiPersonalization, channel } = input;
 
@@ -129,7 +133,7 @@ export async function prepareActivityWhatsApp(
     };
   }
 
-  const vendorVars = await resolveVendorVariables(user.id);
+  const vendorVars = await resolveVendorVariables(userId2);
   const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
     ...buildLeadTemplateVariables(lead, socioNome),

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { encrypt } from '@/lib/security/encryption';
@@ -51,9 +52,8 @@ export async function connectWhatsApp(
     .select('id, phone_number_id, business_account_id, status, created_at, updated_at')
     .single()) as { data: WhatsAppConnectionSafe | null; error: { message: string } | null };
 
-  if (error) {
-    return { success: false, error: 'Erro ao salvar conexão WhatsApp' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao salvar conexão WhatsApp', 'whatsapp');
+  if (qErr) return qErr;
 
   revalidatePath('/settings/integrations');
   return { success: true, data: data! };
@@ -78,9 +78,8 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
     .delete()
     .eq('org_id', orgId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao desconectar WhatsApp' };
-  }
+  const qErr2 = handleQueryError(error, 'Erro ao desconectar WhatsApp', 'whatsapp');
+  if (qErr2) return qErr2;
 
   revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
@@ -96,10 +95,8 @@ export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disc
     method: 'POST',
   });
 
-  if (error) {
-    console.error('[disconnectEvolutionWhatsApp] Edge function error:', error);
-    return { success: false, error: 'Erro ao desconectar WhatsApp' };
-  }
+  const qErr3 = handleQueryError(error, 'Erro ao desconectar WhatsApp', 'disconnectEvolutionWhatsApp');
+  if (qErr3) return qErr3;
 
   revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
