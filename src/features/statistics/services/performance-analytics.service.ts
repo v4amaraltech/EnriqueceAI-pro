@@ -12,6 +12,20 @@ import type {
 import { safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
 
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const arr = map.get(key);
+    if (arr) {
+      arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+  return map;
+}
+
 interface InteractionRow {
   type: string;
   channel: string | null;
@@ -96,11 +110,15 @@ export async function fetchPerformanceAnalyticsData(
     return responsible && filteredIds.includes(responsible);
   }).length;
 
-  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactions, leads);
+  // Build lookup maps once — O(n) instead of O(n×m) per member
+  const interactionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
+  const leadsByAssignee = groupBy(leads, (l) => l.assigned_to ?? '');
+
+  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactionsByUser, leadsByAssignee, leads);
   const sdrComparison = buildSdrComparison(sdrTable);
   const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
 
-  const dailyControl = buildDailyControl(filteredIds, memberLookup, interactions, leads);
+  const dailyControl = buildDailyControl(filteredIds, memberLookup, interactionsByUser, leadsByAssignee);
 
   return {
     totalActivities,
@@ -118,16 +136,17 @@ export async function fetchPerformanceAnalyticsData(
 function buildSdrTable(
   memberIds: string[],
   memberLookup: Map<string, string>,
-  interactions: InteractionRow[],
-  leads: LeadRow[],
+  interactionsByUser: Map<string, InteractionRow[]>,
+  leadsByAssignee: Map<string, LeadRow[]>,
+  allLeads: LeadRow[],
 ): SdrPerformanceRow[] {
   return memberIds
     .map((userId) => {
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
-      const userInteractions = interactions.filter((i) => i.performed_by === userId);
-      const userLeads = leads.filter((l) => l.assigned_to === userId);
+      const userInteractions = interactionsByUser.get(userId) ?? [];
+      const userLeads = leadsByAssignee.get(userId) ?? [];
       // Qualified: count leads where this user is won_by (or assigned_to if won_by is null)
-      const qualified = leads.filter((l) => {
+      const qualified = allLeads.filter((l) => {
         if (l.status !== 'qualified') return false;
         const responsible = l.won_by ?? l.assigned_to;
         return responsible === userId;
@@ -219,12 +238,12 @@ function emptyData(): PerformanceAnalyticsData {
 function buildDailyControl(
   memberIds: string[],
   memberLookup: Map<string, string>,
-  interactions: InteractionRow[],
-  leads: LeadRow[],
+  interactionsByUser: Map<string, InteractionRow[]>,
+  leadsByAssignee: Map<string, LeadRow[]>,
 ): DailyControlRow[] {
   return memberIds.map((userId) => {
-    const userInteractions = interactions.filter((i) => i.performed_by === userId);
-    const userLeads = leads.filter((l) => l.assigned_to === userId);
+    const userInteractions = interactionsByUser.get(userId) ?? [];
+    const userLeads = leadsByAssignee.get(userId) ?? [];
     const prospecting = userLeads.filter((l) => l.status === 'contacted' || l.status === 'new').length;
     const available = userLeads.filter((l) => l.status === 'new').length;
     const won = userLeads.filter((l) => l.status === 'qualified').length;

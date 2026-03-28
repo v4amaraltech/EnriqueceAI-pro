@@ -43,6 +43,20 @@ interface StepRow {
   channel: string;
 }
 
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const arr = map.get(key);
+    if (arr) {
+      arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+  return map;
+}
+
 export async function fetchCadenceAnalyticsData(
   supabase: SupabaseClient,
   orgId: string,
@@ -130,31 +144,35 @@ export async function fetchCadenceAnalyticsData(
   );
   const totalSent = engagementInteractions.filter((i) => i.type === 'sent').length;
 
+  // Build lookup maps once — O(n) instead of O(n²) per helper
+  const enrollmentsByCadence = groupBy(enrollments, (e) => e.cadence_id);
+  const interactionsByCadence = groupBy(interactions, (i) => i.cadence_id ?? '');
+
   return {
     activeCadences,
     totalEnrolled,
     completionRate: safeRate(totalCompleted, totalEnrolled),
     replyRate: safeRate(totalReplied, totalEnrolled),
-    cadenceTable: buildCadenceTable(cadences, enrollments, interactions),
-    enrollmentsByStatus: buildEnrollmentsByStatus(cadences, enrollments),
+    cadenceTable: buildCadenceTable(cadences, enrollmentsByCadence, interactionsByCadence),
+    enrollmentsByStatus: buildEnrollmentsByStatus(cadences, enrollmentsByCadence),
     stepProgression: buildStepProgression(steps, enrollments),
     totalSent,
     engagedLeads: engagedLeadIds.size,
     engagementRate: safeRate(engagedLeadIds.size, sentLeadIds.size),
-    conversionRows: buildConversionRows(cadences, enrollments),
-    distributionRows: buildDistributionRows(cadences, enrollments),
+    conversionRows: buildConversionRows(cadences, enrollmentsByCadence),
+    distributionRows: buildDistributionRows(cadences, enrollmentsByCadence),
   };
 }
 
 function buildCadenceTable(
   cadences: CadenceRow[],
-  enrollments: EnrollmentRow[],
-  interactions: InteractionRow[],
+  enrollmentsByCadence: Map<string, EnrollmentRow[]>,
+  interactionsByCadence: Map<string, InteractionRow[]>,
 ): CadencePerformanceRow[] {
   return cadences
     .map((cadence) => {
-      const cadEnr = enrollments.filter((e) => e.cadence_id === cadence.id);
-      const cadInt = interactions.filter((i) => i.cadence_id === cadence.id);
+      const cadEnr = enrollmentsByCadence.get(cadence.id) ?? [];
+      const cadInt = interactionsByCadence.get(cadence.id) ?? [];
       const enrolled = cadEnr.length;
       const completed = cadEnr.filter((e) => e.status === 'completed').length;
       const replied = cadInt.filter((i) => i.type === 'replied').length;
@@ -176,11 +194,11 @@ function buildCadenceTable(
 
 function buildEnrollmentsByStatus(
   cadences: CadenceRow[],
-  enrollments: EnrollmentRow[],
+  enrollmentsByCadence: Map<string, EnrollmentRow[]>,
 ): EnrollmentsByStatusEntry[] {
   return cadences
     .map((cadence) => {
-      const cadEnr = enrollments.filter((e) => e.cadence_id === cadence.id);
+      const cadEnr = enrollmentsByCadence.get(cadence.id) ?? [];
       return {
         cadenceName: cadence.name,
         active: cadEnr.filter((e) => e.status === 'active').length,
@@ -235,9 +253,9 @@ function buildStepProgression(
     }));
 }
 
-function buildConversionRows(cadences: CadenceRow[], enrollments: EnrollmentRow[]): CadenceConversionRow[] {
+function buildConversionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentRow[]>): CadenceConversionRow[] {
   return cadences.map((c) => {
-    const cEnrollments = enrollments.filter((e) => e.cadence_id === c.id);
+    const cEnrollments = enrollmentsByCadence.get(c.id) ?? [];
     const total = cEnrollments.length;
     const completed = cEnrollments.filter((e) => e.status === 'completed' || e.status === 'replied').length;
     const lost = total - completed;
@@ -253,9 +271,9 @@ function buildConversionRows(cadences: CadenceRow[], enrollments: EnrollmentRow[
   }).filter((r) => r.totalLeads > 0).sort((a, b) => b.totalLeads - a.totalLeads);
 }
 
-function buildDistributionRows(cadences: CadenceRow[], enrollments: EnrollmentRow[]): CadenceDistributionRow[] {
+function buildDistributionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentRow[]>): CadenceDistributionRow[] {
   return cadences.map((c) => {
-    const cEnrollments = enrollments.filter((e) => e.cadence_id === c.id);
+    const cEnrollments = enrollmentsByCadence.get(c.id) ?? [];
     return {
       cadenceId: c.id,
       cadenceName: c.name,

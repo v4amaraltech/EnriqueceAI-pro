@@ -44,6 +44,20 @@ interface LeadRow {
   created_by: string | null;
 }
 
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const arr = map.get(key);
+    if (arr) {
+      arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+  return map;
+}
+
 export async function fetchTeamAnalyticsData(
   supabase: SupabaseClient,
   orgId: string,
@@ -108,21 +122,27 @@ export async function fetchTeamAnalyticsData(
 
   const memberMap = new Map(members.map((m) => [m.user_id, m.displayName]));
 
-  const comparison = buildComparison(members, interactions, enrollments, calls, leads, goalMap, defaultTarget);
+  // Build lookup maps once — O(n) instead of O(n×m) per member
+  const interactionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
+  const callsByUser = groupBy(calls, (c) => c.user_id);
+  const leadsByCreator = groupBy(leads, (l) => l.created_by ?? '');
+  const enrollmentsByUser = groupBy(enrollments, (e) => e.enrolled_by ?? '');
+
+  const comparison = buildComparison(members, interactionsByUser, enrollmentsByUser, callsByUser, leadsByCreator, goalMap, defaultTarget);
   const sdrNames = members.map((m) => m.displayName);
   const trends = buildTrends(members, interactions, periodStart, periodEnd, memberMap);
   const rankings = buildRankings(comparison);
-  const goals = buildGoals(members, interactions, goalMap, defaultTarget, memberMap);
+  const goals = buildGoals(members, interactionsByUser, goalMap, defaultTarget, memberMap);
 
   return { comparison, trends, sdrNames, rankings, goals };
 }
 
 function buildComparison(
   members: MemberInfo[],
-  interactions: InteractionRow[],
-  enrollments: EnrollmentRow[],
-  calls: CallRow[],
-  leads: LeadRow[],
+  interactionsByUser: Map<string, InteractionRow[]>,
+  enrollmentsByUser: Map<string, EnrollmentRow[]>,
+  callsByUser: Map<string, CallRow[]>,
+  leadsByCreator: Map<string, LeadRow[]>,
   goalMap: Map<string | null, number>,
   defaultTarget: number,
 ): SdrComparisonRow[] {
@@ -130,10 +150,10 @@ function buildComparison(
     const userId = member.user_id;
     const userName = member.displayName;
 
-    const sdrInteractions = interactions.filter((i) => i.performed_by === userId);
-    const sdrCalls = calls.filter((c) => c.user_id === userId);
-    const sdrLeads = leads.filter((l) => l.created_by === userId);
-    const sdrEnrollments = enrollments.filter((e) => e.enrolled_by === userId);
+    const sdrInteractions = interactionsByUser.get(userId) ?? [];
+    const sdrCalls = callsByUser.get(userId) ?? [];
+    const sdrLeads = leadsByCreator.get(userId) ?? [];
+    const sdrEnrollments = enrollmentsByUser.get(userId) ?? [];
 
     const replies = sdrInteractions.filter((i) => i.type === 'replied').length;
     const meetings = sdrInteractions.filter((i) => i.type === 'meeting_scheduled').length;
@@ -239,7 +259,7 @@ function buildRankings(
 
 function buildGoals(
   members: MemberInfo[],
-  interactions: InteractionRow[],
+  interactionsByUser: Map<string, InteractionRow[]>,
   goalMap: Map<string | null, number>,
   defaultTarget: number,
   memberMap: Map<string, string>,
@@ -249,8 +269,8 @@ function buildGoals(
 
   return members.map((member) => {
     const target = goalMap.get(member.user_id) ?? defaultTarget;
-    const actual = interactions.filter(
-      (i) => i.performed_by === member.user_id && new Date(i.created_at) >= todayStart,
+    const actual = (interactionsByUser.get(member.user_id) ?? []).filter(
+      (i) => new Date(i.created_at) >= todayStart,
     ).length;
 
     return {
