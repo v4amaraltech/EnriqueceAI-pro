@@ -61,6 +61,12 @@ export function EmailPreviewPanel({ subject, body }: EmailPreviewPanelProps) {
     });
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   function handleSearchChange(value: string) {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);

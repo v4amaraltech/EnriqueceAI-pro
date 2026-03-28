@@ -68,7 +68,7 @@ export function CsvDropzone({ onFileSelect, disabled }: CsvDropzoneProps) {
             <p className="font-medium">{selectedFile.name}</p>
             <p className="text-sm text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={clearFile} disabled={disabled}>
+          <Button variant="ghost" size="icon" onClick={clearFile} disabled={disabled} aria-label="Remover arquivo">
             <X className="h-4 w-4" />
           </Button>
         </div>

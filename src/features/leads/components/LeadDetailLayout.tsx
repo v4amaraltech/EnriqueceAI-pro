@@ -122,7 +122,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   }, [lead.id, lead.status]);
 
   // Won dialog — closer info & selection
-  const [wonCloserName, setWonCloserName] = useState<string | null>(null);
+  const [_wonCloserName, setWonCloserName] = useState<string | null>(null);
   const [wonClosers, setWonClosers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedWonCloserId, setSelectedWonCloserId] = useState<string | null>(lead.closer_id ?? null);
 

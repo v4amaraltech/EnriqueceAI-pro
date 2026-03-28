@@ -62,7 +62,13 @@ export function TemplatePreviewPanel({ subject, body, channel }: TemplatePreview
         if (r.success && r.data) setSignature(r.data);
       });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load initial data on mount only
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   function handleSearchChange(value: string) {
     setSearch(value);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, useTransition } from 'react';
+import Image from 'next/image';
 
 import { toast } from 'sonner';
 
@@ -79,11 +80,20 @@ export function AdminCreateOrgPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Criar Organização</h1>
-        <p className="text-sm text-muted-foreground">
-          Cria uma nova organização com manager e trial de 14 dias.
-        </p>
+      <div className="flex flex-col items-center gap-4">
+        <Image
+          src="/logos/logo-ea-red.png"
+          alt="Enriquece AI"
+          width={64}
+          height={64}
+          priority
+        />
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight">Criar Organização</h1>
+          <p className="text-sm text-muted-foreground">
+            Cria uma nova organização com manager e trial de 14 dias.
+          </p>
+        </div>
       </div>
 
       <Card>

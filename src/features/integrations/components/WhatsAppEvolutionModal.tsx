@@ -118,6 +118,7 @@ export function WhatsAppEvolutionModal({
       <div className="hidden flex-col items-center justify-center bg-black md:flex md:w-1/2 relative">
         <button
           type="button"
+          aria-label="Fechar"
           className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white/60 hover:text-white transition-colors"
           onClick={onClose}
         >
