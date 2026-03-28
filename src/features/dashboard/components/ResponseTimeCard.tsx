@@ -178,7 +178,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
 
       <div className="flex flex-col gap-6 lg:flex-row flex-1">
         {/* Left: KPI */}
-        <div className="flex flex-col items-center justify-center lg:w-[380px] lg:border-r lg:border-[var(--border)] lg:pr-10">
+        <div className="flex flex-col items-center justify-center lg:w-1/2 lg:border-r lg:border-[var(--border)] lg:pr-10">
           <p className="text-7xl font-bold">{data.overallPct}%</p>
           <p className="mt-3 text-base text-center">
             abordados em até <span className="text-[#E53935] font-semibold">{threshold}</span>
