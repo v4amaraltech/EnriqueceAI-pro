@@ -163,9 +163,4 @@ export function getPlanDiff(currentPlan: PlanRow, targetPlan: PlanRow): PlanDiff
   return { gained, lost, limitsChanged };
 }
 
-export function formatCents(cents: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(cents / 100);
-}
+export { formatCurrencyBRL as formatCents } from '@/lib/utils/format';

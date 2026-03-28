@@ -88,3 +88,13 @@ export function safeRate(numerator: number, denominator: number): number {
   if (denominator === 0) return 0;
   return Math.round((numerator / denominator) * 1000) / 10;
 }
+
+/** Format value in cents as BRL currency: 15000 → "R$ 150,00" */
+export function formatCurrencyBRL(cents: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+}
+
+/** Format a BRL value (not cents) with no decimals: 1500 → "R$ 1.500" */
+export function formatCurrencyBRLCompact(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
+}

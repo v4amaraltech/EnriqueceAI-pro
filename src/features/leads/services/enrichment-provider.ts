@@ -12,6 +12,9 @@ export function inferQualificacao(nome: string): string {
   return firstName.endsWith('a') ? 'Sócia' : 'Sócio';
 }
 
+const CNPJ_WS_TIMEOUT_MS = 10_000;
+const LEMIT_TIMEOUT_MS = 15_000;
+
 export interface EnrichmentData {
   razao_social?: string;
   nome_fantasia?: string;
@@ -67,7 +70,7 @@ export class CnpjWsProvider implements EnrichmentProvider {
     try {
       const response = await fetch(`${this.baseUrl}/${cnpj}`, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(CNPJ_WS_TIMEOUT_MS),
       });
 
       if (response.status === 429) {
@@ -146,7 +149,7 @@ export class LemitProvider implements EnrichmentProvider {
           Accept: 'application/json',
           Authorization: `Bearer ${this.token}`,
         },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(LEMIT_TIMEOUT_MS),
       });
 
       if (response.status === 429) {

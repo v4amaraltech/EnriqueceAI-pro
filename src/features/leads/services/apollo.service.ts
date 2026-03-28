@@ -6,6 +6,7 @@
  */
 
 const APOLLO_BASE_URL = 'https://api.apollo.io/api/v1';
+const APOLLO_TIMEOUT_MS = 15_000;
 
 export interface ApolloSearchParams {
   personTitles?: string[];
@@ -109,7 +110,7 @@ async function apolloFetch<T>(
       'x-api-key': apiKey,
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(APOLLO_TIMEOUT_MS),
   });
 
   if (!response.ok) {

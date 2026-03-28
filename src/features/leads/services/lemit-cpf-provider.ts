@@ -17,6 +17,8 @@ export interface CpfEnrichmentResult {
   error?: string;
 }
 
+const LEMIT_CPF_TIMEOUT_MS = 15_000;
+
 export class LemitCpfProvider {
   private apiUrl: string;
   private token: string;
@@ -33,7 +35,7 @@ export class LemitCpfProvider {
           Accept: 'application/json',
           Authorization: `Bearer ${this.token}`,
         },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(LEMIT_CPF_TIMEOUT_MS),
       });
 
       if (response.status === 429) {

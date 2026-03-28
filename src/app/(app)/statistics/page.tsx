@@ -2,11 +2,9 @@ import Link from 'next/link';
 
 import { Activity, ArrowRight, BarChart3, Phone, Users } from 'lucide-react';
 
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-
 import { fetchStatisticsData } from '@/features/reports/actions/fetch-statistics';
 import { StatisticsView } from '@/features/reports/components/StatisticsView';
+import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { parseDateRangeParams } from '@/shared/utils/date-range';
 
@@ -93,26 +91,4 @@ export default async function StatisticsPage({ searchParams }: PageProps) {
       )}
     </div>
   );
-}
-
-async function fetchOrgMembers(): Promise<{ userId: string; email: string }[]> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  if (!member) return [];
-
-  const { data: members } = (await supabase
-    .from('organization_members')
-    .select('user_id, user_email')
-    .eq('org_id', member.org_id)
-    .eq('status', 'active')) as { data: { user_id: string; user_email: string }[] | null };
-
-  return (members ?? []).map((m) => ({ userId: m.user_id, email: m.user_email }));
 }

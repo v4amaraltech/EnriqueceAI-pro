@@ -3,6 +3,7 @@
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { formatCurrencyBRLCompact } from '@/lib/utils/format';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
@@ -131,7 +132,7 @@ export async function sendMeetingBriefingEmail(
 
 function formatCurrency(value: number | null): string {
   if (value === null) return '—';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
+  return formatCurrencyBRLCompact(value);
 }
 
 function buildBriefingHtml(data: {
