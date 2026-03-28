@@ -77,9 +77,11 @@ export function StatisticsView({ data, members }: StatisticsViewProps) {
       {/* Charts grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Loss Reasons */}
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 flex flex-col">
           <h2 className="mb-4 text-lg font-semibold">Motivos de Perda</h2>
-          <LossReasonsChart data={data.lossReasons} />
+          <div className="flex-1">
+            <LossReasonsChart data={data.lossReasons} />
+          </div>
         </div>
 
         {/* Conversion by Origin */}

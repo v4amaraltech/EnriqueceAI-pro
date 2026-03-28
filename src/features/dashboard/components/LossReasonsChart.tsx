@@ -32,7 +32,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
       <h3 className="mb-4 text-sm font-medium">
         Motivos de Perda
       </h3>
-      <ResponsiveContainer width="100%" height={Math.max(200, data.length * 40)}>
+      <ResponsiveContainer width="100%" height={Math.max(250, data.length * 50 + 40)}>
         <BarChart
           data={data}
           layout="vertical"
@@ -41,6 +41,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
           <XAxis
             type="number"
+            allowDecimals={false}
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <YAxis
