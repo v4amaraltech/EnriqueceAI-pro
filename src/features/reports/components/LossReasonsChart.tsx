@@ -8,6 +8,32 @@ interface LossReasonsChartProps {
   data: LossReasonStat[];
 }
 
+interface ChartEntry {
+  name: string;
+  fullName: string;
+  count: number;
+  percentage: number;
+}
+
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ChartEntry }> }) {
+  if (!active || !payload?.[0]) return null;
+  const entry = payload[0].payload;
+  return (
+    <div style={{
+      backgroundColor: 'var(--popover)',
+      border: '1px solid var(--border)',
+      borderRadius: '8px',
+      fontSize: '12px',
+      padding: '8px 12px',
+    }}>
+      <p style={{ margin: 0, fontWeight: 500 }}>{entry.fullName}</p>
+      <p style={{ margin: '4px 0 0', color: 'var(--muted-foreground)' }}>
+        Leads: {entry.count} ({entry.percentage.toFixed(0)}%)
+      </p>
+    </div>
+  );
+}
+
 export function LossReasonsChart({ data }: LossReasonsChartProps) {
   if (data.length === 0) {
     return (
@@ -43,18 +69,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
             width={140}
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'var(--popover)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              fontSize: '12px',
-            }}
-            formatter={((value: number, _name: string, props: { payload: { percentage?: number } }) => {
-              const pct = props.payload?.percentage;
-              return [`${value}${pct ? ` (${pct.toFixed(0)}%)` : ''}`, 'Leads'];
-            }) as never}
-          />
+          <Tooltip content={<CustomTooltip />} />
           <Bar dataKey="count" fill="var(--destructive)" radius={[0, 4, 4, 0]} barSize={28} />
         </BarChart>
       </ResponsiveContainer>

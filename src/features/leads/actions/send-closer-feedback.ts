@@ -41,7 +41,7 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
     if (existing) {
       // Reuse existing pending feedback request — don't create duplicate
       feedbackToken = existing.token;
-      console.log('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
+      console.warn('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
     } else {
       // Create new feedback request
       const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
