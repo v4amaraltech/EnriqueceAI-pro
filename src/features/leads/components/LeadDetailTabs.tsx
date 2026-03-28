@@ -145,7 +145,11 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         {/* Agendar reunião Tab */}
         <TabsContent value="reuniao" className="pt-4">
           <div className="space-y-4">
-            <Button onClick={() => onShowMeetingChange(true)}>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-[#E53935]">Registrar reunião</h3>
+              <p className="text-sm text-[var(--muted-foreground)]">Registre aqui a reunião agendada para o closer.</p>
+            </div>
+            <Button onClick={() => onShowMeetingChange(true)} className="bg-[#E53935] hover:bg-[#C62828] text-white">
               <Calendar className="mr-2 h-4 w-4" />
               Agendar Reunião
             </Button>
