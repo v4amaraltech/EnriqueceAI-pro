@@ -121,8 +121,10 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     }
   }, [lead.id, lead.status]);
 
-  // Won dialog — closer info
+  // Won dialog — closer info & selection
   const [wonCloserName, setWonCloserName] = useState<string | null>(null);
+  const [wonClosers, setWonClosers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [selectedWonCloserId, setSelectedWonCloserId] = useState<string | null>(lead.closer_id ?? null);
 
   // Won dialog — required fields validation
   const [wonMissingFields, setWonMissingFields] = useState<MissingRequiredField[]>([]);
@@ -253,19 +255,25 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setWonMissingFields([]);
     setWonFieldValues({});
     setWonCloserName(null);
+    setWonClosers([]);
+    setSelectedWonCloserId(lead.closer_id ?? null);
     setLoadingPipelines(true);
     setLoadingRequiredFields(true);
 
     const [pipelinesResult, stdSettingsResult, closersResult] = await Promise.all([
       fetchCrmPipelines(),
       listStandardFieldSettingsForMember(),
-      lead.closer_id ? listClosers() : Promise.resolve(null),
+      listClosers(),
     ]);
 
-    // Resolve closer name from lead.closer_id
-    if (closersResult && closersResult.success && lead.closer_id) {
-      const closer = closersResult.data.find((c) => c.id === lead.closer_id);
-      if (closer) setWonCloserName(`${closer.name} (${closer.email})`);
+    // Load closers list for selector
+    if (closersResult.success) {
+      setWonClosers(closersResult.data);
+      // If lead already has closer, show its name
+      if (lead.closer_id) {
+        const closer = closersResult.data.find((c) => c.id === lead.closer_id);
+        if (closer) setWonCloserName(`${closer.name} (${closer.email})`);
+      }
     }
 
     setLoadingPipelines(false);
@@ -322,6 +330,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         }
       }
 
+      // Save closer_id if selected (and different from current)
+      if (selectedWonCloserId && selectedWonCloserId !== lead.closer_id) {
+        await updateLead(lead.id, { closer_id: selectedWonCloserId });
+      }
+
       const crmOptions = sendToCrm && selectedProvider && selectedPipelineId && selectedStageId
         ? { provider: selectedProvider, pipelineId: selectedPipelineId, stageId: selectedStageId }
         : undefined;
@@ -339,7 +352,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       }
     });
     setShowWonDialog(false);
-  }, [lead.id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, router, wonMissingFields, wonFieldValues, lead.custom_field_values]);
+  }, [lead.id, lead.closer_id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, selectedWonCloserId, router, wonMissingFields, wonFieldValues, lead.custom_field_values]);
 
   return (
     <div className="space-y-4">
@@ -554,12 +567,32 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
             <DialogTitle className="text-xl">Marcar lead como ganho</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
-            {wonCloserName && (
-              <div className="rounded-lg border border-[var(--border)] p-3">
-                <p className="text-xs text-[var(--muted-foreground)]">Closer da reunião</p>
-                <p className="text-sm font-medium">{wonCloserName}</p>
-              </div>
-            )}
+            {/* Closer selector */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Closer (quem recebe o lead)</Label>
+              {wonClosers.length > 0 ? (
+                <Select
+                  value={selectedWonCloserId ?? 'none'}
+                  onValueChange={(v) => setSelectedWonCloserId(v === 'none' ? null : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione um closer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum closer</SelectItem>
+                    {wonClosers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Nenhum closer cadastrado. Cadastre em Ajustes &gt; Closers.
+                </p>
+              )}
+            </div>
             {loadingPipelines ? (
               <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando funis do CRM...</p>
             ) : crmConnections.length > 0 ? (
