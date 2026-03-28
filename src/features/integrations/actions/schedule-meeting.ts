@@ -98,6 +98,14 @@ export async function scheduleMeeting(
   }
 }
 
+export async function checkCalendarConnected(): Promise<ActionResult<boolean>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId } = auth.data;
+  const connection = await getCalendarConnection(userId, orgId);
+  return { success: true, data: !!connection };
+}
+
 export async function getLoggedUserEmail(): Promise<ActionResult<string>> {
   try {
     const user = await requireAuth();

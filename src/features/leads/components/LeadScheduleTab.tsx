@@ -10,7 +10,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
-import { scheduleMeeting, getLoggedUserEmail } from '@/features/integrations/actions/schedule-meeting';
+import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected } from '@/features/integrations/actions/schedule-meeting';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 interface LeadScheduleTabProps {
@@ -34,6 +34,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
   const [sdrEmail, setSdrEmail] = useState('');
+  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
 
   // Build attendee list from available emails
   function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
@@ -47,13 +48,13 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   }
 
   useEffect(() => {
-    Promise.all([listClosers(), getLoggedUserEmail()]).then(([closersResult, emailResult]) => {
+    Promise.all([listClosers(), getLoggedUserEmail(), checkCalendarConnected()]).then(([closersResult, emailResult, calResult]) => {
       if (closersResult.success) setClosers(closersResult.data);
       setClosersLoaded(true);
       const userEmail = emailResult.success ? emailResult.data : '';
       setSdrEmail(userEmail);
-      // Pre-fill attendees with lead email + SDR email
       setMeetingAttendee(buildAttendees(undefined, userEmail));
+      if (calResult.success) setCalendarConnected(calResult.data);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -65,6 +66,12 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Agendar Reunião
       </h4>
+
+      {calendarConnected === false && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
+          Google Calendar não conectado. Conecte em <strong>Integrações</strong> para agendar reuniões.
+        </div>
+      )}
 
       <div>
         <Label className="text-xs">Título</Label>

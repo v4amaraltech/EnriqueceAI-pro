@@ -25,22 +25,42 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
   const appUrl = getAppUrl();
 
   try {
-    // Create feedback request record
-    const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
-      .insert({
-        org_id: orgId,
-        lead_id: leadId,
-        closer_id: closerId,
-      })
+    // Check if a pending feedback request already exists (e.g. created by meeting briefing)
+    const { data: existing } = (await from(supabase, 'closer_feedback_requests')
       .select('id, token')
-      .single()) as { data: { id: string; token: string } | null; error: { message: string } | null };
+      .eq('lead_id', leadId)
+      .eq('closer_id', closerId)
+      .is('responded_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()) as { data: { id: string; token: string } | null };
 
-    if (insertError || !request) {
-      console.error('[closer-feedback] Failed to create feedback request:', insertError?.message);
-      return;
+    let feedbackToken: string;
+
+    if (existing) {
+      // Reuse existing pending feedback request — don't create duplicate
+      feedbackToken = existing.token;
+      console.log('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
+    } else {
+      // Create new feedback request
+      const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
+        .insert({
+          org_id: orgId,
+          lead_id: leadId,
+          closer_id: closerId,
+        })
+        .select('id, token')
+        .single()) as { data: { id: string; token: string } | null; error: { message: string } | null };
+
+      if (insertError || !request) {
+        console.error('[closer-feedback] Failed to create feedback request:', insertError?.message);
+        return;
+      }
+      feedbackToken = request.token;
     }
 
-    const feedbackUrl = `${appUrl}/feedback/${request.token}`;
+    const feedbackUrl = `${appUrl}/feedback/${feedbackToken}`;
     const html = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl);
 
     // Send via platform email (Resend) — no Gmail dependency
