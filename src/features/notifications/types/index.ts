@@ -7,7 +7,8 @@ export type NotificationType =
   | 'integration_error'
   | 'member_invited'
   | 'member_joined'
-  | 'usage_limit_alert';
+  | 'usage_limit_alert'
+  | 'closer_feedback';
 
 export type NotificationResourceType = 'lead' | 'cadence' | 'integration' | 'member';
 

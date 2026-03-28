@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Bell,
+  ClipboardCheck,
   Mail,
   MailOpen,
   MousePointerClick,
@@ -26,6 +27,7 @@ const ICON_MAP: Record<NotificationType, React.ElementType> = {
   member_invited: UserPlus,
   member_joined: UserCheck,
   usage_limit_alert: Bell,
+  closer_feedback: ClipboardCheck,
 };
 
 function formatRelativeTime(dateStr: string): string {

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { createNotification } from '@/features/notifications/services/notification.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
@@ -121,6 +122,22 @@ async function notifySdr(
   const closerName = closer?.name ?? 'Closer';
   const leadName = lead.nome_fantasia ?? lead.razao_social ?? 'Lead';
   const resultLabel = RESULT_LABELS[result] ?? result;
+
+  // Create in-app notification for the SDR (triggers Realtime)
+  try {
+    await createNotification({
+      org_id: feedbackReq.org_id,
+      user_id: sdrUserId,
+      type: 'closer_feedback',
+      title: `${closerName} respondeu o feedback`,
+      body: `${leadName} — ${resultLabel} (${rating}/5)${comment ? `: ${comment}` : ''}`,
+      resource_type: 'lead',
+      resource_id: feedbackReq.lead_id,
+      metadata: { closer_name: closerName, result, rating, comment },
+    });
+  } catch (err) {
+    console.error('[api/feedback] Failed to create notification:', err);
+  }
   const ratingLabel = RATING_LABELS[rating] ?? `${rating}/5`;
   const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
 
