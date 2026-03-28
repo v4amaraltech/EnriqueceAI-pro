@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, Trash2, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
@@ -65,6 +66,18 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [statusTarget, setStatusTarget] = useState('');
   const [assignMembers, setAssignMembers] = useState<OrgMemberOption[]>([]);
   const [assignTarget, setAssignTarget] = useState('');
+
+  // Closer name map for the table column
+  const [closerMap, setCloserMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    const hasClosers = leads.some((l) => l.closer_id);
+    if (!hasClosers) return;
+    listClosers().then((res) => {
+      if (res.success) {
+        setCloserMap(new Map(res.data.map((c) => [c.id, c.name])));
+      }
+    });
+  }, [leads]);
 
   const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
   const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
@@ -498,6 +511,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
               </TableHead>
               <TableHead>Cadência</TableHead>
               <TableHead>Responsável</TableHead>
+              <TableHead>Closer</TableHead>
               <TableHead className="w-[40px]" />
             </TableRow>
           </TableHeader>
@@ -572,6 +586,11 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <span className="text-sm text-[var(--muted-foreground)]">
                       {responsible ?? '—'}
+                    </span>
+                  </TableCell>
+                  <TableCell onClick={() => navigateToLead(lead.id)}>
+                    <span className="text-sm text-[var(--muted-foreground)]">
+                      {lead.closer_id ? (closerMap.get(lead.closer_id) ?? '—') : '—'}
                     </span>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
