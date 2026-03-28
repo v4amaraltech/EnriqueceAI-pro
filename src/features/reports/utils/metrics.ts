@@ -1,3 +1,5 @@
+import { safeRate } from '@/lib/utils/format';
+
 import type {
   CadenceMetrics,
   FunnelStep,
@@ -9,11 +11,6 @@ import type {
   RawMember,
   SdrMetrics,
 } from '../reports.contract';
-
-function safeRate(numerator: number, denominator: number): number {
-  if (denominator === 0) return 0;
-  return Math.round((numerator / denominator) * 1000) / 10;
-}
 
 export function calculateCadenceMetrics(
   cadences: RawCadence[],
