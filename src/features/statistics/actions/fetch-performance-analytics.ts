@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchPerformanceAnalyticsData } from '../services/performance-analytics.service';
 import type { PerformanceAnalyticsData } from '../types/performance-analytics.types';
-import { getPeriodDates } from '../types/shared';
+import { analyticsParamsSchema, getPeriodDates } from '../types/shared';
 import { getManagerOrgId } from './shared';
 
 export async function fetchPerformanceAnalytics(
@@ -15,6 +15,9 @@ export async function fetchPerformanceAnalytics(
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<PerformanceAnalyticsData>> {
   try {
+    const params = analyticsParamsSchema.safeParse({ period, userIds, cadenceId, dateRange });
+    if (!params.success) return { success: false, error: 'Parâmetros inválidos' };
+
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange

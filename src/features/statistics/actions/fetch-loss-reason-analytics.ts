@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchLossReasonAnalyticsData } from '../services/loss-reason-analytics.service';
 import type { LossReasonAnalyticsData } from '../types/loss-reason-analytics.types';
-import { getPeriodDates } from '../types/shared';
+import { analyticsParamsSchema, getPeriodDates } from '../types/shared';
 import { getManagerOrgId } from './shared';
 
 export async function fetchLossReasonAnalytics(
@@ -15,6 +15,9 @@ export async function fetchLossReasonAnalytics(
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<LossReasonAnalyticsData>> {
   try {
+    const params = analyticsParamsSchema.safeParse({ period, userIds, cadenceId, dateRange });
+    if (!params.success) return { success: false, error: 'Parâmetros inválidos' };
+
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange

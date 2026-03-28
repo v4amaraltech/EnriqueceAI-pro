@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -9,16 +10,18 @@ import { from } from '@/lib/supabase/from';
 import type { CallStatus } from '@/features/calls/types';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
-export interface CompleteDialerCallInput {
-  enrollmentId: string;
-  cadenceId: string;
-  stepId: string;
-  leadId: string;
-  phone: string;
-  callStatus: string;
-  notes: string;
-  durationSeconds?: number;
-}
+const completeDialerCallSchema = z.object({
+  enrollmentId: z.string().uuid(),
+  cadenceId: z.string().uuid(),
+  stepId: z.string().uuid(),
+  leadId: z.string().uuid(),
+  phone: z.string().min(8),
+  callStatus: z.string().min(1),
+  notes: z.string(),
+  durationSeconds: z.number().int().nonnegative().optional(),
+});
+
+export type CompleteDialerCallInput = z.infer<typeof completeDialerCallSchema>;
 
 // Map dialer UI status to calls table status
 const statusMap: Record<string, CallStatus> = {
@@ -34,11 +37,14 @@ const statusMap: Record<string, CallStatus> = {
 export async function completeDialerCall(
   input: CompleteDialerCallInput,
 ): Promise<ActionResult<{ callId: string }>> {
+  const parsed = completeDialerCallSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Dados inválidos' };
+
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = input;
+  const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = parsed.data;
 
   // 1. Create call record
   const { data: call, error: callError } = (await from(supabase, 'calls')

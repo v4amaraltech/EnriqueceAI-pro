@@ -3,17 +3,17 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { updateCallStatusSchema } from '../schemas/call.schemas';
 
 export async function updateCallStatus(
   rawInput: Record<string, unknown>,
 ): Promise<ActionResult<{ id: string }>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const parsed = updateCallStatusSchema.safeParse(rawInput);
   if (!parsed.success) {

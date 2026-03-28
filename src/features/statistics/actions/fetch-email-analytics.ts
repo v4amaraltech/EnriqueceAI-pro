@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchEmailAnalyticsData } from '../services/email-analytics.service';
 import type { EmailAnalyticsData } from '../types/email-analytics.types';
-import { getPeriodDates } from '../types/shared';
+import { analyticsParamsSchema, getPeriodDates } from '../types/shared';
 import { getManagerOrgId } from './shared';
 
 export async function fetchEmailAnalytics(
@@ -15,6 +15,9 @@ export async function fetchEmailAnalytics(
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<EmailAnalyticsData>> {
   try {
+    const params = analyticsParamsSchema.safeParse({ period, userIds, cadenceId, dateRange });
+    if (!params.success) return { success: false, error: 'Parâmetros inválidos' };
+
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange

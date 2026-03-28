@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type StatisticsPeriod = 'today' | '7d' | '30d' | '90d';
 
 export interface PeriodOption {
@@ -11,6 +13,16 @@ export const periodOptions: PeriodOption[] = [
   { value: '30d', label: '30 dias' },
   { value: '90d', label: '90 dias' },
 ];
+
+export const analyticsParamsSchema = z.object({
+  period: z.enum(['today', '7d', '30d', '90d']).default('30d'),
+  userIds: z.array(z.string().uuid()).max(100).optional(),
+  cadenceId: z.string().uuid().optional(),
+  dateRange: z.object({
+    from: z.string().min(10),
+    to: z.string().min(10),
+  }).optional(),
+});
 
 export interface OrgMember {
   userId: string;

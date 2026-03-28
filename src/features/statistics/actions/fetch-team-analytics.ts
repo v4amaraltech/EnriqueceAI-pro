@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchTeamAnalyticsData } from '../services/team-analytics.service';
 import type { TeamAnalyticsData } from '../types/team-analytics.types';
-import { getPeriodDates } from '../types/shared';
+import { analyticsParamsSchema, getPeriodDates } from '../types/shared';
 import { getManagerOrgId } from './shared';
 
 export async function fetchTeamAnalytics(
@@ -13,6 +13,9 @@ export async function fetchTeamAnalytics(
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<TeamAnalyticsData>> {
   try {
+    const params = analyticsParamsSchema.safeParse({ period, dateRange });
+    if (!params.success) return { success: false, error: 'Parâmetros inválidos' };
+
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange

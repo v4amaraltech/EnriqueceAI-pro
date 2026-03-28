@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchCallDashboardData } from '../services/call-dashboard.service';
 import type { CallDashboardData } from '../types/call-dashboard.types';
-import { getPeriodDates } from '../types/shared';
+import { analyticsParamsSchema, getPeriodDates } from '../types/shared';
 import { getManagerOrgId } from './shared';
 
 export async function fetchCallDashboard(
@@ -14,6 +14,9 @@ export async function fetchCallDashboard(
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<CallDashboardData>> {
   try {
+    const params = analyticsParamsSchema.safeParse({ period, userIds, dateRange });
+    if (!params.success) return { success: false, error: 'Parâmetros inválidos' };
+
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange

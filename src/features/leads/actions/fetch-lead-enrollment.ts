@@ -1,5 +1,7 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -35,9 +37,14 @@ export interface LeadEnrollmentData {
   };
 }
 
+const leadIdSchema = z.string().uuid('ID inválido');
+
 export async function fetchLeadEnrollment(
   leadId: string,
 ): Promise<ActionResult<LeadEnrollmentData>> {
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return { success: false, error: 'ID inválido' };
+
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { supabase } = auth.data;

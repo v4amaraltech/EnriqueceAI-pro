@@ -1,17 +1,17 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function markAllNotificationsRead(): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'notifications')
     .update({ read_at: new Date().toISOString() } as Record<string, unknown>)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .is('read_at', null);
 
   if (error) {
