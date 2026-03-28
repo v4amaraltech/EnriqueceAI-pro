@@ -28,11 +28,12 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4 flex flex-col">
       <h3 className="mb-4 text-sm font-medium">
         Motivos de Perda
       </h3>
-      <ResponsiveContainer width="100%" height={Math.max(250, data.length * 50 + 40)}>
+      <div className="flex-1 min-h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
           layout="vertical"
@@ -71,6 +72,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           />
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

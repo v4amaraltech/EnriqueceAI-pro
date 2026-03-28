@@ -29,11 +29,12 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4 flex flex-col">
       <h3 className="mb-4 text-sm font-medium">
         Conversão por Origem
       </h3>
-      <ResponsiveContainer width="100%" height={280}>
+      <div className="flex-1 min-h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis
@@ -72,6 +73,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
           />
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

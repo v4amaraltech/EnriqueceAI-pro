@@ -18,7 +18,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
   const threshold = formatThreshold(data.thresholdMinutes);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 min-h-[480px]">
       <h2 className="text-lg font-semibold mb-6">Tempo de resposta</h2>
 
       <div className="flex flex-col gap-6 lg:flex-row">
