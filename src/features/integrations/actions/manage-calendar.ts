@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -135,6 +137,7 @@ export async function handleCalendarCallback(
     return { success: false, error: 'Erro ao salvar conexão Google Calendar' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: data! };
 }
 
@@ -152,5 +155,6 @@ export async function disconnectCalendar(): Promise<ActionResult<{ disconnected:
     return { success: false, error: 'Erro ao desconectar Google Calendar' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
 }

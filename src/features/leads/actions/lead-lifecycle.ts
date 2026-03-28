@@ -71,7 +71,7 @@ export async function markLeadAsLost(
     lead_id: leadId,
     loss_reason_id: lossReasonId,
     loss_notes: lossNotes ?? null,
-  }).catch(() => {});
+  }).catch((err) => console.error('[webhook] lead.unqualified dispatch failed:', err));
 
   // 2. Complete active/paused enrollments with loss reason
   const enrollmentUpdate: Record<string, unknown> = {

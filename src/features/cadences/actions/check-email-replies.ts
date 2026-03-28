@@ -414,7 +414,7 @@ async function recordBounce(
     email: lead.email,
   });
 
-  console.warn(`[reply-check] Bounce: lead=${sentInteraction.lead_id} email=${lead.email} — marked bounced + paused all enrollments`);
+  console.warn('[reply-check] Bounce detected — marked bounced + paused all enrollments');
 
   // 5. Notify SDR
   if (lead.assigned_to) {

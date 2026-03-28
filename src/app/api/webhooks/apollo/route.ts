@@ -48,18 +48,37 @@ interface ApolloPhoneWebhook {
 }
 
 export async function POST(request: Request) {
-  // Verify webhook secret (passed as query param)
+  // Verify webhook: org_id is cryptographically bound to the token via HMAC
+  // URL format: ?org_id=xxx&token=HMAC(secret, org_id)
   const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
   if (!webhookSecret) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
   const url = new URL(request.url);
+  const orgId = url.searchParams.get('org_id');
   const token = url.searchParams.get('token') ?? '';
+
+  if (!orgId) {
+    return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
+  }
+
+  // Token must be HMAC-SHA256(secret, org_id) — binds org_id cryptographically
+  // Also accept legacy plain secret for backward compatibility (will be deprecated)
+  const expectedHmac = crypto.createHmac('sha256', webhookSecret).update(orgId).digest('hex');
+  const hmacBuf = Buffer.from(expectedHmac);
   const tokenBuf = Buffer.from(token);
   const secretBuf = Buffer.from(webhookSecret);
-  if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
-    console.warn('[apollo-webhook] Auth failed: tokenLen=%d secretLen=%d', tokenBuf.length, secretBuf.length);
+
+  const isHmacValid = tokenBuf.length === hmacBuf.length && crypto.timingSafeEqual(tokenBuf, hmacBuf);
+  const isLegacyValid = tokenBuf.length === secretBuf.length && crypto.timingSafeEqual(tokenBuf, secretBuf);
+
+  if (!isHmacValid && !isLegacyValid) {
+    console.warn('[apollo-webhook] Auth failed for org_id=%s', orgId);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (isLegacyValid && !isHmacValid) {
+    console.warn('[apollo-webhook] DEPRECATION: org_id=%s using legacy plain token — migrate to HMAC', orgId);
   }
 
   let payload: ApolloPhoneWebhook;
@@ -68,11 +87,6 @@ export async function POST(request: Request) {
     payload = (await request.json()) as ApolloPhoneWebhook;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const orgId = url.searchParams.get('org_id');
-  if (!orgId) {
-    return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
   }
 
   // Apollo sends `people` (array) — also handle legacy `person` format
@@ -145,7 +159,7 @@ export async function POST(request: Request) {
     }
 
     if (!lead) {
-      console.warn('[apollo-webhook] Lead not found for person=%s org=%s', person.id, orgId);
+      console.warn('[apollo-webhook] Lead not found for apollo person_id');
       continue;
     }
 
@@ -168,7 +182,7 @@ export async function POST(request: Request) {
       .eq('id', lead.id);
 
     await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
-    console.warn('[apollo-webhook] Updated lead=%s with %d phones, primary=%s', lead.id, mergedPhones.length, primaryPhone);
+    console.warn('[apollo-webhook] Updated lead with %d phones', mergedPhones.length);
     updated++;
   }
 

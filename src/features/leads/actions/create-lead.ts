@@ -127,7 +127,7 @@ export async function createLead(
     email: parsed.data.email ?? null,
     first_name: parsed.data.first_name,
     last_name: parsed.data.last_name ?? null,
-  }).catch(() => {});
+  }).catch((err) => console.error('[webhook] lead.created dispatch failed:', err));
 
   // 2. Enroll in cadence if selected (non-blocking for lead creation)
   const cadenceId = parsed.data.cadence_id;

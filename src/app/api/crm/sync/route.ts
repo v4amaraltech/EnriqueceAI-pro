@@ -1,8 +1,7 @@
-import crypto from 'crypto';
-
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -14,21 +13,6 @@ interface SyncRequestBody {
   connectionId?: string;
 }
 
-function verifyCronAuth(request: Request): boolean {
-  const authHeader = request.headers.get('authorization') ?? '';
-  const expectedToken = process.env.CRON_SECRET;
-  if (!expectedToken) return false;
-  const expected = `Bearer ${expectedToken}`;
-  try {
-    return (
-      Buffer.byteLength(authHeader) === Buffer.byteLength(expected) &&
-      crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
-    );
-  } catch {
-    return false;
-  }
-}
-
 /**
  * POST /api/crm/sync
  * Triggers CRM sync. Can sync a specific connection or all active connections.
@@ -38,7 +22,7 @@ function verifyCronAuth(request: Request): boolean {
  */
 export async function POST(request: Request) {
   try {
-    const isCron = verifyCronAuth(request);
+    const isCron = verifyCronSecret(request);
     const body = (await request.json()) as SyncRequestBody;
 
     if (body.connectionId) {

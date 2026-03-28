@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -54,6 +56,7 @@ export async function connectWhatsApp(
     return { success: false, error: 'Erro ao salvar conexão WhatsApp' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: data! };
 }
 
@@ -81,6 +84,7 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
     return { success: false, error: 'Erro ao desconectar WhatsApp' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
 }
 
@@ -99,5 +103,6 @@ export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disc
     return { success: false, error: 'Erro ao desconectar WhatsApp' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
 }

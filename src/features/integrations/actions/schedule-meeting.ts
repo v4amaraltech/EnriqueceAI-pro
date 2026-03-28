@@ -88,7 +88,7 @@ export async function scheduleMeeting(
       start_time: event.startTime,
       end_time: event.endTime,
       meet_link: event.meetLink ?? null,
-    }).catch(() => {});
+    }).catch((err) => console.error('[webhook] meeting.scheduled dispatch failed:', err));
 
     return { success: true, data: event };
   } catch (err) {

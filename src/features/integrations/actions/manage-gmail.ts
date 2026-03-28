@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -147,6 +149,7 @@ export async function handleGmailCallback(
       { onConflict: 'org_id,user_id' },
     );
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: data! };
 }
 
@@ -170,6 +173,7 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
     .eq('org_id', orgId)
     .eq('user_id', userId);
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: { disconnected: true } };
 }
 

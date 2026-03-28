@@ -11,7 +11,7 @@ export async function requireAdmin() {
   const user = await requireAuth();
 
   if (!ADMIN_USER_IDS.includes(user.id)) {
-    console.warn(`[admin] Access denied for user ${user.id} (${user.email})`);
+    console.warn('[admin] Access denied for user', user.id);
     redirect('/dashboard');
   }
 

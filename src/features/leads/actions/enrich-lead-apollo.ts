@@ -157,7 +157,7 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
       lead_id: leadId,
       provider: 'apollo',
       person_id: person.id,
-    }).catch(() => {});
+    }).catch((err) => console.error('[webhook] lead.enriched dispatch failed:', err));
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -75,6 +77,7 @@ export async function addCustomField(
     .single()) as { data: CustomFieldRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar campo' };
+  revalidatePath('/settings/prospecting/custom-fields');
   return { success: true, data };
 }
 
@@ -117,6 +120,7 @@ export async function updateCustomField(
     .single()) as { data: CustomFieldRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar campo' };
+  revalidatePath('/settings/prospecting/custom-fields');
   return { success: true, data };
 }
 
@@ -135,6 +139,7 @@ export async function deleteCustomField(id: string): Promise<ActionResult<{ dele
     .eq('org_id', orgId);
 
   if (error) return { success: false, error: 'Erro ao remover campo' };
+  revalidatePath('/settings/prospecting/custom-fields');
   return { success: true, data: { deleted: true } };
 }
 
@@ -158,6 +163,7 @@ export async function updateCustomFieldSettings(
     .single()) as { data: CustomFieldRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar configuração do campo' };
+  revalidatePath('/settings/prospecting/custom-fields');
   return { success: true, data };
 }
 

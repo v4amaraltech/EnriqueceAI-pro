@@ -70,7 +70,7 @@ export async function completeDialerCall(
     call_id: call.id,
     call_status: callStatus,
     duration_seconds: durationSeconds ?? 0,
-  }).catch(() => {});
+  }).catch((err) => console.error('[webhook] call dispatch failed:', err));
 
   // 2. Create interaction record
   await from(supabase, 'interactions')

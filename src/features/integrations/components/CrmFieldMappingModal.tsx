@@ -77,7 +77,6 @@ export function CrmFieldMappingModal({
 
   useEffect(() => {
     if (!open) return;
-    setFieldsLoaded(false);
     Promise.all([
       fetchCrmFields(provider),
       fetchAppFieldsWithCustom(),
@@ -108,6 +107,7 @@ export function CrmFieldMappingModal({
     if (isOpen) {
       setRows(buildInitialRows(provider, currentMapping));
       setIsLoadingFields(true);
+      setFieldsLoaded(false);
     }
     onOpenChange(isOpen);
   }

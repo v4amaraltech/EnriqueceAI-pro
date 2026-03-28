@@ -157,11 +157,11 @@ async function ingestSingleLead(
     first_name: data.first_name,
     last_name: data.last_name ?? null,
     source: 'inbound_api',
-  }).catch(() => {});
+  }).catch((err) => console.error('[webhook] lead.created dispatch failed:', err));
 
   // Trigger enrichment if CNPJ present (fire-and-forget via dynamic import)
   if (data.cnpj) {
-    triggerEnrichment(leadId).catch(() => {});
+    triggerEnrichment(leadId).catch((err) => console.error('[inbound] enrichment failed:', err));
   }
 
   return { index, status: 'created', lead_id: leadId };

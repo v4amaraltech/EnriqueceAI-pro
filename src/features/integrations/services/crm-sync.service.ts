@@ -150,7 +150,7 @@ export class CrmSyncService {
       records_synced: totalSynced,
       errors: totalErrors,
       duration_ms: Date.now() - startTime,
-    }).catch(() => {});
+    }).catch((err) => console.error('[webhook] crm.synced dispatch failed:', err));
 
     return { pull: pullResult, push: pushResult, activities: activityResult };
   }

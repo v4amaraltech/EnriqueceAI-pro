@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -74,6 +74,12 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
   const currentSearch = searchParams.get('search') ?? '';
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // Optimistic overrides for instant Select feedback
   const paramsKey = searchParams.toString();

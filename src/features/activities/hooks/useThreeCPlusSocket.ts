@@ -124,6 +124,7 @@ export function useThreeCPlusSocket({
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
+      socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
       socketRef.current = null;
       setIsConnected(false);

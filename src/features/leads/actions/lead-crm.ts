@@ -235,7 +235,7 @@ export async function markLeadAsWon(
     dispatchWebhookEvent(supabase, orgId, 'lead.qualified', {
       lead_id: leadId,
       crm_provider: crmOptions?.provider ?? null,
-    }).catch(() => {});
+    }).catch((err) => console.error('[webhook] lead.qualified dispatch failed:', err));
 
     // 2. Complete active/paused enrollments
     await from(supabase, 'cadence_enrollments')
@@ -576,7 +576,7 @@ export async function markLeadAsWon(
               deal_external_id: dealExternalId,
               pipeline_id: crmOptions.pipelineId,
               stage_id: crmOptions.stageId,
-            }).catch(() => {});
+            }).catch((err) => console.error('[webhook] crm.deal_created dispatch failed:', err));
           }
         }
       }

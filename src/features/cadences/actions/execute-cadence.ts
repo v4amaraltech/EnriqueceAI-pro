@@ -166,14 +166,20 @@ export interface ExecutionResult {
   errors: string[];
 }
 
-/** Check if current time is within business hours (8h-18h BRT, Mon-Fri) */
+/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri) */
 function isBusinessHours(): boolean {
   const now = new Date();
-  // BRT = UTC-3
-  const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  const brtHour = brtDate.getUTCHours();
-  const brtDay = brtDate.getUTCDay();
-  return brtDay >= 1 && brtDay <= 5 && brtHour >= 8 && brtHour < 18;
+  const brFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    hour: 'numeric',
+    hourCycle: 'h23',
+    weekday: 'short',
+  });
+  const parts = brFormatter.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
+  const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+  return !isWeekend && hour >= 8 && hour < 18;
 }
 
 /**

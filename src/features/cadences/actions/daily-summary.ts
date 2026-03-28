@@ -244,10 +244,10 @@ export async function sendDailyCadenceSummary(): Promise<ActionResult<{ orgs_pro
           if (result.success) {
             totalEmailsSent++;
           } else {
-            console.error(`[daily-summary] Failed to send to ${user.email}: ${result.error}`);
+            console.error(`[daily-summary] Failed to send summary: ${result.error}`);
           }
         } catch (err) {
-          console.error(`[daily-summary] Error sending to ${user.email}:`, err);
+          console.error('[daily-summary] Error sending summary:', err);
         }
       }
 

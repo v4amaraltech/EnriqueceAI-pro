@@ -54,7 +54,10 @@ export async function listApiKeysAction(): Promise<ActionResult<ApiKeySafe[]>> {
   return { success: true, data: data ?? [] };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<void>> {
+  if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
   const { orgId, supabase } = await getManagerOrgId();
 
   const { error } = await from(supabase, 'api_keys')
@@ -71,6 +74,7 @@ export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<vo
 }
 
 export async function deleteApiKeyAction(keyId: string): Promise<ActionResult<void>> {
+  if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
   const { orgId, supabase } = await getManagerOrgId();
 
   const { error } = await from(supabase, 'api_keys')

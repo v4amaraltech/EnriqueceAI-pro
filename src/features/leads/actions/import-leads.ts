@@ -230,7 +230,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
   // Trigger auto-enrichment (fire-and-forget)
   if (successCount > 0) {
-    triggerAutoEnrichment(importId).catch(() => {});
+    triggerAutoEnrichment(importId).catch((err) => console.error('[import] auto-enrichment failed:', err));
   }
 
   revalidatePath('/leads');

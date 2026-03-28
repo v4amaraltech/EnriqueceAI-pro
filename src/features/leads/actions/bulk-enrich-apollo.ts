@@ -3,14 +3,28 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import { enrichLeadWithApollo } from './enrich-lead-apollo';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function bulkEnrichApollo(
   leadIds: string[],
 ): Promise<ActionResult<{ successCount: number; failCount: number; skippedCount: number }>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
+  }
+
+  if (leadIds.length > 100) {
+    return { success: false, error: 'Máximo de 100 leads por vez' };
+  }
+
+  if (!leadIds.every((id) => UUID_RE.test(id))) {
+    return { success: false, error: 'IDs inválidos' };
   }
 
   let successCount = 0;

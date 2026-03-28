@@ -15,10 +15,16 @@ export function useAuth() {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    supabase.auth.getUser()
+      .then(({ data: { user: currentUser } }) => {
+        setUser(currentUser);
+      })
+      .catch(() => {
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     const {
       data: { subscription },

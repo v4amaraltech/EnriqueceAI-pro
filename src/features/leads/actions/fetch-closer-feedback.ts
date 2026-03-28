@@ -15,7 +15,10 @@ export interface CloserFeedbackData {
   closer_email: string;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<CloserFeedbackData | null>> {
+  if (!UUID_RE.test(leadId)) return { success: false, error: 'ID inválido' };
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
