@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface FitScoreRuleRow {
@@ -19,8 +20,7 @@ export async function getFitScoreRules(): Promise<ActionResult<FitScoreRuleRow[]
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -30,8 +30,7 @@ export async function getFitScoreRules(): Promise<ActionResult<FitScoreRuleRow[]
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await supabase
-    .from('fit_score_rules')
+  const { data, error } = (await from(supabase, 'fit_score_rules')
     .select('*')
     .eq('org_id', member.org_id)
     .order('sort_order', { ascending: true })) as { data: FitScoreRuleRow[] | null; error: unknown };

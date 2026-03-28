@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { updateCallStatusSchema } from '../schemas/call.schemas';
@@ -19,8 +20,7 @@ export async function updateCallStatus(
     return { success: false, error: 'Dados inválidos' };
   }
 
-  const { error } = await supabase
-    .from('calls')
+  const { error } = await from(supabase, 'calls')
     .update({ status: parsed.data.status, updated_at: new Date().toISOString() })
     .eq('id', parsed.data.id);
 

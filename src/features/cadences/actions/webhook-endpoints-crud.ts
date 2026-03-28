@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface WebhookEndpointRow {
@@ -39,17 +40,12 @@ const VALID_EVENTS = [
   'call.scheduled',
 ] as const;
 
-function webhooksFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  // Table not in generated types yet — cast needed
-  return (supabase as Record<string, any>).from('webhook_endpoints');
-}
-
 export async function fetchWebhookEndpoints(): Promise<ActionResult<WebhookEndpointRow[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, error } = (await webhooksFrom(supabase)
+  const { data, error } = (await from(supabase, 'webhook_endpoints')
     .select('*')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })) as { data: WebhookEndpointRow[] | null; error: { message: string } | null };
@@ -89,7 +85,7 @@ export async function createWebhookEndpoint(input: {
     return { success: false, error: `Eventos inválidos: ${invalidEvents.join(', ')}` };
   }
 
-  const { data, error } = (await webhooksFrom(supabase)
+  const { data, error } = (await from(supabase, 'webhook_endpoints')
     .insert({
       org_id: orgId,
       url: input.url,
@@ -143,7 +139,7 @@ export async function updateWebhookEndpoint(
   if (input.events !== undefined) updateData.events = input.events;
   if (input.is_active !== undefined) updateData.is_active = input.is_active;
 
-  const { data, error } = (await webhooksFrom(supabase)
+  const { data, error } = (await from(supabase, 'webhook_endpoints')
     .update(updateData)
     .eq('id', id)
     .eq('org_id', orgId)
@@ -165,7 +161,7 @@ export async function deleteWebhookEndpoint(id: string): Promise<ActionResult<nu
     return { success: false, error: 'Permissão negada' };
   }
 
-  const { error } = await webhooksFrom(supabase)
+  const { error } = await from(supabase, 'webhook_endpoints')
     .delete()
     .eq('id', id)
     .eq('org_id', orgId);
@@ -184,7 +180,7 @@ export async function testWebhookEndpoint(id: string): Promise<ActionResult<{ st
     return { success: false, error: 'Permissão negada' };
   }
 
-  const { data: endpoint } = (await webhooksFrom(supabase)
+  const { data: endpoint } = (await from(supabase, 'webhook_endpoints')
     .select('url, secret')
     .eq('id', id)
     .eq('org_id', orgId)

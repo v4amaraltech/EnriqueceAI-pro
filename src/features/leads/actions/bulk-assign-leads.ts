@@ -23,8 +23,7 @@ export async function bulkAssignLeads(
   const { orgId, supabase } = auth.data;
 
   // Validate target user is active member of org
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('user_id')
     .eq('org_id', orgId)
     .eq('user_id', userId)

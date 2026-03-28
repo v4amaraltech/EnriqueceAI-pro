@@ -1,5 +1,6 @@
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { getCallSettings } from '@/features/calls/actions/call-settings-crud';
@@ -9,8 +10,7 @@ export default async function CallDailyTargetsPage() {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
+  const { data: currentMember } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -28,8 +28,7 @@ export default async function CallDailyTargetsPage() {
 
   const [settingsResult, membersResult] = await Promise.all([
     getCallSettings(),
-    supabase
-      .from('organization_members')
+    from(supabase, 'organization_members')
       .select('user_id, role')
       .eq('org_id', orgId)
       .eq('status', 'active')

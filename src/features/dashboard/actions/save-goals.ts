@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { saveGoalsSchema, type SaveGoalsInput } from '../schemas/goals.schema';
@@ -22,8 +23,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
   const monthDate = `${month}-01`;
 
   // Get user's org
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -34,8 +34,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
   }
 
   // Upsert org-level goal
-  const { error: goalError } = await supabase
-    .from('goals')
+  const { error: goalError } = await from(supabase, 'goals')
     .upsert(
       {
         org_id: member.org_id,
@@ -60,8 +59,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     opportunity_target: ug.opportunityTarget,
   }));
 
-  const { error: userGoalError } = await supabase
-    .from('goals_per_user')
+  const { error: userGoalError } = await from(supabase, 'goals_per_user')
     .upsert(userGoalRows, {
       onConflict: 'org_id,user_id,month',
     });

@@ -15,8 +15,7 @@ export async function saveApolloConnection(
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -68,8 +67,7 @@ export async function deleteApolloConnection(): Promise<ActionResult<void>> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')

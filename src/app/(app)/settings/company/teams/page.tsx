@@ -1,5 +1,6 @@
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { TeamRosterView } from '@/features/auth/components/TeamRosterView';
@@ -9,8 +10,7 @@ export default async function CompanyTeamsPage() {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
+  const { data: currentMember } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -26,8 +26,7 @@ export default async function CompanyTeamsPage() {
     );
   }
 
-  const { data: members } = (await supabase
-    .from('organization_members')
+  const { data: members } = (await from(supabase, 'organization_members')
     .select('*')
     .eq('org_id', currentMember.org_id)
     .in('status', ['active', 'invited', 'suspended'])

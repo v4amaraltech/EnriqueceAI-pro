@@ -1,4 +1,5 @@
 import type { ActionResult } from '@/lib/actions/action-result';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { requireAuth } from './require-auth';
@@ -9,8 +10,7 @@ type SupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 type OrgContext = { orgId: string; userId: string; supabase: SupabaseClient };
 
 async function fetchOrgId(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', userId)
     .eq('status', 'active')

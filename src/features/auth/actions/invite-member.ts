@@ -7,6 +7,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 import { ERR_MEMBER_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { INVITE_EXPIRY_DAYS } from '@/lib/constants/limits';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAppUrl } from '@/lib/utils/app-url';
 
@@ -34,8 +35,7 @@ export async function inviteMember(
     const supabase = await createServerSupabaseClient();
 
     // Get current user's org
-    const { data: currentMember } = (await supabase
-      .from('organization_members')
+    const { data: currentMember } = (await from(supabase, 'organization_members')
       .select('org_id')
       .eq('user_id', user.id)
       .eq('status', 'active')
@@ -64,7 +64,7 @@ export async function inviteMember(
 
     if (existingUser) {
       // User already exists — just add to org with active status
-      await admin.from('organization_members').upsert(
+      await from(admin, 'organization_members').upsert(
         {
           org_id: currentMember.org_id,
           user_id: existingUser.id,
@@ -93,8 +93,7 @@ export async function inviteMember(
       if (inviteData?.user) {
         // handle_new_user trigger created an auto-org + auto-member
         // Delete the auto-created org (CASCADE will delete auto-member + subscription)
-        const { data: autoOrgMember } = (await admin
-          .from('organization_members')
+        const { data: autoOrgMember } = (await from(admin, 'organization_members')
           .select('org_id')
           .eq('user_id', inviteData.user.id)
           .eq('role', 'manager')
@@ -102,14 +101,14 @@ export async function inviteMember(
           .single()) as { data: { org_id: string } | null };
 
         if (autoOrgMember && autoOrgMember.org_id !== currentMember.org_id) {
-          await admin.from('organizations').delete().eq('id', autoOrgMember.org_id);
+          await from(admin, 'organizations').delete().eq('id', autoOrgMember.org_id);
         }
 
         // Create org member with 'invited' status and expiry
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
-        const { error: memberError } = await admin.from('organization_members').insert({
+        const { error: memberError } = await from(admin, 'organization_members').insert({
           org_id: currentMember.org_id,
           user_id: inviteData.user.id,
           role: parsed.data.role,

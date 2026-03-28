@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 export interface OrgSettings {
   abm_enabled: boolean;
@@ -22,8 +23,7 @@ export async function getOrgSettings(): Promise<ActionResult<OrgSettings>> {
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await supabase
-    .from('organizations')
+  const { data, error } = (await from(supabase, 'organizations')
     .select('abm_enabled, abm_group_field, lead_visibility_mode')
     .eq('id', orgId)
     .single()) as { data: OrgSettings | null; error: unknown };
@@ -47,8 +47,7 @@ export async function saveAbmSettings(
   const trimmed = groupField.trim();
   if (!trimmed) return { success: false, error: 'Campo de agrupamento é obrigatório' };
 
-  const { error } = await supabase
-    .from('organizations')
+  const { error } = await from(supabase, 'organizations')
     .update({ abm_enabled: enabled, abm_group_field: trimmed })
     .eq('id', orgId);
 
@@ -71,8 +70,7 @@ export async function saveLeadVisibility(
   const validModes = ['all', 'own', 'team'];
   if (!validModes.includes(mode)) return { success: false, error: 'Modo de visibilidade inválido' };
 
-  const { error } = await supabase
-    .from('organizations')
+  const { error } = await from(supabase, 'organizations')
     .update({ lead_visibility_mode: mode })
     .eq('id', orgId);
 

@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { AuthContract } from '../auth.contract';
@@ -22,8 +23,7 @@ export async function createAuthService(): Promise<AuthContract> {
       } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const { data } = (await supabase
-        .from('organization_members')
+      const { data } = (await from(supabase, 'organization_members')
         .select('org_id, organizations(*)')
         .eq('user_id', user.id)
         .eq('status', 'active')
@@ -38,8 +38,7 @@ export async function createAuthService(): Promise<AuthContract> {
       } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const { data } = (await supabase
-        .from('organization_members')
+      const { data } = (await from(supabase, 'organization_members')
         .select('role')
         .eq('user_id', user.id)
         .eq('status', 'active')
@@ -54,8 +53,7 @@ export async function createAuthService(): Promise<AuthContract> {
       } = await supabase.auth.getUser();
       if (!user) return [];
 
-      const { data: member } = (await supabase
-        .from('organization_members')
+      const { data: member } = (await from(supabase, 'organization_members')
         .select('org_id')
         .eq('user_id', user.id)
         .eq('status', 'active')
@@ -63,8 +61,7 @@ export async function createAuthService(): Promise<AuthContract> {
 
       if (!member) return [];
 
-      const { data } = (await supabase
-        .from('organization_members')
+      const { data } = (await from(supabase, 'organization_members')
         .select('*')
         .eq('org_id', member.org_id)) as { data: OrganizationMemberRow[] | null };
 
@@ -77,8 +74,7 @@ export async function createAuthService(): Promise<AuthContract> {
       } = await supabase.auth.getUser();
       if (!user) return false;
 
-      const { data } = (await supabase
-        .from('organization_members')
+      const { data } = (await from(supabase, 'organization_members')
         .select('role')
         .eq('user_id', user.id)
         .eq('status', 'active')

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CallFeedbackRow } from '../types';
@@ -20,8 +21,7 @@ export async function addCallFeedback(
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { data, error } = (await supabase
-    .from('call_feedback')
+  const { data, error } = (await from(supabase, 'call_feedback')
     .insert({
       call_id: parsed.data.call_id,
       user_id: user.id,

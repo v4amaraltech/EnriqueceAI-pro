@@ -23,8 +23,7 @@ export async function completeOnboarding(
   }
 
   // Fetch role for permission check
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('role')
     .eq('user_id', userId)
     .eq('org_id', orgId)

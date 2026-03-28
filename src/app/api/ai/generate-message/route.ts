@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { AIService } from '@/features/ai/services/ai.service';
@@ -25,8 +26,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient();
 
-    const { data: member } = (await supabase
-      .from('organization_members')
+    const { data: member } = (await from(supabase, 'organization_members')
       .select('org_id')
       .eq('user_id', user.id)
       .eq('status', 'active')

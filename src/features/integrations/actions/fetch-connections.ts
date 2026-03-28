@@ -22,8 +22,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
   const { orgId, userId, supabase } = auth.data;
 
   // Check user role — org-level connections are only visible to managers
-  const { data: memberRow } = (await supabase
-    .from('organization_members')
+  const { data: memberRow } = (await from(supabase, 'organization_members')
     .select('role')
     .eq('user_id', userId)
     .eq('org_id', orgId)

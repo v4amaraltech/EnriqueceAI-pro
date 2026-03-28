@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import type { LeadCadenceInfo } from '../types';
 
@@ -16,8 +17,7 @@ export async function fetchLeadsCadenceInfo(
   if (!auth.success) return auth;
   const { supabase } = auth.data;
 
-  const { data, error } = await supabase
-    .from('cadence_enrollments')
+  const { data, error } = await from(supabase, 'cadence_enrollments')
     .select(`
       lead_id,
       status,
@@ -55,8 +55,7 @@ export async function fetchLeadsCadenceInfo(
   const userIds = [...new Set(Object.values(result).map((r) => r.responsible_email).filter(Boolean))] as string[];
 
   if (userIds.length > 0) {
-    const { data: members } = await supabase
-      .from('organization_members')
+    const { data: members } = await from(supabase, 'organization_members')
       .select('user_id, user_email')
       .in('user_id', userIds);
 

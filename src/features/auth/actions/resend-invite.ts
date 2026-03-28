@@ -20,8 +20,7 @@ export async function resendInvite(
     const admin = createAdminSupabaseClient();
 
     // Get current user's org
-    const { data: currentMember } = (await supabase
-      .from('organization_members')
+    const { data: currentMember } = (await from(supabase, 'organization_members')
       .select('org_id')
       .eq('user_id', user.id)
       .eq('status', 'active')

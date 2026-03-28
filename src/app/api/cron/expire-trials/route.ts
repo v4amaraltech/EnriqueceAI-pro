@@ -26,8 +26,7 @@ async function expireTrials() {
     ));
 
     // Get manager user_ids for this org
-    const { data: managers } = await supabase
-      .from('organization_members')
+    const { data: managers } = await from(supabase, 'organization_members')
       .select('user_id')
       .eq('org_id', trial.org_id)
       .eq('role', 'manager')

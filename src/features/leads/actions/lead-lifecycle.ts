@@ -36,8 +36,7 @@ export async function fetchLossReasons(): Promise<ActionResult<LossReasonRow[]>>
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, error } = (await supabase
-    .from('loss_reasons')
+  const { data, error } = (await from(supabase, 'loss_reasons')
     .select('*')
     .eq('org_id', orgId)
     .order('sort_order', { ascending: true })

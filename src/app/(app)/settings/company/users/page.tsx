@@ -1,5 +1,6 @@
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { UserManagement } from '@/features/auth/components/UserManagement';
@@ -10,8 +11,7 @@ export default async function CompanyUsersPage() {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
+  const { data: currentMember } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -26,22 +26,19 @@ export default async function CompanyUsersPage() {
   }
 
   // Expire stale invites on-demand
-  await supabase
-    .from('organization_members')
+  await from(supabase, 'organization_members')
     .update({ status: 'removed' })
     .eq('org_id', currentMember.org_id)
     .eq('status', 'invited')
     .lt('invited_expires_at', new Date().toISOString());
 
-  const { data: members } = (await supabase
-    .from('organization_members')
+  const { data: members } = (await from(supabase, 'organization_members')
     .select('*')
     .eq('org_id', currentMember.org_id)
     .in('status', ['active', 'invited', 'suspended'])
     .order('created_at', { ascending: true })) as { data: OrganizationMemberRow[] | null };
 
-  const { data: org } = (await supabase
-    .from('organizations')
+  const { data: org } = (await from(supabase, 'organizations')
     .select('owner_id')
     .eq('id', currentMember.org_id)
     .single()) as { data: { owner_id: string } | null };

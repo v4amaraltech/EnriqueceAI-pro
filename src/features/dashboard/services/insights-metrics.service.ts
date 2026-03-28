@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   ConversionByOriginEntry,
   DashboardFilters,
@@ -26,8 +28,7 @@ export async function fetchLossReasons(
   const { start, end } = getMonthRange(filters.month);
 
   // Get enrollments with loss reasons in the period
-  let query = supabase
-    .from('cadence_enrollments')
+  let query = from(supabase, 'cadence_enrollments')
     .select('loss_reason_id, cadence_id, enrolled_by')
     .not('loss_reason_id', 'is', null)
     .gte('updated_at', start)
@@ -56,8 +57,7 @@ export async function fetchLossReasons(
 
   // Fetch reason names
   const reasonIds = [...reasonCounts.keys()];
-  const { data: reasons } = (await supabase
-    .from('loss_reasons')
+  const { data: reasons } = (await from(supabase, 'loss_reasons')
     .select('id, name')
     .in('id', reasonIds)) as {
     data: Array<{ id: string; name: string }> | null;
@@ -108,8 +108,7 @@ export async function fetchConversionByOrigin(
   const { start, end } = getMonthRange(filters.month);
 
   // Get enrollments in the period (to filter leads by cadence/user if needed)
-  let enrollmentQuery = supabase
-    .from('cadence_enrollments')
+  let enrollmentQuery = from(supabase, 'cadence_enrollments')
     .select('lead_id, cadence_id')
     .gte('updated_at', start)
     .lt('updated_at', end);
@@ -132,8 +131,7 @@ export async function fetchConversionByOrigin(
   // Get unique lead IDs with status and lead_source
   const leadIds = [...new Set(rows.map((e) => e.lead_id))];
 
-  const { data: leads } = (await supabase
-    .from('leads')
+  const { data: leads } = (await from(supabase, 'leads')
     .select('id, status, lead_source')
     .eq('org_id', orgId)
     .is('deleted_at', null)

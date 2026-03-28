@@ -232,8 +232,7 @@ export async function enrichLeadsBatch({
     const leadId = leadIds[i]!;
 
     // Get lead CNPJ
-    const { data: lead } = (await supabase
-      .from('leads')
+    const { data: lead } = (await from(supabase, 'leads')
       .select('cnpj')
       .eq('id', leadId)
       .single()) as { data: { cnpj: string } | null };

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SaveDailyGoalsInput {
@@ -17,8 +18,7 @@ export async function saveDailyGoals(
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
+  const { data: currentMember } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -35,8 +35,7 @@ export async function saveDailyGoals(
   }
 
   // Upsert org default (user_id = null)
-  const { error: orgError } = await supabase
-    .from('daily_activity_goals')
+  const { error: orgError } = await from(supabase, 'daily_activity_goals')
     .upsert(
       { org_id: orgId, user_id: null, target: input.orgDefault },
       { onConflict: 'org_id,COALESCE(user_id,\'00000000-0000-0000-0000-000000000000\')' as never },
@@ -44,15 +43,13 @@ export async function saveDailyGoals(
 
   if (orgError) {
     // Fallback: try delete + insert for org default
-    const { error: delErr } = await supabase
-      .from('daily_activity_goals')
+    const { error: delErr } = await from(supabase, 'daily_activity_goals')
       .delete()
       .eq('org_id', orgId)
       .is('user_id', null);
     if (delErr) console.error('[saveDailyGoals] Fallback delete failed:', delErr);
 
-    const { error: insertError } = await supabase
-      .from('daily_activity_goals')
+    const { error: insertError } = await from(supabase, 'daily_activity_goals')
       .insert({ org_id: orgId, user_id: null, target: input.orgDefault });
 
     if (insertError) {
@@ -66,8 +63,7 @@ export async function saveDailyGoals(
   for (const mg of input.memberGoals) {
     if (mg.target === null) {
       // Remove individual override (use org default)
-      const { error: rmErr } = await supabase
-        .from('daily_activity_goals')
+      const { error: rmErr } = await from(supabase, 'daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
@@ -76,15 +72,13 @@ export async function saveDailyGoals(
       if (mg.target < 0) continue;
 
       // Delete then insert to handle upsert on computed unique index
-      const { error: delMemberErr } = await supabase
-        .from('daily_activity_goals')
+      const { error: delMemberErr } = await from(supabase, 'daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
       if (delMemberErr) console.error(`[saveDailyGoals] Failed to delete goal for user=${mg.userId}:`, delMemberErr);
 
-      const { error } = await supabase
-        .from('daily_activity_goals')
+      const { error } = await from(supabase, 'daily_activity_goals')
         .insert({ org_id: orgId, user_id: mg.userId, target: mg.target });
 
       if (!error) saved++;

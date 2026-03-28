@@ -1,3 +1,4 @@
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { CnpjWsProvider, LemitProvider } from '@/features/leads/services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '@/features/leads/services/enrichment.service';
@@ -10,8 +11,7 @@ import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
 export async function enrichLeadByService(leadId: string): Promise<void> {
   const supabase = createServiceRoleClient();
 
-  const { data: lead } = await supabase
-    .from('leads')
+  const { data: lead } = await from(supabase, 'leads')
     .select('id, cnpj')
     .eq('id', leadId)
     .single() as { data: { id: string; cnpj: string | null } | null };

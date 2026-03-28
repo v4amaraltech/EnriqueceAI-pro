@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAdmin } from '@/lib/auth/require-admin';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 
 const createOrgSchema = z.object({
   orgName: z.string().min(2, 'Nome da organização deve ter pelo menos 2 caracteres'),
@@ -59,8 +60,7 @@ export async function createOrgWithManager(
   const userId = newUser.user.id;
 
   // Find the auto-created org via organization_members
-  const { data: memberData, error: memberError } = await admin
-    .from('organization_members')
+  const { data: memberData, error: memberError } = await from(admin, 'organization_members')
     .select('org_id')
     .eq('user_id', userId)
     .single();
@@ -75,8 +75,7 @@ export async function createOrgWithManager(
   const orgId = memberData.org_id as string;
 
   // Update org: proper name, slug, skip onboarding
-  const { error: updateError } = await admin
-    .from('organizations')
+  const { error: updateError } = await from(admin, 'organizations')
     .update({
       name: orgName,
       slug: slugify(orgName),

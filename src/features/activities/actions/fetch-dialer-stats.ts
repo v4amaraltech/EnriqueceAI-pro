@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import type { DialerStats } from '../schemas/dialer-preferences.schemas';
 
@@ -16,8 +17,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
   const { orgId, supabase } = auth.data;
 
   // Get dialer daily limit setting
-  const { data: settings } = (await supabase
-    .from('organization_call_settings')
+  const { data: settings } = (await from(supabase, 'organization_call_settings')
     .select('dialer_daily_limit_per_lead')
     .eq('org_id', orgId)
     .single()) as { data: { dialer_daily_limit_per_lead: number } | null };
@@ -25,8 +25,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
   const dailyLimit = settings?.dialer_daily_limit_per_lead ?? 3;
 
   // Get active enrollments where current step is a phone step
-  const { data: enrollments } = (await supabase
-    .from('cadence_enrollments')
+  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
     .select('id, lead_id, cadence_id, current_step, lead:leads(id, telefone)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString())) as {
@@ -48,8 +47,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
 
   // Get phone steps for these cadences
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
-  const { data: phoneSteps } = (await supabase
-    .from('cadence_steps')
+  const { data: phoneSteps } = (await from(supabase, 'cadence_steps')
     .select('cadence_id, step_order')
     .in('cadence_id', cadenceIds)
     .eq('channel', 'phone')) as {
@@ -84,8 +82,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data: todayCalls } = (await supabase
-    .from('calls')
+  const { data: todayCalls } = (await from(supabase, 'calls')
     .select('lead_id')
     .in('lead_id', leadIds)
     .gte('started_at', todayStart.toISOString())) as {

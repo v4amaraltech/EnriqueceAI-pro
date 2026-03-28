@@ -25,8 +25,7 @@ export async function updateMemberRole(formData: FormData): Promise<ActionResult
   const supabase = await createServerSupabaseClient();
 
   // Get the member to validate
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('user_id, org_id')
     .eq('id', parsed.data.memberId)
     .single()) as { data: { user_id: string; org_id: string } | null };
@@ -36,8 +35,7 @@ export async function updateMemberRole(formData: FormData): Promise<ActionResult
   }
 
   // Cannot change role of org owner
-  const { data: org } = (await supabase
-    .from('organizations')
+  const { data: org } = (await from(supabase, 'organizations')
     .select('owner_id')
     .eq('id', member.org_id)
     .single()) as { data: { owner_id: string } | null };

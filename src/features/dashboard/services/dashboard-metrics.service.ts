@@ -86,8 +86,7 @@ export async function fetchOpportunityKpi(
   if (filters.cadenceIds.length > 0) {
     const leadIds = qualifiedLeads.map((l) => l.id);
     if (leadIds.length > 0) {
-      const { data: enrollments } = (await supabase
-        .from('cadence_enrollments')
+      const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
         .select('lead_id')
         .in('lead_id', leadIds)
         .in('cadence_id', filters.cadenceIds)) as {
@@ -109,8 +108,7 @@ export async function fetchOpportunityKpi(
 
   // Query goal for the month
   const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await supabase
-    .from('goals')
+  const { data: goal } = (await from(supabase, 'goals')
     .select('opportunity_target, conversion_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)
@@ -158,8 +156,7 @@ export async function fetchAvailableCadences(
   supabase: SupabaseClient,
   orgId: string,
 ): Promise<CadenceOption[]> {
-  const { data } = (await supabase
-    .from('cadences')
+  const { data } = (await from(supabase, 'cadences')
     .select('id, name')
     .eq('org_id', orgId)
     .in('status', ['active', 'paused'])

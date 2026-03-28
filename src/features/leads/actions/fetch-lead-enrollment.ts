@@ -43,8 +43,7 @@ export async function fetchLeadEnrollment(
   const { supabase } = auth.data;
 
   // Get all active/paused enrollments with cadence info
-  const { data: enrollmentRows } = await supabase
-    .from('cadence_enrollments')
+  const { data: enrollmentRows } = await from(supabase, 'cadence_enrollments')
     .select(`
       id,
       cadence_id,
@@ -83,8 +82,7 @@ export async function fetchLeadEnrollment(
   const cadenceIds = [...new Set(rows.map((r) => r.cadence_id))];
   const stepsMap = new Map<string, Array<{ step_order: number; channel: string }>>();
   if (cadenceIds.length > 0) {
-    const { data: allSteps } = await supabase
-      .from('cadence_steps')
+    const { data: allSteps } = await from(supabase, 'cadence_steps')
       .select('cadence_id, step_order, channel')
       .in('cadence_id', cadenceIds)
       .order('step_order', { ascending: true });
@@ -120,18 +118,15 @@ export async function fetchLeadEnrollment(
 
   // KPIs from interactions
   const [completedRes, openRes, conversationRes] = await Promise.all([
-    supabase
-      .from('interactions')
+    from(supabase, 'interactions')
       .select('*', { count: 'exact', head: true })
       .eq('lead_id', leadId)
       .in('type', ['sent', 'delivered', 'opened', 'clicked']),
-    supabase
-      .from('interactions')
+    from(supabase, 'interactions')
       .select('*', { count: 'exact', head: true })
       .eq('lead_id', leadId)
       .eq('type', 'sent'),
-    supabase
-      .from('interactions')
+    from(supabase, 'interactions')
       .select('*', { count: 'exact', head: true })
       .eq('lead_id', leadId)
       .in('type', ['replied', 'meeting_scheduled']),

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Building2, CreditCard, Plug, User, Users } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationSettings } from '@/features/auth/components/OrganizationSettings';
@@ -19,8 +20,7 @@ export default async function SettingsPage() {
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('*, organization:organizations(*)')
     .eq('user_id', user.id)
     .eq('status', 'active')

@@ -67,8 +67,7 @@ export async function createLead(
   }
 
   // Validate assigned_to belongs to same org
-  const { data: assignee } = (await supabase
-    .from('organization_members')
+  const { data: assignee } = (await from(supabase, 'organization_members')
     .select('user_id')
     .eq('user_id', parsed.data.assigned_to)
     .eq('org_id', orgId)
@@ -137,8 +136,7 @@ export async function createLead(
 
       // If scheduled start, update enrollment's next_step_due
       if (result.success && parsed.data.enrollment_mode === 'scheduled' && parsed.data.scheduled_start) {
-        await supabase
-          .from('cadence_enrollments')
+        await from(supabase, 'cadence_enrollments')
           .update({ next_step_due: parsed.data.scheduled_start })
           .eq('lead_id', leadId)
           .eq('cadence_id', cadenceId);

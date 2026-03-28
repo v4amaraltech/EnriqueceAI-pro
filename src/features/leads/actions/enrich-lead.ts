@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
@@ -17,8 +18,7 @@ export async function enrichLeadAction(leadId: string): Promise<ActionResult<voi
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data: lead } = (await supabase
-    .from('leads')
+  const { data: lead } = (await from(supabase, 'leads')
     .select('id, cnpj, org_id')
     .eq('id', leadId)
     .single()) as { data: { id: string; cnpj: string; org_id: string } | null };

@@ -1,11 +1,11 @@
 'use server';
 
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { requireManager } from '@/lib/auth/require-manager';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { buildMemberInfoMap } from '../services/member-lookup';
 import type { OrgMember } from '../types/shared';
 
 export async function getManagerOrgId(): Promise<{ orgId: string }> {
@@ -42,39 +42,13 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
     // Only managers see the member filter
     if (!member || member.role !== 'manager') return [];
 
-    const { data: members } = (await from(supabase, 'organization_members')
-      .select('user_id')
-      .eq('org_id', member.org_id)
-      .eq('status', 'active')) as { data: { user_id: string }[] | null };
+    const infoMap = await buildMemberInfoMap(supabase, member.org_id);
 
-    if (!members?.length) return [];
-
-    // Look up emails and names via admin client (organization_members has no email/name column)
-    const userMap = new Map<string, { email: string; name?: string }>();
-    try {
-      const admin = createAdminSupabaseClient();
-      const memberIds = new Set(members.map((m) => m.user_id));
-      const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 100 });
-      if (usersData?.users) {
-        for (const u of usersData.users) {
-          if (memberIds.has(u.id)) {
-            const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || undefined;
-            userMap.set(u.id, { email: u.email ?? u.id.slice(0, 8), name });
-          }
-        }
-      }
-    } catch {
-      // Admin client unavailable — fallback to truncated IDs
-    }
-
-    return members.map((m) => {
-      const info = userMap.get(m.user_id);
-      return {
-        userId: m.user_id,
-        email: info?.email ?? m.user_id.slice(0, 8),
-        name: info?.name,
-      };
-    });
+    return Array.from(infoMap.entries()).map(([userId, info]) => ({
+      userId,
+      email: info.email,
+      name: info.name,
+    }));
   } catch (error: unknown) {
     // Re-throw Next.js redirect errors so they propagate correctly
     if (

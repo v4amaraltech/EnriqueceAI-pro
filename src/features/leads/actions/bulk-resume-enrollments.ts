@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
+import { from } from '@/lib/supabase/from';
 
 export async function bulkResumeEnrollments(
   leadIds: string[],
@@ -21,8 +22,7 @@ export async function bulkResumeEnrollments(
   const { orgId, supabase } = auth.data;
 
   // Get paused enrollments for these leads in org cadences
-  const { data: enrollments } = (await supabase
-    .from('cadence_enrollments')
+  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
     .select('id, lead_id, cadences!inner(org_id)')
     .in('lead_id', leadIds)
     .eq('status', 'paused')
@@ -35,8 +35,7 @@ export async function bulkResumeEnrollments(
   }
 
   const enrollmentIds = enrollments.map((e) => e.id);
-  const { error } = await supabase
-    .from('cadence_enrollments')
+  const { error } = await from(supabase, 'cadence_enrollments')
     .update({ status: 'active' })
     .in('id', enrollmentIds);
 

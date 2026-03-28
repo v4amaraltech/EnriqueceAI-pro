@@ -36,8 +36,7 @@ export async function uploadOrgLogo(
 
   // Get user's org
   const userId = (await supabase.auth.getUser()).data.user!.id;
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', userId)
     .eq('status', 'active')
@@ -82,8 +81,7 @@ export async function removeOrgLogo(): Promise<ActionResult<{ removed: boolean }
   const supabase = await createServerSupabaseClient();
 
   const userId = (await supabase.auth.getUser()).data.user!.id;
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', userId)
     .eq('status', 'active')

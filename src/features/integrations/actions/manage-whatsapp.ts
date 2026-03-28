@@ -22,8 +22,7 @@ export async function connectWhatsApp(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { data: roleData } = (await supabase
-    .from('organization_members')
+  const { data: roleData } = (await from(supabase, 'organization_members')
     .select('role')
     .eq('user_id', userId)
     .eq('status', 'active')
@@ -65,8 +64,7 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { data: roleData } = (await supabase
-    .from('organization_members')
+  const { data: roleData } = (await from(supabase, 'organization_members')
     .select('role')
     .eq('user_id', userId)
     .eq('status', 'active')

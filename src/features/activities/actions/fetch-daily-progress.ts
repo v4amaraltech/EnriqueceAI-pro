@@ -80,8 +80,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   }
 
   // Get daily goal: user-specific first, fallback to org default (user_id IS NULL)
-  const { data: userGoal } = (await supabase
-    .from('daily_activity_goals')
+  const { data: userGoal } = (await from(supabase, 'daily_activity_goals')
     .select('target')
     .eq('org_id', orgId)
     .eq('user_id', userId)
@@ -90,8 +89,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   let target = userGoal?.target ?? null;
 
   if (target === null) {
-    const { data: orgGoal } = (await supabase
-      .from('daily_activity_goals')
+    const { data: orgGoal } = (await from(supabase, 'daily_activity_goals')
       .select('target')
       .eq('org_id', orgId)
       .is('user_id', null)

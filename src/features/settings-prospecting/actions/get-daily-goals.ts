@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface DailyGoalRow {
@@ -27,8 +28,7 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: currentMember } = (await supabase
-    .from('organization_members')
+  const { data: currentMember } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -41,8 +41,7 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
   const orgId = currentMember.org_id;
 
   // Get all daily goals for this org
-  const { data: goals } = (await supabase
-    .from('daily_activity_goals')
+  const { data: goals } = (await from(supabase, 'daily_activity_goals')
     .select('id, user_id, target')
     .eq('org_id', orgId)) as { data: DailyGoalRow[] | null };
 
@@ -50,8 +49,7 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
   const orgDefault = orgGoal?.target ?? 20;
 
   // Get all active members
-  const { data: members } = (await supabase
-    .from('organization_members')
+  const { data: members } = (await from(supabase, 'organization_members')
     .select('user_id, role')
     .eq('org_id', orgId)
     .eq('status', 'active')

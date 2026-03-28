@@ -28,8 +28,7 @@ export async function declareAbWinner(params: {
   }
 
   // Verify cadence belongs to org
-  const { data: cadence } = await supabase
-    .from('cadences')
+  const { data: cadence } = await from(supabase, 'cadences')
     .select('id')
     .eq('id', step.cadence_id)
     .eq('org_id', orgId)

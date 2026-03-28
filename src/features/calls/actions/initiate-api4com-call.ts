@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { originateCall } from '@/features/integrations/services/api4com.service';
 
@@ -32,8 +33,7 @@ export async function initiateApi4ComCall(
     });
 
     // Create call record with api4com_call_id in metadata for webhook correlation
-    const { data: call, error: callError } = (await supabase
-      .from('calls')
+    const { data: call, error: callError } = (await from(supabase, 'calls')
       .insert({
         org_id: orgId,
         user_id: userId,

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
 
 import type { LeadImportRow } from '../types';
 
@@ -16,8 +17,7 @@ export async function fetchImports(): Promise<ActionResult<ImportListResult>> {
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, count, error } = (await supabase
-    .from('lead_imports')
+  const { data, count, error } = (await from(supabase, 'lead_imports')
     .select('*', { count: 'exact' })
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })) as {

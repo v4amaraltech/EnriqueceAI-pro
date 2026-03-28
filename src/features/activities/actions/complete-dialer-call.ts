@@ -41,8 +41,7 @@ export async function completeDialerCall(
   const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = input;
 
   // 1. Create call record
-  const { data: call, error: callError } = (await supabase
-    .from('calls')
+  const { data: call, error: callError } = (await from(supabase, 'calls')
     .insert({
       org_id: orgId,
       user_id: userId,

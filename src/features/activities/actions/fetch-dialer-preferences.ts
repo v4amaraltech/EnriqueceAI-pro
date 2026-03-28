@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import type { DialerPreferences } from '../schemas/dialer-preferences.schemas';
 
@@ -15,8 +16,7 @@ export async function fetchDialerPreferences(): Promise<ActionResult<DialerPrefe
   if (!auth.success) return { success: true, data: DEFAULTS };
   const { orgId, supabase } = auth.data;
 
-  const { data } = (await supabase
-    .from('organization_call_settings')
+  const { data } = (await from(supabase, 'organization_call_settings')
     .select('dialer_simultaneous_phones, dialer_daily_limit_per_lead')
     .eq('org_id', orgId)
     .single()) as {

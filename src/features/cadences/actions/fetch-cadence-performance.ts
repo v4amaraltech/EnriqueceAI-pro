@@ -31,8 +31,7 @@ export async function fetchCadencePerformance(
   const { orgId, supabase } = auth.data;
 
   // Fetch cadence info
-  const { data: cadence, error: cadenceErr } = await supabase
-    .from('cadences')
+  const { data: cadence, error: cadenceErr } = await from(supabase, 'cadences')
     .select('id, name, type')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
@@ -49,8 +48,7 @@ export async function fetchCadencePerformance(
     .order('step_order')) as { data: StepRow[] | null; error: { message: string } | null };
 
   // Fetch enrollments
-  let enrollmentQuery = supabase
-    .from('cadence_enrollments')
+  let enrollmentQuery = from(supabase, 'cadence_enrollments')
     .select('status')
     .eq('cadence_id', cadenceId);
 

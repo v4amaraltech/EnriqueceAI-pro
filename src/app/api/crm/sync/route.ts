@@ -29,8 +29,7 @@ export async function POST(request: Request) {
       // Manual sync: require authenticated user + verify connection belongs to their org
       await requireAuth();
       const supabaseUser = await createServerSupabaseClient();
-      const { data: conn } = await supabaseUser
-        .from('crm_connections')
+      const { data: conn } = await from(supabaseUser, 'crm_connections')
         .select('id')
         .eq('id', body.connectionId)
         .maybeSingle();

@@ -1,4 +1,5 @@
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationSettings } from '@/features/auth/components/OrganizationSettings';
@@ -8,8 +9,7 @@ export default async function CompanyGeneralPage() {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('*, organization:organizations(*)')
     .eq('user_id', user.id)
     .eq('status', 'active')

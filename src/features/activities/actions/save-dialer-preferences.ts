@@ -27,8 +27,7 @@ export async function saveDialerPreferences(
   const input = parsed.data;
 
   // Check if settings row exists
-  const { data: existing } = (await supabase
-    .from('organization_call_settings')
+  const { data: existing } = (await from(supabase, 'organization_call_settings')
     .select('id')
     .eq('org_id', orgId)
     .single()) as { data: { id: string } | null };

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
+import { from } from '@/lib/supabase/from';
 
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
@@ -33,8 +34,7 @@ export async function bulkEnrichLeads(
   const lemitCpfProvider = useLemit ? new LemitCpfProvider(lemitApiUrl, lemitApiToken) : null;
 
   // Batch fetch all leads upfront (single query instead of N queries)
-  const { data: allLeads } = (await supabase
-    .from('leads')
+  const { data: allLeads } = (await from(supabase, 'leads')
     .select('id, cnpj, org_id')
     .in('id', leadIds)) as { data: { id: string; cnpj: string; org_id: string }[] | null };
 

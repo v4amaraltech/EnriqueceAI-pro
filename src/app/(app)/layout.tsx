@@ -29,8 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  let { data: memberData } = (await supabase
-    .from('organization_members')
+  let { data: memberData } = (await from(supabase, 'organization_members')
     .select('*, organization:organizations(*)')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -40,16 +39,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Uses service role to bypass RLS (invited members can't read/update their own record)
   if (!memberData) {
     const serviceClient = createServiceRoleClient();
-    const { data: invitedData } = (await serviceClient
-      .from('organization_members')
+    const { data: invitedData } = (await from(serviceClient, 'organization_members')
       .select('*, organization:organizations(*)')
       .eq('user_id', user.id)
       .eq('status', 'invited')
       .single()) as { data: MemberWithOrganization | null };
 
     if (invitedData) {
-      await serviceClient
-        .from('organization_members')
+      await from(serviceClient, 'organization_members')
         .update({ status: 'active', accepted_at: new Date().toISOString() })
         .eq('id', invitedData.id);
       memberData = { ...invitedData, status: 'active' };
@@ -83,8 +80,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .eq('org_id', orgId)
       .maybeSingle() as unknown as Promise<{ data: { status: SubscriptionStatus; current_period_end: string } | null }>),
 
-    (supabase
-      .from('organization_members')
+    (from(supabase, 'organization_members')
       .select('*')
       .eq('org_id', orgId) as unknown as Promise<{ data: OrganizationMemberRow[] | null }>),
 

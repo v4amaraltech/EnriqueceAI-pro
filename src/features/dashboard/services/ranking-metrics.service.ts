@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 import type {
   DashboardFilters,
   RankingCardData,
@@ -58,8 +60,7 @@ export async function fetchLeadsFinishedRanking(
   const { start, end } = getMonthRange(filters.month);
 
   // Query enrollments in the period with lead_id for attribution
-  let query = supabase
-    .from('cadence_enrollments')
+  let query = from(supabase, 'cadence_enrollments')
     .select('lead_id, enrolled_by, status');
 
   query = query.gte('updated_at', start).lt('updated_at', end);
@@ -75,8 +76,7 @@ export async function fetchLeadsFinishedRanking(
   const rows = enrollments ?? [];
   if (rows.length === 0) {
     const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await supabase
-      .from('goals')
+    const { data: goal } = (await from(supabase, 'goals')
       .select('opportunity_target')
       .eq('org_id', orgId)
       .eq('month', monthStart)
@@ -86,8 +86,7 @@ export async function fetchLeadsFinishedRanking(
 
   // Get lead assigned_to for attribution
   const leadIds = [...new Set(rows.map((r) => r.lead_id))];
-  const { data: leadData } = (await supabase
-    .from('leads')
+  const { data: leadData } = (await from(supabase, 'leads')
     .select('id, assigned_to')
     .in('id', leadIds)) as {
     data: Array<{ id: string; assigned_to: string | null }> | null;
@@ -123,8 +122,7 @@ export async function fetchLeadsFinishedRanking(
 
   // Get org goal for opportunity_target (proxy for leads target)
   const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await supabase
-    .from('goals')
+  const { data: goal } = (await from(supabase, 'goals')
     .select('opportunity_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)
@@ -144,8 +142,7 @@ export async function fetchActivitiesRanking(
   const { start, end } = getMonthRange(filters.month);
 
   // Get interactions in the period with performed_by for direct attribution
-  let interactionsQuery = supabase
-    .from('interactions')
+  let interactionsQuery = from(supabase, 'interactions')
     .select('lead_id, type, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', start)
@@ -163,8 +160,7 @@ export async function fetchActivitiesRanking(
 
   if (interactionRows.length === 0) {
     const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await supabase
-      .from('goals')
+    const { data: goal } = (await from(supabase, 'goals')
       .select('activities_target')
       .eq('org_id', orgId)
       .eq('month', monthStart)
@@ -179,8 +175,7 @@ export async function fetchActivitiesRanking(
   ];
   const leadAssignedTo = new Map<string, string>();
   if (leadIdsWithoutPerformer.length > 0) {
-    const { data: leadData } = (await supabase
-      .from('leads')
+    const { data: leadData } = (await from(supabase, 'leads')
       .select('id, assigned_to')
       .in('id', leadIdsWithoutPerformer)) as {
       data: Array<{ id: string; assigned_to: string | null }> | null;
@@ -208,8 +203,7 @@ export async function fetchActivitiesRanking(
 
   // Get goal
   const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await supabase
-    .from('goals')
+  const { data: goal } = (await from(supabase, 'goals')
     .select('activities_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)
@@ -229,8 +223,7 @@ export async function fetchConversionRanking(
   const { start, end } = getMonthRange(filters.month);
 
   // Get all leads updated in the month — use won_by for qualified attribution
-  let leadsQuery = supabase
-    .from('leads')
+  let leadsQuery = from(supabase, 'leads')
     .select('id, status, assigned_to, won_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -247,8 +240,7 @@ export async function fetchConversionRanking(
 
   if (leadRows.length === 0) {
     const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await supabase
-      .from('goals')
+    const { data: goal } = (await from(supabase, 'goals')
       .select('conversion_target')
       .eq('org_id', orgId)
       .eq('month', monthStart)
@@ -261,8 +253,7 @@ export async function fetchConversionRanking(
   let filteredLeadIds: Set<string> | null = null;
   if (filters.cadenceIds.length > 0) {
     const leadIds = leadRows.map((l) => l.id);
-    const { data: enrollments } = (await supabase
-      .from('cadence_enrollments')
+    const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
       .select('lead_id')
       .in('lead_id', leadIds)
       .in('cadence_id', filters.cadenceIds)) as {
@@ -311,8 +302,7 @@ export async function fetchConversionRanking(
 
   // Get goal
   const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await supabase
-    .from('goals')
+  const { data: goal } = (await from(supabase, 'goals')
     .select('conversion_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)

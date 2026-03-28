@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { from } from '@/lib/supabase/from';
+
 export interface ProcessWithRetryOptions {
   supabase: SupabaseClient;
   provider: string;
@@ -28,8 +30,7 @@ export async function processWithRetry({
       await process();
 
       // Success — mark as processed
-      await supabase
-        .from('webhook_events')
+      await from(supabase, 'webhook_events')
         .update({
           status: 'processed',
           retry_count: attempt - 1,
@@ -43,8 +44,7 @@ export async function processWithRetry({
       const errorMessage = err instanceof Error ? err.message : String(err);
       const isFinalAttempt = attempt === maxRetries;
 
-      await supabase
-        .from('webhook_events')
+      await from(supabase, 'webhook_events')
         .update({
           status: isFinalAttempt ? 'dead_letter' : 'failed',
           retry_count: attempt,
