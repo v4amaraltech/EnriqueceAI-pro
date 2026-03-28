@@ -73,7 +73,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
     <div className="rounded-lg border border-border bg-card">
       <div className="flex flex-col gap-6 p-6 lg:flex-row lg:p-8">
         {/* Left column — Stats */}
-        <div className="flex w-full shrink-0 flex-col justify-center lg:w-[400px] lg:pl-16">
+        <div className="flex w-full shrink-0 flex-col justify-center lg:w-[420px] lg:pl-24">
           {/* Big number */}
           <p className="text-6xl font-bold tracking-tight text-foreground">{kpi.totalOpportunities}</p>
           <p className="mt-1.5 flex items-center gap-1.5 text-sm text-foreground/70">
