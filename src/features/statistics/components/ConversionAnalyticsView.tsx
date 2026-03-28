@@ -1,6 +1,6 @@
 'use client';
 
-import { Award, CheckCircle, TrendingUp, Users } from 'lucide-react';
+import { Award, TrendingUp, Users } from 'lucide-react';
 
 import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import type { CadenceOption } from '@/shared/components/AnalyticsFilters';
@@ -41,7 +41,7 @@ interface ConversionAnalyticsViewProps {
   previousData?: ConversionAnalyticsData;
 }
 
-export function ConversionAnalyticsView({ data, members, cadences, hideFilters, previousData }: ConversionAnalyticsViewProps) {
+export function ConversionAnalyticsView({ data, members, cadences, hideFilters, previousData: _previousData }: ConversionAnalyticsViewProps) {
   const { from, to } = useDateRange('/statistics/conversion');
   const drilldown = useDrilldown();
 

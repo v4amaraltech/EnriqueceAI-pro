@@ -5,6 +5,8 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
+
 interface SendEmailParams {
   to: string;
   subject: string;
@@ -127,7 +129,7 @@ export async function refreshAccessToken(
     return { error: 'Google OAuth não configurado — impossível renovar token' };
   }
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

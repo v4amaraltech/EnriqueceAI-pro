@@ -5,6 +5,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
+import { GOOGLE_TOKEN_URL } from '@/features/integrations/constants/oauth-endpoints';
 
 interface GmailConnection {
   id: string;
@@ -27,7 +28,7 @@ async function refreshAccessToken(
     return { error: 'Google OAuth não configurado' };
   }
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

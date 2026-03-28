@@ -8,6 +8,7 @@ import { from } from '@/lib/supabase/from';
 
 import { decrypt, encrypt } from '@/lib/security/encryption';
 
+import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 import type { GmailConnectionSafe } from '../types';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
@@ -60,7 +61,7 @@ export async function handleGmailCallback(
   }
 
   // Exchange code for tokens
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -199,7 +200,7 @@ export async function refreshGmailToken(
     return { success: false, error: 'Conexão não encontrada' };
   }
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

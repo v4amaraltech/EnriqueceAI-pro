@@ -3,6 +3,8 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
+
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
 
 function getGcalClientId() {
@@ -75,7 +77,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
   const clientId = getGcalClientId();
   const clientSecret = getGcalClientSecret();
 
-  const response = await fetch('https://oauth2.googleapis.com/token', {
+  const response = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

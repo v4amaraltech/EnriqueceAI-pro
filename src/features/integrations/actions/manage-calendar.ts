@@ -10,6 +10,7 @@ import { from } from '@/lib/supabase/from';
 
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 import type { CalendarConnectionSafe } from '../types';
 
 function getGcalClientId() {
@@ -65,7 +66,7 @@ export async function handleCalendarCallback(
   }
 
   // Exchange code for tokens
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
