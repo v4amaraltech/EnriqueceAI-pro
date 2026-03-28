@@ -28,24 +28,24 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
   return (
     <div className="space-y-6">
-      {/* Header: Title + Filters (inline) + Edit goals button */}
+      {/* Header: Title left, Filters + Edit goals right */}
       <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-lg font-normal text-foreground">Visão geral</h1>
+
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-lg font-normal text-foreground">Visão geral</h1>
           <Suspense fallback={<Skeleton className="h-6 w-64" />}>
             <DashboardFiltersComponent
               currentFilters={filters}
               availableCadences={data.availableCadences}
             />
           </Suspense>
+          <button
+            onClick={() => setGoalsOpen(true)}
+            className="rounded-full border border-emerald-500 px-4 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+          >
+            Editar metas
+          </button>
         </div>
-
-        <button
-          onClick={() => setGoalsOpen(true)}
-          className="rounded-full border border-emerald-500 px-4 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-        >
-          Editar metas
-        </button>
       </div>
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
