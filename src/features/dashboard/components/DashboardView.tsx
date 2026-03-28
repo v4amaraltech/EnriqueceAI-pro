@@ -53,9 +53,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
       {/* KPI + Chart (unified card) */}
       <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
 
-      {/* Ranking Cards (Story 3.3) */}
+      {/* Ranking Cards (Story 3.3) — equal height via grid stretch */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3" data-slot="ranking-cards">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards">
           <RankingCard
             title="Leads Finalizados"
             icon={Users}
@@ -90,7 +90,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
       {/* Insights Charts (Story 3.4) */}
       {insights && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-slot="insights-charts">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-h-[480px]" data-slot="insights-charts">
           <LossReasonsChart data={insights.lossReasons} />
           <ConversionByOriginChart data={insights.conversionByOrigin} />
         </div>
