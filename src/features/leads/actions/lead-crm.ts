@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -608,6 +609,15 @@ export async function markLeadAsWon(
         }).catch((err) => console.error('[markLeadAsWon] Feedback email error:', err));
       }
     }
+
+    logAudit({
+      orgId,
+      userId: auth.data.userId,
+      action: 'lead.marked_won',
+      resourceType: 'lead',
+      resourceId: leadId,
+      metadata: { crm_provider: crmOptions?.provider ?? null, deal_created: dealCreated },
+    });
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { logAudit } from '@/lib/audit/audit-log';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -41,6 +42,7 @@ export async function createApiKeyAction(
     return { success: false, error: 'Erro ao criar chave de API' };
   }
 
+  logAudit({ orgId, userId, action: 'api_key.created', resourceType: 'api_key', metadata: { name: parsed.data.name, prefix } });
   revalidatePath('/settings/integrations/api');
 
   return { success: true, data: { key, id: hash, prefix } };
@@ -88,6 +90,7 @@ export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<vo
     return { success: false, error: 'Erro ao revogar chave' };
   }
 
+  logAudit({ orgId, action: 'api_key.revoked', resourceType: 'api_key', resourceId: keyId });
   revalidatePath('/settings/integrations/api');
   return { success: true, data: undefined };
 }

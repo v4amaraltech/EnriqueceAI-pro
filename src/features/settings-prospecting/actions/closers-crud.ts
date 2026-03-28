@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -55,6 +56,7 @@ export async function addCloser(name: string, email: string): Promise<ActionResu
     .single()) as { data: CloserRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar closer' };
+  logAudit({ orgId, action: 'closer.created', resourceType: 'closer', resourceId: data.id, metadata: { name: trimmedName, email: trimmedEmail } });
   return { success: true, data };
 }
 
@@ -104,5 +106,6 @@ export async function deleteCloser(id: string): Promise<ActionResult<{ deleted: 
     .eq('org_id', orgId);
 
   if (error) return { success: false, error: 'Erro ao remover closer' };
+  logAudit({ orgId, action: 'closer.deleted', resourceType: 'closer', resourceId: id });
   return { success: true, data: { deleted: true } };
 }

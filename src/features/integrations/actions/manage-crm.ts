@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 
 import { encryptJson } from '@/lib/security/encryption';
@@ -170,6 +171,7 @@ export async function disconnectCrm(
       return { success: false, error: 'Erro ao desconectar CRM' };
     }
 
+    logAudit({ orgId, action: 'crm.disconnected', resourceType: 'integration', metadata: { provider } });
     return { success: true, data: { disconnected: true } };
   } catch (error) {
     return {
