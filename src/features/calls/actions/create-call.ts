@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
@@ -32,5 +34,6 @@ export async function createCall(
     return { success: false, error: 'Erro ao registrar ligação' };
   }
 
+  revalidatePath('/calls');
   return { success: true, data };
 }

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -51,5 +53,6 @@ export async function saveDialerPreferences(
     if (error) return { success: false, error: 'Erro ao criar preferências' };
   }
 
+  revalidatePath('/settings/calls');
   return { success: true, data: { saved: true } };
 }

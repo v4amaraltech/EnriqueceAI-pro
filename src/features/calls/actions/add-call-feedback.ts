@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -32,5 +34,6 @@ export async function addCallFeedback(
     return { success: false, error: 'Erro ao adicionar feedback' };
   }
 
+  revalidatePath('/calls');
   return { success: true, data };
 }

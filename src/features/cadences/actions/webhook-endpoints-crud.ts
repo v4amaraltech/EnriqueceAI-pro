@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
@@ -101,6 +103,7 @@ export async function createWebhookEndpoint(input: {
 
   if (error) return { success: false, error: error.message };
   if (!data) return { success: false, error: 'Falha ao criar webhook endpoint' };
+  revalidatePath('/settings/integrations');
   return { success: true, data };
 }
 
@@ -149,6 +152,7 @@ export async function updateWebhookEndpoint(
 
   if (error) return { success: false, error: error.message };
   if (!data) return { success: false, error: 'Webhook endpoint não encontrado' };
+  revalidatePath('/settings/integrations');
   return { success: true, data };
 }
 
@@ -167,6 +171,7 @@ export async function deleteWebhookEndpoint(id: string): Promise<ActionResult<nu
     .eq('org_id', orgId);
 
   if (error) return { success: false, error: (error as { message: string }).message };
+  revalidatePath('/settings/integrations');
   return { success: true, data: null };
 }
 

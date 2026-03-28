@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -26,5 +28,6 @@ export async function updateCallStatus(
     return { success: false, error: 'Erro ao atualizar status' };
   }
 
+  revalidatePath('/calls');
   return { success: true, data: { id: parsed.data.id } };
 }

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -57,6 +59,7 @@ export async function addCloser(name: string, email: string): Promise<ActionResu
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar closer' };
   logAudit({ orgId, action: 'closer.created', resourceType: 'closer', resourceId: data.id, metadata: { name: trimmedName, email: trimmedEmail } });
+  revalidatePath('/settings/prospecting');
   return { success: true, data };
 }
 
@@ -87,6 +90,7 @@ export async function updateCloser(
     .single()) as { data: CloserRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar closer' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data };
 }
 
@@ -107,5 +111,6 @@ export async function deleteCloser(id: string): Promise<ActionResult<{ deleted: 
 
   if (error) return { success: false, error: 'Erro ao remover closer' };
   logAudit({ orgId, action: 'closer.deleted', resourceType: 'closer', resourceId: id });
+  revalidatePath('/settings/prospecting');
   return { success: true, data: { deleted: true } };
 }

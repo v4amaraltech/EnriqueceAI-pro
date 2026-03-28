@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -72,5 +74,6 @@ export async function saveFitScoreRules(
     // Background task — don't block the response
   });
 
+  revalidatePath('/settings/prospecting');
   return { success: true, data: { saved: rows.length } };
 }

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -132,6 +134,7 @@ export async function updateEnrollmentStatus(
     return { success: false, error: 'Erro ao atualizar status do enrollment' };
   }
 
+  revalidatePath('/cadences');
   return { success: true, data: undefined };
 }
 
@@ -150,5 +153,6 @@ export async function removeEnrollment(
     return { success: false, error: 'Erro ao remover enrollment' };
   }
 
+  revalidatePath('/cadences');
   return { success: true, data: undefined };
 }

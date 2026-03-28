@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -104,6 +106,7 @@ export async function addLossReason(name: string): Promise<ActionResult<LossReas
     .single()) as { data: LossReasonRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar motivo' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data };
 }
 
@@ -130,6 +133,7 @@ export async function updateLossReason(
     .single()) as { data: LossReasonRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar motivo' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data };
 }
 
@@ -158,5 +162,6 @@ export async function deleteLossReason(id: string): Promise<ActionResult<{ delet
     .eq('org_id', orgId);
 
   if (error) return { success: false, error: 'Erro ao remover motivo' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data: { deleted: true } };
 }

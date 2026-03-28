@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -119,6 +121,7 @@ export async function saveCallSettings(
     if (error) return { success: false, error: 'Erro ao criar configurações' };
   }
 
+  revalidatePath('/settings/calls');
   return { success: true, data: { saved: true } };
 }
 
@@ -171,6 +174,7 @@ export async function saveCallDailyTargets(
     }
   }
 
+  revalidatePath('/settings/calls');
   return { success: true, data: { saved } };
 }
 
@@ -212,6 +216,7 @@ export async function addPhoneBlacklist(
     .single()) as { data: PhoneBlacklistRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar telefone (pode já estar na lista)' };
+  revalidatePath('/settings/calls');
   return { success: true, data };
 }
 
@@ -239,5 +244,6 @@ export async function deletePhoneBlacklist(id: string): Promise<ActionResult<{ d
     .eq('org_id', orgId);
 
   if (error) return { success: false, error: 'Erro ao remover telefone' };
+  revalidatePath('/settings/calls');
   return { success: true, data: { deleted: true } };
 }

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -24,5 +26,6 @@ export async function saveCustomSignature(
     return { success: false, error: 'Erro ao salvar assinatura' };
   }
 
+  revalidatePath('/settings/integrations');
   return { success: true, data: undefined };
 }

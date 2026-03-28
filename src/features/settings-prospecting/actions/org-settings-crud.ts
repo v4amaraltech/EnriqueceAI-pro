@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 
@@ -51,6 +53,7 @@ export async function saveAbmSettings(
     .eq('id', orgId);
 
   if (error) return { success: false, error: 'Erro ao salvar configuração ABM' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data: { saved: true } };
 }
 
@@ -74,5 +77,6 @@ export async function saveLeadVisibility(
     .eq('id', orgId);
 
   if (error) return { success: false, error: 'Erro ao salvar modo de acesso' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data: { saved: true } };
 }

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -73,5 +75,6 @@ export async function upsertStandardFieldSetting(
     .single()) as { data: StandardFieldSettingRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar configuração do campo padrão' };
+  revalidatePath('/settings/prospecting');
   return { success: true, data };
 }

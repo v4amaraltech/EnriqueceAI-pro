@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { from } from '@/lib/supabase/from';
@@ -45,6 +47,7 @@ export async function createTemplate(
     return { success: false, error: 'Erro ao criar template' };
   }
 
+  revalidatePath('/templates');
   return { success: true, data: data! };
 }
 
@@ -108,6 +111,7 @@ export async function updateTemplate(
     return { success: false, error: 'Erro ao atualizar template' };
   }
 
+  revalidatePath('/templates');
   return { success: true, data: data! };
 }
 
@@ -146,6 +150,7 @@ export async function deleteTemplate(
     return { success: false, error: 'Erro ao deletar template' };
   }
 
+  revalidatePath('/templates');
   return { success: true, data: { deleted: true } };
 }
 
@@ -188,5 +193,6 @@ export async function duplicateTemplate(
     return { success: false, error: 'Erro ao duplicar template' };
   }
 
+  revalidatePath('/templates');
   return { success: true, data: data! };
 }
