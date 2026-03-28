@@ -81,6 +81,7 @@ export function StandardFieldOptionsDialog({
           <Button
             variant="outline"
             size="sm"
+            className="ml-8"
             onClick={() => setOptionsList((prev) => [...prev, ''])}
           >
             <Plus className="mr-1 h-4 w-4" />
