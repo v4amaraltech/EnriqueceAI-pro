@@ -15,6 +15,13 @@ export interface LossByCadenceRow {
   topReason: string;
 }
 
+export interface LossByCadenceStackedRow {
+  cadenceId: string;
+  cadenceName: string;
+  totalLost: number;
+  reasons: Array<{ reasonName: string; count: number; color: string }>;
+}
+
 export interface LossReasonAnalyticsData {
   totalLost: number;
   topReasonName: string;
@@ -23,4 +30,5 @@ export interface LossReasonAnalyticsData {
   totalEnrolled: number;
   reasonsRanking: LossReasonEntry[];
   lossByCadence: LossByCadenceRow[];
+  lossByCadenceStacked: LossByCadenceStackedRow[];
 }

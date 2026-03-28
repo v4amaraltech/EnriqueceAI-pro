@@ -5,6 +5,7 @@ import { CHART_FALLBACK_COLOR, CHART_SERIES_COLORS } from '@/shared/constants/ch
 
 import type {
   LossByCadenceRow,
+  LossByCadenceStackedRow,
   LossReasonAnalyticsData,
   LossReasonEntry,
 } from '../types/loss-reason-analytics.types';
@@ -76,6 +77,7 @@ export async function fetchLossReasonAnalyticsData(
 
   const reasonsRanking = buildReasonsRanking(lostEnrollments, reasons, totalLost);
   const lossByCadence = buildLossByCadence(enrollments, cadences, reasons);
+  const lossByCadenceStacked = buildLossByCadenceStacked(lostEnrollments, cadences, reasons);
 
   const topReason = reasonsRanking[0];
 
@@ -87,6 +89,7 @@ export async function fetchLossReasonAnalyticsData(
     totalEnrolled,
     reasonsRanking,
     lossByCadence,
+    lossByCadenceStacked,
   };
 }
 
@@ -168,5 +171,45 @@ function emptyData(): LossReasonAnalyticsData {
     totalEnrolled: 0,
     reasonsRanking: [],
     lossByCadence: [],
+    lossByCadenceStacked: [],
   };
+}
+
+function buildLossByCadenceStacked(
+  lostEnrollments: EnrollmentRow[],
+  cadences: CadenceRow[],
+  reasons: LossReasonRow[],
+): LossByCadenceStackedRow[] {
+  const reasonNameMap = new Map(reasons.map((r) => [r.id, r.name]));
+  const cadenceNameMap = new Map(cadences.map((c) => [c.id, c.name]));
+
+  // Group by cadence, then by reason
+  const cadenceMap = new Map<string, Map<string, number>>();
+  for (const e of lostEnrollments) {
+    if (!e.loss_reason_id) continue;
+    const rMap = cadenceMap.get(e.cadence_id) ?? new Map<string, number>();
+    rMap.set(e.loss_reason_id, (rMap.get(e.loss_reason_id) ?? 0) + 1);
+    cadenceMap.set(e.cadence_id, rMap);
+  }
+
+  const rows: LossByCadenceStackedRow[] = [];
+  for (const [cadenceId, reasonMap] of cadenceMap) {
+    const totalLost = Array.from(reasonMap.values()).reduce((a, b) => a + b, 0);
+    const reasonEntries = Array.from(reasonMap.entries())
+      .map(([reasonId, count], idx) => ({
+        reasonName: reasonNameMap.get(reasonId) ?? 'Outro',
+        count,
+        color: CHART_SERIES_COLORS[idx % CHART_SERIES_COLORS.length] ?? CHART_FALLBACK_COLOR,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    rows.push({
+      cadenceId,
+      cadenceName: cadenceNameMap.get(cadenceId) ?? 'Cadência',
+      totalLost,
+      reasons: reasonEntries,
+    });
+  }
+
+  return rows.sort((a, b) => b.totalLost - a.totalLost);
 }
