@@ -22,6 +22,8 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import { formatDateTime, formatDuration } from '@/lib/utils/format';
+
 import type { CallDetail, CallFeedbackRow, CallStatus } from '../types';
 import { callStatusValues } from '../schemas/call.schemas';
 import { addCallFeedback } from '../actions/add-call-feedback';
@@ -41,22 +43,6 @@ const typeLabels: Record<string, string> = {
   outbound: 'Realizada',
   manual: 'Manual',
 };
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 interface CallDetailModalProps {
   call: CallDetail | null;
@@ -214,7 +200,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Data</p>
-                  <p className="text-sm">{formatDate(activeCall.started_at)}</p>
+                  <p className="text-sm">{formatDateTime(activeCall.started_at)}</p>
                 </div>
                 <div className="flex items-start gap-1">
                   <Clock className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
@@ -267,7 +253,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                          {formatDate(fb.created_at)}
+                          {formatDateTime(fb.created_at)}
                         </p>
                         <p className="mt-1 text-sm whitespace-pre-wrap">{fb.content}</p>
                       </div>

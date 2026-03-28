@@ -16,6 +16,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { formatDate } from '@/lib/utils/format';
+
 import type { EnrollmentWithLead } from '../cadences.contract';
 import type { EnrollmentStatus } from '../types';
 import { removeEnrollment, updateEnrollmentStatus } from '../actions/manage-enrollments';
@@ -32,14 +34,6 @@ const statusConfig: Record<EnrollmentStatus, { label: string; variant: 'default'
   bounced: { label: 'Bounce', variant: 'destructive' },
   unsubscribed: { label: 'Desincrito', variant: 'secondary' },
 };
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
 
 export function EnrollmentsList({ enrollments }: EnrollmentsListProps) {
   const router = useRouter();

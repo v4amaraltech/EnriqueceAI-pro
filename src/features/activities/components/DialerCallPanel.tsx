@@ -30,6 +30,8 @@ import {
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
+import { formatDuration } from '@/lib/utils/format';
+
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
 
@@ -45,12 +47,6 @@ interface DialerCallPanelProps {
   onHangup: () => void;
   onRetry: () => void;
   dialerProvider?: DialerProvider;
-}
-
-function formatTimer(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export function DialerCallPanel({
@@ -217,7 +213,7 @@ export function DialerCallPanel({
             {/* Timer display during call */}
             {isInCall && (
               <p className="mb-2 text-lg font-mono tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                {formatTimer(elapsed)}
+                {formatDuration(elapsed)}
               </p>
             )}
 

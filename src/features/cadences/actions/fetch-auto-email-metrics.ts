@@ -5,6 +5,8 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
+import { safeRate } from '@/lib/utils/format';
+
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 
 export async function fetchAutoEmailMetrics(
@@ -92,7 +94,3 @@ export async function fetchAutoEmailMetrics(
   return { success: true, data: metrics };
 }
 
-function safeRate(numerator: number, denominator: number): number {
-  if (denominator === 0) return 0;
-  return Math.round((numerator / denominator) * 1000) / 10;
-}

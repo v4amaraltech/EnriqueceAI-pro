@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { formatDateLabel } from '@/lib/utils/format';
 import { INTERACTION_TYPE_COLORS } from '@/shared/constants/chart-colors';
 
 import type { FunnelStage } from '../types/conversion-analytics.types';
@@ -147,13 +148,6 @@ function buildBounceTrend(interactions: InteractionRow[]): DailyBounceTrendEntry
     }));
 }
 
-function formatDateLabel(dateStr: string): string {
-  const parts = dateStr.split('-');
-  const month = parts[1];
-  const day = parts[2];
-  if (!month || !day) return dateStr;
-  return `${day}/${month}`;
-}
 
 function emptyData(): EmailAnalyticsData {
   return {

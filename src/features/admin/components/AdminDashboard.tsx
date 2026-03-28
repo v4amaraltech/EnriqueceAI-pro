@@ -12,6 +12,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { formatDate } from '@/lib/utils/format';
+
 import type { AdminDashboardData } from '../types';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
@@ -30,14 +32,6 @@ function StatusBadge({ status }: { status: string | null }) {
     return <Badge variant="outline">{status}</Badge>;
   }
   return <Badge className={style.className}>{style.label}</Badge>;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }
 
 export function AdminDashboard({ data }: { data: AdminDashboardData }) {

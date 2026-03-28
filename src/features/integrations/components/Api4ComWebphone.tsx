@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mic, MicOff, Minus, Phone, PhoneOff, X } from 'lucide-react';
 
+import { formatDurationMs } from '@/lib/utils/format';
 import { Button } from '@/shared/components/ui/button';
 
 import { getApi4ComSipCredentials } from '@/features/calls/actions/get-api4com-sip-credentials';
@@ -33,12 +34,6 @@ function statusLabel(status: WebphoneStatus): string {
   return labels[status];
 }
 
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
 
 function CallTimer({ startedAt }: { startedAt: number }) {
   const [elapsed, setElapsed] = useState(0);
@@ -50,7 +45,7 @@ function CallTimer({ startedAt }: { startedAt: number }) {
     return () => clearInterval(interval);
   }, [startedAt]);
 
-  return <span className="font-mono text-sm">{formatDuration(elapsed)}</span>;
+  return <span className="font-mono text-sm">{formatDurationMs(elapsed)}</span>;
 }
 
 export function Api4ComWebphone() {

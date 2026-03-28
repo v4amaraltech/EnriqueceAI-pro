@@ -11,19 +11,13 @@ import {
   YAxis,
 } from 'recharts';
 
+import { formatDateLabel } from '@/lib/utils/format';
+
 import type { AiDailyUsage } from '../types';
 
 interface AiUsageChartProps {
   data: AiDailyUsage[];
   dailyLimit: number; // -1 = unlimited
-}
-
-function formatDateLabel(dateStr: string): string {
-  const parts = dateStr.split('-');
-  const month = parts[1];
-  const day = parts[2];
-  if (!month || !day) return dateStr;
-  return `${day}/${month}`;
 }
 
 export function AiUsageChart({ data, dailyLimit }: AiUsageChartProps) {

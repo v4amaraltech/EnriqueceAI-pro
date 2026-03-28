@@ -42,6 +42,8 @@ import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-d
 
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
+import { formatDuration } from '@/lib/utils/format';
+
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
@@ -68,12 +70,6 @@ interface ActivityPhonePanelProps {
   activityName?: string | null;
   callScript?: string | null;
   dialerProvider?: DialerProvider;
-}
-
-function formatTimer(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export function ActivityPhonePanel({
@@ -338,7 +334,7 @@ export function ActivityPhonePanel({
             {/* Timer display during call */}
             {isInCall && (
               <p className="mb-2 font-mono text-lg tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                {formatTimer(elapsed)}
+                {formatDuration(elapsed)}
               </p>
             )}
 
@@ -427,7 +423,7 @@ export function ActivityPhonePanel({
                 <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{selectedPhone}</p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-sm tabular-nums">{formatTimer(callDuration)}</p>
+                <p className="font-mono text-sm tabular-nums">{formatDuration(callDuration)}</p>
                 <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
               </div>
             </div>

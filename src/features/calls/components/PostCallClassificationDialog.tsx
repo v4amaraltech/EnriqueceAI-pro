@@ -14,6 +14,8 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import { formatDurationMs } from '@/lib/utils/format';
+
 import type { CallStatus } from '../types';
 import { classifyWebphoneCall } from '../actions/classify-webphone-call';
 
@@ -29,13 +31,6 @@ const CLASSIFICATION_OPTIONS: ClassificationOption[] = [
   { status: 'busy', label: 'Ocupado' },
   { status: 'not_connected', label: 'Não Conectada' },
 ];
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
 
 interface PostCallClassificationDialogProps {
   open: boolean;
@@ -111,7 +106,7 @@ export function PostCallClassificationDialog({
           <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
             <span className="text-sm font-medium">{phone}</span>
             <span className="font-mono text-sm tabular-nums text-[var(--muted-foreground)]">
-              {formatDuration(durationMs)}
+              {formatDurationMs(durationMs)}
             </span>
           </div>
 

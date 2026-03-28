@@ -3,6 +3,8 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
+import { formatDuration } from '@/lib/utils/format';
+
 import type { CallRow } from '../types';
 import { callFiltersSchema } from '../schemas/call.schemas';
 
@@ -19,12 +21,6 @@ const typeLabels: Record<string, string> = {
   outbound: 'Realizada',
   manual: 'Manual',
 };
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 function escapeCsvField(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {

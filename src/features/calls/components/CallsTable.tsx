@@ -13,28 +13,14 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { formatDateTime, formatDuration } from '@/lib/utils/format';
+
 import type { CallRow } from '../types';
 import { CallStatusIcon } from './CallStatusIcon';
 
 interface CallsTableProps {
   calls: CallRow[];
   onView: (call: CallRow) => void;
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export function CallsTable({ calls, onView }: CallsTableProps) {
@@ -70,7 +56,7 @@ export function CallsTable({ calls, onView }: CallsTableProps) {
               </TableCell>
               <TableCell className="font-medium">{call.origin}</TableCell>
               <TableCell>{call.destination}</TableCell>
-              <TableCell>{formatDate(call.started_at)}</TableCell>
+              <TableCell>{formatDateTime(call.started_at)}</TableCell>
               <TableCell className="tabular-nums">
                 {formatDuration(call.duration_seconds)}
               </TableCell>

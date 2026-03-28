@@ -15,6 +15,8 @@ import {
 } from '@/shared/components/ui/table';
 import { EmptyState } from '@/shared/components/EmptyState';
 
+import { formatDateTime } from '@/lib/utils/format';
+
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import type { ImportListResult } from '../actions/fetch-imports';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
@@ -35,17 +37,6 @@ function getSourceLabel(value: string | null, options: LeadSourceOption[]): stri
   if (!value) return '—';
   const opt = options.find((o) => o.value === value);
   return opt?.label ?? value;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export function ImportListView({ result, leadSourceOptions }: ImportListViewProps) {
@@ -134,7 +125,7 @@ export function ImportListView({ result, leadSourceOptions }: ImportListViewProp
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{formatDate(row.created_at)}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDateTime(row.created_at)}</TableCell>
                   <TableCell className="text-right">{row.total_rows}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">

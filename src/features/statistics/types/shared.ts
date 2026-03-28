@@ -42,20 +42,5 @@ export function getPeriodDates(period: string): { start: string; end: string } {
   return { start: start.toISOString(), end };
 }
 
-export function safeRate(numerator: number, denominator: number): number {
-  if (denominator === 0) return 0;
-  return Math.round((numerator / denominator) * 1000) / 10;
-}
-
-export function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.round(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-export function formatDurationLong(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
-}
+// Re-export shared formatters from canonical location
+export { safeRate, formatDuration, formatDurationLong } from '@/lib/utils/format';

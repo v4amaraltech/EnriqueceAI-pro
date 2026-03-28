@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/utils/format';
 
 import type { NotificationRow, NotificationType } from '../types';
 
@@ -29,21 +30,6 @@ const ICON_MAP: Record<NotificationType, React.ElementType> = {
   usage_limit_alert: Bell,
   closer_feedback: ClipboardCheck,
 };
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const date = new Date(dateStr).getTime();
-  const diffMs = now - date;
-  const diffMin = Math.floor(diffMs / 60000);
-
-  if (diffMin < 1) return 'agora';
-  if (diffMin < 60) return `${diffMin}min`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}h`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d`;
-  return new Date(dateStr).toLocaleDateString('pt-BR');
-}
 
 export function NotificationItem({
   notification,
