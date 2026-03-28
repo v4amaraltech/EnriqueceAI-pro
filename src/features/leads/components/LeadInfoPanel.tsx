@@ -505,8 +505,6 @@ export function LeadInfoPanel({
                     />
                   )}
                   {isFieldVisible('cnpj') && data.cnpj && <MeetimeFieldRow label="CNPJ" value={data.cnpj} />}
-                  {isFieldVisible('razao_social') && data.razao_social && <MeetimeFieldRow label="Razão Social" value={data.razao_social} />}
-                  {isFieldVisible('porte') && data.porte && <MeetimeFieldRow label="Porte" value={data.porte} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
                   {isFieldVisible('created_at') && (
                     <MeetimeFieldRow
