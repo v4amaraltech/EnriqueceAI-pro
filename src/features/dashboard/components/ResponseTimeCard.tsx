@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { Filter, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -10,6 +10,7 @@ import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 
+import { getResponseTimeData } from '../actions/get-response-time';
 import type { DashboardResponseTimeData } from '../types';
 
 function formatThreshold(minutes: number): string {
@@ -57,6 +58,8 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
   const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [tempFilters, setTempFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filteredData, setFilteredData] = useState<DashboardResponseTimeData>(data);
+  const [isPending, startTransition] = useTransition();
 
   function toggleCadenceFocus(value: string) {
     setTempFilters((prev) => {
@@ -75,8 +78,30 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
   }
 
   function applyFilters() {
-    setFilters({ ...tempFilters });
+    const applied = { ...tempFilters };
+    setFilters(applied);
     setFilterOpen(false);
+
+    const isDefault =
+      applied.cadenceFocus.size === 3 &&
+      applied.days.size === 5 &&
+      applied.timeFrom === '09:00' &&
+      applied.timeTo === '17:59';
+
+    if (isDefault) {
+      setFilteredData(data);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await getResponseTimeData(data.thresholdMinutes, undefined, {
+        cadenceFocus: [...applied.cadenceFocus],
+        days: [...applied.days],
+        timeFrom: applied.timeFrom,
+        timeTo: applied.timeTo,
+      });
+      if (result.success) setFilteredData(result.data);
+    });
   }
 
   function cancelFilters() {
@@ -176,10 +201,10 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
         </Popover>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row flex-1">
+      <div className={`flex flex-col gap-6 lg:flex-row flex-1 transition-opacity ${isPending ? 'opacity-50' : ''}`}>
         {/* Left: KPI */}
         <div className="flex flex-col items-center justify-center lg:w-1/2 lg:border-r lg:border-[var(--border)] lg:pr-10">
-          <p className="text-7xl font-bold">{data.overallPct}%</p>
+          <p className="text-7xl font-bold">{filteredData.overallPct}%</p>
           <p className="mt-3 text-base text-center">
             abordados em até <span className="text-[#E53935] font-semibold">{threshold}</span>
           </p>
@@ -190,7 +215,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
 
         {/* Right: SDR table */}
         <div className="flex-1 min-w-0">
-          {data.byUser.length > 0 ? (
+          {filteredData.byUser.length > 0 ? (
             <table className="w-full">
               <thead>
                 <tr className="text-[var(--muted-foreground)] text-sm">
@@ -200,7 +225,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
                 </tr>
               </thead>
               <tbody>
-                {data.byUser.map((user) => (
+                {filteredData.byUser.map((user) => (
                   <tr key={user.userId} className="border-t border-[var(--border)]">
                     <td className="py-4">
                       <div className="flex items-center gap-3">

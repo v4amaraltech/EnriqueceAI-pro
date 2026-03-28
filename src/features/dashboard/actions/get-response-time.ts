@@ -9,9 +9,22 @@ import type { InteractionQueryRow, LeadQueryRow } from '@/features/statistics/ty
 
 import type { DashboardResponseTimeData, ResponseTimeByUser } from '../types';
 
+function parseTimeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+export interface ResponseTimeFilters {
+  cadenceFocus?: string[];
+  days?: number[];
+  timeFrom?: string;
+  timeTo?: string;
+}
+
 export async function getResponseTimeData(
   thresholdMinutes: number = 30,
   dateRange?: { from: string; to: string },
+  filters?: ResponseTimeFilters,
 ): Promise<ActionResult<DashboardResponseTimeData>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -37,7 +50,57 @@ export async function getResponseTimeData(
     return { success: true, data: { thresholdMinutes, overallPct: 0, totalLeads: 0, byUser: [] } };
   }
 
-  const leadIds = leads.map((l) => l.id);
+  // Apply in-memory filters on leads
+  let filteredLeads = leads;
+
+  if (filters?.days && filters.days.length < 7) {
+    const daySet = new Set(filters.days);
+    filteredLeads = filteredLeads.filter((l) => daySet.has(new Date(l.created_at).getDay()));
+  }
+
+  if (filters?.timeFrom || filters?.timeTo) {
+    const fromMin = parseTimeToMinutes(filters.timeFrom ?? '00:00');
+    const toMin = parseTimeToMinutes(filters.timeTo ?? '23:59');
+    filteredLeads = filteredLeads.filter((l) => {
+      const d = new Date(l.created_at);
+      const leadMin = d.getHours() * 60 + d.getMinutes();
+      return leadMin >= fromMin && leadMin <= toMin;
+    });
+  }
+
+  if (filters?.cadenceFocus && filters.cadenceFocus.length > 0 && filters.cadenceFocus.length < 3) {
+    const allLeadIds = filteredLeads.map((l) => l.id);
+    if (allLeadIds.length > 0) {
+      const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
+        .select('lead_id, cadence_id')
+        .eq('org_id', orgId)
+        .in('lead_id', allLeadIds)) as { data: { lead_id: string; cadence_id: string }[] | null };
+
+      if (enrollments?.length) {
+        const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
+        const { data: cadences } = (await from(supabase, 'cadences')
+          .select('id, origin')
+          .in('id', cadenceIds)) as { data: { id: string; origin: string }[] | null };
+
+        const focusSet = new Set(filters.cadenceFocus);
+        const matchingCadenceIds = new Set(
+          (cadences ?? []).filter((c) => focusSet.has(c.origin)).map((c) => c.id),
+        );
+        const matchingLeadIds = new Set(
+          enrollments.filter((e) => matchingCadenceIds.has(e.cadence_id)).map((e) => e.lead_id),
+        );
+        filteredLeads = filteredLeads.filter((l) => matchingLeadIds.has(l.id));
+      } else {
+        filteredLeads = [];
+      }
+    }
+  }
+
+  if (!filteredLeads.length) {
+    return { success: true, data: { thresholdMinutes, overallPct: 0, totalLeads: 0, byUser: [] } };
+  }
+
+  const leadIds = filteredLeads.map((l) => l.id);
 
   // Fetch first interaction per lead (sent or delivered)
   const { data: interactions } = (await from(supabase, 'interactions')
@@ -60,7 +123,7 @@ export async function getResponseTimeData(
   let overallWithin = 0;
   let overallTotal = 0;
 
-  for (const lead of leads) {
+  for (const lead of filteredLeads) {
     const userId = lead.assigned_to;
     if (!userId) continue;
 
