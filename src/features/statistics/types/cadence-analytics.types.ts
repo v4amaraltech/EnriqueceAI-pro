@@ -25,6 +25,27 @@ export interface StepProgressionEntry {
   count: number;
 }
 
+export interface CadenceConversionRow {
+  cadenceId: string;
+  cadenceName: string;
+  totalLeads: number;
+  won: number;
+  lost: number;
+  wonPercent: number;
+  lostPercent: number;
+}
+
+export interface CadenceDistributionRow {
+  cadenceId: string;
+  cadenceName: string;
+  totalLeads: number;
+  active: number;
+  paused: number;
+  completed: number;
+  replied: number;
+  bounced: number;
+}
+
 export interface CadenceAnalyticsData {
   activeCadences: number;
   totalEnrolled: number;
@@ -36,4 +57,6 @@ export interface CadenceAnalyticsData {
   totalSent: number;
   engagedLeads: number;
   engagementRate: number;
+  conversionRows: CadenceConversionRow[];
+  distributionRows: CadenceDistributionRow[];
 }

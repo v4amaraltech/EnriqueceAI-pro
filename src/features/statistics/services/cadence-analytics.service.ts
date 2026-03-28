@@ -4,6 +4,8 @@ import { from } from '@/lib/supabase/from';
 
 import type {
   CadenceAnalyticsData,
+  CadenceConversionRow,
+  CadenceDistributionRow,
   CadencePerformanceRow,
   EnrollmentsByStatusEntry,
   StepProgressionEntry,
@@ -139,6 +141,8 @@ export async function fetchCadenceAnalyticsData(
     totalSent,
     engagedLeads: engagedLeadIds.size,
     engagementRate: safeRate(engagedLeadIds.size, sentLeadIds.size),
+    conversionRows: buildConversionRows(cadences, enrollments),
+    distributionRows: buildDistributionRows(cadences, enrollments),
   };
 }
 
@@ -231,6 +235,40 @@ function buildStepProgression(
     }));
 }
 
+function buildConversionRows(cadences: CadenceRow[], enrollments: EnrollmentRow[]): CadenceConversionRow[] {
+  return cadences.map((c) => {
+    const cEnrollments = enrollments.filter((e) => e.cadence_id === c.id);
+    const total = cEnrollments.length;
+    const completed = cEnrollments.filter((e) => e.status === 'completed' || e.status === 'replied').length;
+    const lost = total - completed;
+    return {
+      cadenceId: c.id,
+      cadenceName: c.name,
+      totalLeads: total,
+      won: completed,
+      lost,
+      wonPercent: safeRate(completed, total),
+      lostPercent: safeRate(lost, total),
+    };
+  }).filter((r) => r.totalLeads > 0).sort((a, b) => b.totalLeads - a.totalLeads);
+}
+
+function buildDistributionRows(cadences: CadenceRow[], enrollments: EnrollmentRow[]): CadenceDistributionRow[] {
+  return cadences.map((c) => {
+    const cEnrollments = enrollments.filter((e) => e.cadence_id === c.id);
+    return {
+      cadenceId: c.id,
+      cadenceName: c.name,
+      totalLeads: cEnrollments.length,
+      active: cEnrollments.filter((e) => e.status === 'active').length,
+      paused: cEnrollments.filter((e) => e.status === 'paused').length,
+      completed: cEnrollments.filter((e) => e.status === 'completed').length,
+      replied: cEnrollments.filter((e) => e.status === 'replied').length,
+      bounced: cEnrollments.filter((e) => e.status === 'bounced').length,
+    };
+  }).filter((r) => r.totalLeads > 0).sort((a, b) => b.totalLeads - a.totalLeads);
+}
+
 function emptyData(): CadenceAnalyticsData {
   return {
     activeCadences: 0,
@@ -243,5 +281,7 @@ function emptyData(): CadenceAnalyticsData {
     totalSent: 0,
     engagedLeads: 0,
     engagementRate: 0,
+    conversionRows: [],
+    distributionRows: [],
   };
 }
