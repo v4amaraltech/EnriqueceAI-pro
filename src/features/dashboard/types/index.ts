@@ -95,6 +95,7 @@ export interface GoalsData {
 export interface ResponseTimeByUser {
   userId: string;
   userName: string;
+  avatarUrl: string | null;
   leadsApproached: number;
   withinThreshold: number;
   withinThresholdPct: number;

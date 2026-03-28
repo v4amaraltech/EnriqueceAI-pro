@@ -8,7 +8,7 @@ import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
-import { LeadAvatar } from '@/features/leads/components/LeadAvatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 
 import type { DashboardResponseTimeData } from '../types';
 
@@ -204,7 +204,12 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
                   <tr key={user.userId} className="border-t border-[var(--border)]">
                     <td className="py-4">
                       <div className="flex items-center gap-3">
-                        <LeadAvatar name={user.userName} size="sm" />
+                        <Avatar size="sm">
+                          {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.userName} />}
+                          <AvatarFallback className="text-xs font-medium">
+                            {user.userName.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <span className="text-base font-medium">{user.userName}</span>
                       </div>
                     </td>

@@ -82,14 +82,15 @@ export async function getResponseTimeData(
   }
 
   // Resolve user names
-  const nameMap = new Map<string, string>();
+  const nameMap = new Map<string, { name: string; avatarUrl: string | null }>();
   try {
     const admin = createAdminSupabaseClient();
     const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 100 });
     if (authUsers?.users) {
       for (const u of authUsers.users) {
         const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
-        nameMap.set(u.id, name);
+        const avatarUrl = (u.user_metadata?.avatar_url as string) || (u.user_metadata?.picture as string) || null;
+        nameMap.set(u.id, { name, avatarUrl });
       }
     }
   } catch { /* fallback to truncated IDs */ }
@@ -97,7 +98,8 @@ export async function getResponseTimeData(
   const byUser: ResponseTimeByUser[] = Array.from(userMap.entries())
     .map(([userId, { total, within }]) => ({
       userId,
-      userName: nameMap.get(userId) ?? userId.slice(0, 8),
+      userName: nameMap.get(userId)?.name ?? userId.slice(0, 8),
+      avatarUrl: nameMap.get(userId)?.avatarUrl ?? null,
       leadsApproached: total,
       withinThreshold: within,
       withinThresholdPct: total > 0 ? Math.round((within / total) * 100) : 0,
