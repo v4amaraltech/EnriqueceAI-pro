@@ -88,10 +88,27 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
     onShowMeetingChange(true);
   }
 
+  // Inject synthetic "Lead criado" entry at the end (oldest)
+  const timelineWithCreation = useMemo(() => {
+    const leadName = lead.nome_fantasia ?? lead.razao_social ?? lead.cnpj ?? 'Lead';
+    const creationEntry: TimelineEntry = {
+      id: `lead-created-${lead.id}`,
+      type: 'sent',
+      channel: 'system',
+      message_content: `Lead criado com sucesso - ${leadName}`,
+      subject: 'Lead criado',
+      html_body: null,
+      ai_generated: false,
+      is_note: false,
+      created_at: lead.created_at,
+    };
+    return [...timeline, creationEntry];
+  }, [timeline, lead]);
+
   const filteredTimeline = useMemo(() => {
-    if (channelFilter === 'all') return timeline;
-    return timeline.filter((e) => e.channel === channelFilter);
-  }, [timeline, channelFilter]);
+    if (channelFilter === 'all') return timelineWithCreation;
+    return timelineWithCreation.filter((e) => e.channel === channelFilter || e.channel === 'system');
+  }, [timelineWithCreation, channelFilter]);
 
   const meetings = useMemo(
     () => timeline.filter((e) => e.type === 'meeting_scheduled'),
@@ -145,14 +162,14 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         {/* Agendar reunião Tab */}
         <TabsContent value="reuniao" className="pt-4">
           <div className="space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-[#E53935]">Registrar reunião</h3>
-              <p className="text-sm text-[var(--muted-foreground)]">Registre aqui a reunião agendada para o closer.</p>
-            </div>
-            <Button onClick={() => onShowMeetingChange(true)} className="bg-[#E53935] hover:bg-[#C62828] text-white">
-              <Calendar className="mr-2 h-4 w-4" />
-              Agendar Reunião
-            </Button>
+            <ScheduleMeetingModal
+              open={true}
+              onOpenChange={() => {}}
+              leadId={lead.id}
+              leadEmail={lead.email}
+              leadName={lead.nome_fantasia ?? lead.razao_social}
+              inline
+            />
 
             {/* Reuniões agendadas */}
             {meetings.length > 0 && (

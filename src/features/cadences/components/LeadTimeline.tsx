@@ -12,6 +12,7 @@ import {
   Phone,
   Search,
   StickyNote,
+  UserPlus,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -28,6 +29,7 @@ const channelConfig: Record<string, { label: string; icon: typeof Mail; bg: stri
   phone: { label: 'Ligação', icon: Phone, bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-600 dark:text-orange-400' },
   linkedin: { label: 'LinkedIn', icon: MessageSquare, bg: 'bg-purple-100 dark:bg-purple-950', text: 'text-purple-600 dark:text-purple-400' },
   research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-300' },
+  system: { label: 'Sistema', icon: UserPlus, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-500 dark:text-gray-400' },
 };
 
 const noteConfig = { label: 'Anotação', icon: StickyNote, bg: 'bg-yellow-100 dark:bg-yellow-950', text: 'text-yellow-600 dark:text-yellow-400' };
@@ -180,10 +182,13 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
             <div className="space-y-6">
               {entries.map((entry) => {
                 const isNote = entry.is_note;
+                const isSystem = entry.channel === 'system';
                 const channel = isNote ? noteConfig : (channelConfig[entry.channel] ?? defaultChannel);
                 const ChannelIcon = channel.icon;
-                const stepLabel = !isNote && entry.step_order != null ? ` ${entry.step_order}` : '';
-                const title = entry.step_activity_name || `${channel.label}${stepLabel}`;
+                const stepLabel = !isNote && !isSystem && entry.step_order != null ? ` ${entry.step_order}` : '';
+                const title = isSystem
+                  ? 'Sistema criou um lead'
+                  : entry.step_activity_name || `${channel.label}${stepLabel}`;
 
                 return (
                   <div key={entry.id} className="relative flex gap-4">
@@ -210,7 +215,14 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                       </div>
 
                       {/* Message content */}
-                      <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
+                      {isSystem ? (
+                        <div className="mt-2 rounded-lg border border-[var(--border)] p-3">
+                          <p className="text-sm font-semibold text-[var(--foreground)]">{entry.subject}</p>
+                          <p className="mt-1 text-sm text-[var(--muted-foreground)]">{entry.message_content}</p>
+                        </div>
+                      ) : (
+                        <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
+                      )}
                     </div>
                   </div>
                 );

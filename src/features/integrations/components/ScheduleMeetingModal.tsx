@@ -41,6 +41,8 @@ interface ScheduleMeetingModalProps {
   leadEmail?: string | null;
   leadName?: string | null;
   editData?: MeetingEditData | null;
+  /** Render inline (no Dialog wrapper) — used in the lead detail tab */
+  inline?: boolean;
 }
 
 const DURATION_OPTIONS = [
@@ -70,6 +72,7 @@ export function ScheduleMeetingModal({
   leadEmail,
   leadName,
   editData,
+  inline = false,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

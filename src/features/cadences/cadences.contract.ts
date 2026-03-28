@@ -161,7 +161,7 @@ export interface CadencePerformanceData {
 export interface TimelineEntry {
   id: string;
   type: InteractionRow['type'];
-  channel: InteractionRow['channel'];
+  channel: InteractionRow['channel'] | 'system';
   message_content: string | null;
   subject: string | null;
   html_body: string | null;
