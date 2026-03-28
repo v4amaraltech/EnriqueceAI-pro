@@ -25,7 +25,6 @@ import {
 } from './ActivityFilters';
 import { ActivityPagination } from './ActivityPagination';
 import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
-import { DailyGoalCard } from './DailyGoalCard';
 import { PendingCallsSection } from './PendingCallsSection';
 import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
@@ -204,11 +203,13 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   return (
     <div className="space-y-6">
-      {/* Progress cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <ProgressCard completed={progress.completed} total={progress.total} />
-        <DailyGoalCard target={progress.target} completed={progress.completed} availableLeadIds={availableLeadIds} />
-      </div>
+      {/* Progress card */}
+      <ProgressCard
+        completed={progress.completed}
+        total={progress.total}
+        target={progress.target}
+        availableLeadIds={availableLeadIds}
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-4 border-b">
