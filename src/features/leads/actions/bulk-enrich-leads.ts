@@ -28,18 +28,20 @@ export async function bulkEnrichLeads(
   const lemitCnpjProvider = useLemit ? new LemitProvider(lemitApiUrl, lemitApiToken) : null;
   const lemitCpfProvider = useLemit ? new LemitCpfProvider(lemitApiUrl, lemitApiToken) : null;
 
+  // Batch fetch all leads upfront (single query instead of N queries)
+  const { data: allLeads } = (await supabase
+    .from('leads')
+    .select('id, cnpj, org_id')
+    .in('id', leadIds)) as { data: { id: string; cnpj: string; org_id: string }[] | null };
+
+  const leadMap = new Map((allLeads ?? []).map((l) => [l.id, l]));
+
   let successCount = 0;
   let failCount = 0;
 
   for (let i = 0; i < leadIds.length; i++) {
     const leadId = leadIds[i]!;
-
-    // Get lead CNPJ (verify ownership)
-    const { data: lead } = (await supabase
-      .from('leads')
-      .select('cnpj, org_id')
-      .eq('id', leadId)
-      .single()) as { data: { cnpj: string; org_id: string } | null };
+    const lead = leadMap.get(leadId);
 
     if (!lead || lead.org_id !== orgId) {
       failCount++;

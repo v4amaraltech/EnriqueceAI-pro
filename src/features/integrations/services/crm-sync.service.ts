@@ -279,8 +279,23 @@ export class CrmSyncService {
     }
 
     const { data: leads } = (await query) as { data: LeadForSync[] | null };
+    const leadList = leads ?? [];
 
-    for (const lead of leads ?? []) {
+    // Batch fetch existing CRM sync mappings for all leads (single query instead of N)
+    const leadIds = leadList.map((l) => l.id);
+    const syncMap = new Map<string, string>();
+    if (leadIds.length > 0) {
+      const { data: existingSyncs } = (await from(supabase, 'interactions')
+        .select('lead_id, external_id')
+        .in('lead_id', leadIds)
+        .eq('type', 'crm_synced')) as { data: { lead_id: string; external_id: string }[] | null };
+
+      for (const sync of existingSyncs ?? []) {
+        syncMap.set(sync.lead_id, sync.external_id);
+      }
+    }
+
+    for (const lead of leadList) {
       try {
         const leadRecord: Record<string, string | null> = {
           nome_fantasia: lead.nome_fantasia,
@@ -303,22 +318,17 @@ export class CrmSyncService {
           notes: lead.notes,
         };
 
-        // Check if lead has been synced before (external_id in interactions)
-        const { data: existingSync } = (await from(supabase, 'interactions')
-          .select('external_id')
-          .eq('lead_id', lead.id)
-          .eq('type', 'crm_synced')
-          .maybeSingle()) as { data: { external_id: string } | null };
+        const existingExternalId = syncMap.get(lead.id);
 
         const pushResult = await adapter.pushContact(
           credentials,
           leadRecord,
           fieldMapping.leads,
-          existingSync?.external_id ?? undefined,
+          existingExternalId,
         );
 
         // Record sync mapping if new
-        if (!existingSync) {
+        if (!existingExternalId) {
           await from(supabase, 'interactions')
             .insert({
               org_id: connection.org_id,
@@ -368,20 +378,29 @@ export class CrmSyncService {
     const { data: interactions } = (await query) as {
       data: InteractionForSync[] | null;
     };
+    const interactionList = interactions ?? [];
 
-    for (const interaction of interactions ?? []) {
+    // Batch fetch CRM sync mappings for all lead_ids (single query instead of N)
+    const activityLeadIds = [...new Set(interactionList.map((i) => i.lead_id))];
+    const activitySyncMap = new Map<string, string>();
+    if (activityLeadIds.length > 0) {
+      const { data: crmSyncs } = (await from(supabase, 'interactions')
+        .select('lead_id, external_id')
+        .in('lead_id', activityLeadIds)
+        .eq('type', 'crm_synced')) as { data: { lead_id: string; external_id: string }[] | null };
+
+      for (const sync of crmSyncs ?? []) {
+        activitySyncMap.set(sync.lead_id, sync.external_id);
+      }
+    }
+
+    for (const interaction of interactionList) {
       try {
-        // Find CRM external ID for this lead
-        const { data: crmSync } = (await from(supabase, 'interactions')
-          .select('external_id')
-          .eq('lead_id', interaction.lead_id)
-          .eq('type', 'crm_synced')
-          .maybeSingle()) as { data: { external_id: string } | null };
-
-        if (!crmSync?.external_id) continue; // Skip if lead not synced to CRM
+        const crmExternalId = activitySyncMap.get(interaction.lead_id);
+        if (!crmExternalId) continue; // Skip if lead not synced to CRM
 
         const pushResult = await adapter.pushActivity(credentials, {
-          contact_external_id: crmSync.external_id,
+          contact_external_id: crmExternalId,
           type: interaction.channel,
           subject: `Cadência - ${interaction.channel}`,
           body: interaction.message_content ?? '',

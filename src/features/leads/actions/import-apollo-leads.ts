@@ -102,6 +102,8 @@ export async function importApolloLeads(
       ),
     );
 
+    // Map enrichment results to leads
+    const enrichedLeads: Array<{ lead: ReturnType<typeof mapApolloToLead>; index: number }> = [];
     for (let j = 0; j < chunk.length; j++) {
       const enrichResult = enrichedResults[j]!;
 
@@ -117,21 +119,34 @@ export async function importApolloLeads(
         continue;
       }
 
-      const lead = mapApolloToLead(enriched, orgId, userId, autoAssignTo, enriched.id, chunk[j]!.organizationName);
+      enrichedLeads.push({
+        lead: mapApolloToLead(enriched, orgId, userId, autoAssignTo, enriched.id, chunk[j]!.organizationName),
+        index: j,
+      });
+    }
 
-      // Check duplicate by email
-      if (lead.email) {
-        const { data: existing } = (await from(supabase, 'leads')
-          .select('id')
-          .eq('org_id', orgId)
-          .eq('email', lead.email)
-          .is('deleted_at', null)
-          .maybeSingle()) as { data: { id: string } | null };
+    // Batch duplicate check: single query for all emails in this chunk
+    const chunkEmails = enrichedLeads
+      .map((e) => e.lead.email)
+      .filter((email): email is string => !!email);
 
-        if (existing) {
-          duplicates++;
-          continue;
-        }
+    const existingEmailSet = new Set<string>();
+    if (chunkEmails.length > 0) {
+      const { data: existingLeads } = (await from(supabase, 'leads')
+        .select('email')
+        .eq('org_id', orgId)
+        .in('email', chunkEmails)
+        .is('deleted_at', null)) as { data: { email: string }[] | null };
+
+      for (const el of existingLeads ?? []) {
+        existingEmailSet.add(el.email);
+      }
+    }
+
+    for (const { lead } of enrichedLeads) {
+      if (lead.email && existingEmailSet.has(lead.email)) {
+        duplicates++;
+        continue;
       }
 
       const { error: insertError } = await from(supabase, 'leads')
