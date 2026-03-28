@@ -91,3 +91,18 @@ export interface GoalsData {
   conversionTarget: number;
   userGoals: UserGoalRow[];
 }
+
+export interface ResponseTimeByUser {
+  userId: string;
+  userName: string;
+  leadsApproached: number;
+  withinThreshold: number;
+  withinThresholdPct: number;
+}
+
+export interface DashboardResponseTimeData {
+  thresholdMinutes: number;
+  overallPct: number;
+  totalLeads: number;
+  byUser: ResponseTimeByUser[];
+}

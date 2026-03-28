@@ -7,6 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { getDashboardData } from '@/features/dashboard/actions/get-dashboard-data';
 import { getInsightsData } from '@/features/dashboard/actions/get-insights-data';
 import { getRankingData } from '@/features/dashboard/actions/get-ranking-data';
+import { getResponseTimeData } from '@/features/dashboard/actions/get-response-time';
 import { DashboardView } from '@/features/dashboard/components/DashboardView';
 import type { DashboardFilters } from '@/features/dashboard/types';
 
@@ -34,10 +35,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : [],
   };
 
-  const [result, rankingResult, insightsResult] = await Promise.all([
+  const [result, rankingResult, insightsResult, responseTimeResult] = await Promise.all([
     getDashboardData(filters),
     getRankingData(filters),
     getInsightsData(filters),
+    getResponseTimeData(30),
   ]);
 
   if (!result.success) {
@@ -60,6 +62,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         filters={filters}
         ranking={rankingResult.success ? rankingResult.data : undefined}
         insights={insightsResult.success ? insightsResult.data : undefined}
+        responseTime={responseTimeResult.success ? responseTimeResult.data : undefined}
       />
     </div>
   );

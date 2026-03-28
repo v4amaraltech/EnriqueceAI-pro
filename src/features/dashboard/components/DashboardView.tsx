@@ -6,22 +6,24 @@ import { CheckCircle2, TrendingUp, Users } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
+import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, RankingData } from '../types';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
 import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
+import { ResponseTimeCard } from './ResponseTimeCard';
 
 interface DashboardViewProps {
   data: DashboardData;
   filters: DashboardFilters;
   ranking?: RankingData;
   insights?: InsightsData;
+  responseTime?: DashboardResponseTimeData;
 }
 
-export function DashboardView({ data, filters, ranking, insights }: DashboardViewProps) {
+export function DashboardView({ data, filters, ranking, insights, responseTime }: DashboardViewProps) {
   const [goalsOpen, setGoalsOpen] = useState(false);
 
   return (
@@ -93,6 +95,9 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
           <ConversionByOriginChart data={insights.conversionByOrigin} />
         </div>
       )}
+
+      {/* Response Time */}
+      {responseTime && <ResponseTimeCard data={responseTime} />}
     </div>
   );
 }

@@ -1,0 +1,125 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
+
+import type { DashboardResponseTimeData, ResponseTimeByUser } from '../types';
+
+interface LeadRow {
+  id: string;
+  created_at: string;
+  assigned_to: string | null;
+}
+
+interface InteractionRow {
+  lead_id: string;
+  created_at: string;
+}
+
+export async function getResponseTimeData(
+  thresholdMinutes: number = 30,
+  dateRange?: { from: string; to: string },
+): Promise<ActionResult<DashboardResponseTimeData>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  const now = new Date();
+  const monthStart = dateRange?.from
+    ? new Date(dateRange.from).toISOString()
+    : new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthEnd = dateRange?.to
+    ? new Date(dateRange.to + 'T23:59:59').toISOString()
+    : now.toISOString();
+
+  // Fetch leads created in period
+  const { data: leads } = (await from(supabase, 'leads')
+    .select('id, created_at, assigned_to')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .gte('created_at', monthStart)
+    .lte('created_at', monthEnd)) as { data: LeadRow[] | null };
+
+  if (!leads?.length) {
+    return { success: true, data: { thresholdMinutes, overallPct: 0, totalLeads: 0, byUser: [] } };
+  }
+
+  const leadIds = leads.map((l) => l.id);
+
+  // Fetch first interaction per lead (sent or delivered)
+  const { data: interactions } = (await from(supabase, 'interactions')
+    .select('lead_id, created_at')
+    .eq('org_id', orgId)
+    .in('lead_id', leadIds)
+    .in('type', ['sent', 'delivered'])
+    .order('created_at', { ascending: true })) as { data: InteractionRow[] | null };
+
+  // Get first interaction per lead
+  const firstInteractionMap = new Map<string, string>();
+  for (const i of interactions ?? []) {
+    if (!firstInteractionMap.has(i.lead_id)) {
+      firstInteractionMap.set(i.lead_id, i.created_at);
+    }
+  }
+
+  // Calculate per-user breakdown
+  const userMap = new Map<string, { total: number; within: number }>();
+  let overallWithin = 0;
+  let overallTotal = 0;
+
+  for (const lead of leads) {
+    const userId = lead.assigned_to;
+    if (!userId) continue;
+
+    overallTotal++;
+    const entry = userMap.get(userId) ?? { total: 0, within: 0 };
+    entry.total++;
+
+    const firstAt = firstInteractionMap.get(lead.id);
+    if (firstAt) {
+      const diffMs = new Date(firstAt).getTime() - new Date(lead.created_at).getTime();
+      const diffMin = diffMs / (1000 * 60);
+      if (diffMin <= thresholdMinutes) {
+        entry.within++;
+        overallWithin++;
+      }
+    }
+
+    userMap.set(userId, entry);
+  }
+
+  // Resolve user names
+  const nameMap = new Map<string, string>();
+  try {
+    const admin = createAdminSupabaseClient();
+    const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 100 });
+    if (authUsers?.users) {
+      for (const u of authUsers.users) {
+        const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
+        nameMap.set(u.id, name);
+      }
+    }
+  } catch { /* fallback to truncated IDs */ }
+
+  const byUser: ResponseTimeByUser[] = Array.from(userMap.entries())
+    .map(([userId, { total, within }]) => ({
+      userId,
+      userName: nameMap.get(userId) ?? userId.slice(0, 8),
+      leadsApproached: total,
+      withinThreshold: within,
+      withinThresholdPct: total > 0 ? Math.round((within / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.leadsApproached - a.leadsApproached);
+
+  return {
+    success: true,
+    data: {
+      thresholdMinutes,
+      overallPct: overallTotal > 0 ? Math.round((overallWithin / overallTotal) * 100) : 0,
+      totalLeads: overallTotal,
+      byUser,
+    },
+  };
+}
