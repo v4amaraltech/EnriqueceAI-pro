@@ -1,23 +1,30 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { safeRate } from '@/lib/utils/format';
 
 import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 
+const cadenceIdsSchema = z.array(z.string().uuid()).max(100);
+
 export async function fetchAutoEmailMetrics(
   cadenceIds: string[],
 ): Promise<ActionResult<Record<string, AutoEmailCadenceMetrics>>> {
-  if (cadenceIds.length === 0) {
+  const parsed = cadenceIdsSchema.safeParse(cadenceIds);
+  if (!parsed.success) return { success: false, error: 'IDs inválidos' };
+
+  if (parsed.data.length === 0) {
     return { success: true, data: {} };
   }
 
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // Fetch enrollment counts grouped by cadence_id + status
   const { data: enrollmentRows, error: enrollmentError } = (await from(supabase, 'cadence_enrollments')

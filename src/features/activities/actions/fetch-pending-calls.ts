@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 export interface PendingCallLead {
@@ -13,8 +12,9 @@ export interface PendingCallLead {
 }
 
 export async function fetchPendingCalls(): Promise<ActionResult<PendingCallLead[]>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // Active enrollments where next step is a phone call
   const { data: enrollments, error } = (await from(supabase, 'cadence_enrollments')

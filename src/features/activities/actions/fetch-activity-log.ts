@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
@@ -56,8 +55,9 @@ export interface ActivityLogResult {
 export async function fetchActivityLog(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<ActivityLogResult>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const channel = typeof rawFilters.channel === 'string' ? rawFilters.channel : undefined;
   const status = typeof rawFilters.status === 'string' ? rawFilters.status : undefined;

@@ -3,8 +3,7 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LeadNote } from './add-lead-note';
@@ -17,8 +16,9 @@ export async function fetchLeadNotes(
   const parsed = leadIdSchema.safeParse(leadId);
   if (!parsed.success) return { success: false, error: 'ID inválido' };
 
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'interactions')
     .select('id, message_content, metadata, created_at')

@@ -1,13 +1,16 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
 
 import type { AbVariantRates, StepAbMetrics } from '../cadences.contract';
 import { chiSquaredTest } from '../utils/chi-squared';
+
+const stepIdSchema = z.string().uuid('ID inválido');
 
 interface StepRow {
   step_order: number;
@@ -28,8 +31,12 @@ function buildVariantRates(raw: { sent: number; opened: number; replied: number;
 export async function fetchStepAbMetrics(
   stepId: string,
 ): Promise<ActionResult<StepAbMetrics>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const parsed = stepIdSchema.safeParse(stepId);
+  if (!parsed.success) return { success: false, error: 'ID inválido' };
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // Fetch step info for winner and enabled_at
   const { data: step } = (await from(supabase, 'cadence_steps')

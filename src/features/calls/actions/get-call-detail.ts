@@ -3,9 +3,8 @@
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CallDetail, CallFeedbackRow, CallRow } from '../types';
 
@@ -15,8 +14,9 @@ export async function getCallDetail(callId: string): Promise<ActionResult<CallDe
   const parsed = callIdSchema.safeParse(callId);
   if (!parsed.success) return { success: false, error: 'ID inválido' };
 
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   const { data: call, error } = (await from(supabase, 'calls')
     .select('*')

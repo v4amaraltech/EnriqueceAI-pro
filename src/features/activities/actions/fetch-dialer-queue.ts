@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 export interface DialerQueuePhone {
@@ -31,8 +30,9 @@ export interface DialerQueueItem {
 }
 
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // Active enrollments (all due, regardless of step type)
   // RLS on leads filters by assigned_to for SDRs — !inner excludes enrollments for invisible leads

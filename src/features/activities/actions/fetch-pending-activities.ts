@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
@@ -47,8 +46,9 @@ interface EnrollmentRow {
 }
 
 export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
-  await requireAuth();
-  const supabase = await createServerSupabaseClient();
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { supabase } = auth.data;
 
   // 1. Fetch ALL active enrollments with due steps (no time window — show everything pending)
   // RLS on leads table filters by assigned_to for SDRs: leads not visible to this
