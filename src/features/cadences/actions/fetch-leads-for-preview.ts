@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import type { LeadForVariables } from '../utils/build-template-variables';
 
 export interface PreviewLead extends LeadForVariables {
@@ -39,7 +40,7 @@ export async function fetchLeadsForPreview(
       .limit(limit);
 
     if (search?.trim()) {
-      const term = `%${search.trim()}%`;
+      const term = `%${sanitizeFilterValue(search.trim())}%`;
       query = query.or(`nome_fantasia.ilike.${term},razao_social.ilike.${term},cnpj.ilike.${term}`);
     }
 

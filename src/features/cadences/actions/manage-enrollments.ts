@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 import type { EnrollmentListResult, EnrollmentWithLead } from '../cadences.contract';
 import type { EnrollmentStatus } from '../types';
@@ -95,7 +96,8 @@ export async function fetchAvailableLeads(
   }
 
   if (search && search.trim()) {
-    query = query.or(`razao_social.ilike.%${search}%,nome_fantasia.ilike.%${search}%,cnpj.ilike.%${search}%`);
+    const safe = sanitizeFilterValue(search);
+    query = query.or(`razao_social.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%,cnpj.ilike.%${safe}%`);
   }
 
   const { data, error } = (await query) as {

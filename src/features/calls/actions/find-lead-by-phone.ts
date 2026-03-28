@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 interface LeadPhoneMatch {
   leadId: string;
@@ -38,7 +39,7 @@ export async function findLeadByPhone(
   const { data: directMatch } = (await from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
-    .or(`telefone.like.%${normalized}%`)
+    .or(`telefone.like.%${sanitizeFilterValue(normalized)}%`)
     .limit(1)
     .maybeSingle()) as { data: { id: string } | null };
 

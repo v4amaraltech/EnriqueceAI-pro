@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { TemplateListResult } from '../index';
@@ -47,7 +48,7 @@ export async function fetchTemplates(
   }
 
   if (params.search) {
-    const term = `%${params.search}%`;
+    const term = `%${sanitizeFilterValue(params.search)}%`;
     query = query.or(`name.ilike.${term},subject.ilike.${term},body.ilike.${term}`);
   }
 
