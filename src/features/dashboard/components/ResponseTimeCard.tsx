@@ -91,7 +91,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
     filters.timeTo !== '17:59';
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 min-h-[480px]">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 min-h-[480px] flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold">Tempo de resposta</h2>
         <Popover open={filterOpen} onOpenChange={(open) => {
@@ -176,14 +176,14 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
         </Popover>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row flex-1">
         {/* Left: KPI */}
-        <div className="flex flex-col items-center justify-center lg:w-[320px] lg:border-r lg:border-[var(--border)] lg:pr-8">
-          <p className="text-5xl font-bold">{data.overallPct}%</p>
-          <p className="mt-2 text-sm text-center">
+        <div className="flex flex-col items-center justify-center lg:w-[380px] lg:border-r lg:border-[var(--border)] lg:pr-10">
+          <p className="text-7xl font-bold">{data.overallPct}%</p>
+          <p className="mt-3 text-base text-center">
             abordados em até <span className="text-[#E53935] font-semibold">{threshold}</span>
           </p>
-          <p className="mt-4 text-xs text-[var(--muted-foreground)] text-center max-w-[280px]">
+          <p className="mt-6 text-sm text-[var(--muted-foreground)] text-center max-w-[300px] leading-relaxed">
             O tempo de resposta mede o tempo corrido entre o recebimento do lead na plataforma e a primeira atividade do vendedor.
           </p>
         </div>
@@ -191,25 +191,25 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
         {/* Right: SDR table */}
         <div className="flex-1 min-w-0">
           {data.byUser.length > 0 ? (
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
-                <tr className="text-[var(--muted-foreground)]">
-                  <th className="pb-3 text-left font-medium" />
-                  <th className="pb-3 text-right font-medium">leads abordados</th>
-                  <th className="pb-3 text-right font-medium">em até {threshold}</th>
+                <tr className="text-[var(--muted-foreground)] text-sm">
+                  <th className="pb-4 text-left font-medium" />
+                  <th className="pb-4 text-right font-medium">leads abordados</th>
+                  <th className="pb-4 text-right font-medium">em até {threshold}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.byUser.map((user) => (
                   <tr key={user.userId} className="border-t border-[var(--border)]">
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="py-4">
+                      <div className="flex items-center gap-3">
                         <LeadAvatar name={user.userName} size="sm" />
-                        <span className="font-medium">{user.userName}</span>
+                        <span className="text-base font-medium">{user.userName}</span>
                       </div>
                     </td>
-                    <td className="py-3 text-right font-semibold">{user.leadsApproached}</td>
-                    <td className="py-3 text-right">
+                    <td className="py-4 text-right text-base font-semibold">{user.leadsApproached}</td>
+                    <td className="py-4 text-right text-base">
                       <span className="font-semibold">{user.withinThreshold}</span>
                       <span className="text-[var(--muted-foreground)] ml-1">({user.withinThresholdPct}%)</span>
                     </td>
