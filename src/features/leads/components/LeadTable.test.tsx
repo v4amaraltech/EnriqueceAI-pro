@@ -54,6 +54,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     last_name: null,
     job_title: null,
     lead_source: null,
+    canal: null,
     source_id: null,
     is_inbound: false,
     assigned_to: null,
