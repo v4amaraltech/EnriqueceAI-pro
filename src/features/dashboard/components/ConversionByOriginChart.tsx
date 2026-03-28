@@ -63,7 +63,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             dataKey="converted"
             name="Convertidos"
             fill="#22c55e"
-            fillOpacity={0.8}
+            fillOpacity={0.6}
             stackId="stack"
             radius={[0, 0, 0, 0]}
           />
@@ -71,7 +71,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             dataKey="lost"
             name="Perdidos"
             fill="var(--destructive)"
-            fillOpacity={0.8}
+            fillOpacity={0.6}
             stackId="stack"
             radius={[0, 4, 4, 0]}
           />
