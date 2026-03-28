@@ -30,6 +30,7 @@ export async function markEventReceived(
   eventId: string,
   eventType: string,
   payload?: unknown,
+  orgId?: string,
 ): Promise<void> {
   await supabase.from('webhook_events').upsert(
     {
@@ -39,6 +40,7 @@ export async function markEventReceived(
       payload: payload ?? null,
       status: 'pending',
       retry_count: 0,
+      ...(orgId ? { org_id: orgId } : {}),
     },
     { onConflict: 'provider,event_id', ignoreDuplicates: true },
   );
@@ -54,6 +56,7 @@ export async function markEventProcessed(
   eventId: string,
   eventType: string,
   payload?: unknown,
+  orgId?: string,
 ): Promise<void> {
   await supabase.from('webhook_events').upsert(
     {
@@ -62,6 +65,7 @@ export async function markEventProcessed(
       event_type: eventType,
       payload: payload ?? null,
       processed_at: new Date().toISOString(),
+      ...(orgId ? { org_id: orgId } : {}),
     },
     { onConflict: 'provider,event_id', ignoreDuplicates: true },
   );

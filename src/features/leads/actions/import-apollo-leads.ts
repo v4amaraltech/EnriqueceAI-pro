@@ -10,7 +10,7 @@ import { from } from '@/lib/supabase/from';
 import { getEnv } from '@/config/env';
 
 import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
-import { getApolloApiKey } from '../services/apollo-key.service';
+import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 
 export interface ImportApolloResult {
   imported: number;
@@ -32,8 +32,8 @@ export async function importApolloLeads(
 ): Promise<ActionResult<ImportApolloResult>> {
   const { userId, orgId, role } = await requireAuthWithMember();
 
-  // Try org-level key first, fall back to env var
-  const apiKey = await getApolloApiKey(orgId) ?? getEnv().APOLLO_API_KEY;
+  // Use org-level key only (no global fallback for multi-tenant isolation)
+  const apiKey = await getApolloApiKey(orgId);
   if (!apiKey) {
     return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
   }
@@ -83,12 +83,8 @@ export async function importApolloLeads(
   let duplicates = 0;
   let errors = 0;
 
-  // Build webhook URL for async phone reveal (Apollo delivers phone data via webhook)
-  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
-  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const webhookUrl = webhookSecret
-    ? `${appUrl}/api/webhooks/apollo?token=${encodeURIComponent(webhookSecret)}&org_id=${encodeURIComponent(orgId)}`
-    : undefined;
+  // Build webhook URL for async phone reveal (HMAC-bound to org_id)
+  const webhookUrl = buildApolloWebhookUrl(orgId) ?? undefined;
 
   // Process in chunks of 10
   for (let i = 0; i < people.length; i += 10) {

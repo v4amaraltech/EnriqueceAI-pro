@@ -8,7 +8,7 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
-import { getApolloApiKey } from '../services/apollo-key.service';
+import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 import { enrichPerson } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
@@ -62,12 +62,8 @@ export async function backfillApolloSourceIds(): Promise<ActionResult<BackfillRe
     return { success: true, data: { total: 0, updated: 0, noMatch: 0, errors: 0 } };
   }
 
-  // Build webhook URL for phone reveal
-  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
-  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const webhookUrl = webhookSecret
-    ? `${appUrl}/api/webhooks/apollo?token=${encodeURIComponent(webhookSecret)}&org_id=${encodeURIComponent(orgId)}`
-    : undefined;
+  // Build webhook URL for phone reveal (HMAC-bound to org_id)
+  const webhookUrl = buildApolloWebhookUrl(orgId) ?? undefined;
 
   let updated = 0;
   let noMatch = 0;

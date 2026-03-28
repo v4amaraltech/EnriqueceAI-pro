@@ -10,7 +10,7 @@ import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
-import { getApolloApiKey } from '../services/apollo-key.service';
+import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 import { enrichPerson } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
@@ -56,12 +56,8 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
     return { success: false, error: 'Apollo não configurado. Configure a API key nas integrações.' };
   }
 
-  // Build webhook URL for async phone reveal
-  const webhookSecret = process.env.APOLLO_WEBHOOK_SECRET?.trim();
-  const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
-  const webhookUrl = webhookSecret
-    ? `${appUrl}/api/webhooks/apollo?token=${encodeURIComponent(webhookSecret)}&org_id=${encodeURIComponent(orgId)}`
-    : undefined;
+  // Build webhook URL for async phone reveal (HMAC-bound to org_id)
+  const webhookUrl = buildApolloWebhookUrl(orgId) ?? undefined;
 
   try {
     const startTime = Date.now();

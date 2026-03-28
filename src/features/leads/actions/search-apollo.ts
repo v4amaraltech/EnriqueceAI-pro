@@ -38,8 +38,8 @@ export interface SearchApolloResult {
 export async function searchApollo(input: SearchApolloInput): Promise<ActionResult<SearchApolloResult>> {
   const { orgId } = await requireAuthWithMember();
 
-  // Try org-level key first, fall back to env var
-  const apiKey = await getApolloApiKey(orgId) ?? getEnv().APOLLO_API_KEY;
+  // Use org-level key only (no global fallback for multi-tenant isolation)
+  const apiKey = await getApolloApiKey(orgId);
   if (!apiKey) {
     return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
   }
