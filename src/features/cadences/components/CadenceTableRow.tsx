@@ -87,7 +87,7 @@ export function CadenceTableRow({
       <div className="w-7 shrink-0">
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]">
+            <button type="button" aria-label="Informações da cadência" className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]">
               <Info className="h-4 w-4" />
             </button>
           </TooltipTrigger>

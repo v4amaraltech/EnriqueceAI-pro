@@ -557,6 +557,7 @@ export function LeadInfoPanel({
                         type="button"
                         variant="ghost"
                         size="icon"
+                        aria-label="Remover telefone"
                         className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
                         onClick={() => handleRemovePhone(index)}
                         disabled={phoneEntries.length <= 1}
@@ -762,6 +763,7 @@ export function LeadInfoPanel({
               <Button
                 size="icon"
                 variant="outline"
+                aria-label="Cancelar edição"
                 className="h-10 w-10 rounded-full shadow-lg"
                 onClick={handleCancelEdit}
                 disabled={isPending}
@@ -771,6 +773,7 @@ export function LeadInfoPanel({
               <Button
                 size="icon"
                 variant="default"
+                aria-label="Salvar alterações"
                 className="h-10 w-10 rounded-full shadow-lg"
                 onClick={handleSave}
                 disabled={isPending}
@@ -782,6 +785,7 @@ export function LeadInfoPanel({
             <Button
               size="icon"
               variant="default"
+              aria-label="Editar lead"
               className="h-10 w-10 rounded-full shadow-lg"
               onClick={() => setIsEditing(true)}
             >

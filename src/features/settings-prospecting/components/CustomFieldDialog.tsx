@@ -141,6 +141,7 @@ export function CustomFieldDialog({
                     <Button
                       size="icon"
                       variant="ghost"
+                      aria-label="Remover opção"
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => setOptionsList((prev) => prev.filter((_, i) => i !== idx))}
                     >

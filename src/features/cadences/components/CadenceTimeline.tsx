@@ -92,6 +92,7 @@ function SortableStepItem({
     >
       <button
         type="button"
+        aria-label="Arrastar etapa"
         className="cursor-grab text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]"
         {...attributes}
         {...listeners}
@@ -114,6 +115,7 @@ function SortableStepItem({
       <button
         type="button"
         onClick={onRemove}
+        aria-label="Remover etapa"
         className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -152,7 +154,7 @@ function DayContainer({
   return (
     <div ref={setNodeRef} className="rounded-lg border" data-testid={`day-${dayData.day}`}>
       <div className="flex w-full items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5 text-sm font-medium">
-        <button type="button" onClick={onToggle} className="hover:text-[var(--foreground)]">
+        <button type="button" onClick={onToggle} aria-label={collapsed ? 'Expandir dia' : 'Recolher dia'} className="hover:text-[var(--foreground)]">
           {collapsed ? (
             <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           ) : (

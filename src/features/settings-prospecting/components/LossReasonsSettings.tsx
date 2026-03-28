@@ -151,6 +151,7 @@ export function LossReasonsSettings({ initial }: LossReasonsSettingsProps) {
                       <Button
                         size="icon"
                         variant="ghost"
+                        aria-label="Editar motivo de perda"
                         className="h-8 w-8"
                         onClick={() => handleStartEdit(reason)}
                         disabled={isPending}
@@ -161,6 +162,7 @@ export function LossReasonsSettings({ initial }: LossReasonsSettingsProps) {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Excluir motivo de perda"
                           className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => handleDelete(reason.id)}
                           disabled={isPending}
