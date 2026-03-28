@@ -16,7 +16,7 @@ async function fetchRules(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   orgId: string,
 ): Promise<FitScoreRule[]> {
-  const { data } = (await supabase.from('fit_score_rules')
+  const { data } = (await from(supabase, 'fit_score_rules')
     .select('points, field, operator, value')
     .eq('org_id', orgId)
     .order('sort_order', { ascending: true })) as {

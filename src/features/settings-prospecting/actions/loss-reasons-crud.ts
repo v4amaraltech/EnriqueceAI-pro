@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface LossReasonRow {
@@ -39,7 +40,7 @@ const DEFAULT_REASONS = [
 
 // Helper: typed query builder for loss_reasons
 function lossReasonsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('loss_reasons');
+  return from(supabase, 'loss_reasons');
 }
 
 export async function listLossReasons(): Promise<ActionResult<LossReasonRow[]>> {

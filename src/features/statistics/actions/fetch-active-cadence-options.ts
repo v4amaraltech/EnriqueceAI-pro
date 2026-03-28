@@ -13,8 +13,7 @@ export async function fetchActiveCadenceOptions(): Promise<CadenceOption[]> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')

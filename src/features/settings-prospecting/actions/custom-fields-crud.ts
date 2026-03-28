@@ -4,13 +4,14 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export type { CustomFieldRow } from '../types/custom-field';
 import type { CustomFieldRow } from '../types/custom-field';
 
 function customFieldsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('custom_fields');
+  return from(supabase, 'custom_fields');
 }
 
 export async function listCustomFields(): Promise<ActionResult<CustomFieldRow[]>> {

@@ -10,6 +10,7 @@ import type {
   EnrollmentsByStatusEntry,
   StepProgressionEntry,
 } from '../types/cadence-analytics.types';
+import type { EnrollmentQueryRow, InteractionQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 
 interface CadenceRow {
@@ -17,24 +18,6 @@ interface CadenceRow {
   name: string;
   status: string;
   priority: string | null;
-}
-
-interface EnrollmentRow {
-  cadence_id: string;
-  lead_id: string;
-  current_step: number | null;
-  status: string;
-  enrolled_by: string | null;
-}
-
-interface InteractionRow {
-  type: string;
-  cadence_id: string | null;
-}
-
-interface EngagementInteractionRow {
-  type: string;
-  lead_id: string;
 }
 
 interface StepRow {
@@ -82,7 +65,7 @@ export async function fetchCadenceAnalyticsData(
     enrQuery = enrQuery.in('enrolled_by', userIds);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   // Fetch interactions for reply/meeting counts
@@ -94,7 +77,7 @@ export async function fetchCadenceAnalyticsData(
     .lte('created_at', periodEnd)
     .in('type', ['replied', 'meeting_scheduled']);
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
+  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch cadence steps for progression
@@ -111,7 +94,7 @@ export async function fetchCadenceAnalyticsData(
     .in('cadence_id', cadenceIds)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
-    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])) as { data: EngagementInteractionRow[] | null };
+    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])) as { data: InteractionQueryRow[] | null };
   const engagementInteractions = rawEngagement ?? [];
 
   const activeCadences = cadences.filter((c) => c.status === 'active').length;
@@ -152,8 +135,8 @@ export async function fetchCadenceAnalyticsData(
 
 function buildCadenceTable(
   cadences: CadenceRow[],
-  enrollmentsByCadence: Map<string, EnrollmentRow[]>,
-  interactionsByCadence: Map<string, InteractionRow[]>,
+  enrollmentsByCadence: Map<string, EnrollmentQueryRow[]>,
+  interactionsByCadence: Map<string, InteractionQueryRow[]>,
 ): CadencePerformanceRow[] {
   return cadences
     .map((cadence) => {
@@ -180,7 +163,7 @@ function buildCadenceTable(
 
 function buildEnrollmentsByStatus(
   cadences: CadenceRow[],
-  enrollmentsByCadence: Map<string, EnrollmentRow[]>,
+  enrollmentsByCadence: Map<string, EnrollmentQueryRow[]>,
 ): EnrollmentsByStatusEntry[] {
   return cadences
     .map((cadence) => {
@@ -206,7 +189,7 @@ function buildEnrollmentsByStatus(
 
 function buildStepProgression(
   steps: StepRow[],
-  enrollments: EnrollmentRow[],
+  enrollments: EnrollmentQueryRow[],
 ): StepProgressionEntry[] {
   // Get unique step orders from all cadences
   const stepMap = new Map<number, { label: string; count: number }>();
@@ -249,7 +232,7 @@ function buildStepProgression(
     }));
 }
 
-function buildConversionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentRow[]>): CadenceConversionRow[] {
+function buildConversionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentQueryRow[]>): CadenceConversionRow[] {
   return cadences.map((c) => {
     const cEnrollments = enrollmentsByCadence.get(c.id) ?? [];
     const total = cEnrollments.length;
@@ -267,7 +250,7 @@ function buildConversionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<s
   }).filter((r) => r.totalLeads > 0).sort((a, b) => b.totalLeads - a.totalLeads);
 }
 
-function buildDistributionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentRow[]>): CadenceDistributionRow[] {
+function buildDistributionRows(cadences: CadenceRow[], enrollmentsByCadence: Map<string, EnrollmentQueryRow[]>): CadenceDistributionRow[] {
   return cadences.map((c) => {
     const cEnrollments = enrollmentsByCadence.get(c.id) ?? [];
     return {

@@ -1,6 +1,7 @@
 'use server';
 
 import { requireAdmin } from '@/lib/auth/require-admin';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { AdminDashboardData, AdminOrgRow } from '../types';
@@ -11,20 +12,17 @@ export async function fetchAdminDashboard(): Promise<AdminDashboardData> {
   const supabase = createServiceRoleClient();
 
   const [orgsResult, leadsAgg, membersAgg, trialsResult] = await Promise.all([
-    supabase
-      .from('organizations')
+    from(supabase, 'organizations')
       .select('id, name, created_at, subscriptions(status, plan_id, plans(name))')
       .order('created_at', { ascending: false }),
 
-    supabase.from('leads').select('org_id', { count: 'exact', head: false }),
+    from(supabase, 'leads').select('org_id', { count: 'exact', head: false }),
 
-    supabase
-      .from('organization_members')
+    from(supabase, 'organization_members')
       .select('org_id')
       .eq('status', 'active'),
 
-    supabase
-      .from('subscriptions')
+    from(supabase, 'subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'trialing'),
   ]);
@@ -47,7 +45,8 @@ export async function fetchAdminDashboard(): Promise<AdminDashboardData> {
     }
   }
 
-  const organizations: AdminOrgRow[] = (orgsResult.data ?? []).map((org) => {
+  const orgs = (orgsResult.data ?? []) as Array<{ id: string; name: string; created_at: string; subscriptions: unknown }>;
+  const organizations: AdminOrgRow[] = orgs.map((org) => {
     // subscriptions is an array from the join
     const subs = org.subscriptions as Array<{
       status: string;

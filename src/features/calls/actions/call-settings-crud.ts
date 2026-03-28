@@ -4,21 +4,22 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CallDailyTargetRow, CallSettingsData, CallSettingsRow, PhoneBlacklistRow } from '../types';
 import { addPhoneBlacklistSchema, saveCallSettingsSchema } from '../schemas/call-settings.schemas';
 
 function settingsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('organization_call_settings');
+  return from(supabase, 'organization_call_settings');
 }
 
 function targetsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('call_daily_targets');
+  return from(supabase, 'call_daily_targets');
 }
 
 function blacklistFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('phone_blacklist');
+  return from(supabase, 'phone_blacklist');
 }
 
 export async function getCallSettings(): Promise<ActionResult<CallSettingsData>> {

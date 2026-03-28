@@ -10,6 +10,7 @@ import type {
   SdrTrendEntry,
   TeamAnalyticsData,
 } from '../types/team-analytics.types';
+import type { EnrollmentQueryRow, InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
 
@@ -18,30 +19,10 @@ interface MemberInfo {
   displayName: string;
 }
 
-interface InteractionRow {
-  id: string;
-  type: string;
-  lead_id: string;
-  performed_by: string | null;
-  created_at: string;
-}
-
-interface EnrollmentRow {
-  lead_id: string;
-  enrolled_by: string | null;
-  status: string;
-}
-
 interface CallRow {
   id: string;
   user_id: string;
   status: string;
-}
-
-interface LeadRow {
-  id: string;
-  status: string;
-  created_by: string | null;
 }
 
 export async function fetchTeamAnalyticsData(
@@ -54,8 +35,7 @@ export async function fetchTeamAnalyticsData(
   const nameMap = await buildMemberNameMap(supabase, orgId);
 
   // Get member user_ids
-  const { data: rawMemberIds } = (await supabase
-    .from('organization_members')
+  const { data: rawMemberIds } = (await from(supabase, 'organization_members')
     .select('user_id')
     .eq('org_id', orgId)
     .eq('status', 'active')) as { data: { user_id: string }[] | null };
@@ -69,13 +49,13 @@ export async function fetchTeamAnalyticsData(
     .select('id, type, lead_id, performed_by, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: InteractionRow[] | null };
+    .lte('created_at', periodEnd)) as { data: InteractionQueryRow[] | null };
 
   const { data: rawEnrollments } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id, enrolled_by, status')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: EnrollmentRow[] | null };
+    .lte('created_at', periodEnd)) as { data: EnrollmentQueryRow[] | null };
 
   const { data: rawCalls } = (await from(supabase, 'calls')
     .select('id, user_id, status')
@@ -87,7 +67,7 @@ export async function fetchTeamAnalyticsData(
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: LeadRow[] | null };
+    .lte('created_at', periodEnd)) as { data: LeadQueryRow[] | null };
 
   const interactions = rawInteractions ?? [];
   const enrollments = rawEnrollments ?? [];
@@ -95,8 +75,7 @@ export async function fetchTeamAnalyticsData(
   const leads = rawLeads ?? [];
 
   // Fetch goals
-  const { data: goalRows } = (await supabase
-    .from('daily_activity_goals')
+  const { data: goalRows } = (await from(supabase, 'daily_activity_goals')
     .select('user_id, target')
     .eq('org_id', orgId)) as { data: { user_id: string | null; target: number }[] | null };
 
@@ -125,10 +104,10 @@ export async function fetchTeamAnalyticsData(
 
 function buildComparison(
   members: MemberInfo[],
-  interactionsByUser: Map<string, InteractionRow[]>,
-  enrollmentsByUser: Map<string, EnrollmentRow[]>,
+  interactionsByUser: Map<string, InteractionQueryRow[]>,
+  enrollmentsByUser: Map<string, EnrollmentQueryRow[]>,
   callsByUser: Map<string, CallRow[]>,
-  leadsByCreator: Map<string, LeadRow[]>,
+  leadsByCreator: Map<string, LeadQueryRow[]>,
   goalMap: Map<string | null, number>,
   defaultTarget: number,
 ): SdrComparisonRow[] {
@@ -171,7 +150,7 @@ function buildComparison(
 
 function buildTrends(
   members: MemberInfo[],
-  interactions: InteractionRow[],
+  interactions: InteractionQueryRow[],
   periodStart: string,
   periodEnd: string,
   memberMap: Map<string, string>,
@@ -245,7 +224,7 @@ function buildRankings(
 
 function buildGoals(
   members: MemberInfo[],
-  interactionsByUser: Map<string, InteractionRow[]>,
+  interactionsByUser: Map<string, InteractionQueryRow[]>,
   goalMap: Map<string | null, number>,
   defaultTarget: number,
   memberMap: Map<string, string>,

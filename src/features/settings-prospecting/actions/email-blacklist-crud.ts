@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface EmailBlacklistRow {
@@ -12,7 +13,7 @@ export interface EmailBlacklistRow {
 }
 
 function blacklistFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('email_blacklist');
+  return from(supabase, 'email_blacklist');
 }
 
 export async function listBlacklistDomains(): Promise<ActionResult<EmailBlacklistRow[]>> {

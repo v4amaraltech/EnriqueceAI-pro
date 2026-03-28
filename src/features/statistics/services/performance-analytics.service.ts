@@ -9,25 +9,9 @@ import type {
   SdrActivityComparisonEntry,
   SdrPerformanceRow,
 } from '../types/performance-analytics.types';
+import type { InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
-
-interface InteractionRow {
-  type: string;
-  channel: string | null;
-  lead_id: string;
-  performed_by: string | null;
-  cadence_id: string | null;
-  created_at: string;
-}
-
-interface LeadRow {
-  id: string;
-  status: string;
-  created_by: string | null;
-  assigned_to: string | null;
-  won_by: string | null;
-}
 
 export async function fetchPerformanceAnalyticsData(
   supabase: SupabaseClient,
@@ -67,7 +51,7 @@ export async function fetchPerformanceAnalyticsData(
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
+  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch leads in period (don't filter by assigned_to here — won_by may differ)
@@ -77,7 +61,7 @@ export async function fetchPerformanceAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
-  const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
+  const { data: rawLeads } = (await leadsQuery) as { data: LeadQueryRow[] | null };
   const leads = rawLeads ?? [];
 
   // memberLookup: user_id → email/name for display
@@ -122,9 +106,9 @@ export async function fetchPerformanceAnalyticsData(
 function buildSdrTable(
   memberIds: string[],
   memberLookup: Map<string, string>,
-  interactionsByUser: Map<string, InteractionRow[]>,
-  leadsByAssignee: Map<string, LeadRow[]>,
-  allLeads: LeadRow[],
+  interactionsByUser: Map<string, InteractionQueryRow[]>,
+  leadsByAssignee: Map<string, LeadQueryRow[]>,
+  allLeads: LeadQueryRow[],
 ): SdrPerformanceRow[] {
   return memberIds
     .map((userId) => {
@@ -161,7 +145,7 @@ function buildSdrComparison(sdrTable: SdrPerformanceRow[]): SdrActivityCompariso
 }
 
 function buildDailySdrTrend(
-  interactions: InteractionRow[],
+  interactions: InteractionQueryRow[],
   memberLookup: Map<string, string>,
 ): { dailySdrTrend: DailySdrPerformanceEntry[]; dailySdrKeys: string[] } {
   // Count activities per SDR per day
@@ -224,8 +208,8 @@ function emptyData(): PerformanceAnalyticsData {
 function buildDailyControl(
   memberIds: string[],
   memberLookup: Map<string, string>,
-  interactionsByUser: Map<string, InteractionRow[]>,
-  leadsByAssignee: Map<string, LeadRow[]>,
+  interactionsByUser: Map<string, InteractionQueryRow[]>,
+  leadsByAssignee: Map<string, LeadQueryRow[]>,
 ): DailyControlRow[] {
   return memberIds.map((userId) => {
     const userInteractions = interactionsByUser.get(userId) ?? [];

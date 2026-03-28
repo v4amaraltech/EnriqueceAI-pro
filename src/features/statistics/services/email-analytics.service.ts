@@ -10,14 +10,8 @@ import type {
   DailyEmailTrendEntry,
   EmailAnalyticsData,
 } from '../types/email-analytics.types';
+import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
-
-interface InteractionRow {
-  type: string;
-  lead_id: string;
-  cadence_id: string | null;
-  created_at: string;
-}
 
 export async function fetchEmailAnalyticsData(
   supabase: SupabaseClient,
@@ -54,7 +48,7 @@ export async function fetchEmailAnalyticsData(
     query = query.in('lead_id', leadIdFilter);
   }
 
-  const { data: rawInteractions } = (await query) as { data: InteractionRow[] | null };
+  const { data: rawInteractions } = (await query) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   if (interactions.length === 0) {
@@ -64,7 +58,7 @@ export async function fetchEmailAnalyticsData(
   return calculateEmailAnalytics(interactions);
 }
 
-function calculateEmailAnalytics(interactions: InteractionRow[]): EmailAnalyticsData {
+function calculateEmailAnalytics(interactions: InteractionQueryRow[]): EmailAnalyticsData {
   const totalSent = interactions.filter((i) => i.type === 'sent').length;
   const totalDelivered = interactions.filter((i) => i.type === 'delivered').length;
   const totalOpened = interactions.filter((i) => i.type === 'opened').length;
@@ -108,7 +102,7 @@ function buildFunnel(
   ];
 }
 
-function buildDailyTrend(interactions: InteractionRow[]): DailyEmailTrendEntry[] {
+function buildDailyTrend(interactions: InteractionQueryRow[]): DailyEmailTrendEntry[] {
   const dayMap = new Map<string, { sent: number; opened: number; replied: number }>();
 
   for (const interaction of interactions) {
@@ -130,7 +124,7 @@ function buildDailyTrend(interactions: InteractionRow[]): DailyEmailTrendEntry[]
     }));
 }
 
-function buildBounceTrend(interactions: InteractionRow[]): DailyBounceTrendEntry[] {
+function buildBounceTrend(interactions: InteractionQueryRow[]): DailyBounceTrendEntry[] {
   const dayMap = new Map<string, number>();
 
   for (const interaction of interactions) {

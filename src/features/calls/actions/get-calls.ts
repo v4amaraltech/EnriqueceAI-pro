@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import type { CallRow } from '../types';
 import { callFiltersSchema, type CallFilters } from '../schemas/call.schemas';
@@ -26,10 +27,10 @@ export async function getCalls(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const from = (filters.page - 1) * filters.per_page;
-  const to = from + filters.per_page - 1;
+  const rangeFrom = (filters.page - 1) * filters.per_page;
+  const to = rangeFrom + filters.per_page - 1;
 
-  let query = supabase.from('calls')
+  let query = from(supabase, 'calls')
     .select('*', { count: 'exact' })
     .eq('org_id', orgId);
 
@@ -73,7 +74,7 @@ export async function getCalls(
   // Order and paginate
   query = query
     .order('started_at', { ascending: false })
-    .range(from, to);
+    .range(rangeFrom, to);
 
   const { data, count, error } = (await query) as {
     data: Record<string, unknown>[] | null;

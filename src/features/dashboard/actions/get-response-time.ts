@@ -5,18 +5,9 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { from } from '@/lib/supabase/from';
 
+import type { InteractionQueryRow, LeadQueryRow } from '@/features/statistics/types/query-rows';
+
 import type { DashboardResponseTimeData, ResponseTimeByUser } from '../types';
-
-interface LeadRow {
-  id: string;
-  created_at: string;
-  assigned_to: string | null;
-}
-
-interface InteractionRow {
-  lead_id: string;
-  created_at: string;
-}
 
 export async function getResponseTimeData(
   thresholdMinutes: number = 30,
@@ -40,7 +31,7 @@ export async function getResponseTimeData(
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', monthStart)
-    .lte('created_at', monthEnd)) as { data: LeadRow[] | null };
+    .lte('created_at', monthEnd)) as { data: LeadQueryRow[] | null };
 
   if (!leads?.length) {
     return { success: true, data: { thresholdMinutes, overallPct: 0, totalLeads: 0, byUser: [] } };
@@ -54,7 +45,7 @@ export async function getResponseTimeData(
     .eq('org_id', orgId)
     .in('lead_id', leadIds)
     .in('type', ['sent', 'delivered'])
-    .order('created_at', { ascending: true })) as { data: InteractionRow[] | null };
+    .order('created_at', { ascending: true })) as { data: InteractionQueryRow[] | null };
 
   // Get first interaction per lead
   const firstInteractionMap = new Map<string, string>();

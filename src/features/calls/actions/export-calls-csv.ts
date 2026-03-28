@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 import { escapeCsvField } from '@/lib/utils/csv';
 import { formatDuration } from '@/lib/utils/format';
@@ -36,7 +37,7 @@ export async function exportCallsCsv(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  let query = supabase.from('calls')
+  let query = from(supabase, 'calls')
     .select('*')
     .eq('org_id', orgId);
 

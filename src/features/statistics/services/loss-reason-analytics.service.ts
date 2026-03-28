@@ -9,15 +9,8 @@ import type {
   LossReasonAnalyticsData,
   LossReasonEntry,
 } from '../types/loss-reason-analytics.types';
+import type { EnrollmentQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
-
-interface EnrollmentRow {
-  cadence_id: string;
-  lead_id: string;
-  status: string;
-  loss_reason_id: string | null;
-  enrolled_by: string | null;
-}
 
 interface LossReasonRow {
   id: string;
@@ -51,7 +44,7 @@ export async function fetchLossReasonAnalyticsData(
     enrQuery = enrQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   if (enrollments.length === 0) {
@@ -94,7 +87,7 @@ export async function fetchLossReasonAnalyticsData(
 }
 
 function buildReasonsRanking(
-  lostEnrollments: EnrollmentRow[],
+  lostEnrollments: EnrollmentQueryRow[],
   reasons: LossReasonRow[],
   totalLost: number,
 ): LossReasonEntry[] {
@@ -120,7 +113,7 @@ function buildReasonsRanking(
 }
 
 function buildLossByCadence(
-  enrollments: EnrollmentRow[],
+  enrollments: EnrollmentQueryRow[],
   cadences: CadenceRow[],
   reasons: LossReasonRow[],
 ): LossByCadenceRow[] {
@@ -177,7 +170,7 @@ function emptyData(): LossReasonAnalyticsData {
 }
 
 function buildLossByCadenceStacked(
-  lostEnrollments: EnrollmentRow[],
+  lostEnrollments: EnrollmentQueryRow[],
   cadences: CadenceRow[],
   reasons: LossReasonRow[],
 ): LossByCadenceStackedRow[] {

@@ -19,16 +19,9 @@ import type {
   GoalData,
   UserActivityRow,
 } from '../types/activity-analytics.types';
+import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
-
-interface InteractionRow {
-  id: string;
-  type: string;
-  channel: string | null;
-  created_at: string;
-  performed_by: string | null;
-}
 
 export async function fetchActivityAnalyticsData(
   supabase: SupabaseClient,
@@ -47,7 +40,7 @@ export async function fetchActivityAnalyticsData(
     query = query.in('performed_by', userIds);
   }
 
-  const { data: rawInteractions } = (await query) as { data: InteractionRow[] | null };
+  const { data: rawInteractions } = (await query) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Get goal target
@@ -98,8 +91,7 @@ async function fetchGoalTarget(
   userId?: string,
 ): Promise<number> {
   if (userId) {
-    const { data: userGoal } = (await supabase
-      .from('daily_activity_goals')
+    const { data: userGoal } = (await from(supabase, 'daily_activity_goals')
       .select('target')
       .eq('org_id', orgId)
       .eq('user_id', userId)
@@ -108,8 +100,7 @@ async function fetchGoalTarget(
     if (userGoal) return userGoal.target;
   }
 
-  const { data: orgGoal } = (await supabase
-    .from('daily_activity_goals')
+  const { data: orgGoal } = (await from(supabase, 'daily_activity_goals')
     .select('target')
     .eq('org_id', orgId)
     .is('user_id', null)
@@ -119,7 +110,7 @@ async function fetchGoalTarget(
 }
 
 function calculateKpis(
-  interactions: InteractionRow[],
+  interactions: InteractionQueryRow[],
   periodStart: string,
   target: number,
 ): ActivityAnalyticsKpis {
@@ -140,7 +131,7 @@ function calculateKpis(
   return { totalActivities: total, activitiesToday, avgPerDay, goalAchievement };
 }
 
-function calculateChannelVolume(interactions: InteractionRow[]): ChannelVolumeEntry[] {
+function calculateChannelVolume(interactions: InteractionQueryRow[]): ChannelVolumeEntry[] {
   const counts = new Map<string, number>();
 
   for (const interaction of interactions) {
@@ -159,7 +150,7 @@ function calculateChannelVolume(interactions: InteractionRow[]): ChannelVolumeEn
 }
 
 function calculateDailyTrend(
-  interactions: InteractionRow[],
+  interactions: InteractionQueryRow[],
   periodStart: string,
   periodEnd: string,
   target: number,
@@ -191,7 +182,7 @@ function calculateDailyTrend(
   return result;
 }
 
-function calculateActivityTypes(interactions: InteractionRow[]): ActivityTypeEntry[] {
+function calculateActivityTypes(interactions: InteractionQueryRow[]): ActivityTypeEntry[] {
   const total = interactions.length;
   const counts = new Map<string, number>();
 
@@ -211,7 +202,7 @@ function calculateActivityTypes(interactions: InteractionRow[]): ActivityTypeEnt
     .sort((a, b) => b.count - a.count);
 }
 
-function calculateGoal(interactions: InteractionRow[], target: number): GoalData {
+function calculateGoal(interactions: InteractionQueryRow[], target: number): GoalData {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const actual = interactions.filter(
@@ -222,7 +213,7 @@ function calculateGoal(interactions: InteractionRow[], target: number): GoalData
   return { target, actual, percentage };
 }
 
-function calculateChannelCompletion(interactions: InteractionRow[]): ChannelCompletionEntry[] {
+function calculateChannelCompletion(interactions: InteractionQueryRow[]): ChannelCompletionEntry[] {
   const channelMap = new Map<string, { total: number; completed: number }>();
 
   for (const i of interactions) {
@@ -250,12 +241,12 @@ function calculateChannelCompletion(interactions: InteractionRow[]): ChannelComp
 async function calculateUserBreakdown(
   supabase: SupabaseClient,
   orgId: string,
-  interactions: InteractionRow[],
+  interactions: InteractionQueryRow[],
   statusLeads: Array<{ id: string; status: string; assigned_to: string | null }>,
   activeLeads: Array<{ id: string; assigned_to: string | null }>,
 ): Promise<UserActivityRow[]> {
   // Group interactions by performed_by
-  const userMap = new Map<string, InteractionRow[]>();
+  const userMap = new Map<string, InteractionQueryRow[]>();
   for (const i of interactions) {
     if (!i.performed_by) continue;
     const arr = userMap.get(i.performed_by) ?? [];

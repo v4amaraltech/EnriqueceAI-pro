@@ -11,30 +11,8 @@ import type {
   PipelineVelocity,
   StageConversion,
 } from '../types/conversion-analytics.types';
+import type { EnrollmentQueryRow, InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
-
-interface LeadRow {
-  id: string;
-  status: string;
-  created_at: string;
-  created_by: string | null;
-}
-
-interface InteractionRow {
-  type: string;
-  lead_id: string;
-  cadence_id: string | null;
-  created_at: string;
-}
-
-interface EnrollmentRow {
-  cadence_id: string;
-  lead_id: string;
-  status: string;
-  enrolled_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 interface CadenceRow {
   id: string;
@@ -60,7 +38,7 @@ export async function fetchConversionAnalyticsData(
     leadsQuery = leadsQuery.in('created_by', userIds);
   }
 
-  const { data: rawLeads } = (await leadsQuery) as { data: LeadRow[] | null };
+  const { data: rawLeads } = (await leadsQuery) as { data: LeadQueryRow[] | null };
   const leads = rawLeads ?? [];
 
   // Fetch interactions
@@ -74,7 +52,7 @@ export async function fetchConversionAnalyticsData(
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionRow[] | null };
+  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch enrollments
@@ -91,12 +69,11 @@ export async function fetchConversionAnalyticsData(
     enrQuery = enrQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   // Fetch cadences
-  const { data: rawCadences } = (await supabase
-    .from('cadences')
+  const { data: rawCadences } = (await from(supabase, 'cadences')
     .select('id, name')
     .eq('org_id', orgId)) as { data: CadenceRow[] | null };
   const cadences = rawCadences ?? [];
@@ -110,7 +87,7 @@ export async function fetchConversionAnalyticsData(
   return { funnel, stageConversions, velocity, cadenceConversion, conversionByOrigin };
 }
 
-function calculateFunnel(leads: LeadRow[], interactions: InteractionRow[]): FunnelStage[] {
+function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRow[]): FunnelStage[] {
   const totalLeads = leads.length;
   const contactedLeads = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
@@ -148,7 +125,7 @@ function calculateStageConversions(funnel: FunnelStage[]): StageConversion[] {
   return result;
 }
 
-function calculateVelocity(enrollments: EnrollmentRow[], leads: LeadRow[]): PipelineVelocity {
+function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRow[]): PipelineVelocity {
   const qualifiedLeadIds = new Set(
     leads.filter((l) => l.status === 'qualified').map((l) => l.id),
   );
@@ -183,9 +160,9 @@ function calculateVelocity(enrollments: EnrollmentRow[], leads: LeadRow[]): Pipe
 
 function calculateCadenceConversion(
   cadences: CadenceRow[],
-  enrollments: EnrollmentRow[],
-  interactions: InteractionRow[],
-  leads: LeadRow[],
+  enrollments: EnrollmentQueryRow[],
+  interactions: InteractionQueryRow[],
+  leads: LeadQueryRow[],
 ): CadenceConversionRow[] {
   const qualifiedLeadIds = new Set(
     leads.filter((l) => l.status === 'qualified').map((l) => l.id),
@@ -219,7 +196,7 @@ function calculateCadenceConversion(
     .sort((a, b) => b.conversionRate - a.conversionRate);
 }
 
-function calculateConversionByOrigin(leads: LeadRow[]): ConversionByOriginEntry[] {
+function calculateConversionByOrigin(leads: LeadQueryRow[]): ConversionByOriginEntry[] {
   const originMap = new Map<string, { qualified: number; total: number }>();
 
   for (const lead of leads) {

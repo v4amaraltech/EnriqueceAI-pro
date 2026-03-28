@@ -3,6 +3,7 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { requireManager } from '@/lib/auth/require-manager';
+import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { OrgMember } from '../types/shared';
@@ -11,8 +12,7 @@ export async function getManagerOrgId(): Promise<{ orgId: string }> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
 
-  const { data: member } = (await supabase
-    .from('organization_members')
+  const { data: member } = (await from(supabase, 'organization_members')
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -33,8 +33,7 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
     const user = await requireAuth();
     const supabase = await createServerSupabaseClient();
 
-    const { data: member } = (await supabase
-      .from('organization_members')
+    const { data: member } = (await from(supabase, 'organization_members')
       .select('org_id, role')
       .eq('user_id', user.id)
       .eq('status', 'active')
@@ -43,8 +42,7 @@ export async function fetchOrgMembers(): Promise<OrgMember[]> {
     // Only managers see the member filter
     if (!member || member.role !== 'manager') return [];
 
-    const { data: members } = (await supabase
-      .from('organization_members')
+    const { data: members } = (await from(supabase, 'organization_members')
       .select('user_id')
       .eq('org_id', member.org_id)
       .eq('status', 'active')) as { data: { user_id: string }[] | null };
