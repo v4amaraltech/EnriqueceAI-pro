@@ -8,6 +8,7 @@ import {
 
   Ban,
   Clock,
+  ClipboardCheck,
   ListChecks,
   Lock,
   Settings2,
@@ -35,6 +36,7 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: ListChecks },
 
   { label: 'Closers', href: '/settings/prospecting/closers', icon: UserCheck },
+  { label: 'Feedbacks dos Closers', href: '/settings/prospecting/closer-feedbacks', icon: ClipboardCheck },
   { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
   { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
 ];
