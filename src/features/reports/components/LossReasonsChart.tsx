@@ -24,16 +24,23 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
     percentage: d.percentage,
   }));
 
+  // Dynamic height: min 200px, scales with number of items (50px per bar)
+  const chartHeight = Math.max(200, chartData.length * 50 + 40);
+
   return (
-    <div className="h-64">
+    <div style={{ height: chartHeight }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
+        <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-          <XAxis type="number" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
+          <XAxis
+            type="number"
+            allowDecimals={false}
+            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
+          />
           <YAxis
             type="category"
             dataKey="name"
-            width={150}
+            width={140}
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <Tooltip
@@ -43,8 +50,12 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
               borderRadius: '8px',
               fontSize: '12px',
             }}
+            formatter={((value: number, _name: string, props: { payload: { percentage?: number } }) => {
+              const pct = props.payload?.percentage;
+              return [`${value}${pct ? ` (${pct.toFixed(0)}%)` : ''}`, 'Leads'];
+            }) as never}
           />
-          <Bar dataKey="count" fill="var(--destructive)" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="count" fill="var(--destructive)" radius={[0, 4, 4, 0]} barSize={28} />
         </BarChart>
       </ResponsiveContainer>
     </div>
