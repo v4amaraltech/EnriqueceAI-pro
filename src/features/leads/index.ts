@@ -53,7 +53,7 @@ export { archiveLead } from './actions/lead-lifecycle';
 export { updateLead } from './actions/update-lead';
 
 // Services
-export { enrichLead, enrichLeadsBatch } from './services/enrichment.service';
+export { enrichLead } from './services/enrichment.service';
 export { CnpjWsProvider, LemitProvider } from './services/enrichment-provider';
 export type { EnrichmentData, EnrichmentResult } from './services/enrichment-provider';
 
@@ -61,7 +61,6 @@ export type { EnrichmentData, EnrichmentResult } from './services/enrichment-pro
 export { ImportView } from './components/ImportView';
 export { LeadListView } from './components/LeadListView';
 export { LeadTable } from './components/LeadTable';
-export { LeadFilters as LeadFiltersPanel } from './components/LeadFilters';
 export { LeadPagination } from './components/LeadPagination';
 export { LeadStatusBadge, EnrichmentStatusBadge } from './components/LeadStatusBadge';
 export { LeadDetailLayout } from './components/LeadDetailLayout';
