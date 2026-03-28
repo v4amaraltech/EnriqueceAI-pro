@@ -147,7 +147,7 @@ export class AIService {
 
   static async getUsage(orgId: string): Promise<AIUsageInfo> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
 
     const { data } = (await from(supabase, 'ai_usage')
       .select('*')
@@ -178,7 +178,7 @@ export class AIService {
 
   static async incrementUsage(orgId: string): Promise<void> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = new Date().toISOString().split('T')[0] ?? '';
 
     // Try to update existing row
     const { data: existing } = (await from(supabase, 'ai_usage')
@@ -219,7 +219,7 @@ export class AIService {
 async function fireAiThresholdAlert(orgId: string, used: number, limit: number): Promise<void> {
   // Deduplicate: check if alert already sent today
   const supabase = createServiceRoleClient();
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = new Date().toISOString().split('T')[0] ?? '';
 
   const { data: existing } = (await from(supabase, 'notifications')
     .select('id')

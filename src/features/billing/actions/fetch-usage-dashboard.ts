@@ -39,7 +39,7 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
     return { success: false, error: 'Plano não encontrado' };
   }
 
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = new Date().toISOString().split('T')[0] ?? '';
   const currentPeriod = new Date().toISOString().slice(0, 7); // YYYY-MM
 
   // Fetch counts in parallel
@@ -106,7 +106,7 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
 function getDateDaysAgo(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().split('T')[0]!;
+  return d.toISOString().split('T')[0] ?? '';
 }
 
 function fillAiHistory(
@@ -122,7 +122,7 @@ function fillAiHistory(
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().split('T')[0]!;
+    const key = d.toISOString().split('T')[0] ?? '';
     result.push({ date: key, count: map.get(key) ?? 0 });
   }
 

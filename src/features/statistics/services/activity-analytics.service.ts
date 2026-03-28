@@ -137,7 +137,7 @@ function calculateDailyTrend(
   const dayMap = new Map<string, number>();
 
   for (const interaction of interactions) {
-    const day = new Date(interaction.created_at).toISOString().split('T')[0]!;
+    const day = new Date(interaction.created_at).toISOString().split('T')[0] ?? '';
     dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
   }
 
@@ -146,7 +146,7 @@ function calculateDailyTrend(
   current.setHours(0, 0, 0, 0);
 
   while (current <= end) {
-    const key = current.toISOString().split('T')[0]!;
+    const key = current.toISOString().split('T')[0] ?? '';
     result.push({
       date: key,
       label: `${current.getDate().toString().padStart(2, '0')}/${(current.getMonth() + 1).toString().padStart(2, '0')}`,

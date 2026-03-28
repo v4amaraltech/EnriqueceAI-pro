@@ -188,9 +188,9 @@ export class LemitProvider implements EnrichmentProvider {
     if (celulares && celulares.length > 0) {
       const best = celulares.sort(
         (a, b) => ((a.ranking as number) ?? 99) - ((b.ranking as number) ?? 99),
-      )[0]!;
-      const ddd = best.ddd as number;
-      const numero = best.numero as string;
+      )[0];
+      const ddd = best?.ddd as number;
+      const numero = best?.numero as string;
       telefone = `(${ddd}) ${numero}`;
     }
 
@@ -211,7 +211,7 @@ export class LemitProvider implements EnrichmentProvider {
       porte: empresa.tipo as string | undefined,
       cnae: cnaeRaw?.numero as string | undefined,
       situacao_cadastral: empresa.situacao as string | undefined,
-      email: emails && emails.length > 0 ? (emails[0]!.email as string) : undefined,
+      email: emails && emails.length > 0 ? (emails[0]?.email as string) : undefined,
       telefone,
       faturamento_estimado: empresa.faturamento_estimado as number | undefined,
       socios: socios?.map((s) => ({

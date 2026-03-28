@@ -69,7 +69,7 @@ function checkInMemory(key: string, limit: number, windowMs: number): RateLimitR
   memStore.set(key, filtered);
 
   if (filtered.length >= limit) {
-    const oldest = filtered[0]!;
+    const oldest = filtered[0] ?? now;
     return {
       allowed: false,
       remaining: 0,

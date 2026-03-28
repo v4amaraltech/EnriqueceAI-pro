@@ -82,11 +82,11 @@ export class LemitCpfProvider {
       endereco:
         enderecos && enderecos.length > 0
           ? {
-              endereco: (enderecos[0]!.endereco as string) ?? '',
-              bairro: (enderecos[0]!.bairro as string) ?? '',
-              cidade: (enderecos[0]!.cidade as string) ?? '',
-              uf: (enderecos[0]!.uf as string) ?? '',
-              cep: (enderecos[0]!.cep as string) ?? '',
+              endereco: (enderecos[0]?.endereco as string) ?? '',
+              bairro: (enderecos[0]?.bairro as string) ?? '',
+              cidade: (enderecos[0]?.cidade as string) ?? '',
+              uf: (enderecos[0]?.uf as string) ?? '',
+              cep: (enderecos[0]?.cep as string) ?? '',
             }
           : undefined,
     };

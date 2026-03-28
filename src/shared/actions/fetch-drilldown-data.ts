@@ -18,7 +18,7 @@ function toIsoEnd(dateStr: string): string {
 }
 
 function todayRange(): { start: string; end: string } {
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = new Date().toISOString().split('T')[0] ?? '';
   return { start: toIso(today), end: toIsoEnd(today) };
 }
 
