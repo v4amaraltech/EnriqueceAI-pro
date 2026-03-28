@@ -35,15 +35,17 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
       </h3>
       <div className="flex-1 min-h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 10 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
           <XAxis
-            dataKey="origin"
-            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-            interval={0}
-            height={40}
+            type="number"
+            allowDecimals={false}
+            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <YAxis
+            type="category"
+            dataKey="origin"
+            width={140}
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />
           <Tooltip
@@ -61,6 +63,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             dataKey="converted"
             name="Convertidos"
             fill="#22c55e"
+            fillOpacity={0.8}
             stackId="stack"
             radius={[0, 0, 0, 0]}
           />
@@ -68,8 +71,9 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             dataKey="lost"
             name="Perdidos"
             fill="var(--destructive)"
+            fillOpacity={0.8}
             stackId="stack"
-            radius={[4, 4, 0, 0]}
+            radius={[0, 4, 4, 0]}
           />
         </BarChart>
       </ResponsiveContainer>

@@ -67,8 +67,9 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           <Bar
             dataKey="count"
             fill="var(--destructive)"
+            fillOpacity={0.8}
             radius={[0, 4, 4, 0]}
-            barSize={20}
+            barSize={32}
           />
         </BarChart>
       </ResponsiveContainer>
