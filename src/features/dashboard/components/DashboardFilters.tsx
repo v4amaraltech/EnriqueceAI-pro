@@ -134,6 +134,13 @@ export function DashboardFilters({
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               <DropdownMenuLabel>Filtrar por cadência</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={currentFilters.cadenceIds.length === 0}
+                onCheckedChange={() => updateParams('cadenceIds', [])}
+              >
+                Todos
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
               {availableCadences.map((c) => (
                 <DropdownMenuCheckboxItem
                   key={c.id}
@@ -167,6 +174,13 @@ export function DashboardFilters({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               <DropdownMenuLabel>Filtrar por vendedor</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={currentFilters.userIds.length === 0}
+                onCheckedChange={() => updateParams('userIds', [])}
+              >
+                Todos
+              </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               {sdrMembers.map((m) => {
                 const displayName = m.name ?? m.user_id.slice(0, 8);
