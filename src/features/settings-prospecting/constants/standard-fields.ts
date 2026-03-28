@@ -16,7 +16,6 @@ export const STANDARD_FIELDS: StandardFieldDef[] = [
   { key: 'cnpj', label: 'CNPJ', type: 'text' },
   { key: 'razao_social', label: 'Razão Social', type: 'text' },
   { key: 'nome_fantasia', label: 'Nome Fantasia', type: 'text' },
-  { key: 'porte', label: 'Porte', type: 'text' },
   {
     key: 'lead_source',
     label: 'Origem',
