@@ -28,7 +28,6 @@ export default async function IntegrationsPage() {
       crmConnections={result.data.crmConnections}
       calendar={result.data.calendar}
       api4com={result.data.api4com}
-      threecplus={result.data.threecplus}
       evolutionInstance={result.data.evolutionInstance}
       apollo={result.data.apollo}
       planFeatures={planFeatures}

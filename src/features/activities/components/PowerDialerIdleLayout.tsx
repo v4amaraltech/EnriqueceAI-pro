@@ -72,9 +72,6 @@ export function PowerDialerIdleLayout({
               {dialerProvider === 'api4com' && (
                 <Badge variant="outline" className="text-[10px]">via API4Com</Badge>
               )}
-              {dialerProvider === 'threecplus' && (
-                <Badge variant="outline" className="text-[10px]">via 3CPlus</Badge>
-              )}
             </div>
             <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {!dialerProvider ? (

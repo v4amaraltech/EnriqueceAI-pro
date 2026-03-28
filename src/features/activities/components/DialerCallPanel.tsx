@@ -223,7 +223,7 @@ export function DialerCallPanel({
                 <button
                   onClick={() => onInitiateCall(selectedPhone)}
                   className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
-                  title={dialerProvider === 'threecplus' ? 'Ligar via 3CPlus' : 'Ligar via API4COM'}
+                  title="Ligar via API4COM"
                 >
                   {dialerProvider === 'api4com' ? (
                     <Image src="/logos/api4com-logo.png" alt="API4COM" width={40} height={40} className="rounded-full brightness-0 invert" />
@@ -270,7 +270,7 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && (dialerProvider === 'threecplus' ? 'Clique para ligar via 3CPlus' : 'Clique para ligar via API4COM')}
+              {callState === 'idle' && 'Clique para ligar via API4COM'}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}

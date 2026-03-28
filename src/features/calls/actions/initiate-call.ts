@@ -34,19 +34,6 @@ export async function initiateCall(
     };
   }
 
-  if (input.provider === 'threecplus') {
-    const { initiateThreeCPlusCall } = await import('./initiate-threecplus-call');
-    const result = await initiateThreeCPlusCall({
-      phone: input.phone,
-      leadId: input.leadId,
-    });
-    if (!result.success) return result;
-    return {
-      success: true,
-      data: { callId: result.data.callId, providerCallId: result.data.threecplusCallId },
-    };
-  }
-
   return { success: false, error: `Provedor desconhecido: ${input.provider as string}` };
 }
 
@@ -65,12 +52,6 @@ export async function hangupCall(
     if (!providerCallId) return { success: false, error: 'ID da chamada API4COM não fornecido' };
     const { hangupApi4ComCall } = await import('./initiate-api4com-call');
     return hangupApi4ComCall(providerCallId);
-  }
-
-  if (provider === 'threecplus') {
-    if (!providerCallId) return { success: false, error: 'ID da chamada 3CPlus não fornecido' };
-    const { hangupThreeCPlusCall } = await import('./initiate-threecplus-call');
-    return hangupThreeCPlusCall(providerCallId);
   }
 
   return { success: false, error: `Provedor desconhecido: ${provider as string}` };

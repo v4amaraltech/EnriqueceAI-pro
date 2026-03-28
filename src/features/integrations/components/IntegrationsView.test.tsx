@@ -31,10 +31,6 @@ vi.mock('../actions/manage-api4com', () => ({
   disconnectApi4Com: vi.fn(),
 }));
 
-vi.mock('../actions/manage-threecplus', () => ({
-  disconnectThreeCPlus: vi.fn(),
-}));
-
 vi.mock('@/features/billing/services/feature-flags', () => ({
   checkFeature: vi.fn().mockReturnValue(true),
 }));
@@ -45,10 +41,6 @@ vi.mock('@/features/cadences/components/WebhookEndpointsManager', () => ({
 
 vi.mock('./Api4ComConfigModal', () => ({
   Api4ComConfigModal: () => null,
-}));
-
-vi.mock('./ThreeCPlusConfigModal', () => ({
-  ThreeCPlusConfigModal: () => null,
 }));
 
 vi.mock('./ApolloConfigModal', () => ({
@@ -127,7 +119,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, threecplus: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true }, isManager: true };
+const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true }, isManager: true };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {

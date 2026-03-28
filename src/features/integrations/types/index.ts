@@ -142,16 +142,6 @@ export interface EvolutionQrResponse {
   message?: string;
 }
 
-// Re-export 3CPlus types
-export type {
-  ThreeCPlusConnectionRow,
-  ThreeCPlusConnectionSafe,
-  ThreeCPlusCampaign,
-  ThreeCPlusAgentStatus,
-  ThreeCPlusSocketCallData,
-  ThreeCPlusQualification,
-} from './threecplus';
-
 // Re-export CRM types
 export type {
   CrmProvider,

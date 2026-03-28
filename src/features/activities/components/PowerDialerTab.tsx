@@ -139,7 +139,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   }
 
   function handleHangup() {
-    if (!providerCallId && dialerProvider !== 'threecplus') {
+    if (!providerCallId) {
       setCallState('ended');
       return;
     }

@@ -1,4 +1,4 @@
-export type DialerProvider = 'api4com' | 'threecplus' | null;
+export type DialerProvider = 'api4com' | null;
 
 export interface InitiateCallResult {
   callId: string;

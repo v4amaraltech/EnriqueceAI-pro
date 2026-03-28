@@ -93,7 +93,6 @@ const ENCRYPTED_TABLES: Array<{ table: string; columns: string[] }> = [
   { table: 'whatsapp_connections', columns: ['access_token_encrypted'] },
   { table: 'apollo_connections', columns: ['api_key_encrypted'] },
   { table: 'api4com_connections', columns: ['api_key_encrypted'] },
-  { table: 'threecplus_connections', columns: ['api_token_encrypted'] },
   { table: 'whatsapp_instances', columns: ['api_key_encrypted'] },
 ];
 
