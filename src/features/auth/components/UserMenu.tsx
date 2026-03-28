@@ -20,10 +20,9 @@ export function UserMenu() {
   const { organization } = useOrganization();
 
   const email = user?.email ?? '';
-  const initials = email
-    .split('@')[0]
-    ?.slice(0, 2)
-    .toUpperCase() ?? 'U';
+  const initials = (email.split('@')[0] || 'U')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <DropdownMenu>

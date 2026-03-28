@@ -183,10 +183,10 @@ function buildDailySdrTrend(
   const dailySdrTrend: DailySdrPerformanceEntry[] = Array.from(sdrDayMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, dayMap]) => {
-      const [, month, day] = date.split('-');
+      const dateParts = date.split('-');
       const entry: DailySdrPerformanceEntry = {
         date,
-        label: `${day}/${month}`,
+        label: dateParts[2] && dateParts[1] ? `${dateParts[2]}/${dateParts[1]}` : date,
       };
       for (const sdr of topSdrs) {
         entry[sdr] = dayMap.get(sdr) ?? 0;

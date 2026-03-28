@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
+import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';

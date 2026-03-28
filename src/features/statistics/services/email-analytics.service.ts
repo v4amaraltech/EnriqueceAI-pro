@@ -148,7 +148,10 @@ function buildBounceTrend(interactions: InteractionRow[]): DailyBounceTrendEntry
 }
 
 function formatDateLabel(dateStr: string): string {
-  const [, month, day] = dateStr.split('-');
+  const parts = dateStr.split('-');
+  const month = parts[1];
+  const day = parts[2];
+  if (!month || !day) return dateStr;
   return `${day}/${month}`;
 }
 
