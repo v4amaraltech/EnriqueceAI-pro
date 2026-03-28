@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 import { searchPeople, type ApolloSearchPerson } from '../services/apollo.service';
 import { getApolloApiKey } from '../services/apollo-key.service';
@@ -36,6 +37,12 @@ export interface SearchApolloResult {
 
 export async function searchApollo(input: SearchApolloInput): Promise<ActionResult<SearchApolloResult>> {
   const { orgId } = await requireAuthWithMember();
+
+  // Rate limit: 30 searches per org per minute
+  const rl = await checkRateLimit(`apollo-search:${orgId}`, 30, 60_000);
+  if (!rl.allowed) {
+    return { success: false, error: 'Limite de buscas atingido. Aguarde um momento.' };
+  }
 
   // Use org-level key only (no global fallback for multi-tenant isolation)
   const apiKey = await getApolloApiKey(orgId);

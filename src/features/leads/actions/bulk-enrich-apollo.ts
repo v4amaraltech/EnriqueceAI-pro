@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 import { enrichLeadWithApollo } from './enrich-lead-apollo';
 
@@ -17,6 +18,12 @@ export async function bulkEnrichApollo(
 
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
+  }
+
+  // Rate limit: 5 bulk operations per org per minute
+  const rl = await checkRateLimit(`bulk-apollo:${auth.data.orgId}`, 5, 60_000);
+  if (!rl.allowed) {
+    return { success: false, error: 'Limite de operações em massa atingido. Aguarde um momento.' };
   }
 
   if (leadIds.length > 100) {

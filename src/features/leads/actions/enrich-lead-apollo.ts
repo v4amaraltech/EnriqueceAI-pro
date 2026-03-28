@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
@@ -49,7 +50,13 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
     return { success: false, error: 'Lead já foi enriquecido via Apollo' };
   }
 
-  // Get Apollo API key (org-level or env fallback)
+  // Rate limit: 20 enrichments per org per minute
+  const rl = await checkRateLimit(`apollo-enrich:${orgId}`, 20, 60_000);
+  if (!rl.allowed) {
+    return { success: false, error: 'Limite de enriquecimentos atingido. Aguarde um momento.' };
+  }
+
+  // Get Apollo API key (org-level only)
   const apiKey = await getApolloApiKey(orgId);
   if (!apiKey) {
     return { success: false, error: 'Apollo não configurado. Configure a API key nas integrações.' };
