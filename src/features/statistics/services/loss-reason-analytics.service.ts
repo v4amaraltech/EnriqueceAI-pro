@@ -119,16 +119,31 @@ function buildReasonsRanking(
     .sort((a, b) => b.count - a.count);
 }
 
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const arr = map.get(key);
+    if (arr) {
+      arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+  return map;
+}
+
 function buildLossByCadence(
   enrollments: EnrollmentRow[],
   cadences: CadenceRow[],
   reasons: LossReasonRow[],
 ): LossByCadenceRow[] {
   const reasonLookup = new Map(reasons.map((r) => [r.id, r.name]));
+  const enrollmentsByCadence = groupBy(enrollments, (e) => e.cadence_id);
 
   return cadences
     .map((cadence) => {
-      const cadEnr = enrollments.filter((e) => e.cadence_id === cadence.id);
+      const cadEnr = enrollmentsByCadence.get(cadence.id) ?? [];
       const cadLost = cadEnr.filter((e) => e.loss_reason_id != null);
       const enrolled = cadEnr.length;
       const lost = cadLost.length;

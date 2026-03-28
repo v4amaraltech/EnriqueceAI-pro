@@ -64,6 +64,7 @@ export async function fetchLeads(
       // Leads without active enrollment — get enrolled lead IDs and exclude them
       const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
         .select('lead_id')
+        .eq('org_id', orgId)
         .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
       const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
       if (enrolledIds.length > 0) {
@@ -74,6 +75,7 @@ export async function fetchLeads(
       // Leads enrolled in a specific cadence
       const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
         .select('lead_id')
+        .eq('org_id', orgId)
         .eq('cadence_id', filters.cadence_id)
         .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
       const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];

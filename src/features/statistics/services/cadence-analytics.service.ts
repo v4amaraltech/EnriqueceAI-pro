@@ -234,13 +234,23 @@ function buildStepProgression(
     }
   }
 
-  // Count enrollments at each step
+  // Count enrollments at each step — O(E + S) instead of O(E × S)
+  // First, count enrollments by their current_step
+  const enrollmentStepCounts = new Map<number, number>();
   for (const enrollment of enrollments) {
     const currentStep = enrollment.current_step ?? 1;
-    for (const [stepOrder, entry] of stepMap) {
-      if (currentStep >= stepOrder) {
-        entry.count++;
-      }
+    enrollmentStepCounts.set(currentStep, (enrollmentStepCounts.get(currentStep) ?? 0) + 1);
+  }
+  // Merge all step values (from stepMap and enrollments) and sort descending
+  // Walking from highest to lowest, cumulative = count of enrollments at step >= current
+  const allStepValues = new Set([...stepMap.keys(), ...enrollmentStepCounts.keys()]);
+  const sortedDesc = Array.from(allStepValues).sort((a, b) => b - a);
+  let cumulative = 0;
+  for (const stepVal of sortedDesc) {
+    cumulative += enrollmentStepCounts.get(stepVal) ?? 0;
+    const entry = stepMap.get(stepVal);
+    if (entry) {
+      entry.count = cumulative;
     }
   }
 
