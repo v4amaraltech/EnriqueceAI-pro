@@ -8,6 +8,14 @@ import { toast } from 'sonner';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -99,6 +107,9 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<CustomFieldRow | null>(null);
+
+  // Delete confirmation
+  const [deleteFieldId, setDeleteFieldId] = useState<string | null>(null);
 
   // Standard field options dialog state
   const [stdOptionsDialogOpen, setStdOptionsDialogOpen] = useState(false);
@@ -217,8 +228,10 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
     });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir este campo? Dados preenchidos nos leads serão perdidos.')) return;
+  function handleConfirmDelete() {
+    if (!deleteFieldId) return;
+    const id = deleteFieldId;
+    setDeleteFieldId(null);
     startTransition(async () => {
       const result = await deleteCustomField(id);
       if (result.success) {
@@ -353,7 +366,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(field.id)} className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem onClick={() => setDeleteFieldId(field.id)} className="text-destructive focus:text-destructive">
                           <Trash2 className="mr-2 h-4 w-4" />
                           Excluir
                         </DropdownMenuItem>
@@ -483,6 +496,21 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             isPending={isPending}
           />
         )}
+        {/* Delete confirmation dialog */}
+        <Dialog open={!!deleteFieldId} onOpenChange={() => setDeleteFieldId(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Excluir campo personalizado</DialogTitle>
+              <DialogDescription>
+                Tem certeza? Dados preenchidos nos leads para este campo serão perdidos. Esta ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteFieldId(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={handleConfirmDelete}>Excluir</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

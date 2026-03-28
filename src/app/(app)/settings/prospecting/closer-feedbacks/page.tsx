@@ -2,6 +2,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 
 import { fetchCloserFeedbacks } from '@/features/leads/actions/fetch-closer-feedbacks';
 import { CloserFeedbackTable } from '@/features/leads/components/CloserFeedbackTable';
+import { CloserPerformanceCards } from '@/features/leads/components/CloserPerformanceCards';
 
 export default async function CloserFeedbacksPage() {
   await requireManager();
@@ -13,12 +14,15 @@ export default async function CloserFeedbacksPage() {
       <div>
         <h1 className="text-xl font-semibold">Feedbacks dos Closers</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Acompanhe as avaliações das reuniões enviadas pelos closers.
+          Acompanhe as avaliações das reuniões e a performance dos closers.
         </p>
       </div>
 
       {result.success ? (
-        <CloserFeedbackTable feedbacks={result.data} />
+        <>
+          <CloserPerformanceCards feedbacks={result.data} />
+          <CloserFeedbackTable feedbacks={result.data} />
+        </>
       ) : (
         <p className="text-sm text-muted-foreground">{result.error}</p>
       )}

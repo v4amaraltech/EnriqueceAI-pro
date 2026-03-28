@@ -18,6 +18,14 @@ import {
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
@@ -51,10 +59,17 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [editingMeeting, setEditingMeeting] = useState<TimelineEntry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
 
   function handleDeleteMeeting(interactionId: string) {
-    if (!confirm('Tem certeza que deseja excluir esta reunião? Ela também será removida do Google Calendar.')) return;
+    setDeleteConfirmId(interactionId);
+  }
+
+  function confirmDeleteMeeting() {
+    if (!deleteConfirmId) return;
+    const interactionId = deleteConfirmId;
+    setDeleteConfirmId(null);
     setDeletingId(interactionId);
     startDeleteTransition(async () => {
       const result = await deleteMeeting(interactionId);
@@ -266,6 +281,22 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           };
         })() : null}
       />
+
+      {/* Delete meeting confirmation */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir reunião</DialogTitle>
+            <DialogDescription>
+              Tem certeza? A reunião também será removida do Google Calendar. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDeleteMeeting}>Excluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
