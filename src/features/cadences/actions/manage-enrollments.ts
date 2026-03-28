@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
@@ -44,9 +45,8 @@ export async function fetchCadenceEnrollments(
     error: { message: string } | null;
   };
 
-  if (error) {
-    return { success: false, error: 'Erro ao buscar inscritos' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao buscar inscritos', 'enrollments');
+  if (qErr) return qErr;
 
   const enrollments: EnrollmentWithLead[] = (data ?? []).map((row) => {
     const { leads, ...enrollment } = row;
@@ -105,9 +105,8 @@ export async function fetchAvailableLeads(
     error: { message: string } | null;
   };
 
-  if (error) {
-    return { success: false, error: 'Erro ao buscar leads disponíveis' };
-  }
+  const qErr2 = handleQueryError(error, 'Erro ao buscar leads disponíveis', 'enrollments');
+  if (qErr2) return qErr2;
 
   return {
     success: true,
@@ -132,9 +131,8 @@ export async function updateEnrollmentStatus(
     .update({ status } as Record<string, unknown>)
     .eq('id', enrollmentId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao atualizar status do enrollment' };
-  }
+  const qErr3 = handleQueryError(error, 'Erro ao atualizar status do enrollment', 'enrollments');
+  if (qErr3) return qErr3;
 
   revalidatePath('/cadences');
   return { success: true, data: undefined };
@@ -151,9 +149,8 @@ export async function removeEnrollment(
     .delete()
     .eq('id', enrollmentId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao remover enrollment' };
-  }
+  const qErr4 = handleQueryError(error, 'Erro ao remover enrollment', 'enrollments');
+  if (qErr4) return qErr4;
 
   revalidatePath('/cadences');
   return { success: true, data: undefined };

@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -229,10 +230,8 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     .lte('next_step_due', new Date().toISOString())
     .limit(BATCH_SIZE)) as { data: EnrollmentWithLead[] | null; error: { message: string } | null };
 
-  if (enrollError) {
-    console.error('[cadence-engine] Failed to fetch enrollments:', enrollError.message);
-    return { success: false, error: 'Erro ao buscar enrollments pendentes' };
-  }
+  const qErr = handleQueryError(enrollError, 'Erro ao buscar enrollments pendentes', 'cadence-engine');
+  if (qErr) return qErr;
 
   const result: ExecutionResult = {
     processed: 0,

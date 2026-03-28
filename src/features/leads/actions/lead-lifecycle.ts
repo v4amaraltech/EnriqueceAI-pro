@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -21,9 +22,8 @@ export async function archiveLead(
     .eq('id', leadId)
     .eq('org_id', orgId);
 
-  if (error) {
-    return { success: false, error: 'Erro ao arquivar lead' };
-  }
+  const qErr = handleQueryError(error, 'Erro ao arquivar lead', 'lead-lifecycle');
+  if (qErr) return qErr;
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);
@@ -42,7 +42,8 @@ export async function fetchLossReasons(): Promise<ActionResult<LossReasonRow[]>>
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })) as { data: LossReasonRow[] | null; error: unknown };
 
-  if (error) return { success: false, error: 'Erro ao listar motivos de perda' };
+  const qErr2 = handleQueryError(error, 'Erro ao listar motivos de perda', 'lead-lifecycle');
+  if (qErr2) return qErr2;
   return { success: true, data: data ?? [] };
 }
 
@@ -61,9 +62,8 @@ export async function markLeadAsLost(
     .eq('id', leadId)
     .eq('org_id', orgId);
 
-  if (leadError) {
-    return { success: false, error: 'Erro ao marcar lead como perdido' };
-  }
+  const qErr3 = handleQueryError(leadError, 'Erro ao marcar lead como perdido', 'lead-lifecycle');
+  if (qErr3) return qErr3;
 
   // Dispatch lead.unqualified webhook
   dispatchWebhookEvent(supabase, orgId, 'lead.unqualified', {
@@ -141,9 +141,8 @@ export async function scheduleNewProspection(
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
 
-  if (insertError || !enrollment) {
-    return { success: false, error: 'Erro ao agendar prospecção' };
-  }
+  const qErr4 = handleQueryError(insertError, 'Erro ao agendar prospecção', 'lead-lifecycle');
+  if (qErr4 || !enrollment) return qErr4 ?? { success: false, error: 'Erro ao agendar prospecção' };
 
   // Set next_step_due to scheduled date (trigger won't fire — not updating status or current_step)
   await from(supabase, 'cadence_enrollments')

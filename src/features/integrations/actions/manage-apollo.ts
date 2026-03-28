@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireManager } from '@/lib/auth/require-manager';
 import { encrypt } from '@/lib/security/encryption';
@@ -43,9 +44,8 @@ export async function saveApolloConnection(
       .update({ api_key_encrypted: encrypted, status: 'connected' } as Record<string, unknown>)
       .eq('id', existing.id);
 
-    if (error) {
-      return { success: false, error: 'Erro ao atualizar conexao Apollo' };
-    }
+    const qErr = handleQueryError(error, 'Erro ao atualizar conexao Apollo', 'apollo');
+    if (qErr) return qErr;
   } else {
     const { error } = await from(supabase, 'apollo_connections' as never)
       .insert({
@@ -54,9 +54,8 @@ export async function saveApolloConnection(
         status: 'connected',
       } as Record<string, unknown>);
 
-    if (error) {
-      return { success: false, error: 'Erro ao salvar conexao Apollo' };
-    }
+    const qErr2 = handleQueryError(error, 'Erro ao salvar conexao Apollo', 'apollo');
+    if (qErr2) return qErr2;
   }
 
   revalidatePath('/settings/integrations');
@@ -81,9 +80,8 @@ export async function deleteApolloConnection(): Promise<ActionResult<void>> {
     .delete()
     .eq('org_id', member.org_id);
 
-  if (error) {
-    return { success: false, error: 'Erro ao desconectar Apollo' };
-  }
+  const qErr3 = handleQueryError(error, 'Erro ao desconectar Apollo', 'apollo');
+  if (qErr3) return qErr3;
 
   revalidatePath('/settings/integrations');
   return { success: true, data: undefined };

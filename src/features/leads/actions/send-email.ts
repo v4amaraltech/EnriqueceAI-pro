@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { EmailService } from '@/features/integrations/services/email.service';
@@ -38,9 +39,8 @@ export async function sendManualEmail(
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
 
-  if (interactionError || !interaction) {
-    return { success: false, error: 'Erro ao registrar interação' };
-  }
+  const qErr = handleQueryError(interactionError, 'Erro ao registrar interação', 'send-email');
+  if (qErr || !interaction) return qErr ?? { success: false, error: 'Erro ao registrar interação' };
 
   // Send the email
   const result = await EmailService.sendEmail(

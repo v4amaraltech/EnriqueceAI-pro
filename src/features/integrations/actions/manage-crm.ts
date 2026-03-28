@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { handleQueryError } from '@/lib/actions/handle-error';
 import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 
@@ -100,9 +101,8 @@ export async function handleCrmCallback(
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
       .single()) as { data: CrmConnectionSafe | null; error: { message: string } | null };
 
-    if (error || !data) {
-      return { success: false, error: 'Erro ao salvar conexão CRM' };
-    }
+    const qErr = handleQueryError(error, 'Erro ao salvar conexão CRM', 'crm');
+    if (qErr || !data) return qErr ?? { success: false, error: 'Erro ao salvar conexão CRM' };
 
     return { success: true, data };
   } catch (error) {
@@ -143,9 +143,8 @@ export async function connectRdStationCrm(
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
       .single()) as { data: CrmConnectionSafe | null; error: { message: string } | null };
 
-    if (error || !data) {
-      return { success: false, error: 'Erro ao salvar conexão RD Station CRM' };
-    }
+    const qErr2 = handleQueryError(error, 'Erro ao salvar conexão RD Station CRM', 'crm');
+    if (qErr2 || !data) return qErr2 ?? { success: false, error: 'Erro ao salvar conexão RD Station CRM' };
 
     return { success: true, data };
   } catch (error) {
@@ -167,9 +166,8 @@ export async function disconnectCrm(
       .eq('org_id', orgId)
       .eq('crm_provider', provider);
 
-    if (error) {
-      return { success: false, error: 'Erro ao desconectar CRM' };
-    }
+    const qErr3 = handleQueryError(error, 'Erro ao desconectar CRM', 'crm');
+    if (qErr3) return qErr3;
 
     logAudit({ orgId, action: 'crm.disconnected', resourceType: 'integration', metadata: { provider } });
     return { success: true, data: { disconnected: true } };
@@ -207,9 +205,8 @@ export async function updateCrmFieldMapping(
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
       .single()) as { data: CrmConnectionSafe | null; error: { message: string } | null };
 
-    if (error || !data) {
-      return { success: false, error: 'Erro ao atualizar mapeamento de campos' };
-    }
+    const qErr4 = handleQueryError(error, 'Erro ao atualizar mapeamento de campos', 'crm');
+    if (qErr4 || !data) return qErr4 ?? { success: false, error: 'Erro ao atualizar mapeamento de campos' };
 
     return { success: true, data };
   } catch (error) {
@@ -230,9 +227,8 @@ export async function fetchCrmConnections(): Promise<ActionResult<CrmConnectionS
       .select('id, crm_provider, field_mapping, status, last_sync_at, created_at, updated_at')
       .eq('org_id', orgId)) as { data: CrmConnectionSafe[] | null; error: { message: string } | null };
 
-    if (error) {
-      return { success: false, error: 'Erro ao buscar conexões CRM' };
-    }
+    const qErr5 = handleQueryError(error, 'Erro ao buscar conexões CRM', 'crm');
+    if (qErr5) return qErr5;
 
     return { success: true, data: data ?? [] };
   } catch (error) {
@@ -269,9 +265,8 @@ export async function fetchCrmSyncLogs(
       .order('created_at', { ascending: false })
       .limit(limit)) as { data: CrmSyncLogRow[] | null; error: { message: string } | null };
 
-    if (error) {
-      return { success: false, error: 'Erro ao buscar logs de sincronização' };
-    }
+    const qErr6 = handleQueryError(error, 'Erro ao buscar logs de sincronização', 'crm');
+    if (qErr6) return qErr6;
 
     return { success: true, data: data ?? [] };
   } catch (error) {
