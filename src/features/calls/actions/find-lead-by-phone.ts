@@ -4,19 +4,13 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
+import { normalizePhone } from '@/lib/utils/phone';
 
 interface LeadPhoneMatch {
   leadId: string;
   enrollmentId: string | null;
   cadenceId: string | null;
   stepId: string | null;
-}
-
-/**
- * Normalize a phone number by stripping non-digit characters.
- */
-function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '');
 }
 
 /**

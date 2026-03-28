@@ -36,6 +36,7 @@ import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
 import { OrgContext } from '@/features/auth/components/OrganizationProvider';
+import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
@@ -275,8 +276,7 @@ export function LeadInfoPanel({
   const seenPhones = new Set<string>();
   const allPhones: Array<{ tipo: string; numero: string; href: string; whatsapp: boolean; nome?: string }> = [];
 
-  // Helper: normalize phone to digits only for dedup
-  const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+  // Normalize phone to digits only for dedup
 
   // Socios celulares first (more specific: has whatsapp flag, nome)
   for (const socio of data.socios ?? []) {

@@ -1,12 +1,6 @@
-import type { CadenceMetrics, SdrMetrics } from '../reports.contract';
+import { escapeCsvField } from '@/lib/utils/csv';
 
-function escapeCsvField(value: string | number): string {
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
+import type { CadenceMetrics, SdrMetrics } from '../reports.contract';
 
 function toCsv(headers: string[], rows: (string | number)[][]): string {
   const headerLine = headers.map(escapeCsvField).join(',');

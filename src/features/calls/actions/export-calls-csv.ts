@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
+import { escapeCsvField } from '@/lib/utils/csv';
 import { formatDuration } from '@/lib/utils/format';
 
 import type { CallRow } from '../types';
@@ -21,13 +22,6 @@ const typeLabels: Record<string, string> = {
   outbound: 'Realizada',
   manual: 'Manual',
 };
-
-function escapeCsvField(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 export async function exportCallsCsv(
   rawFilters: Record<string, unknown>,

@@ -1,18 +1,12 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { escapeCsvField } from '@/lib/utils/csv';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { formatDuration, getPeriodDates } from '@/features/statistics/types/shared';
 
 import { fetchExtratoData } from '../services/extrato.service';
-
-function escapeCsvField(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 export async function exportExtratoCsv(
   period: string,
