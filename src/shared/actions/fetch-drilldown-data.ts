@@ -51,7 +51,7 @@ export async function fetchDrilldownData(
           overall_replied: ['replied'],
           overall_meetings: ['meeting_scheduled'],
         };
-        const types = typeMap[metric]!;
+        const types = typeMap[metric] ?? [];
 
         const { data, count } = (await from(supabase, 'interactions')
           .select('id, type, created_at, lead_id, cadence_id, leads!inner(id, razao_social, nome_fantasia, email), cadences(id, name)', { count: 'exact' })
