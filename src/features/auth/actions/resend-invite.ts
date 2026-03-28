@@ -7,6 +7,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 const INVITE_EXPIRY_DAYS = 7;
 
@@ -52,14 +53,8 @@ export async function resendInvite(
     }
 
     // Resend invite
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : 'http://localhost:3000');
-
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${appUrl}/api/auth/confirm`,
+      redirectTo: `${getAppUrl()}/api/auth/confirm`,
     });
 
     if (inviteError) {

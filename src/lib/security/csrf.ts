@@ -1,5 +1,7 @@
 import { headers } from 'next/headers';
 
+import { getAppUrl } from '@/lib/utils/app-url';
+
 /**
  * Verifies that a server action request originates from the same site.
  * Next.js checks this automatically for server actions, but this provides
@@ -10,8 +12,7 @@ import { headers } from 'next/headers';
 export async function verifyCsrfOrigin(): Promise<void> {
   const headerStore = await headers();
   const origin = headerStore.get('origin');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const allowedOrigin = new URL(appUrl).origin;
+  const allowedOrigin = new URL(getAppUrl()).origin;
 
   if (!origin) {
     // No origin header — likely a same-origin request from the browser

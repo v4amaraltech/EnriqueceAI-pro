@@ -20,9 +20,10 @@ import { CrmSyncService } from '../services/crm-sync.service';
 import { ensureFreshCredentials } from '../services/crm-token';
 import { APP_LEAD_FIELDS } from '../constants/crm-fields';
 import { listCustomFields } from '@/features/settings-prospecting/actions/custom-fields-crud';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 function getCrmRedirectUri(provider: CrmProvider): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   // Pipedrive forces private apps to use /API/v2/callback
   if (provider === 'pipedrive') {
     return `${baseUrl}/API/v2/callback`;

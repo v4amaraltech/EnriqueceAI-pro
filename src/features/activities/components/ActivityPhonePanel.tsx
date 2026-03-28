@@ -188,7 +188,7 @@ export function ActivityPhonePanel({
         clientDurationSeconds: callDuration,
         notes: notes || undefined,
         leadId,
-      }).catch(() => {});
+      }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
 
     setAttempts((prev) => [...prev, attempt]);
@@ -214,7 +214,7 @@ export function ActivityPhonePanel({
         clientDurationSeconds: callDuration,
         notes: notes || undefined,
         leadId,
-      }).catch(() => {});
+      }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
 
     onMarkDone(aggregatedNotes);

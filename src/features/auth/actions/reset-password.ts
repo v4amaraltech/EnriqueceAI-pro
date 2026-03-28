@@ -7,6 +7,7 @@ import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
 import { RESET_LIMIT, RESET_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import { forgotPasswordSchema } from '../schemas/auth.schemas';
 
@@ -32,9 +33,8 @@ export async function resetPassword(formData: FormData): Promise<ActionResult<vo
   }
 
   const supabase = await createServerSupabaseClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${appUrl}/api/auth/confirm?type=recovery`,
+    redirectTo: `${getAppUrl()}/api/auth/confirm?type=recovery`,
   });
 
   if (error) {

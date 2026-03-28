@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import { registerWebhook } from '../services/api4com.service';
 
@@ -14,7 +15,7 @@ export async function registerApi4ComWebhook(): Promise<ActionResult<void>> {
   if (!auth.success) return auth;
   const { orgId, userId } = auth.data;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = getAppUrl();
   const webhookUrl = `${appUrl}/api/webhooks/api4com`;
   const gateway = `flux-${orgId}`;
 

@@ -5,6 +5,7 @@ import { enrichLead, enrichLeadFull } from '@/features/leads/services/enrichment
 import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 // Allow long-running execution on Vercel (up to 5 minutes)
 export const maxDuration = 300;
@@ -134,7 +135,7 @@ async function processLeadsBatch(importId: string): Promise<void> {
 }
 
 async function selfChain(importId: string): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = getAppUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {

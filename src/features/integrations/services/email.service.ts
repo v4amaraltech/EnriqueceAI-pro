@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 interface SendEmailParams {
   to: string;
@@ -34,7 +35,7 @@ export interface GmailConnection {
  * Adds tracking pixel for open tracking.
  */
 function injectOpenTracking(html: string, interactionId: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   const pixel = `<img src="${baseUrl}/api/track/open/${interactionId}" width="1" height="1" style="display:none" alt="" />`;
   return html.replace('</body>', `${pixel}</body>`);
 }
@@ -43,7 +44,7 @@ function injectOpenTracking(html: string, interactionId: string): string {
  * Wraps links for click tracking.
  */
 function injectClickTracking(html: string, interactionId: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const baseUrl = getAppUrl();
   return html.replace(
     /href="(https?:\/\/[^"]+)"/g,
     (_match, url: string) => {

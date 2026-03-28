@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { stripe } from '@/lib/stripe';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 export async function createCheckoutSession(
   planId: string,
@@ -77,8 +78,8 @@ export async function createCheckoutSession(
       org_id: org.id,
       plan_id: plan.id,
     },
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath : '/settings/billing?success=true'}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath.split('?')[0] + '?canceled=true' : '/settings/billing?canceled=true'}`,
+    success_url: `${getAppUrl()}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath : '/settings/billing?success=true'}`,
+    cancel_url: `${getAppUrl()}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath.split('?')[0] + '?canceled=true' : '/settings/billing?canceled=true'}`,
   });
 
   if (!session.url) {

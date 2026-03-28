@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
   // 7. Mark idempotency
   if (idempotencyKey) {
-    await markEventProcessed(supabase, 'inbound-api', idempotencyKey, 'lead.create').catch(() => {});
+    await markEventProcessed(supabase, 'inbound-api', idempotencyKey, 'lead.create').catch((err: unknown) => console.error('[v1/leads] markEventProcessed failed:', err));
   }
 
   const firstResult = result.results[0];

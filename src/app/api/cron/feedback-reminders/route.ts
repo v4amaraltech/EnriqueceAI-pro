@@ -4,6 +4,7 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 export const maxDuration = 60;
 
@@ -34,7 +35,7 @@ interface LeadInfo {
  */
 async function sendFeedbackReminders() {
   const supabase = createServiceRoleClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = getAppUrl();
 
   // Find feedbacks sent > 3 days ago, not responded, not expired, no reminder sent yet
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();

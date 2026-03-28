@@ -133,7 +133,7 @@ export async function POST(request: Request) {
                   lead_id: interaction.lead_id,
                   whatsapp_message_id: status.id,
                   errors: status.errors ?? null,
-                }).catch(() => {});
+                }).catch((err: unknown) => console.error('[whatsapp-webhook] dispatch failed:', err));
               }
             }
           },
@@ -254,7 +254,7 @@ async function processIncomingMessage(
     enrollment_id: enrollment.id,
     message_id: message.id,
     message_text: messageText,
-  }).catch(() => {});
+  }).catch((err: unknown) => console.error('[whatsapp-webhook] dispatch replied failed:', err));
 
   logger.info('Reply detected', { lead_id: lead.id, enrollment_id: enrollment.id });
 }

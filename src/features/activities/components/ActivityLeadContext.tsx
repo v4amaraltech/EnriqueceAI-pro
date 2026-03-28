@@ -54,7 +54,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
 
     // Fetch standard field settings for visibility
     (async () => {
-      const { data } = (await (supabase as any).from('standard_field_settings')
+      const { data } = (await from(supabase, 'standard_field_settings')
         .select('*')) as { data: StandardFieldSettingRow[] | null };
 
       setStandardFieldSettings(data ?? []);

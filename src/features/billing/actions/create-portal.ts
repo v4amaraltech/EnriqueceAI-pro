@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { stripe } from '@/lib/stripe';
 import { from } from '@/lib/supabase/from';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 export async function createPortalSession(): Promise<ActionResult<{ url: string }>> {
   const auth = await getAuthOrgIdResult();
@@ -24,7 +25,7 @@ export async function createPortalSession(): Promise<ActionResult<{ url: string 
 
   const session = await stripe.billingPortal.sessions.create({
     customer: org.stripe_customer_id,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/settings/billing`,
+    return_url: `${getAppUrl()}/settings/billing`,
   });
 
   redirect(session.url);

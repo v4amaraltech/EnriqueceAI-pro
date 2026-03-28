@@ -1,6 +1,8 @@
 'use server';
 
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
+
 import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 
 export type LeadSourceOption = { value: string; label: string };
@@ -13,8 +15,7 @@ export async function getLeadSourceOptions(): Promise<LeadSourceOption[]> {
 
   const { orgId, supabase } = auth.data;
 
-  const { data } = (await (supabase as any)
-    .from('standard_field_settings')
+  const { data } = (await from(supabase, 'standard_field_settings')
     .select('options')
     .eq('org_id', orgId)
     .eq('field_key', 'lead_source')

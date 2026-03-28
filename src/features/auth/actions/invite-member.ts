@@ -8,6 +8,7 @@ import { ERR_MEMBER_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { INVITE_EXPIRY_DAYS } from '@/lib/constants/limits';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
@@ -55,12 +56,7 @@ export async function inviteMember(
     }
 
     const admin = createAdminSupabaseClient();
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : 'http://localhost:3000');
-    const redirectTo = `${appUrl}/api/auth/confirm`;
+    const redirectTo = `${getAppUrl()}/api/auth/confirm`;
 
     // Check if user already exists
     const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });

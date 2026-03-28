@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { createServerClient } from '@supabase/ssr';
 
+import { getAppUrl } from '@/lib/utils/app-url';
+
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo'];
 const PUBLIC_PREFIXES = ['/feedback/'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
@@ -19,8 +21,7 @@ export async function middleware(request: NextRequest) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const origin = request.headers.get('origin');
     if (origin) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-      const allowedOrigin = new URL(appUrl).origin;
+      const allowedOrigin = new URL(getAppUrl()).origin;
       if (origin !== allowedOrigin) {
         return NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 });
       }

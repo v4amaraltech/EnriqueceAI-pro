@@ -1,8 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 
 export interface StandardFieldSettingRow {
   id: string;
@@ -23,7 +23,7 @@ export async function listStandardFieldSettings(): Promise<ActionResult<Standard
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase as any).from('standard_field_settings')
+  const { data, error } = (await from(supabase, 'standard_field_settings')
     .select('*')
     .eq('org_id', orgId)) as { data: StandardFieldSettingRow[] | null; error: unknown };
 
@@ -36,7 +36,7 @@ export async function listStandardFieldSettingsForMember(): Promise<ActionResult
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, error } = (await (supabase as any).from('standard_field_settings')
+  const { data, error } = (await from(supabase, 'standard_field_settings')
     .select('*')
     .eq('org_id', orgId)) as { data: StandardFieldSettingRow[] | null; error: unknown };
 
@@ -67,7 +67,7 @@ export async function upsertStandardFieldSetting(
     payload.options = settings.options;
   }
 
-  const { data, error } = (await (supabase as any).from('standard_field_settings')
+  const { data, error } = (await from(supabase, 'standard_field_settings')
     .upsert(payload, { onConflict: 'org_id,field_key' })
     .select()
     .single()) as { data: StandardFieldSettingRow | null; error: unknown };

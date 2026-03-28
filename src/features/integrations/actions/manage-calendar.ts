@@ -8,6 +8,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 
+import { getAppUrl } from '@/lib/utils/app-url';
+
 import type { CalendarConnectionSafe } from '../types';
 
 function getGcalClientId() {
@@ -17,8 +19,7 @@ function getGcalClientSecret() {
   return process.env.GCAL_CLIENT_SECRET ?? '';
 }
 function getGcalRedirectUri() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  return `${appUrl}/api/auth/callback/calendar`;
+  return `${getAppUrl()}/api/auth/callback/calendar`;
 }
 
 export async function getCalendarAuthUrl(): Promise<ActionResult<{ url: string }>> {

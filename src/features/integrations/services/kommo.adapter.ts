@@ -5,6 +5,7 @@ import type {
   CrmFieldOption,
   CrmProvider,
 } from '../types/crm';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 const KOMMO_AUTH_URL = 'https://www.kommo.com/oauth';
 
@@ -185,7 +186,7 @@ export class KommoAdapter implements CRMAdapter {
           client_secret: KOMMO_CLIENT_SECRET,
           grant_type: 'refresh_token',
           refresh_token: credentials.refresh_token,
-          redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/auth/callback/kommo`,
+          redirect_uri: `${getAppUrl()}/api/auth/callback/kommo`,
         }),
       },
     );

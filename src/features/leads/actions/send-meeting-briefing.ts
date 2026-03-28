@@ -3,6 +3,7 @@
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
 
@@ -60,7 +61,7 @@ export async function sendMeetingBriefingEmail(
   params: MeetingBriefingParams,
 ): Promise<void> {
   const { leadId, orgId, closerId, sdrUserId, meetingTitle, meetingStart, meetingEnd, meetLink } = params;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = getAppUrl();
 
   try {
     // Fetch all data in parallel

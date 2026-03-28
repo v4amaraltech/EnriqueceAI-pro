@@ -3,6 +3,7 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 interface SendFeedbackParams {
   leadId: string;
@@ -21,7 +22,7 @@ interface SendFeedbackParams {
 export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promise<void> {
   const { leadId, orgId, closerId, closerName, closerEmail, leadName } = params;
   const supabase = createServiceRoleClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = getAppUrl();
 
   try {
     // Create feedback request record

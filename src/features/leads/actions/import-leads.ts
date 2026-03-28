@@ -8,6 +8,7 @@ import { ERR_LEAD_LIMIT_EXCEEDED, ERR_LEAD_LIMIT_REACHED } from '@/lib/constants
 import { MAX_CSV_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { LeadImportErrorRow } from '../types';
 import { parseCsv } from '../utils/csv-parser';
@@ -250,7 +251,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 }
 
 async function triggerAutoEnrichment(importId: string): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = getAppUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {
