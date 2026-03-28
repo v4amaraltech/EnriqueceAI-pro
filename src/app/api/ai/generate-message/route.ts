@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 503 });
     }
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ai/generate-message] Unexpected error:', error);
+    return NextResponse.json({ error: 'Erro ao gerar mensagem' }, { status: 500 });
   }
 }

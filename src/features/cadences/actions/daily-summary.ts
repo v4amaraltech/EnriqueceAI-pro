@@ -18,17 +18,41 @@ interface DailyMetrics {
   active_cadences: number;
 }
 
-/** Get today's date range in BRT (UTC-3) */
+/** Get today's date range in São Paulo timezone (DST-safe) */
 function getTodayRangeBRT(): { start: string; end: string } {
   const now = new Date();
-  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  const dateStr = brt.toISOString().slice(0, 10); // YYYY-MM-DD in BRT
-  // Next day in BRT
-  const nextDay = new Date(brt.getTime() + 24 * 60 * 60 * 1000);
-  const nextDateStr = nextDay.toISOString().slice(0, 10);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const dateStr = formatter.format(now); // YYYY-MM-DD in São Paulo tz
+
+  // Calculate UTC offset for São Paulo at this moment (handles DST)
+  const spFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+  const utcFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+  const spHour = Number(spFormatter.format(now));
+  const utcHour = Number(utcFormatter.format(now));
+  const offsetHours = ((utcHour - spHour + 24) % 24);
+
+  const padOffset = String(offsetHours).padStart(2, '0');
+
+  // Next day
+  const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const nextDateStr = formatter.format(nextDay);
+
   return {
-    start: `${dateStr}T03:00:00.000Z`,     // 00:00 BRT = 03:00 UTC
-    end: `${nextDateStr}T02:59:59.999Z`,   // 23:59 BRT = next day 02:59 UTC
+    start: `${dateStr}T${padOffset}:00:00.000Z`,
+    end: `${nextDateStr}T${padOffset}:00:00.000Z`,
   };
 }
 
@@ -172,8 +196,12 @@ export async function sendDailyCadenceSummary(): Promise<ActionResult<{ orgs_pro
   const adminSupabase = createAdminSupabaseClient();
 
   const { start, end } = getTodayRangeBRT();
-  const brt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const dateStr = brt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dateStr = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date());
 
   // Fetch all organizations that have at least 1 active cadence
   const { data: orgs } = (await from(supabase, 'organizations')

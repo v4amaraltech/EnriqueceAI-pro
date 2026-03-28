@@ -39,9 +39,13 @@ export async function checkStaleCadences(): Promise<ActionResult<{ checked: numb
   cutoffDate.setDate(cutoffDate.getDate() - STALE_DAYS);
   const cutoffISO = cutoffDate.toISOString();
 
-  // Dedup: check today's date for notification deduplication
-  const brt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const today = brt.toISOString().slice(0, 10);
+  // Dedup: check today's date for notification deduplication (DST-safe)
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 
   let alerted = 0;
 

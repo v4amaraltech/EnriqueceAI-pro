@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error('[enrich-leads] Processing error:', err);
     return NextResponse.json(
-      { ok: false, importId, error: String(err) },
+      { ok: false, importId, error: 'Erro ao processar lote de enriquecimento' },
       { status: 500 },
     );
   }
