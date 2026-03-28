@@ -129,8 +129,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Alguma observação sobre a reunião ou o lead..."
-          rows={3}
+          placeholder="Como foi a conversa? O lead demonstrou interesse? Algum ponto de atenção para o time?"
+          rows={4}
           className="w-full rounded-lg border border-gray-200 dark:border-[var(--border)] dark:bg-[var(--input)] px-4 py-3 text-sm text-gray-700 dark:text-[var(--foreground)] placeholder:text-gray-400 dark:placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[#E53935]/50 focus:border-[#E53935] resize-y"
         />
       </div>
