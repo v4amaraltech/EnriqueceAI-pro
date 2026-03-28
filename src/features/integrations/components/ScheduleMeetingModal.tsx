@@ -186,20 +186,20 @@ export function ScheduleMeetingModal({
     });
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[#E53935]">
-            <CalendarIcon className="h-5 w-5" />
-            {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
-          </DialogTitle>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Registre aqui a reunião agendada para o closer.
-          </p>
-        </DialogHeader>
+  const header = (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 text-[#E53935] text-lg font-semibold">
+        <CalendarIcon className="h-5 w-5" />
+        {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
+      </div>
+      <p className="text-sm text-[var(--muted-foreground)]">
+        Registre aqui a reunião agendada para o closer.
+      </p>
+    </div>
+  );
 
-        <div className="space-y-5 mt-2">
+  const formFields = (
+        <div className="space-y-5 mt-4">
           {/* Título */}
           <div>
             <Label className="text-sm font-semibold">Título:</Label>
@@ -342,11 +342,51 @@ export function ScheduleMeetingModal({
             Gerar link do Google Meet
           </label>
         </div>
+  );
 
+  const footer = (
+    <div className={cn('flex gap-2', inline ? 'mt-4' : 'mt-4 justify-end')}>
+      {!inline && (
+        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+      )}
+      <Button
+        onClick={handleSubmit}
+        disabled={isPending || !dateString || !selectedTime}
+        className="bg-[#E53935] hover:bg-[#C62828] text-white"
+      >
+        <CalendarIcon className="mr-2 h-4 w-4" />
+        {isPending
+          ? (isEditing ? 'Salvando...' : 'Agendando...')
+          : (isEditing ? 'Salvar' : 'Agendar')}
+      </Button>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div>
+        {header}
+        {formFields}
+        {footer}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-[#E53935]">
+            <CalendarIcon className="h-5 w-5" />
+            {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
+          </DialogTitle>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Registre aqui a reunião agendada para o closer.
+          </p>
+        </DialogHeader>
+        {formFields}
         <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
             disabled={isPending || !dateString || !selectedTime}
