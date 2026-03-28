@@ -7,8 +7,16 @@ import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { z } from 'zod';
+
 import type { CallDailyTargetRow, CallSettingsData, CallSettingsRow, PhoneBlacklistRow } from '../types';
 import { addPhoneBlacklistSchema, saveCallSettingsSchema } from '../schemas/call-settings.schemas';
+
+const uuidSchema = z.string().uuid('ID inválido');
+const dailyTargetsSchema = z.array(z.object({
+  userId: z.string().uuid('User ID inválido'),
+  dailyTarget: z.number().int().min(0).nullable(),
+})).max(100);
 
 function settingsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
   return from(supabase, 'organization_call_settings');
@@ -129,6 +137,11 @@ export async function saveCallSettings(
 export async function saveCallDailyTargets(
   targets: Array<{ userId: string; dailyTarget: number | null }>,
 ): Promise<ActionResult<{ saved: number }>> {
+  const parsed = dailyTargetsSchema.safeParse(targets);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -222,6 +235,9 @@ export async function addPhoneBlacklist(
 }
 
 export async function deletePhoneBlacklist(id: string): Promise<ActionResult<{ deleted: true }>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {

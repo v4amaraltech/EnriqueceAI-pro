@@ -1,5 +1,7 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -7,9 +9,14 @@ import { from } from '@/lib/supabase/from';
 
 import type { LeadNote } from './add-lead-note';
 
+const leadIdSchema = z.string().uuid('ID inválido');
+
 export async function fetchLeadNotes(
   leadId: string,
 ): Promise<ActionResult<LeadNote[]>> {
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return { success: false, error: 'ID inválido' };
+
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 

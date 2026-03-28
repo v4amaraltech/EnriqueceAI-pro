@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
@@ -37,6 +38,9 @@ const DEFAULT_REASONS = [
   'Serviço fora de escopo',
   'SPAM',
 ];
+
+const uuidSchema = z.string().uuid('ID inválido');
+const nameSchema = z.string().min(1, 'Nome é obrigatório').max(200, 'Nome muito longo');
 
 // Helper: typed query builder for loss_reasons
 function lossReasonsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
@@ -80,6 +84,9 @@ export async function listLossReasons(): Promise<ActionResult<LossReasonRow[]>> 
 }
 
 export async function addLossReason(name: string): Promise<ActionResult<LossReasonRow>> {
+  const parsed = nameSchema.safeParse(name.trim());
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0]?.message ?? 'Nome inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -88,8 +95,7 @@ export async function addLossReason(name: string): Promise<ActionResult<LossReas
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const trimmed = name.trim();
-  if (!trimmed) return { success: false, error: 'Nome é obrigatório' };
+  const trimmed = parsed.data;
 
   // Get max sort_order
   const { data: maxRow } = (await lossReasonsFrom(supabase)
@@ -115,6 +121,11 @@ export async function updateLossReason(
   id: string,
   name: string,
 ): Promise<ActionResult<LossReasonRow>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+  const nameParsed = nameSchema.safeParse(name.trim());
+  if (!nameParsed.success) return { success: false, error: nameParsed.error.errors[0]?.message ?? 'Nome inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -123,8 +134,7 @@ export async function updateLossReason(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const trimmed = name.trim();
-  if (!trimmed) return { success: false, error: 'Nome é obrigatório' };
+  const trimmed = nameParsed.data;
 
   const { data, error } = (await lossReasonsFrom(supabase)
     .update({ name: trimmed })
@@ -139,6 +149,9 @@ export async function updateLossReason(
 }
 
 export async function deleteLossReason(id: string): Promise<ActionResult<{ deleted: true }>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {

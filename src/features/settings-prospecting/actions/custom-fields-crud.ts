@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
@@ -9,6 +10,21 @@ import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export type { CustomFieldRow } from '../types/custom-field';
 import type { CustomFieldRow } from '../types/custom-field';
+
+const uuidSchema = z.string().uuid('ID inválido');
+
+const customFieldSettingsSchema = z.object({
+  is_visible: z.boolean().optional(),
+  is_required_won: z.boolean().optional(),
+  is_required_lost: z.boolean().optional(),
+});
+
+const addCustomFieldSchema = z.object({
+  fieldName: z.string().min(1, 'Nome do campo é obrigatório').max(200),
+  fieldType: z.enum(['text', 'number', 'select', 'date', 'boolean']),
+  options: z.array(z.string()).optional(),
+  settings: customFieldSettingsSchema.optional(),
+});
 
 function customFieldsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
   return from(supabase, 'custom_fields');
@@ -39,6 +55,15 @@ export async function addCustomField(
   options?: string[],
   settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
+  const parsed = addCustomFieldSchema.safeParse({ fieldName, fieldType, options, settings });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  if (fieldType === 'select' && (!options || options.length === 0)) {
+    return { success: false, error: 'Campos do tipo select precisam de pelo menos uma opção' };
+  }
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -47,12 +72,7 @@ export async function addCustomField(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const trimmed = fieldName.trim();
-  if (!trimmed) return { success: false, error: 'Nome do campo é obrigatório' };
-
-  if (fieldType === 'select' && (!options || options.length === 0)) {
-    return { success: false, error: 'Campos do tipo select precisam de pelo menos uma opção' };
-  }
+  const trimmed = parsed.data.fieldName;
 
   const { data: maxRow } = (await customFieldsFrom(supabase)
     .select('sort_order')
@@ -89,6 +109,18 @@ export async function updateCustomField(
   options?: string[],
   settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
+  const parsed = addCustomFieldSchema.safeParse({ fieldName, fieldType, options, settings });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  if (fieldType === 'select' && (!options || options.length === 0)) {
+    return { success: false, error: 'Campos do tipo select precisam de pelo menos uma opção' };
+  }
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -97,12 +129,7 @@ export async function updateCustomField(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const trimmed = fieldName.trim();
-  if (!trimmed) return { success: false, error: 'Nome do campo é obrigatório' };
-
-  if (fieldType === 'select' && (!options || options.length === 0)) {
-    return { success: false, error: 'Campos do tipo select precisam de pelo menos uma opção' };
-  }
+  const trimmed = parsed.data.fieldName;
 
   const { data, error } = (await customFieldsFrom(supabase)
     .update({
@@ -126,6 +153,9 @@ export async function updateCustomField(
 }
 
 export async function deleteCustomField(id: string): Promise<ActionResult<{ deleted: true }>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -148,6 +178,12 @@ export async function updateCustomFieldSettings(
   id: string,
   settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
+  const settingsParsed = customFieldSettingsSchema.safeParse(settings);
+  if (!settingsParsed.success) return { success: false, error: 'Configuração inválida' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {

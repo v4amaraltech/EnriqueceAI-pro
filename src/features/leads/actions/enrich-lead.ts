@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -10,10 +11,11 @@ import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
 import { LemitCpfProvider } from '../services/lemit-cpf-provider';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const leadIdSchema = z.string().uuid('ID inválido');
 
 export async function enrichLeadAction(leadId: string): Promise<ActionResult<void>> {
-  if (!UUID_RE.test(leadId)) return { success: false, error: 'ID inválido' };
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return { success: false, error: 'ID inválido' };
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;

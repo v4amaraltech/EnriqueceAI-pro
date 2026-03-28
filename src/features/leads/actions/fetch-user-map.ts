@@ -1,8 +1,12 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+
+const userIdsSchema = z.array(z.string().uuid()).max(100);
 
 /**
  * Resolves user UUIDs to display names (email username before @).
@@ -11,7 +15,10 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 export async function fetchUserMap(
   userIds: string[],
 ): Promise<ActionResult<Record<string, string>>> {
-  if (userIds.length === 0) {
+  const parsed = userIdsSchema.safeParse(userIds);
+  if (!parsed.success) return { success: false, error: 'IDs inválidos' };
+
+  if (parsed.data.length === 0) {
     return { success: true, data: {} };
   }
 

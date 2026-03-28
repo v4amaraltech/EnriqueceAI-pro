@@ -1,5 +1,7 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
@@ -7,7 +9,12 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CallDetail, CallFeedbackRow, CallRow } from '../types';
 
+const callIdSchema = z.string().uuid('ID inválido');
+
 export async function getCallDetail(callId: string): Promise<ActionResult<CallDetail>> {
+  const parsed = callIdSchema.safeParse(callId);
+  if (!parsed.success) return { success: false, error: 'ID inválido' };
+
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 

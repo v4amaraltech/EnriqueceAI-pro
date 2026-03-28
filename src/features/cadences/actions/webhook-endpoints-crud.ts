@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
@@ -40,6 +41,21 @@ const VALID_EVENTS = [
   'call.scheduled',
 ] as const;
 
+const uuidSchema = z.string().uuid('ID inválido');
+
+const createWebhookSchema = z.object({
+  url: z.string().url('URL inválida').startsWith('https://', 'A URL precisa usar HTTPS'),
+  secret: z.string().optional(),
+  events: z.array(z.enum(VALID_EVENTS)).min(1, 'Selecione pelo menos um evento'),
+});
+
+const updateWebhookSchema = z.object({
+  url: z.string().url('URL inválida').startsWith('https://', 'A URL precisa usar HTTPS').optional(),
+  secret: z.string().optional(),
+  events: z.array(z.enum(VALID_EVENTS)).min(1, 'Selecione pelo menos um evento').optional(),
+  is_active: z.boolean().optional(),
+});
+
 export async function fetchWebhookEndpoints(): Promise<ActionResult<WebhookEndpointRow[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -59,6 +75,11 @@ export async function createWebhookEndpoint(input: {
   secret?: string;
   events: string[];
 }): Promise<ActionResult<WebhookEndpointRow>> {
+  const parsed = createWebhookSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -68,22 +89,6 @@ export async function createWebhookEndpoint(input: {
   }
 
   const user = await requireAuth();
-
-  // Validate URL
-  try {
-    const parsed = new URL(input.url);
-    if (parsed.protocol !== 'https:') {
-      return { success: false, error: 'A URL precisa usar HTTPS' };
-    }
-  } catch {
-    return { success: false, error: 'URL inválida' };
-  }
-
-  // Validate events
-  const invalidEvents = input.events.filter((e) => !(VALID_EVENTS as readonly string[]).includes(e));
-  if (invalidEvents.length > 0) {
-    return { success: false, error: `Eventos inválidos: ${invalidEvents.join(', ')}` };
-  }
 
   const { data, error } = (await from(supabase, 'webhook_endpoints')
     .insert({
@@ -107,30 +112,20 @@ export async function updateWebhookEndpoint(
   id: string,
   input: { url?: string; secret?: string; events?: string[]; is_active?: boolean },
 ): Promise<ActionResult<WebhookEndpointRow>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
+  const inputParsed = updateWebhookSchema.safeParse(input);
+  if (!inputParsed.success) {
+    return { success: false, error: inputParsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
     ({ orgId, supabase } = await getManagerOrgId());
   } catch {
     return { success: false, error: 'Permissão negada' };
-  }
-
-  if (input.url) {
-    try {
-      const parsed = new URL(input.url);
-      if (parsed.protocol !== 'https:') {
-        return { success: false, error: 'A URL precisa usar HTTPS' };
-      }
-    } catch {
-      return { success: false, error: 'URL inválida' };
-    }
-  }
-
-  if (input.events) {
-    const invalidEvents = input.events.filter((e) => !(VALID_EVENTS as readonly string[]).includes(e));
-    if (invalidEvents.length > 0) {
-      return { success: false, error: `Eventos inválidos: ${invalidEvents.join(', ')}` };
-    }
   }
 
   const updateData: Record<string, unknown> = {};
@@ -153,6 +148,9 @@ export async function updateWebhookEndpoint(
 }
 
 export async function deleteWebhookEndpoint(id: string): Promise<ActionResult<null>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -172,6 +170,9 @@ export async function deleteWebhookEndpoint(id: string): Promise<ActionResult<nu
 }
 
 export async function testWebhookEndpoint(id: string): Promise<ActionResult<{ status: number }>> {
+  const idParsed = uuidSchema.safeParse(id);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {

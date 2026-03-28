@@ -1,10 +1,20 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { originateCall } from '@/features/integrations/services/api4com.service';
+
+const initiateCallSchema = z.object({
+  phone: z.string().min(8, 'Telefone inválido'),
+  leadId: z.string().uuid().optional(),
+  extraMetadata: z.record(z.string()).optional(),
+});
+
+const callIdSchema = z.string().min(1, 'ID da chamada é obrigatório');
 
 interface InitiateCallInput {
   phone: string;
@@ -20,6 +30,11 @@ interface InitiateCallResult {
 export async function initiateApi4ComCall(
   input: InitiateCallInput,
 ): Promise<ActionResult<InitiateCallResult>> {
+  const parsed = initiateCallSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
@@ -67,6 +82,9 @@ export async function initiateApi4ComCall(
 export async function hangupApi4ComCall(
   api4comCallId: string,
 ): Promise<ActionResult<void>> {
+  const idParsed = callIdSchema.safeParse(api4comCallId);
+  if (!idParsed.success) return { success: false, error: 'ID inválido' };
+
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { userId } = auth.data;
