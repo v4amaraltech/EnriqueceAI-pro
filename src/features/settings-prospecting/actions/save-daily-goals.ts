@@ -42,11 +42,12 @@ export async function saveDailyGoals(
 
   if (orgError) {
     // Fallback: try delete + insert for org default
-    await supabase
+    const { error: delErr } = await supabase
       .from('daily_activity_goals')
       .delete()
       .eq('org_id', orgId)
       .is('user_id', null);
+    if (delErr) console.error('[saveDailyGoals] Fallback delete failed:', delErr);
 
     const { error: insertError } = await supabase
       .from('daily_activity_goals')
@@ -63,20 +64,22 @@ export async function saveDailyGoals(
   for (const mg of input.memberGoals) {
     if (mg.target === null) {
       // Remove individual override (use org default)
-      await supabase
+      const { error: rmErr } = await supabase
         .from('daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
+      if (rmErr) console.error(`[saveDailyGoals] Failed to remove goal for user=${mg.userId}:`, rmErr);
     } else {
       if (mg.target < 0) continue;
 
       // Delete then insert to handle upsert on computed unique index
-      await supabase
+      const { error: delMemberErr } = await supabase
         .from('daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
+      if (delMemberErr) console.error(`[saveDailyGoals] Failed to delete goal for user=${mg.userId}:`, delMemberErr);
 
       const { error } = await supabase
         .from('daily_activity_goals')

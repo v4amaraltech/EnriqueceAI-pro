@@ -18,7 +18,14 @@ export async function createApiKeyAction(
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { orgId, userId, supabase } = await getManagerOrgId();
+  let orgId: string;
+  let userId: string;
+  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
+  try {
+    ({ orgId, userId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
   const { key, hash, prefix } = generateApiKey();
 
   const { error } = await from(supabase, 'api_keys').insert({
@@ -40,7 +47,13 @@ export async function createApiKeyAction(
 }
 
 export async function listApiKeysAction(): Promise<ActionResult<ApiKeySafe[]>> {
-  const { orgId, supabase } = await getManagerOrgId();
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { data, error } = await from(supabase, 'api_keys')
     .select('id, name, key_prefix, scopes, is_active, last_used_at, expires_at, created_at')
@@ -58,7 +71,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<void>> {
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
-  const { orgId, supabase } = await getManagerOrgId();
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { error } = await from(supabase, 'api_keys')
     .update({ is_active: false } as Record<string, unknown>)
@@ -75,7 +94,13 @@ export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<vo
 
 export async function deleteApiKeyAction(keyId: string): Promise<ActionResult<void>> {
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
-  const { orgId, supabase } = await getManagerOrgId();
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { error } = await from(supabase, 'api_keys')
     .delete()

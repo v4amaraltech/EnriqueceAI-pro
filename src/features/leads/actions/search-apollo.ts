@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
-import { getEnv } from '@/config/env';
 
 import { searchPeople, type ApolloSearchPerson } from '../services/apollo.service';
 import { getApolloApiKey } from '../services/apollo-key.service';

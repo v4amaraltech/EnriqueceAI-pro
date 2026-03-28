@@ -7,7 +7,6 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { ERR_LEAD_LIMIT_EXCEEDED } from '@/lib/constants/error-codes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
-import { getEnv } from '@/config/env';
 
 import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';

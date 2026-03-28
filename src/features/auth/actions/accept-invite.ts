@@ -44,9 +44,10 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
 
     if (autoOrgMember && autoOrgMember.org_id !== invite.org_id) {
       // Delete auto-created org member record (cascade will clean up)
-      await from(serviceClient, 'organizations')
+      const { error: delOrgErr } = await from(serviceClient, 'organizations')
         .delete()
         .eq('id', autoOrgMember.org_id);
+      if (delOrgErr) console.error('[acceptPendingInvite] Failed to delete auto-created org:', delOrgErr);
     }
 
     // Accept the invite

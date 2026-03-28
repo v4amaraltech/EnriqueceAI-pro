@@ -65,10 +65,11 @@ export async function saveAutoEmailSteps(
     .filter((id): id is string => id != null);
 
   if (templateIds.length > 0) {
-    await from(supabase, 'message_templates')
+    const { error: orphanErr } = await from(supabase, 'message_templates')
       .delete()
       .in('id', templateIds)
       .eq('org_id', orgId);
+    if (orphanErr) console.error('[saveAutoEmailSteps] Failed to delete orphaned templates:', orphanErr);
   }
 
   // Create templates and steps for each new step
@@ -156,9 +157,10 @@ export async function saveAutoEmailSteps(
   }
 
   // Update total_steps
-  await from(supabase, 'cadences')
+  const { error: countErr } = await from(supabase, 'cadences')
     .update({ total_steps: steps.length } as Record<string, unknown>)
     .eq('id', cadence_id);
+  if (countErr) console.error(`[saveAutoEmailSteps] Failed to update total_steps for cadence=${cadence_id}:`, countErr);
 
   return { success: true, data: { saved: steps.length, template_ids: newTemplateIds } };
 }

@@ -204,15 +204,17 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   for (const scheduled of scheduledEnrollments ?? []) {
     // Reactivate lead if still unqualified
-    await from(supabase, 'leads')
+    const { error: reactivateErr } = await from(supabase, 'leads')
       .update({ status: 'new' } as Record<string, unknown>)
       .eq('id', scheduled.lead_id)
       .eq('status', 'unqualified');
+    if (reactivateErr) console.error(`[cadence-engine] Failed to reactivate lead=${scheduled.lead_id}:`, reactivateErr);
 
     // Activate enrollment — DB trigger recalculates next_step_due
-    await from(supabase, 'cadence_enrollments')
+    const { error: activateErr } = await from(supabase, 'cadence_enrollments')
       .update({ status: 'active', scheduled_start_at: null } as Record<string, unknown>)
       .eq('id', scheduled.id);
+    if (activateErr) console.error(`[cadence-engine] Failed to activate enrollment=${scheduled.id}:`, activateErr);
 
     console.warn(`[cadence-engine] scheduled enrollment=${scheduled.id} activated, lead=${scheduled.lead_id} reactivated`);
   }
@@ -268,9 +270,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .single()) as { data: CadenceStepRow | null };
 
       if (!step) {
-        await from(supabase, 'cadence_enrollments')
+        const { error: completeErr } = await from(supabase, 'cadence_enrollments')
           .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
+        if (completeErr) console.error(`[cadence-engine] Failed to complete enrollment=${enrollment.id}:`, completeErr);
         result.completed++;
         console.warn(`[cadence-engine] enrollment=${enrollment.id} status=completed reason=no_step duration_ms=${Date.now() - stepStart}`);
         continue;
@@ -305,13 +308,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           .maybeSingle()) as { data: { step_order: number } | null };
 
         if (nextIdempStep) {
-          await from(supabase, 'cadence_enrollments')
+          const { error: advErr } = await from(supabase, 'cadence_enrollments')
             .update({ current_step: nextIdempStep.step_order } as Record<string, unknown>)
             .eq('id', enrollment.id);
+          if (advErr) console.error(`[cadence-engine] Failed to advance enrollment=${enrollment.id}:`, advErr);
         } else {
-          await from(supabase, 'cadence_enrollments')
+          const { error: compErr } = await from(supabase, 'cadence_enrollments')
             .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
             .eq('id', enrollment.id);
+          if (compErr) console.error(`[cadence-engine] Failed to complete enrollment=${enrollment.id}:`, compErr);
           result.completed++;
         }
         result.skipped++;
@@ -329,9 +334,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { id: string } | null };
 
       if (replyInteraction) {
-        await from(supabase, 'cadence_enrollments')
+        const { error: replyErr } = await from(supabase, 'cadence_enrollments')
           .update({ status: 'replied' } as Record<string, unknown>)
           .eq('id', enrollment.id);
+        if (replyErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as replied:`, replyErr);
         result.skipped++;
         console.warn(`[cadence-engine] enrollment=${enrollment.id} status=replied reason=auto_stop duration_ms=${Date.now() - stepStart}`);
         continue;
@@ -347,9 +353,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { id: string } | null };
 
       if (bounceInteraction) {
-        await from(supabase, 'cadence_enrollments')
+        const { error: bounceErr } = await from(supabase, 'cadence_enrollments')
           .update({ status: 'bounced' } as Record<string, unknown>)
           .eq('id', enrollment.id);
+        if (bounceErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as bounced:`, bounceErr);
         result.skipped++;
         console.warn(`[cadence-engine] enrollment=${enrollment.id} status=bounced reason=auto_stop duration_ms=${Date.now() - stepStart}`);
         continue;
@@ -617,13 +624,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .maybeSingle()) as { data: { step_order: number } | null };
 
       if (nextStep) {
-        await from(supabase, 'cadence_enrollments')
+        const { error: nextErr } = await from(supabase, 'cadence_enrollments')
           .update({ current_step: nextStep.step_order } as Record<string, unknown>)
           .eq('id', enrollment.id);
+        if (nextErr) console.error(`[cadence-engine] Failed to advance enrollment=${enrollment.id} to step=${nextStep.step_order}:`, nextErr);
       } else {
-        await from(supabase, 'cadence_enrollments')
+        const { error: doneErr } = await from(supabase, 'cadence_enrollments')
           .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
+        if (doneErr) console.error(`[cadence-engine] Failed to complete enrollment=${enrollment.id}:`, doneErr);
         result.completed++;
         dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'enrollment.completed', {
           lead_id: enrollment.lead_id,

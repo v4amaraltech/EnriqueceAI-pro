@@ -176,9 +176,10 @@ export async function addCadenceStep(
   }
 
   // Update total_steps
-  await from(supabase, 'cadences')
+  const { error: countErr } = await from(supabase, 'cadences')
     .update({ total_steps: cadence.total_steps + 1 } as Record<string, unknown>)
     .eq('id', cadenceId);
+  if (countErr) console.error(`[addCadenceStep] Failed to update total_steps for cadence=${cadenceId}:`, countErr);
 
   return { success: true, data: step! };
 }
@@ -214,9 +215,10 @@ export async function removeCadenceStep(
 
   // Update total_steps
   const newTotal = Math.max(0, cadence.total_steps - 1);
-  await from(supabase, 'cadences')
+  const { error: countErr } = await from(supabase, 'cadences')
     .update({ total_steps: newTotal } as Record<string, unknown>)
     .eq('id', cadenceId);
+  if (countErr) console.error(`[removeCadenceStep] Failed to update total_steps for cadence=${cadenceId}:`, countErr);
 
   return { success: true, data: { removed: true } };
 }
@@ -289,12 +291,14 @@ export async function duplicateCadence(
       ab_enabled_at: null,
     } as Record<string, unknown>));
 
-    await from(supabase, 'cadence_steps').insert(stepInserts);
+    const { error: stepsErr } = await from(supabase, 'cadence_steps').insert(stepInserts);
+    if (stepsErr) console.error(`[duplicateCadence] Failed to copy steps for cadence=${newCadence.id}:`, stepsErr);
 
     // Update total_steps
-    await from(supabase, 'cadences')
+    const { error: countErr } = await from(supabase, 'cadences')
       .update({ total_steps: steps.length } as Record<string, unknown>)
       .eq('id', newCadence.id);
+    if (countErr) console.error(`[duplicateCadence] Failed to update total_steps for cadence=${newCadence.id}:`, countErr);
 
     newCadence.total_steps = steps.length;
   }
@@ -332,7 +336,7 @@ export async function enrollLeads(
 
   for (const leadId of leadIds) {
     // Complete any existing active/paused enrollment for this lead in this cadence
-    await from(supabase, 'cadence_enrollments')
+    const { error: completeErr } = await from(supabase, 'cadence_enrollments')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -340,6 +344,7 @@ export async function enrollLeads(
       .eq('cadence_id', cadenceId)
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
+    if (completeErr) console.error(`[enrollLeads] Failed to complete previous enrollment for lead=${leadId}:`, completeErr);
 
     const { error } = await from(supabase, 'cadence_enrollments')
       .insert({

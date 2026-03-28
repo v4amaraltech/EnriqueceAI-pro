@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { getEnv } from '@/config/env';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
