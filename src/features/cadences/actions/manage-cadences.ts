@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
@@ -78,16 +80,25 @@ export async function deleteCadence(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // Soft delete
-  const { error } = await from(supabase, 'cadences')
+  // Soft delete — select the updated row to confirm it was actually modified
+  const { data: updated, error } = await from(supabase, 'cadences')
     .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', cadenceId)
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .select('id')
+    .maybeSingle();
 
   if (error) {
+    console.error('[deleteCadence] Error:', error);
     return { success: false, error: 'Erro ao deletar cadência' };
   }
 
+  if (!updated) {
+    console.error('[deleteCadence] No rows affected for cadenceId:', cadenceId);
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  revalidatePath('/cadences');
   return { success: true, data: { deleted: true } };
 }
 
