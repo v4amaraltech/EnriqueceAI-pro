@@ -19,6 +19,21 @@ export interface DailySdrPerformanceEntry {
   [sdrEmail: string]: string | number;
 }
 
+export interface DailyControlRow {
+  userId: string;
+  userName: string;
+  prospecting: number;
+  available: number;
+  won: number;
+  lost: number;
+  pending: number;
+  completed: number;
+  ignored: number;
+  calls: number;
+  emails: number;
+  research: number;
+}
+
 export interface PerformanceAnalyticsData {
   totalActivities: number;
   totalLeadsCreated: number;
@@ -28,4 +43,5 @@ export interface PerformanceAnalyticsData {
   sdrComparison: SdrActivityComparisonEntry[];
   dailySdrTrend: DailySdrPerformanceEntry[];
   dailySdrKeys: string[];
+  dailyControl: DailyControlRow[];
 }

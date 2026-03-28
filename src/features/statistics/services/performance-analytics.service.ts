@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 
 import type {
+  DailyControlRow,
   DailySdrPerformanceEntry,
   PerformanceAnalyticsData,
   SdrActivityComparisonEntry,
@@ -13,6 +14,7 @@ import { buildMemberNameMap } from './member-lookup';
 
 interface InteractionRow {
   type: string;
+  channel: string | null;
   lead_id: string;
   performed_by: string | null;
   cadence_id: string | null;
@@ -55,7 +57,7 @@ export async function fetchPerformanceAnalyticsData(
 
   // Fetch interactions
   let intQuery = from(supabase, 'interactions')
-    .select('type, lead_id, performed_by, cadence_id, created_at')
+    .select('type, channel, lead_id, performed_by, cadence_id, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
@@ -98,6 +100,8 @@ export async function fetchPerformanceAnalyticsData(
   const sdrComparison = buildSdrComparison(sdrTable);
   const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
 
+  const dailyControl = buildDailyControl(filteredIds, memberLookup, interactions, leads);
+
   return {
     totalActivities,
     totalLeadsCreated,
@@ -107,6 +111,7 @@ export async function fetchPerformanceAnalyticsData(
     sdrComparison,
     dailySdrTrend,
     dailySdrKeys,
+    dailyControl,
   };
 }
 
@@ -207,5 +212,42 @@ function emptyData(): PerformanceAnalyticsData {
     sdrComparison: [],
     dailySdrTrend: [],
     dailySdrKeys: [],
+    dailyControl: [],
   };
+}
+
+function buildDailyControl(
+  memberIds: string[],
+  memberLookup: Map<string, string>,
+  interactions: InteractionRow[],
+  leads: LeadRow[],
+): DailyControlRow[] {
+  return memberIds.map((userId) => {
+    const userInteractions = interactions.filter((i) => i.performed_by === userId);
+    const userLeads = leads.filter((l) => l.assigned_to === userId);
+    const prospecting = userLeads.filter((l) => l.status === 'contacted' || l.status === 'new').length;
+    const available = userLeads.filter((l) => l.status === 'new').length;
+    const won = userLeads.filter((l) => l.status === 'qualified').length;
+    const lost = userLeads.filter((l) => l.status === 'unqualified').length;
+
+    const completed = userInteractions.filter((i) => ['sent', 'delivered', 'meeting_scheduled'].includes(i.type)).length;
+    const calls = userInteractions.filter((i) => i.channel === 'phone').length;
+    const emails = userInteractions.filter((i) => i.channel === 'email').length;
+    const research = userInteractions.filter((i) => i.channel === 'research' || i.type === 'research').length;
+
+    return {
+      userId,
+      userName: memberLookup.get(userId) ?? userId.slice(0, 8),
+      prospecting,
+      available,
+      won,
+      lost,
+      pending: userInteractions.length - completed,
+      completed,
+      ignored: 0,
+      calls,
+      emails,
+      research,
+    };
+  }).sort((a, b) => b.completed - a.completed);
 }
