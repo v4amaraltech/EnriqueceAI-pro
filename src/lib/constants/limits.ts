@@ -20,6 +20,9 @@ export const RESEND_WINDOW_MS = 5 * 60 * 1000; // 5 min
 export const TRACKING_LIMIT = 100;
 export const TRACKING_WINDOW_MS = 60_000; // 1 min
 
+// --- Bulk Operations ---
+export const MAX_BULK_LEAD_IDS = 500;
+
 // --- Business ---
 export const INVITE_EXPIRY_DAYS = 7;
 export const RESOURCE_ALERT_THRESHOLD = 0.8; // 80% usage triggers alert

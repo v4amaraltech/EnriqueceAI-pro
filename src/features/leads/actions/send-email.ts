@@ -38,7 +38,7 @@ export async function sendManualEmail(
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
 
-  if (interactionError) {
+  if (interactionError || !interaction) {
     return { success: false, error: 'Erro ao registrar interação' };
   }
 
@@ -53,14 +53,14 @@ export async function sendManualEmail(
       trackOpens: true,
       trackClicks: true,
     },
-    interaction?.id,
+    interaction.id,
   );
 
   if (!result.success) {
     // Update interaction to failed
     await from(supabase, 'interactions')
       .update({ type: 'failed' } as Record<string, unknown>)
-      .eq('id', interaction!.id);
+      .eq('id', interaction.id);
 
     return { success: false, error: result.error ?? 'Erro ao enviar email' };
   }

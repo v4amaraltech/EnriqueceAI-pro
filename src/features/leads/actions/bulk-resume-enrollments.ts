@@ -4,12 +4,16 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 
 export async function bulkResumeEnrollments(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
+  }
+  if (leadIds.length > MAX_BULK_LEAD_IDS) {
+    return { success: false, error: `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação` };
   }
 
   const auth = await getAuthOrgIdResult();

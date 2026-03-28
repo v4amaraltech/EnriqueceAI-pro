@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 
 import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
@@ -14,6 +15,9 @@ export async function bulkEnrichLeads(
 ): Promise<ActionResult<{ successCount: number; failCount: number }>> {
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
+  }
+  if (leadIds.length > MAX_BULK_LEAD_IDS) {
+    return { success: false, error: `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação` };
   }
 
   const auth = await getAuthOrgIdResult();
