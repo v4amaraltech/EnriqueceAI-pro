@@ -181,12 +181,12 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
             Leads finalizados{wonLostTotal > 0 ? ` (${fmt(wonLostTotal)})` : ''}
           </h4>
           {wonLostTotal > 0 ? (
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-7 rounded-md overflow-hidden flex">
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-8 rounded-full overflow-hidden flex">
                 {user.lost > 0 && (
                   <div
                     className="h-full bg-[#E53935] flex items-center justify-center text-[11px] font-semibold text-white"
-                    style={{ width: `${lostPercent}%`, minWidth: '2.5rem' }}
+                    style={{ width: `${lostPercent}%`, minWidth: '3rem' }}
                   >
                     {lostPercent}%
                   </div>
@@ -194,7 +194,7 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
                 {user.won > 0 && (
                   <div
                     className="h-full bg-emerald-500 flex items-center justify-center text-[11px] font-semibold text-white"
-                    style={{ width: `${wonPercent}%`, minWidth: '2.5rem' }}
+                    style={{ width: `${wonPercent}%`, minWidth: '3rem' }}
                   >
                     {wonPercent}%
                   </div>
@@ -209,6 +209,35 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
             <p className="text-xs text-[var(--muted-foreground)]">Nenhum lead finalizado no período.</p>
           )}
         </div>
+
+        {/* Distribuição dos leads em prospecção */}
+        {user.leadsInProspection > 0 && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]">
+            <h4 className="text-sm text-[var(--foreground)] mb-3">
+              Distribuição dos leads em prospecção ({fmt(user.leadsInProspection)})
+            </h4>
+            <div className="flex h-8 rounded-md overflow-hidden">
+              {user.quartiles.map((q, i) => (
+                <div
+                  key={q.quartile}
+                  className="relative flex items-center justify-center bg-[#6b7280] text-white"
+                  style={{ width: `${q.percent}%`, minWidth: '3rem' }}
+                >
+                  <span className="relative z-10 text-[11px] font-medium whitespace-nowrap">
+                    Quartil {q.quartile}: {q.percent}%
+                  </span>
+                  {i < user.quartiles.length - 1 && (
+                    <div className="absolute right-0 top-0 z-20 h-full flex items-center">
+                      <svg width="12" height="32" viewBox="0 0 12 32" className="text-white/80">
+                        <path d="M0 0 L10 16 L0 32" fill="currentColor" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </td>
     </tr>
   );

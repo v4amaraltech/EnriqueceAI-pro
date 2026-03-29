@@ -41,6 +41,12 @@ export interface UserChannelProgress {
   color: string;
 }
 
+export interface UserQuartileData {
+  quartile: number;
+  percent: number;
+  count: number;
+}
+
 export interface UserActivityRow {
   userId: string;
   name: string;
@@ -56,6 +62,8 @@ export interface UserActivityRow {
   inboundReplies: number;
   phoneCalls: number;
   channelProgress: UserChannelProgress[];
+  leadsInProspection: number;
+  quartiles: UserQuartileData[];
 }
 
 export interface ChannelCompletionEntry {

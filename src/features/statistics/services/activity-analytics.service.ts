@@ -19,6 +19,7 @@ import type {
   GoalData,
   UserActivityRow,
   UserChannelProgress,
+  UserQuartileData,
 } from '../types/activity-analytics.types';
 import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
@@ -67,11 +68,11 @@ export async function fetchActivityAnalyticsData(
 
   // Count leads in period (any lead that had an interaction)
   const { data: activeLeads } = (await from(supabase, 'leads')
-    .select('id, assigned_to')
+    .select('id, assigned_to, status, created_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
+    .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
 
   const leadsInPeriod = (activeLeads ?? []).length;
   const totalWon = leads.filter((l) => l.status === 'qualified').length;
@@ -239,12 +240,52 @@ function calculateChannelCompletion(interactions: InteractionQueryRow[]): Channe
     .sort((a, b) => b.completedPercent - a.completedPercent);
 }
 
+const QUARTILE_RANGES = [
+  { max: 7, label: 'Quartil 1' },
+  { max: 14, label: 'Quartil 2' },
+  { max: 30, label: 'Quartil 3' },
+  { max: Infinity, label: 'Quartil 4' },
+];
+
+function computeQuartiles(
+  userLeads: Array<{ created_at: string; status: string }>,
+): { leadsInProspection: number; quartiles: UserQuartileData[] } {
+  const now = Date.now();
+  const prospectionLeads = userLeads.filter(
+    (l) => !['qualified', 'unqualified', 'archived'].includes(l.status),
+  );
+  const total = prospectionLeads.length;
+  if (total === 0) return { leadsInProspection: 0, quartiles: [] };
+
+  const counts = [0, 0, 0, 0];
+  for (const l of prospectionLeads) {
+    const days = Math.floor((now - new Date(l.created_at).getTime()) / (24 * 60 * 60 * 1000));
+    for (let i = 0; i < QUARTILE_RANGES.length; i++) {
+      const range = QUARTILE_RANGES[i];
+      if (range && days <= range.max) {
+        counts[i] = (counts[i] ?? 0) + 1;
+        break;
+      }
+    }
+  }
+
+  const quartiles: UserQuartileData[] = counts
+    .map((count, i) => ({
+      quartile: i + 1,
+      percent: Math.round((count / total) * 100),
+      count,
+    }))
+    .filter((q) => q.count > 0);
+
+  return { leadsInProspection: total, quartiles };
+}
+
 async function calculateUserBreakdown(
   supabase: SupabaseClient,
   orgId: string,
   interactions: InteractionQueryRow[],
   statusLeads: Array<{ id: string; status: string; assigned_to: string | null }>,
-  activeLeads: Array<{ id: string; assigned_to: string | null }>,
+  activeLeads: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }>,
 ): Promise<UserActivityRow[]> {
   // Group interactions by performed_by
   const userMap = new Map<string, InteractionQueryRow[]>();
@@ -317,6 +358,10 @@ async function calculateUserBreakdown(
       }))
       .sort((a, b) => b.total - a.total);
 
+    // Quartile distribution for leads in prospection
+    const userActiveLeads = activeLeads.filter((l) => l.assigned_to === userId);
+    const { leadsInProspection, quartiles } = computeQuartiles(userActiveLeads);
+
     const memberInfo = infoMap.get(userId);
     rows.push({
       userId,
@@ -333,6 +378,8 @@ async function calculateUserBreakdown(
       inboundReplies,
       phoneCalls,
       channelProgress,
+      leadsInProspection,
+      quartiles,
     });
   }
 
