@@ -32,6 +32,8 @@ export async function fetchActivityAnalyticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<ActivityAnalyticsData> {
+  console.error(`[ActivityAnalytics] fetching orgId=${orgId} period=${periodStart} to ${periodEnd} users=${userIds?.join(',') ?? 'all'}`);
+
   let query = from(supabase, 'interactions')
     .select('id, type, channel, lead_id, created_at, performed_by')
     .eq('org_id', orgId)
@@ -42,8 +44,11 @@ export async function fetchActivityAnalyticsData(
     query = query.in('performed_by', userIds);
   }
 
-  const { data: rawInteractions } = (await query) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
+  const interactionsResult = (await query) as { data: InteractionQueryRow[] | null; error: unknown };
+  if (interactionsResult.error) {
+    console.error('[ActivityAnalytics] interactions query error:', interactionsResult.error);
+  }
+  const interactions = interactionsResult.data ?? [];
 
   // Get goal target
   const userId = userIds && userIds.length === 1 ? userIds[0] : undefined;
@@ -56,26 +61,35 @@ export async function fetchActivityAnalyticsData(
   const goal = calculateGoal(interactions, target);
 
   // Fetch leads with status changes in period for won/lost counts
-  const { data: rawLeads } = (await from(supabase, 'leads')
+  const statusLeadsResult = (await from(supabase, 'leads')
     .select('id, status, assigned_to')
     .eq('org_id', orgId)
     .gte('updated_at', periodStart)
     .lte('updated_at', periodEnd)
     .in('status', ['qualified', 'unqualified'])) as {
     data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
+    error: unknown;
   };
-  const leads = rawLeads ?? [];
+  if (statusLeadsResult.error) {
+    console.error('[ActivityAnalytics] statusLeads query error:', statusLeadsResult.error);
+  }
+  const leads = statusLeadsResult.data ?? [];
 
   // Count leads in period (any lead that had an interaction)
-  const { data: activeLeads } = (await from(supabase, 'leads')
+  const activeLeadsResult = (await from(supabase, 'leads')
     .select('id, assigned_to, status, created_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
+    .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null; error: unknown };
+  if (activeLeadsResult.error) {
+    console.error('[ActivityAnalytics] activeLeads query error:', activeLeadsResult.error);
+  }
+  const activeLeads = activeLeadsResult.data;
 
   const allActiveLeads = activeLeads ?? [];
   const leadsInPeriod = allActiveLeads.length;
+  console.error(`[ActivityAnalytics] counts: interactions=${interactions.length} statusLeads=${leads.length} activeLeads=${allActiveLeads.length}`);
 
   // Merge both lead sources for accurate won/lost totals
   const seenIds = new Set<string>();
