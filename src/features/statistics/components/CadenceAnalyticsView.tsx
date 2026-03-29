@@ -12,16 +12,14 @@ function fmt(n: number): string {
 
 /* ── Conversion tab ── */
 
-function ConversionBar({ row, maxLeads }: { row: CadenceConversionRow; maxLeads: number }) {
-  const barWidth = maxLeads > 0 ? (row.totalLeads / maxLeads) * 100 : 0;
-
+function ConversionBar({ row }: { row: CadenceConversionRow }) {
   return (
     <div className="flex items-center gap-4 py-4">
-      <div className="w-[320px] shrink-0 text-right text-sm leading-snug pr-2" title={row.cadenceName}>
+      <div className="w-[280px] shrink-0 text-right text-sm leading-snug pr-2" title={row.cadenceName}>
         {row.cadenceName}
       </div>
       <div className="flex-1 relative">
-        <div className="flex h-10 rounded overflow-hidden" style={{ width: `${Math.max(barWidth, 2)}%` }}>
+        <div className="flex h-10 rounded overflow-hidden w-full">
           {row.wonPercent > 0 && (
             <div
               className="bg-emerald-500 flex items-center justify-center text-white text-xs font-medium transition-all"
@@ -52,10 +50,10 @@ function ConversionBar({ row, maxLeads }: { row: CadenceConversionRow; maxLeads:
 /* ── Distribution tab ── */
 
 const STATUS_COLORS: Record<string, string> = {
-  active: '#a78bfa',
-  completed: '#60a5fa',
+  active: '#3b82f6',
+  paused: '#a78bfa',
+  completed: '#22d3ee',
   replied: '#94a3b8',
-  paused: '#fb923c',
   bounced: '#ef4444',
 };
 
@@ -116,7 +114,7 @@ interface CadenceAnalyticsViewProps {
 export function CadenceAnalyticsView({ data }: CadenceAnalyticsViewProps) {
   const [tab, setTab] = useState<'conversion' | 'distribution'>('distribution');
 
-  const conversionMax = data.conversionRows.reduce((max, r) => Math.max(max, r.totalLeads), 0);
+
   const distributionMax = data.distributionRows.reduce((max, r) => Math.max(max, r.totalLeads), 0);
 
   return (
@@ -133,7 +131,7 @@ export function CadenceAnalyticsView({ data }: CadenceAnalyticsViewProps) {
           {data.conversionRows.length > 0 ? (
             <div className="divide-y divide-[var(--border)]">
               {data.conversionRows.map((row) => (
-                <ConversionBar key={row.cadenceId} row={row} maxLeads={conversionMax} />
+                <ConversionBar key={row.cadenceId} row={row} />
               ))}
               {/* Legend */}
               <div className="flex gap-6 pt-4">
