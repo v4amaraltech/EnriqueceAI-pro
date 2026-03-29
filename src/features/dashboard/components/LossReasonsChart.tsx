@@ -98,8 +98,8 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
             <Maximize2 className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex-1 min-h-[300px]">
-          <LossReasonsBarChart data={data} height={300} />
+        <div className="flex-1 min-h-[350px]">
+          <LossReasonsBarChart data={data} height={420} />
         </div>
       </div>
 

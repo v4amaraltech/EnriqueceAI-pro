@@ -116,8 +116,8 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-[300px]">
-          <ConversionBarChart data={filteredData} height={300} />
+        <div className="flex-1 min-h-[350px]">
+          <ConversionBarChart data={filteredData} height={420} />
         </div>
       </div>
 
