@@ -1,13 +1,19 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Filter, X } from 'lucide-react';
+import { Filter, Maximize2, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 
 import { getResponseTimeData } from '../actions/get-response-time';
@@ -60,6 +66,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filteredData, setFilteredData] = useState<DashboardResponseTimeData>(data);
   const [isPending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
 
   function toggleCadenceFocus(value: string) {
     setTempFilters((prev) => {
@@ -116,9 +123,11 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
     filters.timeTo !== '17:59';
 
   return (
+    <>
     <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 min-h-[480px] flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold">Tempo de resposta</h2>
+        <div className="flex items-center gap-2">
         <Popover open={filterOpen} onOpenChange={(open) => {
           if (open) setTempFilters({ ...filters });
           setFilterOpen(open);
@@ -199,6 +208,15 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
             </div>
           </PopoverContent>
         </Popover>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+          title="Expandir"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+        </div>
       </div>
 
       <div className={`flex flex-col gap-6 lg:flex-row flex-1 transition-opacity ${isPending ? 'opacity-50' : ''}`}>
@@ -255,5 +273,64 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
         </div>
       </div>
     </div>
+
+    <Dialog open={expanded} onOpenChange={setExpanded}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Tempo de resposta</DialogTitle>
+        </DialogHeader>
+        <div className={`flex flex-col gap-8 lg:flex-row transition-opacity ${isPending ? 'opacity-50' : ''}`}>
+          {/* KPI */}
+          <div className="flex flex-col items-center justify-center lg:w-1/3 lg:border-r lg:border-[var(--border)] lg:pr-8">
+            <p className="text-7xl font-bold">{filteredData.overallPct}%</p>
+            <p className="mt-3 text-base text-center">
+              abordados em até <span className="text-[#E53935] font-semibold">{threshold}</span>
+            </p>
+          </div>
+
+          {/* SDR table */}
+          <div className="flex-1 min-w-0">
+            {filteredData.byUser.length > 0 ? (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[var(--muted-foreground)] text-sm">
+                    <th className="pb-4 text-left font-medium" />
+                    <th className="pb-4 text-right font-medium">leads abordados</th>
+                    <th className="pb-4 text-right font-medium">em até {threshold}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.byUser.map((user) => (
+                    <tr key={user.userId} className="border-t border-[var(--border)]">
+                      <td className="py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar size="sm">
+                            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.userName} />}
+                            <AvatarFallback className="text-xs font-medium">
+                              {user.userName.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-base font-medium">{user.userName}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 text-right text-base font-semibold">{user.leadsApproached}</td>
+                      <td className="py-4 text-right text-base">
+                        <span className="font-semibold">{user.withinThreshold}</span>
+                        <span className="text-[var(--muted-foreground)] ml-1">({user.withinThresholdPct}%)</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-[var(--muted-foreground)] text-center py-8">
+                Nenhum lead abordado no período.
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
