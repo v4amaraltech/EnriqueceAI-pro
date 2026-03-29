@@ -223,7 +223,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
-                className="absolute top-0 right-0 z-10 rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                className="absolute -top-4 -right-4 z-10 rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
                 title="Expandir"
               >
                 <Maximize2 className="h-4 w-4" />
@@ -262,7 +262,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
       </div>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-7xl">
+        <DialogContent className="max-w-[90vw]">
           <DialogHeader>
             <DialogTitle>Oportunidades em {monthName}</DialogTitle>
           </DialogHeader>

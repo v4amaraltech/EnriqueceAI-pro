@@ -58,7 +58,7 @@ async function sendFeedbackReminders() {
 
   const [closersResult, leadsResult] = await Promise.all([
     from(supabase, 'closers').select('id, name, email').in('id', closerIds) as Promise<{ data: CloserInfo[] | null }>,
-    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds) as Promise<{ data: LeadInfo[] | null }>,
+    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds).is('deleted_at', null) as Promise<{ data: LeadInfo[] | null }>,
   ]);
 
   const closerMap = new Map((closersResult.data ?? []).map((c) => [c.id, c]));

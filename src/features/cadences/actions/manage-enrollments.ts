@@ -36,8 +36,9 @@ export async function fetchCadenceEnrollments(
   const to = rangeFrom + perPage - 1;
 
   const { data, count, error } = (await from(supabase, 'cadence_enrollments')
-    .select('*, leads!inner(razao_social, nome_fantasia, cnpj)', { count: 'exact' })
+    .select('*, leads!inner(razao_social, nome_fantasia, cnpj, deleted_at)', { count: 'exact' })
     .eq('cadence_id', cadenceId)
+    .is('leads.deleted_at', null)
     .order('enrolled_at', { ascending: false })
     .range(rangeFrom, to)) as {
     data: Array<Record<string, unknown> & { leads: { razao_social: string | null; nome_fantasia: string | null; cnpj: string } }> | null;

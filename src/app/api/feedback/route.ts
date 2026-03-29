@@ -105,6 +105,7 @@ async function notifySdr(
   const { data: lead } = (await from(supabase, 'leads')
     .select('nome_fantasia, razao_social, won_by, assigned_to')
     .eq('id', feedbackReq.lead_id)
+    .is('deleted_at', null)
     .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null } | null };
 
   if (!lead) return;

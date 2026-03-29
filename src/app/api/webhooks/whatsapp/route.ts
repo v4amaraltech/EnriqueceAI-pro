@@ -196,6 +196,7 @@ async function processIncomingMessage(
   const { data: lead } = (await from(supabase, 'leads')
     .select('id, org_id')
     .in('telefone', phonesToMatch)
+    .is('deleted_at', null)
     .limit(1)
     .maybeSingle()) as { data: { id: string; org_id: string } | null };
 

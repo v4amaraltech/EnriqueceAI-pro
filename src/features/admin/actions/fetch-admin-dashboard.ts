@@ -16,7 +16,7 @@ export async function fetchAdminDashboard(): Promise<AdminDashboardData> {
       .select('id, name, created_at, subscriptions(status, plan_id, plans(name))')
       .order('created_at', { ascending: false }),
 
-    from(supabase, 'leads').select('org_id', { count: 'exact', head: false }),
+    from(supabase, 'leads').select('org_id', { count: 'exact', head: false }).is('deleted_at', null),
 
     from(supabase, 'organization_members')
       .select('org_id')

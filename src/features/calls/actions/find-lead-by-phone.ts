@@ -33,6 +33,7 @@ export async function findLeadByPhone(
   const { data: directMatch } = (await from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
+    .is('deleted_at', null)
     .or(`telefone.like.%${sanitizeFilterValue(normalized)}%`)
     .limit(1)
     .maybeSingle()) as { data: { id: string } | null };
@@ -46,6 +47,7 @@ export async function findLeadByPhone(
     const { data: socioMatch } = (await from(supabase, 'leads')
       .select('id')
       .eq('org_id', orgId)
+      .is('deleted_at', null)
       .like('socios::text' as never, `%${phoneSuffix}%` as never)
       .limit(1)
       .maybeSingle()) as { data: { id: string } | null };
