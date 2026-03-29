@@ -18,6 +18,7 @@ import type {
   DailyActivityEntry,
   GoalData,
   UserActivityRow,
+  UserChannelProgress,
 } from '../types/activity-analytics.types';
 import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
@@ -31,7 +32,7 @@ export async function fetchActivityAnalyticsData(
   userIds?: string[],
 ): Promise<ActivityAnalyticsData> {
   let query = from(supabase, 'interactions')
-    .select('id, type, channel, created_at, performed_by')
+    .select('id, type, channel, lead_id, created_at, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
@@ -281,16 +282,40 @@ async function calculateUserBreakdown(
     if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
 
+  const completedTypes = new Set(['sent', 'delivered', 'meeting_scheduled']);
+
   const rows: UserActivityRow[] = [];
   for (const [userId, userInteractions] of userMap) {
     const leads = userLeadCount.get(userId) ?? 0;
-    const completed = userInteractions.filter((i) =>
-      ['sent', 'delivered', 'meeting_scheduled'].includes(i.type),
-    ).length;
+    const completed = userInteractions.filter((i) => completedTypes.has(i.type)).length;
     const total = userInteractions.length;
     const won = userWon.get(userId) ?? 0;
     const lost = userLost.get(userId) ?? 0;
     const wonLostTotal = won + lost;
+
+    // Extra detail fields
+    const leadsWithFirstActivity = new Set(userInteractions.map((i) => i.lead_id)).size;
+    const inboundReplies = userInteractions.filter((i) => i.type === 'replied').length;
+    const phoneCalls = userInteractions.filter((i) => i.channel === 'phone').length;
+
+    // Channel progress breakdown
+    const channelMap = new Map<string, { completed: number; total: number }>();
+    for (const i of userInteractions) {
+      const ch = i.channel ?? 'email';
+      const entry = channelMap.get(ch) ?? { completed: 0, total: 0 };
+      entry.total++;
+      if (completedTypes.has(i.type)) entry.completed++;
+      channelMap.set(ch, entry);
+    }
+    const channelProgress: UserChannelProgress[] = Array.from(channelMap.entries())
+      .map(([channel, { completed: comp, total: tot }]) => ({
+        channel,
+        label: CHANNEL_LABELS[channel] ?? channel,
+        completed: comp,
+        total: tot,
+        color: CHANNEL_COLORS[channel] ?? CHART_FALLBACK_COLOR,
+      }))
+      .sort((a, b) => b.total - a.total);
 
     const memberInfo = infoMap.get(userId);
     rows.push({
@@ -304,6 +329,10 @@ async function calculateUserBreakdown(
       lost,
       won,
       wonPercent: wonLostTotal > 0 ? safeRate(won, wonLostTotal) : null,
+      leadsWithFirstActivity,
+      inboundReplies,
+      phoneCalls,
+      channelProgress,
     });
   }
 

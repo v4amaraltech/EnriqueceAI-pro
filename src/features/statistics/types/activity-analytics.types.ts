@@ -33,6 +33,14 @@ export interface GoalData {
   percentage: number;
 }
 
+export interface UserChannelProgress {
+  channel: string;
+  label: string;
+  completed: number;
+  total: number;
+  color: string;
+}
+
 export interface UserActivityRow {
   userId: string;
   name: string;
@@ -44,6 +52,10 @@ export interface UserActivityRow {
   lost: number;
   won: number;
   wonPercent: number | null;
+  leadsWithFirstActivity: number;
+  inboundReplies: number;
+  phoneCalls: number;
+  channelProgress: UserChannelProgress[];
 }
 
 export interface ChannelCompletionEntry {

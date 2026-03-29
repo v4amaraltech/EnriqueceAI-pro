@@ -7,7 +7,7 @@ import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { useDateRange } from '@/shared/hooks/useDateRange';
 
-import type { ActivityAnalyticsData, ChannelCompletionEntry, UserActivityRow } from '../types/activity-analytics.types';
+import type { ActivityAnalyticsData, ChannelCompletionEntry, UserActivityRow, UserChannelProgress } from '../types/activity-analytics.types';
 import type { OrgMember } from '../types/shared';
 
 const CHANNEL_ICONS: Record<string, typeof Mail> = {
@@ -102,46 +102,154 @@ function sortUsers(users: UserActivityRow[], sort: { column: SortColumn; directi
   return sorted;
 }
 
-function UserRow({ user }: { user: UserActivityRow }) {
+function ChannelProgressBar({ entry }: { entry: UserChannelProgress }) {
+  const percent = entry.total > 0 ? (entry.completed / entry.total) * 100 : 0;
+  const Icon = CHANNEL_ICONS[entry.channel] ?? Search;
   return (
-    <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/30 transition-colors">
-      <td className="py-4 px-4">
-        <div className="flex items-center gap-3">
-          <Avatar size="lg">
-            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
-            <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-medium">{user.name}</span>
+    <div className="flex items-center gap-3">
+      <Icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+      <span className="w-20 shrink-0 text-xs text-[var(--muted-foreground)]">{entry.label}</span>
+      <div className="flex-1 h-5 rounded-full bg-[var(--muted)]/50 overflow-hidden relative">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${percent}%`, backgroundColor: entry.color }}
+        />
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">
+          {fmt(entry.completed)} / {fmt(entry.total)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function UserExpandedDetails({ user }: { user: UserActivityRow }) {
+  const wonLostTotal = user.won + user.lost;
+  const lostPercent = wonLostTotal > 0 ? ((user.lost / wonLostTotal) * 100).toFixed(0) : '0';
+  const wonPercent = wonLostTotal > 0 ? ((user.won / wonLostTotal) * 100).toFixed(0) : '0';
+
+  return (
+    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/20">
+      <td colSpan={7} className="px-6 py-5">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Left: Geral */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">Geral</h4>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted-foreground)]">Novos leads</span>
+                <span className="font-medium">{fmt(user.leads)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted-foreground)]">Leads com 1ª atividade</span>
+                <span className="font-medium">{fmt(user.leadsWithFirstActivity)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted-foreground)]">Respostas inbound</span>
+                <span className="font-medium">{fmt(user.inboundReplies)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted-foreground)]">Ligações</span>
+                <span className="font-medium">{fmt(user.phoneCalls)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Progresso por atividade */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">Progresso por atividade</h4>
+            <div className="space-y-2.5">
+              {user.channelProgress.length > 0 ? (
+                user.channelProgress.map((cp) => (
+                  <ChannelProgressBar key={cp.channel} entry={cp} />
+                ))
+              ) : (
+                <p className="text-xs text-[var(--muted-foreground)]">Sem atividades no período.</p>
+              )}
+            </div>
+          </div>
         </div>
-      </td>
-      <td className="py-4 px-4 text-center text-sm">{fmt(user.leads)}</td>
-      <td className="py-4 px-4 text-center text-sm">
-        <span className="font-medium">{fmt(user.activitiesCompleted)}</span>
-        <span className="text-[var(--muted-foreground)]"> de {fmt(user.activitiesTotal)}</span>
-      </td>
-      <td className="py-4 px-4 text-center text-sm">
-        <span className={
-          user.onTimePercent !== null
-            ? user.onTimePercent >= 50
-              ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-              : 'text-[#E53935] font-medium'
-            : 'text-[var(--muted-foreground)]'
-        }>
-          {user.onTimePercent !== null ? `${user.onTimePercent.toFixed(0)}%` : '—'}
-        </span>
-      </td>
-      <td className="py-4 px-4 text-center text-sm">
-        <span className="text-[#E53935] font-semibold underline decoration-[#E53935]/40">{fmt(user.lost)}</span>
-      </td>
-      <td className="py-4 px-4 text-center text-sm">
-        <span className="text-emerald-600 dark:text-emerald-400 font-semibold underline decoration-emerald-600/40 dark:decoration-emerald-400/40">
-          {fmt(user.won)}{user.wonPercent !== null && user.wonPercent > 0 ? ` (${user.wonPercent.toFixed(0)}%)` : ''}
-        </span>
-      </td>
-      <td className="py-4 px-2 text-center">
-        <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
+
+        {/* Leads Finalizados */}
+        {wonLostTotal > 0 && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">Leads finalizados</h4>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-6 rounded-full bg-[var(--muted)]/50 overflow-hidden flex">
+                {user.lost > 0 && (
+                  <div
+                    className="h-full bg-[#E53935] flex items-center justify-center text-[10px] font-semibold text-white"
+                    style={{ width: `${lostPercent}%`, minWidth: user.lost > 0 ? '2rem' : undefined }}
+                  >
+                    {lostPercent}%
+                  </div>
+                )}
+                {user.won > 0 && (
+                  <div
+                    className="h-full bg-emerald-500 flex items-center justify-center text-[10px] font-semibold text-white"
+                    style={{ width: `${wonPercent}%`, minWidth: user.won > 0 ? '2rem' : undefined }}
+                  >
+                    {wonPercent}%
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3 text-xs shrink-0">
+                <span className="text-[#E53935] font-medium">Perdidos {fmt(user.lost)}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ganhos {fmt(user.won)}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </td>
     </tr>
+  );
+}
+
+function UserRow({ user, isExpanded, onToggle }: { user: UserActivityRow; isExpanded: boolean; onToggle: () => void }) {
+  return (
+    <>
+      <tr
+        className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/30 transition-colors cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="py-4 px-4">
+          <div className="flex items-center gap-3">
+            <Avatar size="lg">
+              {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+              <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <span className="text-sm font-medium">{user.name}</span>
+          </div>
+        </td>
+        <td className="py-4 px-4 text-center text-sm">{fmt(user.leads)}</td>
+        <td className="py-4 px-4 text-center text-sm">
+          <span className="font-medium">{fmt(user.activitiesCompleted)}</span>
+          <span className="text-[var(--muted-foreground)]"> de {fmt(user.activitiesTotal)}</span>
+        </td>
+        <td className="py-4 px-4 text-center text-sm">
+          <span className={
+            user.onTimePercent !== null
+              ? user.onTimePercent >= 50
+                ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                : 'text-[#E53935] font-medium'
+              : 'text-[var(--muted-foreground)]'
+          }>
+            {user.onTimePercent !== null ? `${user.onTimePercent.toFixed(0)}%` : '—'}
+          </span>
+        </td>
+        <td className="py-4 px-4 text-center text-sm">
+          <span className="text-[#E53935] font-semibold underline decoration-[#E53935]/40">{fmt(user.lost)}</span>
+        </td>
+        <td className="py-4 px-4 text-center text-sm">
+          <span className="text-emerald-600 dark:text-emerald-400 font-semibold underline decoration-emerald-600/40 dark:decoration-emerald-400/40">
+            {fmt(user.won)}{user.wonPercent !== null && user.wonPercent > 0 ? ` (${user.wonPercent.toFixed(0)}%)` : ''}
+          </span>
+        </td>
+        <td className="py-4 px-2 text-center">
+          <ChevronRight className={`h-4 w-4 text-[var(--muted-foreground)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </td>
+      </tr>
+      {isExpanded && <UserExpandedDetails user={user} />}
+    </>
   );
 }
 
@@ -159,6 +267,7 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
     column: 'leads',
     direction: 'desc',
   });
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   const lostPercent = data.leadsInPeriod > 0 ? ((data.totalLost / data.leadsInPeriod) * 100).toFixed(0) : '0';
   const wonPercent = data.leadsInPeriod > 0 ? ((data.totalWon / data.leadsInPeriod) * 100).toFixed(0) : '0';
@@ -267,7 +376,12 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
           <tbody>
             {sortedUsers.length > 0 ? (
               sortedUsers.map((user) => (
-                <UserRow key={user.userId} user={user} />
+                <UserRow
+                  key={user.userId}
+                  user={user}
+                  isExpanded={expandedUserId === user.userId}
+                  onToggle={() => setExpandedUserId((prev) => prev === user.userId ? null : user.userId)}
+                />
               ))
             ) : (
               <tr>
