@@ -53,10 +53,9 @@ export async function fetchCadenceAnalyticsData(
 
   const cadenceIds = cadences.map((c) => c.id);
 
-  // Fetch all enrollments for these cadences (not filtered by period — shows full cadence state)
+  // Fetch all enrollments for these cadences (org isolation via cadenceIds which are already org-filtered)
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, current_step, status, enrolled_by')
-    .eq('org_id', orgId)
     .in('cadence_id', cadenceIds);
 
   if (userIds && userIds.length > 0) {
