@@ -77,6 +77,8 @@ function ConversionBarChart({ data, height }: { data: ConversionByOriginEntry[];
 
 export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) {
   const [expanded, setExpanded] = useState(false);
+  const [selectedOrigin, setSelectedOrigin] = useState('');
+  const filteredData = selectedOrigin ? data.filter((d) => d.origin === selectedOrigin) : data;
 
   if (data.length === 0) {
     return (
@@ -93,17 +95,29 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
       <div className="rounded-lg border bg-card p-4 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium">Conversão por Origem</h3>
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-            title="Expandir"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedOrigin}
+              onChange={(e) => setSelectedOrigin(e.target.value)}
+              className="h-7 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+            >
+              <option value="">Todas origens</option>
+              {data.map((d) => (
+                <option key={d.origin} value={d.origin}>{d.origin}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+              title="Expandir"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 min-h-[300px]">
-          <ConversionBarChart data={data} height={300} />
+          <ConversionBarChart data={filteredData} height={300} />
         </div>
       </div>
 
