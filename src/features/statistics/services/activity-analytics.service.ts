@@ -74,15 +74,29 @@ export async function fetchActivityAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
 
-  const leadsInPeriod = (activeLeads ?? []).length;
-  const totalWon = leads.filter((l) => l.status === 'qualified').length;
-  const totalLost = leads.filter((l) => l.status === 'unqualified').length;
+  const allActiveLeads = activeLeads ?? [];
+  const leadsInPeriod = allActiveLeads.length;
+
+  // Merge both lead sources for accurate won/lost totals
+  const seenIds = new Set<string>();
+  let totalWon = 0;
+  let totalLost = 0;
+  for (const l of leads) {
+    seenIds.add(l.id);
+    if (l.status === 'qualified') totalWon++;
+    if (l.status === 'unqualified') totalLost++;
+  }
+  for (const l of allActiveLeads) {
+    if (seenIds.has(l.id)) continue;
+    if (l.status === 'qualified') totalWon++;
+    if (l.status === 'unqualified') totalLost++;
+  }
 
   // Channel completion (% of steps completed vs total per channel)
   const channelCompletion = calculateChannelCompletion(interactions);
 
   // User breakdown — fetch user names via admin
-  const userBreakdown = await calculateUserBreakdown(supabase, orgId, interactions, leads, activeLeads ?? []);
+  const userBreakdown = await calculateUserBreakdown(supabase, orgId, interactions, leads, allActiveLeads);
 
   return { kpis, channelVolume, dailyTrend, activityTypes, goal, leadsInPeriod, totalLost, totalWon, channelCompletion, userBreakdown };
 }
@@ -315,10 +329,22 @@ async function calculateUserBreakdown(
     }
   }
 
+  // Merge both sources (statusLeads filtered by updated_at + activeLeads filtered by created_at)
+  // to catch finalized leads regardless of which date filter matches
   const userWon = new Map<string, number>();
   const userLost = new Map<string, number>();
+  const seenLeadIds = new Set<string>();
+
   for (const l of statusLeads) {
-    if (!l.assigned_to) continue;
+    if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
+    seenLeadIds.add(l.id);
+    if (l.status === 'qualified') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
+    if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
+  }
+
+  for (const l of activeLeads) {
+    if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
+    seenLeadIds.add(l.id);
     if (l.status === 'qualified') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
     if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
