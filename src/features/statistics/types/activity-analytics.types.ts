@@ -36,6 +36,7 @@ export interface GoalData {
 export interface UserActivityRow {
   userId: string;
   name: string;
+  avatarUrl?: string;
   leads: number;
   activitiesCompleted: number;
   activitiesTotal: number;

@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Mail, MessageSquare, Phone, Search } from 'lucide-react';
 
 import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { useDateRange } from '@/shared/hooks/useDateRange';
-import { LeadAvatar } from '@/features/leads/components/LeadAvatar';
 
 import type { ActivityAnalyticsData, ChannelCompletionEntry, UserActivityRow } from '../types/activity-analytics.types';
 import type { OrgMember } from '../types/shared';
@@ -107,7 +107,10 @@ function UserRow({ user }: { user: UserActivityRow }) {
     <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/30 transition-colors">
       <td className="py-4 px-4">
         <div className="flex items-center gap-3">
-          <LeadAvatar name={user.name} size="default" />
+          <Avatar size="lg">
+            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+            <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+          </Avatar>
           <span className="text-sm font-medium">{user.name}</span>
         </div>
       </td>

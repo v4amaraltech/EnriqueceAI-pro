@@ -21,7 +21,7 @@ import type {
 } from '../types/activity-analytics.types';
 import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
-import { buildMemberNameMap } from './member-lookup';
+import { buildMemberInfoMap } from './member-lookup';
 
 export async function fetchActivityAnalyticsData(
   supabase: SupabaseClient,
@@ -263,7 +263,7 @@ async function calculateUserBreakdown(
 
   if (userMap.size === 0) return [];
 
-  const nameMap = await buildMemberNameMap(supabase, orgId);
+  const infoMap = await buildMemberInfoMap(supabase, orgId);
 
   // Group leads by assigned_to
   const userLeadCount = new Map<string, number>();
@@ -292,9 +292,11 @@ async function calculateUserBreakdown(
     const lost = userLost.get(userId) ?? 0;
     const wonLostTotal = won + lost;
 
+    const memberInfo = infoMap.get(userId);
     rows.push({
       userId,
-      name: nameMap.get(userId) ?? userId.slice(0, 8),
+      name: memberInfo?.name ?? userId.slice(0, 8),
+      avatarUrl: memberInfo?.avatarUrl,
       leads,
       activitiesCompleted: completed,
       activitiesTotal: total,

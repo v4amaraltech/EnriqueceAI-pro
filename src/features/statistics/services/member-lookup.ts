@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 export interface MemberInfo {
   email: string;
   name: string;
+  avatarUrl?: string;
 }
 
 /**
@@ -36,7 +37,8 @@ export async function buildMemberInfoMap(
         if (memberIds.has(u.id)) {
           const meta = u.user_metadata as Record<string, string> | undefined;
           const name = meta?.full_name ?? meta?.name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
-          result.set(u.id, { email: u.email ?? u.id.slice(0, 8), name });
+          const avatarUrl = meta?.avatar_url;
+          result.set(u.id, { email: u.email ?? u.id.slice(0, 8), name, avatarUrl });
         }
       }
       // Add members not found in auth.users with fallback values
