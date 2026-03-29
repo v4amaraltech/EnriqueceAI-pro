@@ -148,6 +148,8 @@ export function LeadInfoPanel({
     email: primaryEmail,
     job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
     lead_source: data.lead_source ?? '',
+    canal: data.canal ?? '',
+    cnpj: data.cnpj ?? '',
     instagram: data.instagram ?? '',
     linkedin: data.linkedin ?? '',
     website: data.website ?? '',
@@ -255,6 +257,8 @@ export function LeadInfoPanel({
       email: primaryEmail,
       job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
       lead_source: data.lead_source ?? '',
+      canal: data.canal ?? '',
+      cnpj: data.cnpj ?? '',
       instagram: data.instagram ?? '',
       linkedin: data.linkedin ?? '',
       website: data.website ?? '',
@@ -484,6 +488,44 @@ export function LeadInfoPanel({
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  )}
+                  {isFieldVisible('canal') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Canal</p>
+                      <Select
+                        value={editFields.canal ?? 'none'}
+                        onValueChange={(value) => {
+                          setEditFields((prev) => ({ ...prev, canal: value === 'none' ? '' : value }));
+                        }}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Selecione o canal" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          <SelectItem value="Facebook">Facebook</SelectItem>
+                          <SelectItem value="Google">Google</SelectItem>
+                          <SelectItem value="Instagram">Instagram</SelectItem>
+                          <SelectItem value="Orgânico">Orgânico</SelectItem>
+                          <SelectItem value="TikTok">TikTok</SelectItem>
+                          <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                          <SelectItem value="Indicação">Indicação</SelectItem>
+                          <SelectItem value="Bing">Bing</SelectItem>
+                          <SelectItem value="Prospecção Fria">Prospecção Fria</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {isFieldVisible('cnpj') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">CNPJ</p>
+                      <Input
+                        value={editFields.cnpj ?? ''}
+                        onChange={(e) => setEditFields({ ...editFields, cnpj: e.target.value })}
+                        className="h-8 text-sm"
+                        placeholder="00.000.000/0000-00"
+                      />
                     </div>
                   )}
                 </>
