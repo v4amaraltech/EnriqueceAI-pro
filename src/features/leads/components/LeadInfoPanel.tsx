@@ -504,6 +504,7 @@ export function LeadInfoPanel({
                       value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
                     />
                   )}
+                  {isFieldVisible('canal') && <MeetimeFieldRow label="Canal" value={data.canal || '—'} />}
                   {isFieldVisible('cnpj') && data.cnpj && <MeetimeFieldRow label="CNPJ" value={data.cnpj} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
                   {isFieldVisible('created_at') && (
