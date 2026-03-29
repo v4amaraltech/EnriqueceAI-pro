@@ -11,7 +11,7 @@ import type {
 } from '../types/performance-analytics.types';
 import type { InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
-import { buildMemberNameMap } from './member-lookup';
+import { buildMemberInfoMap, type MemberInfo } from './member-lookup';
 
 export async function fetchPerformanceAnalyticsData(
   supabase: SupabaseClient,
@@ -21,8 +21,8 @@ export async function fetchPerformanceAnalyticsData(
   userIds?: string[],
   cadenceId?: string,
 ): Promise<PerformanceAnalyticsData> {
-  // Fetch member name map (via admin client — org_members has no email column)
-  const nameMap = await buildMemberNameMap(supabase, orgId);
+  // Fetch member info map (via admin client — org_members has no email column)
+  const infoMap = await buildMemberInfoMap(supabase, orgId);
 
   // Get member user_ids
   const { data: rawMemberIds } = (await from(supabase, 'organization_members')
@@ -64,9 +64,12 @@ export async function fetchPerformanceAnalyticsData(
   const { data: rawLeads } = (await leadsQuery) as { data: LeadQueryRow[] | null };
   const leads = rawLeads ?? [];
 
-  // memberLookup: user_id → email/name for display
+  // memberLookup: user_id → name for display; memberInfoLookup: user_id → full info
   const memberLookup = new Map(
-    memberIds.map((m) => [m.user_id, nameMap.get(m.user_id) ?? m.user_id.slice(0, 8)]),
+    memberIds.map((m) => [m.user_id, infoMap.get(m.user_id)?.name ?? m.user_id.slice(0, 8)]),
+  );
+  const memberInfoLookup = new Map(
+    memberIds.map((m) => [m.user_id, infoMap.get(m.user_id)]),
   );
 
   const totalActivities = interactions.length;
@@ -88,7 +91,7 @@ export async function fetchPerformanceAnalyticsData(
   const sdrComparison = buildSdrComparison(sdrTable);
   const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
 
-  const dailyControl = buildDailyControl(filteredIds, memberLookup, interactionsByUser, leadsByAssignee);
+  const dailyControl = buildDailyControl(filteredIds, memberLookup, memberInfoLookup, interactionsByUser, leadsByAssignee);
 
   return {
     totalActivities,
@@ -208,6 +211,7 @@ function emptyData(): PerformanceAnalyticsData {
 function buildDailyControl(
   memberIds: string[],
   memberLookup: Map<string, string>,
+  memberInfoLookup: Map<string, MemberInfo | undefined>,
   interactionsByUser: Map<string, InteractionQueryRow[]>,
   leadsByAssignee: Map<string, LeadQueryRow[]>,
 ): DailyControlRow[] {
@@ -224,9 +228,20 @@ function buildDailyControl(
     const emails = userInteractions.filter((i) => i.channel === 'email').length;
     const research = userInteractions.filter((i) => i.channel === 'research' || i.type === 'research').length;
 
+    // Find last activity timestamp
+    let lastActivityAt: string | undefined;
+    if (userInteractions.length > 0) {
+      lastActivityAt = userInteractions.reduce((latest, i) =>
+        i.created_at > latest ? i.created_at : latest, userInteractions[0]?.created_at ?? '');
+    }
+
+    const info = memberInfoLookup.get(userId);
+
     return {
       userId,
       userName: memberLookup.get(userId) ?? userId.slice(0, 8),
+      avatarUrl: info?.avatarUrl,
+      lastActivityAt,
       prospecting,
       available,
       won,

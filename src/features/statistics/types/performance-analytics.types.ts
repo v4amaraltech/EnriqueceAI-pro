@@ -22,6 +22,8 @@ export interface DailySdrPerformanceEntry {
 export interface DailyControlRow {
   userId: string;
   userName: string;
+  avatarUrl?: string;
+  lastActivityAt?: string;
   prospecting: number;
   available: number;
   won: number;
