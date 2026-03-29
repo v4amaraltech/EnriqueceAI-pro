@@ -262,7 +262,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
       </div>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-7xl">
           <DialogHeader>
             <DialogTitle>Oportunidades em {monthName}</DialogTitle>
           </DialogHeader>
