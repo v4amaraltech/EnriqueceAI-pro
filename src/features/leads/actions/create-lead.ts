@@ -107,6 +107,7 @@ export async function createLead(
       telefone: parsed.data.telefone,
       job_title: parsed.data.job_title,
       lead_source: parsed.data.lead_source,
+      canal: parsed.data.canal || null,
       is_inbound: parsed.data.is_inbound,
       assigned_to: parsed.data.assigned_to,
       created_by: userId,

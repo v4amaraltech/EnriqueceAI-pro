@@ -54,6 +54,7 @@ const INITIAL_FORM = {
   empresa: '',
   job_title: '',
   lead_source: '',
+  canal: '',
   is_inbound: false,
   assigned_to: '',
   cadence_id: '',
@@ -121,6 +122,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
     form.empresa.trim() !== '' &&
     form.job_title.trim() !== '' &&
     form.lead_source !== '' &&
+    form.canal !== '' &&
     form.assigned_to !== '' &&
     (!isScheduled || !hasCadence || form.scheduled_start !== '');
 
@@ -135,6 +137,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
         empresa: form.empresa,
         job_title: form.job_title,
         lead_source: form.lead_source,
+        canal: form.canal,
         is_inbound: form.is_inbound,
         assigned_to: form.assigned_to,
         cadence_id: form.cadence_id || undefined,
@@ -396,6 +399,30 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                           {o.label}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>
+                    Canal <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.canal || 'none'}
+                    onValueChange={(v) => setForm({ ...form, canal: v === 'none' ? '' : v })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione o canal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Facebook">Facebook</SelectItem>
+                      <SelectItem value="Google">Google</SelectItem>
+                      <SelectItem value="Instagram">Instagram</SelectItem>
+                      <SelectItem value="Orgânico">Orgânico</SelectItem>
+                      <SelectItem value="TikTok">TikTok</SelectItem>
+                      <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                      <SelectItem value="Indicação">Indicação</SelectItem>
+                      <SelectItem value="Bing">Bing</SelectItem>
+                      <SelectItem value="Prospecção Fria">Prospecção Fria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
