@@ -26,12 +26,12 @@ export async function fetchAvailableLeadsCount(): Promise<ActionResult<Available
 
   const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
 
-  // Get available leads (not enrolled, not archived, not deleted)
+  // Get available leads: only 'new' status (not yet started), not enrolled, not deleted
   let query = from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .neq('status', 'archived');
+    .eq('status', 'new');
 
   if (enrolledIds.length > 0) {
     query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
