@@ -288,7 +288,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           </div>
 
           {filtered.length === 0 ? (
-            <ActivityEmptyState />
+            <ActivityEmptyState onStartActivities={() => router.push('/leads')} />
           ) : quickMode && grouped ? (
             /* Quick mode: grouped by channel */
             <div className="space-y-4">
