@@ -1,10 +1,18 @@
 'use client';
 
+import { useState } from 'react';
+
 import type { LucideIcon } from 'lucide-react';
-import { TrendingDown, TrendingUp } from 'lucide-react';
+import { Maximize2, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 
 import type { RankingCardData } from '../types';
 
@@ -38,27 +46,32 @@ interface RankingCardProps {
   averageLabel?: string;
 }
 
-export function RankingCard({
-  title,
+interface RankingContentProps {
+  icon: LucideIcon;
+  iconColor: string;
+  iconTextColor: string;
+  unit: string;
+  data: RankingCardData;
+  primaryColumnLabel?: string;
+  secondaryColumnLabel?: string;
+  averageLabel?: string;
+}
+
+function RankingContent({
   icon: Icon,
-  iconColor = 'bg-primary/10',
-  iconTextColor = 'text-primary',
-  unit = '',
+  iconColor,
+  iconTextColor,
+  unit,
   data,
   primaryColumnLabel,
   secondaryColumnLabel,
   averageLabel,
-}: RankingCardProps) {
+}: RankingContentProps) {
   const isAbove = data.percentOfTarget >= 0;
   const absPercent = Math.abs(data.percentOfTarget);
 
   return (
-    <div className="flex flex-col rounded-lg border bg-card">
-      {/* Title */}
-      <div className="px-6 pt-6">
-        <h3 className="text-sm font-semibold">{title}</h3>
-      </div>
-
+    <>
       {/* Icon Badge + Big Number — centered */}
       <div className="flex flex-col items-center px-6 pb-2 pt-5">
         <div className={cn('flex h-14 w-14 items-center justify-center rounded-full', iconColor)}>
@@ -170,6 +183,61 @@ export function RankingCard({
           <p className="text-xs text-muted-foreground">Nenhum dado individual disponível</p>
         </div>
       )}
-    </div>
+    </>
+  );
+}
+
+export function RankingCard({
+  title,
+  icon: Icon,
+  iconColor = 'bg-primary/10',
+  iconTextColor = 'text-primary',
+  unit = '',
+  data,
+  primaryColumnLabel,
+  secondaryColumnLabel,
+  averageLabel,
+}: RankingCardProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  const contentProps: RankingContentProps = {
+    icon: Icon,
+    iconColor,
+    iconTextColor,
+    unit,
+    data,
+    primaryColumnLabel,
+    secondaryColumnLabel,
+    averageLabel,
+  };
+
+  return (
+    <>
+      <div className="flex flex-col rounded-lg border bg-card">
+        {/* Title */}
+        <div className="flex items-center justify-between px-6 pt-6">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+            title="Expandir"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        <RankingContent {...contentProps} />
+      </div>
+
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <RankingContent {...contentProps} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

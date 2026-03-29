@@ -238,8 +238,8 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
               <thead>
                 <tr className="text-[var(--muted-foreground)] text-sm">
                   <th className="pb-4 text-left font-medium" />
-                  <th className="pb-4 text-right font-medium">leads abordados</th>
-                  <th className="pb-4 text-right font-medium">em até {threshold}</th>
+                  <th className="pb-4 text-center font-medium">leads abordados</th>
+                  <th className="pb-4 text-center font-medium">em até {threshold}</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,8 +256,8 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
                         <span className="text-base font-medium">{user.userName}</span>
                       </div>
                     </td>
-                    <td className="py-4 text-right text-base font-semibold">{user.leadsApproached}</td>
-                    <td className="py-4 text-right text-base">
+                    <td className="py-4 text-center text-base font-semibold">{user.leadsApproached}</td>
+                    <td className="py-4 text-center text-base">
                       <span className="font-semibold">{user.withinThreshold}</span>
                       <span className="text-[var(--muted-foreground)] ml-1">({user.withinThresholdPct}%)</span>
                     </td>
