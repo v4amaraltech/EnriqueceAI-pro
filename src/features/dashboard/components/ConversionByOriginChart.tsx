@@ -122,7 +122,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
       </div>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-7xl">
+        <DialogContent className="max-w-[90vw]">
           <DialogHeader>
             <DialogTitle>Conversão por Origem</DialogTitle>
           </DialogHeader>
