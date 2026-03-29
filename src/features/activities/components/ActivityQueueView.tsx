@@ -88,7 +88,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount: _availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -144,6 +144,9 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   // Only current-step activities are shown in the list; future steps stay in state for promotion & counter
   const visibleActivities = useMemo(() => activities.filter((a) => a.isCurrentStep), [activities]);
+
+  // Unique leads being prospected
+  const prospectingLeadsCount = useMemo(() => new Set(activities.map((a) => a.lead.id)).size, [activities]);
 
   // Filtered activities (from visible only)
   const filtered = useMemo(() => applyFilters(visibleActivities, filters), [visibleActivities, filters]);
@@ -203,6 +206,20 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   return (
     <div className="space-y-6">
+      {/* Prospecting banner */}
+      <div className="flex items-center justify-between rounded-lg border bg-[var(--card)] px-6 py-4">
+        <p className="text-sm">
+          Você está prospectando <span className="font-semibold text-emerald-600">{prospectingLeadsCount} leads</span> e existem <span className="font-semibold text-emerald-600">{availableLeadsCount} leads disponíveis</span> para serem iniciados
+        </p>
+        <Button
+          size="sm"
+          className="bg-emerald-500 hover:bg-emerald-600 text-white shrink-0"
+          onClick={() => router.push('/leads')}
+        >
+          Iniciar novos leads
+        </Button>
+      </div>
+
       {/* Progress card */}
       <ProgressCard
         completed={progress.completed}

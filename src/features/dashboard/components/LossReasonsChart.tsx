@@ -104,7 +104,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
       </div>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-7xl">
           <DialogHeader>
             <DialogTitle>Motivos de Perda</DialogTitle>
           </DialogHeader>
