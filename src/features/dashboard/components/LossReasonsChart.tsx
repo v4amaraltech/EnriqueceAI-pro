@@ -49,7 +49,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
             type="category"
             dataKey="reason"
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
-            width={120}
+            width={160}
           />
           <Tooltip
             cursor={false}
