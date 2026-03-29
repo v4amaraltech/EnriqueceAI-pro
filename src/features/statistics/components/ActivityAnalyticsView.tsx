@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Mail, MessageSquare, Phone, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Mail, MessageSquare, Phone, Reply, Search, UserCheck, Users } from 'lucide-react';
 
 import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
@@ -109,13 +109,13 @@ function ChannelProgressBar({ entry }: { entry: UserChannelProgress }) {
     <div className="flex items-center gap-3">
       <Icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
       <span className="w-20 shrink-0 text-xs text-[var(--muted-foreground)]">{entry.label}</span>
-      <div className="flex-1 h-5 rounded-full bg-[var(--muted)]/50 overflow-hidden relative">
+      <div className="flex-1 h-6 rounded-md bg-[var(--muted)]/40 overflow-hidden relative">
         <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${percent}%`, backgroundColor: entry.color }}
+          className="h-full rounded-md bg-emerald-500 transition-all"
+          style={{ width: `${Math.max(percent, entry.completed > 0 ? 8 : 0)}%` }}
         />
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">
-          {fmt(entry.completed)} / {fmt(entry.total)}
+        <span className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white mix-blend-difference">
+          {fmt(entry.completed)}
         </span>
       </div>
     </div>
@@ -128,36 +128,42 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
   const wonPercent = wonLostTotal > 0 ? ((user.won / wonLostTotal) * 100).toFixed(0) : '0';
 
   return (
-    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/20">
+    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/10">
       <td colSpan={7} className="px-6 py-5">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           {/* Left: Geral */}
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">Geral</h4>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted-foreground)]">Novos leads</span>
-                <span className="font-medium">{fmt(user.leads)}</span>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-4">Geral</h4>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5 text-sm">
+                <Users className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--foreground)]">Novos leads: <span className="font-semibold">{fmt(user.leads)}</span></span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted-foreground)]">Leads com 1ª atividade</span>
-                <span className="font-medium">{fmt(user.leadsWithFirstActivity)}</span>
+              <div className="flex items-center gap-2.5 text-sm">
+                <Reply className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--foreground)]">Resposta Inbound: <span className="font-semibold">{user.inboundReplies > 0 ? fmt(user.inboundReplies) : '-'}</span></span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted-foreground)]">Respostas inbound</span>
-                <span className="font-medium">{fmt(user.inboundReplies)}</span>
+              <div className="flex items-center gap-2.5 text-sm">
+                <UserCheck className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--foreground)]">Leads que realizaram a primeira atividade: <span className="font-semibold">{fmt(user.leadsWithFirstActivity)}</span></span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted-foreground)]">Ligações</span>
-                <span className="font-medium">{fmt(user.phoneCalls)}</span>
+              <div className="flex items-center gap-2.5 text-sm">
+                <Phone className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--foreground)]">Ligações: <span className="font-semibold">{fmt(user.phoneCalls)}</span></span>
               </div>
             </div>
           </div>
 
           {/* Right: Progresso por atividade */}
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">Progresso por atividade</h4>
-            <div className="space-y-2.5">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Progresso por atividade</h4>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
+                <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />Finalizado</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[var(--muted)]" />Pendente</span>
+              </div>
+            </div>
+            <div className="space-y-3">
               {user.channelProgress.length > 0 ? (
                 user.channelProgress.map((cp) => (
                   <ChannelProgressBar key={cp.channel} entry={cp} />
@@ -170,35 +176,39 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
         </div>
 
         {/* Leads Finalizados */}
-        {wonLostTotal > 0 && (
-          <div className="mt-5 pt-4 border-t border-[var(--border)]">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">Leads finalizados</h4>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-6 rounded-full bg-[var(--muted)]/50 overflow-hidden flex">
+        <div className="mt-6 pt-4 border-t border-[var(--border)]">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">
+            Leads finalizados{wonLostTotal > 0 ? ` (${fmt(wonLostTotal)})` : ''}
+          </h4>
+          {wonLostTotal > 0 ? (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-7 rounded-md overflow-hidden flex">
                 {user.lost > 0 && (
                   <div
-                    className="h-full bg-[#E53935] flex items-center justify-center text-[10px] font-semibold text-white"
-                    style={{ width: `${lostPercent}%`, minWidth: user.lost > 0 ? '2rem' : undefined }}
+                    className="h-full bg-[#E53935] flex items-center justify-center text-[11px] font-semibold text-white"
+                    style={{ width: `${lostPercent}%`, minWidth: '2.5rem' }}
                   >
                     {lostPercent}%
                   </div>
                 )}
                 {user.won > 0 && (
                   <div
-                    className="h-full bg-emerald-500 flex items-center justify-center text-[10px] font-semibold text-white"
-                    style={{ width: `${wonPercent}%`, minWidth: user.won > 0 ? '2rem' : undefined }}
+                    className="h-full bg-emerald-500 flex items-center justify-center text-[11px] font-semibold text-white"
+                    style={{ width: `${wonPercent}%`, minWidth: '2.5rem' }}
                   >
                     {wonPercent}%
                   </div>
                 )}
               </div>
-              <div className="flex gap-3 text-xs shrink-0">
+              <div className="flex gap-4 text-xs shrink-0">
                 <span className="text-[#E53935] font-medium">Perdidos {fmt(user.lost)}</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ganhos {fmt(user.won)}</span>
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-[var(--muted-foreground)]">Nenhum lead finalizado no período.</p>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -245,7 +255,10 @@ function UserRow({ user, isExpanded, onToggle }: { user: UserActivityRow; isExpa
           </span>
         </td>
         <td className="py-4 px-2 text-center">
-          <ChevronRight className={`h-4 w-4 text-[var(--muted-foreground)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          {isExpanded
+            ? <ChevronUp className="h-4 w-4 text-[var(--muted-foreground)]" />
+            : <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
+          }
         </td>
       </tr>
       {isExpanded && <UserExpandedDetails user={user} />}
