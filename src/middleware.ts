@@ -7,7 +7,7 @@ import { getAppUrl } from '@/lib/utils/app-url';
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo'];
 const PUBLIC_PREFIXES = ['/feedback/'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
-const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1', '/api/feedback'];
+const API_PUBLIC_PREFIXES = ['/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1', '/api/feedback', '/api/admin', '/api/workers'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
