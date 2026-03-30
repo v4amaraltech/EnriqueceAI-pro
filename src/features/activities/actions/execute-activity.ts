@@ -27,7 +27,7 @@ const executeActivitySchema = z.object({
   orgId: z.string().uuid(),
   cadenceCreatedBy: z.string().min(1),
   channel: z.string().min(1),
-  to: z.string().min(1),
+  to: z.string(),
   subject: z.string(),
   body: z.string(),
   aiGenerated: z.boolean(),
@@ -39,6 +39,12 @@ export async function executeActivity(
 ): Promise<ActionResult<{ interactionId: string }>> {
   const parsed = executeActivitySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
+
+  // Channels that send external messages require a recipient
+  const sendChannels = ['email', 'whatsapp'];
+  if (sendChannels.includes(input.channel) && !input.to?.trim()) {
+    return { success: false, error: 'Destinatário é obrigatório para este canal' };
+  }
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
