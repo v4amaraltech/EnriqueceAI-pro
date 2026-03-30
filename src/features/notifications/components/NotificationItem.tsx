@@ -4,7 +4,9 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Bell,
+  Calendar,
   ClipboardCheck,
+  Clock,
   Mail,
   MailOpen,
   MousePointerClick,
@@ -29,6 +31,8 @@ const ICON_MAP: Record<NotificationType, React.ElementType> = {
   member_joined: UserCheck,
   usage_limit_alert: Bell,
   closer_feedback: ClipboardCheck,
+  activity_reminder: Clock,
+  meeting_reminder: Calendar,
 };
 
 export function NotificationItem({

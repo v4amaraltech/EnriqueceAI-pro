@@ -8,7 +8,9 @@ export type NotificationType =
   | 'member_invited'
   | 'member_joined'
   | 'usage_limit_alert'
-  | 'closer_feedback';
+  | 'closer_feedback'
+  | 'activity_reminder'
+  | 'meeting_reminder';
 
 export type NotificationResourceType = 'lead' | 'cadence' | 'integration' | 'member';
 
