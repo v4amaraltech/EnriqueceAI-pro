@@ -24,9 +24,17 @@ export async function fetchEmailAnalyticsData(
   // When filtering by userIds, get lead_ids enrolled by those users
   let leadIdFilter: string[] | undefined;
   if (userIds && userIds.length > 0) {
+    // cadence_enrollments has no org_id column — scope via org cadences
+    const { data: orgCadences } = (await from(supabase, 'cadences')
+      .select('id')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)) as { data: { id: string }[] | null };
+    const cadenceIds = (orgCadences ?? []).map((c) => c.id);
+    if (cadenceIds.length === 0) return emptyData();
+
     const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
       .select('lead_id')
-      .eq('org_id', orgId)
+      .in('cadence_id', cadenceIds)
       .in('enrolled_by', userIds)) as { data: { lead_id: string }[] | null };
     leadIdFilter = (enrollments ?? []).map((e) => e.lead_id);
     if (leadIdFilter.length === 0) {
