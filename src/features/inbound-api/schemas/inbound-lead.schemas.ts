@@ -11,6 +11,7 @@ export const inboundLeadSchema = z.object({
   cnpj: cnpjOptionalSchema,
   job_title: z.string().optional(),
   lead_source: z.string().optional(),
+  canal: z.string().optional(),
   is_inbound: z.boolean().default(true),
   assigned_to: z.string().uuid('assigned_to deve ser UUID válido').optional(),
   notes: z.string().optional(),
