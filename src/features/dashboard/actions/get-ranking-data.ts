@@ -31,10 +31,7 @@ export async function getRankingData(
 
   const filters = parsed.data;
 
-  // SDR isolation: force ranking to show only their own data
-  if (role === 'sdr') {
-    filters.userIds = [userId];
-  }
+  // Dashboard shows global data for all roles to foster team competition
 
   try {
     const ranking = await fetchRankingData(supabase, orgId, filters);

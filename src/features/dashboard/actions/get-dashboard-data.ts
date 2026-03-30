@@ -34,10 +34,7 @@ export async function getDashboardData(
 
   const filters = parsed.data;
 
-  // SDR isolation: force dashboard to show only their own data
-  if (role === 'sdr') {
-    filters.userIds = [userId];
-  }
+  // Dashboard shows global data for all roles to foster team competition
 
   try {
     const [kpi, availableCadences] = await Promise.all([

@@ -30,10 +30,7 @@ export async function getInsightsData(
 
   const filters = parsed.data;
 
-  // SDR isolation: force insights to show only their own data
-  if (role === 'sdr') {
-    filters.userIds = [userId];
-  }
+  // Dashboard shows global data for all roles to foster team competition
 
   try {
     const insights = await fetchInsightsData(supabase, orgId, filters);
