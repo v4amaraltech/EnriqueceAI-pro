@@ -42,7 +42,9 @@ interface LeadDetailHeaderProps {
   onEnrich: () => void;
   onEnrichApollo: () => void;
   onReenrichApollo: () => void;
+  onCall?: () => void;
   isEnriching?: boolean;
+  isCalling?: boolean;
 }
 
 export function LeadDetailHeader({
@@ -57,7 +59,9 @@ export function LeadDetailHeader({
   onEnrich,
   onEnrichApollo,
   onReenrichApollo,
+  onCall,
   isEnriching,
+  isCalling,
 }: LeadDetailHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -107,11 +111,14 @@ export function LeadDetailHeader({
 
       <div className="flex items-center gap-2">
         {lead.telefone && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={`tel:${lead.telefone}`}>
-              <Phone className="mr-1 h-4 w-4" />
-              Ligar
-            </a>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCall}
+            disabled={isCalling}
+          >
+            <Phone className="mr-1 h-4 w-4" />
+            {isCalling ? 'Ligando...' : 'Ligar'}
           </Button>
         )}
         {isClosed ? (

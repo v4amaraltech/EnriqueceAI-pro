@@ -53,6 +53,8 @@ import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection }
 import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
+import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
+import { initiateCall } from '@/features/calls/actions/initiate-call';
 
 const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
@@ -87,6 +89,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
 
   // Loss reason dialog state
   const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
@@ -143,6 +146,33 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     });
     setShowArchiveDialog(false);
   }, [lead.id, router]);
+
+  const handleCall = useCallback(async () => {
+    const phone = lead.telefone ?? lead.phones?.[0]?.numero;
+    if (!phone) {
+      toast.error('Lead não possui telefone cadastrado');
+      return;
+    }
+    setIsCalling(true);
+    try {
+      const providerResult = await getDialerProvider();
+      if (!providerResult.success || !providerResult.data.provider) {
+        // Fallback to native tel: link if no dialer configured
+        window.open(`tel:${phone}`, '_self');
+        return;
+      }
+      const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id });
+      if (result.success) {
+        toast.success('Ligação iniciada');
+      } else {
+        toast.error(result.error);
+      }
+    } catch {
+      toast.error('Erro ao iniciar ligação');
+    } finally {
+      setIsCalling(false);
+    }
+  }, [lead.id, lead.telefone, lead.phones]);
 
   const handleEnrich = useCallback(() => {
     startTransition(async () => {
@@ -368,7 +398,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         onEnrich={handleEnrich}
         onEnrichApollo={handleEnrichApollo}
         onReenrichApollo={handleReenrichApollo}
+        onCall={handleCall}
         isEnriching={isPending}
+        isCalling={isCalling}
       />
 
       {enrollmentData.enrollments.length > 0 && (
