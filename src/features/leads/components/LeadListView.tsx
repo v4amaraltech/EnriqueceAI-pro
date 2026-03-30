@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileUp, Plus, SearchX, Users } from 'lucide-react';
+import { FileUp, Globe, Plus, SearchX, Users } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -93,6 +93,12 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/leads/import/apollo">
+              <Globe className="mr-2 h-4 w-4" />
+              Importar do Apollo
+            </Link>
+          </Button>
           <Button asChild>
             <Link href="/leads/imports">
               <FileUp className="mr-2 h-4 w-4" />
