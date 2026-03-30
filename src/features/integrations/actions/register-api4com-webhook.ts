@@ -16,7 +16,10 @@ export async function registerApi4ComWebhook(): Promise<ActionResult<void>> {
   const { orgId, userId } = auth.data;
 
   const appUrl = getAppUrl();
-  const webhookUrl = `${appUrl}/api/webhooks/api4com`;
+  const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
+  const webhookUrl = webhookSecret
+    ? `${appUrl}/api/webhooks/api4com?token=${webhookSecret}`
+    : `${appUrl}/api/webhooks/api4com`;
   const gateway = `flux-${orgId}`;
 
   try {
