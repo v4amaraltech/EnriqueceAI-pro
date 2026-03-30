@@ -125,7 +125,7 @@ export async function executeActivity(
     if (hasMetaConnection) {
       waResult = await WhatsAppService.sendMessage(orgId, { to, body }, supabase);
     } else {
-      waResult = await EvolutionWhatsAppService.sendMessage(orgId, { to, body }, supabase);
+      waResult = await EvolutionWhatsAppService.sendMessage(orgId, { to, body }, supabase, userId);
     }
 
     if (waResult.success && waResult.messageId) {

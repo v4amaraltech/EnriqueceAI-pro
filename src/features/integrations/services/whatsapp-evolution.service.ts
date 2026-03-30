@@ -16,16 +16,22 @@ interface WhatsAppInstance {
   instance_name: string;
   status: string;
   phone: string | null;
+  user_id: string | null;
 }
 
 export class EvolutionWhatsAppService {
   /**
    * Sends a text message via Evolution API (WhatsApp Web).
+   *
+   * Lookup order:
+   * 1. User-specific instance (org_id + user_id)
+   * 2. Org-level default instance (org_id + user_id IS NULL)
    */
   static async sendMessage(
     orgId: string,
     params: { to: string; body: string },
     supabase: SupabaseClient,
+    userId?: string,
   ): Promise<EvolutionSendResult> {
     const env = getEnv();
     const apiUrl = env.EVOLUTION_API_URL;
@@ -35,18 +41,16 @@ export class EvolutionWhatsAppService {
       return { success: false, error: 'Evolution API não configurada no servidor' };
     }
 
-    // Fetch Evolution instance for this org
-    const { data: instance } = (await from(supabase, 'whatsapp_instances' as never)
-      .select('id, instance_name, status, phone')
-      .eq('org_id', orgId)
-      .maybeSingle()) as { data: WhatsAppInstance | null };
+    // Fetch Evolution instance: user-specific first, then org default
+    const instance = await this.resolveInstance(supabase, orgId, userId);
 
     if (!instance) {
       return { success: false, error: 'Nenhuma instância WhatsApp Evolution encontrada' };
     }
 
     if (instance.status !== 'connected') {
-      return { success: false, error: 'WhatsApp Evolution não está conectado. Reconecte via QR Code.' };
+      const owner = instance.user_id ? 'Sua instância WhatsApp' : 'WhatsApp Evolution da organização';
+      return { success: false, error: `${owner} não está conectado. Reconecte via QR Code.` };
     }
 
     // Validate phone number
@@ -100,5 +104,35 @@ export class EvolutionWhatsAppService {
         error: err instanceof Error ? err.message : 'Erro ao conectar com Evolution API',
       };
     }
+  }
+
+  /**
+   * Resolves the WhatsApp instance for a given user.
+   * Priority: user-specific instance > org-level default.
+   */
+  private static async resolveInstance(
+    supabase: SupabaseClient,
+    orgId: string,
+    userId?: string,
+  ): Promise<WhatsAppInstance | null> {
+    if (userId) {
+      // Try user-specific instance first
+      const { data: userInstance } = (await from(supabase, 'whatsapp_instances' as never)
+        .select('id, instance_name, status, phone, user_id')
+        .eq('org_id', orgId)
+        .eq('user_id', userId)
+        .maybeSingle()) as { data: WhatsAppInstance | null };
+
+      if (userInstance) return userInstance;
+    }
+
+    // Fallback to org-level default (user_id IS NULL)
+    const { data: orgInstance } = (await from(supabase, 'whatsapp_instances' as never)
+      .select('id, instance_name, status, phone, user_id')
+      .eq('org_id', orgId)
+      .is('user_id', null)
+      .maybeSingle()) as { data: WhatsAppInstance | null };
+
+    return orgInstance;
   }
 }
