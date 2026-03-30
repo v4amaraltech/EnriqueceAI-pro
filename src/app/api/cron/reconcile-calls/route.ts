@@ -173,11 +173,11 @@ export async function POST(request: Request) {
             const remotePhone = (record.to ?? '').replace(/\D/g, '').slice(-8);
             const candidates = localByPhone.get(remotePhone);
             if (candidates?.length) {
-              // Find the closest match by timestamp (within 5 minutes)
+              // Find the closest match by timestamp (within 15 minutes — accounts for delay between click and call start)
               const remoteTime = new Date(record.started_at).getTime();
               localCall = candidates.find((c) => {
                 const localTime = new Date(c.created_at).getTime();
-                return Math.abs(remoteTime - localTime) < 5 * 60 * 1000;
+                return Math.abs(remoteTime - localTime) < 15 * 60 * 1000;
               });
             }
           }
