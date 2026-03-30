@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, FileUp, Globe, Plus } from 'lucide-react';
+import { ArrowLeft, FileUp, Plus } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -82,12 +82,6 @@ export function ImportListView({ result, leadSourceOptions }: ImportListViewProp
           </div>
         </div>
         <div className="flex gap-2">
-          <Button asChild className="bg-[#FFCA28] text-black hover:bg-[#FFB300]">
-            <Link href="/leads/import/apollo">
-              <Globe className="mr-2 h-4 w-4" />
-              Importar do Apollo
-            </Link>
-          </Button>
           <Button asChild>
             <Link href="/leads/import">
               <Plus className="mr-2 h-4 w-4" />
