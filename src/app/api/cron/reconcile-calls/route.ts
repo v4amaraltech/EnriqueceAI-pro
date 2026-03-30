@@ -112,12 +112,12 @@ export async function POST(request: Request) {
       }
 
       // 2. Fetch local calls for this user that might need reconciliation
-      //    Focus on calls with duration_seconds=0 or status='not_connected'
+      //    Include: missing duration, not_connected status, OR missing recording_url
       const { data: localCalls } = (await from(supabase, 'calls')
         .select('id, status, duration_seconds, recording_url, metadata')
         .eq('user_id', conn.user_id)
         .eq('org_id', conn.org_id)
-        .or('duration_seconds.eq.0,status.eq.not_connected')
+        .or('duration_seconds.eq.0,status.eq.not_connected,recording_url.is.null')
         .order('created_at', { ascending: false })
         .limit(500)) as { data: LocalCallRow[] | null };
 
