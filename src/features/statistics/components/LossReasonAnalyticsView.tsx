@@ -4,7 +4,81 @@ import { useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
-import type { LossReasonAnalyticsData, LossReasonEntry, LossByCadenceStackedRow } from '../types/loss-reason-analytics.types';
+import type {
+  LossByCadenceStackedRow,
+  LossByUserStackedRow,
+  LossReasonAnalyticsData,
+  LossReasonEntry,
+} from '../types/loss-reason-analytics.types';
+
+/* ── Shared: stacked bar + legend ─────────────────────────── */
+
+interface StackedRow {
+  id: string;
+  label: string;
+  totalLost: number;
+  reasons: Array<{ reasonName: string; count: number; color: string }>;
+}
+
+function StackedBar({ row }: { row: StackedRow }) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="w-[240px] shrink-0 text-right text-sm truncate" title={row.label}>
+        {row.label}
+      </div>
+      <div className="flex-1 flex h-8 rounded-sm overflow-hidden">
+        {row.reasons.map((r, i) => (
+          <div
+            key={i}
+            style={{ width: `${(r.count / row.totalLost) * 100}%`, backgroundColor: r.color }}
+            className="h-full min-w-[2px]"
+            title={`${r.reasonName}: ${r.count}`}
+          />
+        ))}
+      </div>
+      <div className="w-[60px] shrink-0 text-right">
+        <span className="text-sm font-semibold">{row.totalLost}</span>
+        <span className="text-xs text-[var(--muted-foreground)] block leading-tight">perdas</span>
+      </div>
+    </div>
+  );
+}
+
+function StackedChartWithLegend({ rows, emptyMessage }: { rows: StackedRow[]; emptyMessage: string }) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-[var(--muted-foreground)] text-center py-8">
+        {emptyMessage}
+      </p>
+    );
+  }
+
+  // Build legend from all reasons across all rows
+  const legendMap = new Map<string, string>();
+  for (const row of rows) {
+    for (const r of row.reasons) {
+      if (!legendMap.has(r.reasonName)) legendMap.set(r.reasonName, r.color);
+    }
+  }
+
+  return (
+    <div className="flex gap-6">
+      <div className="flex-1 min-w-0">
+        {rows.map((row) => (
+          <StackedBar key={row.id} row={row} />
+        ))}
+      </div>
+      <div className="w-[220px] shrink-0 flex flex-col gap-1.5 pt-2">
+        {Array.from(legendMap.entries()).map(([name, color]) => (
+          <div key={name} className="flex items-center gap-2 text-xs">
+            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+            <span className="truncate" title={name}>{name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ── By Reason (horizontal bars) ──────────────────────────── */
 
@@ -16,13 +90,11 @@ function ReasonBar({ entry, maxCount }: { entry: LossReasonEntry; maxCount: numb
         {entry.reasonName}
       </div>
       <div className="relative flex-1 h-8">
-        {/* Grid lines */}
         <div className="absolute inset-0 flex">
           {[0, 25, 50, 75, 100].map((pct) => (
             <div key={pct} className="absolute h-full border-l border-[var(--border)]" style={{ left: `${pct}%` }} />
           ))}
         </div>
-        {/* Bar */}
         <div
           className="relative h-full rounded-sm bg-[#d1d5db] dark:bg-[#4b5563]"
           style={{ width: `${widthPercent}%` }}
@@ -51,78 +123,66 @@ function ByReasonTab({ data }: { data: LossReasonEntry[] }) {
   );
 }
 
-/* ── By Cadence (stacked bars + legend) ───────────────────── */
-
-function CadenceStackedBar({ row }: { row: LossByCadenceStackedRow }) {
-  return (
-    <div className="flex items-center gap-3 py-2.5">
-      <div className="w-[240px] shrink-0 text-right text-sm truncate" title={row.cadenceName}>
-        {row.cadenceName}
-      </div>
-      <div className="flex-1 flex h-8 rounded-sm overflow-hidden">
-        {row.reasons.map((r, i) => (
-          <div
-            key={i}
-            style={{ width: `${(r.count / row.totalLost) * 100}%`, backgroundColor: r.color }}
-            className="h-full min-w-[2px]"
-            title={`${r.reasonName}: ${r.count}`}
-          />
-        ))}
-      </div>
-      <div className="w-[60px] shrink-0 text-right">
-        <span className="text-sm font-semibold">{row.totalLost}</span>
-        <span className="text-xs text-[var(--muted-foreground)] block leading-tight">perdas</span>
-      </div>
-    </div>
-  );
-}
+/* ── By Cadence (stacked bars) ────────────────────────────── */
 
 function ByCadenceTab({ data }: { data: LossByCadenceStackedRow[] }) {
+  const rows: StackedRow[] = data.map((d) => ({
+    id: d.cadenceId,
+    label: d.cadenceName,
+    totalLost: d.totalLost,
+    reasons: d.reasons,
+  }));
+  return <StackedChartWithLegend rows={rows} emptyMessage="Nenhuma perda por cadência no período." />;
+}
+
+/* ── By User (stacked bars) ───────────────────────────────── */
+
+function ByUserTab({ data }: { data: LossByUserStackedRow[] }) {
+  const rows: StackedRow[] = data.map((d) => ({
+    id: d.userId,
+    label: d.userName,
+    totalLost: d.totalLost,
+    reasons: d.reasons,
+  }));
+  return <StackedChartWithLegend rows={rows} emptyMessage="Nenhuma perda por usuário no período." />;
+}
+
+/* ── By Team (aggregate stacked bar) ──────────────────────── */
+
+function ByTeamTab({ data }: { data: LossByUserStackedRow[] }) {
   if (data.length === 0) {
     return (
       <p className="text-sm text-[var(--muted-foreground)] text-center py-8">
-        Nenhuma perda por cadência no período.
+        Nenhuma perda no período.
       </p>
     );
   }
 
-  // Build legend from all reasons across all cadences
-  const legendMap = new Map<string, string>();
-  for (const row of data) {
-    for (const r of row.reasons) {
-      if (!legendMap.has(r.reasonName)) legendMap.set(r.reasonName, r.color);
+  // Aggregate all users into a single "Team" row
+  const reasonTotals = new Map<string, { count: number; color: string }>();
+  let totalLost = 0;
+  for (const user of data) {
+    totalLost += user.totalLost;
+    for (const r of user.reasons) {
+      const existing = reasonTotals.get(r.reasonName);
+      if (existing) {
+        existing.count += r.count;
+      } else {
+        reasonTotals.set(r.reasonName, { count: r.count, color: r.color });
+      }
     }
   }
 
-  return (
-    <div className="flex gap-6">
-      {/* Chart area */}
-      <div className="flex-1 min-w-0">
-        {data.map((row) => (
-          <CadenceStackedBar key={row.cadenceId} row={row} />
-        ))}
-      </div>
-      {/* Legend on the right */}
-      <div className="w-[220px] shrink-0 flex flex-col gap-1.5 pt-2">
-        {Array.from(legendMap.entries()).map(([name, color]) => (
-          <div key={name} className="flex items-center gap-2 text-xs">
-            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-            <span className="truncate" title={name}>{name}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  const teamRow: StackedRow = {
+    id: 'team',
+    label: 'Time completo',
+    totalLost,
+    reasons: Array.from(reasonTotals.entries())
+      .map(([reasonName, { count, color }]) => ({ reasonName, count, color }))
+      .sort((a, b) => b.count - a.count),
+  };
 
-/* ── Placeholder tabs ─────────────────────────────────────── */
-
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <p className="text-sm text-[var(--muted-foreground)] text-center py-8">
-      Visualização &quot;{label}&quot; em breve.
-    </p>
-  );
+  return <StackedChartWithLegend rows={[teamRow]} emptyMessage="Nenhuma perda no período." />;
 }
 
 /* ── Main view ────────────────────────────────────────────── */
@@ -153,11 +213,11 @@ export function LossReasonAnalyticsView({ data }: LossReasonAnalyticsViewProps) 
         </TabsContent>
 
         <TabsContent value="user" className="mt-6">
-          <PlaceholderTab label="Por usuário" />
+          <ByUserTab data={data.lossByUserStacked} />
         </TabsContent>
 
         <TabsContent value="team" className="mt-6">
-          <PlaceholderTab label="Por time" />
+          <ByTeamTab data={data.lossByUserStacked} />
         </TabsContent>
 
         <TabsContent value="cadence" className="mt-6">

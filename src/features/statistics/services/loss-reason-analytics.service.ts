@@ -6,11 +6,13 @@ import { CHART_FALLBACK_COLOR, CHART_SERIES_COLORS } from '@/shared/constants/ch
 import type {
   LossByCadenceRow,
   LossByCadenceStackedRow,
+  LossByUserStackedRow,
   LossReasonAnalyticsData,
   LossReasonEntry,
 } from '../types/loss-reason-analytics.types';
 import type { EnrollmentQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
+import { buildMemberInfoMap } from './member-lookup';
 
 interface LossReasonRow {
   id: string;
@@ -75,6 +77,10 @@ export async function fetchLossReasonAnalyticsData(
   const lossByCadence = buildLossByCadence(enrollments, cadences, reasons);
   const lossByCadenceStacked = buildLossByCadenceStacked(lostEnrollments, cadences, reasons);
 
+  // Build user-level stacked data
+  const memberInfoMap = await buildMemberInfoMap(supabase, orgId);
+  const lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap);
+
   const topReason = reasonsRanking[0];
 
   return {
@@ -86,6 +92,7 @@ export async function fetchLossReasonAnalyticsData(
     reasonsRanking,
     lossByCadence,
     lossByCadenceStacked,
+    lossByUserStacked,
   };
 }
 
@@ -169,6 +176,7 @@ function emptyData(): LossReasonAnalyticsData {
     reasonsRanking: [],
     lossByCadence: [],
     lossByCadenceStacked: [],
+    lossByUserStacked: [],
   };
 }
 
@@ -203,6 +211,56 @@ function buildLossByCadenceStacked(
     rows.push({
       cadenceId,
       cadenceName: cadenceNameMap.get(cadenceId) ?? 'Cadência',
+      totalLost,
+      reasons: reasonEntries,
+    });
+  }
+
+  return rows.sort((a, b) => b.totalLost - a.totalLost);
+}
+
+function buildLossByUserStacked(
+  lostEnrollments: EnrollmentQueryRow[],
+  reasons: LossReasonRow[],
+  memberInfoMap: Map<string, { name: string }>,
+): LossByUserStackedRow[] {
+  const reasonNameMap = new Map(reasons.map((r) => [r.id, r.name]));
+
+  // Build a global reason → color mapping so colors are consistent across all rows
+  const globalReasonIds = new Set<string>();
+  for (const e of lostEnrollments) {
+    if (e.loss_reason_id) globalReasonIds.add(e.loss_reason_id);
+  }
+  const reasonColorMap = new Map<string, string>();
+  let colorIdx = 0;
+  for (const rId of globalReasonIds) {
+    reasonColorMap.set(rId, CHART_SERIES_COLORS[colorIdx % CHART_SERIES_COLORS.length] ?? CHART_FALLBACK_COLOR);
+    colorIdx++;
+  }
+
+  // Group by user
+  const userMap = new Map<string, Map<string, number>>();
+  for (const e of lostEnrollments) {
+    if (!e.loss_reason_id || !e.enrolled_by) continue;
+    const rMap = userMap.get(e.enrolled_by) ?? new Map<string, number>();
+    rMap.set(e.loss_reason_id, (rMap.get(e.loss_reason_id) ?? 0) + 1);
+    userMap.set(e.enrolled_by, rMap);
+  }
+
+  const rows: LossByUserStackedRow[] = [];
+  for (const [userId, reasonMap] of userMap) {
+    const totalLost = Array.from(reasonMap.values()).reduce((a, b) => a + b, 0);
+    const reasonEntries = Array.from(reasonMap.entries())
+      .map(([reasonId, count]) => ({
+        reasonName: reasonNameMap.get(reasonId) ?? 'Outro',
+        count,
+        color: reasonColorMap.get(reasonId) ?? CHART_FALLBACK_COLOR,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    rows.push({
+      userId,
+      userName: memberInfoMap.get(userId)?.name ?? userId.slice(0, 8),
       totalLost,
       reasons: reasonEntries,
     });
