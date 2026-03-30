@@ -14,7 +14,7 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { deleteInstance, logoutInstance, fetchInstance } from '../_shared/evolution.ts';
 import { getStaleInstances, deleteWhatsAppInstance } from '../_shared/supabase.ts';
 
-const STALE_THRESHOLD_MINUTES = 30;
+const STALE_THRESHOLD_MINUTES = 10;
 
 serve(async (req) => {
   const corsResponse = handleCors(req);

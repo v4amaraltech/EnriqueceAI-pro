@@ -10,7 +10,7 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { validateWebhookSecret } from "../_shared/auth.ts";
 import { normalizeConnectionState, extractPhoneFromPayload } from "../_shared/evolution.ts";
-import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
+import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, deleteWhatsAppInstance, eventExists, createProviderEvent } from "../_shared/supabase.ts";
 serve(async (req)=>{
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -77,7 +77,11 @@ serve(async (req)=>{
               updates.phone = phone;
             }
           } else if (normalizedStatus === "disconnected") {
-            updates.last_error = "Disconnected via webhook";
+            // User disconnected from their phone — delete instance entirely
+            console.log(`[webhook] Instance ${instanceName} disconnected — deleting from DB`);
+            const instanceId = instance.id as string;
+            await deleteWhatsAppInstance(instanceId);
+            break;
           }
           await updateWhatsAppInstanceByName(instanceName, updates);
           break;
