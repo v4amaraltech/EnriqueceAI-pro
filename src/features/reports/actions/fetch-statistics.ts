@@ -40,33 +40,45 @@ export async function fetchStatisticsData(
   thresholdMinutes?: number,
   dateRange?: { from: string; to: string },
 ): Promise<ActionResult<StatisticsData>> {
-  const auth = await getAuthOrgIdResult();
-  if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  try {
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, supabase } = auth.data;
 
-  const { start, end } = dateRange
-    ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
-    : getPeriodDates(period);
+    const { start, end } = dateRange
+      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      : getPeriodDates(period);
 
-  const filters: StatisticsFilters = {
-    periodStart: start,
-    periodEnd: end,
-    userIds: userIds && userIds.length > 0 ? userIds : undefined,
-    thresholdMinutes: thresholdMinutes ?? 60,
-  };
+    const filters: StatisticsFilters = {
+      periodStart: start,
+      periodEnd: end,
+      userIds: userIds && userIds.length > 0 ? userIds : undefined,
+      thresholdMinutes: thresholdMinutes ?? 60,
+    };
 
-  const [lossReasons, conversionByOrigin, responseTime] = await Promise.all([
-    fetchLossReasonStats(supabase, orgId, filters),
-    fetchConversionByOrigin(supabase, orgId, filters),
-    fetchResponseTimeData(supabase, orgId, filters),
-  ]);
+    const [lossReasons, conversionByOrigin, responseTime] = await Promise.all([
+      fetchLossReasonStats(supabase, orgId, filters),
+      fetchConversionByOrigin(supabase, orgId, filters),
+      fetchResponseTimeData(supabase, orgId, filters),
+    ]);
 
-  return {
-    success: true,
-    data: {
-      lossReasons,
-      conversionByOrigin,
-      responseTime,
-    },
-  };
+    return {
+      success: true,
+      data: {
+        lossReasons,
+        conversionByOrigin,
+        responseTime,
+      },
+    };
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      'digest' in error &&
+      typeof (error as { digest: unknown }).digest === 'string' &&
+      ((error as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
 }
