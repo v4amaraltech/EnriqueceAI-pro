@@ -59,7 +59,11 @@ interface LocalCallRow {
 }
 
 export async function POST(request: Request) {
-  if (!verifyCronSecret(request)) {
+  // Accept both CRON_SECRET and SUPABASE_SERVICE_ROLE_KEY for auth
+  const authHeader = request.headers.get('authorization');
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isServiceRole = serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+  if (!isServiceRole && !verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
