@@ -33,6 +33,8 @@ import { LeadTimeline } from '@/features/cadences/components/LeadTimeline';
 import { deleteMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 
+import { ScheduleActivityForm } from '@/features/activities/components/ScheduleActivityForm';
+
 import type { LeadRow } from '../types';
 import { LeadNotes } from './LeadNotes';
 
@@ -149,9 +151,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
         {/* Agendar atividade Tab */}
         <TabsContent value="atividade" className="pt-4">
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            Agendamento de atividades em breve
-          </div>
+          <ScheduleActivityForm leadId={lead.id} />
         </TabsContent>
 
         {/* Anotações Tab */}
