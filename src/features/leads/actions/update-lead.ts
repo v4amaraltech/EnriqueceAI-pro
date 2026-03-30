@@ -88,7 +88,8 @@ export async function updateLead(
     .eq('org_id', orgId);
 
   if (error) {
-    return { success: false, error: 'Erro ao atualizar lead' };
+    console.error('[updateLead] Error:', error.message, 'Fields:', Object.keys(safeUpdates));
+    return { success: false, error: `Erro ao atualizar lead: ${error.message}` };
   }
 
   // Resume paused enrollments when email/phone is added or changed
