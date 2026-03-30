@@ -10,8 +10,8 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance } from "../_shared/evolution.ts";
-import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance } from "../_shared/supabase.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance } from "../_shared/evolution.ts";
+import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
 serve(async (req)=>{
@@ -35,33 +35,14 @@ serve(async (req)=>{
     const existingInstance = await getWhatsAppInstance(organizationId, userId);
     if (existingInstance) {
       console.log("[create-instance] Found existing instance:", existingInstance.instance_name, "status:", existingInstance.status);
-      // ALWAYS force logout + fresh QR when user clicks "Conectar"
-      // This ensures the user can link their own WhatsApp number
-      console.log("[create-instance] Forcing logout for fresh QR...");
+      // ALWAYS destroy + recreate when user clicks "Conectar"
+      // This ensures a completely fresh session for the user's phone
+      console.log("[create-instance] Destroying existing instance for fresh start...");
       await logoutInstance(existingInstance.instance_name);
-      await updateWhatsAppInstance(existingInstance.id, {
-        status: "connecting",
-        phone: null,
-        qr_base64: null,
-        last_error: null,
-      });
-      const freshConnect = await connectInstance(existingInstance.instance_name);
-      if (freshConnect.ok && freshConnect.data.base64) {
-        console.log("[create-instance] Got fresh QR after logout");
-        await updateWhatsAppInstance(existingInstance.id, {
-          qr_base64: freshConnect.data.base64,
-        });
-        return jsonResponse({
-          instance_name: existingInstance.instance_name,
-          qr_base64: freshConnect.data.base64,
-          status: "connecting"
-        });
-      }
-      return jsonResponse({
-        instance_name: existingInstance.instance_name,
-        qr_base64: null,
-        status: "connecting"
-      });
+      await deleteInstance(existingInstance.instance_name);
+      await deleteWhatsAppInstance(existingInstance.id);
+      console.log("[create-instance] Old instance destroyed, will create new one below");
+      // Fall through to create new instance
     }
     // Criar nova instância
     console.log("[create-instance] Creating new instance...");
