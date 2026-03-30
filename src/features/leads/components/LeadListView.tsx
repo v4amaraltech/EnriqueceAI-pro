@@ -68,8 +68,9 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
     });
   };
 
-  // Empty state: no leads at all
-  if (leads.length === 0 && !hasFilters) {
+  // Empty state: only when org has zero leads total (not just filtered view empty)
+  const orgTotalLeads = statusCounts?.all ?? total;
+  if (orgTotalLeads === 0 && leads.length === 0 && !hasFilters) {
     return (
       <EmptyState
         icon={Users}
