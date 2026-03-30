@@ -30,18 +30,28 @@ export async function fetchLossReasonAnalyticsData(
   userIds?: string[],
   cadenceId?: string,
 ): Promise<LossReasonAnalyticsData> {
-  // Fetch enrollments
+  // Fetch cadences for org (used for org isolation + cadence names)
+  const { data: rawCadences } = (await from(supabase, 'cadences')
+    .select('id, name')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)) as { data: CadenceRow[] | null };
+  const cadences = rawCadences ?? [];
+
+  if (cadences.length === 0) {
+    return emptyData();
+  }
+
+  // Fetch enrollments scoped to org cadences (cadence_enrollments has no org_id column)
+  const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
+
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, loss_reason_id, enrolled_by')
-    .eq('org_id', orgId)
+    .in('cadence_id', cadenceIds)
     .gte('enrolled_at', periodStart)
     .lte('enrolled_at', periodEnd);
 
   if (userIds && userIds.length > 0) {
     enrQuery = enrQuery.in('enrolled_by', userIds);
-  }
-  if (cadenceId) {
-    enrQuery = enrQuery.eq('cadence_id', cadenceId);
   }
 
   const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
@@ -56,13 +66,6 @@ export async function fetchLossReasonAnalyticsData(
     .select('id, name')
     .eq('org_id', orgId)) as { data: LossReasonRow[] | null };
   const reasons = rawReasons ?? [];
-
-  // Fetch cadences
-  const { data: rawCadences } = (await from(supabase, 'cadences')
-    .select('id, name')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)) as { data: CadenceRow[] | null };
-  const cadences = rawCadences ?? [];
 
   const lostEnrollments = enrollments.filter((e) => e.loss_reason_id != null);
   const totalLost = lostEnrollments.length;
