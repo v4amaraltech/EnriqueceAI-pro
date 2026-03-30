@@ -206,7 +206,7 @@ function mapApolloToLead(
     razao_social: org?.name ?? searchOrgName ?? null,
     nome_fantasia: org?.name ?? searchOrgName ?? null,
     job_title: person.title ?? null,
-    lead_source: 'apollo',
+    lead_source: 'Apollo',
     is_inbound: false,
     email: person.email ?? null,
     telefone: phone,
