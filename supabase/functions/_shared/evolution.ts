@@ -13,10 +13,14 @@ function headers(): Record<string, string> {
   };
 }
 
-/** Generate a deterministic instance name from an org ID */
-export function generateInstanceName(orgId: string): string {
-  const short = orgId.replace(/-/g, '').slice(0, 12);
-  return `ea_${short}`;
+/** Generate a deterministic instance name from an org ID and optional user ID */
+export function generateInstanceName(orgId: string, userId?: string): string {
+  const orgShort = orgId.replace(/-/g, '').slice(0, 8);
+  if (userId) {
+    const userShort = userId.replace(/-/g, '').slice(0, 8);
+    return `ea_${orgShort}_${userShort}`;
+  }
+  return `ea_${orgShort}`;
 }
 
 // ---------------------------------------------------------------------------

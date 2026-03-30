@@ -46,7 +46,7 @@ serve(async (req)=>{
     }
     // Criar nova instância
     console.log("[create-instance] Creating new instance...");
-    const instanceName = generateInstanceName(organizationId);
+    const instanceName = generateInstanceName(organizationId, userId);
     const webhookUrl = `${SUPABASE_URL}/functions/v1/evolution-webhook`;
     // Criar na Evolution API
     console.log("[create-instance] Calling Evolution API to create:", instanceName);
@@ -55,42 +55,28 @@ serve(async (req)=>{
       // Handle "already in use" — orphaned instance exists in Evolution but not in our DB
       const isAlreadyInUse = createResult.error?.includes("already in use");
       if (isAlreadyInUse) {
-        console.log("[create-instance] Instance already exists in Evolution API, recovering...");
-        // Check actual connection state in Evolution API
-        const stateResult = await getConnectionState(instanceName);
-        const evolutionState = stateResult.ok ? normalizeConnectionState(stateResult.data.instance.state) : "error";
-        console.log("[create-instance] Orphan instance state:", evolutionState);
-
-        if (evolutionState === "connected") {
-          // Orphaned instance connected in Evolution but no DB record.
-          // User explicitly clicked "Conectar" — force logout and get fresh QR.
-          console.log("[create-instance] Orphan connected, forcing logout for fresh QR...");
-          await logoutInstance(instanceName);
-          const freshConnect = await connectInstance(instanceName);
-          const freshQr = freshConnect.ok ? (freshConnect.data.base64 || null) : null;
-          const savedInstance = await createWhatsAppInstance(organizationId, instanceName, freshQr || undefined, userId);
-          if (!savedInstance) {
-            return errorResponse("Failed to save instance to database", 500);
-          }
-          return jsonResponse({
-            instance_name: instanceName,
-            qr_base64: freshQr,
-            status: "connecting"
-          });
+        console.log("[create-instance] Instance already in use, destroying and recreating...");
+        await logoutInstance(instanceName);
+        await deleteInstance(instanceName);
+        // Retry create after destroying orphan
+        const retryResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+        if (!retryResult.ok) {
+          console.error("[create-instance] Retry failed:", retryResult.error);
+          return errorResponse(`Failed after retry: ${retryResult.error}`, 500);
         }
-
-        // Not connected — try to get QR code for scanning
-        const connectResult = await connectInstance(instanceName);
-        const recoveredQr = connectResult.ok ? (connectResult.data.base64 || null) : null;
-        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, recoveredQr || undefined, userId);
+        const retryQr = retryResult.data.qrcode?.base64 || null;
+        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, retryQr || undefined, userId);
         if (!savedInstance) {
-          return errorResponse("Failed to save recovered instance to database", 500);
+          return errorResponse("Failed to save instance to database", 500);
         }
-        return jsonResponse({
-          instance_name: instanceName,
-          qr_base64: recoveredQr,
-          status: "connecting"
-        });
+        if (!retryQr) {
+          const connectResult = await connectInstance(instanceName);
+          if (connectResult.ok && connectResult.data.base64) {
+            await updateWhatsAppInstance(savedInstance.id, { qr_base64: connectResult.data.base64 });
+            return jsonResponse({ instance_name: instanceName, qr_base64: connectResult.data.base64, status: "connecting" });
+          }
+        }
+        return jsonResponse({ instance_name: instanceName, qr_base64: retryQr, status: "connecting" });
       }
       console.error("[create-instance] Evolution API error:", createResult.error);
       return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
