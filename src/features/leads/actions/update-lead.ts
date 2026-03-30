@@ -56,7 +56,7 @@ export async function updateLead(
   const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'is_inbound', 'email_bounced_at', 'custom_field_values'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {
