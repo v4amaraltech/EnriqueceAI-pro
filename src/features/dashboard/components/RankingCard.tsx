@@ -118,10 +118,10 @@ function RankingContent({
             <div className="mb-3 flex items-center text-[11px] font-medium text-muted-foreground">
               <span className="flex-1" />
               {secondaryColumnLabel && (
-                <span className="w-20 text-right">{secondaryColumnLabel}</span>
+                <span className="w-20 text-center">{secondaryColumnLabel}</span>
               )}
               {primaryColumnLabel && (
-                <span className="w-20 text-right">{primaryColumnLabel}</span>
+                <span className="w-20 text-center">{primaryColumnLabel}</span>
               )}
             </div>
 
@@ -144,12 +144,12 @@ function RankingContent({
                     {sdr.userName || sdr.userId.slice(0, 8)}
                   </span>
                   {secondaryColumnLabel && (
-                    <span className="w-20 text-right text-sm text-muted-foreground">
+                    <span className="w-20 text-center text-sm text-muted-foreground">
                       {sdr.secondaryValue ?? '—'}
                     </span>
                   )}
                   {primaryColumnLabel && (
-                    <span className="w-20 text-right text-sm font-medium">
+                    <span className="w-20 text-center text-sm font-medium">
                       {sdr.value}
                       {unit}
                     </span>
