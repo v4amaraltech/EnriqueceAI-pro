@@ -68,9 +68,10 @@ export async function updateLead(
     return { success: false, error: 'Nenhum campo válido para atualizar' };
   }
 
-  // Sanitize: convert empty strings to null for fields with DB constraints
-  if ('cnpj' in safeUpdates && !(safeUpdates.cnpj as string)?.trim()) {
-    safeUpdates.cnpj = null;
+  // Sanitize CNPJ: strip formatting (dots, slashes, hyphens) and convert empty to null
+  if ('cnpj' in safeUpdates) {
+    const rawCnpj = (safeUpdates.cnpj as string)?.replace(/\D/g, '').trim();
+    safeUpdates.cnpj = rawCnpj ? rawCnpj : null;
   }
   if ('canal' in safeUpdates && !(safeUpdates.canal as string)?.trim()) {
     delete safeUpdates.canal;
