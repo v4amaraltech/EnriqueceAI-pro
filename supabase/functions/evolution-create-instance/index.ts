@@ -35,113 +35,33 @@ serve(async (req)=>{
     const existingInstance = await getWhatsAppInstance(organizationId, userId);
     if (existingInstance) {
       console.log("[create-instance] Found existing instance:", existingInstance.instance_name, "status:", existingInstance.status);
-      // Se o banco diz "connected", verificar estado real na Evolution API
-      if (existingInstance.status === "connected") {
-        console.log("[create-instance] DB says connected, verifying with Evolution API...");
-        const stateResult = await getConnectionState(existingInstance.instance_name);
-        const realState = stateResult.ok ? normalizeConnectionState(stateResult.data.instance.state) : "error";
-        console.log("[create-instance] Real state from Evolution:", realState);
-
-        if (realState === "connected") {
-          console.log("[create-instance] Confirmed connected, returning");
-          return jsonResponse({
-            instance_name: existingInstance.instance_name,
-            status: "connected",
-            phone: existingInstance.phone,
-            message: "Instance already connected"
-          });
-        }
-
-        // Not actually connected — update DB and fall through to get new QR
-        console.log("[create-instance] Not actually connected, getting new QR...");
+      // ALWAYS force logout + fresh QR when user clicks "Conectar"
+      // This ensures the user can link their own WhatsApp number
+      console.log("[create-instance] Forcing logout for fresh QR...");
+      await logoutInstance(existingInstance.instance_name);
+      await updateWhatsAppInstance(existingInstance.id, {
+        status: "connecting",
+        phone: null,
+        qr_base64: null,
+        last_error: null,
+      });
+      const freshConnect = await connectInstance(existingInstance.instance_name);
+      if (freshConnect.ok && freshConnect.data.base64) {
+        console.log("[create-instance] Got fresh QR after logout");
         await updateWhatsAppInstance(existingInstance.id, {
-          status: "connecting",
-          phone: null,
-          qr_base64: null,
-          last_error: null,
+          qr_base64: freshConnect.data.base64,
         });
-        const connectResult = await connectInstance(existingInstance.instance_name);
-        if (connectResult.ok && connectResult.data.base64) {
-          console.log("[create-instance] Got new QR code after stale connected state");
-          await updateWhatsAppInstance(existingInstance.id, {
-            qr_base64: connectResult.data.base64,
-          });
-          return jsonResponse({
-            instance_name: existingInstance.instance_name,
-            qr_base64: connectResult.data.base64,
-            status: "connecting"
-          });
-        }
-        // Fallback: return connecting without QR, polling will pick it up
         return jsonResponse({
           instance_name: existingInstance.instance_name,
-          qr_base64: null,
+          qr_base64: freshConnect.data.base64,
           status: "connecting"
         });
       }
-      // Se está em connecting, error ou disconnected, verificar estado real antes de gerar QR
-      if (existingInstance.status === "connecting" || existingInstance.status === "error" || existingInstance.status === "disconnected") {
-        // Check real state first — instance might actually be connected
-        console.log("[create-instance] DB status:", existingInstance.status, "— checking real state...");
-        const stateCheck = await getConnectionState(existingInstance.instance_name);
-        const actualState = stateCheck.ok ? normalizeConnectionState(stateCheck.data.instance.state) : null;
-        console.log("[create-instance] Actual Evolution state:", actualState);
-
-        if (actualState === "connected") {
-          // DB says not connected but Evolution says connected — stale session.
-          // User clicked "Conectar" so they want a fresh QR. Force logout + reconnect.
-          console.log("[create-instance] Stale connected session, forcing logout for fresh QR...");
-          await logoutInstance(existingInstance.instance_name);
-          await updateWhatsAppInstance(existingInstance.id, {
-            status: "connecting",
-            phone: null,
-            qr_base64: null,
-            last_error: null,
-          });
-          const freshConnect = await connectInstance(existingInstance.instance_name);
-          if (freshConnect.ok && freshConnect.data.base64) {
-            console.log("[create-instance] Got fresh QR after logout");
-            await updateWhatsAppInstance(existingInstance.id, {
-              qr_base64: freshConnect.data.base64,
-            });
-            return jsonResponse({
-              instance_name: existingInstance.instance_name,
-              qr_base64: freshConnect.data.base64,
-              status: "connecting"
-            });
-          }
-          return jsonResponse({
-            instance_name: existingInstance.instance_name,
-            qr_base64: null,
-            status: "connecting"
-          });
-        }
-
-        // Not connected — try to get QR code
-        console.log("[create-instance] Trying to get new QR code...");
-        const connectResult = await connectInstance(existingInstance.instance_name);
-        if (connectResult.ok && connectResult.data.base64) {
-          console.log("[create-instance] Got QR code, updating DB");
-          await updateWhatsAppInstance(existingInstance.id, {
-            status: "connecting",
-            qr_base64: connectResult.data.base64,
-            last_error: null
-          });
-          return jsonResponse({
-            instance_name: existingInstance.instance_name,
-            qr_base64: connectResult.data.base64,
-            status: "connecting"
-          });
-        }
-        // Se não conseguiu QR, retornar estado atual
-        console.log("[create-instance] No QR from connect, returning current state");
-        return jsonResponse({
-          instance_name: existingInstance.instance_name,
-          qr_base64: existingInstance.qr_base64,
-          status: existingInstance.status,
-          last_error: existingInstance.last_error
-        });
-      }
+      return jsonResponse({
+        instance_name: existingInstance.instance_name,
+        qr_base64: null,
+        status: "connecting"
+      });
     }
     // Criar nova instância
     console.log("[create-instance] Creating new instance...");
