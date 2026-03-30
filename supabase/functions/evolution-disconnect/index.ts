@@ -29,10 +29,10 @@ serve(async (req) => {
     return authResult.response;
   }
 
-  const { organizationId } = authResult.context;
+  const { organizationId, userId } = authResult.context;
 
   try {
-    const instance = await getWhatsAppInstance(organizationId);
+    const instance = await getWhatsAppInstance(organizationId, userId);
     if (!instance) {
       return jsonResponse({ success: true, message: "No instance to disconnect" });
     }

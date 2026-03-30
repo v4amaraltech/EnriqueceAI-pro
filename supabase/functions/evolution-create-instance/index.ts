@@ -27,12 +27,12 @@ serve(async (req)=>{
   if (!authResult.ok) {
     return authResult.response;
   }
-  const { organizationId } = authResult.context;
-  console.log("[create-instance] Auth OK, org:", organizationId);
+  const { organizationId, userId } = authResult.context;
+  console.log("[create-instance] Auth OK, org:", organizationId, "user:", userId);
   try {
-    // Verificar se já existe uma instância para esta organização
-    console.log("[create-instance] Checking existing instance...");
-    const existingInstance = await getWhatsAppInstance(organizationId);
+    // Verificar se já existe uma instância para este usuário (ou org default)
+    console.log("[create-instance] Checking existing instance for user...");
+    const existingInstance = await getWhatsAppInstance(organizationId, userId);
     if (existingInstance) {
       console.log("[create-instance] Found existing instance:", existingInstance.instance_name, "status:", existingInstance.status);
       // Se o banco diz "connected", verificar estado real na Evolution API
@@ -167,7 +167,7 @@ serve(async (req)=>{
           await logoutInstance(instanceName);
           const freshConnect = await connectInstance(instanceName);
           const freshQr = freshConnect.ok ? (freshConnect.data.base64 || null) : null;
-          const savedInstance = await createWhatsAppInstance(organizationId, instanceName, freshQr || undefined);
+          const savedInstance = await createWhatsAppInstance(organizationId, instanceName, freshQr || undefined, userId);
           if (!savedInstance) {
             return errorResponse("Failed to save instance to database", 500);
           }
@@ -181,7 +181,7 @@ serve(async (req)=>{
         // Not connected — try to get QR code for scanning
         const connectResult = await connectInstance(instanceName);
         const recoveredQr = connectResult.ok ? (connectResult.data.base64 || null) : null;
-        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, recoveredQr || undefined);
+        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, recoveredQr || undefined, userId);
         if (!savedInstance) {
           return errorResponse("Failed to save recovered instance to database", 500);
         }
@@ -200,7 +200,7 @@ serve(async (req)=>{
     console.log("[create-instance] QR from create:", qrBase64 ? "yes" : "no");
     // Salvar no banco
     console.log("[create-instance] Saving to database...");
-    const savedInstance = await createWhatsAppInstance(organizationId, instanceName, qrBase64 || undefined);
+    const savedInstance = await createWhatsAppInstance(organizationId, instanceName, qrBase64 || undefined, userId);
     if (!savedInstance) {
       console.error("[create-instance] Failed to save to database");
       return errorResponse("Failed to save instance to database", 500);

@@ -26,10 +26,10 @@ serve(async (req)=>{
   if (!authResult.ok) {
     return authResult.response;
   }
-  const { organizationId } = authResult.context;
+  const { organizationId, userId } = authResult.context;
   try {
-    // Buscar instância da organização
-    const instance = await getWhatsAppInstance(organizationId);
+    // Buscar instância do usuário (ou org default)
+    const instance = await getWhatsAppInstance(organizationId, userId);
     if (!instance) {
       return jsonResponse({
         status: "not_configured",

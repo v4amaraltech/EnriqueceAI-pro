@@ -10,12 +10,25 @@ export function getServiceClient() {
 // whatsapp_instances
 // ---------------------------------------------------------------------------
 
-/** Get the WhatsApp instance for an organization */
-export async function getWhatsAppInstance(orgId: string) {
+/** Get the WhatsApp instance for a user (or org default).
+ *  Priority: user-specific instance > org-level default (user_id IS NULL). */
+export async function getWhatsAppInstance(orgId: string, userId?: string) {
+  if (userId) {
+    const { data } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('user_id', userId)
+      .single();
+    if (data) return data;
+  }
+
+  // Fallback to org-level default
   const { data, error } = await supabaseAdmin
     .from('whatsapp_instances')
     .select('*')
     .eq('org_id', orgId)
+    .is('user_id', null)
     .single();
 
   if (error || !data) return null;
@@ -39,6 +52,7 @@ export async function createWhatsAppInstance(
   orgId: string,
   instanceName: string,
   qrBase64?: string,
+  userId?: string,
 ) {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_instances')
@@ -47,6 +61,7 @@ export async function createWhatsAppInstance(
       instance_name: instanceName,
       status: 'connecting',
       qr_base64: qrBase64 || null,
+      user_id: userId || null,
     })
     .select()
     .single();
