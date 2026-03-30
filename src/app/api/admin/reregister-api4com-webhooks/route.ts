@@ -37,22 +37,24 @@ export async function POST(request: Request) {
     const gateway = `flux-${conn.org_id}`;
     try {
       const apiKey = decrypt(conn.api_key_encrypted);
-      const response = await fetch(`${conn.base_url}integrations`, {
+      const reqBody = {
+        gateway,
+        webhook: true,
+        webhookConstraint: { gateway },
+        metadata: {
+          webhookUrl,
+          webhookVersion: '1.8',
+          webhookTypes: ['channel-hangup'],
+        },
+      };
+      const reqUrl = `${conn.base_url.replace(/\/+$/, '')}/integrations`;
+      const response = await fetch(reqUrl, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: apiKey,
         },
-        body: JSON.stringify({
-          gateway,
-          webhook: true,
-          webhookConstraint: { gateway },
-          metadata: {
-            webhookUrl,
-            webhookVersion: '1.8',
-            webhookTypes: ['channel-hangup'],
-          },
-        }),
+        body: JSON.stringify(reqBody),
       });
 
       if (!response.ok) {
