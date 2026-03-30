@@ -78,10 +78,34 @@ export async function POST(request: Request) {
   let totalChecked = 0;
   const errors: string[] = [];
 
+  // Re-register webhook for all connections (ensures webhook URL has auth token)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.enriqueceai.com.br';
+  const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
+  const webhookUrl = webhookSecret
+    ? `${appUrl}/api/webhooks/api4com?token=${webhookSecret}`
+    : `${appUrl}/api/webhooks/api4com`;
+
   for (const conn of connections) {
     try {
       const apiKey = decrypt(conn.api_key_encrypted);
       const baseUrl = conn.base_url.replace(/\/$/, '');
+
+      // Re-register webhook (idempotent — safe to call every time)
+      const gateway = `flux-${conn.org_id}`;
+      try {
+        await fetch(`${baseUrl}/integrations`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+          body: JSON.stringify({
+            gateway,
+            webhook: true,
+            webhookConstraint: { gateway },
+            metadata: { webhookUrl, webhookVersion: '1.8', webhookTypes: ['channel-hangup'] },
+          }),
+        });
+      } catch (webhookErr) {
+        console.warn(`[reconcile] webhook re-register failed for ${conn.ramal}:`, webhookErr);
+      }
 
       // 2. Fetch local calls for this user that might need reconciliation
       //    Focus on calls with duration_seconds=0 or status='not_connected'
