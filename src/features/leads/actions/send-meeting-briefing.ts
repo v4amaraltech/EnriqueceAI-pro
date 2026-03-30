@@ -155,7 +155,7 @@ function buildBriefingHtml(data: {
   // Build info rows helper
   function row(label: string, value: string | null | undefined): string {
     if (!value) return '';
-    return `<tr><td style="padding:4px 0;color:#6b7280;font-size:13px;width:140px;vertical-align:top;">${label}:</td><td style="padding:4px 0;color:#1a1a1a;font-size:13px;">${value}</td></tr>`;
+    return `<tr><td style="padding:6px 0;color:#6b7280;font-size:15px;width:160px;vertical-align:top;font-weight:500;">${label}:</td><td style="padding:6px 0;color:#1a1a1a;font-size:15px;line-height:1.5;">${value}</td></tr>`;
   }
 
   function linkRow(label: string, value: string | null | undefined, href?: string): string {
@@ -163,7 +163,7 @@ function buildBriefingHtml(data: {
     const display = href
       ? `<a href="${href}" style="color:#E53935;text-decoration:none;">${value}</a>`
       : value;
-    return `<tr><td style="padding:4px 0;color:#6b7280;font-size:13px;width:140px;vertical-align:top;">${label}:</td><td style="padding:4px 0;font-size:13px;">${display}</td></tr>`;
+    return `<tr><td style="padding:6px 0;color:#6b7280;font-size:15px;width:160px;vertical-align:top;font-weight:500;">${label}:</td><td style="padding:6px 0;font-size:15px;line-height:1.5;">${display}</td></tr>`;
   }
 
   // Address
@@ -196,7 +196,7 @@ function buildBriefingHtml(data: {
       .join('');
     if (cfRows) {
       customFieldsHtml = `
-        <tr><td colspan="2" style="padding:16px 0 8px;"><strong style="color:#1a1a1a;font-size:14px;">Campos personalizados</strong></td></tr>
+        <tr><td colspan="2" style="padding:20px 0 8px;"><strong style="color:#1a1a1a;font-size:16px;">Campos personalizados</strong></td></tr>
         ${cfRows}`;
     }
   }
@@ -212,38 +212,38 @@ function buildBriefingHtml(data: {
   <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <table width="700" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 700px;">
           <!-- Header -->
           <tr>
-            <td style="background: #1a1a1a; padding: 24px 32px;">
-              <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
-              <p style="color: #9ca3af; font-size: 13px; margin: 4px 0 0;">Nova reunião agendada</p>
+            <td style="background: #1a1a1a; padding: 28px 36px;">
+              <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 600;">EnriqueceAI</h1>
+              <p style="color: #9ca3af; font-size: 14px; margin: 4px 0 0;">Nova reunião agendada</p>
             </td>
           </tr>
 
           <!-- Meeting Info Banner -->
           <tr>
-            <td style="background: #E53935; padding: 20px 32px;">
-              <h2 style="color: white; margin: 0 0 4px; font-size: 16px; font-weight: 600;">${meetingTitle}</h2>
-              <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px;">
+            <td style="background: #E53935; padding: 24px 36px;">
+              <h2 style="color: white; margin: 0 0 8px; font-size: 20px; font-weight: 600;">${meetingTitle}</h2>
+              <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 16px; line-height: 1.6;">
                 📅 ${dateStr}<br>
                 🕐 ${timeStr}
               </p>
-              ${meetLink ? `<p style="margin: 8px 0 0;"><a href="${meetLink}" style="color: white; font-weight: 600; text-decoration: underline;">🔗 Entrar no Google Meet</a></p>` : ''}
+              ${meetLink ? `<p style="margin: 12px 0 0;"><a href="${meetLink}" style="color: white; font-weight: 600; font-size: 16px; text-decoration: underline;">🔗 Entrar no Google Meet</a></p>` : ''}
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
-            <td style="padding: 32px;">
-              <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 24px; font-size: 15px;">
+            <td style="padding: 36px;">
+              <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 28px; font-size: 16px;">
                 Olá, <strong>${closerName}</strong>!<br>
                 Confira abaixo tudo o que você precisa saber sobre o seu lead.
               </p>
 
               <!-- Lead Info Section -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px;">
-                <tr><td colspan="2" style="padding:0 0 8px;"><strong style="color:#1a1a1a;font-size:14px;">Sobre o lead</strong></td></tr>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px;">
+                <tr><td colspan="2" style="padding:0 0 12px;"><strong style="color:#1a1a1a;font-size:18px;">Sobre o lead</strong></td></tr>
                 ${row('Empresa', leadName)}
                 ${row('Contato', contactName)}
                 ${row('Cargo', lead.job_title)}
@@ -265,9 +265,9 @@ function buildBriefingHtml(data: {
 
               <!-- Notes -->
               ${lead.notes ? `
-              <table width="100%" cellpadding="0" cellspacing="0" style="background: #fffbeb; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; border-left: 4px solid #f59e0b;">
-                <tr><td style="padding:0 0 8px;"><strong style="color:#1a1a1a;font-size:14px;">📝 Notas do pré-vendas</strong></td></tr>
-                <tr><td style="color:#4a4a4a;font-size:13px;line-height:1.6;white-space:pre-wrap;">${lead.notes}</td></tr>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background: #fffbeb; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; border-left: 4px solid #f59e0b;">
+                <tr><td style="padding:0 0 8px;"><strong style="color:#1a1a1a;font-size:16px;">📝 Notas do pré-vendas</strong></td></tr>
+                <tr><td style="color:#4a4a4a;font-size:15px;line-height:1.7;white-space:pre-wrap;">${lead.notes}</td></tr>
               </table>
               ` : ''}
 
@@ -275,7 +275,7 @@ function buildBriefingHtml(data: {
               <table cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center" style="padding: 8px 0 0;">
-                    <a href="${leadUrl}" style="display: inline-block; background: #E53935; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                    <a href="${leadUrl}" style="display: inline-block; background: #E53935; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
                       Ver lead na plataforma
                     </a>
                   </td>
@@ -283,10 +283,10 @@ function buildBriefingHtml(data: {
                 ${feedbackUrl ? `
                 <tr>
                   <td align="center" style="padding: 16px 0 0;">
-                    <a href="${feedbackUrl}" style="display: inline-block; background: #1a1a1a; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                    <a href="${feedbackUrl}" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
                       Enviar feedback da reunião
                     </a>
-                    <p style="color: #9ca3af; font-size: 12px; margin: 8px 0 0;">
+                    <p style="color: #9ca3af; font-size: 13px; margin: 10px 0 0;">
                       Após a reunião, clique acima para avaliar o lead (expira em 7 dias)
                     </p>
                   </td>
@@ -298,8 +298,8 @@ function buildBriefingHtml(data: {
 
           <!-- Footer -->
           <tr>
-            <td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
-              <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            <td style="background: #f9fafb; padding: 20px 36px; border-top: 1px solid #e5e7eb;">
+              <p style="color: #9ca3af; font-size: 13px; margin: 0;">
                 Enviado automaticamente pelo EnriqueceAI
               </p>
             </td>
