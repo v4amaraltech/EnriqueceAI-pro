@@ -114,25 +114,31 @@ export async function POST(request: Request) {
       // 2. Fetch local calls for this user that might need reconciliation
       //    Include: missing duration, not_connected status, OR missing recording_url
       const { data: localCalls } = (await from(supabase, 'calls')
-        .select('id, status, duration_seconds, recording_url, metadata')
+        .select('id, status, duration_seconds, recording_url, metadata, destination, created_at')
         .eq('user_id', conn.user_id)
         .eq('org_id', conn.org_id)
         .or('duration_seconds.eq.0,status.eq.not_connected,recording_url.is.null')
         .order('created_at', { ascending: false })
-        .limit(500)) as { data: LocalCallRow[] | null };
+        .limit(500)) as { data: (LocalCallRow & { destination: string; created_at: string })[] | null };
 
       if (!localCalls || localCalls.length === 0) continue;
 
-      // Build lookup by api4com_call_id
-      const localByApi4ComId = new Map<string, LocalCallRow>();
+      // Build lookups: by api4com_call_id AND by destination phone (last 8 digits)
+      const localByApi4ComId = new Map<string, LocalCallRow & { destination: string; created_at: string }>();
+      const localByPhone = new Map<string, (LocalCallRow & { destination: string; created_at: string })[]>();
       for (const call of localCalls) {
         const api4comId = call.metadata?.api4com_call_id;
         if (api4comId) {
           localByApi4ComId.set(api4comId, call);
         }
+        // Index by last 8 digits of destination for fuzzy match
+        const phoneKey = call.destination.replace(/\D/g, '').slice(-8);
+        if (phoneKey) {
+          const list = localByPhone.get(phoneKey) ?? [];
+          list.push(call);
+          localByPhone.set(phoneKey, list);
+        }
       }
-
-      if (localByApi4ComId.size === 0) continue;
 
       // 3. Fetch calls from Api4Com API (paginate)
       let page = 1;
@@ -158,7 +164,24 @@ export async function POST(request: Request) {
         // 4. Match and update
         for (const record of records) {
           totalChecked++;
-          const localCall = localByApi4ComId.get(record.id);
+          // Try match by api4com_call_id first, then by phone number
+          let localCall: (LocalCallRow & { destination: string; created_at: string }) | undefined =
+            localByApi4ComId.get(record.id);
+
+          if (!localCall) {
+            // Fuzzy match by destination phone (last 8 digits) + close timestamp
+            const remotePhone = (record.to ?? '').replace(/\D/g, '').slice(-8);
+            const candidates = localByPhone.get(remotePhone);
+            if (candidates?.length) {
+              // Find the closest match by timestamp (within 5 minutes)
+              const remoteTime = new Date(record.started_at).getTime();
+              localCall = candidates.find((c) => {
+                const localTime = new Date(c.created_at).getTime();
+                return Math.abs(remoteTime - localTime) < 5 * 60 * 1000;
+              });
+            }
+          }
+
           if (!localCall) continue;
 
           const updates: Record<string, unknown> = {};
@@ -195,8 +218,8 @@ export async function POST(request: Request) {
           localByApi4ComId.delete(record.id);
         }
 
-        // Check if we still have unmatched local calls and more pages
-        hasMore = (data.metadata?.nextPage ?? null) !== null && localByApi4ComId.size > 0;
+        // Check if there are more pages
+        hasMore = (data.metadata?.nextPage ?? null) !== null;
         page++;
 
         // Safety limit: don't fetch more than 20 pages
