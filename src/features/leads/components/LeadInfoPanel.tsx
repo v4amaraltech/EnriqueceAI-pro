@@ -217,8 +217,13 @@ export function LeadInfoPanel({
       const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
 
+      // Remove empty cnpj/canal to avoid check constraint violations
+      const cleanFields: Record<string, unknown> = { ...leadFields };
+      if (!(cleanFields.cnpj as string)?.trim()) delete cleanFields.cnpj;
+      if (!(cleanFields.canal as string)?.trim()) delete cleanFields.canal;
+
       const result = await updateLead(data.id, {
-        ...leadFields,
+        ...cleanFields,
         email: editEmail,
         telefone: primaryPhone,
         phones: validPhones,
