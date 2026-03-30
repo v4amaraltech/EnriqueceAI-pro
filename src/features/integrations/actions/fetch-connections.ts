@@ -69,11 +69,23 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', userId)
     .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; sip_domain: string | null; sip_password_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
-  // Fetch WhatsApp Evolution instance (per org, all members — no sensitive data)
-  const { data: evolutionRow } = (await from(supabase, 'whatsapp_instances' as never)
+  // Fetch WhatsApp Evolution instance for current user (fallback to org default)
+  let evolutionRow: WhatsAppEvolutionInstanceSafe | null = null;
+  const { data: userEvolution } = (await from(supabase, 'whatsapp_instances' as never)
     .select('id, instance_name, status, phone, created_at, updated_at')
     .eq('org_id', orgId)
+    .eq('user_id', userId)
     .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
+  if (userEvolution) {
+    evolutionRow = userEvolution;
+  } else {
+    const { data: orgEvolution } = (await from(supabase, 'whatsapp_instances' as never)
+      .select('id, instance_name, status, phone, created_at, updated_at')
+      .eq('org_id', orgId)
+      .is('user_id', null)
+      .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
+    evolutionRow = orgEvolution;
+  }
 
   // Fetch Apollo connection (per org, manager-only)
   let apolloRow: ApolloConnectionSafe | null = null;
