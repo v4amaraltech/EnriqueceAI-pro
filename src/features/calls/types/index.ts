@@ -1,6 +1,7 @@
 // Call status and type enums matching database
 export type CallStatus = 'significant' | 'not_significant' | 'no_contact' | 'busy' | 'not_connected';
 export type CallType = 'inbound' | 'outbound' | 'manual';
+export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
 
 // Call row matching database table
 export interface CallRow {
@@ -19,6 +20,9 @@ export interface CallRow {
   notes: string | null;
   is_important: boolean;
   metadata: Record<string, string> | null;
+  transcription: string | null;
+  transcription_status: TranscriptionStatus;
+  transcription_error: string | null;
   created_at: string;
   updated_at: string;
 }

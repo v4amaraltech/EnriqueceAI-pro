@@ -4,6 +4,7 @@ import { NextResponse, after } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { getAppUrl } from '@/lib/utils/app-url';
 import {
   createWebhookLogger,
   isEventProcessed,
@@ -164,4 +165,22 @@ async function updateCallFromWebhook(
   await from(supabase, 'calls')
     .update(updates)
     .eq('id', callId);
+
+  // Trigger automatic transcription + SPICED analysis if recording available
+  if (payload.recordUrl && payload.duration >= 30) {
+    const appUrl = getAppUrl();
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (appUrl && serviceRoleKey) {
+      fetch(`${appUrl}/api/workers/transcribe-call`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ callId }),
+      }).catch((err) => {
+        logger.warn('Failed to trigger transcription worker', { callId, error: String(err) });
+      });
+    }
+  }
 }
