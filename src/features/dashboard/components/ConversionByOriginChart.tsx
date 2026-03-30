@@ -7,7 +7,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -53,7 +52,7 @@ function ConversionBarChart({ data, height }: { data: ConversionByOriginEntry[];
             color: 'var(--foreground)',
           }}
         />
-        <Legend />
+        {/* Legend removed per design request */}
         <Bar
           dataKey="converted"
           name="Convertidos"
