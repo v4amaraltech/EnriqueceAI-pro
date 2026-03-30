@@ -67,9 +67,9 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Metas de Ligações por Vendedor</h2>
+        <h2 className="text-xl font-semibold">Metas Diárias de Ligações por Vendedor</h2>
         <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-          Defina metas individuais de ligações. Vendedores sem meta individual usam o padrão da organização ({orgDefault}).
+          Defina metas diárias individuais de ligações. Vendedores sem meta individual usam o padrão da organização ({orgDefault}/dia).
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export function CallDailyTargets({ orgDefault, members, initialTargets }: CallDa
               <tr className="border-b bg-[var(--muted)]/50">
                 <th className="p-3 text-left text-sm font-medium">Vendedor</th>
                 <th className="p-3 text-left text-sm font-medium">Função</th>
-                <th className="p-3 text-left text-sm font-medium">Meta Individual</th>
+                <th className="p-3 text-left text-sm font-medium">Meta Diária</th>
               </tr>
             </thead>
             <tbody>
