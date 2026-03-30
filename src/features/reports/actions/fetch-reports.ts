@@ -44,13 +44,20 @@ export async function fetchReportData(
     ? new Date(dateRange.to + 'T23:59:59').toISOString()
     : undefined;
 
+  // Fetch org cadence IDs for enrollment isolation (cadence_enrollments has no org_id column)
+  const { data: orgCadences } = (await from(supabase, 'cadences')
+    .select('id')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)) as { data: { id: string }[] | null };
+  const orgCadenceIds = cadenceId ? [cadenceId] : (orgCadences ?? []).map((c) => c.id);
+
   // Build queries with optional upper bound for custom date ranges
   let enrollmentsQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, enrolled_by')
+    .in('cadence_id', orgCadenceIds.length > 0 ? orgCadenceIds : ['__none__'])
     .gte('enrolled_at', sinceDate);
   if (untilDate) enrollmentsQuery = enrollmentsQuery.lte('enrolled_at', untilDate);
   if (sdrId) enrollmentsQuery = enrollmentsQuery.eq('enrolled_by', sdrId);
-  if (cadenceId) enrollmentsQuery = enrollmentsQuery.eq('cadence_id', cadenceId);
 
   let interactionsQuery = from(supabase, 'interactions')
     .select('type, cadence_id, lead_id, created_at, performed_by')

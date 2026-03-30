@@ -203,7 +203,7 @@ export function DashboardFilters({
                     }
                   >
                     <Avatar className="mr-2 h-5 w-5 text-[10px]">
-                      <AvatarImage src={m.avatar_url} alt={displayName} />
+                      {m.avatar_url && <AvatarImage src={m.avatar_url} alt={displayName} />}
                       <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
                     </Avatar>
                     {displayName}
