@@ -56,10 +56,10 @@ function ControlRow({ row }: { row: DailyControlRow }) {
       {/* Duração */}
       <td className="p-3 text-center text-sm text-[var(--muted-foreground)]" />
       {/* Leads */}
-      <td className="p-3 text-center text-sm">{row.prospecting}</td>
+      <td className="p-3 text-center text-sm border-l border-[var(--border)]">{row.prospecting}</td>
       <td className="p-3 text-center text-sm">{row.available}</td>
       <td className="p-3 text-center text-sm text-green-600 dark:text-green-400">{row.won}</td>
-      <td className="p-3 text-center text-sm text-[#E53935]">{row.lost}</td>
+      <td className="p-3 text-center text-sm text-[#E53935] border-r border-[var(--border)]">{row.lost}</td>
       {/* Atividades */}
       <td className="p-3 text-center text-sm">{row.pending}</td>
       <td className="p-3 text-center text-sm">{row.completed}</td>
@@ -109,16 +109,16 @@ export function PerformanceAnalyticsView({ data }: PerformanceAnalyticsViewProps
             {/* Group headers */}
             <tr className="border-b border-[var(--border)]">
               <th className="p-3 text-left font-semibold text-xs uppercase tracking-wider" colSpan={3}>Time</th>
-              <th className="p-3 text-center font-semibold text-xs uppercase tracking-wider bg-blue-50 dark:bg-blue-950/30" colSpan={4}>Leads</th>
+              <th className="p-3 text-center font-semibold text-xs uppercase tracking-wider border-x border-[var(--border)]" colSpan={4}>Leads</th>
               <th className="p-3 text-center font-semibold text-xs uppercase tracking-wider" colSpan={6}>Atividades</th>
             </tr>
             {/* Column headers */}
-            <tr className="border-b border-[var(--border)] bg-[var(--muted)]/30">
+            <tr className="border-b border-[var(--border)]">
               <th className="p-3 text-left font-medium">Usuários</th>
               <th className="p-3 text-left font-medium">Atividade Atual</th>
               <th className="p-3 text-center font-medium">Duração</th>
-              <th className="p-3 text-center font-medium bg-blue-50/50 dark:bg-blue-950/20">Prospectando</th>
-              <th className="p-3 text-center font-medium bg-blue-50/50 dark:bg-blue-950/20">
+              <th className="p-3 text-center font-medium border-l border-[var(--border)]">Prospectando</th>
+              <th className="p-3 text-center font-medium">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -133,8 +133,8 @@ export function PerformanceAnalyticsView({ data }: PerformanceAnalyticsViewProps
                   </Tooltip>
                 </TooltipProvider>
               </th>
-              <th className="p-3 text-center font-medium bg-blue-50/50 dark:bg-blue-950/20">Ganhos</th>
-              <th className="p-3 text-center font-medium bg-blue-50/50 dark:bg-blue-950/20">Perdidos</th>
+              <th className="p-3 text-center font-medium">Ganhos</th>
+              <th className="p-3 text-center font-medium border-r border-[var(--border)]">Perdidos</th>
               <th className="p-3 text-center font-medium">Pendentes</th>
               <th className="p-3 text-center font-medium">Realizadas</th>
               <th className="p-3 text-center font-medium">Ignoradas</th>
