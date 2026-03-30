@@ -87,6 +87,24 @@ export async function markLeadAsLost(
     .eq('lead_id', leadId)
     .in('status', ['active', 'paused']);
 
+  // 3. Record system interaction for timeline visibility
+  const { data: reason } = (await from(supabase, 'loss_reasons')
+    .select('name')
+    .eq('id', lossReasonId)
+    .single()) as { data: { name: string } | null };
+
+  const lossMessage = `Lead marcado como perdido — Motivo: ${reason?.name ?? 'Desconhecido'}${lossNotes ? ` | Obs: ${lossNotes}` : ''}`;
+  await from(supabase, 'interactions')
+    .insert({
+      org_id: orgId,
+      lead_id: leadId,
+      channel: 'system',
+      type: 'sent',
+      message_content: lossMessage,
+      performed_by: auth.data.userId,
+      metadata: { system_event: 'lead_lost', loss_reason_id: lossReasonId, loss_reason_name: reason?.name },
+    } as Record<string, unknown>);
+
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);
 

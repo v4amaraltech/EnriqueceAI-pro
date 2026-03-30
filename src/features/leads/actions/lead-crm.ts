@@ -244,6 +244,18 @@ export async function markLeadAsWon(
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
 
+    // 2b. Record system interaction for timeline visibility
+    await from(supabase, 'interactions')
+      .insert({
+        org_id: orgId,
+        lead_id: leadId,
+        channel: 'system',
+        type: 'sent',
+        message_content: 'Lead marcado como ganho',
+        performed_by: userId,
+        metadata: { system_event: 'lead_won' },
+      } as Record<string, unknown>);
+
     // 3. Push to CRM if requested
     let dealCreated = false;
     if (crmOptions) {
