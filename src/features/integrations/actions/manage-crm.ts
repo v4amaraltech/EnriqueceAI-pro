@@ -356,18 +356,34 @@ export async function triggerCrmSync(
       return { success: false, error: 'Conexão CRM não encontrada' };
     }
 
+    // If stuck in syncing for more than 10 minutes, auto-reset
     if (connection.status === 'syncing') {
-      return { success: false, error: 'Sincronização já em andamento' };
+      const updatedAt = new Date(connection.updated_at).getTime();
+      const staleMs = 10 * 60 * 1000; // 10 minutes
+      if (Date.now() - updatedAt < staleMs) {
+        return { success: false, error: 'Sincronização já em andamento' };
+      }
+      // Stale sync — reset and allow retry
+      console.warn('[triggerCrmSync] Resetting stale syncing status for connection:', connection.id);
     }
 
     // Mark as syncing
     await from(supabase, 'crm_connections')
-      .update({ status: 'syncing' } as Record<string, unknown>)
+      .update({ status: 'syncing', updated_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', connection.id);
 
-    // Run sync in background (fire-and-forget from the action perspective)
-    void CrmSyncService.syncConnection(connection.id).catch((err) => {
+    // Run sync in background with error recovery
+    void CrmSyncService.syncConnection(connection.id).catch(async (err) => {
       console.error('[triggerCrmSync] Sync failed:', err);
+      // Reset status so it doesn't stay stuck as 'syncing' forever
+      try {
+        const serviceSupabase = (await import('@/lib/supabase/service')).createServiceRoleClient();
+        await from(serviceSupabase, 'crm_connections')
+          .update({ status: 'error', updated_at: new Date().toISOString() } as Record<string, unknown>)
+          .eq('id', connection.id);
+      } catch {
+        console.error('[triggerCrmSync] Failed to reset status after error');
+      }
     });
 
     return { success: true, data: { message: 'Sincronização iniciada' } };
