@@ -63,7 +63,7 @@ export async function fetchCrmPipelines(): Promise<
     const { data: rows, error: queryError } = (await from(serviceSupabase, 'crm_connections')
       .select('*')
       .eq('org_id', orgId)
-      .eq('status', 'connected')) as { data: CrmConnectionRow[] | null; error: { message: string } | null };
+      .in('status', ['connected', 'syncing'])) as { data: CrmConnectionRow[] | null; error: { message: string } | null };
 
     if (queryError) {
       console.error('[fetchCrmPipelines] Query error:', queryError.message);
