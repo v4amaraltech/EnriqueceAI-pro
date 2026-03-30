@@ -68,6 +68,14 @@ export async function updateLead(
     return { success: false, error: 'Nenhum campo válido para atualizar' };
   }
 
+  // Sanitize: convert empty strings to null for fields with DB constraints
+  if ('cnpj' in safeUpdates && !(safeUpdates.cnpj as string)?.trim()) {
+    safeUpdates.cnpj = null;
+  }
+  if ('canal' in safeUpdates && !(safeUpdates.canal as string)?.trim()) {
+    delete safeUpdates.canal;
+  }
+
   // Fetch current lead to detect email/phone changes
   const { data: currentLead } = (await from(supabase, 'leads')
     .select('email, telefone, email_bounced_at')
