@@ -76,14 +76,17 @@ export class EvolutionWhatsAppService {
       );
 
       if (!response.ok) {
-        const errorBody = (await response.json().catch(() => ({}))) as {
-          message?: string;
-          error?: string;
-        };
-        return {
-          success: false,
-          error: errorBody?.message ?? errorBody?.error ?? `Evolution API error: ${response.status}`,
-        };
+        const rawError = await response.text().catch(() => '');
+        let errorMsg = `Evolution API error: ${response.status}`;
+        try {
+          const errorBody = JSON.parse(rawError) as { message?: string; error?: string; response?: { message?: string[] | string } };
+          const responseMsg = Array.isArray(errorBody?.response?.message) ? errorBody.response.message.join(', ') : errorBody?.response?.message;
+          errorMsg = responseMsg ?? errorBody?.message ?? errorBody?.error ?? errorMsg;
+        } catch {
+          if (rawError) errorMsg = rawError;
+        }
+        console.error('[evolution] sendMessage failed:', response.status, errorMsg, 'instance:', instance.instance_name, 'phone:', formattedPhone);
+        return { success: false, error: errorMsg };
       }
 
       const result = (await response.json()) as {
