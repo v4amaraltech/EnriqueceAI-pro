@@ -93,7 +93,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
+          <Button asChild className="bg-[#FFCA28] text-black hover:bg-[#FFB300]">
             <Link href="/leads/import/apollo">
               <Globe className="mr-2 h-4 w-4" />
               Importar do Apollo
