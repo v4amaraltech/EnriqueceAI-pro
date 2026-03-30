@@ -151,6 +151,15 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // Filtered activities (from visible only)
   const filtered = useMemo(() => applyFilters(visibleActivities, filters), [visibleActivities, filters]);
 
+  // Auto-open first activity when quick mode is activated
+  const handleToggleQuickMode = useCallback(() => {
+    const newMode = !quickMode;
+    setQuickMode(newMode);
+    if (newMode && filtered.length > 0 && selectedIndex === null) {
+      setSelectedIndex(0);
+    }
+  }, [quickMode, filtered.length, selectedIndex]);
+
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
@@ -278,7 +287,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             <Button
               variant={quickMode ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setQuickMode(!quickMode)}
+              onClick={handleToggleQuickMode}
               className="gap-1.5 shrink-0"
             >
               <Zap className="h-3.5 w-3.5" />
@@ -377,6 +386,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
             dialerProvider={dialerProvider}
+            quickMode={quickMode}
           />
         </>
       )}

@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react';
 
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -29,6 +29,7 @@ interface ActivityExecutionSheetProps {
   onNavigate: (index: number) => void;
   onActivityDone: (enrollmentId: string, stepId: string) => void;
   dialerProvider?: DialerProvider;
+  quickMode?: boolean;
 }
 
 export function ActivityExecutionSheet({
@@ -38,6 +39,7 @@ export function ActivityExecutionSheet({
   onNavigate,
   onActivityDone,
   dialerProvider,
+  quickMode = false,
 }: ActivityExecutionSheetProps) {
   const [isSending, startSendTransition] = useTransition();
 
@@ -48,8 +50,14 @@ export function ActivityExecutionSheet({
     onActivityDone(enrollmentId, stepId);
 
     if (selectedIndex !== null && selectedIndex < activities.length - 1) {
+      if (quickMode) {
+        toast.success(`Avançando... (${selectedIndex + 1}/${activities.length})`);
+      }
       onNavigate(selectedIndex);
     } else {
+      if (quickMode) {
+        toast.success('Todas as atividades concluídas!');
+      }
       onClose();
     }
   }
@@ -186,6 +194,12 @@ export function ActivityExecutionSheet({
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              {quickMode && (
+                <div className="absolute top-3 left-4 z-10 flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  <Zap className="h-3 w-3" />
+                  Modo rápido
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
