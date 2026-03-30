@@ -633,6 +633,7 @@ export async function markLeadAsWon(
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);
+    revalidatePath('/atividades');
 
     return { success: true, data: { dealCreated } };
   } catch (error) {

@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
@@ -66,6 +68,12 @@ export async function scheduleMeeting(
         .eq('org_id', orgId);
     }
 
+    // Complete active/paused cadence enrollments — meeting scheduled means cadence is done
+    await from(supabase, 'cadence_enrollments')
+      .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+      .eq('lead_id', leadId)
+      .in('status', ['active', 'paused']);
+
     // Send meeting briefing email to closer (fire-and-forget)
     if (input.closerId) {
       sendMeetingBriefingEmail(supabase, {
@@ -79,6 +87,9 @@ export async function scheduleMeeting(
         meetLink: event.meetLink,
       }).catch((err) => console.error('[scheduleMeeting] Briefing email error:', err));
     }
+
+    revalidatePath('/atividades');
+    revalidatePath(`/leads/${leadId}`);
 
     // Dispatch call.scheduled webhook
     dispatchWebhookEvent(supabase, orgId, 'call.scheduled', {

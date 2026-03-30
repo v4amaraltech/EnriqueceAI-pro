@@ -107,6 +107,7 @@ export async function markLeadAsLost(
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);
+  revalidatePath('/atividades');
 
   return { success: true, data: undefined };
 }
