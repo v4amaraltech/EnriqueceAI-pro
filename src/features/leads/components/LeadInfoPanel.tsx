@@ -235,6 +235,8 @@ export function LeadInfoPanel({
           phones: validPhones,
           job_title: editFields.job_title || null,
           lead_source: editFields.lead_source || null,
+          canal: editFields.canal || null,
+          cnpj: editFields.cnpj || null,
           instagram: editFields.instagram || null,
           linkedin: editFields.linkedin || null,
           website: editFields.website || null,
