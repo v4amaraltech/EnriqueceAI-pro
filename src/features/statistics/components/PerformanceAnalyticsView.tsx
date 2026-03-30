@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Info, Mail, Phone, Search } from 'lucide-react';
-import Image from 'next/image';
 
 import { LeadAvatar } from '@/features/leads/components/LeadAvatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
@@ -16,14 +15,18 @@ function formatLastActivity(isoDate?: string): string {
 }
 
 function UserAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
-  if (avatarUrl) {
+  const [imgError, setImgError] = useState(false);
+
+  if (avatarUrl && !imgError) {
     return (
-      <Image
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={avatarUrl}
         alt={name}
         width={32}
         height={32}
         className="h-8 w-8 rounded-full object-cover"
+        onError={() => setImgError(true)}
       />
     );
   }
