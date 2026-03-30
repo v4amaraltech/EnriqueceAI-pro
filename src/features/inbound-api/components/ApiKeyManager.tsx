@@ -234,11 +234,15 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 <tr className="border-b"><td className="p-2">job_title</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Cargo do contato</td></tr>
                 <tr className="border-b"><td className="p-2">lead_source</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Origem (ex: Outbound, Inbound Marketing)</td></tr>
                 <tr className="border-b"><td className="p-2">canal</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Canal (ex: Facebook, Google, Instagram)</td></tr>
+                <tr className="border-b"><td className="p-2">instagram</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">@ ou URL do Instagram</td></tr>
+                <tr className="border-b"><td className="p-2">linkedin</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do LinkedIn</td></tr>
+                <tr className="border-b"><td className="p-2">website</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do site</td></tr>
+                <tr className="border-b"><td className="p-2">razao_social</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Razão social da empresa</td></tr>
+                <tr className="border-b"><td className="p-2">porte</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Porte da empresa (ex: MEI, ME, EPP)</td></tr>
+                <tr className="border-b"><td className="p-2">faturamento_estimado</td><td className="p-2">number</td><td className="p-2">Não</td><td className="p-2 font-sans">Faturamento estimado em R$</td></tr>
                 <tr className="border-b"><td className="p-2">is_inbound</td><td className="p-2">boolean</td><td className="p-2">Não</td><td className="p-2 font-sans">Se é lead inbound (default: true)</td></tr>
                 <tr className="border-b"><td className="p-2">assigned_to</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID do SDR responsável</td></tr>
                 <tr className="border-b"><td className="p-2">notes</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Observações sobre o lead</td></tr>
-                <tr className="border-b"><td className="p-2">linkedin</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do LinkedIn</td></tr>
-                <tr className="border-b"><td className="p-2">website</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do site</td></tr>
                 <tr><td className="p-2">custom_fields</td><td className="p-2">object</td><td className="p-2">Não</td><td className="p-2 font-sans">Campos personalizados {"{ \"campo_id\": \"valor\" }"}</td></tr>
               </tbody>
             </table>
