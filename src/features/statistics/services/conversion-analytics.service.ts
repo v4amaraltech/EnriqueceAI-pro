@@ -55,28 +55,27 @@ export async function fetchConversionAnalyticsData(
   const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
-  // Fetch enrollments
+  // Fetch cadences first (for org isolation of enrollments)
+  const { data: rawCadences } = (await from(supabase, 'cadences')
+    .select('id, name')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)) as { data: CadenceRow[] | null };
+  const cadences = rawCadences ?? [];
+
+  // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column)
+  const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, enrolled_by, created_at, updated_at')
-    .eq('org_id', orgId)
+    .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
   if (userIds && userIds.length > 0) {
     enrQuery = enrQuery.in('enrolled_by', userIds);
   }
-  if (cadenceId) {
-    enrQuery = enrQuery.eq('cadence_id', cadenceId);
-  }
 
   const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
-
-  // Fetch cadences
-  const { data: rawCadences } = (await from(supabase, 'cadences')
-    .select('id, name')
-    .eq('org_id', orgId)) as { data: CadenceRow[] | null };
-  const cadences = rawCadences ?? [];
 
   const funnel = calculateFunnel(leads, interactions);
   const stageConversions = calculateStageConversions(funnel);
