@@ -94,16 +94,28 @@ export async function sendMeetingBriefingEmail(
     const dateStr = startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-    // Create feedback request so the closer can respond after the meeting
-    // Uses service role because closer_feedback_requests has no INSERT policy for members
+    // Reuse existing pending feedback request or create new one
     let feedbackUrl: string | null = null;
     const serviceSupabase = createServiceRoleClient();
-    const { data: feedbackReq } = (await from(serviceSupabase, 'closer_feedback_requests')
-      .insert({ org_id: orgId, lead_id: leadId, closer_id: closerId })
+
+    // Check for existing pending feedback for this lead+closer
+    const { data: existingReq } = (await from(serviceSupabase, 'closer_feedback_requests')
       .select('token')
-      .single()) as { data: { token: string } | null };
-    if (feedbackReq) {
-      feedbackUrl = `${appUrl}/feedback/${feedbackReq.token}`;
+      .eq('lead_id', leadId)
+      .eq('closer_id', closerId)
+      .is('responded_at', null)
+      .maybeSingle()) as { data: { token: string } | null };
+
+    if (existingReq) {
+      feedbackUrl = `${appUrl}/feedback/${existingReq.token}`;
+    } else {
+      const { data: feedbackReq } = (await from(serviceSupabase, 'closer_feedback_requests')
+        .insert({ org_id: orgId, lead_id: leadId, closer_id: closerId })
+        .select('token')
+        .single()) as { data: { token: string } | null };
+      if (feedbackReq) {
+        feedbackUrl = `${appUrl}/feedback/${feedbackReq.token}`;
+      }
     }
 
     const html = buildBriefingHtml({
