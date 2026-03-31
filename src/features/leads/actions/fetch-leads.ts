@@ -58,24 +58,29 @@ export async function fetchLeads(
     query = query.eq('lead_source', filters.lead_source);
   }
 
-  // Filter by cadence enrollment
+  // Filter by cadence enrollment (cadence_enrollments has no org_id — scope via cadence_id)
   if (filters.cadence_id) {
     if (filters.cadence_id === '__none__') {
-      // Leads without active enrollment — get enrolled lead IDs and exclude them
-      const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
-        .select('lead_id')
+      // Leads without active enrollment — get org cadence IDs first
+      const { data: orgCadences } = (await from(supabase, 'cadences')
+        .select('id')
         .eq('org_id', orgId)
-        .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
-      const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
-      if (enrolledIds.length > 0) {
-        // Supabase doesn't have .not.in(), so use filter with negation
-        query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
+        .is('deleted_at', null)) as { data: Array<{ id: string }> | null };
+      const orgCadenceIds = (orgCadences ?? []).map((c) => c.id);
+      if (orgCadenceIds.length > 0) {
+        const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
+          .select('lead_id')
+          .in('cadence_id', orgCadenceIds)
+          .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
+        const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
+        if (enrolledIds.length > 0) {
+          query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
+        }
       }
     } else {
       // Leads enrolled in a specific cadence
       const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
         .select('lead_id')
-        .eq('org_id', orgId)
         .eq('cadence_id', filters.cadence_id)
         .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
       const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
