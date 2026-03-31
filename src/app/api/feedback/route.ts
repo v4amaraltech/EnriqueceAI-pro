@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
@@ -82,9 +82,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Erro ao salvar feedback' }, { status: 500 });
     }
 
-    // Fire-and-forget: notify SDR via email
-    notifySdr(supabase, feedbackReq, result, rating, comment).catch((err) =>
-      console.error('[api/feedback] SDR notification error:', err),
+    // Notify SDR in background after response is sent
+    after(() =>
+      notifySdr(supabase, feedbackReq, result, rating, comment).catch((err) =>
+        console.error('[api/feedback] SDR notification error:', err),
+      ),
     );
 
     return NextResponse.json({ success: true });
