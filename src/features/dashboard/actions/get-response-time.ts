@@ -71,9 +71,9 @@ export async function getResponseTimeData(
   if (filters?.cadenceFocus && filters.cadenceFocus.length > 0 && filters.cadenceFocus.length < 3) {
     const allLeadIds = filteredLeads.map((l) => l.id);
     if (allLeadIds.length > 0) {
+      // cadence_enrollments has no org_id — lead_id already scoped by org via filteredLeads
       const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
         .select('lead_id, cadence_id')
-        .eq('org_id', orgId)
         .in('lead_id', allLeadIds)) as { data: { lead_id: string; cadence_id: string }[] | null };
 
       if (enrollments?.length) {

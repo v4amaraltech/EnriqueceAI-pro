@@ -29,9 +29,9 @@ export async function fetchStepAnalyticsData(
   // SDR filter: get lead_ids from enrollments if filtering by user
   let leadIdFilter: string[] | undefined;
   if (userIds && userIds.length > 0) {
+    // cadence_enrollments has no org_id — cadence_id already scopes to org
     const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
       .select('lead_id')
-      .eq('org_id', orgId)
       .eq('cadence_id', cadenceId)
       .in('enrolled_by', userIds)) as { data: { lead_id: string }[] | null };
     leadIdFilter = (enrollments ?? []).map((e) => e.lead_id);

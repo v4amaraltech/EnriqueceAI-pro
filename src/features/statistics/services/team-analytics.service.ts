@@ -51,9 +51,14 @@ export async function fetchTeamAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: InteractionQueryRow[] | null };
 
+  // cadence_enrollments has no org_id — scope via org cadences
+  const { data: orgCadencesForTeam } = (await from(supabase, 'cadences')
+    .select('id').eq('org_id', orgId).is('deleted_at', null)) as { data: { id: string }[] | null };
+  const teamCadenceIds = (orgCadencesForTeam ?? []).map((c) => c.id);
+
   const { data: rawEnrollments } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id, enrolled_by, status')
-    .eq('org_id', orgId)
+    .in('cadence_id', teamCadenceIds.length > 0 ? teamCadenceIds : ['__none__'])
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)) as { data: EnrollmentQueryRow[] | null };
 

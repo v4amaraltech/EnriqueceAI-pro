@@ -89,9 +89,12 @@ export async function fetchDrilldownData(
           .gte('created_at', fromDate)
           .lte('created_at', toDate)) as { data: { lead_id: string }[] | null };
 
+        // cadence_enrollments has no org_id — scope via org cadences
+        const { data: drillCadences } = (await from(supabase, 'cadences').select('id').eq('org_id', orgId).is('deleted_at', null)) as { data: { id: string }[] | null };
+        const drillCadenceIds = (drillCadences ?? []).map((c) => c.id);
         const { data: enrollmentLeads } = (await from(supabase, 'cadence_enrollments')
           .select('lead_id')
-          .eq('org_id', orgId)
+          .in('cadence_id', drillCadenceIds.length > 0 ? drillCadenceIds : ['__none__'])
           .gte('created_at', fromDate)
           .lte('created_at', toDate)) as { data: { lead_id: string }[] | null };
 
@@ -158,9 +161,12 @@ export async function fetchDrilldownData(
       }
 
       case 'cadence_enrollments': {
+        // cadence_enrollments has no org_id — scope via org cadences
+        const { data: enrCadences } = (await from(supabase, 'cadences').select('id').eq('org_id', orgId).is('deleted_at', null)) as { data: { id: string }[] | null };
+        const enrCadenceIds = (enrCadences ?? []).map((c) => c.id);
         let query = from(supabase, 'cadence_enrollments')
           .select('id, status, created_at, leads!inner(id, razao_social, nome_fantasia, email)', { count: 'exact' })
-          .eq('org_id', orgId)
+          .in('cadence_id', enrCadenceIds.length > 0 ? enrCadenceIds : ['__none__'])
           .gte('created_at', fromDate)
           .lte('created_at', toDate);
 
