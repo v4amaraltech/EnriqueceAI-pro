@@ -174,27 +174,6 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: Lea
           </Select>
         </div>
 
-        {/* UF */}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">UF</span>
-          <Select
-            value={activeUf}
-            onValueChange={(v) => handleFilterChange('uf', v)}
-          >
-            <SelectTrigger className="w-[100px]">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-              {ufOptions.map((uf) => (
-                <SelectItem key={uf} value={uf}>
-                  {uf}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Origem */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Origem</span>
