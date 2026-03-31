@@ -285,13 +285,6 @@ function buildBriefingHtml(data: {
 
               <!-- CTAs -->
               <table cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td align="center" style="padding: 8px 0 0;">
-                    <a href="${leadUrl}" style="display: inline-block; background: #E53935; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
-                      Ver lead na plataforma
-                    </a>
-                  </td>
-                </tr>
                 ${feedbackUrl ? `
                 <tr>
                   <td align="center" style="padding: 16px 0 0;">
