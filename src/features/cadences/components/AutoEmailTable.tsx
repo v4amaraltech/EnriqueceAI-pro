@@ -95,7 +95,7 @@ const HEALTH_STYLES: Record<HealthLevel, string> = {
 function MetricCell({ value, isPercent = false }: { value: number; isPercent?: boolean }) {
   const display = isPercent ? `${value.toFixed(1)}%` : value;
   return (
-    <TableCell className={`text-right tabular-nums ${value === 0 ? 'text-muted-foreground' : ''}`}>
+    <TableCell className={`text-center tabular-nums ${value === 0 ? 'text-muted-foreground' : ''}`}>
       {display}
     </TableCell>
   );
@@ -168,15 +168,15 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
           <TableHead className="min-w-[200px]">Nome</TableHead>
           <TableHead className="w-20">Saúde</TableHead>
           <TableHead className="w-16">Criador</TableHead>
-          <TableHead className="w-16 text-right">Ativo</TableHead>
-          <TableHead className="w-16 text-right">Pausado</TableHead>
-          <TableHead className="w-16 text-right">Enviados</TableHead>
-          <TableHead className="w-20 text-right">Rejeitado</TableHead>
-          <TableHead className="w-20 text-right">Bloqueado</TableHead>
-          <TableHead className="w-20 text-right">Finalizado</TableHead>
-          <TableHead className="w-20 text-right">Respondido</TableHead>
-          <TableHead className="w-20 text-right">Responder %</TableHead>
-          <TableHead className="w-24 text-right">Interessados %</TableHead>
+          <TableHead className="w-16 text-center">Ativo</TableHead>
+          <TableHead className="w-16 text-center">Pausado</TableHead>
+          <TableHead className="w-16 text-center">Enviados</TableHead>
+          <TableHead className="w-20 text-center">Rejeitado</TableHead>
+          <TableHead className="w-20 text-center">Bloqueado</TableHead>
+          <TableHead className="w-20 text-center">Finalizado</TableHead>
+          <TableHead className="w-20 text-center">Respondido</TableHead>
+          <TableHead className="w-20 text-center">Responder %</TableHead>
+          <TableHead className="w-24 text-center">Interessados %</TableHead>
           <TableHead className="w-12"></TableHead>
           <TableHead className="w-16">Fluxo</TableHead>
           <TableHead className="w-12">Ações</TableHead>
