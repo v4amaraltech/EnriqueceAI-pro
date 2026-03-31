@@ -184,7 +184,7 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: Lea
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
-            <SelectContent position="popper" sideOffset={4}>
+            <SelectContent>
               <SelectItem value={ALL_VALUE}>Todos</SelectItem>
               {sourceOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
