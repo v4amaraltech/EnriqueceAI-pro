@@ -258,29 +258,6 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: Lea
           </Select>
         </div>
 
-        {/* CNAE */}
-        {cnaes && cnaes.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--muted-foreground)]">CNAE</span>
-            <Select
-              value={activeCnae}
-              onValueChange={(v) => handleFilterChange('cnae', v)}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-                {cnaes.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
         {/* Cadência */}
         {cadences && cadences.length > 0 && (
           <div className="flex flex-col gap-1">
