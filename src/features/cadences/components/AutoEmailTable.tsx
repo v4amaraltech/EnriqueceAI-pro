@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { LeadAvatar } from '@/features/leads/components/LeadAvatar';
 import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
@@ -53,9 +54,17 @@ interface AutoEmailTableProps {
   onDeleteRequest: (id: string) => void;
 }
 
-function getCreatorName(userId: string | null, userMap: Record<string, string>): string {
+function getCreatorFirstName(userId: string | null, userMap: Record<string, string>): string {
   if (!userId) return '-';
-  return userMap[userId] ?? userId.substring(0, 2).toUpperCase();
+  const fullName = userMap[userId];
+  if (!fullName) return userId.substring(0, 2).toUpperCase();
+  return fullName.split(' ')[0] ?? fullName;
+}
+
+function getCreatorInitial(userId: string | null, userMap: Record<string, string>): string {
+  if (!userId) return '?';
+  const fullName = userMap[userId];
+  return (fullName?.[0] ?? userId[0] ?? '?').toUpperCase();
 }
 
 type HealthLevel = 'green' | 'yellow' | 'red' | 'gray';
@@ -225,8 +234,11 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
               </TableCell>
 
               {/* Created by */}
-              <TableCell className="max-w-[120px] truncate text-xs">
-                {getCreatorName(cadence.created_by, userMap)}
+              <TableCell>
+                <div className="flex items-center gap-1.5">
+                  <LeadAvatar name={userMap[cadence.created_by ?? ''] ?? null} size="sm" />
+                  <span className="text-xs">{getCreatorFirstName(cadence.created_by, userMap)}</span>
+                </div>
               </TableCell>
 
               {/* Metrics */}
