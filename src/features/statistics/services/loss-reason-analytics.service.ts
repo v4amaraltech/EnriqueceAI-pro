@@ -77,9 +77,14 @@ export async function fetchLossReasonAnalyticsData(
   const lossByCadence = buildLossByCadence(enrollments, cadences, reasons);
   const lossByCadenceStacked = buildLossByCadenceStacked(lostEnrollments, cadences, reasons);
 
-  // Build user-level stacked data
+  // Build user-level stacked data (grouped by lead's assigned_to, not enrolled_by)
   const memberInfoMap = await buildMemberInfoMap(supabase, orgId);
-  const lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap);
+  const lostLeadIds = [...new Set(lostEnrollments.map((e) => e.lead_id))];
+  const { data: lostLeads } = lostLeadIds.length > 0
+    ? (await from(supabase, 'leads').select('id, assigned_to').in('id', lostLeadIds)) as { data: Array<{ id: string; assigned_to: string | null }> | null }
+    : { data: [] as Array<{ id: string; assigned_to: string | null }> };
+  const leadAssignedMap = new Map((lostLeads ?? []).map((l) => [l.id, l.assigned_to]));
+  const lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap, leadAssignedMap);
 
   const topReason = reasonsRanking[0];
 
@@ -223,6 +228,7 @@ function buildLossByUserStacked(
   lostEnrollments: EnrollmentQueryRow[],
   reasons: LossReasonRow[],
   memberInfoMap: Map<string, { name: string }>,
+  leadAssignedMap: Map<string, string | null>,
 ): LossByUserStackedRow[] {
   const reasonNameMap = new Map(reasons.map((r) => [r.id, r.name]));
 
@@ -238,13 +244,15 @@ function buildLossByUserStacked(
     colorIdx++;
   }
 
-  // Group by user
+  // Group by lead's assigned_to (SDR responsible), fallback to enrolled_by
   const userMap = new Map<string, Map<string, number>>();
   for (const e of lostEnrollments) {
-    if (!e.loss_reason_id || !e.enrolled_by) continue;
-    const rMap = userMap.get(e.enrolled_by) ?? new Map<string, number>();
+    if (!e.loss_reason_id) continue;
+    const userId = leadAssignedMap.get(e.lead_id) ?? e.enrolled_by;
+    if (!userId) continue;
+    const rMap = userMap.get(userId) ?? new Map<string, number>();
     rMap.set(e.loss_reason_id, (rMap.get(e.loss_reason_id) ?? 0) + 1);
-    userMap.set(e.enrolled_by, rMap);
+    userMap.set(userId, rMap);
   }
 
   const rows: LossByUserStackedRow[] = [];
