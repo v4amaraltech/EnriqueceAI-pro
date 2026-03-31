@@ -58,7 +58,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
-    .order('next_step_due', { ascending: true })
+    .order('enrolled_at', { ascending: false })
     .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
   const qErr = handleQueryError(enrollError, 'Erro ao buscar atividades pendentes', 'activities');
