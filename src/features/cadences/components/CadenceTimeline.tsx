@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripHorizontal, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 
@@ -97,7 +97,7 @@ function SortableStepItem({
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="h-4 w-4" />
+        <GripHorizontal className="h-4 w-4" />
       </button>
       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${config.bgColor}`}>
         <span className={`text-xs font-bold ${config.color}`}>{globalNumber}</span>
