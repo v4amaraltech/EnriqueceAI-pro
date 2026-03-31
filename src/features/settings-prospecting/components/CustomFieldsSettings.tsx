@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { Check, HelpCircle, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, HelpCircle, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -358,7 +358,7 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
