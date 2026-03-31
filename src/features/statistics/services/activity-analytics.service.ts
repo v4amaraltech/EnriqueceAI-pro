@@ -35,6 +35,7 @@ export async function fetchActivityAnalyticsData(
   let query = from(supabase, 'interactions')
     .select('id, type, channel, lead_id, created_at, performed_by')
     .eq('org_id', orgId)
+    .not('channel', 'in', '(system,calendar)')
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
