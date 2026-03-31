@@ -17,16 +17,24 @@ export interface CloserFeedbackRow {
   expires_at: string;
 }
 
-export async function fetchCloserFeedbacks(): Promise<ActionResult<CloserFeedbackRow[]>> {
+export async function fetchCloserFeedbacks(
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ActionResult<CloserFeedbackRow[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, error } = (await from(supabase, 'closer_feedback_requests')
+  let query = from(supabase, 'closer_feedback_requests')
     .select('id, result, rating, comment, sent_at, responded_at, expires_at, lead_id, closer_id')
     .eq('org_id', orgId)
     .order('sent_at', { ascending: false })
-    .limit(100)) as {
+    .limit(200);
+
+  if (dateFrom) query = query.gte('sent_at', new Date(dateFrom).toISOString());
+  if (dateTo) query = query.lte('sent_at', new Date(dateTo + 'T23:59:59').toISOString());
+
+  const { data, error } = (await query) as {
     data: Array<{
       id: string;
       result: string | null;

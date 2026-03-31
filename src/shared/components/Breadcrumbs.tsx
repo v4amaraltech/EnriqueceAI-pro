@@ -35,6 +35,7 @@ const pathLabels: Record<string, string> = {
   blacklist: 'Blacklist de E-mails',
   'custom-fields': 'Campos Personalizados',
   closers: 'Closers',
+  'closer-feedbacks': 'Feedbacks dos Closers',
   'fit-score': 'Fit Score',
 
   teams: 'Times',
