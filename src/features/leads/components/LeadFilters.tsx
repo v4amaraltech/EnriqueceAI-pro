@@ -174,48 +174,6 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: Lea
           </Select>
         </div>
 
-        {/* Enrichment */}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Enriquecimento</span>
-          <Select
-            value={activeEnrichment}
-            onValueChange={(v) => handleFilterChange('enrichment_status', v)}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-              {enrichmentStatusValues.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {enrichmentLabels[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Porte */}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">Porte</span>
-          <Select
-            value={activePorte}
-            onValueChange={(v) => handleFilterChange('porte', v)}
-          >
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>Todos</SelectItem>
-              {porteOptions.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* UF */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">UF</span>
