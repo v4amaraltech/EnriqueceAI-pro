@@ -176,9 +176,9 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     setPage(1);
   }, []);
 
-  // Cadence options for filter (from visible activities only)
+  // Cadence options for filter (from visible activities only, trimmed to avoid duplicates)
   const cadenceOptions = useMemo(
-    () => [...new Set(visibleActivities.map((a) => a.cadenceName))].sort(),
+    () => [...new Set(visibleActivities.map((a) => a.cadenceName.trim()))].sort(),
     [visibleActivities],
   );
 
