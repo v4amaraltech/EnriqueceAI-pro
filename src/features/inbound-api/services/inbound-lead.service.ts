@@ -131,12 +131,17 @@ async function ingestSingleLead(
     cnpj: data.cnpj ?? null,
     job_title: data.job_title ?? null,
     lead_source: source,
+    canal: data.canal ?? null,
     is_inbound: data.is_inbound,
     assigned_to: data.assigned_to ?? null,
     linkedin: data.linkedin ?? null,
     website: data.website ?? null,
+    instagram: data.instagram ?? null,
+    porte: data.porte ?? null,
+    razao_social: data.razao_social ?? null,
+    faturamento_estimado: data.faturamento_estimado ?? null,
     notes: data.notes ?? null,
-    custom_fields: data.custom_fields ?? null,
+    custom_field_values: data.custom_fields ?? null,
   };
 
   const { data: lead, error } = await from(supabase, 'leads')
@@ -162,6 +167,13 @@ async function ingestSingleLead(
   // Trigger enrichment if CNPJ present (fire-and-forget via dynamic import)
   if (data.cnpj) {
     triggerEnrichment(leadId).catch((err) => console.error('[inbound] enrichment failed:', err));
+  }
+
+  // Enroll in cadence if cadence_id provided
+  if (data.cadence_id) {
+    enrollInCadence(supabase, orgId, leadId, data.cadence_id, data.assigned_to ?? null).catch((err) =>
+      console.error('[inbound] cadence enrollment failed:', err),
+    );
   }
 
   return { index, status: 'created', lead_id: leadId };
@@ -219,6 +231,34 @@ async function checkLeadLimitForOrg(
   }
 
   return { allowed: true };
+}
+
+async function enrollInCadence(
+  supabase: SupabaseClient,
+  orgId: string,
+  leadId: string,
+  cadenceId: string,
+  assignedTo: string | null,
+): Promise<void> {
+  // Validate cadence exists and is active
+  const { data: cadence } = await from(supabase, 'cadences')
+    .select('id, status')
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single() as { data: { id: string; status: string } | null };
+
+  if (!cadence || cadence.status !== 'active') return;
+
+  await from(supabase, 'cadence_enrollments')
+    .insert({
+      cadence_id: cadenceId,
+      lead_id: leadId,
+      org_id: orgId,
+      current_step: 1,
+      status: 'active',
+      enrolled_by: assignedTo,
+    } as Record<string, unknown>);
 }
 
 async function triggerEnrichment(leadId: string): Promise<void> {

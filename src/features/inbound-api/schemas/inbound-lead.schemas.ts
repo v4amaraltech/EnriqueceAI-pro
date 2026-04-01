@@ -18,6 +18,7 @@ export const inboundLeadSchema = z.object({
   faturamento_estimado: z.number().optional(),
   is_inbound: z.boolean().default(true),
   assigned_to: z.string().uuid('assigned_to deve ser UUID válido').optional(),
+  cadence_id: z.string().uuid('cadence_id deve ser UUID válido').optional(),
   notes: z.string().optional(),
   custom_fields: z.record(z.string()).optional(),
   linkedin: z.string().url('LinkedIn URL inválida').optional().or(z.literal('')),

@@ -242,6 +242,7 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 <tr className="border-b"><td className="p-2">faturamento_estimado</td><td className="p-2">number</td><td className="p-2">Não</td><td className="p-2 font-sans">Faturamento estimado em R$</td></tr>
                 <tr className="border-b"><td className="p-2">is_inbound</td><td className="p-2">boolean</td><td className="p-2">Não</td><td className="p-2 font-sans">Se é lead inbound (default: true)</td></tr>
                 <tr className="border-b"><td className="p-2">assigned_to</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID do SDR responsável</td></tr>
+                <tr className="border-b"><td className="p-2">cadence_id</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID da cadência para inscrever o lead automaticamente</td></tr>
                 <tr className="border-b"><td className="p-2">notes</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Observações sobre o lead</td></tr>
                 <tr><td className="p-2">custom_fields</td><td className="p-2">object</td><td className="p-2">Não</td><td className="p-2 font-sans">Campos personalizados {"{ \"campo_id\": \"valor\" }"}</td></tr>
               </tbody>
