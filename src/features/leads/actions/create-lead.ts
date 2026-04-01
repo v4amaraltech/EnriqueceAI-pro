@@ -80,19 +80,41 @@ export async function createLead(
 
   // Check duplicate by email within same org
   if (parsed.data.email) {
-    const { data: existingLead } = await from(supabase, 'leads')
+    const { data: existingByEmail } = await from(supabase, 'leads')
       .select('id, email, first_name, last_name')
       .eq('org_id', orgId)
       .eq('email', parsed.data.email)
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (existingLead) {
-      const name = [existingLead.first_name, existingLead.last_name].filter(Boolean).join(' ');
+    if (existingByEmail) {
+      const name = [existingByEmail.first_name, existingByEmail.last_name].filter(Boolean).join(' ');
       return {
         success: false,
         error: `Já existe um lead com o email ${parsed.data.email}${name ? ` (${name})` : ''}`,
       };
+    }
+  }
+
+  // Check duplicate by phone within same org
+  if (parsed.data.telefone) {
+    const cleanPhone = parsed.data.telefone.replace(/\D/g, '');
+    if (cleanPhone.length >= 8) {
+      const phoneSuffix = cleanPhone.slice(-8);
+      const { data: existingByPhone } = (await from(supabase, 'leads')
+        .select('id, telefone, first_name, last_name')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .like('telefone', `%${phoneSuffix}`)) as { data: Array<{ id: string; telefone: string | null; first_name: string | null; last_name: string | null }> | null };
+
+      if (existingByPhone && existingByPhone.length > 0) {
+        const dup = existingByPhone[0]!;
+        const name = [dup.first_name, dup.last_name].filter(Boolean).join(' ');
+        return {
+          success: false,
+          error: `Já existe um lead com o telefone ${parsed.data.telefone}${name ? ` (${name})` : ''}`,
+        };
+      }
     }
   }
 
