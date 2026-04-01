@@ -61,7 +61,8 @@ export async function fetchLeadsFinishedRanking(
 
   // Query enrollments in the period with lead_id for attribution
   let query = from(supabase, 'cadence_enrollments')
-    .select('lead_id, enrolled_by, status');
+    .select('lead_id, enrolled_by, status')
+    .eq('org_id', orgId);
 
   query = query.gte('updated_at', start).lt('updated_at', end);
 

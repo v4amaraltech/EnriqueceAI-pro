@@ -30,6 +30,7 @@ export async function fetchLossReasons(
   // Get enrollments with loss reasons in the period
   let query = from(supabase, 'cadence_enrollments')
     .select('loss_reason_id, cadence_id, enrolled_by')
+    .eq('org_id', orgId)
     .not('loss_reason_id', 'is', null)
     .gte('updated_at', start)
     .lt('updated_at', end);
@@ -110,6 +111,7 @@ export async function fetchConversionByOrigin(
   // Get enrollments in the period (to filter leads by cadence/user if needed)
   let enrollmentQuery = from(supabase, 'cadence_enrollments')
     .select('lead_id, cadence_id')
+    .eq('org_id', orgId)
     .gte('updated_at', start)
     .lt('updated_at', end);
 
