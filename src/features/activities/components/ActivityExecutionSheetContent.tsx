@@ -11,6 +11,7 @@ import { fetchVendorVariables } from '@/features/cadences/actions/fetch-vendor-v
 import { fetchGmailSignature } from '../actions/fetch-gmail-signature';
 import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
+import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
 import { resolveWhatsAppPhone, getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
@@ -40,6 +41,7 @@ export function ActivityExecutionSheetContent({
   dialerProvider,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [waConnected, setWaConnected] = useState<boolean | null>(null);
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
   const [body, setBody] = useState(activity.templateBody ?? '');
   const [aiPersonalized, setAiPersonalized] = useState(false);
@@ -83,6 +85,11 @@ export function ActivityExecutionSheetContent({
     });
 
     if (activity.channel === 'whatsapp') {
+      // Check WhatsApp connection status
+      checkWhatsAppConnected().then((connected) => {
+        if (!cancelled) setWaConnected(connected);
+      });
+
       // Fetch templates in parallel with preparing the message
       fetchWhatsAppTemplates().then((result) => {
         if (!cancelled && result.success) {
@@ -217,7 +224,14 @@ export function ActivityExecutionSheetContent({
   // WhatsApp
   if (activity.channel === 'whatsapp') {
     return (
-      <ActivityWhatsAppCompose
+      <>
+        {waConnected === false && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+            <span className="text-lg">⚠️</span>
+            WhatsApp não conectado. Conecte em Configurações &gt; Integrações antes de enviar.
+          </div>
+        )}
+        <ActivityWhatsAppCompose
         to={to}
         body={body}
         renderedPreview={renderedPreview}
@@ -233,6 +247,7 @@ export function ActivityExecutionSheetContent({
         onSend={() => onSend('', renderedPreview, aiPersonalized, to)}
         onSkip={onSkip}
       />
+      </>
     );
   }
 
