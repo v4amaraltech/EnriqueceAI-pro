@@ -1,18 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-
 import type { LucideIcon } from 'lucide-react';
-import { Maximize2, TrendingDown, TrendingUp } from 'lucide-react';
+import { TrendingDown, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
 
 import type { RankingCardData } from '../types';
 
@@ -198,8 +190,6 @@ export function RankingCard({
   secondaryColumnLabel,
   averageLabel,
 }: RankingCardProps) {
-  const [expanded, setExpanded] = useState(false);
-
   const contentProps: RankingContentProps = {
     icon: Icon,
     iconColor,
@@ -212,32 +202,13 @@ export function RankingCard({
   };
 
   return (
-    <>
-      <div className="flex flex-col rounded-lg border bg-card">
-        {/* Title */}
-        <div className="flex items-center justify-between px-6 pt-6">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-            title="Expandir"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </button>
-        </div>
-
-        <RankingContent {...contentProps} />
+    <div className="flex flex-col rounded-lg border bg-card">
+      {/* Title */}
+      <div className="px-6 pt-6">
+        <h3 className="text-sm font-semibold">{title}</h3>
       </div>
 
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-          <RankingContent {...contentProps} />
-        </DialogContent>
-      </Dialog>
-    </>
+      <RankingContent {...contentProps} />
+    </div>
   );
 }
