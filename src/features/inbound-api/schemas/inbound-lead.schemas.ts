@@ -5,9 +5,9 @@ import { cnpjOptionalSchema } from '@/features/leads/schemas/lead.schemas';
 export const inboundLeadSchema = z.object({
   first_name: z.string().min(1, 'first_name é obrigatório'),
   last_name: z.string().optional(),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  telefone: z.string().optional(),
-  empresa: z.string().optional(),
+  email: z.string().email('email inválido').min(1, 'email é obrigatório'),
+  telefone: z.string().min(1, 'telefone é obrigatório'),
+  empresa: z.string().min(1, 'empresa é obrigatório'),
   cnpj: cnpjOptionalSchema,
   job_title: z.string().optional(),
   lead_source: z.string().optional(),
