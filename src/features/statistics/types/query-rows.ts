@@ -23,6 +23,7 @@ export interface InteractionQueryRow {
 export interface EnrollmentQueryRow {
   cadence_id: string;
   lead_id: string;
+  org_id: string;
   current_step: number | null;
   status: string;
   enrolled_by: string | null;

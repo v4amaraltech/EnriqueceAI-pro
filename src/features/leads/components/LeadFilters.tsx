@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { Search, User, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -53,9 +53,10 @@ interface LeadFiltersProps {
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
+  currentUserId?: string;
 }
 
-export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, currentUserId }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -153,6 +154,19 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions }: Lea
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
+        {/* Meus Leads toggle */}
+        {currentUserId && (
+          <Button
+            variant={activeAssigned === currentUserId ? 'default' : 'outline'}
+            size="sm"
+            className="h-9 gap-1.5 self-end"
+            onClick={() => handleFilterChange('assigned_to', activeAssigned === currentUserId ? ALL_VALUE : currentUserId)}
+          >
+            <User className="h-3.5 w-3.5" />
+            Meus leads
+          </Button>
+        )}
+
         {/* Status */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>

@@ -146,7 +146,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} />
+        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} currentUserId={currentUserId} />
       </Suspense>
 
       {/* Table or filtered empty */}

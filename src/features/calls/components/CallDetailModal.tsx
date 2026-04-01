@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useTransition } from 'react';
-import { Clock, DollarSign, Mic, Phone, Send, User } from 'lucide-react';
+import { Clock, DollarSign, FileText, Mic, Phone, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -163,6 +163,19 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                 </div>
               )}
             </div>
+
+            {/* Transcription */}
+            {activeCall.transcription && (
+              <div className="border-b px-6 py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="h-4 w-4 text-[var(--primary)]" />
+                  <span className="text-xs font-medium">Transcrição</span>
+                </div>
+                <div className="rounded-lg bg-[var(--muted)] p-3 max-h-[200px] overflow-y-auto">
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{activeCall.transcription}</p>
+                </div>
+              </div>
+            )}
 
             {/* Metadata */}
             <div className="border-b px-6 py-4 space-y-3">
