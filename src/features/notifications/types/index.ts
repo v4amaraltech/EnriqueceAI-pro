@@ -10,7 +10,13 @@ export type NotificationType =
   | 'usage_limit_alert'
   | 'closer_feedback'
   | 'activity_reminder'
-  | 'meeting_reminder';
+  | 'meeting_reminder'
+  | 'lead_won'
+  | 'lead_lost'
+  | 'import_completed'
+  | 'goal_reached'
+  | 'cadence_completed'
+  | 'whatsapp_reply';
 
 export type NotificationResourceType = 'lead' | 'cadence' | 'integration' | 'member';
 

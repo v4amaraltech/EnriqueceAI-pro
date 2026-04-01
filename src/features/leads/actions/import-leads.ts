@@ -8,6 +8,7 @@ import { ERR_LEAD_LIMIT_EXCEEDED, ERR_LEAD_LIMIT_REACHED } from '@/lib/constants
 import { MAX_CSV_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
+import { createNotification } from '@/features/notifications/services/notification.service';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { LeadImportErrorRow } from '../types';
@@ -233,6 +234,17 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   if (successCount > 0) {
     triggerAutoEnrichment(importId).catch((err) => console.error('[import] auto-enrichment failed:', err));
   }
+
+  // Notify user that import completed
+  createNotification({
+    org_id: orgId,
+    user_id: userId,
+    type: 'import_completed',
+    title: `Importação concluída: ${successCount} leads`,
+    body: totalErrorCount > 0 ? `${totalErrorCount} erro(s) encontrado(s)` : undefined,
+    resource_type: 'lead',
+    metadata: { import_id: importId, success_count: successCount, error_count: totalErrorCount },
+  }).catch((err) => console.error('[notification] import_completed failed:', err));
 
   revalidatePath('/leads');
   revalidatePath('/leads/import');

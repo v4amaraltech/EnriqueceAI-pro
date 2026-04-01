@@ -8,6 +8,7 @@ import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
@@ -630,6 +631,20 @@ export async function markLeadAsWon(
       resourceId: leadId,
       metadata: { crm_provider: crmOptions?.provider ?? null, deal_created: dealCreated },
     });
+
+    // Notify managers that a lead was won
+    const wonLead = (await from(supabase, 'leads').select('nome_fantasia, razao_social').eq('id', leadId).single() as { data: { nome_fantasia: string | null; razao_social: string | null } | null }).data;
+    const wonName = wonLead?.nome_fantasia ?? wonLead?.razao_social ?? 'Lead';
+    createNotificationsForOrgMembers({
+      orgId,
+      type: 'lead_won',
+      title: `Lead ganho: ${wonName}`,
+      body: crmOptions ? `Enviado para ${crmOptions.provider}` : undefined,
+      resourceType: 'lead',
+      resourceId: leadId,
+      roleFilter: 'manager',
+      excludeUserId: userId,
+    }).catch((err) => console.error('[notification] lead_won failed:', err));
 
     revalidatePath('/leads');
     revalidatePath(`/leads/${leadId}`);

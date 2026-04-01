@@ -9,6 +9,7 @@ import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 export async function archiveLead(
   leadId: string,
@@ -104,6 +105,20 @@ export async function markLeadAsLost(
       performed_by: auth.data.userId,
       metadata: { system_event: 'lead_lost', loss_reason_id: lossReasonId, loss_reason_name: reason?.name },
     } as Record<string, unknown>);
+
+  // Notify managers that a lead was lost
+  const leadName = (await from(supabase, 'leads').select('nome_fantasia, razao_social').eq('id', leadId).single() as { data: { nome_fantasia: string | null; razao_social: string | null } | null }).data;
+  const displayName = leadName?.nome_fantasia ?? leadName?.razao_social ?? 'Lead';
+  createNotificationsForOrgMembers({
+    orgId,
+    type: 'lead_lost',
+    title: `Lead perdido: ${displayName}`,
+    body: `Motivo: ${reason?.name ?? 'Desconhecido'}`,
+    resourceType: 'lead',
+    resourceId: leadId,
+    roleFilter: 'manager',
+    excludeUserId: auth.data.userId,
+  }).catch((err) => console.error('[notification] lead_lost failed:', err));
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);

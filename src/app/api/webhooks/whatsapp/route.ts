@@ -194,11 +194,11 @@ async function processIncomingMessage(
   }
 
   const { data: lead } = (await from(supabase, 'leads')
-    .select('id, org_id')
+    .select('id, org_id, nome_fantasia, razao_social, assigned_to')
     .in('telefone', phonesToMatch)
     .is('deleted_at', null)
     .limit(1)
-    .maybeSingle()) as { data: { id: string; org_id: string } | null };
+    .maybeSingle()) as { data: { id: string; org_id: string; nome_fantasia: string | null; razao_social: string | null; assigned_to: string | null } | null };
 
   if (!lead) {
     logger.warn('No lead found for phone', { phone });
@@ -207,13 +207,13 @@ async function processIncomingMessage(
 
   // Find active enrollment with whatsapp channel for this lead
   const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, current_step')
+    .select('id, cadence_id, current_step, enrolled_by')
     .eq('lead_id', lead.id)
     .eq('status', 'active')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()) as {
-    data: { id: string; cadence_id: string; current_step: number } | null;
+    data: { id: string; cadence_id: string; current_step: number; enrolled_by: string | null } | null;
   };
 
   if (!enrollment) {
@@ -256,6 +256,23 @@ async function processIncomingMessage(
     message_id: message.id,
     message_text: messageText,
   }).catch((err: unknown) => console.error('[whatsapp-webhook] dispatch replied failed:', err));
+
+  // Notify SDR (assigned_to) that lead replied on WhatsApp
+  const leadName = lead.nome_fantasia ?? lead.razao_social ?? phone;
+  const sdrUserId = lead.assigned_to ?? enrollment.enrolled_by;
+  if (sdrUserId) {
+    const { createNotification } = await import('@/features/notifications/services/notification.service');
+    createNotification({
+      org_id: lead.org_id,
+      user_id: sdrUserId,
+      type: 'whatsapp_reply',
+      title: `Resposta WhatsApp: ${leadName}`,
+      body: messageText.length > 100 ? messageText.slice(0, 100) + '...' : messageText,
+      resource_type: 'lead',
+      resource_id: lead.id,
+      metadata: { message_id: message.id, from: phone },
+    }).catch((err: unknown) => console.error('[whatsapp-webhook] notification failed:', err));
+  }
 
   logger.info('Reply detected', { lead_id: lead.id, enrollment_id: enrollment.id });
 }

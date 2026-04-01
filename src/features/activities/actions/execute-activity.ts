@@ -200,6 +200,20 @@ export async function executeActivity(
     await from(supabase, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', enrollmentId);
+
+    // Notify SDR that cadence is completed for this lead
+    const leadDisplay = input.to || leadId.slice(0, 8);
+    import('@/features/notifications/services/notification.service').then(({ createNotification }) =>
+      createNotification({
+        org_id: orgId,
+        user_id: userId,
+        type: 'cadence_completed',
+        title: 'Cadência concluída',
+        body: `Todos os steps foram executados para ${leadDisplay}`,
+        resource_type: 'lead',
+        resource_id: leadId,
+      }).catch((err) => console.error('[notification] cadence_completed failed:', err)),
+    );
   }
 
   revalidatePath('/atividades');
