@@ -32,8 +32,8 @@ export async function fetchLossReasons(
     .select('loss_reason_id, cadence_id, enrolled_by')
     .eq('org_id', orgId)
     .not('loss_reason_id', 'is', null)
-    .gte('updated_at', start)
-    .lt('updated_at', end);
+    .gte('enrolled_at', start)
+    .lt('enrolled_at', end);
 
   if (filters.cadenceIds.length > 0) {
     query = query.in('cadence_id', filters.cadenceIds);
@@ -112,8 +112,8 @@ export async function fetchConversionByOrigin(
   let enrollmentQuery = from(supabase, 'cadence_enrollments')
     .select('lead_id, cadence_id')
     .eq('org_id', orgId)
-    .gte('updated_at', start)
-    .lt('updated_at', end);
+    .gte('enrolled_at', start)
+    .lt('enrolled_at', end);
 
   if (filters.cadenceIds.length > 0) {
     enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);

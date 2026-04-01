@@ -64,7 +64,7 @@ export async function fetchLeadsFinishedRanking(
     .select('lead_id, enrolled_by, status')
     .eq('org_id', orgId);
 
-  query = query.gte('updated_at', start).lt('updated_at', end);
+  query = query.gte('enrolled_at', start).lt('enrolled_at', end);
 
   if (filters.cadenceIds.length > 0) {
     query = query.in('cadence_id', filters.cadenceIds);
