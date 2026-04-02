@@ -75,10 +75,11 @@ interface LeadDetailLayoutProps {
   enrollmentData: LeadEnrollmentData;
   customFieldDefs?: CustomFieldRow[];
   leadSourceOptions?: LeadSourceOption[];
+  jobTitleOptions?: { value: string; label: string }[];
   standardFieldSettings?: StandardFieldSettingRow[];
 }
 
-export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, standardFieldSettings }: LeadDetailLayoutProps) {
+export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings }: LeadDetailLayoutProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -452,7 +453,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       )}
 
       <div className="flex gap-6">
-        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} standardFieldSettings={standardFieldSettings} />
+        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} jobTitleOptions={jobTitleOptions} standardFieldSettings={standardFieldSettings} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
 

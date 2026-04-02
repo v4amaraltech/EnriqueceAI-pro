@@ -80,6 +80,7 @@ export interface LeadInfoPanelProps {
   kpis?: { completed: number; open: number; conversations: number };
   customFieldDefs?: CustomFieldRow[];
   leadSourceOptions?: LeadSourceOption[];
+  jobTitleOptions?: { value: string; label: string }[];
   standardFieldSettings?: StandardFieldSettingRow[];
 }
 
@@ -95,11 +96,13 @@ export function LeadInfoPanel({
   kpis,
   customFieldDefs,
   leadSourceOptions,
+  jobTitleOptions,
   standardFieldSettings,
 }: LeadInfoPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
+  const cargoOptions = jobTitleOptions ?? [];
 
   const orgContext = useContext(OrgContext);
   const members = orgContext?.members ?? [];
@@ -466,12 +469,31 @@ export function LeadInfoPanel({
                   {isFieldVisible('job_title') && (
                     <div className="space-y-1">
                       <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
-                      <Input
-                        value={editFields.job_title}
-                        onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
-                        className="h-8 text-sm"
-                        placeholder="Cargo"
-                      />
+                      {cargoOptions.length > 0 ? (
+                        <Select
+                          value={editFields.job_title || 'none'}
+                          onValueChange={(value) => setEditFields((prev) => ({ ...prev, job_title: value === 'none' ? '' : value }))}
+                        >
+                          <SelectTrigger className="w-full text-sm">
+                            <SelectValue placeholder="Selecione o cargo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">—</SelectItem>
+                            {cargoOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={editFields.job_title}
+                          onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
+                          className="h-8 text-sm"
+                          placeholder="Cargo"
+                        />
+                      )}
                     </div>
                   )}
                   {isFieldVisible('lead_source') && (

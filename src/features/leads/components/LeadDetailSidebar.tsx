@@ -5,6 +5,7 @@ import type { CustomFieldRow } from '@/features/settings-prospecting/types/custo
 import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
 
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
+import type { JobTitleOption } from '../actions/get-job-title-options';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import type { LeadRow } from '../types';
 import { LeadInfoPanel } from './LeadInfoPanel';
@@ -16,10 +17,11 @@ interface LeadDetailSidebarProps {
   timeline: TimelineEntry[];
   customFieldDefs?: CustomFieldRow[];
   leadSourceOptions?: LeadSourceOption[];
+  jobTitleOptions?: JobTitleOption[];
   standardFieldSettings?: StandardFieldSettingRow[];
 }
 
-export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldDefs, leadSourceOptions, standardFieldSettings }: LeadDetailSidebarProps) {
+export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings }: LeadDetailSidebarProps) {
   const { enrollment, enrollments, kpis } = enrollmentData;
 
   return (
@@ -31,6 +33,7 @@ export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldD
       kpis={kpis}
       customFieldDefs={customFieldDefs}
       leadSourceOptions={leadSourceOptions}
+      jobTitleOptions={jobTitleOptions}
       standardFieldSettings={standardFieldSettings}
     />
   );
