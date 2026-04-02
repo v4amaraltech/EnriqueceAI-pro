@@ -651,12 +651,12 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
       <div>
         <h2 className="mb-3 text-lg font-semibold">API & Webhooks</h2>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-          {/* Inbound API */}
+          {/* API Enriquece AI */}
           <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
               <Key className="h-5 w-5 text-[var(--muted-foreground)]" />
             </div>
-            <div className="w-32 shrink-0 font-medium">Inbound API</div>
+            <div className="w-32 shrink-0 font-medium">API Enriquece AI</div>
             <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Receba leads de plataformas externas via API REST e webhooks
             </div>
