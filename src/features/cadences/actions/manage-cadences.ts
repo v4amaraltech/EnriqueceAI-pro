@@ -344,6 +344,7 @@ export async function enrollLeads(
       .insert({
         cadence_id: cadenceId,
         lead_id: leadId,
+        org_id: orgId,
         current_step: 1,
         status: initialStatus,
         enrolled_by: userId,

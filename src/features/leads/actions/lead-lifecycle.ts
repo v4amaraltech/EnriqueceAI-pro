@@ -167,6 +167,7 @@ export async function scheduleNewProspection(
     .insert({
       cadence_id: cadenceId,
       lead_id: leadId,
+      org_id: orgId,
       current_step: 1,
       status: 'paused',
       enrolled_by: userId,
