@@ -7,6 +7,8 @@ import { z } from 'zod';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 
 const scheduleActivitySchema = z.object({
   leadId: z.string().uuid(),
@@ -69,8 +71,48 @@ export async function scheduleActivity(
       metadata: { system_event: 'activity_scheduled', scheduled_activity_id: data.id },
     } as Record<string, unknown>);
 
+  // Create Google Calendar event (fire-and-forget)
+  createCalendarEventForActivity(userId, orgId, leadId, channel, scheduledAt, notes).catch((err) =>
+    console.warn('[schedule-activity] Calendar event failed (non-blocking):', err),
+  );
+
   revalidatePath('/atividades');
   revalidatePath(`/leads/${leadId}`);
 
   return { success: true, data: { id: data.id } };
+}
+
+async function createCalendarEventForActivity(
+  userId: string,
+  orgId: string,
+  leadId: string,
+  channel: string,
+  scheduledAt: string,
+  notes?: string,
+): Promise<void> {
+  const connection = await getCalendarConnection(userId, orgId);
+  if (!connection) return; // Calendar not connected — skip silently
+
+  // Fetch lead name for event title
+  const supabase = await createServerSupabaseClient();
+  const { data: lead } = (await from(supabase, 'leads')
+    .select('nome_fantasia, razao_social, first_name, last_name')
+    .eq('id', leadId)
+    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; first_name: string | null; last_name: string | null } | null };
+
+  const channelLabels: Record<string, string> = {
+    phone: 'Ligação', whatsapp: 'WhatsApp', email: 'Email', linkedin: 'LinkedIn', research: 'Pesquisa',
+  };
+  const leadName = lead?.nome_fantasia ?? lead?.razao_social ?? [lead?.first_name, lead?.last_name].filter(Boolean).join(' ') ?? 'Lead';
+  const channelLabel = channelLabels[channel] ?? channel;
+
+  const startTime = new Date(scheduledAt);
+  const endTime = new Date(startTime.getTime() + 15 * 60 * 1000); // 15 min duration
+
+  await createCalendarEvent(connection, {
+    title: `${channelLabel}: ${leadName}`,
+    description: notes ? `Retorno agendado\n\n${notes}` : 'Retorno agendado via EnriqueceAI',
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+  });
 }
