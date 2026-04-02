@@ -51,15 +51,13 @@ export async function POST(request: Request) {
         sampleCall = calls.find((c: Record<string, unknown>) => c.record_url) ?? calls[0] ?? null;
       }
 
+      // Get recent calls (last 3) with full detail for debugging
+      const recentCalls = (callsResponse.ok ? (await callsResponse.json() as { data: Record<string, unknown>[] }).data?.slice(0, 3) : [])
+        ?.map((c: Record<string, unknown>) => ({ id: c.id, to: c.to, from: c.from, started_at: c.started_at, duration: c.duration, record_url: c.record_url })) ?? [];
+
       results.push({
         ramal: conn.ramal,
-        integrations: intData,
-        sampleCall: sampleCall ? {
-          id: sampleCall.id,
-          duration: sampleCall.duration,
-          record_url: sampleCall.record_url,
-          hangup_cause: sampleCall.hangup_cause,
-        } : null,
+        recentCalls,
       });
     } catch (err) {
       results.push({ ramal: conn.ramal, error: err instanceof Error ? err.message : String(err) });
