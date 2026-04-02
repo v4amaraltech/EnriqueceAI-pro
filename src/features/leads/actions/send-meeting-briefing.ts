@@ -66,7 +66,7 @@ export async function sendMeetingBriefingEmail(
 
   try {
     // Fetch all data in parallel
-    const [leadResult, closerResult, sdrResult, customFieldsResult] = await Promise.all([
+    const [leadResult, closerResult, sdrResult, customFieldsResult, lastCallResult] = await Promise.all([
       from(supabase, 'leads')
         .select('nome_fantasia, razao_social, first_name, last_name, job_title, email, telefone, phones, cnpj, porte, cnae, faturamento_estimado, lead_source, website, instagram, linkedin, notes, fit_score, endereco, custom_field_values')
         .eq('id', leadId)
@@ -80,6 +80,14 @@ export async function sendMeetingBriefingEmail(
         .select('id, field_name, field_type')
         .eq('org_id', orgId)
         .order('sort_order') as Promise<{ data: CustomFieldDef[] | null }>,
+      from(supabase, 'calls')
+        .select('recording_url, duration_seconds, transcription')
+        .eq('lead_id', leadId)
+        .eq('org_id', orgId)
+        .not('recording_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle() as Promise<{ data: { recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
     ]);
 
     const lead = leadResult.data;
@@ -118,6 +126,8 @@ export async function sendMeetingBriefingEmail(
       }
     }
 
+    const lastCall = lastCallResult.data;
+
     const html = buildBriefingHtml({
       closerName: closer.name,
       leadName,
@@ -130,6 +140,9 @@ export async function sendMeetingBriefingEmail(
       feedbackUrl,
       leadUrl: `${appUrl}/leads/${leadId}`,
       customFields: customFieldsResult.data ?? [],
+      recordingUrl: lastCall?.recording_url ?? null,
+      recordingDuration: lastCall?.duration_seconds ?? null,
+      transcription: lastCall?.transcription ?? null,
     });
 
     await sendPlatformEmail({
@@ -159,8 +172,11 @@ function buildBriefingHtml(data: {
   feedbackUrl: string | null;
   leadUrl: string;
   customFields: CustomFieldDef[];
+  recordingUrl: string | null;
+  recordingDuration: number | null;
+  transcription: string | null;
 }): string {
-  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl, customFields } = data;
+  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl, customFields, recordingUrl, recordingDuration, transcription } = data;
 
   const contactName = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
 
@@ -276,6 +292,18 @@ function buildBriefingHtml(data: {
               </table>
 
               <!-- Notes -->
+              ${recordingUrl ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0fdf4; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; border-left: 4px solid #22c55e;">
+                <tr><td style="padding:0 0 12px;"><strong style="color:#1a1a1a;font-size:16px;">🎙️ Gravação da ligação de qualificação</strong></td></tr>
+                <tr><td>
+                  <a href="${recordingUrl}" style="display: inline-block; background: #22c55e; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">
+                    ▶ Ouvir gravação${recordingDuration ? ` (${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')})` : ''}
+                  </a>
+                </td></tr>
+                ${transcription ? `<tr><td style="padding:12px 0 0;color:#4a4a4a;font-size:14px;line-height:1.6;"><strong>Transcrição:</strong><br><span style="white-space:pre-wrap;">${transcription.length > 800 ? transcription.slice(0, 800) + '...' : transcription}</span></td></tr>` : ''}
+              </table>
+              ` : ''}
+
               ${lead.notes ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="background: #fffbeb; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; border-left: 4px solid #f59e0b;">
                 <tr><td style="padding:0 0 8px;"><strong style="color:#1a1a1a;font-size:16px;">📝 Notas do pré-vendas</strong></td></tr>
