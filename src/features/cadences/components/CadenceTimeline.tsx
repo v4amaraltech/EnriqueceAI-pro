@@ -244,9 +244,15 @@ export function CadenceTimeline({ days, onDaysChange, sidebarSlot, onStepClick }
   }
 
   function changeDayNumber(dayIndex: number, newDay: number) {
-    // Prevent duplicate day numbers
-    if (days.some((d, i) => i !== dayIndex && d.day === newDay)) return;
+    const existingIndex = days.findIndex((d, i) => i !== dayIndex && d.day === newDay);
     const updated = [...days];
+
+    if (existingIndex !== -1) {
+      // Swap day numbers instead of blocking
+      const oldDay = days[dayIndex]!.day;
+      updated[existingIndex] = { ...updated[existingIndex]!, day: oldDay };
+    }
+
     updated[dayIndex] = { ...updated[dayIndex]!, day: newDay };
     updated.sort((a, b) => a.day - b.day);
     onDaysChange(updated);
