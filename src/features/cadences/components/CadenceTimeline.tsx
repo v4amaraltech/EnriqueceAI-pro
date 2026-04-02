@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -151,6 +151,22 @@ function DayContainer({
     disabled: true,
   });
 
+  const [localDay, setLocalDay] = useState(String(dayData.day));
+
+  // Sync local state when external value changes (e.g. after swap/sort)
+  useEffect(() => {
+    setLocalDay(String(dayData.day));
+  }, [dayData.day]);
+
+  function commitDayNumber() {
+    const v = parseInt(localDay, 10);
+    if (v > 0 && v !== dayData.day) {
+      onDayNumberChange(v);
+    } else {
+      setLocalDay(String(dayData.day)); // reset on invalid
+    }
+  }
+
   return (
     <div ref={setNodeRef} className="rounded-lg border" data-testid={`day-${dayData.day}`}>
       <div className="flex w-full items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5 text-sm font-medium">
@@ -163,15 +179,14 @@ function DayContainer({
         </button>
         <span>Dia</span>
         <input
-          type="number"
-          min={1}
-          value={dayData.day}
-          onChange={(e) => {
-            const v = parseInt(e.target.value, 10);
-            if (v > 0) onDayNumberChange(v);
-          }}
+          type="text"
+          inputMode="numeric"
+          value={localDay}
+          onChange={(e) => setLocalDay(e.target.value.replace(/\D/g, ''))}
+          onBlur={commitDayNumber}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
           onClick={(e) => e.stopPropagation()}
-          className="w-12 rounded border bg-[var(--background)] px-1.5 py-0.5 text-center text-sm font-medium [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="w-12 rounded border bg-[var(--background)] px-1.5 py-0.5 text-center text-sm font-medium"
           aria-label={`Número do dia ${dayData.day}`}
         />
         <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
