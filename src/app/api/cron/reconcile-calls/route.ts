@@ -140,48 +140,30 @@ export async function POST(request: Request) {
         }
       }
 
-      // 3. Fetch calls from Api4Com API (paginate)
-      let page = 1;
-      let hasMore = true;
+      // 3. Fetch each call by ID from Api4Com API using LoopBack filter
+      const api4comIds = [...localByApi4ComId.keys()];
 
-      while (hasMore) {
-        const params = new URLSearchParams({ page: String(page) });
-        const response = await fetch(`${baseUrl}/calls?${params.toString()}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: apiKey,
-          },
-        });
+      for (const api4comId of api4comIds) {
+        try {
+          const filter = JSON.stringify({ where: { id: api4comId } });
+          const params = new URLSearchParams({ filter, page: '1' });
+          const response = await fetch(`${baseUrl}/calls?${params.toString()}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: apiKey,
+            },
+          });
 
-        if (!response.ok) {
-          errors.push(`User ${conn.user_id}: API error ${response.status} on page ${page}`);
-          break;
-        }
+          if (!response.ok) continue;
 
-        const data = (await response.json()) as Api4ComCallListResponse;
-        const records = data.data ?? [];
-
-        // 4. Match and update
-        for (const record of records) {
+          const data = (await response.json()) as Api4ComCallListResponse;
+          const records = data.data ?? [];
           totalChecked++;
-          // Try match by api4com_call_id first, then by phone number
-          let localCall: (LocalCallRow & { destination: string; created_at: string }) | undefined =
-            localByApi4ComId.get(record.id);
 
-          if (!localCall) {
-            // Fuzzy match by destination phone (last 8 digits) + close timestamp
-            const remotePhone = (record.to ?? '').replace(/\D/g, '').slice(-8);
-            const candidates = localByPhone.get(remotePhone);
-            if (candidates?.length) {
-              // Find the closest match by timestamp (within 15 minutes — accounts for delay between click and call start)
-              const remoteTime = new Date(record.started_at).getTime();
-              localCall = candidates.find((c) => {
-                const localTime = new Date(c.created_at).getTime();
-                return Math.abs(remoteTime - localTime) < 15 * 60 * 1000;
-              });
-            }
-          }
+          const record = records[0];
+          if (!record) continue;
 
+          const localCall = localByApi4ComId.get(api4comId);
           if (!localCall) continue;
 
           const updates: Record<string, unknown> = {};
@@ -214,16 +196,9 @@ export async function POST(request: Request) {
             totalUpdated++;
           }
 
-          // Remove from map once processed
-          localByApi4ComId.delete(record.id);
+        } catch {
+          // Individual call fetch failed — continue with next
         }
-
-        // Check if there are more pages
-        hasMore = (data.metadata?.nextPage ?? null) !== null;
-        page++;
-
-        // Safety limit: don't fetch more than 20 pages
-        if (page > 20) break;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
