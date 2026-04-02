@@ -174,7 +174,7 @@ export async function POST(request: Request) {
           const remoteTime = new Date(record.started_at).getTime();
           const localCall = candidates.find((c) => {
             const localTime = new Date(c.created_at).getTime();
-            return Math.abs(remoteTime - localTime) < 15 * 60 * 1000;
+            return Math.abs(remoteTime - localTime) < 60 * 60 * 1000; // 1 hour window
           });
 
           if (!localCall) continue;
