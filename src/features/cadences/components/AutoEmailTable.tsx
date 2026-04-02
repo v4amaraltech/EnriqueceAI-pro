@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import {
@@ -51,7 +52,22 @@ interface AutoEmailTableProps {
   cadences: CadenceRow[];
   metrics: Record<string, AutoEmailCadenceMetrics>;
   userMap?: Record<string, string>;
+  avatarMap?: Record<string, string>;
   onDeleteRequest: (id: string) => void;
+}
+
+function CreatorAvatar({ userId, userMap, avatarMap }: { userId: string | null; userMap: Record<string, string>; avatarMap: Record<string, string> }) {
+  const [imgError, setImgError] = useState(false);
+  const url = userId ? avatarMap[userId] : undefined;
+  const name = userId ? userMap[userId] : undefined;
+
+  if (url && !imgError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={url} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" onError={() => setImgError(true)} />
+    );
+  }
+  return <LeadAvatar name={name ?? null} size="sm" />;
 }
 
 function getCreatorFirstName(userId: string | null, userMap: Record<string, string>): string {
@@ -101,7 +117,7 @@ function MetricCell({ value, isPercent = false }: { value: number; isPercent?: b
   );
 }
 
-export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteRequest }: AutoEmailTableProps) {
+export function AutoEmailTable({ cadences, metrics, userMap = {}, avatarMap = {}, onDeleteRequest }: AutoEmailTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -236,7 +252,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteReques
               {/* Created by */}
               <TableCell>
                 <div className="flex items-center gap-1.5">
-                  <LeadAvatar name={userMap[cadence.created_by ?? ''] ?? null} size="sm" />
+                  <CreatorAvatar userId={cadence.created_by} userMap={userMap} avatarMap={avatarMap} />
                   <span className="text-xs">{getCreatorFirstName(cadence.created_by, userMap)}</span>
                 </div>
               </TableCell>

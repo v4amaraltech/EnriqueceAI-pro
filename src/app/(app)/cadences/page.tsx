@@ -10,7 +10,7 @@ import { fetchCadenceEnrollmentCounts, fetchCadences, fetchCadenceTabCounts } fr
 import { fetchAutoEmailMetrics } from '@/features/cadences/actions/fetch-auto-email-metrics';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
 import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
-import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
+import { fetchAvatarMap, fetchUserMap } from '@/features/leads/actions/fetch-user-map';
 
 interface CadencesPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -65,11 +65,13 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
   // Fetch enrollment counts + resolve creator names
   const cadenceIds = result.data.data.map((c) => c.id);
   const creatorIds = [...new Set(result.data.data.map((c) => c.created_by).filter(Boolean))] as string[];
-  const [userMapResult, enrollmentResult] = await Promise.all([
+  const [userMapResult, avatarMapResult, enrollmentResult] = await Promise.all([
     fetchUserMap(creatorIds),
+    fetchAvatarMap(creatorIds),
     fetchCadenceEnrollmentCounts(cadenceIds),
   ]);
   const userMap = userMapResult.success ? userMapResult.data : {};
+  const avatarMap = avatarMapResult.success ? avatarMapResult.data : {};
   const enrollmentCounts = enrollmentResult.success ? enrollmentResult.data : {};
   const members = membersResult.success ? membersResult.data : [];
 
@@ -83,6 +85,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         tabCounts={tabCounts}
         metrics={metrics}
         userMap={userMap}
+        avatarMap={avatarMap}
         members={members}
         enrollmentCounts={enrollmentCounts}
       />
