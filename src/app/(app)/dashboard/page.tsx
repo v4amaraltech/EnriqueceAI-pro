@@ -35,11 +35,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : [],
   };
 
+  // Build date range from month filter for response time component
+  const [year, mon] = filters.month.split('-').map(Number) as [number, number];
+  const monthFrom = `${filters.month}-01`;
+  const monthTo = new Date(year, mon, 0).toISOString().slice(0, 10); // last day of month
+
   const [result, rankingResult, insightsResult, responseTimeResult] = await Promise.all([
     getDashboardData(filters),
     getRankingData(filters),
     getInsightsData(filters),
-    getResponseTimeData(30),
+    getResponseTimeData(30, { from: monthFrom, to: monthTo }),
   ]);
 
   if (!result.success) {
