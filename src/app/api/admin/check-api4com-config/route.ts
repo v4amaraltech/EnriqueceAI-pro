@@ -39,21 +39,19 @@ export async function POST(request: Request) {
       });
       const intData = intResponse.ok ? await intResponse.json() : { error: intResponse.status };
 
-      // Check recent calls for recording_url
+      // Check recent calls
       const callsResponse = await fetch(`${baseUrl}/calls?page=1`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json', Authorization: apiKey },
       });
-      let sampleCall = null;
+      let recentCalls: Record<string, unknown>[] = [];
       if (callsResponse.ok) {
-        const callsData = await callsResponse.json();
-        const calls = callsData?.data ?? [];
-        sampleCall = calls.find((c: Record<string, unknown>) => c.record_url) ?? calls[0] ?? null;
+        const callsData = (await callsResponse.json()) as { data: Record<string, unknown>[] };
+        recentCalls = (callsData?.data ?? []).slice(0, 3).map((c) => ({
+          id: c.id, to: c.to, from: c.from, started_at: c.started_at,
+          duration: c.duration, record_url: c.record_url,
+        }));
       }
-
-      // Get recent calls (last 3) with full detail for debugging
-      const recentCalls = (callsResponse.ok ? (await callsResponse.json() as { data: Record<string, unknown>[] }).data?.slice(0, 3) : [])
-        ?.map((c: Record<string, unknown>) => ({ id: c.id, to: c.to, from: c.from, started_at: c.started_at, duration: c.duration, record_url: c.record_url })) ?? [];
 
       results.push({
         ramal: conn.ramal,
