@@ -27,6 +27,7 @@ import type { CadenceOrigin, CadencePriority } from '../types';
 import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, createCadence, updateCadence } from '../actions/manage-cadences';
 import { saveAutoEmailSteps } from '../actions/save-auto-email-steps';
+import { updateStepContent } from '../actions/update-step-content';
 import { AutoEmailStepEditor } from './AutoEmailStepEditor';
 
 interface AutoEmailBuilderProps {
@@ -84,10 +85,20 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
+  const isContentEditable = isEditable || cadence?.status === 'active'; // Can edit templates even when active
   const statusCfg = cadence ? statusConfig[cadence.status] : null;
 
   function updateStep(index: number, updated: AutoEmailStep) {
     setSteps((prev) => prev.map((s, i) => (i === index ? updated : s)));
+
+    // If cadence is active, persist content change immediately
+    if (cadence?.status === 'active' && cadence.steps[index]?.id) {
+      updateStepContent({
+        stepId: cadence.steps[index]!.id,
+        cadenceId: cadence.id,
+        ai_personalization: updated.ai_personalization,
+      }).catch(() => { /* silent */ });
+    }
   }
 
   function removeStep(index: number) {

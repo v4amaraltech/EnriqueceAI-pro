@@ -27,6 +27,7 @@ import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
 import { saveTimelineSteps } from '../actions/save-timeline-steps';
+import { updateStepContent } from '../actions/update-step-content';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
 import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
 import { EnrollmentsList } from './EnrollmentsList';
@@ -186,6 +187,22 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
         ),
       })),
     );
+
+    // If cadence is active, persist the content change immediately
+    if (cadence && cadence.status === 'active') {
+      updateStepContent({
+        stepId,
+        cadenceId: cadence.id,
+        activity_name: activityName,
+        instructions,
+      }).then((result) => {
+        if (result.success) {
+          toast.success('Atividade atualizada');
+        } else {
+          toast.error(result.error);
+        }
+      });
+    }
   }
 
   return (
