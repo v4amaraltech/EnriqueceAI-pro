@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import {
+  CalendarIcon,
   CheckCircle2,
   Clock,
   FileText,
@@ -13,6 +14,8 @@ import {
   RotateCcw,
   User,
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import Image from 'next/image';
 import { toast } from 'sonner';
 
@@ -32,12 +35,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Calendar } from '@/shared/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
+import { Switch } from '@/shared/components/ui/switch';
 import { Textarea } from '@/shared/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 import type { CallStatus } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
+import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
 import type { CallAttempt } from '../types/call-attempt';
@@ -92,6 +100,10 @@ export function ActivityPhonePanel({
   const [callId, setCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
+  const [scheduleReturn, setScheduleReturn] = useState(false);
+  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
+  const [returnTime, setReturnTime] = useState('09:00');
+  const [returnChannel, setReturnChannel] = useState<'phone' | 'whatsapp'>('phone');
   const [elapsed, setElapsed] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -213,9 +225,28 @@ export function ActivityPhonePanel({
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
 
+    // Schedule return activity if requested
+    if (scheduleReturn && returnDate) {
+      const [hours, minutes] = returnTime.split(':').map(Number);
+      const scheduledAt = new Date(returnDate);
+      scheduledAt.setHours(hours!, minutes!, 0, 0);
+
+      scheduleActivity({
+        leadId,
+        channel: returnChannel,
+        scheduledAt: scheduledAt.toISOString(),
+        notes: notes ? `Retorno: ${notes}` : undefined,
+        completeEnrollments: true,
+      }).catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
+    }
+
     onMarkDone(aggregatedNotes);
     setCallStatus('');
     setNotes('');
+    setScheduleReturn(false);
+    setReturnDate(undefined);
+    setReturnTime('09:00');
+    setReturnChannel('phone');
     setCallState('idle');
     setCallId(null);
     setProviderCallId(null);
@@ -464,6 +495,66 @@ export function ActivityPhonePanel({
                 className="min-h-[100px] resize-y"
               />
             </div>
+            {/* Schedule return toggle — visible for connected statuses */}
+            {(callStatus === 'connected' || callStatus === 'gatekeeper') && (
+              <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Agendar retorno</Label>
+                  <Switch checked={scheduleReturn} onCheckedChange={setScheduleReturn} />
+                </div>
+                {scheduleReturn && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Canal</Label>
+                        <Select value={returnChannel} onValueChange={(v) => setReturnChannel(v as 'phone' | 'whatsapp')}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="phone">Ligação</SelectItem>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Data</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn('h-8 w-full justify-start text-xs font-normal', !returnDate && 'text-muted-foreground')}>
+                              <CalendarIcon className="mr-1 h-3 w-3" />
+                              {returnDate ? format(returnDate, 'dd/MM', { locale: ptBR }) : 'Data'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single" selected={returnDate} onSelect={setReturnDate} locale={ptBR} disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Horário</Label>
+                        <Select value={returnTime} onValueChange={setReturnTime}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => i + 8).flatMap((h) => [
+                              `${h.toString().padStart(2, '0')}:00`,
+                              `${h.toString().padStart(2, '0')}:30`,
+                            ]).map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      A cadência será encerrada e a atividade de retorno criada.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex-col gap-2 sm:flex-row">
