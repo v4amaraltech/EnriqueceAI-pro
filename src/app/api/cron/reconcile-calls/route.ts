@@ -140,30 +140,43 @@ export async function POST(request: Request) {
         }
       }
 
-      // 3. Fetch each call by ID from Api4Com API using LoopBack filter
-      const api4comIds = [...localByApi4ComId.keys()];
+      // 3. Fetch recent calls from Api4Com and match by normalized phone
+      let page = 1;
+      let hasMore = true;
 
-      for (const api4comId of api4comIds) {
-        try {
-          const filter = JSON.stringify({ where: { id: api4comId } });
-          const params = new URLSearchParams({ filter, page: '1' });
-          const response = await fetch(`${baseUrl}/calls?${params.toString()}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: apiKey,
-            },
-          });
+      while (hasMore) {
+        const params = new URLSearchParams({ page: String(page) });
+        const response = await fetch(`${baseUrl}/calls?${params.toString()}`, {
+          headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+        });
 
-          if (!response.ok) continue;
+        if (!response.ok) {
+          errors.push(`User ${conn.user_id}: API error ${response.status} on page ${page}`);
+          break;
+        }
 
-          const data = (await response.json()) as Api4ComCallListResponse;
-          const records = data.data ?? [];
+        const data = (await response.json()) as Api4ComCallListResponse;
+        const records = data.data ?? [];
+
+        for (const record of records) {
           totalChecked++;
 
-          const record = records[0];
-          if (!record) continue;
+          // Normalize api4com phone: remove leading 0, keep last 10 digits (DDD+number)
+          const rawTo = (record.to ?? '').replace(/\D/g, '');
+          const normalizedTo = rawTo.startsWith('0') ? rawTo.slice(1) : rawTo;
+          const phoneKey = normalizedTo.slice(-8);
 
-          const localCall = localByApi4ComId.get(api4comId);
+          // Try match by phone suffix
+          const candidates = localByPhone.get(phoneKey);
+          if (!candidates?.length) continue;
+
+          // Find closest by timestamp (within 15 minutes)
+          const remoteTime = new Date(record.started_at).getTime();
+          const localCall = candidates.find((c) => {
+            const localTime = new Date(c.created_at).getTime();
+            return Math.abs(remoteTime - localTime) < 15 * 60 * 1000;
+          });
+
           if (!localCall) continue;
 
           const updates: Record<string, unknown> = {};
@@ -196,9 +209,11 @@ export async function POST(request: Request) {
             totalUpdated++;
           }
 
-        } catch {
-          // Individual call fetch failed — continue with next
         }
+
+        hasMore = (data.metadata?.nextPage ?? null) !== null;
+        page++;
+        if (page > 20) break;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
