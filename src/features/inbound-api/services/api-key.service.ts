@@ -51,7 +51,8 @@ export async function resolveApiKey(
   from(supabase, 'api_keys')
     .update({ last_used_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', data.id)
-    .catch((err: unknown) => console.error('[api-key] Failed to update last_used_at:', err));
+    .then(({ error }) => { if (error) console.error('[api-key] Failed to update last_used_at:', error); })
+    .catch((err: unknown) => console.error('[api-key] last_used_at update error:', err));
 
   return data;
 }
