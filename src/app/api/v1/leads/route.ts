@@ -12,6 +12,7 @@ export const maxDuration = 30;
 const MAX_BODY_SIZE = 1_048_576; // 1MB
 
 export async function POST(request: Request) {
+  try {
   // 0. Check body size
   const contentLength = request.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
@@ -131,6 +132,13 @@ export async function POST(request: Request) {
     console.error('[v1/leads] Unhandled error:', err);
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Erro interno do servidor' },
+      { status: 500 },
+    );
+  }
+  } catch (outerErr) {
+    console.error('[v1/leads] Top-level error:', outerErr);
+    return NextResponse.json(
+      { success: false, error: outerErr instanceof Error ? outerErr.message : 'Erro interno' },
       { status: 500 },
     );
   }
