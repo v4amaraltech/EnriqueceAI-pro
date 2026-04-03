@@ -84,47 +84,54 @@ export async function POST(request: Request) {
   }
 
   // 6. Ingest
-  const supabase = createServiceRoleClient();
-  const result = await ingestInboundLeads(
-    [body as Record<string, unknown>],
-    {
-      orgId: auth.orgId,
-      supabase,
-      defaultSource: 'api',
-      onDuplicate: 'skip',
-    },
-  );
+  try {
+    const supabase = createServiceRoleClient();
+    const result = await ingestInboundLeads(
+      [body as Record<string, unknown>],
+      {
+        orgId: auth.orgId,
+        supabase,
+        defaultSource: 'api',
+        onDuplicate: 'skip',
+      },
+    );
 
-  // 7. Mark idempotency
-  if (idempotencyKey) {
-    await markEventProcessed(supabase, 'inbound-api', idempotencyKey, 'lead.create').catch((err: unknown) => console.error('[v1/leads] markEventProcessed failed:', err));
-  }
+    // 7. Mark idempotency
+    if (idempotencyKey) {
+      await markEventProcessed(supabase, 'inbound-api', idempotencyKey, 'lead.create').catch((err: unknown) => console.error('[v1/leads] markEventProcessed failed:', err));
+    }
 
-  const firstResult = result.results[0];
+    const firstResult = result.results[0];
 
-  if (firstResult?.status === 'error') {
-    // Check if it's a lead limit error
-    if (firstResult.error?.includes('Limite de leads')) {
+    if (firstResult?.status === 'error') {
+      if (firstResult.error?.includes('Limite de leads')) {
+        return NextResponse.json(
+          { success: false, error: firstResult.error },
+          { status: 402 },
+        );
+      }
       return NextResponse.json(
         { success: false, error: firstResult.error },
-        { status: 402 },
+        { status: 422 },
       );
     }
+
+    if (firstResult?.status === 'duplicate') {
+      return NextResponse.json(
+        { success: false, error: 'Lead duplicado', existing_lead_id: firstResult.existing_lead_id },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
-      { success: false, error: firstResult.error },
-      { status: 422 },
+      { success: true, data: { lead_id: firstResult?.lead_id } },
+      { status: 201 },
+    );
+  } catch (err) {
+    console.error('[v1/leads] Unhandled error:', err);
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Erro interno do servidor' },
+      { status: 500 },
     );
   }
-
-  if (firstResult?.status === 'duplicate') {
-    return NextResponse.json(
-      { success: false, error: 'Lead duplicado', existing_lead_id: firstResult.existing_lead_id },
-      { status: 409 },
-    );
-  }
-
-  return NextResponse.json(
-    { success: true, data: { lead_id: firstResult?.lead_id } },
-    { status: 201 },
-  );
 }
