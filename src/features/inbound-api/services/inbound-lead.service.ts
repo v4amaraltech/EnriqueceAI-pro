@@ -141,7 +141,7 @@ async function ingestSingleLead(
     razao_social: data.razao_social ?? null,
     faturamento_estimado: data.faturamento_estimado ?? null,
     notes: data.notes ?? null,
-    custom_field_values: data.custom_fields ?? null,
+    custom_field_values: data.custom_fields ?? {},
   };
 
   const { data: lead, error } = await from(supabase, 'leads')
