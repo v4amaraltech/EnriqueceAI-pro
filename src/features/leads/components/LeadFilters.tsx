@@ -154,19 +154,6 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
-        {/* Meus Leads toggle */}
-        {currentUserId && (
-          <Button
-            variant={activeAssigned === currentUserId ? 'default' : 'outline'}
-            size="sm"
-            className="h-9 gap-1.5 self-end"
-            onClick={() => handleFilterChange('assigned_to', activeAssigned === currentUserId ? ALL_VALUE : currentUserId)}
-          >
-            <User className="h-3.5 w-3.5" />
-            Meus leads
-          </Button>
-        )}
-
         {/* Status */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>
@@ -255,6 +242,19 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
               </SelectContent>
             </Select>
           </div>
+        )}
+
+        {/* Meus Leads toggle */}
+        {currentUserId && (
+          <Button
+            variant={activeAssigned === currentUserId ? 'default' : 'outline'}
+            size="sm"
+            className="h-9 gap-1.5 self-end"
+            onClick={() => handleFilterChange('assigned_to', activeAssigned === currentUserId ? ALL_VALUE : currentUserId)}
+          >
+            <User className="h-3.5 w-3.5" />
+            Meus leads
+          </Button>
         )}
 
         {/* Clear filters */}
