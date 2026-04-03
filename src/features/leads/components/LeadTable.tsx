@@ -376,38 +376,11 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowEnrichConfirm('cnpj')}
-              disabled={isPending}
-            >
-              <RefreshCw className="mr-1 h-3.5 w-3.5" />
-              Enriquecer (CNPJ)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowEnrichConfirm('apollo')}
-              disabled={isPending}
-            >
-              <Globe className="mr-1 h-3.5 w-3.5" />
-              Enriquecer (Apollo)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => setShowEnrollDialog(true)}
               disabled={isPending}
             >
               <Zap className="mr-1 h-3.5 w-3.5" />
               Cadência
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setShowStatusDialog(true); setStatusTarget(''); }}
-              disabled={isPending}
-            >
-              <Tag className="mr-1 h-3.5 w-3.5" />
-              Status
             </Button>
             <Button
               variant="outline"
@@ -444,15 +417,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             >
               <Archive className="mr-1 h-3.5 w-3.5" />
               Arquivar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isPending}
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Excluir
             </Button>
             <Button
               variant="outline"
