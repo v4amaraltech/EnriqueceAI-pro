@@ -27,13 +27,13 @@ export async function fetchLossReasons(
 ): Promise<LossReasonEntry[]> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get enrollments with loss reasons in the period
+  // Get enrollments with loss reasons — filter by completed_at (when lost), not enrolled_at
   let query = from(supabase, 'cadence_enrollments')
     .select('loss_reason_id, cadence_id, enrolled_by')
     .eq('org_id', orgId)
     .not('loss_reason_id', 'is', null)
-    .gte('enrolled_at', start)
-    .lt('enrolled_at', end);
+    .gte('completed_at', start)
+    .lt('completed_at', end);
 
   if (filters.cadenceIds.length > 0) {
     query = query.in('cadence_id', filters.cadenceIds);
@@ -108,38 +108,33 @@ export async function fetchConversionByOrigin(
 ): Promise<ConversionByOriginEntry[]> {
   const { start, end } = getMonthRange(filters.month);
 
-  // Get enrollments in the period (to filter leads by cadence/user if needed)
-  let enrollmentQuery = from(supabase, 'cadence_enrollments')
-    .select('lead_id, cadence_id')
-    .eq('org_id', orgId)
-    .gte('enrolled_at', start)
-    .lt('enrolled_at', end);
-
-  if (filters.cadenceIds.length > 0) {
-    enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
-  }
-  if (filters.userIds.length > 0) {
-    enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-  }
-
-  const { data: enrollments } = (await enrollmentQuery) as {
-    data: Array<{ lead_id: string; cadence_id: string }> | null;
-  };
-
-  const rows = enrollments ?? [];
-
-  if (rows.length === 0) return [];
-
-  // Get unique lead IDs with status and lead_source
-  const leadIds = [...new Set(rows.map((e) => e.lead_id))];
-
-  const { data: leads } = (await from(supabase, 'leads')
+  // Get leads that changed to qualified/unqualified in the period
+  let leadsQuery = from(supabase, 'leads')
     .select('id, status, lead_source')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .in('id', leadIds)) as {
+    .in('status', ['qualified', 'unqualified'])
+    .gte('updated_at', start)
+    .lt('updated_at', end);
+
+  // If cadence/user filter active, narrow by enrollment
+  if (filters.cadenceIds.length > 0 || filters.userIds.length > 0) {
+    let enrollmentQuery = from(supabase, 'cadence_enrollments')
+      .select('lead_id')
+      .eq('org_id', orgId);
+    if (filters.cadenceIds.length > 0) enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
+    if (filters.userIds.length > 0) enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
+    const { data: enrollments } = (await enrollmentQuery) as { data: Array<{ lead_id: string }> | null };
+    const enrolledIds = [...new Set((enrollments ?? []).map((e) => e.lead_id))];
+    if (enrolledIds.length === 0) return [];
+    leadsQuery = leadsQuery.in('id', enrolledIds);
+  }
+
+  const { data: leads } = (await leadsQuery) as {
     data: Array<{ id: string; status: string; lead_source: string | null }> | null;
   };
+
+  if (!leads?.length) return [];
 
   // Group by lead_source: count converted (qualified) vs lost (unqualified/archived)
   const sourceStats = new Map<string, { converted: number; lost: number }>();
