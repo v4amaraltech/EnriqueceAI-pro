@@ -102,7 +102,7 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
                 </Button>
               ))}
             </div>
-            <div className="p-3">
+            <div className="relative p-3">
               <Calendar
                 mode="range"
                 selected={pendingRange}

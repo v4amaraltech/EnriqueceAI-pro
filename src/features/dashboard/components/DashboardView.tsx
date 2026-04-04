@@ -32,6 +32,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
     router.push(`/leads?assigned_to=${userId}`);
   }, [router]);
 
+  const handleActivitySdrClick = useCallback((_userId: string) => {
+    router.push('/statistics/activities');
+  }, [router]);
+
   return (
     <div className="space-y-6">
       {/* Header: Title left, Filters + Edit goals right */}
@@ -81,7 +85,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.activitiesDone}
             primaryColumnLabel="atividades"
             averageLabel="média atividades/vendedor"
-            onSdrClick={handleSdrClick}
+            onSdrClick={handleActivitySdrClick}
           />
           <RankingCard
             title="Taxa de Conversão"
@@ -92,7 +96,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.conversionRate}
             primaryColumnLabel="oportunidades"
             averageLabel="média conversão/vendedor"
-            onSdrClick={handleSdrClick}
+            onSdrClick={handleActivitySdrClick}
           />
         </div>
       )}

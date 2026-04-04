@@ -78,17 +78,18 @@ export async function fetchOpportunityKpi(
   const { start, end } = getDateRange(filters);
   const days = getDaysInMonth(filters.month);
 
-  // Query qualified leads in the month
+  // Query qualified leads in the month (using won_at for accuracy)
   let leadsQuery = from(supabase, 'leads')
-    .select('id, updated_at, assigned_to, won_by')
+    .select('id, won_at, assigned_to, won_by')
     .eq('org_id', orgId)
     .eq('status', 'qualified')
     .is('deleted_at', null)
-    .gte('updated_at', start)
-    .lt('updated_at', end);
+    .not('won_at', 'is', null)
+    .gte('won_at', start)
+    .lt('won_at', end);
 
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; updated_at: string; assigned_to: string | null; won_by: string | null }> | null;
+    data: Array<{ id: string; won_at: string; assigned_to: string | null; won_by: string | null }> | null;
   };
 
   let qualifiedLeads = leads ?? [];
@@ -147,7 +148,7 @@ export async function fetchOpportunityKpi(
       : 0;
 
   const dailyData = computeDailyData(
-    qualifiedLeads.map((l) => l.updated_at),
+    qualifiedLeads.map((l) => l.won_at),
     filters.month,
     monthTarget,
   );
