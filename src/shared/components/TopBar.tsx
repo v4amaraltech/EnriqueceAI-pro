@@ -25,6 +25,7 @@ export interface NavDropdownItem {
   label: string;
   href?: string;
   placeholder?: string;
+  badge?: number;
 }
 
 export interface NavSection {
@@ -105,10 +106,16 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
                 href={item.href!}
                 prefetch
                 className={cn(
+                  'flex items-center justify-between',
                   pathname === item.href && 'font-medium text-primary',
                 )}
               >
                 {item.label}
+                {item.badge != null && item.badge > 0 && (
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
               </Link>
             </DropdownMenuItem>
           ),
@@ -118,8 +125,27 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
   );
 }
 
-export function TopBar() {
+interface TopBarProps {
+  pendingActivitiesCount?: number;
+}
+
+export function TopBar({ pendingActivitiesCount }: TopBarProps) {
   const pathname = usePathname();
+
+  // Inject badge into Execução menu item
+  const sections = navSections.map((s) => {
+    if (s.items) {
+      return {
+        ...s,
+        items: s.items.map((item) =>
+          item.href === '/atividades' && pendingActivitiesCount
+            ? { ...item, badge: pendingActivitiesCount }
+            : item,
+        ),
+      };
+    }
+    return s;
+  });
 
   return (
     <div className="border-b bg-background">
@@ -136,7 +162,7 @@ export function TopBar() {
 
         {/* Desktop Navigation */}
         <nav className="ml-6 hidden items-center gap-1 md:flex" data-tour="nav">
-          {navSections.map((section) =>
+          {sections.map((section) =>
             section.href ? (
               <Link
                 key={section.label}

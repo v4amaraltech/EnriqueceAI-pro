@@ -19,6 +19,7 @@ import { NotificationProvider } from '@/features/notifications/components/Notifi
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
 import { ClientErrorBoundary } from '@/shared/components/ClientErrorBoundary';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
+import { fetchPendingActivitiesCount } from '@/features/activities/actions/fetch-pending-count';
 import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
@@ -74,7 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Fetch subscription, members and user names in parallel
   const orgId = memberData.organization.id;
 
-  const [subscriptionResult, membersResult, namesResult] = await Promise.all([
+  const [subscriptionResult, membersResult, namesResult, pendingCount] = await Promise.all([
     (from(supabase, 'subscriptions')
       .select('status, current_period_end')
       .eq('org_id', orgId)
@@ -105,6 +106,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }
       return map;
     })(),
+
+    fetchPendingActivitiesCount(),
   ]);
 
   const subscriptionData = subscriptionResult.data;
@@ -148,7 +151,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {subscriptionStatus === 'trialing' && subscriptionPeriodEnd && (
                   <TrialBanner periodEnd={subscriptionPeriodEnd} />
                 )}
-                <TopBar />
+                <TopBar pendingActivitiesCount={pendingCount} />
                 <main className="flex-1 overflow-auto p-6" data-tour="main-content">
                   <Breadcrumbs />
                   <Suspense fallback={<PageSkeleton />}>
