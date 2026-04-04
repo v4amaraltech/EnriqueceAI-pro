@@ -45,6 +45,7 @@ interface ActivityEmailComposeProps {
   aiPersonalized: boolean;
   isLoading: boolean;
   isSending: boolean;
+  draftKey?: string;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onSend: () => void;
@@ -59,6 +60,7 @@ export function ActivityEmailCompose({
   aiPersonalized,
   isLoading,
   isSending,
+  draftKey,
   onSubjectChange,
   onBodyChange,
   onSend,
@@ -70,7 +72,49 @@ export function ActivityEmailCompose({
   const [focusedField, setFocusedField] = useState<'subject' | 'body'>('body');
   // Preview mode toggle
   const [previewMode, setPreviewMode] = useState(false);
+  // Auto-save status indicator
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'saving' | null>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
+
+  // Restore draft from localStorage on mount
+  const draftRestored = useRef(false);
+  useEffect(() => {
+    if (!draftKey || isLoading || draftRestored.current) return;
+    draftRestored.current = true;
+    try {
+      const raw = localStorage.getItem(`email-draft:${draftKey}`);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { subject?: string; body?: string };
+      if (draft.subject && draft.subject !== subject) onSubjectChange(draft.subject);
+      if (draft.body && draft.body !== body) onBodyChange(draft.body);
+      setDraftStatus('saved');
+    } catch { /* ignore corrupt drafts */ }
+  }, [draftKey, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save draft to localStorage on changes (debounced 2s)
+  useEffect(() => {
+    if (!draftKey || isLoading) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    setDraftStatus('saving');
+    draftTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(`email-draft:${draftKey}`, JSON.stringify({ subject, body }));
+        setDraftStatus('saved');
+      } catch { /* storage full */ }
+    }, 2000);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [draftKey, subject, body, isLoading]);
+
+  // Clear draft after successful send
+  const originalOnSend = onSend;
+  const handleSendAndClearDraft = useCallback(() => {
+    if (draftKey) {
+      try { localStorage.removeItem(`email-draft:${draftKey}`); } catch {}
+    }
+    setDraftStatus(null);
+    originalOnSend();
+  }, [draftKey, originalOnSend]);
   // Save cursor position so we can restore it when inserting variables from the dropdown
   const savedSelection = useRef<{ from: number; to: number } | null>(null);
 
@@ -171,6 +215,12 @@ export function ActivityEmailCompose({
               Personalizado por IA
             </Badge>
           )}
+          {draftStatus === 'saved' && (
+            <span className="text-[10px] text-[var(--muted-foreground)]">Rascunho salvo</span>
+          )}
+          {draftStatus === 'saving' && (
+            <span className="text-[10px] text-[var(--muted-foreground)] animate-pulse">Salvando...</span>
+          )}
           {!isLoading && (
             <Button
               type="button"
@@ -234,7 +284,7 @@ export function ActivityEmailCompose({
               <Clock className="mr-2 h-4 w-4" />
               Pular
             </Button>
-            <Button onClick={onSend} disabled={!canSend}>
+            <Button onClick={handleSendAndClearDraft} disabled={!canSend}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -411,7 +461,7 @@ export function ActivityEmailCompose({
               <Clock className="mr-2 h-4 w-4" />
               Pular
             </Button>
-            <Button onClick={onSend} disabled={!canSend}>
+            <Button onClick={handleSendAndClearDraft} disabled={!canSend}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

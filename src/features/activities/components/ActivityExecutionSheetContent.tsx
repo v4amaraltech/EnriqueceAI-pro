@@ -261,6 +261,7 @@ export function ActivityExecutionSheetContent({
       aiPersonalized={aiPersonalized}
       isLoading={isLoading}
       isSending={isSending}
+      draftKey={`${activity.enrollmentId}:${activity.stepId}`}
       onSubjectChange={setSubject}
       onBodyChange={setBody}
       onSend={() => onSend(renderedSubject, renderedPreview, aiPersonalized)}
