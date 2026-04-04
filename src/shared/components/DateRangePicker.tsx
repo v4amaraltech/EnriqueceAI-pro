@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CalendarIcon } from 'lucide-react';
 import { differenceInDays, format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,6 +19,7 @@ const MAX_RANGE_DAYS = 365;
 
 const presets = [
   { label: 'Hoje', days: 0 },
+  { label: 'Ontem', days: -1 },
   { label: '7 dias', days: 7 },
   { label: '30 dias', days: 30 },
   { label: '90 dias', days: 90 },
@@ -46,12 +47,31 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
     to: toDate_,
   });
 
+  // Sync pending range when props change (e.g. from URL)
+  useEffect(() => {
+    if (!open) {
+      setPendingRange({ from: fromDate, to: toDate_ });
+    }
+  }, [from, to, open]);
+
   const handlePreset = useCallback(
     (days: number) => {
       const end = new Date();
-      const start = days === 0 ? end : subDays(end, days);
-      onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-      setPendingRange({ from: start, to: end });
+      let start: Date;
+      if (days === -1) {
+        // Yesterday
+        start = subDays(end, 1);
+        onChange(format(start, 'yyyy-MM-dd'), format(start, 'yyyy-MM-dd'));
+        setPendingRange({ from: start, to: start });
+      } else if (days === 0) {
+        start = end;
+        onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
+        setPendingRange({ from: start, to: end });
+      } else {
+        start = subDays(end, days);
+        onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
+        setPendingRange({ from: start, to: end });
+      }
       setOpen(false);
     },
     [onChange],
@@ -60,12 +80,17 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
   const handleRangeSelect = useCallback(
     (selected: DateRange | undefined) => {
       setPendingRange(selected);
+
+      // Only apply when both from and to are set AND they are different
+      // (when user clicks the same day twice, from === to, that's a single-day selection — apply it)
       if (selected?.from && selected?.to) {
         const diff = differenceInDays(selected.to, selected.from);
-        if (diff > MAX_RANGE_DAYS || diff < 0) return;
+        if (diff > MAX_RANGE_DAYS) return;
+        if (diff < 0) return;
         onChange(format(selected.from, 'yyyy-MM-dd'), format(selected.to, 'yyyy-MM-dd'));
         setOpen(false);
       }
+      // If only from is set (first click), keep popover open and wait for second click
     },
     [onChange],
   );
