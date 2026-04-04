@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 
 import { handleGmailCallback } from '@/features/integrations/actions/manage-gmail';
 
-// Only allow relative paths starting with /
+// Only allow same-origin relative paths (block protocol-relative URLs like //evil.com)
 function sanitizeRedirect(state: string | null): string {
-  if (!state || !state.startsWith('/') || state.includes('://')) {
+  if (!state || !state.startsWith('/') || state.startsWith('//') || state.includes('://')) {
     return '/settings/integrations';
   }
   return state;

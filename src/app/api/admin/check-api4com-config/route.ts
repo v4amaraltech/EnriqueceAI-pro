@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
@@ -7,9 +8,7 @@ import { decrypt } from '@/lib/security/encryption';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
+  if (!verifyServiceRole(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

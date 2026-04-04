@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
+import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
@@ -59,11 +60,8 @@ interface LocalCallRow {
 }
 
 export async function POST(request: Request) {
-  // Accept both CRON_SECRET and SUPABASE_SERVICE_ROLE_KEY for auth
-  const authHeader = request.headers.get('authorization');
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const isServiceRole = serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
-  if (!isServiceRole && !verifyCronSecret(request)) {
+  // Accept both CRON_SECRET and SUPABASE_SERVICE_ROLE_KEY for auth (timing-safe)
+  if (!verifyServiceRole(request) && !verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

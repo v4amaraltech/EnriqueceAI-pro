@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { CnpjWsProvider, LemitProvider } from '@/features/leads/services/enrichment-provider';
 import { enrichLead, enrichLeadFull } from '@/features/leads/services/enrichment.service';
 import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
+import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { getAppUrl } from '@/lib/utils/app-url';
@@ -19,11 +20,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function POST(request: Request) {
-  // Auth: accept service_role_key
-  const authHeader = request.headers.get('authorization');
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
+  if (!verifyServiceRole(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
