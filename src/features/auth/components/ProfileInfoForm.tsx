@@ -114,7 +114,7 @@ export function ProfileInfoForm({ initialName, email, avatarUrl }: ProfileInfoFo
             className="hidden"
           />
           <div className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            Clique para alterar a foto. JPEG, PNG ou WebP, até 2MB.
+            Clique para alterar a foto. JPEG, PNG ou WebP, até 5MB.
           </div>
         </div>
 

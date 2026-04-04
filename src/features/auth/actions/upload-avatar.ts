@@ -28,7 +28,8 @@ export async function uploadAvatar(
   }
 
   if (file.size > MAX_AVATAR_SIZE) {
-    return { success: false, error: 'Arquivo muito grande. Máximo 2MB' };
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    return { success: false, error: `Arquivo muito grande (${sizeMB}MB). Máximo 5MB.` };
   }
 
   const ext = EXTENSION_MAP[file.type] ?? 'jpg';

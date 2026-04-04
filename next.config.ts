@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   experimental: {
     serverActions: {
-      bodySizeLimit: '2mb',
+      bodySizeLimit: '5mb',
     },
   },
   rewrites: async () => [
