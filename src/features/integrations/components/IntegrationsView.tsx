@@ -32,6 +32,7 @@ import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSaf
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { getCrmAuthUrl, disconnectCrm, triggerCrmSync } from '../actions/manage-crm';
 import { disconnectApi4Com } from '../actions/manage-api4com';
+import { testGmailConnection, testApi4ComConnection } from '../actions/test-connections';
 import { deleteApolloConnection } from '../actions/manage-apollo';
 import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
@@ -264,6 +265,22 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     variant="outline"
                     size="sm"
                     className="opacity-0 group-hover:opacity-100"
+                    onClick={() => {
+                      startTransition(async () => {
+                        const r = await testApi4ComConnection();
+                        if (r.success && r.data.ok) toast.success(`API4Com conectado (ramal ${r.data.ramal})`);
+                        else toast.error('Conexão com API4Com falhou — verifique o token');
+                      });
+                    }}
+                    disabled={isPending}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Testar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100"
                     onClick={() => setShowApi4ComConfig(true)}
                   >
                     <Settings2 className="mr-1.5 h-3.5 w-3.5" />
@@ -311,6 +328,22 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             <div className="ml-auto shrink-0 flex items-center gap-2">
               {googleConnected ? (
                 <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={() => {
+                      startTransition(async () => {
+                        const r = await testGmailConnection();
+                        if (r.success && r.data.ok) toast.success(`Gmail conectado (${r.data.email})`);
+                        else toast.error('Conexão com Gmail falhou — reconecte');
+                      });
+                    }}
+                    disabled={isPending}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Testar
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
