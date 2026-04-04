@@ -73,10 +73,13 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
 
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingParamsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
     };
   }, []);
 
@@ -101,9 +104,28 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
   const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
   const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);
 
+  const flushFilterParams = useCallback(() => {
+    const pending = pendingParamsRef.current;
+    if (Object.keys(pending).length === 0) return;
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(pending)) {
+      if (value && value !== ALL_VALUE) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    }
+    params.delete('page');
+    pendingParamsRef.current = {};
+    router.push(`/leads?${params.toString()}`);
+  }, [router, searchParams]);
+
   function handleFilterChange(key: string, value: string) {
     setOverrides((prev) => ({ ...prev, [key]: value }));
-    updateParam(key, value);
+    // Batch rapid filter changes into a single navigation
+    pendingParamsRef.current[key] = value;
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(flushFilterParams, 300);
   }
 
   const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence || currentCnae;
@@ -116,7 +138,6 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
       } else {
         params.delete(key);
       }
-      // Reset to page 1 on filter change
       params.delete('page');
       router.push(`/leads?${params.toString()}`);
     },
