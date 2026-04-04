@@ -20,38 +20,52 @@ async function expireTrials() {
   };
 
   let notified = 0;
-  for (const trial of expiringTrials ?? []) {
-    const daysLeft = Math.max(0, Math.ceil(
-      (new Date(trial.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-    ));
+  const trials = expiringTrials ?? [];
 
-    // Get manager user_ids for this org
-    const { data: managers } = await from(supabase, 'organization_members')
-      .select('user_id')
-      .eq('org_id', trial.org_id)
-      .eq('role', 'manager')
-      .eq('status', 'active');
+  if (trials.length > 0) {
+    const orgIds = trials.map((t) => t.org_id);
 
-    for (const manager of managers ?? []) {
-      // Check if already notified today to avoid duplicates
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: existing } = (await from(supabase, 'notifications')
-        .select('id')
-        .eq('user_id', manager.user_id)
+    // Batch: fetch all managers + existing notifications in parallel (fixes N+1)
+    const today = new Date().toISOString().slice(0, 10);
+    const [managersResult, notifsResult] = await Promise.all([
+      from(supabase, 'organization_members')
+        .select('user_id, org_id')
+        .in('org_id', orgIds)
+        .eq('role', 'manager')
+        .eq('status', 'active') as Promise<{ data: Array<{ user_id: string; org_id: string }> | null }>,
+      from(supabase, 'notifications')
+        .select('user_id')
         .eq('type', 'trial_expiring')
-        .gte('created_at', today)
-        .limit(1)
-        .maybeSingle()) as { data: { id: string } | null };
+        .gte('created_at', today) as Promise<{ data: Array<{ user_id: string }> | null }>,
+    ]);
 
-      if (!existing) {
+    const alreadyNotified = new Set((notifsResult.data ?? []).map((n) => n.user_id));
+
+    // Group managers by org
+    const managersByOrg = new Map<string, string[]>();
+    for (const m of managersResult.data ?? []) {
+      const list = managersByOrg.get(m.org_id) ?? [];
+      list.push(m.user_id);
+      managersByOrg.set(m.org_id, list);
+    }
+
+    for (const trial of trials) {
+      const daysLeft = Math.max(0, Math.ceil(
+        (new Date(trial.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+      ));
+
+      for (const userId of managersByOrg.get(trial.org_id) ?? []) {
+        if (alreadyNotified.has(userId)) continue;
+
         await from(supabase, 'notifications')
           .insert({
-            user_id: manager.user_id,
+            user_id: userId,
             org_id: trial.org_id,
             type: 'trial_expiring',
             title: 'Trial expirando',
             message: `Seu trial expira em ${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}. Faça upgrade para não perder acesso.`,
           } as Record<string, unknown>);
+        alreadyNotified.add(userId);
         notified++;
       }
     }

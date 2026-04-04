@@ -30,42 +30,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'No connections found', registered: 0 });
   }
 
-  const results: Array<{ userId: string; success: boolean; error?: string }> = [];
+  // Parallelize webhook registration across all connections
+  const results = await Promise.all(
+    connections.map(async (conn) => {
+      const gateway = `flux-${conn.org_id}`;
+      try {
+        const apiKey = decrypt(conn.api_key_encrypted);
+        const reqBody = {
+          gateway,
+          webhook: true,
+          webhookConstraint: { gateway },
+          metadata: {
+            webhookUrl,
+            webhookVersion: '1.8',
+            webhookTypes: ['channel-hangup'],
+          },
+        };
+        const reqUrl = `${conn.base_url.replace(/\/+$/, '')}/integrations`;
+        const response = await fetch(reqUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+          body: JSON.stringify(reqBody),
+        });
 
-  for (const conn of connections) {
-    const gateway = `flux-${conn.org_id}`;
-    try {
-      const apiKey = decrypt(conn.api_key_encrypted);
-      const reqBody = {
-        gateway,
-        webhook: true,
-        webhookConstraint: { gateway },
-        metadata: {
-          webhookUrl,
-          webhookVersion: '1.8',
-          webhookTypes: ['channel-hangup'],
-        },
-      };
-      const reqUrl = `${conn.base_url.replace(/\/+$/, '')}/integrations`;
-      const response = await fetch(reqUrl, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: apiKey,
-        },
-        body: JSON.stringify(reqBody),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        results.push({ userId: conn.user_id, success: false, error: `${response.status}: ${text}` });
-      } else {
-        results.push({ userId: conn.user_id, success: true });
+        if (!response.ok) {
+          const text = await response.text();
+          return { userId: conn.user_id, success: false, error: `${response.status}: ${text}` };
+        }
+        return { userId: conn.user_id, success: true };
+      } catch (err) {
+        return { userId: conn.user_id, success: false, error: err instanceof Error ? err.message : String(err) };
       }
-    } catch (err) {
-      results.push({ userId: conn.user_id, success: false, error: err instanceof Error ? err.message : String(err) });
-    }
-  }
+    }),
+  );
 
   const registered = results.filter((r) => r.success).length;
   return NextResponse.json({ registered, total: connections.length, results });

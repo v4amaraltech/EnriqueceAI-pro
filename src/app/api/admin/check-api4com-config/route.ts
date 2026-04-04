@@ -24,42 +24,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'No connections', results: [] });
   }
 
-  const results = [];
+  // Parallelize API checks across all connections
+  const results = await Promise.all(
+    connections.map(async (conn) => {
+      try {
+        const apiKey = decrypt(conn.api_key_encrypted);
+        const baseUrl = conn.base_url.replace(/\/+$/, '');
+        const hdrs = { 'Content-Type': 'application/json', Authorization: apiKey };
 
-  for (const conn of connections) {
-    try {
-      const apiKey = decrypt(conn.api_key_encrypted);
-      const baseUrl = conn.base_url.replace(/\/+$/, '');
+        // Parallel fetch: integrations + recent calls per connection
+        const [intResponse, callsResponse] = await Promise.all([
+          fetch(`${baseUrl}/integrations`, { method: 'GET', headers: hdrs }),
+          fetch(`${baseUrl}/calls?page=1`, { method: 'GET', headers: hdrs }),
+        ]);
 
-      // Check integrations config
-      const intResponse = await fetch(`${baseUrl}/integrations`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json', Authorization: apiKey },
-      });
-      const intData = intResponse.ok ? await intResponse.json() : { error: intResponse.status };
+        let recentCalls: Record<string, unknown>[] = [];
+        if (callsResponse.ok) {
+          const callsData = (await callsResponse.json()) as { data: Record<string, unknown>[] };
+          recentCalls = (callsData?.data ?? []).slice(0, 3).map((c) => ({
+            id: c.id, to: c.to, from: c.from, started_at: c.started_at,
+            duration: c.duration, record_url: c.record_url,
+          }));
+        }
 
-      // Check recent calls
-      const callsResponse = await fetch(`${baseUrl}/calls?page=1`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json', Authorization: apiKey },
-      });
-      let recentCalls: Record<string, unknown>[] = [];
-      if (callsResponse.ok) {
-        const callsData = (await callsResponse.json()) as { data: Record<string, unknown>[] };
-        recentCalls = (callsData?.data ?? []).slice(0, 3).map((c) => ({
-          id: c.id, to: c.to, from: c.from, started_at: c.started_at,
-          duration: c.duration, record_url: c.record_url,
-        }));
+        return { ramal: conn.ramal, recentCalls };
+      } catch (err) {
+        return { ramal: conn.ramal, error: err instanceof Error ? err.message : String(err) };
       }
-
-      results.push({
-        ramal: conn.ramal,
-        recentCalls,
-      });
-    } catch (err) {
-      results.push({ ramal: conn.ramal, error: err instanceof Error ? err.message : String(err) });
-    }
-  }
+    }),
+  );
 
   return NextResponse.json({ results });
 }
