@@ -67,19 +67,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este link expirou' }, { status: 410 });
     }
 
-    // Save feedback
-    const { error: updateError } = await from(supabase, 'closer_feedback_requests')
+    // Save feedback — conditional update prevents race condition (two concurrent submits)
+    const { data: updated, error: updateError } = await from(supabase, 'closer_feedback_requests')
       .update({
         result,
         rating,
         comment: comment || null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
-      .eq('id', feedbackReq.id);
+      .eq('id', feedbackReq.id)
+      .is('responded_at', null)
+      .select('id') as { data: Array<{ id: string }> | null; error: { message: string } | null };
 
     if (updateError) {
       console.error('[api/feedback] Update error:', updateError);
       return NextResponse.json({ error: 'Erro ao salvar feedback' }, { status: 500 });
+    }
+
+    if (!updated?.length) {
+      return NextResponse.json({ error: 'Este feedback já foi enviado' }, { status: 409 });
     }
 
     // Notify SDR in background after response is sent

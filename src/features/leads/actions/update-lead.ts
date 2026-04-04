@@ -99,7 +99,7 @@ export async function updateLead(
 
   if (error) {
     console.error('[updateLead] Error:', error.message, 'Fields:', Object.keys(safeUpdates));
-    return { success: false, error: `Erro ao atualizar lead: ${error.message}` };
+    return { success: false, error: 'Erro ao atualizar lead. Tente novamente.' };
   }
 
   // Log field changes to audit log

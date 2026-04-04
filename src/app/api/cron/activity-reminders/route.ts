@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification } from '@/features/notifications/services/notification.service';
@@ -17,10 +18,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  // Auth: cron secret
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -102,19 +100,31 @@ export async function POST(request: Request) {
 
     if (upcomingMeetings?.length) {
       const leadIds = [...new Set(upcomingMeetings.map((m) => m.lead_id))];
-      const { data: leads } = (await from(supabase, 'leads')
-        .select('id, nome_fantasia, razao_social')
-        .in('id', leadIds)) as { data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null };
-      const leadNameMap = new Map((leads ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']));
+      const meetingIds = upcomingMeetings.map((m) => m.id);
+
+      // Batch: fetch lead names + existing reminders in parallel (fixes N+1)
+      const [leadsResult, existingRemindersResult] = await Promise.all([
+        from(supabase, 'leads')
+          .select('id, nome_fantasia, razao_social')
+          .in('id', leadIds) as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
+        from(supabase, 'notifications')
+          .select('metadata')
+          .eq('type', 'meeting_reminder')
+          .in('metadata->>interaction_id', meetingIds) as Promise<{ data: Array<{ metadata: Record<string, unknown> }> | null }>,
+      ]);
+
+      const leadNameMap = new Map((leadsResult.data ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']));
+      const sentMeetingIds = new Set(
+        (existingRemindersResult.data ?? []).map((n) => n.metadata?.interaction_id as string),
+      );
 
       for (const meeting of upcomingMeetings) {
         if (!meeting.performed_by || !meeting.metadata) continue;
+        if (sentMeetingIds.has(meeting.id)) continue;
 
-        // Parse meeting start time from metadata or message content
         const meetLink = meeting.metadata.meet_link as string | undefined;
         const subject = meeting.metadata.subject as string | undefined;
 
-        // Extract start time from message_content (format: "Horário: DD/MM/YYYY, HH:MM:SS - ...")
         const timeMatch = meeting.message_content?.match(/Horário:\s*(\d{2}\/\d{2}\/\d{4}),?\s*(\d{2}:\d{2})/);
         if (!timeMatch) continue;
 
@@ -122,18 +132,7 @@ export async function POST(request: Request) {
         const [day, month, year] = dateStr!.split('/');
         const meetingStart = new Date(`${year}-${month}-${day}T${timeStr}:00`);
 
-        // Skip if meeting is not within reminder window
         if (meetingStart <= now || meetingStart > windowEnd) continue;
-
-        // Check if reminder already sent (via notifications dedup)
-        const { data: existingReminder } = (await from(supabase, 'notifications')
-          .select('id')
-          .eq('user_id', meeting.performed_by)
-          .eq('type', 'meeting_reminder')
-          .eq('metadata->>interaction_id', meeting.id)
-          .maybeSingle()) as { data: { id: string } | null };
-
-        if (existingReminder) continue;
 
         const leadName = leadNameMap.get(meeting.lead_id) ?? 'Lead';
 
