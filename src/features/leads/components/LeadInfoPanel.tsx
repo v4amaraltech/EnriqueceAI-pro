@@ -45,6 +45,7 @@ import { updateLead } from '../actions/update-lead';
 
 import { CurrencyInput, formatBRL } from './CurrencyInput';
 import { LeadNotes } from './LeadNotes';
+import { InlineEditField } from './InlineEditField';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
 import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
@@ -566,9 +567,36 @@ export function LeadInfoPanel({
                   ) : fullName && fullName !== firstName ? (
                     <MeetimeFieldRow label="Nome completo" value={fullName} />
                   ) : null)}
-                  {isFieldVisible('email') && primaryEmail && <MeetimeFieldRow label="E-mail" value={primaryEmail} href={`mailto:${primaryEmail}`} />}
-                  {isFieldVisible('nome_fantasia') && companyName && <MeetimeFieldRow label="Empresa" value={companyName} />}
-                  {isFieldVisible('job_title') && <MeetimeFieldRow label="Cargo" value={cargo || '—'} />}
+                  {isFieldVisible('email') && (
+                    <InlineEditField
+                      leadId={data.id}
+                      fieldKey="email"
+                      label="E-mail"
+                      value={primaryEmail || null}
+                      placeholder="Adicionar email"
+                      onSaved={(v) => setData((prev) => ({ ...prev, email: v || null }))}
+                    />
+                  )}
+                  {isFieldVisible('nome_fantasia') && (
+                    <InlineEditField
+                      leadId={data.id}
+                      fieldKey="nome_fantasia"
+                      label="Empresa"
+                      value={data.nome_fantasia}
+                      placeholder="Adicionar empresa"
+                      onSaved={(v) => setData((prev) => ({ ...prev, nome_fantasia: v || null }))}
+                    />
+                  )}
+                  {isFieldVisible('job_title') && (
+                    <InlineEditField
+                      leadId={data.id}
+                      fieldKey="job_title"
+                      label="Cargo"
+                      value={data.job_title}
+                      placeholder="Adicionar cargo"
+                      onSaved={(v) => setData((prev) => ({ ...prev, job_title: v || null }))}
+                    />
+                  )}
                   {isFieldVisible('lead_source') && (
                     <MeetimeFieldRow
                       label="Origem"

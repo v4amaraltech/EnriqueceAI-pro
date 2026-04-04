@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 
 import { ChevronLeft, ChevronRight, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -150,6 +150,29 @@ export function ActivityExecutionSheet({
   const hasPrev = selectedIndex !== null && selectedIndex > 0;
   const hasNext = selectedIndex !== null && selectedIndex < activities.length - 1;
 
+  // Keyboard shortcuts: ← → to navigate, Escape to close
+  useEffect(() => {
+    if (selectedIndex === null) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't intercept when typing in inputs/textareas/editors
+      const tag = (e.target as HTMLElement).tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable;
+      if (isEditable) return;
+
+      if (e.key === 'ArrowLeft' && hasPrev) {
+        e.preventDefault();
+        onNavigate(selectedIndex! - 1);
+      } else if (e.key === 'ArrowRight' && hasNext) {
+        e.preventDefault();
+        onNavigate(selectedIndex! + 1);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIndex, hasPrev, hasNext, onNavigate]);
+
   return (
     <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col" showCloseButton={false}>
@@ -178,6 +201,7 @@ export function ActivityExecutionSheet({
                   className="h-8 w-8"
                   disabled={!hasPrev}
                   onClick={() => selectedIndex !== null && onNavigate(selectedIndex - 1)}
+                  title="Anterior (←)"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -190,6 +214,7 @@ export function ActivityExecutionSheet({
                   className="h-8 w-8"
                   disabled={!hasNext}
                   onClick={() => selectedIndex !== null && onNavigate(selectedIndex + 1)}
+                  title="Próxima (→)"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
