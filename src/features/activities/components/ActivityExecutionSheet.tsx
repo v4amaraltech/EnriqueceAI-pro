@@ -49,15 +49,20 @@ export function ActivityExecutionSheet({
   function advanceOrClose(enrollmentId: string, stepId: string) {
     onActivityDone(enrollmentId, stepId);
 
+    const remaining = activities.length - 1;
+
     if (selectedIndex !== null && selectedIndex < activities.length - 1) {
-      if (quickMode) {
-        toast.success(`Avançando... (${selectedIndex + 1}/${activities.length})`);
-      }
+      toast.success(
+        remaining <= 3
+          ? `Quase lá! ${remaining} restante${remaining > 1 ? 's' : ''}`
+          : `Feito! (${selectedIndex + 1}/${activities.length})`,
+      );
       onNavigate(selectedIndex);
     } else {
-      if (quickMode) {
-        toast.success('Todas as atividades concluídas!');
-      }
+      toast('Todas as atividades concluídas!', {
+        icon: '🎉',
+        duration: 4000,
+      });
       onClose();
     }
   }
@@ -96,7 +101,7 @@ export function ActivityExecutionSheet({
       });
 
       if (result.success) {
-        toast.success(isWhatsApp ? 'WhatsApp enviado com sucesso!' : 'Email enviado com sucesso!');
+        toast.success(isWhatsApp ? 'WhatsApp enviado!' : 'Email enviado!', { icon: isWhatsApp ? '💬' : '📧' });
         advanceOrClose(activity.enrollmentId, activity.stepId);
       } else {
         toast.error(result.error);
@@ -124,7 +129,7 @@ export function ActivityExecutionSheet({
       });
 
       if (result.success) {
-        toast.success('Atividade marcada como feita!');
+        toast.success('Atividade concluída!', { icon: '✅' });
         advanceOrClose(activity.enrollmentId, activity.stepId);
       } else {
         toast.error(result.error);
