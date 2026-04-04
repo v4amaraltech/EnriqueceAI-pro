@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
@@ -77,16 +78,16 @@ export async function updateLead(
     delete safeUpdates.canal;
   }
 
-  // Fetch current lead to detect email/phone changes
+  // Fetch current lead to detect changes (for audit + email/phone resume)
   const { data: currentLead } = (await from(supabase, 'leads')
-    .select('email, telefone, email_bounced_at')
+    .select('*')
     .eq('id', leadId)
     .eq('org_id', orgId)
-    .single()) as { data: { email: string | null; telefone: string | null; email_bounced_at: string | null } | null };
+    .single()) as { data: Record<string, unknown> | null };
 
   // If email is being updated and it changed, clear bounce flag
   const newEmail = safeUpdates.email as string | undefined;
-  const emailChanged = newEmail !== undefined && newEmail !== currentLead?.email && newEmail;
+  const emailChanged = newEmail !== undefined && newEmail !== (currentLead?.email as string | null) && newEmail;
   if (emailChanged && currentLead?.email_bounced_at) {
     safeUpdates.email_bounced_at = null;
   }
@@ -101,9 +102,31 @@ export async function updateLead(
     return { success: false, error: `Erro ao atualizar lead: ${error.message}` };
   }
 
+  // Log field changes to audit log
+  if (currentLead) {
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, newVal] of Object.entries(safeUpdates)) {
+      const oldVal = currentLead[key];
+      // Compare serialized values to handle objects (custom_field_values, phones, socios)
+      if (JSON.stringify(oldVal ?? null) !== JSON.stringify(newVal ?? null)) {
+        changes[key] = { from: oldVal ?? null, to: newVal ?? null };
+      }
+    }
+    if (Object.keys(changes).length > 0) {
+      logAudit({
+        orgId,
+        userId: auth.data.userId,
+        action: 'lead.fields_updated',
+        resourceType: 'lead',
+        resourceId: leadId,
+        metadata: { changes },
+      });
+    }
+  }
+
   // Resume paused enrollments when email/phone is added or changed
   const newTelefone = safeUpdates.telefone as string | undefined;
-  const telefoneChanged = newTelefone !== undefined && newTelefone !== currentLead?.telefone && newTelefone;
+  const telefoneChanged = newTelefone !== undefined && newTelefone !== (currentLead?.telefone as string | null) && newTelefone;
 
   if (emailChanged || telefoneChanged) {
     const reasons: string[] = [];
