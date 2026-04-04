@@ -35,10 +35,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const dateFrom = typeof params.dateFrom === 'string' ? params.dateFrom : defaults.from;
   const dateTo = typeof params.dateTo === 'string' ? params.dateTo : defaults.to;
 
-  // Derive month from dateFrom for services that still use it
+  // Derive month from dateTo (use most recent month as reference for goals/charts)
   const month = typeof params.month === 'string'
     ? params.month
-    : dateFrom.slice(0, 7);
+    : dateTo.slice(0, 7);
 
   const filters: DashboardFilters = {
     month,
