@@ -233,21 +233,33 @@ export async function fetchConversionRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
 
-  // Get all leads updated in the month — use won_by for qualified attribution
-  let leadsQuery = from(supabase, 'leads')
+  // Get all active leads in the org (denominator: total leads being worked)
+  let allLeadsQuery = from(supabase, 'leads')
     .select('id, status, assigned_to, won_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .gte('updated_at', start)
-    .lt('updated_at', end);
+    .in('status', ['new', 'contacted', 'qualified', 'unqualified']);
 
-  // Note: don't filter by assigned_to here because won_by may differ from assigned_to
-
-  const { data: leads } = (await leadsQuery) as {
+  const { data: allLeads } = (await allLeadsQuery) as {
     data: Array<{ id: string; status: string; assigned_to: string | null; won_by: string | null }> | null;
   };
 
-  const leadRows = leads ?? [];
+  // Get leads won in the period (numerator: qualified via won_at)
+  let wonLeadsQuery = from(supabase, 'leads')
+    .select('id, assigned_to, won_by')
+    .eq('org_id', orgId)
+    .eq('status', 'qualified')
+    .is('deleted_at', null)
+    .not('won_at', 'is', null)
+    .gte('won_at', start)
+    .lt('won_at', end);
+
+  const { data: wonLeads } = (await wonLeadsQuery) as {
+    data: Array<{ id: string; assigned_to: string | null; won_by: string | null }> | null;
+  };
+
+  const leadRows = allLeads ?? [];
+  const wonRows = wonLeads ?? [];
 
   if (leadRows.length === 0) {
     const monthStart = `${filters.month}-01`;
@@ -273,23 +285,35 @@ export async function fetchConversionRanking(
     filteredLeadIds = new Set((enrollments ?? []).map((e) => e.lead_id));
   }
 
-  // Count qualified and total per SDR
-  // For qualified leads: use won_by (who marked as won), fallback to assigned_to
-  // For other leads: use assigned_to
+  // Build set of won lead IDs in the period for quick lookup
+  const wonLeadIds = new Set(wonRows.map((l) => l.id));
+  // Map won leads to their SDR (won_by, fallback assigned_to)
+  const wonLeadSdr = new Map<string, string>();
+  for (const l of wonRows) {
+    const sdr = l.won_by ?? l.assigned_to;
+    if (sdr) wonLeadSdr.set(l.id, sdr);
+  }
+
+  // Count total leads per SDR and won leads per SDR
   const sdrStats = new Map<string, { qualified: number; total: number }>();
   for (const lead of leadRows) {
     if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
-    const isQualified = lead.status === 'qualified';
-    const sdr = isQualified
-      ? (lead.won_by ?? lead.assigned_to)
-      : lead.assigned_to;
+    const sdr = lead.assigned_to;
     if (!sdr) continue;
-    // If userIds filter is active, skip leads not belonging to filtered users
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
     stats.total++;
-    if (isQualified) {
-      stats.qualified++;
+    // Count as qualified only if won in the period
+    if (wonLeadIds.has(lead.id)) {
+      const wonSdr = wonLeadSdr.get(lead.id) ?? sdr;
+      if (wonSdr === sdr) {
+        stats.qualified++;
+      } else {
+        // Won by different SDR — attribute to the one who won it
+        const wonStats = sdrStats.get(wonSdr) ?? { qualified: 0, total: 0 };
+        wonStats.qualified++;
+        sdrStats.set(wonSdr, wonStats);
+      }
     }
     sdrStats.set(sdr, stats);
   }
