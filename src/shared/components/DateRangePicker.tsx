@@ -47,10 +47,10 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
     to: toDate_,
   });
 
-  // Reset pending range when popover opens
+  // Clear pending range when popover opens so user starts fresh
   useEffect(() => {
     if (open) {
-      setPendingRange({ from: fromDate, to: toDate_ });
+      setPendingRange(undefined);
     }
   }, [open]);
 
