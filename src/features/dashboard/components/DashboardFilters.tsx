@@ -96,12 +96,51 @@ export function DashboardFilters({
     ? currentFilters.userIds.length
     : sdrMembers.length;
 
+  const currentRange = searchParams.get('range') ?? '';
+  const RANGE_PRESETS = [
+    { value: '7d', label: '7 dias' },
+    { value: '30d', label: '30 dias' },
+    { value: '90d', label: '90 dias' },
+  ];
+
+  const handleRangePreset = useCallback((range: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (currentRange === range) {
+      // Toggle off — go back to month view
+      params.delete('range');
+    } else {
+      params.set('range', range);
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  }, [router, pathname, searchParams, currentRange]);
+
   return (
     <div className="flex flex-wrap items-center gap-1">
+      {/* Range presets */}
+      {RANGE_PRESETS.map((preset) => (
+        <button
+          key={preset.value}
+          onClick={() => handleRangePreset(preset.value)}
+          className={`rounded-md px-2 py-1 text-sm transition-colors ${
+            currentRange === preset.value
+              ? 'bg-primary text-white'
+              : 'text-foreground/70 hover:bg-accent hover:text-foreground'
+          }`}
+        >
+          {preset.label}
+        </button>
+      ))}
+
+      <span className="mx-1 text-[var(--border)]">|</span>
+
       {/* Month selector — inline dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+          <button className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${
+            !currentRange
+              ? 'bg-accent text-foreground'
+              : 'text-foreground/70 hover:bg-accent hover:text-foreground'
+          }`}>
             <CalendarDays className="h-3.5 w-3.5" />
             <span>{currentMonthLabel.toLowerCase()}</span>
             <ChevronDown className="h-3 w-3 opacity-50" />
@@ -111,8 +150,13 @@ export function DashboardFilters({
           {months.map((m) => (
             <DropdownMenuCheckboxItem
               key={m.value}
-              checked={m.value === currentFilters.month}
-              onCheckedChange={() => updateParams('month', m.value)}
+              checked={m.value === currentFilters.month && !currentRange}
+              onCheckedChange={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set('month', m.value);
+                params.delete('range');
+                router.push(`${pathname}?${params.toString()}`);
+              }}
             >
               {m.label}
             </DropdownMenuCheckboxItem>
