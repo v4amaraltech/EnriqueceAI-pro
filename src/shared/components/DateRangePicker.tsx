@@ -46,11 +46,13 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
     from: fromDate,
     to: toDate_,
   });
+  const [clickCount, setClickCount] = useState(0);
 
-  // Sync pending range when props change (e.g. from URL)
+  // Sync pending range when props change or popover reopens
   useEffect(() => {
     if (!open) {
       setPendingRange({ from: fromDate, to: toDate_ });
+      setClickCount(0);
     }
   }, [from, to, open]);
 
@@ -79,20 +81,23 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
 
   const handleRangeSelect = useCallback(
     (selected: DateRange | undefined) => {
+      const newClickCount = clickCount + 1;
+      setClickCount(newClickCount);
       setPendingRange(selected);
 
-      // Only apply when both from and to are set AND they are different
-      // (when user clicks the same day twice, from === to, that's a single-day selection — apply it)
+      // First click: always keep open (user is selecting start date)
+      if (newClickCount === 1) return;
+
+      // Second click: apply the range and close
       if (selected?.from && selected?.to) {
         const diff = differenceInDays(selected.to, selected.from);
-        if (diff > MAX_RANGE_DAYS) return;
-        if (diff < 0) return;
+        if (diff > MAX_RANGE_DAYS || diff < 0) return;
         onChange(format(selected.from, 'yyyy-MM-dd'), format(selected.to, 'yyyy-MM-dd'));
+        setClickCount(0);
         setOpen(false);
       }
-      // If only from is set (first click), keep popover open and wait for second click
     },
-    [onChange],
+    [onChange, clickCount],
   );
 
   const label = `${format(fromDate, 'dd MMM yyyy', { locale: ptBR })} — ${format(toDate_, 'dd MMM yyyy', { locale: ptBR })}`;
