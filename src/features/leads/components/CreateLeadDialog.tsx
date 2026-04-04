@@ -104,6 +104,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   const resetForm = useCallback(() => {
     setForm({ ...INITIAL_FORM, assigned_to: currentUserId });
     setCadenceSearch('');
+    setTouched(new Set());
   }, [currentUserId]);
 
   function handleOpenChange(value: boolean) {
@@ -114,17 +115,34 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   const hasCadence = form.cadence_id !== '';
   const isScheduled = form.enrollment_mode === 'scheduled';
 
-  const isFormValid =
-    form.first_name.trim() !== '' &&
-    form.last_name.trim() !== '' &&
-    form.email.trim() !== '' &&
-    form.telefone.trim() !== '' &&
-    form.empresa.trim() !== '' &&
-    form.job_title.trim() !== '' &&
-    form.lead_source !== '' &&
-    form.canal !== '' &&
-    form.assigned_to !== '' &&
+  // Track which fields have been touched (blurred)
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const markTouched = useCallback((field: string) => {
+    setTouched((prev) => new Set(prev).add(field));
+  }, []);
+
+  // Field-level validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^[\d\s()+-]{8,}$/;
+  const fieldErrors: Record<string, string> = {};
+  if (!form.first_name.trim()) fieldErrors.first_name = 'Nome obrigatório';
+  if (!form.last_name.trim()) fieldErrors.last_name = 'Sobrenome obrigatório';
+  if (!form.email.trim()) fieldErrors.email = 'Email obrigatório';
+  else if (!emailRegex.test(form.email)) fieldErrors.email = 'Email inválido';
+  if (!form.telefone.trim()) fieldErrors.telefone = 'Telefone obrigatório';
+  else if (!phoneRegex.test(form.telefone)) fieldErrors.telefone = 'Telefone inválido';
+  if (!form.empresa.trim()) fieldErrors.empresa = 'Empresa obrigatória';
+  if (!form.job_title.trim()) fieldErrors.job_title = 'Cargo obrigatório';
+  if (!form.lead_source) fieldErrors.lead_source = 'Origem obrigatória';
+  if (!form.canal) fieldErrors.canal = 'Canal obrigatório';
+  if (!form.assigned_to) fieldErrors.assigned_to = 'Responsável obrigatório';
+
+  const isFormValid = Object.keys(fieldErrors).length === 0 &&
     (!isScheduled || !hasCadence || form.scheduled_start !== '');
+
+  function fieldError(field: string): string | undefined {
+    return touched.has(field) ? fieldErrors[field] : undefined;
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -326,7 +344,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     id="create-first-name"
                     value={form.first_name}
                     onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                    onBlur={() => markTouched('first_name')}
+                    aria-invalid={!!fieldError('first_name')}
+                    className={fieldError('first_name') ? 'border-red-500' : ''}
                   />
+                  {fieldError('first_name') && <p className="text-xs text-red-500">{fieldError('first_name')}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-last-name">
@@ -336,7 +358,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     id="create-last-name"
                     value={form.last_name}
                     onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                    onBlur={() => markTouched('last_name')}
+                    aria-invalid={!!fieldError('last_name')}
+                    className={fieldError('last_name') ? 'border-red-500' : ''}
                   />
+                  {fieldError('last_name') && <p className="text-xs text-red-500">{fieldError('last_name')}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-email">
@@ -348,7 +374,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     placeholder="contato@empresa.com"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    onBlur={() => markTouched('email')}
+                    aria-invalid={!!fieldError('email')}
+                    className={fieldError('email') ? 'border-red-500' : ''}
                   />
+                  {fieldError('email') && <p className="text-xs text-red-500">{fieldError('email')}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-telefone">
@@ -359,7 +389,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     placeholder="(11) 99999-9999"
                     value={form.telefone}
                     onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                    onBlur={() => markTouched('telefone')}
+                    aria-invalid={!!fieldError('telefone')}
+                    className={fieldError('telefone') ? 'border-red-500' : ''}
                   />
+                  {fieldError('telefone') && <p className="text-xs text-red-500">{fieldError('telefone')}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-empresa">
@@ -369,7 +403,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     id="create-empresa"
                     value={form.empresa}
                     onChange={(e) => setForm({ ...form, empresa: e.target.value })}
+                    onBlur={() => markTouched('empresa')}
+                    aria-invalid={!!fieldError('empresa')}
+                    className={fieldError('empresa') ? 'border-red-500' : ''}
                   />
+                  {fieldError('empresa') && <p className="text-xs text-red-500">{fieldError('empresa')}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="create-job-title" className="flex items-center gap-1.5">
@@ -380,7 +418,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     id="create-job-title"
                     value={form.job_title}
                     onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+                    onBlur={() => markTouched('job_title')}
+                    aria-invalid={!!fieldError('job_title')}
+                    className={fieldError('job_title') ? 'border-red-500' : ''}
                   />
+                  {fieldError('job_title') && <p className="text-xs text-red-500">{fieldError('job_title')}</p>}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>
