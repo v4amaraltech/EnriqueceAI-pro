@@ -4,10 +4,11 @@ import { useCallback } from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { CalendarDays, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
+import { DateRangePicker } from '@/shared/components/DateRangePicker';
 
 import {
   DropdownMenu,
@@ -19,23 +20,6 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 
 import type { CadenceOption, DashboardFilters as Filters } from '../types';
-
-const MONTH_NAMES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
-
-function getLast12Months(): { value: string; label: string }[] {
-  const months: { value: string; label: string }[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-    months.push({ value, label: label ?? value });
-  }
-  return months;
-}
 
 function GreenDot() {
   return <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />;
@@ -54,11 +38,6 @@ export function DashboardFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { members, isManager } = useOrganization();
-
-  const months = getLast12Months();
-  const currentMonthLabel =
-    months.find((m) => m.value === currentFilters.month)?.label ??
-    currentFilters.month;
 
   const updateParams = useCallback(
     (key: string, value: string | string[]) => {
@@ -86,6 +65,17 @@ export function DashboardFilters({
     [updateParams],
   );
 
+  const handleDateRangeChange = useCallback(
+    (from: string, to: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('dateFrom', from);
+      params.set('dateTo', to);
+      params.delete('month');
+      router.push(`${pathname}?${params.toString()}`);
+    },
+    [router, pathname, searchParams],
+  );
+
   const sdrMembers = members.filter((m) => m.status === 'active');
 
   const cadenceCount = currentFilters.cadenceIds.length > 0
@@ -96,73 +86,14 @@ export function DashboardFilters({
     ? currentFilters.userIds.length
     : sdrMembers.length;
 
-  const currentRange = searchParams.get('range') ?? '';
-  const RANGE_PRESETS = [
-    { value: '7d', label: '7 dias' },
-    { value: '30d', label: '30 dias' },
-    { value: '90d', label: '90 dias' },
-  ];
-
-  const handleRangePreset = useCallback((range: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (currentRange === range) {
-      // Toggle off — go back to month view
-      params.delete('range');
-    } else {
-      params.set('range', range);
-    }
-    router.push(`${pathname}?${params.toString()}`);
-  }, [router, pathname, searchParams, currentRange]);
-
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {/* Range presets */}
-      {RANGE_PRESETS.map((preset) => (
-        <button
-          key={preset.value}
-          onClick={() => handleRangePreset(preset.value)}
-          className={`rounded-md px-2 py-1 text-sm transition-colors ${
-            currentRange === preset.value
-              ? 'bg-primary text-white'
-              : 'text-foreground/70 hover:bg-accent hover:text-foreground'
-          }`}
-        >
-          {preset.label}
-        </button>
-      ))}
-
-      <span className="mx-1 text-[var(--border)]">|</span>
-
-      {/* Month selector — inline dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${
-            !currentRange
-              ? 'bg-accent text-foreground'
-              : 'text-foreground/70 hover:bg-accent hover:text-foreground'
-          }`}>
-            <CalendarDays className="h-3.5 w-3.5" />
-            <span>{currentMonthLabel.toLowerCase()}</span>
-            <ChevronDown className="h-3 w-3 opacity-50" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {months.map((m) => (
-            <DropdownMenuCheckboxItem
-              key={m.value}
-              checked={m.value === currentFilters.month && !currentRange}
-              onCheckedChange={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('month', m.value);
-                params.delete('range');
-                router.push(`${pathname}?${params.toString()}`);
-              }}
-            >
-              {m.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Date range picker */}
+      <DateRangePicker
+        from={currentFilters.dateFrom!}
+        to={currentFilters.dateTo!}
+        onChange={handleDateRangeChange}
+      />
 
       {/* Cadence filter */}
       {availableCadences.length > 0 && (

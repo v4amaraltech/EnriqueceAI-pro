@@ -16,6 +16,16 @@ function getMonthRange(month: string): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function getDateRange(filters: DashboardFilters): { start: string; end: string } {
+  if (filters.dateFrom && filters.dateTo) {
+    return {
+      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
+      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+    };
+  }
+  return getMonthRange(filters.month);
+}
+
 /**
  * Chart 1: Loss reasons — horizontal bar chart
  * Counts enrollments with a loss_reason_id, grouped by reason name
@@ -25,7 +35,7 @@ export async function fetchLossReasons(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<LossReasonEntry[]> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
 
   // Get enrollments with loss reasons — filter by completed_at (when lost), not enrolled_at
   let query = from(supabase, 'cadence_enrollments')
@@ -106,7 +116,7 @@ export async function fetchConversionByOrigin(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<ConversionByOriginEntry[]> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
 
   // Get leads that changed to qualified/unqualified in the period
   let leadsQuery = from(supabase, 'leads')

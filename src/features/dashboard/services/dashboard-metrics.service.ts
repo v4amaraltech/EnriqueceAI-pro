@@ -19,6 +19,17 @@ function getMonthRange(month: string): { start: string; end: string } {
   };
 }
 
+/** Use dateFrom/dateTo when available, fallback to month range */
+function getDateRange(filters: DashboardFilters): { start: string; end: string } {
+  if (filters.dateFrom && filters.dateTo) {
+    return {
+      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
+      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+    };
+  }
+  return getMonthRange(filters.month);
+}
+
 function getDaysInMonth(month: string): number {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   return new Date(year, mon, 0).getDate();
@@ -64,7 +75,7 @@ export async function fetchOpportunityKpi(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<OpportunityKpiData> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
   const days = getDaysInMonth(filters.month);
 
   // Query qualified leads in the month

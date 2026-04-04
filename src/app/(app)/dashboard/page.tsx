@@ -1,3 +1,4 @@
+import { format, subDays } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
@@ -15,36 +16,47 @@ interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function getCurrentMonth(): string {
+function getDefaultDateRange(): { from: string; to: string; month: string } {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  return {
+    from: format(firstOfMonth, 'yyyy-MM-dd'),
+    to: format(now, 'yyyy-MM-dd'),
+    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+  };
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   await requireAuth();
 
   const params = await searchParams;
+  const defaults = getDefaultDateRange();
+
+  const dateFrom = typeof params.dateFrom === 'string' ? params.dateFrom : defaults.from;
+  const dateTo = typeof params.dateTo === 'string' ? params.dateTo : defaults.to;
+
+  // Derive month from dateFrom for services that still use it
+  const month = typeof params.month === 'string'
+    ? params.month
+    : dateFrom.slice(0, 7);
 
   const filters: DashboardFilters = {
-    month: typeof params.month === 'string' ? params.month : getCurrentMonth(),
+    month,
     cadenceIds: typeof params.cadenceIds === 'string'
       ? params.cadenceIds.split(',').filter(Boolean)
       : [],
     userIds: typeof params.userIds === 'string'
       ? params.userIds.split(',').filter(Boolean)
       : [],
+    dateFrom,
+    dateTo,
   };
-
-  // Build date range from month filter for response time component
-  const [year, mon] = filters.month.split('-').map(Number) as [number, number];
-  const monthFrom = `${filters.month}-01`;
-  const monthTo = new Date(year, mon, 0).toISOString().slice(0, 10); // last day of month
 
   const [result, rankingResult, insightsResult, responseTimeResult] = await Promise.all([
     getDashboardData(filters),
     getRankingData(filters),
     getInsightsData(filters),
-    getResponseTimeData(30, { from: monthFrom, to: monthTo }),
+    getResponseTimeData(30, { from: dateFrom, to: dateTo }),
   ]);
 
   if (!result.success) {

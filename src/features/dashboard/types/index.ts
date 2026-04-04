@@ -2,6 +2,9 @@ export interface DashboardFilters {
   month: string; // YYYY-MM format
   cadenceIds: string[];
   userIds: string[];
+  /** Override date range (ISO date strings). When set, takes precedence over month. */
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface DailyDataPoint {

@@ -16,6 +16,16 @@ function getMonthRange(month: string): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function getDateRange(filters: DashboardFilters): { start: string; end: string } {
+  if (filters.dateFrom && filters.dateTo) {
+    return {
+      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
+      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+    };
+  }
+  return getMonthRange(filters.month);
+}
+
 function getDaysInMonth(month: string): number {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   return new Date(year, mon, 0).getDate();
@@ -57,7 +67,7 @@ export async function fetchLeadsFinishedRanking(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
 
   // Query enrollments in the period with lead_id for attribution
   let query = from(supabase, 'cadence_enrollments')
@@ -140,7 +150,7 @@ export async function fetchActivitiesRanking(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
 
   // Get interactions in the period with performed_by for direct attribution
   let interactionsQuery = from(supabase, 'interactions')
@@ -221,7 +231,7 @@ export async function fetchConversionRanking(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
-  const { start, end } = getMonthRange(filters.month);
+  const { start, end } = getDateRange(filters);
 
   // Get all leads updated in the month — use won_by for qualified attribution
   let leadsQuery = from(supabase, 'leads')
