@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check } from 'lucide-react';
 import { differenceInDays, format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
@@ -46,59 +46,51 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
     from: fromDate,
     to: toDate_,
   });
-  const [clickCount, setClickCount] = useState(0);
 
-  // Sync pending range when props change or popover reopens
+  // Reset pending range when popover opens
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setPendingRange({ from: fromDate, to: toDate_ });
-      setClickCount(0);
     }
-  }, [from, to, open]);
+  }, [open]);
 
   const handlePreset = useCallback(
     (days: number) => {
       const end = new Date();
       let start: Date;
       if (days === -1) {
-        // Yesterday
         start = subDays(end, 1);
         onChange(format(start, 'yyyy-MM-dd'), format(start, 'yyyy-MM-dd'));
-        setPendingRange({ from: start, to: start });
       } else if (days === 0) {
         start = end;
         onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-        setPendingRange({ from: start, to: end });
       } else {
         start = subDays(end, days);
         onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-        setPendingRange({ from: start, to: end });
       }
       setOpen(false);
     },
     [onChange],
   );
 
-  const handleRangeSelect = useCallback(
-    (selected: DateRange | undefined) => {
-      const newClickCount = clickCount + 1;
-      setClickCount(newClickCount);
-      setPendingRange(selected);
+  const handleApply = useCallback(() => {
+    if (pendingRange?.from) {
+      const rangeFrom = pendingRange.from;
+      const rangeTo = pendingRange.to ?? pendingRange.from;
+      const diff = differenceInDays(rangeTo, rangeFrom);
+      if (diff > MAX_RANGE_DAYS || diff < 0) return;
+      onChange(format(rangeFrom, 'yyyy-MM-dd'), format(rangeTo, 'yyyy-MM-dd'));
+      setOpen(false);
+    }
+  }, [pendingRange, onChange]);
 
-      // First click: always keep open (user is selecting start date)
-      if (newClickCount === 1) return;
+  const canApply = pendingRange?.from && pendingRange?.to;
 
-      // Second click: apply the range and close
-      if (selected?.from && selected?.to) {
-        const diff = differenceInDays(selected.to, selected.from);
-        if (diff > MAX_RANGE_DAYS || diff < 0) return;
-        onChange(format(selected.from, 'yyyy-MM-dd'), format(selected.to, 'yyyy-MM-dd'));
-        setClickCount(0);
-        setOpen(false);
-      }
-    },
-    [onChange, clickCount],
-  );
+  const pendingLabel = pendingRange?.from
+    ? pendingRange.to
+      ? `${format(pendingRange.from, 'dd MMM', { locale: ptBR })} — ${format(pendingRange.to, 'dd MMM', { locale: ptBR })}`
+      : `${format(pendingRange.from, 'dd MMM', { locale: ptBR })} — ...`
+    : null;
 
   const label = `${format(fromDate, 'dd MMM yyyy', { locale: ptBR })} — ${format(toDate_, 'dd MMM yyyy', { locale: ptBR })}`;
 
@@ -132,15 +124,31 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
                 </Button>
               ))}
             </div>
-            <div className="relative p-3">
-              <Calendar
-                mode="range"
-                selected={pendingRange}
-                onSelect={handleRangeSelect}
-                numberOfMonths={2}
-                disabled={{ after: new Date() }}
-                locale={ptBR}
-              />
+            <div className="flex flex-col">
+              <div className="relative p-3">
+                <Calendar
+                  mode="range"
+                  selected={pendingRange}
+                  onSelect={setPendingRange}
+                  numberOfMonths={2}
+                  disabled={{ after: new Date() }}
+                  locale={ptBR}
+                />
+              </div>
+              <div className="flex items-center justify-between border-t px-3 py-2">
+                <span className="text-sm text-muted-foreground">
+                  {pendingLabel}
+                </span>
+                <Button
+                  size="sm"
+                  disabled={!canApply}
+                  onClick={handleApply}
+                  className="gap-1.5"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Aplicar
+                </Button>
+              </div>
             </div>
           </div>
         </PopoverContent>
