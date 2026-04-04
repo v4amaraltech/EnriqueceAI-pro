@@ -21,6 +21,8 @@ import { listClosers, type CloserRow } from '@/features/settings-prospecting/act
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
 import { scheduleMeeting, updateMeeting, getLoggedUserEmail } from '../actions/schedule-meeting';
+import { WhatsAppInviteModal } from './WhatsAppInviteModal';
+import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 
 export interface MeetingEditData {
   interactionId: string;
@@ -91,6 +93,13 @@ export function ScheduleMeetingModal({
   const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
   const [sdrEmail, setSdrEmail] = useState('');
+
+  // WhatsApp invite modal
+  const [whatsAppInviteOpen, setWhatsAppInviteOpen] = useState(false);
+  const [hasWhatsApp, setHasWhatsApp] = useState(false);
+  const [meetingForInvite, setMeetingForInvite] = useState<{
+    title: string; date: string; time: string; duration: string; meetLink?: string | null;
+  } | null>(null);
 
   function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
     const emails = [leadEmail, closerEmail, currentSdrEmail ?? sdrEmail]
@@ -175,6 +184,20 @@ export function ScheduleMeetingModal({
         toast.success(editData ? 'Reunião atualizada!' : `Reunião agendada!${meetInfo}`);
         onOpenChange(false);
         router.refresh();
+
+        // After scheduling (not editing), prompt WhatsApp invite
+        if (!editData) {
+          const whatsAppStatus = await checkWhatsAppConnected();
+          setHasWhatsApp(whatsAppStatus);
+          setMeetingForInvite({
+            title,
+            date: dateString,
+            time: selectedTime,
+            duration: effectiveDuration,
+            meetLink: result.data?.meetLink,
+          });
+          setWhatsAppInviteOpen(true);
+        }
       } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
         toast.info('Reconectando ao Google Calendar...');
         const authResult = await getCalendarAuthUrl();
@@ -362,17 +385,31 @@ export function ScheduleMeetingModal({
     </div>
   );
 
+  const whatsAppInviteElement = meetingForInvite ? (
+    <WhatsAppInviteModal
+      open={whatsAppInviteOpen}
+      onOpenChange={setWhatsAppInviteOpen}
+      leadId={leadId}
+      leadName={leadName ?? 'Lead'}
+      hasWhatsApp={hasWhatsApp}
+      meeting={meetingForInvite}
+    />
+  ) : null;
+
   if (inline) {
     return (
       <div>
         {header}
         {formFields}
         {footer}
+        {whatsAppInviteElement}
       </div>
     );
   }
 
   return (
+    <>
+    {whatsAppInviteElement}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -400,5 +437,6 @@ export function ScheduleMeetingModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
