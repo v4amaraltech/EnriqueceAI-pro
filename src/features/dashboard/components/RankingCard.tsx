@@ -36,6 +36,7 @@ interface RankingCardProps {
   primaryColumnLabel?: string;
   secondaryColumnLabel?: string;
   averageLabel?: string;
+  onSdrClick?: (userId: string) => void;
 }
 
 interface RankingContentProps {
@@ -47,6 +48,7 @@ interface RankingContentProps {
   primaryColumnLabel?: string;
   secondaryColumnLabel?: string;
   averageLabel?: string;
+  onSdrClick?: (userId: string) => void;
 }
 
 function RankingContent({
@@ -58,6 +60,7 @@ function RankingContent({
   primaryColumnLabel,
   secondaryColumnLabel,
   averageLabel,
+  onSdrClick,
 }: RankingContentProps) {
   const isAbove = data.percentOfTarget >= 0;
   const absPercent = Math.abs(data.percentOfTarget);
@@ -120,7 +123,14 @@ function RankingContent({
             {/* SDR List */}
             <div className="space-y-3">
               {data.sdrBreakdown.map((sdr, index) => (
-                <div key={sdr.userId} className="flex items-center">
+                <div
+                  key={sdr.userId}
+                  className={cn('flex items-center', onSdrClick && 'cursor-pointer rounded-md px-1 -mx-1 py-0.5 hover:bg-[var(--accent)] transition-colors')}
+                  onClick={() => onSdrClick?.(sdr.userId)}
+                  role={onSdrClick ? 'button' : undefined}
+                  tabIndex={onSdrClick ? 0 : undefined}
+                  onKeyDown={onSdrClick ? (e) => { if (e.key === 'Enter') onSdrClick(sdr.userId); } : undefined}
+                >
                   <Avatar size="sm" className="mr-3 shrink-0">
                     {sdr.avatarUrl && <AvatarImage src={sdr.avatarUrl} alt={sdr.userName} />}
                     <AvatarFallback
@@ -189,6 +199,7 @@ export function RankingCard({
   primaryColumnLabel,
   secondaryColumnLabel,
   averageLabel,
+  onSdrClick,
 }: RankingCardProps) {
   const contentProps: RankingContentProps = {
     icon: Icon,
@@ -199,6 +210,7 @@ export function RankingCard({
     primaryColumnLabel,
     secondaryColumnLabel,
     averageLabel,
+    onSdrClick,
   };
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useCallback, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { CheckCircle2, TrendingUp, Users } from 'lucide-react';
 
@@ -24,7 +25,12 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ data, filters, ranking, insights, responseTime }: DashboardViewProps) {
+  const router = useRouter();
   const [goalsOpen, setGoalsOpen] = useState(false);
+
+  const handleSdrClick = useCallback((userId: string) => {
+    router.push(`/leads?assigned_to=${userId}`);
+  }, [router]);
 
   return (
     <div className="space-y-6">
@@ -65,6 +71,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             primaryColumnLabel="finalizados"
             secondaryColumnLabel="prospectando"
             averageLabel="média finalizados/vendedor"
+            onSdrClick={handleSdrClick}
           />
           <RankingCard
             title="Atividades Realizadas"
@@ -74,6 +81,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.activitiesDone}
             primaryColumnLabel="atividades"
             averageLabel="média atividades/vendedor"
+            onSdrClick={handleSdrClick}
           />
           <RankingCard
             title="Taxa de Conversão"
@@ -84,6 +92,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.conversionRate}
             primaryColumnLabel="oportunidades"
             averageLabel="média conversão/vendedor"
+            onSdrClick={handleSdrClick}
           />
         </div>
       )}
