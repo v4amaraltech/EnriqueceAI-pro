@@ -75,7 +75,7 @@ export default async function FeedbackPage({
     <div className="min-h-screen bg-gray-50 dark:bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="bg-white dark:bg-[var(--card)] rounded-xl shadow-sm border border-gray-200 dark:border-[var(--border)] overflow-hidden">
-          <div className="bg-[#E53935] px-8 py-6">
+          <div className="bg-primary px-8 py-6">
             <h1 className="text-white text-xl font-semibold">EnriqueceAI</h1>
             <p className="text-gray-300 text-sm mt-1">Feedback da Reunião</p>
           </div>
@@ -96,7 +96,7 @@ function ErrorPage({ message }: { message: string }) {
     <div className="min-h-screen bg-gray-50 dark:bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="bg-white dark:bg-[var(--card)] rounded-xl shadow-sm border border-gray-200 dark:border-[var(--border)] overflow-hidden">
-          <div className="bg-[#E53935] px-8 py-6">
+          <div className="bg-primary px-8 py-6">
             <h1 className="text-white text-xl font-semibold">EnriqueceAI</h1>
           </div>
           <div className="p-8 text-center">

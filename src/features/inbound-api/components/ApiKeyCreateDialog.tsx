@@ -110,7 +110,7 @@ export function ApiKeyCreateDialog({ open, onOpenChange, onCreated }: Props) {
                     if (e.target.checked) setExpiresAt('');
                   }}
                   disabled={isPending}
-                  className="rounded accent-[#E53935]"
+                  className="rounded accent-primary"
                 />
                 Nunca expira
               </label>

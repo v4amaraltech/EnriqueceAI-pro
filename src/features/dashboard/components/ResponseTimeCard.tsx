@@ -127,7 +127,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
             <Button variant="outline" size="sm" className="gap-1.5">
               <Filter className="h-3.5 w-3.5" />
               Filtros
-              {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-[#E53935]" />}
+              {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-primary" />}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[380px] p-0" align="end">
@@ -207,7 +207,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
         <div className="flex flex-col items-center justify-center lg:w-1/2 lg:border-r lg:border-[var(--border)] lg:pr-10">
           <p className="text-7xl font-bold">{filteredData.overallPct}%</p>
           <p className="mt-3 text-base text-center">
-            abordados em até <span className="text-[#E53935] font-semibold">{threshold}</span>
+            abordados em até <span className="text-primary font-semibold">{threshold}</span>
           </p>
           <p className="mt-6 text-sm text-[var(--muted-foreground)] text-center max-w-[300px] leading-relaxed">
             O tempo de resposta mede o tempo corrido entre o recebimento do lead na plataforma e a primeira atividade do vendedor.

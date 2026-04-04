@@ -115,7 +115,7 @@ export function CloserPerformanceCards({ feedbacks }: { feedbacks: CloserFeedbac
                     <td className="p-3 text-center text-yellow-600 dark:text-yellow-400">{c.rescheduled}</td>
                     <td className="p-3 text-center">
                       {c.avgRating !== null ? (
-                        <span className="text-[#E53935]">{'★'.repeat(Math.round(c.avgRating))}{'☆'.repeat(5 - Math.round(c.avgRating))}</span>
+                        <span className="text-primary">{'★'.repeat(Math.round(c.avgRating))}{'☆'.repeat(5 - Math.round(c.avgRating))}</span>
                       ) : '—'}
                     </td>
                     <td className="p-3 text-center">{c.responseRate.toFixed(0)}%</td>

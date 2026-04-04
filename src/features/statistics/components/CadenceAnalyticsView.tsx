@@ -30,7 +30,7 @@ function ConversionBar({ row }: { row: CadenceConversionRow }) {
           )}
           {row.lostPercent > 0 && (
             <div
-              className="bg-[#E53935] flex items-center justify-center text-white text-xs font-medium transition-all"
+              className="bg-primary flex items-center justify-center text-white text-xs font-medium transition-all"
               style={{ width: `${row.lostPercent}%` }}
             >
               {row.lostPercent >= 8 ? `${row.lostPercent.toFixed(0)}%` : ''}
@@ -140,7 +140,7 @@ export function CadenceAnalyticsView({ data }: CadenceAnalyticsViewProps) {
                   Ganhos
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-                  <div className="h-3 w-3 rounded-sm bg-[#E53935]" />
+                  <div className="h-3 w-3 rounded-sm bg-primary" />
                   Perdidos
                 </div>
               </div>

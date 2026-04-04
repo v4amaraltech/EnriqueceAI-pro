@@ -59,7 +59,7 @@ function ControlRow({ row }: { row: DailyControlRow }) {
       <td className="p-3 text-center text-sm border-l border-[var(--border)]">{row.prospecting}</td>
       <td className="p-3 text-center text-sm">{row.available}</td>
       <td className="p-3 text-center text-sm text-green-600 dark:text-green-400">{row.won}</td>
-      <td className="p-3 text-center text-sm text-[#E53935] border-r border-[var(--border)]">{row.lost}</td>
+      <td className="p-3 text-center text-sm text-primary border-r border-[var(--border)]">{row.lost}</td>
       {/* Atividades */}
       <td className="p-3 text-center text-sm">{row.pending}</td>
       <td className="p-3 text-center text-sm">{row.completed}</td>

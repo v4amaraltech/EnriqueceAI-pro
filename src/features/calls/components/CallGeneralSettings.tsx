@@ -7,6 +7,15 @@ import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import { Switch } from '@/shared/components/ui/switch';
 
 import { saveCallSettings } from '../actions/call-settings-crud';
 import type { CallSettingsRow, CallType } from '../types';
@@ -58,49 +67,38 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
         {/* Calls enabled toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <label className="text-sm font-medium">Módulo de Ligações</label>
+            <Label htmlFor="calls-enabled">Módulo de Ligações</Label>
             <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               Habilitar ou desabilitar o módulo de ligações.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={callsEnabled}
-            onClick={() => setCallsEnabled(!callsEnabled)}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-              callsEnabled ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                callsEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <Switch
+            id="calls-enabled"
+            checked={callsEnabled}
+            onCheckedChange={setCallsEnabled}
+          />
         </div>
 
         {/* Default call type */}
-        <div>
-          <label className="block text-sm font-medium mb-2">Tipo Padrão de Ligação</label>
-          <select
-            value={defaultCallType}
-            onChange={(e) => setDefaultCallType(e.target.value as CallType)}
-            className="h-9 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm"
-          >
-            {CALL_TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-2">
+          <Label>Tipo Padrão de Ligação</Label>
+          <Select value={defaultCallType} onValueChange={(v) => setDefaultCallType(v as CallType)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CALL_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Significant threshold */}
         <div>
-          <label className="block text-sm font-medium mb-2">
-            Duração Mínima para Ligação Significativa
-          </label>
+          <Label>Duração Mínima para Ligação Significativa</Label>
           <div className="flex items-center gap-3">
             <Input
               type="number"
@@ -115,9 +113,7 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
 
         {/* Daily target */}
         <div>
-          <label className="block text-sm font-medium mb-2">
-            Meta Diária de Ligações (Padrão da Organização)
-          </label>
+          <Label>Meta Diária de Ligações (Padrão da Organização)</Label>
           <div className="flex items-center gap-3">
             <Input
               type="number"

@@ -36,7 +36,7 @@ function ProgressRing({ percent, size = 64, strokeWidth = 5 }: { percent: number
     <svg width={size} height={size} className="-rotate-90">
       <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} className="stroke-[var(--border)]" />
       <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} strokeLinecap="round"
-        strokeDasharray={circumference} strokeDashoffset={offset} className="stroke-[#E53935]" />
+        strokeDasharray={circumference} strokeDashoffset={offset} className="stroke-primary" />
     </svg>
   );
 }
@@ -185,7 +185,7 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
               <div className="flex-1 h-8 rounded-full overflow-hidden flex">
                 {user.lost > 0 && (
                   <div
-                    className="h-full bg-[#E53935] flex items-center justify-center text-[11px] font-semibold text-white"
+                    className="h-full bg-primary flex items-center justify-center text-[11px] font-semibold text-white"
                     style={{ width: `${lostPercent}%`, minWidth: '3rem' }}
                   >
                     {lostPercent}%
@@ -201,7 +201,7 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
                 )}
               </div>
               <div className="flex gap-4 text-xs shrink-0">
-                <span className="text-[#E53935] font-medium">Perdidos {fmt(user.lost)}</span>
+                <span className="text-primary font-medium">Perdidos {fmt(user.lost)}</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ganhos {fmt(user.won)}</span>
               </div>
             </div>
@@ -220,7 +220,7 @@ function UserExpandedDetails({ user }: { user: UserActivityRow }) {
               {user.quartiles.map((q, i) => (
                 <div
                   key={q.quartile}
-                  className="relative flex items-center justify-center bg-[#6b7280] text-white"
+                  className="relative flex items-center justify-center bg-[var(--muted-foreground)] text-white"
                   style={{ width: `${q.percent}%`, minWidth: '3rem' }}
                 >
                   <span className="relative z-10 text-[11px] font-medium whitespace-nowrap">
@@ -269,14 +269,14 @@ function UserRow({ user, isExpanded, onToggle }: { user: UserActivityRow; isExpa
             user.onTimePercent !== null
               ? user.onTimePercent >= 50
                 ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                : 'text-[#E53935] font-medium'
+                : 'text-primary font-medium'
               : 'text-[var(--muted-foreground)]'
           }>
             {user.onTimePercent !== null ? `${user.onTimePercent.toFixed(0)}%` : '—'}
           </span>
         </td>
         <td className="py-4 px-4 text-center text-sm">
-          <span className="text-[#E53935] font-semibold underline decoration-[#E53935]/40">{fmt(user.lost)}</span>
+          <span className="text-primary font-semibold underline decoration-primary/40">{fmt(user.lost)}</span>
         </td>
         <td className="py-4 px-4 text-center text-sm">
           <span className="text-emerald-600 dark:text-emerald-400 font-semibold underline decoration-emerald-600/40 dark:decoration-emerald-400/40">
@@ -353,7 +353,7 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
               </span>
             </div>
             <div className="mt-2 flex gap-6 text-sm">
-              <span className="text-[#E53935] font-semibold underline decoration-[#E53935]/40">
+              <span className="text-primary font-semibold underline decoration-primary/40">
                 {fmt(data.totalLost)} perdas ({lostPercent}%)
               </span>
               <span className="text-emerald-600 dark:text-emerald-400 font-semibold underline decoration-emerald-600/40 dark:decoration-emerald-400/40">

@@ -83,7 +83,7 @@ export function ProgressCard({ completed, total, target, availableLeadIds = [] }
               type="button"
               onClick={() => setDialogOpen(true)}
               disabled={availableLeadIds.length === 0}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#E53935] hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
             >
               <Rocket className="h-3.5 w-3.5" />
               Iniciar novas prospecções

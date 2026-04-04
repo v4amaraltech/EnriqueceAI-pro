@@ -96,7 +96,7 @@ function ReasonBar({ entry, maxCount }: { entry: LossReasonEntry; maxCount: numb
           ))}
         </div>
         <div
-          className="relative h-full rounded-sm bg-[#d1d5db] dark:bg-[#4b5563]"
+          className="relative h-full rounded-sm bg-[var(--border)]"
           style={{ width: `${widthPercent}%` }}
         />
       </div>

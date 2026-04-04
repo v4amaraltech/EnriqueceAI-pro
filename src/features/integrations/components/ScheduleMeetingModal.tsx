@@ -188,7 +188,7 @@ export function ScheduleMeetingModal({
 
   const header = (
     <div className="space-y-1">
-      <div className="flex items-center gap-2 text-[#E53935] text-lg font-semibold">
+      <div className="flex items-center gap-2 text-primary text-lg font-semibold">
         <CalendarIcon className="h-5 w-5" />
         {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
       </div>
@@ -245,7 +245,7 @@ export function ScheduleMeetingModal({
                   className={cn(
                     'rounded-md border px-4 py-2 text-sm font-medium transition-colors',
                     !showCustomDuration && duration === opt.value
-                      ? 'border-[#E53935] text-[#E53935] bg-[#E53935]/5'
+                      ? 'border-primary text-primary bg-primary/5'
                       : 'border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--foreground)]',
                   )}
                 >
@@ -258,7 +258,7 @@ export function ScheduleMeetingModal({
                 className={cn(
                   'rounded-md border px-4 py-2 text-sm font-medium transition-colors',
                   showCustomDuration
-                    ? 'border-[#E53935] text-[#E53935] bg-[#E53935]/5'
+                    ? 'border-primary text-primary bg-primary/5'
                     : 'border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--foreground)]',
                 )}
               >
@@ -306,7 +306,7 @@ export function ScheduleMeetingModal({
                       className={cn(
                         'border-b border-[var(--border)] last:border-0 px-4 py-2.5 text-sm text-center transition-colors',
                         selectedTime === slot
-                          ? 'bg-[#E53935]/10 text-[#E53935] font-semibold'
+                          ? 'bg-primary/10 text-primary font-semibold'
                           : 'hover:bg-[var(--muted)]/50',
                       )}
                     >
@@ -336,7 +336,7 @@ export function ScheduleMeetingModal({
               type="checkbox"
               checked={generateMeetLink}
               onChange={(e) => setGenerateMeetLink(e.target.checked)}
-              className="rounded accent-[#E53935]"
+              className="rounded accent-primary"
             />
             <Video className="h-4 w-4" />
             Gerar link do Google Meet
@@ -352,7 +352,7 @@ export function ScheduleMeetingModal({
       <Button
         onClick={handleSubmit}
         disabled={isPending || !dateString || !selectedTime}
-        className="bg-[#E53935] hover:bg-[#C62828] text-white"
+        className="bg-primary hover:bg-primary-700 text-white"
       >
         <CalendarIcon className="mr-2 h-4 w-4" />
         {isPending
@@ -376,7 +376,7 @@ export function ScheduleMeetingModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[#E53935]">
+          <DialogTitle className="flex items-center gap-2 text-primary">
             <CalendarIcon className="h-5 w-5" />
             {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
           </DialogTitle>
@@ -390,7 +390,7 @@ export function ScheduleMeetingModal({
           <Button
             onClick={handleSubmit}
             disabled={isPending || !dateString || !selectedTime}
-            className="bg-[#E53935] hover:bg-[#C62828] text-white"
+            className="bg-primary hover:bg-primary-700 text-white"
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
             {isPending

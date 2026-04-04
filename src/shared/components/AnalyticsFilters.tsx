@@ -4,6 +4,13 @@ import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { DateRangePicker } from '@/shared/components/DateRangePicker';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import { useDateRange } from '@/shared/hooks/useDateRange';
 
 import type { OrgMember } from '@/features/statistics/types/shared';
@@ -60,32 +67,34 @@ export function AnalyticsFilters({
         onCompareChange={showCompare ? setCompare : undefined}
       />
 
-      <select
-        value={currentSdr}
-        onChange={(e) => updateParam('sdr', e.target.value || undefined)}
-        className="h-8 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
-      >
-        <option value="">Todos os vendedores</option>
-        {members.map((m) => (
-          <option key={m.userId} value={m.userId}>
-            {m.name ?? m.email.split('@')[0]}
-          </option>
-        ))}
-      </select>
+      <Select value={currentSdr || '__all__'} onValueChange={(v) => updateParam('sdr', v === '__all__' ? undefined : v)}>
+        <SelectTrigger className="h-8 w-[180px]">
+          <SelectValue placeholder="Todos os vendedores" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__all__">Todos os vendedores</SelectItem>
+          {members.map((m) => (
+            <SelectItem key={m.userId} value={m.userId}>
+              {m.name ?? m.email.split('@')[0]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {cadences && cadences.length > 0 && (
-        <select
-          value={currentCadence}
-          onChange={(e) => updateParam('cadence', e.target.value || undefined)}
-          className="h-8 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
-        >
-          <option value="">Todas as cadências</option>
-          {cadences.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <Select value={currentCadence || '__all__'} onValueChange={(v) => updateParam('cadence', v === '__all__' ? undefined : v)}>
+          <SelectTrigger className="h-8 w-[180px]">
+            <SelectValue placeholder="Todas as cadências" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todas as cadências</SelectItem>
+            {cadences.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
 
       {children}

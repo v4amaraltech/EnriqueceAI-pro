@@ -225,11 +225,11 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 </tr>
               </thead>
               <tbody className="font-mono">
-                <tr className="border-b"><td className="p-2">first_name</td><td className="p-2">string</td><td className="p-2 text-[#E53935]">Sim</td><td className="p-2 font-sans">Primeiro nome do contato</td></tr>
+                <tr className="border-b"><td className="p-2">first_name</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Primeiro nome do contato</td></tr>
                 <tr className="border-b"><td className="p-2">last_name</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sobrenome</td></tr>
-                <tr className="border-b"><td className="p-2">email</td><td className="p-2">string</td><td className="p-2 text-[#E53935]">Sim</td><td className="p-2 font-sans">E-mail do contato</td></tr>
-                <tr className="border-b"><td className="p-2">telefone</td><td className="p-2">string</td><td className="p-2 text-[#E53935]">Sim</td><td className="p-2 font-sans">Telefone (formato livre)</td></tr>
-                <tr className="border-b"><td className="p-2">empresa</td><td className="p-2">string</td><td className="p-2 text-[#E53935]">Sim</td><td className="p-2 font-sans">Nome da empresa (nome fantasia)</td></tr>
+                <tr className="border-b"><td className="p-2">email</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">E-mail do contato</td></tr>
+                <tr className="border-b"><td className="p-2">telefone</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Telefone (formato livre)</td></tr>
+                <tr className="border-b"><td className="p-2">empresa</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Nome da empresa (nome fantasia)</td></tr>
                 <tr className="border-b"><td className="p-2">cnpj</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">CNPJ (14 dígitos, sem pontuação)</td></tr>
                 <tr className="border-b"><td className="p-2">job_title</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Cargo do contato</td></tr>
                 <tr className="border-b"><td className="p-2">lead_source</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Origem (ex: Outbound, Inbound Marketing)</td></tr>

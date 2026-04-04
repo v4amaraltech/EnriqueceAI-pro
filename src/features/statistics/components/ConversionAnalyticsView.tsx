@@ -93,8 +93,8 @@ export function ConversionAnalyticsView({ data, members, cadences, hideFilters, 
       {/* 3 ranking cards */}
       <div className="grid gap-4 sm:grid-cols-3">
         <BigKpiCard value={totalLeads.toLocaleString('pt-BR')} label="Leads no período" icon={Users} />
-        <BigKpiCard value={(qualified?.count ?? 0).toLocaleString('pt-BR')} label="Qualificados" icon={Award} color="#22c55e" />
-        <BigKpiCard value={`${conversionRate}%`} label="Taxa de Conversão" icon={TrendingUp} color="#E53935" />
+        <BigKpiCard value={(qualified?.count ?? 0).toLocaleString('pt-BR')} label="Qualificados" icon={Award} color="var(--color-primary-500)" />
+        <BigKpiCard value={`${conversionRate}%`} label="Taxa de Conversão" icon={TrendingUp} color="var(--primary)" />
       </div>
 
       {/* Funnel */}

@@ -51,9 +51,9 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
   if (submitted) {
     return (
       <div className="text-center py-8">
-        <div className="text-4xl mb-4 text-[#E53935]">&#10003;</div>
-        <h2 className="text-xl font-semibold text-gray-800 dark:text-[var(--foreground)] mb-2">Feedback enviado!</h2>
-        <p className="text-gray-600 dark:text-[var(--muted-foreground)]">Obrigado pela sua avaliação.</p>
+        <div className="text-4xl mb-4 text-primary">&#10003;</div>
+        <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">Feedback enviado!</h2>
+        <p className="text-[var(--muted-foreground)]">Obrigado pela sua avaliação.</p>
       </div>
     );
   }
@@ -62,8 +62,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Result */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 dark:text-[var(--foreground)] mb-3">
-          Como foi a reunião? <span className="text-[#E53935]">*</span>
+        <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
+          Como foi a reunião? <span className="text-primary">*</span>
         </label>
         <div className="space-y-2">
           {RESULT_OPTIONS.map((option) => (
@@ -71,8 +71,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
               key={option.value}
               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 result === option.value
-                  ? 'border-[#E53935] bg-red-50 dark:bg-[#E53935]/10'
-                  : 'border-gray-200 dark:border-[var(--border)] hover:border-gray-300 dark:hover:border-[var(--muted-foreground)]'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
               }`}
             >
               <input
@@ -81,9 +81,9 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
                 value={option.value}
                 checked={result === option.value}
                 onChange={() => setResult(option.value)}
-                className="accent-[#E53935]"
+                className="accent-primary"
               />
-              <span className="text-sm text-gray-700 dark:text-[var(--foreground)]">{option.label}</span>
+              <span className="text-sm text-[var(--foreground)]">{option.label}</span>
             </label>
           ))}
         </div>
@@ -91,8 +91,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
       {/* Rating */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 dark:text-[var(--foreground)] mb-3">
-          Qualidade do lead (1-5) <span className="text-[#E53935]">*</span>
+        <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
+          Qualidade do lead (1-5) <span className="text-primary">*</span>
         </label>
         <div className="flex gap-2">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -104,14 +104,14 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
               onMouseLeave={() => setHoverRating(0)}
               className="text-3xl transition-transform hover:scale-110 focus:outline-none"
             >
-              <span style={{ color: star <= (hoverRating || rating) ? '#E53935' : '#d1d5db' }}>
+              <span style={{ color: star <= (hoverRating || rating) ? 'var(--primary)' : 'var(--muted-foreground)' }}>
                 &#9733;
               </span>
             </button>
           ))}
         </div>
         {rating > 0 && (
-          <p className="text-xs text-gray-500 dark:text-[var(--muted-foreground)] mt-1">
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">
             {rating === 1 && 'Muito baixa'}
             {rating === 2 && 'Baixa'}
             {rating === 3 && 'Regular'}
@@ -123,15 +123,15 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
       {/* Comment */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 dark:text-[var(--foreground)] mb-2">
-          Observações <span className="text-gray-400 dark:text-[var(--muted-foreground)] font-normal">(opcional)</span>
+        <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
+          Observações <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>
         </label>
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Como foi a conversa? O lead demonstrou interesse? Algum ponto de atenção para o time?"
           rows={4}
-          className="w-full rounded-lg border border-gray-200 dark:border-[var(--border)] dark:bg-[var(--input)] px-4 py-3 text-sm text-gray-700 dark:text-[var(--foreground)] placeholder:text-gray-400 dark:placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[#E53935]/50 focus:border-[#E53935] resize-y"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-y"
         />
       </div>
 
@@ -142,7 +142,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       <button
         type="submit"
         disabled={submitting || !result || !rating}
-        className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+        className="w-full bg-primary hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar Feedback'}
       </button>

@@ -24,7 +24,7 @@ const RESULT_BADGE: Record<string, string> = {
 function StarRating({ rating }: { rating: number | null }) {
   if (rating === null) return <span className="text-[var(--muted-foreground)]">—</span>;
   return (
-    <span className="text-[#E53935]" title={`${rating}/5`}>
+    <span className="text-primary" title={`${rating}/5`}>
       {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
     </span>
   );
