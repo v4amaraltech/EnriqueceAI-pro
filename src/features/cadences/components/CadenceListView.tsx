@@ -485,7 +485,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
           <DialogHeader>
             <DialogTitle>Deletar cadência</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja deletar esta cadência? Os enrollments ativos serão encerrados.
+              A cadência será excluída permanentemente. Todos os leads ativos nesta cadência terão seus enrollments encerrados e não receberão mais mensagens automáticas. Esta ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

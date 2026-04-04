@@ -44,11 +44,30 @@ export function WhatsAppEvolutionModal({
         ) : (
           <>
             {/* Title + subtitle */}
-            <div className="mb-8">
+            <div className="mb-6">
               <h2 className="text-2xl font-bold text-white">Conecte seu WhatsApp</h2>
               <p className="mt-1 text-sm text-zinc-400">
-                Escaneie o QR Code para analisar suas conversas com IA.
+                Vincule seu número para enviar mensagens de cadência via WhatsApp Web.
               </p>
+            </div>
+
+            {/* Instructions BEFORE QR for visibility */}
+            <div className="mb-6 rounded-lg bg-zinc-800/50 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Como conectar</p>
+              <ol className="space-y-2 text-sm text-zinc-400">
+                <li className="flex gap-2">
+                  <span className="font-semibold text-green-500 shrink-0">1.</span>
+                  <span>Abra o <strong className="text-white">WhatsApp</strong> no seu celular</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-semibold text-green-500 shrink-0">2.</span>
+                  <span>Vá em <strong className="text-white">Configurações</strong> → <strong className="text-white">Dispositivos conectados</strong></span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-semibold text-green-500 shrink-0">3.</span>
+                  <span>Toque em <strong className="text-white">Conectar dispositivo</strong> e escaneie o QR abaixo</span>
+                </li>
+              </ol>
             </div>
 
             {/* QR Code */}
@@ -79,25 +98,10 @@ export function WhatsAppEvolutionModal({
               </div>
             )}
 
-            {/* Instructions */}
-            <ol className="mb-8 space-y-3 text-sm text-zinc-400">
-              <li className="flex gap-3">
-                <span className="font-semibold text-green-500">1.</span>
-                <span>Abra o <strong className="text-white">WhatsApp</strong> no seu celular.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-green-500">2.</span>
-                <span>Toque em <strong className="text-white">Mais opções</strong> : ou <strong className="text-white">Configurações</strong>.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-green-500">3.</span>
-                <span>Toque em <strong className="text-white">Dispositivos conectados</strong> → <strong className="text-white">Conectar</strong>.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-green-500">4.</span>
-                <span>Escaneie o QR code para confirmar.</span>
-              </li>
-            </ol>
+            {/* Tip */}
+            <p className="mb-6 text-xs text-zinc-500">
+              A conexão usa WhatsApp Web. Seu celular precisa estar conectado à internet.
+            </p>
 
             {/* Refresh button */}
             {(step === 'waiting_scan' || step === 'error') && (

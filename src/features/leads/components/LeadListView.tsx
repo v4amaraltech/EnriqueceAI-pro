@@ -152,15 +152,13 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
       {/* Table or filtered empty */}
       <div className={isTabPending ? 'pointer-events-none opacity-50 transition-opacity' : ''}>
       {leads.length === 0 && hasFilters ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <SearchX className="h-10 w-10 text-[var(--muted-foreground)]" />
-          </div>
-          <h3 className="mb-2 text-lg font-semibold">Nenhum lead encontrado</h3>
-          <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
-            Tente ajustar os filtros para encontrar o que procura.
-          </p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="Nenhum lead encontrado"
+          description="Nenhum lead corresponde aos filtros aplicados. Limpe os filtros ou importe novos leads."
+          action={{ label: 'Limpar filtros', href: '/leads' }}
+          secondaryAction={{ label: 'Importar leads', href: '/leads/import' }}
+        />
       ) : (
         <LeadTable leads={leads} total={total} cadenceInfo={cadenceInfo} userMap={userMap} />
       )}

@@ -38,12 +38,25 @@ export function LeadStatusBadge({ status, variant = 'default' }: { status: LeadS
   );
 }
 
-export function EnrichmentStatusBadge({ status }: { status: EnrichmentStatus }) {
+export function EnrichmentStatusBadge({ status, onRetry }: { status: EnrichmentStatus; onRetry?: () => void }) {
   const config = enrichmentConfig[status];
+  const showRetry = onRetry && (status === 'enrichment_failed' || status === 'not_found');
+
   return (
-    <Badge variant="outline" className={config.className}>
-      {config.label}
-    </Badge>
+    <span className="inline-flex items-center gap-1">
+      <Badge variant="outline" className={config.className}>
+        {config.label}
+      </Badge>
+      {showRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-[10px] font-medium text-primary hover:underline"
+        >
+          Tentar novamente
+        </button>
+      )}
+    </span>
   );
 }
 

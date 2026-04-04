@@ -598,7 +598,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         open={showArchiveConfirm}
         onOpenChange={setShowArchiveConfirm}
         title="Arquivar leads"
-        description={`Tem certeza que deseja arquivar ${selected.size} lead${selected.size > 1 ? 's' : ''}? Os leads arquivados não aparecerão mais na lista principal.`}
+        description={`${selected.size} lead${selected.size > 1 ? 's serão arquivados' : ' será arquivado'}. Leads arquivados saem da lista principal e da fila de atividades, mas continuam acessíveis pelo filtro "Arquivado". Cadências ativas serão encerradas.`}
         confirmLabel="Arquivar"
         pendingLabel="Arquivando..."
         onConfirm={handleArchiveConfirmed}
@@ -609,7 +609,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         title="Excluir leads"
-        description={`Tem certeza que deseja excluir ${selected.size} lead${selected.size > 1 ? 's' : ''}? Esta ação não pode ser desfeita.`}
+        description={`${selected.size} lead${selected.size > 1 ? 's serão excluídos' : ' será excluído'} permanentemente. Todo o histórico de atividades, interações e cadências associadas será perdido. Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         pendingLabel="Excluindo..."
         onConfirm={handleDeleteConfirmed}
@@ -632,7 +632,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         open={!!singleArchiveId}
         onOpenChange={(open) => !open && setSingleArchiveId(null)}
         title="Arquivar lead"
-        description="Tem certeza que deseja arquivar este lead? Ele não aparecerá mais na lista principal."
+        description="O lead será arquivado. Ele sairá da lista principal e da fila de atividades, mas continuará acessível pelo filtro 'Arquivado'. Cadências ativas serão encerradas."
         confirmLabel="Arquivar"
         pendingLabel="Arquivando..."
         onConfirm={handleSingleArchiveConfirmed}

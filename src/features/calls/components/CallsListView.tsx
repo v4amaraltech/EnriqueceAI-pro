@@ -67,7 +67,8 @@ export function CallsListView({ result, hasFilters, currentFilters }: CallsListV
       <EmptyState
         icon={Phone}
         title="Nenhuma ligação ainda"
-        description="As ligações registradas aparecerão aqui."
+        description="Conecte a API4Com nas integrações para começar a registrar ligações automaticamente."
+        action={{ label: 'Configurar integrações', href: '/settings/integrations' }}
       />
     );
   }
