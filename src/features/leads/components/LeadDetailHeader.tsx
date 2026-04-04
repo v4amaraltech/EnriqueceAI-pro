@@ -97,7 +97,7 @@ export function LeadDetailHeader({
           variant="ghost"
           size="sm"
           className="h-8 w-8 p-0"
-          onClick={() => router.push('/leads')}
+          onClick={() => router.back()}
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
