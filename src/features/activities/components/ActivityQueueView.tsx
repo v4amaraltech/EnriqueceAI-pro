@@ -176,6 +176,12 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     setPage(1);
   }, []);
 
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage);
+    // Scroll to activity list top on page change
+    document.getElementById('activity-list-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   // Cadence options for filter (from visible activities only, trimmed to avoid duplicates)
   const cadenceOptions = useMemo(
     () => [...new Set(visibleActivities.map((a) => a.cadenceName.trim()))].sort(),
@@ -296,7 +302,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           </div>
 
           {/* Column headers */}
-          <div>
+          <div id="activity-list-top">
             <div className="flex items-center gap-2 mb-3">
               <ListChecks className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               <h2 className="text-lg font-semibold">
@@ -350,7 +356,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                 total={filtered.length}
                 page={page}
                 perPage={perPage}
-                onPageChange={setPage}
+                onPageChange={handlePageChange}
                 onPerPageChange={handlePerPageChange}
               />
             </div>
@@ -372,7 +378,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                 total={filtered.length}
                 page={page}
                 perPage={perPage}
-                onPageChange={setPage}
+                onPageChange={handlePageChange}
                 onPerPageChange={handlePerPageChange}
               />
             </div>
