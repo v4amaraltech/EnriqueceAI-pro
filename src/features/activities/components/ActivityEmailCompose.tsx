@@ -10,10 +10,12 @@ import {
   Bold,
   Braces,
   Clock,
+  Eye,
   Heading,
   Italic,
   Link as LinkIcon,
   Loader2,
+  Pencil,
   Send,
   Sparkles,
 } from 'lucide-react';
@@ -66,6 +68,8 @@ export function ActivityEmailCompose({
   const lastExternalBody = useRef(body);
   // Track which field was last focused (subject or body) for variable insertion
   const [focusedField, setFocusedField] = useState<'subject' | 'body'>('body');
+  // Preview mode toggle
+  const [previewMode, setPreviewMode] = useState(false);
   const subjectRef = useRef<HTMLInputElement>(null);
   // Save cursor position so we can restore it when inserting variables from the dropdown
   const savedSelection = useRef<{ from: number; to: number } | null>(null);
@@ -158,7 +162,7 @@ export function ActivityEmailCompose({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-          Compor Email
+          {previewMode ? 'Pré-visualização' : 'Compor Email'}
         </h3>
         <div className="flex items-center gap-2">
           {aiPersonalized && (
@@ -166,6 +170,27 @@ export function ActivityEmailCompose({
               <Sparkles className="h-3 w-3" />
               Personalizado por IA
             </Badge>
+          )}
+          {!isLoading && (
+            <Button
+              type="button"
+              variant={previewMode ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setPreviewMode(!previewMode)}
+            >
+              {previewMode ? (
+                <>
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5" />
+                  Pré-visualizar
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>
@@ -175,6 +200,50 @@ export function ActivityEmailCompose({
           <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           <span className="ml-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Preparando email...</span>
         </div>
+      ) : previewMode ? (
+        <>
+          <div className="mt-3 flex-1 overflow-auto rounded-lg border bg-white dark:bg-[var(--card)]">
+            {/* Email header */}
+            <div className="border-b px-6 py-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-[var(--muted-foreground)]">Para:</span>
+                <span>{to || 'Sem email'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-[var(--muted-foreground)]">Assunto:</span>
+                <span className="font-semibold">{subject || '(sem assunto)'}</span>
+              </div>
+            </div>
+            {/* Email body */}
+            <div className="px-6 py-4">
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none [&_p]:my-1"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+              />
+              {signature && (
+                <div
+                  className="mt-4 border-t border-dashed border-[var(--border)] pt-3 text-sm opacity-70"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature) }}
+                />
+              )}
+            </div>
+          </div>
+          {/* Actions */}
+          <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
+            <Button variant="outline" onClick={onSkip} disabled={isSending}>
+              <Clock className="mr-2 h-4 w-4" />
+              Pular
+            </Button>
+            <Button onClick={onSend} disabled={!canSend}>
+              {isSending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              Enviar Email
+            </Button>
+          </div>
+        </>
       ) : (
         <>
           <div className="mt-3 flex-1 space-y-3">
