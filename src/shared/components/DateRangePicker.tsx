@@ -46,13 +46,28 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
     from: fromDate,
     to: toDate_,
   });
+  const [rangeComplete, setRangeComplete] = useState(false);
 
   // Clear pending range when popover opens so user starts fresh
   useEffect(() => {
     if (open) {
       setPendingRange(undefined);
+      setRangeComplete(false);
     }
   }, [open]);
+
+  const handleCalendarSelect = useCallback((selected: DateRange | undefined) => {
+    // If previous selection was complete (from+to), start a new range from scratch
+    if (rangeComplete && selected?.from) {
+      setPendingRange({ from: selected.from, to: undefined });
+      setRangeComplete(false);
+      return;
+    }
+    setPendingRange(selected);
+    if (selected?.from && selected?.to) {
+      setRangeComplete(true);
+    }
+  }, [rangeComplete]);
 
   const handlePreset = useCallback(
     (days: number) => {
@@ -129,7 +144,7 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
                 <Calendar
                   mode="range"
                   selected={pendingRange}
-                  onSelect={setPendingRange}
+                  onSelect={handleCalendarSelect}
                   numberOfMonths={2}
                   disabled={{ after: new Date() }}
                   locale={ptBR}
