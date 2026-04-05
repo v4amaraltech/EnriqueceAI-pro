@@ -57,14 +57,15 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
   }, [open]);
 
   const handleCalendarSelect = useCallback((selected: DateRange | undefined) => {
-    // If previous selection was complete (from+to), start a new range from scratch
+    // If previous selection was a real range (from !== to), next click starts fresh
     if (rangeComplete && selected?.from) {
       setPendingRange({ from: selected.from, to: undefined });
       setRangeComplete(false);
       return;
     }
     setPendingRange(selected);
-    if (selected?.from && selected?.to) {
+    // Only mark complete when from and to are different days (real range)
+    if (selected?.from && selected?.to && selected.from.getTime() !== selected.to.getTime()) {
       setRangeComplete(true);
     }
   }, [rangeComplete]);
