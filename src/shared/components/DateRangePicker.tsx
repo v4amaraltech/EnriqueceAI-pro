@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarIcon, Check } from 'lucide-react';
-import { differenceInDays, format, subDays } from 'date-fns';
+import { differenceInDays, format, startOfWeek, startOfMonth, startOfYear, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 
@@ -17,13 +17,17 @@ import { Switch } from '@/shared/components/ui/switch';
 
 const MAX_RANGE_DAYS = 365;
 
-const presets = [
-  { label: 'Hoje', days: 0 },
-  { label: 'Ontem', days: -1 },
-  { label: '7 dias', days: 7 },
-  { label: '30 dias', days: 30 },
-  { label: '90 dias', days: 90 },
-] as const;
+type PresetFn = () => { from: Date; to: Date };
+
+const presets: Array<{ label: string; getRange: PresetFn }> = [
+  { label: 'Hoje', getRange: () => { const d = new Date(); return { from: d, to: d }; } },
+  { label: 'Ontem', getRange: () => { const d = subDays(new Date(), 1); return { from: d, to: d }; } },
+  { label: 'Essa semana', getRange: () => ({ from: startOfWeek(new Date(), { weekStartsOn: 1 }), to: new Date() }) },
+  { label: 'Últimos 7 dias', getRange: () => ({ from: subDays(new Date(), 7), to: new Date() }) },
+  { label: 'Últimos 30 dias', getRange: () => ({ from: subDays(new Date(), 30), to: new Date() }) },
+  { label: 'Esse mês', getRange: () => ({ from: startOfMonth(new Date()), to: new Date() }) },
+  { label: 'Esse ano', getRange: () => ({ from: startOfYear(new Date()), to: new Date() }) },
+];
 
 interface DateRangePickerProps {
   from: string;
@@ -71,19 +75,9 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
   }, [rangeComplete]);
 
   const handlePreset = useCallback(
-    (days: number) => {
-      const end = new Date();
-      let start: Date;
-      if (days === -1) {
-        start = subDays(end, 1);
-        onChange(format(start, 'yyyy-MM-dd'), format(start, 'yyyy-MM-dd'));
-      } else if (days === 0) {
-        start = end;
-        onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-      } else {
-        start = subDays(end, days);
-        onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-      }
+    (getRange: PresetFn) => {
+      const { from: start, to: end } = getRange();
+      onChange(format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
       setOpen(false);
     },
     [onChange],
@@ -130,11 +124,11 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
             <div className="flex flex-col gap-1 border-r p-3">
               {presets.map((p) => (
                 <Button
-                  key={p.days}
+                  key={p.label}
                   variant="ghost"
                   size="sm"
                   className="justify-start"
-                  onClick={() => handlePreset(p.days)}
+                  onClick={() => handlePreset(p.getRange)}
                 >
                   {p.label}
                 </Button>
