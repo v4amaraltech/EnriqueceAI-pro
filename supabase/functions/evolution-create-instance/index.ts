@@ -52,31 +52,30 @@ serve(async (req)=>{
     console.log("[create-instance] Calling Evolution API to create:", instanceName);
     const createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
     if (!createResult.ok) {
-      // Handle "already in use" — orphaned instance exists in Evolution but not in our DB
+      // Handle "already in use" — orphaned instance in Evolution, create with new name
       const isAlreadyInUse = createResult.error?.includes("already in use");
       if (isAlreadyInUse) {
-        console.log("[create-instance] Instance already in use, destroying and recreating...");
-        await logoutInstance(instanceName);
-        await deleteInstance(instanceName);
-        // Retry create after destroying orphan
-        const retryResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+        console.log("[create-instance] Instance name conflict, creating with new name...");
+        const retryName = generateInstanceName(organizationId, userId, true);
+        console.log("[create-instance] Retry with name:", retryName);
+        const retryResult = await createInstance(retryName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
         if (!retryResult.ok) {
           console.error("[create-instance] Retry failed:", retryResult.error);
           return errorResponse(`Failed after retry: ${retryResult.error}`, 500);
         }
         const retryQr = retryResult.data.qrcode?.base64 || null;
-        const savedInstance = await createWhatsAppInstance(organizationId, instanceName, retryQr || undefined, userId);
+        const savedInstance = await createWhatsAppInstance(organizationId, retryName, retryQr || undefined, userId);
         if (!savedInstance) {
           return errorResponse("Failed to save instance to database", 500);
         }
         if (!retryQr) {
-          const connectResult = await connectInstance(instanceName);
+          const connectResult = await connectInstance(retryName);
           if (connectResult.ok && connectResult.data.base64) {
             await updateWhatsAppInstance(savedInstance.id, { qr_base64: connectResult.data.base64 });
-            return jsonResponse({ instance_name: instanceName, qr_base64: connectResult.data.base64, status: "connecting" });
+            return jsonResponse({ instance_name: retryName, qr_base64: connectResult.data.base64, status: "connecting" });
           }
         }
-        return jsonResponse({ instance_name: instanceName, qr_base64: retryQr, status: "connecting" });
+        return jsonResponse({ instance_name: retryName, qr_base64: retryQr, status: "connecting" });
       }
       console.error("[create-instance] Evolution API error:", createResult.error);
       return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);

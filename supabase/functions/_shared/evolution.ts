@@ -13,14 +13,17 @@ function headers(): Record<string, string> {
   };
 }
 
-/** Generate a deterministic instance name from an org ID and optional user ID */
-export function generateInstanceName(orgId: string, userId?: string): string {
+/** Generate an instance name from an org ID and optional user ID.
+ *  When retry=true, appends a short timestamp suffix to avoid "already in use" conflicts.
+ */
+export function generateInstanceName(orgId: string, userId?: string, retry = false): string {
   const orgShort = orgId.replace(/-/g, '').slice(0, 8);
+  const suffix = retry ? `_${Date.now().toString(36).slice(-4)}` : '';
   if (userId) {
     const userShort = userId.replace(/-/g, '').slice(0, 8);
-    return `ea_${orgShort}_${userShort}`;
+    return `ea_${orgShort}_${userShort}${suffix}`;
   }
-  return `ea_${orgShort}`;
+  return `ea_${orgShort}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------
