@@ -139,14 +139,19 @@ export async function markInstancesAsEvolutionDown(): Promise<number> {
   return data?.length || 0;
 }
 
-/** Get stale instances (not connected) older than the given threshold */
+/** Get stale instances (not connected) older than the given threshold.
+ *  Only returns instances that have NEVER been connected (phone is null).
+ *  Instances that were previously connected (have phone set) are preserved
+ *  to avoid orphaning active Evolution API sessions.
+ */
 export async function getStaleInstances(thresholdMinutes: number = 30) {
   const threshold = new Date(Date.now() - thresholdMinutes * 60 * 1000).toISOString();
 
   const { data, error } = await supabaseAdmin
     .from('whatsapp_instances')
     .select('*')
-    .in('status', ['connecting', 'error', 'disconnected'])
+    .in('status', ['connecting', 'error'])
+    .is('phone', null)
     .lt('updated_at', threshold);
 
   if (error) {
