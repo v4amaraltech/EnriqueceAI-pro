@@ -182,9 +182,15 @@ export function LeadInfoPanel({
       const key = data.telefone.replace(/\D/g, '');
       if (!seen.has(key)) {
         seen.add(key);
-        const digits = key.length > 2 ? key.slice(2) : key;
-        const isCelular = digits.length >= 9 && digits.startsWith('9');
-        entries.push({ tipo: isCelular ? 'celular' : 'fixo', numero: data.telefone });
+        // Remove country code (55) if present, then DDD (2 digits) to get local number
+        let local = key;
+        if (local.length >= 12 && local.startsWith('55')) local = local.slice(2); // remove +55
+        if (local.length >= 10) local = local.slice(2); // remove DDD
+        const isCelular = local.length >= 9 && local.startsWith('9');
+        // Leads from Leadbroker/Blackbox are always WhatsApp contacts
+        const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
+        const tipo = isWhatsAppSource ? 'whatsapp' : (isCelular ? 'celular' : 'fixo');
+        entries.push({ tipo, numero: data.telefone });
       }
     }
 
@@ -193,7 +199,7 @@ export function LeadInfoPanel({
     }
 
     return entries;
-  }, [data.telefone, data.phones]);
+  }, [data.telefone, data.phones, data.lead_source]);
 
   const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
 
@@ -329,13 +335,17 @@ export function LeadInfoPanel({
   if (data.telefone) {
     const key = normalizePhone(data.telefone);
     if (!seenPhones.has(key)) {
-      const digits = key.length > 2 ? key.slice(2) : key;
-      const isCelular = digits.length >= 9 && digits.startsWith('9');
+      let local = key;
+      if (local.length >= 12 && local.startsWith('55')) local = local.slice(2);
+      if (local.length >= 10) local = local.slice(2);
+      const isCelular = local.length >= 9 && local.startsWith('9');
+      const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
+      const isWhatsApp = isWhatsAppSource || false;
       allPhones.push({
-        tipo: isCelular ? 'Celular' : 'Fixo',
+        tipo: isWhatsApp ? 'WhatsApp' : (isCelular ? 'Celular' : 'Fixo'),
         numero: data.telefone,
         href: `tel:${data.telefone}`,
-        whatsapp: false,
+        whatsapp: isWhatsApp,
       });
       seenPhones.add(key);
     }
