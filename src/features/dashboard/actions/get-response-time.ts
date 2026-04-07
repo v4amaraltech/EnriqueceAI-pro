@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 
 import type { InteractionQueryRow, LeadQueryRow } from '@/features/statistics/types/query-rows';
@@ -28,7 +29,9 @@ export async function getResponseTimeData(
 ): Promise<ActionResult<DashboardResponseTimeData>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId } = auth.data;
+  // Use service role to bypass RLS — dashboard shows org-wide metrics for all roles
+  const supabase = createServiceRoleClient();
 
   const now = new Date();
   const monthStart = dateRange?.from

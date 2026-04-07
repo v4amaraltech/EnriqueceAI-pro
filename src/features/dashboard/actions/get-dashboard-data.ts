@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import {
   fetchAvailableCadences,
@@ -24,7 +24,8 @@ export async function getDashboardData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<DashboardData>> {
   const { userId, orgId, role } = await requireAuthWithMember();
-  const supabase = await createServerSupabaseClient();
+  // Use service role to bypass RLS — dashboard shows org-wide metrics for all roles
+  const supabase = createServiceRoleClient();
 
   // Validate filters
   const parsed = filtersSchema.safeParse(rawFilters);
