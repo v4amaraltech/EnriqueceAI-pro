@@ -125,26 +125,101 @@ export async function importApolloLeads(
       });
     }
 
-    // Batch duplicate check: single query for all emails in this chunk
+    // Batch duplicate check: source_id (Apollo ID), email, phone (last 8 digits), linkedin
+    const duplicateSet = new Set<number>(); // indexes of duplicates in enrichedLeads
+
+    // 1. Check by Apollo source_id (exact match — same person imported before)
+    const chunkSourceIds = enrichedLeads
+      .map((e) => e.lead.source_id)
+      .filter((id): id is string => !!id);
+
+    if (chunkSourceIds.length > 0) {
+      const { data: existingBySource } = (await from(supabase, 'leads')
+        .select('source_id')
+        .eq('org_id', orgId)
+        .in('source_id', chunkSourceIds)
+        .is('deleted_at', null)) as { data: { source_id: string }[] | null };
+
+      const existingSources = new Set((existingBySource ?? []).map((e) => e.source_id));
+      for (let idx = 0; idx < enrichedLeads.length; idx++) {
+        const sid = enrichedLeads[idx]!.lead.source_id;
+        if (sid && existingSources.has(sid)) duplicateSet.add(idx);
+      }
+    }
+
+    // 2. Check by email (exact match)
     const chunkEmails = enrichedLeads
+      .filter((_, idx) => !duplicateSet.has(idx))
       .map((e) => e.lead.email)
       .filter((email): email is string => !!email);
 
-    const existingEmailSet = new Set<string>();
     if (chunkEmails.length > 0) {
-      const { data: existingLeads } = (await from(supabase, 'leads')
+      const { data: existingByEmail } = (await from(supabase, 'leads')
         .select('email')
         .eq('org_id', orgId)
         .in('email', chunkEmails)
         .is('deleted_at', null)) as { data: { email: string }[] | null };
 
-      for (const el of existingLeads ?? []) {
-        existingEmailSet.add(el.email);
+      const existingEmails = new Set((existingByEmail ?? []).map((e) => e.email));
+      for (let idx = 0; idx < enrichedLeads.length; idx++) {
+        if (duplicateSet.has(idx)) continue;
+        const email = enrichedLeads[idx]!.lead.email;
+        if (email && existingEmails.has(email)) duplicateSet.add(idx);
       }
     }
 
-    for (const { lead } of enrichedLeads) {
-      if (lead.email && existingEmailSet.has(lead.email)) {
+    // 3. Check by phone (last 8 digits match — covers different formats)
+    const phoneCandidates: Array<{ idx: number; suffix: string }> = [];
+    for (let idx = 0; idx < enrichedLeads.length; idx++) {
+      if (duplicateSet.has(idx)) continue;
+      const phone = enrichedLeads[idx]!.lead.telefone;
+      if (!phone) continue;
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length >= 8) {
+        phoneCandidates.push({ idx, suffix: digits.slice(-8) });
+      }
+    }
+
+    if (phoneCandidates.length > 0) {
+      // Query each phone suffix individually (LIKE patterns can't be batched with IN)
+      for (const { idx, suffix } of phoneCandidates) {
+        if (duplicateSet.has(idx)) continue;
+        const { count } = (await from(supabase, 'leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .is('deleted_at', null)
+          .like('telefone', `%${suffix}`)) as { count: number | null };
+
+        if ((count ?? 0) > 0) duplicateSet.add(idx);
+      }
+    }
+
+    // 4. Check by LinkedIn URL (exact match on normalized URL)
+    const linkedinCandidates: Array<{ idx: number; url: string }> = [];
+    for (let idx = 0; idx < enrichedLeads.length; idx++) {
+      if (duplicateSet.has(idx)) continue;
+      const linkedin = enrichedLeads[idx]!.lead.linkedin;
+      if (linkedin) linkedinCandidates.push({ idx, url: linkedin });
+    }
+
+    if (linkedinCandidates.length > 0) {
+      const urls = linkedinCandidates.map((c) => c.url);
+      const { data: existingByLinkedin } = (await from(supabase, 'leads')
+        .select('linkedin')
+        .eq('org_id', orgId)
+        .in('linkedin', urls)
+        .is('deleted_at', null)) as { data: { linkedin: string }[] | null };
+
+      const existingLinkedins = new Set((existingByLinkedin ?? []).map((e) => e.linkedin));
+      for (const { idx, url } of linkedinCandidates) {
+        if (existingLinkedins.has(url)) duplicateSet.add(idx);
+      }
+    }
+
+    for (let idx = 0; idx < enrichedLeads.length; idx++) {
+      const { lead } = enrichedLeads[idx]!;
+
+      if (duplicateSet.has(idx)) {
         duplicates++;
         continue;
       }
