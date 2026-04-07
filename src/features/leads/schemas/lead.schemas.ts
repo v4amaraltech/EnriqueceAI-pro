@@ -33,6 +33,23 @@ export const leadAddressSchema = z.object({
   cep: z.string().optional(),
 });
 
+export const CANAL_OPTIONS = [
+  'Facebook',
+  'Google',
+  'Instagram',
+  'Orgânico',
+  'TikTok',
+  'LinkedIn',
+  'Indicação',
+  'Bing',
+  'Prospecção Fria',
+  'Outbound',
+  'Landing Page Indicação',
+  'Closer',
+  'Lavras',
+  'Planning',
+] as const;
+
 export const LEAD_SOURCE_OPTIONS = [
   { value: 'outbound', label: 'Outbound' },
   { value: 'leadbroker', label: 'Leadbroker' },

@@ -39,7 +39,7 @@ import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
 
@@ -546,15 +546,9 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          <SelectItem value="Facebook">Facebook</SelectItem>
-                          <SelectItem value="Google">Google</SelectItem>
-                          <SelectItem value="Instagram">Instagram</SelectItem>
-                          <SelectItem value="Orgânico">Orgânico</SelectItem>
-                          <SelectItem value="TikTok">TikTok</SelectItem>
-                          <SelectItem value="LinkedIn">LinkedIn</SelectItem>
-                          <SelectItem value="Indicação">Indicação</SelectItem>
-                          <SelectItem value="Bing">Bing</SelectItem>
-                          <SelectItem value="Prospecção Fria">Prospecção Fria</SelectItem>
+                          {CANAL_OPTIONS.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

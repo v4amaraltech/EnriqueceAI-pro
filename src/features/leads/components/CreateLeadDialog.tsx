@@ -28,7 +28,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
@@ -456,15 +456,9 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                       <SelectValue placeholder="Selecione o canal" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Facebook">Facebook</SelectItem>
-                      <SelectItem value="Google">Google</SelectItem>
-                      <SelectItem value="Instagram">Instagram</SelectItem>
-                      <SelectItem value="Orgânico">Orgânico</SelectItem>
-                      <SelectItem value="TikTok">TikTok</SelectItem>
-                      <SelectItem value="LinkedIn">LinkedIn</SelectItem>
-                      <SelectItem value="Indicação">Indicação</SelectItem>
-                      <SelectItem value="Bing">Bing</SelectItem>
-                      <SelectItem value="Prospecção Fria">Prospecção Fria</SelectItem>
+                      {CANAL_OPTIONS.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
