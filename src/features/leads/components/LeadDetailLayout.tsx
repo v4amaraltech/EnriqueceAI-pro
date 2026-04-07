@@ -50,7 +50,7 @@ import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active-cadences';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { archiveLead, fetchLossReasons, markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
-import { fetchCrmPipelines, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
+import { fetchCrmPipelines, fetchKommoUsers, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
@@ -113,6 +113,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingPipelines, setLoadingPipelines] = useState(false);
   const [loadingStages, setLoadingStages] = useState(false);
+
+  // Kommo responsible user
+  const [kommoUsers, setKommoUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [selectedKommoUserId, setSelectedKommoUserId] = useState<string | null>(null);
+  const [loadingKommoUsers, setLoadingKommoUsers] = useState(false);
 
   // Closer feedback
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
@@ -308,6 +313,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     }
 
     setLoadingPipelines(false);
+    setKommoUsers([]);
+    setSelectedKommoUserId(null);
     if (pipelinesResult.success && pipelinesResult.data.connections.length > 0) {
       setCrmConnections(pipelinesResult.data.connections);
       const firstConn = pipelinesResult.data.connections[0]!;
@@ -317,6 +324,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         const pipeline = firstConn.pipelines[0]!;
         setSelectedPipelineId(pipeline.id);
         void loadStages(firstConn.provider, pipeline.id);
+      }
+      // Load Kommo users if Kommo is connected
+      if (firstConn.provider === 'kommo' || pipelinesResult.data.connections.some((c) => c.provider === 'kommo')) {
+        setLoadingKommoUsers(true);
+        fetchKommoUsers().then((r) => {
+          if (r.success) setKommoUsers(r.data);
+          setLoadingKommoUsers(false);
+        });
       }
     }
 
@@ -367,7 +382,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       }
 
       const crmOptions = sendToCrm && selectedProvider && selectedPipelineId && selectedStageId
-        ? { provider: selectedProvider, pipelineId: selectedPipelineId, stageId: selectedStageId }
+        ? {
+            provider: selectedProvider,
+            pipelineId: selectedPipelineId,
+            stageId: selectedStageId,
+            responsibleUserId: selectedProvider === 'kommo' && selectedKommoUserId ? selectedKommoUserId : undefined,
+          }
         : undefined;
 
       const result = await markLeadAsWon(lead.id, crmOptions);
@@ -383,7 +403,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       }
     });
     setShowWonDialog(false);
-  }, [lead.id, lead.closer_id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, selectedWonCloserId, router, wonMissingFields, wonFieldValues, lead.custom_field_values]);
+  }, [lead.id, lead.closer_id, sendToCrm, selectedProvider, selectedPipelineId, selectedStageId, selectedWonCloserId, selectedKommoUserId, router, wonMissingFields, wonFieldValues, lead.custom_field_values]);
 
   return (
     <div className="space-y-4">
@@ -733,6 +753,32 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                               ))}
                             </SelectContent>
                           </Select>
+                        )}
+                      </div>
+                    )}
+                    {selectedProvider === 'kommo' && selectedPipelineId && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Responsável no Kommo</Label>
+                        {loadingKommoUsers ? (
+                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Carregando usuários...</p>
+                        ) : kommoUsers.length > 0 ? (
+                          <Select
+                            value={selectedKommoUserId ?? undefined}
+                            onValueChange={setSelectedKommoUserId}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione o responsável" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {kommoUsers.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.name} ({user.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum usuário encontrado</p>
                         )}
                       </div>
                     )}

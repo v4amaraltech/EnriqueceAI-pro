@@ -517,6 +517,25 @@ export class KommoAdapter implements CRMAdapter {
     }));
   }
 
+  async fetchUsers(
+    credentials: CrmCredentials,
+  ): Promise<Array<{ id: number; name: string; email: string }>> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    const result = await kommoFetch<KommoListResponse<{ id: number; name: string; email: string }>>(
+      subdomain,
+      '/users',
+      credentials.access_token,
+    );
+
+    return (result._embedded?.users ?? []).map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+    }));
+  }
+
   async pushDeal(
     credentials: CrmCredentials,
     options: {
@@ -524,6 +543,7 @@ export class KommoAdapter implements CRMAdapter {
       contactExternalId: string;
       pipelineId: number;
       stageId: number;
+      responsibleUserId?: number;
       customFieldsValues?: Array<{
         field_id?: number;
         field_code?: string;
@@ -539,6 +559,7 @@ export class KommoAdapter implements CRMAdapter {
         name: options.title,
         pipeline_id: options.pipelineId,
         status_id: options.stageId,
+        ...(options.responsibleUserId ? { responsible_user_id: options.responsibleUserId } : {}),
         _embedded: {
           contacts: [{ id: parseInt(options.contactExternalId, 10) }],
         },

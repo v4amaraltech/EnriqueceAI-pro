@@ -215,19 +215,56 @@ export async function fetchPipelineStages(
   }
 }
 
+export interface KommoUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export async function fetchKommoUsers(): Promise<ActionResult<KommoUser[]>> {
+  try {
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId } = auth.data;
+
+    const serviceSupabase = createServiceRoleClient();
+
+    const { data: connection } = (await from(serviceSupabase, 'crm_connections')
+      .select('*')
+      .eq('org_id', orgId)
+      .eq('crm_provider', 'kommo')
+      .eq('status', 'connected')
+      .single()) as { data: CrmConnectionRow | null };
+
+    if (!connection) {
+      return { success: false, error: 'Conexão Kommo não encontrada' };
+    }
+
+    const adapter = new KommoAdapter();
+    const credentials = await ensureFreshCredentials(connection, adapter, serviceSupabase);
+    const users = await adapter.fetchUsers(credentials);
+
+    return {
+      success: true,
+      data: users.map((u) => ({ id: u.id.toString(), name: u.name, email: u.email })),
+    };
+  } catch (error) {
+    console.error('[fetchKommoUsers] Error:', error);
+    return { success: false, error: 'Erro ao buscar usuários do Kommo' };
+  }
+}
+
 export async function markLeadAsWon(
   leadId: string,
-  crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string },
+  crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string; responsibleUserId?: string },
 ): Promise<ActionResult<{ dealCreated?: boolean }>> {
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
     const { orgId, userId, supabase } = auth.data;
-    // Use service role for lead update to bypass RLS — any SDR that can view the lead should be able to mark it as won
-    const serviceSupabaseForLead = createServiceRoleClient();
 
     // 1. Update lead status to qualified + record who won it
-    const { error: leadError } = await from(serviceSupabaseForLead, 'leads')
+    const { error: leadError } = await from(supabase, 'leads')
       .update({ status: 'qualified', won_by: userId } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
@@ -559,6 +596,7 @@ export async function markLeadAsWon(
               contactExternalId,
               pipelineId: parseInt(crmOptions.pipelineId, 10),
               stageId: parseInt(crmOptions.stageId, 10),
+              responsibleUserId: crmOptions.responsibleUserId ? parseInt(crmOptions.responsibleUserId, 10) : undefined,
               customFieldsValues: customFieldsValues.length > 0 ? customFieldsValues : undefined,
             });
             dealExternalId = result.external_id;
