@@ -6,7 +6,6 @@ import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-import { getAppUrl } from '@/lib/utils/app-url';
 
 // Allow long-running execution on Vercel (up to 5 minutes)
 export const maxDuration = 300;
@@ -51,31 +50,11 @@ export async function POST(request: Request) {
 
 async function processLeadsBatch(importId: string): Promise<void> {
   const supabase = createServiceRoleClient();
+  const startTime = Date.now();
+  // Leave 30s buffer before Vercel kills the function (maxDuration = 300s)
+  const maxRunMs = (maxDuration - 30) * 1000;
 
-  // Fetch pending leads for this import
-  const { data: leads, error } = (await from(supabase, 'leads')
-    .select('id, cnpj')
-    .eq('import_id', importId)
-    .eq('enrichment_status', 'pending')
-    .is('deleted_at', null)
-    .limit(BATCH_SIZE)) as {
-    data: Array<{ id: string; cnpj: string }> | null;
-    error: { message: string } | null;
-  };
-
-  if (error) {
-    console.error('[enrich-leads] Query error:', error.message);
-    return;
-  }
-
-  if (!leads || leads.length === 0) {
-    console.warn('[enrich-leads] No pending leads for import', importId);
-    return;
-  }
-
-  console.warn(`[enrich-leads] Processing ${leads.length} leads for import ${importId}`);
-
-  // Determine provider (instantiate once outside loop)
+  // Determine provider (instantiate once)
   const lemitUrl = process.env.LEMIT_API_URL;
   const lemitToken = process.env.LEMIT_API_TOKEN;
   const useLemit = Boolean(lemitUrl && lemitToken);
@@ -89,70 +68,81 @@ async function processLeadsBatch(importId: string): Promise<void> {
 
   const delayMs = useLemit ? LEMIT_DELAY_MS : CNPJWS_DELAY_MS;
 
-  for (let i = 0; i < leads.length; i++) {
-    const lead = leads[i]!;
+  let totalProcessed = 0;
 
-    // Rate limiting delay (skip before first)
-    if (i > 0) {
-      await sleep(delayMs);
+  // Process in batches until all done or time runs out
+  while (true) {
+    // Check time budget before fetching next batch
+    if (Date.now() - startTime > maxRunMs) {
+      console.warn(`[enrich-leads] Time budget exceeded after ${totalProcessed} leads, will resume on next trigger`);
+      break;
     }
 
-    try {
-      console.warn(`[enrich-leads] [${i + 1}/${leads.length}] Enriching lead ${lead.id} (CNPJ: ${lead.cnpj}) via ${cpfProvider ? 'Lemit' : 'CNPJ.ws'}...`);
-      let result;
-      if (cpfProvider) {
-        result = await enrichLeadFull({
-          leadId: lead.id,
-          cnpj: lead.cnpj,
-          cnpjProvider,
-          cpfProvider,
-          supabase,
-        });
-      } else {
-        result = await enrichLead({
-          leadId: lead.id,
-          cnpj: lead.cnpj,
-          provider: cnpjProvider,
-          supabase,
-        });
+    const { data: leads, error } = (await from(supabase, 'leads')
+      .select('id, cnpj')
+      .eq('import_id', importId)
+      .eq('enrichment_status', 'pending')
+      .is('deleted_at', null)
+      .not('cnpj', 'is', null)
+      .limit(BATCH_SIZE)) as {
+      data: Array<{ id: string; cnpj: string }> | null;
+      error: { message: string } | null;
+    };
+
+    if (error) {
+      console.error('[enrich-leads] Query error:', error.message);
+      break;
+    }
+
+    if (!leads || leads.length === 0) {
+      console.warn(`[enrich-leads] All leads enriched for import ${importId} (total: ${totalProcessed})`);
+      break;
+    }
+
+    console.warn(`[enrich-leads] Processing batch of ${leads.length} leads (total so far: ${totalProcessed})`);
+
+    for (let i = 0; i < leads.length; i++) {
+      // Check time budget before each lead
+      if (Date.now() - startTime > maxRunMs) {
+        console.warn(`[enrich-leads] Time budget exceeded mid-batch at lead ${i}/${leads.length}`);
+        return;
       }
-      console.warn(`[enrich-leads] [${i + 1}/${leads.length}] Result: ${result.success ? 'SUCCESS' : `FAIL: ${result.error}`}`);
-    } catch (err) {
-      console.error(`[enrich-leads] [${i + 1}/${leads.length}] Exception for lead ${lead.id}:`, err);
+
+      const lead = leads[i]!;
+
+      // Rate limiting delay (skip before first in batch)
+      if (i > 0 || totalProcessed > 0) {
+        await sleep(delayMs);
+      }
+
+      try {
+        let result;
+        if (cpfProvider) {
+          result = await enrichLeadFull({
+            leadId: lead.id,
+            cnpj: lead.cnpj,
+            cnpjProvider,
+            cpfProvider,
+            supabase,
+          });
+        } else {
+          result = await enrichLead({
+            leadId: lead.id,
+            cnpj: lead.cnpj,
+            provider: cnpjProvider,
+            supabase,
+          });
+        }
+        totalProcessed++;
+        if (!result.success) {
+          console.warn(`[enrich-leads] [${totalProcessed}] FAIL ${lead.cnpj}: ${result.error}`);
+        }
+      } catch (err) {
+        totalProcessed++;
+        console.error(`[enrich-leads] [${totalProcessed}] Exception for ${lead.cnpj}:`, err);
+      }
     }
   }
 
-  console.warn(`[enrich-leads] Batch complete for import ${importId} (${leads.length} leads)`);
-
-  // Auto-chain: if we processed a full batch, there may be more pending
-  if (leads.length === BATCH_SIZE) {
-    console.warn('[enrich-leads] Full batch processed, auto-chaining next batch...');
-    await selfChain(importId);
-  }
-}
-
-async function selfChain(importId: string): Promise<void> {
-  const appUrl = getAppUrl();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceRoleKey) {
-    console.error('[enrich-leads] Cannot auto-chain: missing SUPABASE_SERVICE_ROLE_KEY');
-    return;
-  }
-
-  try {
-    // Fire-and-forget: trigger next batch without waiting for it to finish
-    fetch(`${appUrl}/api/workers/enrich-leads`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${serviceRoleKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ importId }),
-    }).catch((err) => {
-      console.error('[enrich-leads] Auto-chain failed:', err);
-    });
-  } catch (err) {
-    console.error('[enrich-leads] Auto-chain failed:', err);
-  }
+  console.warn(`[enrich-leads] Complete for import ${importId}: ${totalProcessed} leads processed`);
 }
