@@ -56,16 +56,26 @@ export async function fetchActivityAnalyticsData(
   const activityTypes = calculateActivityTypes(interactions);
   const goal = calculateGoal(interactions, target);
 
-  // Fetch leads with status changes in period for won/lost counts
-  const { data: rawLeads } = (await from(supabase, 'leads')
+  // Fetch leads won/lost in period using accurate timestamps
+  const { data: wonLeadsRaw } = (await from(supabase, 'leads')
     .select('id, status, assigned_to')
     .eq('org_id', orgId)
-    .gte('updated_at', periodStart)
-    .lte('updated_at', periodEnd)
-    .in('status', ['qualified', 'unqualified'])) as {
+    .eq('status', 'qualified')
+    .not('won_at', 'is', null)
+    .gte('won_at', periodStart)
+    .lte('won_at', periodEnd)) as {
     data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
   };
-  const leads = rawLeads ?? [];
+  const { data: lostLeadsRaw } = (await from(supabase, 'leads')
+    .select('id, status, assigned_to')
+    .eq('org_id', orgId)
+    .eq('status', 'unqualified')
+    .not('lost_at', 'is', null)
+    .gte('lost_at', periodStart)
+    .lte('lost_at', periodEnd)) as {
+    data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
+  };
+  const leads = [...(wonLeadsRaw ?? []), ...(lostLeadsRaw ?? [])];
 
   // Count leads in period (any lead that had an interaction)
   const { data: activeLeads } = (await from(supabase, 'leads')

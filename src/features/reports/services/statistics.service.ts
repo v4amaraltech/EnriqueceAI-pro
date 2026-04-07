@@ -70,8 +70,9 @@ export async function fetchLossReasonStats(
   let query = from(supabase, 'cadence_enrollments')
     .select('loss_reason_id, enrolled_by, cadence_id')
     .not('loss_reason_id', 'is', null)
-    .gte('updated_at', filters.periodStart)
-    .lte('updated_at', filters.periodEnd);
+    .not('completed_at', 'is', null)
+    .gte('completed_at', filters.periodStart)
+    .lte('completed_at', filters.periodEnd);
 
   if (filters.userIds && filters.userIds.length > 0) {
     query = query.in('enrolled_by', filters.userIds);

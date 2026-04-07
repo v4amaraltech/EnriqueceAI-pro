@@ -76,8 +76,8 @@ async function getOrgDailyMetrics(supabase: SupabaseClient, orgId: string, start
   const { count: enrollments_paused } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'paused')
-    .gte('updated_at', start)
-    .lte('updated_at', end)
+    .gte('created_at', start)
+    .lte('created_at', end)
     // Filter by org via lead join
     .not('lead_id', 'is', null)) as { count: number | null };
 

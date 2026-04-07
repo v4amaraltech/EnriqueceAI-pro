@@ -135,12 +135,13 @@ export async function fetchDrilldownData(
 
       case 'overall_qualified': {
         const { data, count } = (await from(supabase, 'leads')
-          .select('id, razao_social, nome_fantasia, email, status', { count: 'exact' })
+          .select('id, razao_social, nome_fantasia, email, status, won_at', { count: 'exact' })
           .eq('org_id', orgId)
           .eq('status', 'qualified')
-          .gte('updated_at', fromDate)
-          .lte('updated_at', toDate)
-          .order('updated_at', { ascending: false })
+          .not('won_at', 'is', null)
+          .gte('won_at', fromDate)
+          .lte('won_at', toDate)
+          .order('won_at', { ascending: false })
           .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
 
         return {

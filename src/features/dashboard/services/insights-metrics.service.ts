@@ -118,38 +118,51 @@ export async function fetchConversionByOrigin(
 ): Promise<ConversionByOriginEntry[]> {
   const { start, end } = getDateRange(filters);
 
-  // Get leads that changed to qualified/unqualified in the period
-  let leadsQuery = from(supabase, 'leads')
+  // Get leads won or lost in the period (using won_at/lost_at for accuracy)
+  const { data: wonLeads } = (await from(supabase, 'leads')
     .select('id, status, lead_source')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .in('status', ['qualified', 'unqualified'])
-    .gte('updated_at', start)
-    .lt('updated_at', end);
+    .eq('status', 'qualified')
+    .not('won_at', 'is', null)
+    .gte('won_at', start)
+    .lt('won_at', end)) as { data: Array<{ id: string; status: string; lead_source: string | null }> | null };
+
+  const { data: lostLeads } = (await from(supabase, 'leads')
+    .select('id, status, lead_source')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .eq('status', 'unqualified')
+    .not('lost_at', 'is', null)
+    .gte('lost_at', start)
+    .lt('lost_at', end)) as { data: Array<{ id: string; status: string; lead_source: string | null }> | null };
+
+  const allLeads = [...(wonLeads ?? []), ...(lostLeads ?? [])];
+  // Apply cadence/user filters if needed — build a mutable set of lead IDs
+  let filteredLeads = allLeads;
 
   // If cadence/user filter active, narrow by enrollment
   if (filters.cadenceIds.length > 0 || filters.userIds.length > 0) {
-    let enrollmentQuery = from(supabase, 'cadence_enrollments')
-      .select('lead_id')
-      .eq('org_id', orgId);
-    if (filters.cadenceIds.length > 0) enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
-    if (filters.userIds.length > 0) enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-    const { data: enrollments } = (await enrollmentQuery) as { data: Array<{ lead_id: string }> | null };
-    const enrolledIds = [...new Set((enrollments ?? []).map((e) => e.lead_id))];
-    if (enrolledIds.length === 0) return [];
-    leadsQuery = leadsQuery.in('id', enrolledIds);
+    const leadIds = filteredLeads.map((l) => l.id);
+    if (leadIds.length > 0) {
+      let enrollmentQuery = from(supabase, 'cadence_enrollments')
+        .select('lead_id')
+        .eq('org_id', orgId)
+        .in('lead_id', leadIds);
+      if (filters.cadenceIds.length > 0) enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
+      if (filters.userIds.length > 0) enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
+      const { data: enrollments } = (await enrollmentQuery) as { data: Array<{ lead_id: string }> | null };
+      const enrolledIds = new Set((enrollments ?? []).map((e) => e.lead_id));
+      filteredLeads = filteredLeads.filter((l) => enrolledIds.has(l.id));
+    }
   }
 
-  const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; status: string; lead_source: string | null }> | null;
-  };
-
-  if (!leads?.length) return [];
+  if (!filteredLeads.length) return [];
 
   // Group by lead_source: count converted (qualified) vs lost (unqualified/archived)
   const sourceStats = new Map<string, { converted: number; lost: number }>();
 
-  for (const lead of leads ?? []) {
+  for (const lead of filteredLeads) {
     const source = lead.lead_source || 'unknown';
 
     if (lead.status === 'qualified') {
