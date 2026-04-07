@@ -50,6 +50,7 @@ import { MeetimeFieldRow } from './MeetimeFieldRow';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
 import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
 import { LeadTimelineTab } from './LeadTimelineTab';
+import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
 
 function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -85,7 +86,7 @@ export interface LeadInfoPanelProps {
   standardFieldSettings?: StandardFieldSettingRow[];
 }
 
-type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
+type TabId = 'dados' | 'timeline' | 'notas' | 'agendar' | 'atividade';
 
 export function LeadInfoPanel({
   data: initialData,
@@ -134,7 +135,8 @@ export function LeadInfoPanel({
     { id: 'dados', icon: User, label: 'Dados' },
     { id: 'timeline', icon: Clock, label: 'Timeline' },
     { id: 'notas', icon: FileText, label: 'Notas' },
-    { id: 'agendar', icon: CalendarDays, label: 'Agendar' },
+    { id: 'agendar', icon: CalendarDays, label: 'Reunião' },
+    { id: 'atividade', icon: Plus, label: 'Atividade' },
   ];
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
@@ -853,13 +855,18 @@ export function LeadInfoPanel({
           <LeadNotes leadId={data.id} notes={null} />
         )}
 
-        {/* Tab Agendar */}
+        {/* Tab Agendar Reunião */}
         {activeTab === 'agendar' && (
           <LeadScheduleTab
             leadId={data.id}
             leadEmail={data.email}
             companyName={data.nome_fantasia ?? data.razao_social}
           />
+        )}
+
+        {/* Tab Agendar Atividade */}
+        {activeTab === 'atividade' && (
+          <LeadActivityTab leadId={data.id} />
         )}
       </div>
 

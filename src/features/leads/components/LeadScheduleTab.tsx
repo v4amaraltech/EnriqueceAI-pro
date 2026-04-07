@@ -3,24 +3,14 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Calendar, Clock, Video } from 'lucide-react';
+import { Calendar, Video } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
-import { Textarea } from '@/shared/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
-
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected } from '@/features/integrations/actions/schedule-meeting';
-import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 interface LeadScheduleTabProps {
@@ -38,13 +28,6 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [meetingAttendee, setMeetingAttendee] = useState('');
   const [meetingMeetLink, setMeetingMeetLink] = useState(true);
   const [isMeetingPending, startMeetingTransition] = useTransition();
-
-  // Schedule activity state
-  const [activityChannel, setActivityChannel] = useState<'phone' | 'whatsapp' | 'email' | 'linkedin' | 'research'>('phone');
-  const [activityDate, setActivityDate] = useState('');
-  const [activityTime, setActivityTime] = useState('09:00');
-  const [activityNotes, setActivityNotes] = useState('');
-  const [isActivityPending, startActivityTransition] = useTransition();
 
   // Closer selection
   const [closers, setClosers] = useState<CloserRow[]>([]);
@@ -232,92 +215,6 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       >
         <Calendar className="mr-2 h-4 w-4" />
         {isMeetingPending ? 'Agendando...' : 'Agendar Reunião'}
-      </Button>
-
-      {/* Separator */}
-      <div className="border-t border-[var(--border)] my-2" />
-
-      {/* Schedule Activity (non-meeting) */}
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-        Agendar Atividade
-      </h4>
-
-      <div>
-        <Label className="text-xs">Tipo de atividade</Label>
-        <Select value={activityChannel} onValueChange={(v) => setActivityChannel(v as typeof activityChannel)}>
-          <SelectTrigger className="mt-1 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="phone">Ligação</SelectItem>
-            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-            <SelectItem value="email">Email</SelectItem>
-            <SelectItem value="linkedin">LinkedIn</SelectItem>
-            <SelectItem value="research">Pesquisa</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs">Data</Label>
-          <Input
-            type="date"
-            value={activityDate}
-            onChange={(e) => setActivityDate(e.target.value)}
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Hora</Label>
-          <Input
-            type="time"
-            value={activityTime}
-            onChange={(e) => setActivityTime(e.target.value)}
-            className="mt-1"
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-xs">Observações</Label>
-        <Textarea
-          value={activityNotes}
-          onChange={(e) => setActivityNotes(e.target.value)}
-          placeholder="Ex: Retornar para verificar interesse..."
-          className="mt-1 min-h-[60px]"
-        />
-      </div>
-
-      <Button
-        className="w-full"
-        variant="outline"
-        disabled={!activityDate || !activityTime || isActivityPending}
-        onClick={() => {
-          const scheduledAt = new Date(`${activityDate}T${activityTime}:00`).toISOString();
-
-          startActivityTransition(async () => {
-            const result = await scheduleActivity({
-              leadId,
-              channel: activityChannel,
-              scheduledAt,
-              notes: activityNotes || undefined,
-              completeEnrollments: false,
-            });
-
-            if (result.success) {
-              toast.success('Atividade agendada!');
-              setActivityDate('');
-              setActivityNotes('');
-              router.refresh();
-            } else {
-              toast.error(result.error);
-            }
-          });
-        }}
-      >
-        <Clock className="mr-2 h-4 w-4" />
-        {isActivityPending ? 'Agendando...' : 'Agendar Atividade'}
       </Button>
     </div>
   );
