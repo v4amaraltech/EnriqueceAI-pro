@@ -108,12 +108,22 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   const handleIgnore = useCallback((activity: PendingActivity) => {
     handleActivityDone(activity.enrollmentId, activity.stepId);
-    import('../actions/ignore-activity').then(({ ignoreActivity }) =>
-      ignoreActivity(activity.enrollmentId).then((r) => {
-        if (!r.success) toast.error(r.error);
-        else toast.success('Atividade ignorada');
-      }),
-    );
+    if (activity.enrollmentId.startsWith('scheduled:')) {
+      const scheduledId = activity.stepId;
+      import('../actions/complete-scheduled-activity').then(({ completeScheduledActivity }) =>
+        completeScheduledActivity(scheduledId, 'cancelled').then((r) => {
+          if (!r.success) toast.error(r.error);
+          else toast.success('Atividade agendada cancelada');
+        }),
+      );
+    } else {
+      import('../actions/ignore-activity').then(({ ignoreActivity }) =>
+        ignoreActivity(activity.enrollmentId).then((r) => {
+          if (!r.success) toast.error(r.error);
+          else toast.success('Atividade ignorada');
+        }),
+      );
+    }
   }, [handleActivityDone]);
 
   const handleViewLead = useCallback((leadId: string) => {

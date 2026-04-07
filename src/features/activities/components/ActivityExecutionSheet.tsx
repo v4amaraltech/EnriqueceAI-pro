@@ -15,6 +15,7 @@ import {
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import { executeActivity } from '../actions/execute-activity';
+import { executeScheduledActivity } from '../actions/execute-scheduled-activity';
 import { skipActivity } from '../actions/skip-activity';
 import type { PendingActivity } from '../types';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
@@ -67,11 +68,10 @@ export function ActivityExecutionSheet({
     }
   }
 
+  const isScheduled = activity?.enrollmentId.startsWith('scheduled:') ?? false;
+
   const handleSend = (subject: string, body: string, aiGenerated: boolean, phone?: string) => {
-    if (!activity || !activity.cadenceCreatedBy) {
-      toast.error('Cadência sem usuário criador — não é possível enviar');
-      return;
-    }
+    if (!activity) return;
 
     const isWhatsApp = activity.channel === 'whatsapp';
     const resolvedEmail = (activity.lead.socios ?? [])
@@ -83,6 +83,32 @@ export function ActivityExecutionSheet({
       ?? (isWhatsApp
         ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
         : resolvedEmail);
+
+    if (isScheduled) {
+      startSendTransition(async () => {
+        const result = await executeScheduledActivity({
+          scheduledActivityId: activity.stepId,
+          leadId: activity.lead.id,
+          channel: activity.channel,
+          to,
+          subject,
+          body,
+          aiGenerated,
+        });
+        if (result.success) {
+          toast.success(isWhatsApp ? 'WhatsApp enviado!' : 'Email enviado!', { icon: isWhatsApp ? '💬' : '📧' });
+          advanceOrClose(activity.enrollmentId, activity.stepId);
+        } else {
+          toast.error(result.error);
+        }
+      });
+      return;
+    }
+
+    if (!activity.cadenceCreatedBy) {
+      toast.error('Cadência sem usuário criador — não é possível enviar');
+      return;
+    }
 
     startSendTransition(async () => {
       const result = await executeActivity({
@@ -113,6 +139,25 @@ export function ActivityExecutionSheet({
     if (!activity) return;
 
     startSendTransition(async () => {
+      if (isScheduled) {
+        const result = await executeScheduledActivity({
+          scheduledActivityId: activity.stepId,
+          leadId: activity.lead.id,
+          channel: activity.channel,
+          to: '',
+          subject: '',
+          body: notes,
+          aiGenerated: false,
+        });
+        if (result.success) {
+          toast.success('Atividade concluída!', { icon: '✅' });
+          advanceOrClose(activity.enrollmentId, activity.stepId);
+        } else {
+          toast.error(result.error);
+        }
+        return;
+      }
+
       const result = await executeActivity({
         enrollmentId: activity.enrollmentId,
         cadenceId: activity.cadenceId,
@@ -139,6 +184,20 @@ export function ActivityExecutionSheet({
 
   const handleSkip = () => {
     if (!activity) return;
+
+    if (isScheduled) {
+      startSendTransition(async () => {
+        const { postponeScheduledActivity } = await import('../actions/complete-scheduled-activity');
+        const result = await postponeScheduledActivity(activity.stepId);
+        if (result.success) {
+          toast.success('Atividade adiada em 2 horas');
+          advanceOrClose(activity.enrollmentId, activity.stepId);
+        } else {
+          toast.error(result.error);
+        }
+      });
+      return;
+    }
 
     startSendTransition(async () => {
       const result = await skipActivity(activity.enrollmentId);

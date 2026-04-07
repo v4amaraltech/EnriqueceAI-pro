@@ -199,9 +199,51 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     (existingInteractions ?? []).map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
   );
 
-  const activities = candidates
+  const cadenceActivities = candidates
     .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
-    .map((c) => c.activity)
+    .map((c) => c.activity);
+
+  // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
+  const { data: scheduledRows } = (await from(supabase, 'scheduled_activities' as never)
+    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score)')
+    .eq('status', 'pending')
+    .order('scheduled_at', { ascending: true })
+    .limit(100)) as { data: Array<{
+      id: string;
+      lead_id: string;
+      channel: string;
+      scheduled_at: string;
+      notes: string | null;
+      leads: RawLead;
+    }> | null };
+
+  const scheduledActivities: PendingActivity[] = (scheduledRows ?? []).map((row) => ({
+    enrollmentId: `scheduled:${row.id}`,
+    cadenceId: '',
+    cadenceName: 'Atividade Agendada',
+    cadenceCreatedBy: null,
+    stepId: row.id,
+    stepOrder: 1,
+    totalSteps: 1,
+    channel: row.channel as PendingActivity['channel'],
+    templateId: null,
+    templateSubject: null,
+    templateBody: null,
+    aiPersonalization: false,
+    nextStepDue: row.scheduled_at,
+    isCurrentStep: true,
+    lead: {
+      ...row.leads,
+      primeiro_nome: row.leads.first_name
+        ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
+        ?? null,
+    },
+    activityName: row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
+    callScript: row.notes,
+  }));
+
+  // 7. Merge and sort: current steps first (by due date), then future steps
+  const activities = [...cadenceActivities, ...scheduledActivities]
     .sort((a, b) => {
       // Current steps first (sorted by nextStepDue), then future steps (sorted by stepOrder)
       if (a.isCurrentStep !== b.isCurrentStep) return a.isCurrentStep ? -1 : 1;
