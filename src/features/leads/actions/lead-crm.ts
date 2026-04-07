@@ -223,9 +223,11 @@ export async function markLeadAsWon(
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
     const { orgId, userId, supabase } = auth.data;
+    // Use service role for lead update to bypass RLS — any SDR that can view the lead should be able to mark it as won
+    const serviceSupabaseForLead = createServiceRoleClient();
 
     // 1. Update lead status to qualified + record who won it
-    const { error: leadError } = await from(supabase, 'leads')
+    const { error: leadError } = await from(serviceSupabaseForLead, 'leads')
       .update({ status: 'qualified', won_by: userId } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);

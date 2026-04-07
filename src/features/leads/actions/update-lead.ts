@@ -8,6 +8,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
@@ -92,7 +93,9 @@ export async function updateLead(
     safeUpdates.email_bounced_at = null;
   }
 
-  const { error } = await from(supabase, 'leads')
+  // Use service role to bypass RLS — SDRs may need to update leads visible to them (SELECT) but not owned (UPDATE RLS)
+  const serviceSupabase = createServiceRoleClient();
+  const { error } = await from(serviceSupabase, 'leads')
     .update(safeUpdates as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
