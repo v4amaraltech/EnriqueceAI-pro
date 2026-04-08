@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { inboundLeadSchema } from '../schemas/inbound-lead.schemas';
 import type { InboundLeadResult, InboundBatchResult } from '../types';
@@ -154,6 +155,16 @@ async function ingestSingleLead(
   }
 
   const leadId = (lead as { id: string }).id;
+
+  // Log API creation to timeline
+  logLeadEvent(supabase as Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>, {
+    orgId,
+    leadId,
+    userId: data.assigned_to ?? 'system',
+    event: 'lead_created',
+    message: `Lead criado via API (${source ?? 'inbound'})`,
+    metadata: { source: 'inbound_api', lead_source: source ?? null },
+  });
 
   // Fire-and-forget: webhook dispatch + enrichment
   dispatchWebhookEvent(supabase, orgId, 'lead.created', {

@@ -15,6 +15,7 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 import { RESOURCE_ALERT_THRESHOLD } from '@/lib/constants/limits';
 
 import { createLeadSchema } from '../schemas/lead.schemas';
+import { logLeadEvent } from './log-lead-event';
 import { enrichLeadAction } from './enrich-lead';
 
 export async function createLead(
@@ -142,6 +143,16 @@ export async function createLead(
   }
 
   const leadId = (lead as { id: string }).id;
+
+  // Log lead creation to timeline
+  logLeadEvent(supabase, {
+    orgId,
+    leadId,
+    userId,
+    event: 'lead_created',
+    message: `Lead criado manualmente por SDR`,
+    metadata: { source: 'manual', canal: parsed.data.canal ?? null, lead_source: parsed.data.lead_source ?? null },
+  });
 
   // Dispatch lead.created webhook
   dispatchWebhookEvent(supabase, orgId, 'lead.created', {

@@ -12,6 +12,7 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { LeadImportErrorRow } from '../types';
+import { logLeadEventBulk } from './log-lead-event';
 import { parseCsv } from '../utils/csv-parser';
 
 export interface ImportLeadsResult {
@@ -118,13 +119,14 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   let successCount = 0;
   let duplicateCount = 0;
   const importErrors: LeadImportErrorRow[] = [];
+  const importedLeadIds: string[] = [];
 
   // SDR auto-assign: when an SDR imports leads, auto-assign to themselves
   const autoAssignTo = role === 'sdr' ? userId : null;
 
   // Insert valid rows
   for (const row of parsed.rows) {
-    const { error: insertError } = await from(supabase, 'leads')
+    const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
       .insert({
         org_id: orgId,
         cnpj: row.cnpj,
@@ -136,7 +138,9 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         created_by: userId,
         assigned_to: autoAssignTo,
         import_id: importId,
-      } as Record<string, unknown>);
+      } as Record<string, unknown>)
+      .select('id')
+      .single()) as { data: { id: string } | null; error: { message?: string } | null };
 
     if (insertError) {
       const isDuplicate = insertError.message?.includes('unique') || insertError.message?.includes('duplicate');
@@ -195,6 +199,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       importErrors.push(errorEntry);
     } else {
       successCount++;
+      if (insertedLead) importedLeadIds.push(insertedLead.id);
     }
   }
 
@@ -229,6 +234,18 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       status: 'completed',
     } as Record<string, unknown>)
     .eq('id', importId);
+
+  // Log import event for each lead
+  if (importedLeadIds.length > 0) {
+    logLeadEventBulk(supabase, {
+      orgId,
+      leadIds: importedLeadIds,
+      userId,
+      event: 'lead_created',
+      message: `Lead importado via CSV (${file.name})`,
+      metadata: { source: 'csv_import', import_id: importId, file_name: file.name },
+    });
+  }
 
   // Trigger auto-enrichment (fire-and-forget)
   if (successCount > 0) {

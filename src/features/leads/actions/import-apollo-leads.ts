@@ -9,6 +9,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
+import { logLeadEventBulk } from './log-lead-event';
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 
 export interface ImportApolloResult {
@@ -81,6 +82,7 @@ export async function importApolloLeads(
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  const apolloImportedIds: string[] = [];
 
   // Build webhook URL for async phone reveal (HMAC-bound to org_id)
   const webhookUrl = buildApolloWebhookUrl(orgId) ?? undefined;
@@ -224,8 +226,10 @@ export async function importApolloLeads(
         continue;
       }
 
-      const { error: insertError } = await from(supabase, 'leads')
-        .insert(lead as Record<string, unknown>);
+      const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
+        .insert(lead as Record<string, unknown>)
+        .select('id')
+        .single()) as { data: { id: string } | null; error: { message?: string } | null };
 
       if (insertError) {
         const isDuplicate = insertError.message?.includes('unique') || insertError.message?.includes('duplicate');
@@ -236,8 +240,21 @@ export async function importApolloLeads(
         }
       } else {
         imported++;
+        if (insertedLead) apolloImportedIds.push(insertedLead.id);
       }
     }
+  }
+
+  // Log import event for Apollo leads
+  if (apolloImportedIds.length > 0) {
+    logLeadEventBulk(supabase, {
+      orgId,
+      leadIds: apolloImportedIds,
+      userId,
+      event: 'lead_created',
+      message: 'Lead importado via Apollo.io',
+      metadata: { source: 'apollo_import' },
+    });
   }
 
   revalidatePath('/leads');

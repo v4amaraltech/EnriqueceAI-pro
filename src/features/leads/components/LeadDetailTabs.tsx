@@ -92,14 +92,19 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
     onShowMeetingChange(true);
   }
 
-  // Inject synthetic "Lead criado" entry at the end (oldest)
+  // Inject synthetic "Lead criado" entry only if no real lead_created event exists
   const timelineWithCreation = useMemo(() => {
+    const hasRealCreationEvent = timeline.some(
+      (e) => e.channel === 'system' && e.metadata?.system_event === 'lead_created',
+    );
+    if (hasRealCreationEvent) return timeline;
+
     const leadName = lead.nome_fantasia ?? lead.razao_social ?? lead.cnpj ?? 'Lead';
     const creationEntry: TimelineEntry = {
       id: `lead-created-${lead.id}`,
       type: 'sent',
       channel: 'system',
-      message_content: `Lead criado com sucesso - ${leadName}`,
+      message_content: `Lead criado - ${leadName}`,
       subject: 'Lead criado',
       html_body: null,
       ai_generated: false,
