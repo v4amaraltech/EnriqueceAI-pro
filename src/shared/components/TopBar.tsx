@@ -44,7 +44,8 @@ export const navSections: NavSection[] = [
     label: 'Prospecção',
     items: [
       { label: 'Execução', href: '/atividades' },
-      { label: 'Templates', href: '/activities' },
+      { label: 'Templates de Atividades', href: '/activities' },
+      { label: 'Templates de Mensagens', href: '/templates' },
       { label: 'Cadências', href: '/cadences' },
       { label: 'Leads', href: '/leads' },
       { label: 'Ajustes', href: '/settings/prospecting' },
