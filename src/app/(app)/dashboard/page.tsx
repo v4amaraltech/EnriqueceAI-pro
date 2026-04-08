@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { format, subDays } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 
