@@ -87,17 +87,10 @@ const contextualTips: { pattern: string; tips: HelpTip[] }[] = [
     ],
   },
   {
-    pattern: '/activities',
-    tips: [
-      { title: 'Fila de atividades', description: 'Execute tarefas pendentes na ordem de prioridade.' },
-      { title: 'Ações rápidas', description: 'Envie email, ligue ou pule a atividade direto da fila.' },
-    ],
-  },
-  {
     pattern: '/templates',
     tips: [
-      { title: 'Templates', description: 'Crie modelos reutilizáveis para email e WhatsApp.' },
-      { title: 'Variáveis', description: 'Use variáveis como {{primeiro_nome}} para personalizar mensagens.' },
+      { title: 'Templates de mensagens', description: 'Gerencie templates de email e WhatsApp para suas cadências.' },
+      { title: 'Personalização', description: 'Use variáveis como {{primeiro_nome}} para personalizar mensagens.' },
     ],
   },
   {
