@@ -8,6 +8,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+
 import type { EnrollmentListResult, EnrollmentWithLead } from '../cadences.contract';
 import type { EnrollmentStatus } from '../types';
 
@@ -126,7 +128,13 @@ export async function updateEnrollmentStatus(
 ): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
+
+  // Fetch enrollment + cadence name before update
+  const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
+    .select('lead_id, cadence:cadences(name)')
+    .eq('id', enrollmentId)
+    .single()) as { data: { lead_id: string; cadence: { name: string } | null } | null };
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .update({ status } as Record<string, unknown>)
@@ -134,6 +142,21 @@ export async function updateEnrollmentStatus(
 
   const qErr3 = handleQueryError(error, 'Erro ao atualizar status do enrollment', 'enrollments');
   if (qErr3) return qErr3;
+
+  if (enrollment) {
+    const statusLabels: Record<string, string> = {
+      active: 'retomada', paused: 'pausada', completed: 'concluída',
+    };
+    const cadenceName = enrollment.cadence?.name ?? 'Cadência';
+    logLeadEvent(supabase, {
+      orgId,
+      leadId: enrollment.lead_id,
+      userId,
+      event: 'enrollment_status_changed',
+      message: `Cadência ${cadenceName}: ${statusLabels[status] ?? status}`,
+      metadata: { enrollment_id: enrollmentId, new_status: status },
+    });
+  }
 
   revalidatePath('/cadences');
   return { success: true, data: undefined };
@@ -144,7 +167,13 @@ export async function removeEnrollment(
 ): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
+
+  // Fetch enrollment + cadence name before deletion
+  const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
+    .select('lead_id, cadence:cadences(name)')
+    .eq('id', enrollmentId)
+    .single()) as { data: { lead_id: string; cadence: { name: string } | null } | null };
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .delete()
@@ -152,6 +181,17 @@ export async function removeEnrollment(
 
   const qErr4 = handleQueryError(error, 'Erro ao remover enrollment', 'enrollments');
   if (qErr4) return qErr4;
+
+  if (enrollment) {
+    logLeadEvent(supabase, {
+      orgId,
+      leadId: enrollment.lead_id,
+      userId,
+      event: 'enrollment_removed',
+      message: `Removido da cadência: ${enrollment.cadence?.name ?? 'Cadência'}`,
+      metadata: { enrollment_id: enrollmentId },
+    });
+  }
 
   revalidatePath('/cadences');
   return { success: true, data: undefined };

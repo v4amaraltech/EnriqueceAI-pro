@@ -7,6 +7,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEventBulk } from './log-lead-event';
+
 export async function bulkAssignLeads(
   leadIds: string[],
   userId: string,
@@ -42,6 +44,22 @@ export async function bulkAssignLeads(
   if (error) {
     return { success: false, error: 'Erro ao reatribuir leads' };
   }
+
+  // Fetch assigned user name for log message
+  const { data: targetUser } = (await from(supabase, 'organization_members')
+    .select('full_name')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
+    .single()) as { data: { full_name: string | null } | null };
+
+  logLeadEventBulk(supabase, {
+    orgId,
+    leadIds,
+    userId: auth.data.userId,
+    event: 'assigned',
+    message: `Responsável alterado para: ${targetUser?.full_name ?? 'Usuário'}`,
+    metadata: { assigned_to: userId },
+  });
 
   revalidatePath('/leads');
 

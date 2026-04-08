@@ -8,6 +8,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEventBulk } from './log-lead-event';
+
 const bulkChangeStatusSchema = z.object({
   leadIds: z.array(z.string().uuid()).min(1, 'Nenhum lead selecionado').max(MAX_BULK_LEAD_IDS),
   newStatus: z.enum(['new', 'contacted', 'qualified', 'unqualified']),
@@ -34,6 +36,18 @@ export async function bulkChangeStatus(
   if (error) {
     return { success: false, error: 'Erro ao alterar status dos leads' };
   }
+
+  const statusLabels: Record<string, string> = {
+    new: 'Novo', contacted: 'Contactado', qualified: 'Qualificado', unqualified: 'Não Qualificado',
+  };
+  logLeadEventBulk(supabase, {
+    orgId,
+    leadIds,
+    userId: auth.data.userId,
+    event: 'status_changed',
+    message: `Status alterado para: ${statusLabels[newStatus] ?? newStatus}`,
+    metadata: { new_status: newStatus },
+  });
 
   revalidatePath('/leads');
   return { success: true, data: { count: leadIds.length } };

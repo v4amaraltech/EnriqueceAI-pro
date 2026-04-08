@@ -7,6 +7,8 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
 
@@ -311,11 +313,11 @@ export async function enrollLeads(
 
   // Verify cadence is active
   const { data: cadence } = (await from(supabase, 'cadences')
-    .select('id, status')
+    .select('id, name, status')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .single()) as { data: { id: string; status: string } | null };
+    .single()) as { data: { id: string; name: string; status: string } | null };
 
   if (!cadence) {
     return { success: false, error: 'Cadência não encontrada' };
@@ -354,6 +356,14 @@ export async function enrollLeads(
       errors.push(`Lead ${leadId}: ${error.message ?? 'já inscrito ou erro'}`);
     } else {
       enrolled++;
+      logLeadEvent(supabase, {
+        orgId,
+        leadId,
+        userId,
+        event: 'cadence_enrolled',
+        message: `Inscrito na cadência: ${cadence.name}`,
+        metadata: { cadence_id: cadenceId, cadence_name: cadence.name },
+      });
     }
   }
 

@@ -9,13 +9,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { logLeadEvent } from './log-lead-event';
 
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 import { enrichPerson } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
 export async function enrichLeadWithApollo(leadId: string, force = false): Promise<ActionResult<void>> {
-  const { orgId } = await requireAuthWithMember();
+  const { orgId, userId: enrichUserId } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   // Verify lead belongs to user's org
@@ -153,6 +154,17 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
       error_message: null,
       duration_ms: durationMs,
     } as Record<string, unknown>);
+
+    // Log to timeline
+    const filledFields = Object.keys(updates).filter((k) => k !== 'enrichment_status' && k !== 'enriched_at' && k !== 'source_id');
+    logLeadEvent(supabase, {
+      orgId,
+      leadId,
+      userId: enrichUserId,
+      event: 'enriched',
+      message: `Lead enriquecido via Apollo.io${filledFields.length > 0 ? ` (${filledFields.join(', ')})` : ''}`,
+      metadata: { provider: 'apollo', fields_updated: filledFields },
+    });
 
     // Dispatch lead.enriched webhook
     dispatchWebhookEvent(supabase, orgId, 'lead.enriched', {

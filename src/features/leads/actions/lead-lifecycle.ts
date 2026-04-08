@@ -8,6 +8,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import { logLeadEvent } from './log-lead-event';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
@@ -25,6 +26,15 @@ export async function archiveLead(
 
   const qErr = handleQueryError(error, 'Erro ao arquivar lead', 'lead-lifecycle');
   if (qErr) return qErr;
+
+  logLeadEvent(supabase, {
+    orgId,
+    leadId,
+    userId: auth.data.userId,
+    event: 'status_changed',
+    message: 'Lead arquivado',
+    metadata: { new_status: 'archived' },
+  });
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);

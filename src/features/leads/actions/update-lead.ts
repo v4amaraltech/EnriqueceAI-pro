@@ -9,6 +9,7 @@ import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEvent } from './log-lead-event';
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 
 /**
@@ -119,6 +120,26 @@ export async function updateLead(
         action: 'lead.fields_updated',
         resourceType: 'lead',
         resourceId: leadId,
+        metadata: { changes },
+      });
+
+      // Log to lead timeline
+      const fieldLabels: Record<string, string> = {
+        first_name: 'Nome', last_name: 'Sobrenome', nome_fantasia: 'Empresa', email: 'Email',
+        telefone: 'Telefone', job_title: 'Cargo', lead_source: 'Origem', canal: 'Canal',
+        cnpj: 'CNPJ', instagram: 'Instagram', linkedin: 'LinkedIn', website: 'Website',
+        status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
+        faturamento_estimado: 'Faturamento', phones: 'Telefones',
+      };
+      const changedFields = Object.keys(changes)
+        .map((k) => fieldLabels[k] ?? k)
+        .join(', ');
+      logLeadEvent(supabase, {
+        orgId,
+        leadId,
+        userId: auth.data.userId,
+        event: 'fields_updated',
+        message: `Campos atualizados: ${changedFields}`,
         metadata: { changes },
       });
     }
