@@ -101,6 +101,9 @@ export function LeadActivityTab({ leadId }: LeadActivityTabProps) {
 
             if (result.success) {
               toast.success('Atividade agendada!');
+              if ((result.data as { calendarFailed?: boolean }).calendarFailed) {
+                toast.warning('Não foi possível criar evento no Google Calendar. Verifique a conexão em Integrações.');
+              }
               setDate('');
               setNotes('');
               router.refresh();

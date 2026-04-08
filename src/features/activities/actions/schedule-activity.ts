@@ -71,15 +71,22 @@ export async function scheduleActivity(
       metadata: { system_event: 'activity_scheduled', scheduled_activity_id: data.id },
     } as Record<string, unknown>);
 
-  // Create Google Calendar event (fire-and-forget)
-  createCalendarEventForActivity(userId, orgId, leadId, channel, scheduledAt, notes).catch((err) =>
-    console.warn('[schedule-activity] Calendar event failed (non-blocking):', err),
-  );
+  // Create Google Calendar event
+  let calendarFailed = false;
+  try {
+    await createCalendarEventForActivity(userId, orgId, leadId, channel, scheduledAt, notes);
+  } catch (err) {
+    console.warn('[schedule-activity] Calendar event failed:', err);
+    calendarFailed = true;
+  }
 
   revalidatePath('/atividades');
   revalidatePath(`/leads/${leadId}`);
 
-  return { success: true, data: { id: data.id } };
+  return {
+    success: true,
+    data: { id: data.id, calendarFailed },
+  } as ActionResult<{ id: string; calendarFailed?: boolean }>;
 }
 
 async function createCalendarEventForActivity(
