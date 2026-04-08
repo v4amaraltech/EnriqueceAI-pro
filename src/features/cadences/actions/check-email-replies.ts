@@ -116,7 +116,10 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     byUser.set(userId, list);
   }
 
-  console.warn(`[reply-check] Users to check: ${byUser.size}`);
+  console.warn(`[reply-check] cadences found: ${cadences?.length ?? 0}, users to check: ${byUser.size}, cadenceCreatorMap entries: ${cadenceCreatorMap.size}`);
+  for (const [cId, uId] of cadenceCreatorMap) {
+    console.warn(`[reply-check] cadence=${cId} creator=${uId}`);
+  }
 
   // 5. For each user, get Gmail connection and check threads
   for (const [userId, interactions] of byUser) {
