@@ -52,11 +52,33 @@ export async function GET(
     if (interaction) {
       const metadata = interaction.metadata ?? {};
       const clicks = Array.isArray(metadata.clicks) ? metadata.clicks : [];
+      const isFirstClick = clicks.length === 0;
       clicks.push({ url: parsedUrl.href, clicked_at: new Date().toISOString() });
 
       await from(supabase, 'interactions')
         .update({ metadata: { ...metadata, clicks } } as Record<string, unknown>)
         .eq('id', interactionId);
+
+      // Create 'clicked' interaction record (only on first click)
+      if (isFirstClick) {
+        const { data: sent } = (await from(supabase, 'interactions')
+          .select('org_id, lead_id, cadence_id, step_id')
+          .eq('id', interactionId)
+          .single()) as { data: { org_id: string; lead_id: string; cadence_id: string | null; step_id: string | null } | null };
+
+        if (sent) {
+          await from(supabase, 'interactions')
+            .insert({
+              org_id: sent.org_id,
+              lead_id: sent.lead_id,
+              cadence_id: sent.cadence_id,
+              step_id: sent.step_id,
+              channel: 'email',
+              type: 'clicked',
+              metadata: { sent_interaction_id: interactionId, url: parsedUrl.href },
+            } as Record<string, unknown>);
+        }
+      }
     }
   } catch (err) {
     console.error('[track/click] Error recording click:', err);

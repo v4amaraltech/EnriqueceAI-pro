@@ -51,6 +51,27 @@ export async function GET(
       await from(supabase, 'interactions')
         .update({ metadata: { ...metadata, open_count: openCount } } as Record<string, unknown>)
         .eq('id', interactionId);
+
+      // Create 'opened' interaction record (only on first open)
+      if (openCount === 1) {
+        const { data: sent } = (await from(supabase, 'interactions')
+          .select('org_id, lead_id, cadence_id, step_id')
+          .eq('id', interactionId)
+          .single()) as { data: { org_id: string; lead_id: string; cadence_id: string | null; step_id: string | null } | null };
+
+        if (sent) {
+          await from(supabase, 'interactions')
+            .insert({
+              org_id: sent.org_id,
+              lead_id: sent.lead_id,
+              cadence_id: sent.cadence_id,
+              step_id: sent.step_id,
+              channel: 'email',
+              type: 'opened',
+              metadata: { sent_interaction_id: interactionId, open_count: 1 },
+            } as Record<string, unknown>);
+        }
+      }
     }
   } catch (err) {
     console.error('[track/open] Error recording open:', err);
