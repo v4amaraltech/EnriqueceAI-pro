@@ -74,21 +74,19 @@ export function LeadDetailHeader({
 
   const isClosed = lead.status === 'qualified' || lead.status === 'unqualified';
 
-  const handleStatusChange = useCallback((status: 'qualified' | 'contacted') => {
+  const handleReopen = useCallback(() => {
+    // Reopen to the most advanced stage the lead had reached
+    const reopenStatus = lead.qualified_at || lead.meeting_scheduled_at ? 'qualified' : 'contacted';
     startTransition(async () => {
-      const result = await updateLead(lead.id, { status });
+      const result = await updateLead(lead.id, { status: reopenStatus });
       if (result.success) {
-        const messages: Record<string, string> = {
-          qualified: 'Lead marcado como ganho',
-          contacted: 'Lead reaberto',
-        };
-        toast.success(messages[status]);
+        toast.success('Lead reaberto');
         router.refresh();
       } else {
         toast.error(result.error);
       }
     });
-  }, [lead.id, router]);
+  }, [lead.id, lead.qualified_at, lead.meeting_scheduled_at, router]);
 
   return (
     <div className="flex items-start justify-between">
@@ -125,7 +123,7 @@ export function LeadDetailHeader({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleStatusChange('contacted')}
+            onClick={handleReopen}
             disabled={isPending}
           >
             <RefreshCw className="mr-1 h-4 w-4" />
