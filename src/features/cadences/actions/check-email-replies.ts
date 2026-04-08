@@ -83,8 +83,11 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   );
 
   if (!toCheck.length) {
+    console.warn(`[reply-check] All ${sentInteractions.length} interactions already processed`);
     return { success: true, data: { found: 0 } };
   }
+
+  console.warn(`[reply-check] Checking ${toCheck.length} interactions (${sentInteractions.length} total sent, ${alreadyProcessedMap.size} already processed)`);
 
   // 3. Group by cadence → get created_by (the Gmail user)
   const cadenceIds = [...new Set(toCheck.map((i) => i.cadence_id))];
@@ -179,12 +182,20 @@ async function getValidAccessToken(
     .in('status', ['connected', 'error'])
     .maybeSingle()) as { data: GmailConnection | null };
 
-  if (!connection) return null;
+  if (!connection) {
+    console.warn(`[reply-check] No Gmail connection for user=${userId}`);
+    return null;
+  }
 
   // Check if token is expired
   if (connection.status === 'error' || new Date(connection.token_expires_at) < new Date()) {
+    console.warn(`[reply-check] Token expired for user=${userId}, refreshing...`);
     const refreshResult = await refreshAccessToken(connection, supabase);
-    if ('error' in refreshResult) return null;
+    if ('error' in refreshResult) {
+      console.error(`[reply-check] Token refresh failed for user=${userId}:`, refreshResult.error);
+      return null;
+    }
+    console.warn(`[reply-check] Token refreshed for user=${userId}`);
     return refreshResult.accessToken;
   }
 
