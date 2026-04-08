@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap } from 'lucide-react';
+import { Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -33,6 +33,7 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
   const [isPending, startTransition] = useTransition();
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
 
   const count = leadIds.length;
   const isBulk = count > 1;
@@ -51,16 +52,20 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
   }, [open, loaded]);
 
   function handleOpenChange(nextOpen: boolean) {
+    if (enrollingId) return; // Prevent closing while enrolling
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setLoaded(false);
       setCadences([]);
+      setEnrollingId(null);
     }
   }
 
   function handleEnroll(cadenceId: string) {
+    setEnrollingId(cadenceId);
     startTransition(async () => {
       const result = await enrollLeads(cadenceId, leadIds);
+      setEnrollingId(null);
       if (result.success) {
         if (result.data.enrolled > 0) {
           toast.success(
@@ -108,22 +113,34 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
             </p>
           ) : (
             <div className="space-y-2">
-              {cadences.map((cadence) => (
-                <button
-                  key={cadence.id}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-md border p-3 text-left hover:bg-[var(--muted)] transition-colors"
-                  disabled={isPending}
-                  onClick={() => handleEnroll(cadence.id)}
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {cadence.name} ({cadence.total_steps} etapas)
-                    </p>
-                  </div>
-                  <Zap className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-                </button>
-              ))}
+              {cadences.map((cadence) => {
+                const isEnrolling = enrollingId === cadence.id;
+                return (
+                  <button
+                    key={cadence.id}
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border p-3 text-left hover:bg-[var(--muted)] transition-colors disabled:opacity-50"
+                    disabled={!!enrollingId}
+                    onClick={() => handleEnroll(cadence.id)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">
+                        {cadence.name} ({cadence.total_steps} etapas)
+                      </p>
+                      {isEnrolling && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Inscrevendo {count} lead{count > 1 ? 's' : ''}...
+                        </p>
+                      )}
+                    </div>
+                    {isEnrolling ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Zap className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
