@@ -17,6 +17,8 @@ import type { InteractionRow } from '@/features/cadences/types';
 
 import { toPlainText } from '@/lib/utils/html-to-plaintext';
 
+import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
+
 import type { ExecuteActivityInput } from '../types';
 
 const executeActivitySchema = z.object({
@@ -179,6 +181,9 @@ export async function executeActivity(
     }
   }
   // Manual channels (phone, linkedin, research) — interaction already recorded above, no external send needed
+
+  // Mark lead as contacted on first activity
+  markLeadContacted(supabase, leadId).catch(() => {});
 
   // Advance step or mark enrollment completed
   const { data: nextStep } = (await from(supabase, 'cadence_steps')

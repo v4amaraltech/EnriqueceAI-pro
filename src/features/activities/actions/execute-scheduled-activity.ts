@@ -15,6 +15,8 @@ import { WhatsAppService } from '@/features/integrations/services/whatsapp.servi
 
 import { toPlainText } from '@/lib/utils/html-to-plaintext';
 
+import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
+
 const schema = z.object({
   scheduledActivityId: z.string().uuid(),
   leadId: z.string().uuid(),
@@ -132,6 +134,9 @@ export async function executeScheduledActivity(
       return { success: false, error: emailResult.error ?? 'Falha ao enviar email' };
     }
   }
+
+  // Mark lead as contacted on first activity
+  markLeadContacted(supabase, leadId).catch(() => {});
 
   // Mark scheduled activity as completed
   await from(supabase, 'scheduled_activities' as never)

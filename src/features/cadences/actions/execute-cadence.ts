@@ -641,6 +641,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       result.sent++;
+
+      // Mark lead as contacted on first activity
+      const { markLeadContacted } = await import('@/features/leads/actions/mark-contacted');
+      markLeadContacted(supabase, enrollment.lead_id).catch(() => {});
+
       console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=sent ai=${aiGenerated} send_success=${sendSuccess} duration_ms=${Date.now() - stepStart}`);
 
       // Rate limit: wait between sends to avoid Gmail/WhatsApp API throttling

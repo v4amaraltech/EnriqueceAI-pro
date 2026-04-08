@@ -66,10 +66,8 @@ export async function sendManualEmail(
   }
 
   // Update lead status to contacted if still new
-  await from(supabase, 'leads')
-    .update({ status: 'contacted', contacted_at: new Date().toISOString() } as Record<string, unknown>)
-    .eq('id', leadId)
-    .eq('status', 'new');
+  const { markLeadContacted } = await import('./mark-contacted');
+  await markLeadContacted(supabase, leadId);
 
   revalidatePath(`/leads/${leadId}`);
 
