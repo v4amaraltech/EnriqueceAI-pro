@@ -131,9 +131,12 @@ export function DialerCallPanel({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div>
-            <p className="text-right text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
-            <p className="text-sm font-medium">{item.leadName}</p>
+          <div className="text-right">
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
+            {item.firstName && (
+              <p className="text-sm font-medium">{[item.firstName, item.lastName].filter(Boolean).join(' ')}</p>
+            )}
+            <p className={item.firstName ? 'text-xs text-muted-foreground' : 'text-sm font-medium'}>{item.leadName}</p>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/10">
             <PhoneCall className="h-5 w-5 text-green-500" />

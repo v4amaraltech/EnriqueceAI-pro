@@ -89,7 +89,12 @@ export function DialerQueueList({ items, itemStatuses, currentIndex, isActive, o
             <div className="flex items-center gap-3 min-w-0">
               <LeadAvatar name={item.leadName} status={status} />
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.leadName}</p>
+                <p className="truncate text-sm font-medium">
+                  {item.firstName ? `${item.firstName} ${item.lastName ?? ''}`.trim() : item.leadName}
+                </p>
+                {item.firstName && (
+                  <p className="truncate text-xs text-muted-foreground">{item.leadName}</p>
+                )}
                 <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                   {item.phone ? (
                     <>

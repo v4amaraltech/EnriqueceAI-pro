@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useContext, useState, useTransition } from 'react';
+import { useCallback, useContext, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -165,6 +165,29 @@ export function LeadInfoPanel({
     data.custom_field_values ?? {},
   );
 
+  // Reset all edit state when lead changes
+  useEffect(() => {
+    setIsEditing(false);
+    setActiveTab('dados');
+    const socio = data.socios?.[0] ?? null;
+    const email = (data.socios ?? []).flatMap((s) => s.emails ?? []).sort((a, b) => a.ranking - b.ranking)[0]?.email ?? data.email ?? '';
+    setEditFields({
+      first_name: data.first_name ?? socio?.nome?.split(' ')[0] ?? '',
+      last_name: data.last_name ?? (socio?.nome?.split(' ').slice(1).join(' ') ?? ''),
+      nome_fantasia: data.nome_fantasia ?? '',
+      email,
+      job_title: data.job_title ?? socio?.qualificacao ?? '',
+      lead_source: data.lead_source ?? '',
+      canal: data.canal ?? '',
+      cnpj: data.cnpj ?? '',
+      instagram: data.instagram ?? '',
+      linkedin: data.linkedin ?? '',
+      website: data.website ?? '',
+    });
+    setEditCustomFieldValues(data.custom_field_values ?? {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackedLeadId]);
+
   // Build initial phone entries from phones JSONB (preferred) + telefone fallback
   const buildInitialPhones = useCallback((): LeadPhone[] => {
     const entries: LeadPhone[] = [];
@@ -204,6 +227,11 @@ export function LeadInfoPanel({
   }, [data.telefone, data.phones, data.lead_source]);
 
   const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
+
+  // Reset phone entries when lead changes (buildInitialPhones depends on data which updates on next render)
+  useEffect(() => {
+    setPhoneEntries(buildInitialPhones());
+  }, [trackedLeadId, buildInitialPhones]);
 
   const handleAddPhone = useCallback(() => {
     setPhoneEntries((prev) => [...prev, { tipo: 'celular', numero: '' }]);
