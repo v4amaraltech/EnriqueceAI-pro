@@ -37,9 +37,10 @@ interface LeadListViewProps {
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
+  canalOptions?: string[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions }: LeadListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -169,7 +170,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
         <LeadPagination total={total} page={page} perPage={per_page} />
       </Suspense>
 
-      <CreateLeadDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} currentUserId={currentUserId} leadSourceOptions={leadSourceOptions} />
+      <CreateLeadDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} currentUserId={currentUserId} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} />
     </div>
   );
 }

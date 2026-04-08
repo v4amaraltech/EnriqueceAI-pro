@@ -7,6 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { fetchActiveCadences } from '@/features/leads/actions/fetch-active-cadences';
 import { fetchDistinctCnaes, fetchLeads, fetchLeadStatusCounts } from '@/features/leads/actions/fetch-leads';
 import { getLeadSourceOptions } from '@/features/leads/actions/get-lead-source-options';
+import { listCanalOptions } from '@/features/settings-prospecting/actions/canal-crud';
 import { fetchLeadsCadenceInfo } from '@/features/leads/actions/fetch-leads-cadence-info';
 import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
 import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
@@ -59,7 +60,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       .filter((id): id is string => id !== null && id !== undefined),
   )];
 
-  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions] = await Promise.all([
+  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions, canalResult] = await Promise.all([
     fetchLeadsCadenceInfo(leadIds),
     fetchUserMap(uniqueUserIds),
     fetchOrgMembersAuth(),
@@ -67,6 +68,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
     fetchActiveCadences(),
     fetchDistinctCnaes(),
     getLeadSourceOptions(),
+    listCanalOptions(),
   ]);
   const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
   const userMap = userMapResult.success ? userMapResult.data : {};
@@ -74,6 +76,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const statusCounts = statusCountsResult.success ? statusCountsResult.data : undefined;
   const cadences = cadencesResult.success ? cadencesResult.data : [];
   const cnaes = cnaesResult.success ? cnaesResult.data : [];
+  const canalOptions = canalResult.success ? canalResult.data.map((c) => c.name) : undefined;
 
   return (
     <LeadListView
@@ -87,6 +90,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       cadences={cadences}
       cnaes={cnaes}
       leadSourceOptions={leadSourceOptions}
+      canalOptions={canalOptions}
     />
   );
 }

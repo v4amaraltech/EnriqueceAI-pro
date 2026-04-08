@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   ListChecks,
   Lock,
+  Megaphone,
   Settings2,
   Star,
   UserCheck,
@@ -37,6 +38,7 @@ const sidebarItems: SidebarItem[] = [
 
   { label: 'Closers', href: '/settings/prospecting/closers', icon: UserCheck },
   { label: 'Feedbacks dos Closers', href: '/settings/prospecting/closer-feedbacks', icon: ClipboardCheck },
+  { label: 'Canais de Aquisição', href: '/settings/prospecting/canal', icon: Megaphone },
   { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
   { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
 ];
