@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { checkEmailReplies } from '@/features/cadences/actions/check-email-replies';
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   if (!verifyCronSecret(request)) {

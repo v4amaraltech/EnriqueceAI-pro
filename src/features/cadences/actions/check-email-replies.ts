@@ -116,13 +116,17 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     byUser.set(userId, list);
   }
 
+  console.warn(`[reply-check] Users to check: ${byUser.size}`);
+
   // 5. For each user, get Gmail connection and check threads
   for (const [userId, interactions] of byUser) {
+    console.warn(`[reply-check] Processing user=${userId} interactions=${interactions.length}`);
     const accessToken = await getValidAccessToken(supabase, userId);
     if (!accessToken) {
-      console.error(`[reply-check] No valid Gmail token for user=${userId}`);
+      console.error(`[reply-check] No valid Gmail token for user=${userId} — skipping ${interactions.length} interactions`);
       continue;
     }
+    console.warn(`[reply-check] Got valid token for user=${userId}, checking ${interactions.length} threads...`);
 
     // Process interactions in parallel batches of 5 to avoid Gmail rate limits
     const PARALLEL_BATCH = 5;
