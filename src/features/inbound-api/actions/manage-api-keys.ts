@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { logAudit } from '@/lib/audit/audit-log';
-import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { ApiKeySafe } from '../types';
@@ -19,14 +19,9 @@ export async function createApiKeyAction(
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
   }
 
-  let orgId: string;
-  let userId: string;
-  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
-  try {
-    ({ orgId, userId, supabase } = await getManagerOrgId());
-  } catch {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
   const { key, hash, prefix } = generateApiKey();
 
   const { error } = await from(supabase, 'api_keys').insert({
@@ -69,13 +64,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<void>> {
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
-  try {
-    ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'api_keys')
     .update({ is_active: false } as Record<string, unknown>)
@@ -93,13 +84,9 @@ export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<vo
 
 export async function deleteApiKeyAction(keyId: string): Promise<ActionResult<void>> {
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
-  try {
-    ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'api_keys')
     .delete()
