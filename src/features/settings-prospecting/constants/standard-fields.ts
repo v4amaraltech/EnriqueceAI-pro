@@ -32,7 +32,7 @@ export const STANDARD_FIELDS: StandardFieldDef[] = [
   },
   {
     key: 'canal',
-    label: 'Canal',
+    label: 'Sub-origem',
     type: 'select',
     defaultOptions: [
       'Facebook',

@@ -562,7 +562,7 @@ export function LeadInfoPanel({
                   )}
                   {isFieldVisible('canal') && (
                     <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Canal</p>
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sub-origem</p>
                       <Select
                         value={editFields.canal ?? 'none'}
                         onValueChange={(value) => {
@@ -637,7 +637,7 @@ export function LeadInfoPanel({
                       value={sourceOptions.find((o) => o.value === data.lead_source)?.label ?? data.lead_source ?? '—'}
                     />
                   )}
-                  {isFieldVisible('canal') && <MeetimeFieldRow label="Canal" value={data.canal || '—'} />}
+                  {isFieldVisible('canal') && <MeetimeFieldRow label="Sub-origem" value={data.canal || '—'} />}
                   {isFieldVisible('cnpj') && data.cnpj && <MeetimeFieldRow label="CNPJ" value={data.cnpj} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
                   {isFieldVisible('created_at') && (

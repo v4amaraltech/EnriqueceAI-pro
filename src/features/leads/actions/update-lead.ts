@@ -126,7 +126,7 @@ export async function updateLead(
       // Log to lead timeline
       const fieldLabels: Record<string, string> = {
         first_name: 'Nome', last_name: 'Sobrenome', nome_fantasia: 'Empresa', email: 'Email',
-        telefone: 'Telefone', job_title: 'Cargo', lead_source: 'Origem', canal: 'Canal',
+        telefone: 'Telefone', job_title: 'Cargo', lead_source: 'Origem', canal: 'Sub-origem',
         cnpj: 'CNPJ', instagram: 'Instagram', linkedin: 'LinkedIn', website: 'Website',
         status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
         faturamento_estimado: 'Faturamento', phones: 'Telefones',

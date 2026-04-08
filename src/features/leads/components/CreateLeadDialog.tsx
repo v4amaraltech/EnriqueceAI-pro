@@ -134,7 +134,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   if (!form.empresa.trim()) fieldErrors.empresa = 'Empresa obrigatória';
   if (!form.job_title.trim()) fieldErrors.job_title = 'Cargo obrigatório';
   if (!form.lead_source) fieldErrors.lead_source = 'Origem obrigatória';
-  if (!form.canal) fieldErrors.canal = 'Canal obrigatório';
+  if (!form.canal) fieldErrors.canal = 'Sub-origem obrigatória';
   if (!form.assigned_to) fieldErrors.assigned_to = 'Responsável obrigatório';
 
   const isFormValid = Object.keys(fieldErrors).length === 0 &&
@@ -446,14 +446,14 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>
-                    Canal <span className="text-red-500">*</span>
+                    Sub-origem <span className="text-red-500">*</span>
                   </Label>
                   <Select
                     value={form.canal || 'none'}
                     onValueChange={(v) => setForm({ ...form, canal: v === 'none' ? '' : v })}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o canal" />
+                      <SelectValue placeholder="Selecione a sub-origem" />
                     </SelectTrigger>
                     <SelectContent>
                       {CANAL_OPTIONS.map((c) => (
