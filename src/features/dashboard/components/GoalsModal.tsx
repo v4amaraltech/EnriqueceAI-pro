@@ -67,6 +67,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
   const [opportunityTarget, setOpportunityTarget] = useState(0);
+  const [leadsFinishedTarget, setLeadsFinishedTarget] = useState(0);
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
@@ -85,6 +86,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
       if (cancelled) return;
       if (result.success) {
         setOpportunityTarget(result.data.opportunityTarget);
+        setLeadsFinishedTarget(result.data.leadsFinishedTarget);
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
         setUserGoals(result.data.userGoals);
@@ -123,6 +125,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
       const result = await saveGoals({
         month,
         opportunityTarget,
+        leadsFinishedTarget,
         activitiesTarget,
         conversionTarget,
         userGoals: userGoals.map((ug) => ({
@@ -189,6 +192,29 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     value={opportunityTarget}
                     onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
                     aria-label="Meta de Oportunidades"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Meta de Leads Finalizados */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Leads Finalizados</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Total de leads finalizados (prospectados) pela equipe no mês
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="leads-finished-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={leadsFinishedTarget}
+                    onChange={(e) => setLeadsFinishedTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Leads Finalizados"
                   />
                 </div>
               </div>

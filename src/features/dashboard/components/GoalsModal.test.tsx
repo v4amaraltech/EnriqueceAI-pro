@@ -24,6 +24,7 @@ import { GoalsModal } from './GoalsModal';
 const goalsData: GoalsData = {
   month: '2026-02',
   opportunityTarget: 50,
+  leadsFinishedTarget: 100,
   activitiesTarget: 200,
   conversionTarget: 25,
   userGoals: [

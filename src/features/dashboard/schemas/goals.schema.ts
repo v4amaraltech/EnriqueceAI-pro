@@ -8,6 +8,7 @@ const userGoalSchema = z.object({
 export const saveGoalsSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Mês deve ser YYYY-MM'),
   opportunityTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
+  leadsFinishedTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
   activitiesTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
   conversionTarget: z
     .number()

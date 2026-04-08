@@ -131,15 +131,15 @@ export async function fetchLeadsFinishedRanking(
     });
   }
 
-  // Get org goal for opportunity_target (proxy for leads target)
+  // Get org goal for leads_finished_target
   const monthStart = `${filters.month}-01`;
   const { data: goal } = (await from(supabase, 'goals')
-    .select('opportunity_target')
+    .select('leads_finished_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)
-    .maybeSingle()) as { data: { opportunity_target: number } | null };
+    .maybeSingle()) as { data: { leads_finished_target: number } | null };
 
-  return buildRankingCardData(entries, totalFinished, goal?.opportunity_target ?? 0, filters.month);
+  return buildRankingCardData(entries, totalFinished, goal?.leads_finished_target ?? 0, filters.month);
 }
 
 /**
