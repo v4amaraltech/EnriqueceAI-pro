@@ -6,7 +6,6 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
@@ -19,9 +18,7 @@ export async function archiveLead(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // Service role to bypass RLS — any SDR should be able to archive leads they can view
-  const serviceSupabase = createServiceRoleClient();
-  const { error } = await from(serviceSupabase, 'leads')
+  const { error } = await from(supabase, 'leads')
     .update({ status: 'archived' } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
@@ -60,9 +57,8 @@ export async function markLeadAsLost(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // 1. Update lead status to unqualified (service role to bypass RLS — any SDR should be able to mark leads as lost)
-  const serviceSupabase = createServiceRoleClient();
-  const { error: leadError } = await from(serviceSupabase, 'leads')
+  // 1. Update lead status to unqualified
+  const { error: leadError } = await from(supabase, 'leads')
     .update({ status: 'unqualified' } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);

@@ -33,3 +33,4 @@ Thumbs.db
 # AIOX Local (AIOX)
 .aiox-core/local/
 .aiox/install-log.txt
+.env*.local

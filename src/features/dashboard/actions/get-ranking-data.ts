@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import { createServiceRoleClient } from '@/lib/supabase/service';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchRankingData } from '../services/ranking-metrics.service';
 import type { DashboardFilters, RankingData, SdrRankingEntry } from '../types';
@@ -22,8 +22,7 @@ export async function getRankingData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<RankingData>> {
   const { userId, orgId, role } = await requireAuthWithMember();
-  // Use service role to bypass RLS — dashboard shows org-wide metrics for all roles
-  const supabase = createServiceRoleClient();
+  const supabase = await createServerSupabaseClient();
 
   const parsed = filtersSchema.safeParse(rawFilters);
   if (!parsed.success) {

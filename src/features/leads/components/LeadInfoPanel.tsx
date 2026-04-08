@@ -39,7 +39,7 @@ import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { CANAL_OPTIONS as DEFAULT_CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
 
@@ -84,7 +84,6 @@ export interface LeadInfoPanelProps {
   leadSourceOptions?: LeadSourceOption[];
   jobTitleOptions?: { value: string; label: string }[];
   standardFieldSettings?: StandardFieldSettingRow[];
-  canalOptions?: string[];
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'agendar' | 'atividade';
@@ -101,7 +100,6 @@ export function LeadInfoPanel({
   leadSourceOptions,
   jobTitleOptions,
   standardFieldSettings,
-  canalOptions,
 }: LeadInfoPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -548,7 +546,7 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          {(canalOptions ?? DEFAULT_CANAL_OPTIONS).map((c) => (
+                          {(standardFieldSettings?.find((s) => s.field_key === 'canal')?.options ?? CANAL_OPTIONS).map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>

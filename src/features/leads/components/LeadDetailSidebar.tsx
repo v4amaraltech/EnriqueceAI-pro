@@ -19,10 +19,9 @@ interface LeadDetailSidebarProps {
   leadSourceOptions?: LeadSourceOption[];
   jobTitleOptions?: JobTitleOption[];
   standardFieldSettings?: StandardFieldSettingRow[];
-  canalOptions?: string[];
 }
 
-export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings, canalOptions }: LeadDetailSidebarProps) {
+export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings }: LeadDetailSidebarProps) {
   const { enrollment, enrollments, kpis } = enrollmentData;
 
   return (
@@ -36,7 +35,6 @@ export function LeadDetailSidebar({ lead, enrollmentData, timeline, customFieldD
       leadSourceOptions={leadSourceOptions}
       jobTitleOptions={jobTitleOptions}
       standardFieldSettings={standardFieldSettings}
-      canalOptions={canalOptions}
     />
   );
 }

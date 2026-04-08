@@ -28,7 +28,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { CANAL_OPTIONS as DEFAULT_CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
@@ -44,7 +44,6 @@ interface CreateLeadDialogProps {
   onOpenChange: (open: boolean) => void;
   currentUserId: string;
   leadSourceOptions?: LeadSourceOption[];
-  canalOptions?: string[];
 }
 
 const INITIAL_FORM = {
@@ -63,7 +62,7 @@ const INITIAL_FORM = {
   scheduled_start: '',
 };
 
-export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSourceOptions, canalOptions }: CreateLeadDialogProps) {
+export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSourceOptions }: CreateLeadDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -457,7 +456,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                       <SelectValue placeholder="Selecione o canal" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(canalOptions ?? DEFAULT_CANAL_OPTIONS).map((c) => (
+                      {CANAL_OPTIONS.map((c) => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>
