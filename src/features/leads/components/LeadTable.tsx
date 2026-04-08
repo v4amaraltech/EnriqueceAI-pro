@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, Trash2, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Tag, Trash2, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -57,6 +57,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEnrichConfirm, setShowEnrichConfirm] = useState<'cnpj' | 'apollo' | null>(null);
@@ -385,6 +386,15 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowSwitchDialog(true)}
+              disabled={isPending}
+            >
+              <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />
+              Trocar Cadência
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleBulkPause}
               disabled={isPending}
             >
@@ -670,6 +680,19 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
           }
         }}
         leadIds={Array.from(selected)}
+      />
+
+      {/* Switch cadence dialog */}
+      <EnrollInCadenceDialog
+        open={showSwitchDialog}
+        onOpenChange={(open) => {
+          setShowSwitchDialog(open);
+          if (!open) {
+            setSelected(new Set());
+          }
+        }}
+        leadIds={Array.from(selected)}
+        mode="switch"
       />
 
     </div>

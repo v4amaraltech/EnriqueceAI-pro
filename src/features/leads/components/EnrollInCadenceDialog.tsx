@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Zap } from 'lucide-react';
+import { ArrowRightLeft, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -13,13 +13,15 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
+import { enrollLeads, switchLeadsCadence } from '@/features/cadences/actions/manage-cadences';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 
 interface EnrollInCadenceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadIds: string[];
+  /** 'enroll' adds to cadence (default), 'switch' removes from current + adds to new */
+  mode?: 'enroll' | 'switch';
 }
 
 interface ActiveCadence {
@@ -28,7 +30,7 @@ interface ActiveCadence {
   total_steps: number;
 }
 
-export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInCadenceDialogProps) {
+export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enroll' }: EnrollInCadenceDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
@@ -37,6 +39,7 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
 
   const count = leadIds.length;
   const isBulk = count > 1;
+  const isSwitch = mode === 'switch';
 
   // Load cadences when dialog becomes visible
   useEffect(() => {
@@ -52,7 +55,7 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
   }, [open, loaded]);
 
   function handleOpenChange(nextOpen: boolean) {
-    if (enrollingId) return; // Prevent closing while enrolling
+    if (enrollingId) return;
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setLoaded(false);
@@ -64,20 +67,23 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
   function handleEnroll(cadenceId: string) {
     setEnrollingId(cadenceId);
     startTransition(async () => {
-      const result = await enrollLeads(cadenceId, leadIds);
+      const action = isSwitch ? switchLeadsCadence : enrollLeads;
+      const result = await action(cadenceId, leadIds);
       setEnrollingId(null);
       if (result.success) {
         if (result.data.enrolled > 0) {
+          const verb = isSwitch ? 'movido' : 'inscrito';
+          const verbPlural = isSwitch ? 'movidos' : 'inscritos';
           toast.success(
             isBulk
-              ? `${result.data.enrolled} lead${result.data.enrolled > 1 ? 's' : ''} inscrito${result.data.enrolled > 1 ? 's' : ''} na cadência`
-              : 'Lead inscrito na cadência',
+              ? `${result.data.enrolled} lead${result.data.enrolled > 1 ? 's' : ''} ${result.data.enrolled > 1 ? verbPlural : verb} na cadência`
+              : `Lead ${verb} na cadência`,
           );
           if (result.data.errors.length > 0) {
-            toast.warning(`${result.data.errors.length} erro(s) ao inscrever`);
+            toast.warning(`${result.data.errors.length} erro(s)`);
           }
         } else {
-          toast.error(result.data.errors[0] ?? 'Erro ao inscrever');
+          toast.error(result.data.errors[0] ?? 'Erro ao processar');
         }
         onOpenChange(false);
         router.refresh();
@@ -87,28 +93,36 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
     });
   }
 
+  const Icon = isSwitch ? ArrowRightLeft : Zap;
+  const title = isSwitch
+    ? (isBulk ? `Trocar cadência de ${count} leads` : 'Trocar Cadência')
+    : (isBulk ? `Atribuir ${count} leads a uma cadência` : 'Inscrever em Cadência');
+  const description = isSwitch
+    ? (isBulk
+      ? 'Os leads serão removidos da cadência atual e inscritos na selecionada.'
+      : 'O lead será removido da cadência atual e inscrito na selecionada.')
+    : (isBulk
+      ? 'Selecione uma cadência ativa para inscrever os leads selecionados.'
+      : 'Selecione uma cadência ativa para inscrever este lead.');
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            {isBulk ? `Atribuir ${count} leads a uma cadência` : 'Inscrever em Cadência'}
+            <Icon className="h-5 w-5" />
+            {title}
           </DialogTitle>
-          <DialogDescription>
-            {isBulk
-              ? 'Selecione uma cadência ativa para inscrever os leads selecionados.'
-              : 'Selecione uma cadência ativa para inscrever este lead.'}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-64 overflow-y-auto">
           {isPending && !loaded ? (
-            <p className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               Carregando cadências...
             </p>
           ) : cadences.length === 0 ? (
-            <p className="py-8 text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               Nenhuma cadência ativa encontrada.
             </p>
           ) : (
@@ -129,14 +143,14 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
                       </p>
                       {isEnrolling && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Inscrevendo {count} lead{count > 1 ? 's' : ''}...
+                          {isSwitch ? 'Trocando' : 'Inscrevendo'} {count} lead{count > 1 ? 's' : ''}...
                         </p>
                       )}
                     </div>
                     {isEnrolling ? (
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     ) : (
-                      <Zap className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                     )}
                   </button>
                 );

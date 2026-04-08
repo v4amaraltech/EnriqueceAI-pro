@@ -359,3 +359,42 @@ export async function enrollLeads(
 
   return { success: true, data: { enrolled, errors } };
 }
+
+/**
+ * Switch leads from any active cadence to a new one.
+ * Completes ALL active/paused enrollments across all cadences, then enrolls in the target.
+ */
+export async function switchLeadsCadence(
+  targetCadenceId: string,
+  leadIds: string[],
+): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  // Verify target cadence is active
+  const { data: cadence } = (await from(supabase, 'cadences')
+    .select('id, status')
+    .eq('id', targetCadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single()) as { data: { id: string; status: string } | null };
+
+  if (!cadence) return { success: false, error: 'Cadência não encontrada' };
+  if (cadence.status !== 'active') return { success: false, error: 'Cadência precisa estar ativa' };
+
+  // Complete ALL active/paused enrollments for these leads (any cadence)
+  for (const leadId of leadIds) {
+    await from(supabase, 'cadence_enrollments')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      } as Record<string, unknown>)
+      .eq('lead_id', leadId)
+      .eq('org_id', orgId)
+      .in('status', ['active', 'paused']);
+  }
+
+  // Now enroll in the target cadence
+  return enrollLeads(targetCadenceId, leadIds);
+}
