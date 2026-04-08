@@ -233,7 +233,7 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 <tr className="border-b"><td className="p-2">cnpj</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">CNPJ (14 dígitos, sem pontuação)</td></tr>
                 <tr className="border-b"><td className="p-2">job_title</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Cargo do contato</td></tr>
                 <tr className="border-b"><td className="p-2">lead_source</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Origem (ex: Outbound, Inbound Marketing)</td></tr>
-                <tr className="border-b"><td className="p-2">canal</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Canal (ex: Facebook, Google, Instagram)</td></tr>
+                <tr className="border-b"><td className="p-2">canal</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sub-origem (ex: Facebook, Google, Instagram)</td></tr>
                 <tr className="border-b"><td className="p-2">instagram</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">@ ou URL do Instagram</td></tr>
                 <tr className="border-b"><td className="p-2">linkedin</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do LinkedIn</td></tr>
                 <tr className="border-b"><td className="p-2">website</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do site</td></tr>

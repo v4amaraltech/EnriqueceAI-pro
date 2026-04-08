@@ -21,7 +21,7 @@ export const APP_LEAD_FIELDS = [
   { value: 'situacao_cadastral', label: 'Situacao Cadastral' },
   { value: 'faturamento_estimado', label: 'Faturamento Estimado' },
   { value: 'uf', label: 'UF' },
-  { value: 'canal', label: 'Canal' },
+  { value: 'canal', label: 'Sub-origem' },
   { value: 'lead_source', label: 'Origem' },
   { value: 'instagram', label: 'Instagram' },
   { value: 'linkedin', label: 'LinkedIn' },

@@ -15,7 +15,7 @@ const FIELD_LABELS: Record<string, string> = {
   cnpj: 'CNPJ',
   status: 'Status',
   lead_source: 'Origem',
-  canal: 'Canal',
+  canal: 'Sub-origem',
   job_title: 'Cargo',
   linkedin: 'LinkedIn',
   website: 'Website',
