@@ -71,6 +71,15 @@ export function DialerCallPanel({
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
   const hasMultiplePhones = (item.phones?.length ?? 0) > 1;
 
+  // Reset state when lead changes
+  useEffect(() => {
+    setSelectedPhone(item.phone ?? '');
+    setCallStatus('');
+    setNotes('');
+    setAttempts([]);
+    setElapsed(0);
+  }, [item.enrollmentId, item.phone]);
+
   // Timer for call duration — starts on calling/connected, resets on idle
   useEffect(() => {
     if (callState === 'calling' || callState === 'connected') {
