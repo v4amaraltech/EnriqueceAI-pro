@@ -31,7 +31,6 @@ export async function bulkChangeStatus(
   const now = new Date().toISOString();
   const timestampField: Record<string, string> = {
     contacted: 'contacted_at',
-    qualified: 'qualified_at',
   };
   const updates: Record<string, unknown> = { status: newStatus };
   const tsField = timestampField[newStatus];

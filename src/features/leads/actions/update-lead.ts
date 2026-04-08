@@ -84,7 +84,6 @@ export async function updateLead(
     const now = new Date().toISOString();
     const statusTimestamps: Record<string, string> = {
       contacted: 'contacted_at',
-      qualified: 'qualified_at',
       archived: 'archived_at',
     };
     const tsField = statusTimestamps[safeUpdates.status as string];

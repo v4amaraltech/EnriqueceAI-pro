@@ -60,9 +60,11 @@ export async function scheduleMeeting(
         performed_by: userId,
       } as Record<string, unknown>);
 
-    // Update lead: meeting_scheduled_at + closer_id if provided
+    // Update lead: qualified_at (reunião agendada = qualificado) + closer_id if provided
     const leadUpdates: Record<string, unknown> = {
       meeting_scheduled_at: new Date().toISOString(),
+      qualified_at: new Date().toISOString(),
+      status: 'qualified',
     };
     if (input.closerId) {
       leadUpdates.closer_id = input.closerId;

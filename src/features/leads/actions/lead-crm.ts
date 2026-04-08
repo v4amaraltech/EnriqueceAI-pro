@@ -265,7 +265,7 @@ export async function markLeadAsWon(
 
     // 1. Update lead status to qualified + record who won it
     const { error: leadError } = await from(supabase, 'leads')
-      .update({ status: 'qualified', won_by: userId, qualified_at: new Date().toISOString() } as Record<string, unknown>)
+      .update({ status: 'qualified', won_by: userId, won_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
 
