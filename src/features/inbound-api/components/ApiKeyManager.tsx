@@ -244,7 +244,7 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 <tr className="border-b"><td className="p-2">assigned_to</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID do SDR responsável</td></tr>
                 <tr className="border-b"><td className="p-2">cadence_id</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID da cadência para inscrever o lead automaticamente</td></tr>
                 <tr className="border-b"><td className="p-2">notes</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Observações sobre o lead</td></tr>
-                <tr><td className="p-2">custom_fields</td><td className="p-2">object</td><td className="p-2">Não</td><td className="p-2 font-sans">Campos personalizados {"{ \"campo_id\": \"valor\" }"}</td></tr>
+                <tr><td className="p-2">custom_fields</td><td className="p-2">object</td><td className="p-2">Não</td><td className="p-2 font-sans">Campos personalizados por ID ou nome {"{ \"Valor do Lead\": 5000 }"}</td></tr>
               </tbody>
             </table>
           </div>

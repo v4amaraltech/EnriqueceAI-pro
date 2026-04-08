@@ -20,7 +20,7 @@ export const inboundLeadSchema = z.object({
   assigned_to: z.string().uuid('assigned_to deve ser UUID válido').optional(),
   cadence_id: z.string().uuid('cadence_id deve ser UUID válido').optional(),
   notes: z.string().optional(),
-  custom_fields: z.record(z.string()).optional(),
+  custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   linkedin: z.string().url('LinkedIn URL inválida').optional().or(z.literal('')),
   website: z.string().url('Website URL inválido').optional().or(z.literal('')),
 });

@@ -121,6 +121,11 @@ async function ingestSingleLead(
     }
   }
 
+  // Resolve custom fields: accept both field IDs (UUID) and field names
+  const resolvedCustomFields = data.custom_fields
+    ? await resolveCustomFieldKeys(supabase, orgId, data.custom_fields)
+    : {};
+
   // Insert new lead
   const insertData: Record<string, unknown> = {
     org_id: orgId,
@@ -142,7 +147,7 @@ async function ingestSingleLead(
     razao_social: data.razao_social ?? null,
     faturamento_estimado: data.faturamento_estimado ?? null,
     notes: data.notes ?? null,
-    custom_field_values: data.custom_fields ?? {},
+    custom_field_values: resolvedCustomFields,
   };
 
   const { data: lead, error } = await from(supabase, 'leads')
@@ -270,6 +275,46 @@ async function enrollInCadence(
       status: 'active',
       enrolled_by: assignedTo,
     } as Record<string, unknown>);
+}
+
+/**
+ * Resolve custom field keys: accepts both UUIDs and field names.
+ * If a key is not a UUID, look up the field by name and map to its ID.
+ */
+async function resolveCustomFieldKeys(
+  supabase: SupabaseClient,
+  orgId: string,
+  fields: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const entries = Object.entries(fields);
+  const hasNames = entries.some(([key]) => !UUID_RE.test(key));
+
+  if (!hasNames) return fields; // All keys are UUIDs already
+
+  // Fetch org's custom fields to map names → IDs
+  const { data: orgFields } = await from(supabase, 'custom_fields')
+    .select('id, field_name')
+    .eq('org_id', orgId) as { data: Array<{ id: string; field_name: string }> | null };
+
+  if (!orgFields?.length) return fields;
+
+  const nameToId = new Map(
+    orgFields.map((f) => [f.field_name.toLowerCase().trim(), f.id]),
+  );
+
+  const resolved: Record<string, unknown> = {};
+  for (const [key, value] of entries) {
+    if (UUID_RE.test(key)) {
+      resolved[key] = value;
+    } else {
+      const id = nameToId.get(key.toLowerCase().trim());
+      if (id) resolved[id] = value;
+      // Skip unknown field names silently
+    }
+  }
+
+  return resolved;
 }
 
 async function triggerEnrichment(leadId: string): Promise<void> {
