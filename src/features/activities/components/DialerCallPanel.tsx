@@ -222,7 +222,8 @@ export function DialerCallPanel({
               {callState === 'idle' && (
                 <button
                   onClick={() => onInitiateCall(selectedPhone)}
-                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                  disabled={isSending}
+                  className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
                   title="Ligar via API4COM"
                 >
                   {dialerProvider === 'api4com' ? (
@@ -270,7 +271,7 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && 'Clique para ligar via API4COM'}
+              {callState === 'idle' && (isSending ? 'Iniciando ligação...' : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
