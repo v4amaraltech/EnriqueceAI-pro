@@ -48,6 +48,7 @@ export const CANAL_OPTIONS = [
   'Closer',
   'Lavras',
   'Planning',
+  'Torres',
 ] as const;
 
 export const LEAD_SOURCE_OPTIONS = [
