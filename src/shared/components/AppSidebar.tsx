@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Leads', href: '/leads', icon: Users },
   { label: 'Execução', href: '/atividades', icon: Play },
-  { label: 'Templates', href: '/templates', icon: ListChecks },
+  { label: 'Templates', href: '/activities', icon: ListChecks },
   { label: 'Ligações', href: '/calls', icon: Phone },
   { label: 'Cadências', href: '/cadences', icon: Zap },
   { label: 'Relatórios', href: '/reports', icon: BarChart3 },

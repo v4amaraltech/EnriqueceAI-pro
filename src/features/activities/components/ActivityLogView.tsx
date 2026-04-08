@@ -80,7 +80,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   );
 
   const clearFilters = useCallback(() => {
-    router.push('/templates');
+    router.push('/activities');
   }, [router]);
 
   // Pagination state
