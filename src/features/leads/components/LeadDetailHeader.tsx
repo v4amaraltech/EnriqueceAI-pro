@@ -72,13 +72,27 @@ export function LeadDetailHeader({
   const primaryName = personName ?? companyName ?? '—';
   const secondaryName = personName ? companyName : null;
 
-  const isClosed = lead.status === 'qualified' || lead.status === 'unqualified';
+  const isWon = lead.status === 'qualified' && !!lead.won_at;
+  const isLost = lead.status === 'unqualified';
+  const isClosed = isWon || isLost;
 
   const handleReopen = useCallback(() => {
-    // Reopen to the most advanced stage the lead had reached
-    const reopenStatus = lead.qualified_at || lead.meeting_scheduled_at ? 'qualified' : 'contacted';
+    // Reopen: determine the right status to return to
+    let reopenStatus: string = 'contacted';
+    if (isWon && lead.meeting_scheduled_at) {
+      // Was won → reopen to qualified (reunião agendada) and clear won_at
+      reopenStatus = 'qualified';
+    } else if (isLost && (lead.qualified_at || lead.meeting_scheduled_at)) {
+      reopenStatus = 'qualified';
+    } else if (lead.contacted_at) {
+      reopenStatus = 'contacted';
+    }
+
     startTransition(async () => {
-      const result = await updateLead(lead.id, { status: reopenStatus });
+      const updates: Record<string, unknown> = { status: reopenStatus };
+      // Clear won_at when reopening from won state
+      if (isWon) updates.won_at = null;
+      const result = await updateLead(lead.id, updates);
       if (result.success) {
         toast.success('Lead reaberto');
         router.refresh();
@@ -86,7 +100,7 @@ export function LeadDetailHeader({
         toast.error(result.error);
       }
     });
-  }, [lead.id, lead.qualified_at, lead.meeting_scheduled_at, router]);
+  }, [lead.id, lead.contacted_at, lead.qualified_at, lead.meeting_scheduled_at, isWon, isLost, router]);
 
   return (
     <div className="flex items-start justify-between">
