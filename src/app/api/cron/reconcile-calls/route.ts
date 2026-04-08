@@ -102,7 +102,7 @@ export async function POST(request: Request) {
             gateway,
             webhook: true,
             webhookConstraint: { gateway },
-            metadata: { webhookUrl, webhookVersion: '1.8', webhookTypes: ['channel-hangup'] },
+            metadata: { webhookUrl, webhookVersion: '1.8', webhookTypes: ['channel-hangup', 'channel-answer'] },
           }),
         });
       } catch (webhookErr) {

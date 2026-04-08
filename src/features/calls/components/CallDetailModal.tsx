@@ -27,6 +27,7 @@ import { formatDateTime, formatDuration } from '@/lib/utils/format';
 import type { CallDetail, CallFeedbackRow, CallStatus } from '../types';
 import { callStatusValues } from '../schemas/call.schemas';
 import { addCallFeedback } from '../actions/add-call-feedback';
+import { fetchCallRecording } from '../actions/fetch-call-recording';
 import { updateCallStatus } from '../actions/update-call-status';
 import { CallStatusIcon } from './CallStatusIcon';
 
@@ -55,6 +56,8 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
   const [feedbackContent, setFeedbackContent] = useState('');
   const [feedbackList, setFeedbackList] = useState<CallFeedbackRow[]>([]);
   const [currentStatus, setCurrentStatus] = useState<CallStatus | null>(null);
+  const [fetchedRecordingUrl, setFetchedRecordingUrl] = useState<string | null>(null);
+  const [isFetchingRecording, setIsFetchingRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Sync state when call changes
@@ -104,12 +107,32 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
     });
   }, [activeCall, feedbackContent, onUpdated]);
 
+  const handleFetchRecording = useCallback(async () => {
+    if (!activeCall) return;
+    setIsFetchingRecording(true);
+    try {
+      const result = await fetchCallRecording(activeCall.id);
+      if (result.success && result.data.recording_url) {
+        setFetchedRecordingUrl(result.data.recording_url);
+        toast.success('Gravação encontrada!');
+        onUpdated?.();
+      } else if (result.success) {
+        toast.info('Gravação ainda não disponível na API4COM');
+      } else {
+        toast.error(result.error);
+      }
+    } finally {
+      setIsFetchingRecording(false);
+    }
+  }, [activeCall, onUpdated]);
+
   const handleOpenChange = useCallback(
     (isOpen: boolean) => {
       if (!isOpen) {
         setFeedbackContent('');
         setFeedbackList([]);
         setCurrentStatus(null);
+        setFetchedRecordingUrl(null);
         onClose();
       }
     },
@@ -130,36 +153,50 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
           <div className="flex-1 overflow-y-auto">
             {/* Audio Player */}
             <div className="border-b px-6 py-4">
-              {activeCall.recording_url ? (
+              {(activeCall.recording_url || fetchedRecordingUrl) ? (
                 <div className="space-y-2 rounded-lg bg-[var(--muted)] p-4">
                   <div className="flex items-center gap-2">
                     <Mic className="h-4 w-4 text-[var(--primary)]" />
                     <span className="text-xs font-medium">Gravação da ligação</span>
-                    <span className="ml-auto text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    <span className="ml-auto text-sm tabular-nums text-muted-foreground">
                       {formatDuration(activeCall.duration_seconds)}
                     </span>
                   </div>
                   <audio
                     controls
-                    src={activeCall.recording_url}
+                    src={fetchedRecordingUrl ?? activeCall.recording_url!}
                     className="w-full h-10"
                     preload="metadata"
                   />
                 </div>
               ) : (
-                <div className="flex items-center gap-3 rounded-lg bg-[var(--muted)] p-4">
-                  <Mic className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-                  <div className="flex-1">
-                    <div className="h-2 rounded-full bg-[var(--border)]">
-                      <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+                <div className="space-y-3 rounded-lg bg-[var(--muted)] p-4">
+                  <div className="flex items-center gap-3">
+                    <Mic className="h-5 w-5 text-muted-foreground" />
+                    <div className="flex-1">
+                      <div className="h-2 rounded-full bg-[var(--border)]">
+                        <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Gravação não disponível
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                      Gravação não disponível
-                    </p>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {formatDuration(activeCall.duration_seconds)}
+                    </span>
                   </div>
-                  <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    {formatDuration(activeCall.duration_seconds)}
-                  </span>
+                  {activeCall.duration_seconds > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={isFetchingRecording}
+                      onClick={handleFetchRecording}
+                    >
+                      <Mic className="mr-2 h-4 w-4" />
+                      {isFetchingRecording ? 'Buscando gravação...' : 'Buscar gravação na API4COM'}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

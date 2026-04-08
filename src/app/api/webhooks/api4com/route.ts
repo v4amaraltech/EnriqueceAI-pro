@@ -33,42 +33,70 @@ const hangupCauseToStatus: Record<string, CallStatus> = {
   // NORMAL_CLEARING handled separately below (depends on answeredAt)
 };
 
+/** Find a matching call record by api4com_call_id or caller+phone fallback */
+async function findMatchingCall(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  body: Api4ComWebhookPayload,
+): Promise<{ id: string; status: CallStatus; recording_url: string | null } | null> {
+  // Try by api4com_call_id first
+  const { data: call } = (await from(supabase, 'calls')
+    .select('id, status, recording_url')
+    .eq('metadata->>api4com_call_id', body.id)
+    .maybeSingle()) as { data: { id: string; status: CallStatus; recording_url: string | null } | null };
+
+  if (call) return call;
+
+  // Fallback: try matching by caller (ramal) + called (phone)
+  const calledNormalized = body.called.replace(/\D/g, '');
+  const { data: fallbackCall } = (await from(supabase, 'calls')
+    .select('id, status, recording_url')
+    .eq('origin', body.caller)
+    .like('destination', `%${calledNormalized.slice(-8)}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()) as { data: { id: string; status: CallStatus; recording_url: string | null } | null };
+
+  return fallbackCall;
+}
+
 /** Process an API4COM event (runs in background via after()) */
 async function processApi4ComEvent(
   body: Api4ComWebhookPayload,
   supabase: ReturnType<typeof createServiceRoleClient>,
 ): Promise<void> {
-  // Correlate with our calls table via metadata->api4com_call_id
-  const { data: call } = (await from(supabase, 'calls')
-    .select('id, status')
-    .eq('metadata->>api4com_call_id', body.id)
-    .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
+  const call = await findMatchingCall(supabase, body);
 
   if (!call) {
-    // Fallback: try matching by caller (ramal) + called (phone)
-    const calledNormalized = body.called.replace(/\D/g, '');
-    const { data: fallbackCall } = (await from(supabase, 'calls')
-      .select('id, status')
-      .eq('origin', body.caller)
-      .like('destination', `%${calledNormalized.slice(-8)}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string; status: CallStatus } | null };
-
-    if (!fallbackCall) {
-      logger.warn('No matching call found', {
-        api4comId: body.id,
-        caller: body.caller,
-        called: body.called,
-      });
-      return;
-    }
-
-    await updateCallFromWebhook(supabase, fallbackCall.id, fallbackCall.status, body);
-    logger.info('Call updated via fallback', { callId: fallbackCall.id, api4comId: body.id });
+    logger.warn('No matching call found', {
+      api4comId: body.id,
+      caller: body.caller,
+      called: body.called,
+      eventType: body.eventType,
+    });
     return;
   }
 
+  if (body.eventType === 'channel-answer') {
+    // channel-answer: save recordUrl early if available
+    const updates: Record<string, unknown> = {};
+    if (body.recordUrl && !call.recording_url) {
+      updates.recording_url = body.recordUrl;
+    }
+    if (body.startedAt) {
+      updates.started_at = body.startedAt;
+    }
+    if (Object.keys(updates).length > 0) {
+      await from(supabase, 'calls').update(updates).eq('id', call.id);
+      logger.info('Call updated from channel-answer', {
+        callId: call.id,
+        api4comId: body.id,
+        hasRecording: !!body.recordUrl,
+      });
+    }
+    return;
+  }
+
+  // channel-hangup: full update
   await updateCallFromWebhook(supabase, call.id, call.status, body);
   logger.info('Call updated', { callId: call.id, api4comId: body.id });
 }
@@ -99,29 +127,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  if (body.eventType !== 'channel-hangup') {
-    logger.info('Ignoring non-hangup event', { eventType: body.eventType });
+  if (body.eventType !== 'channel-hangup' && body.eventType !== 'channel-answer') {
+    logger.info('Ignoring event', { eventType: body.eventType });
     return NextResponse.json({ received: true });
   }
 
   const supabase = createServiceRoleClient();
 
+  // Use composite event ID to allow both channel-answer and channel-hangup for same call
+  const compositeEventId = `${body.id}:${body.eventType}`;
+
   // Idempotency check
-  if (await isEventProcessed(supabase, 'api4com', body.id)) {
-    logger.info('Event already processed', { id: body.id });
+  if (await isEventProcessed(supabase, 'api4com', compositeEventId)) {
+    logger.info('Event already processed', { id: body.id, eventType: body.eventType });
     return NextResponse.json({ received: true });
   }
 
   // Mark as received (pending) before returning response
-  await markEventReceived(supabase, 'api4com', body.id, 'channel-hangup');
+  await markEventReceived(supabase, 'api4com', compositeEventId, body.eventType);
 
   // Process in background after response is sent
   after(() =>
     processWithRetry({
       supabase,
       provider: 'api4com',
-      eventId: body.id,
-      eventType: 'channel-hangup',
+      eventId: compositeEventId,
+      eventType: body.eventType,
       process: () => processApi4ComEvent(body, supabase),
     }),
   );
@@ -137,8 +168,12 @@ async function updateCallFromWebhook(
 ) {
   const updates: Record<string, unknown> = {
     duration_seconds: payload.duration,
-    recording_url: payload.recordUrl || null,
   };
+
+  // Only update recording_url if webhook provides one (don't overwrite with null)
+  if (payload.recordUrl) {
+    updates.recording_url = payload.recordUrl;
+  }
 
   // Set started_at from webhook if available
   if (payload.startedAt) {
