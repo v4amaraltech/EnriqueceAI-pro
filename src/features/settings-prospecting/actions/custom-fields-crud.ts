@@ -21,7 +21,7 @@ const customFieldSettingsSchema = z.object({
 
 const addCustomFieldSchema = z.object({
   fieldName: z.string().min(1, 'Nome do campo é obrigatório').max(200),
-  fieldType: z.enum(['text', 'number', 'select', 'date', 'boolean']),
+  fieldType: z.enum(['text', 'textarea', 'number', 'currency', 'select', 'date', 'datetime', 'boolean', 'url']),
   options: z.array(z.string()).optional(),
   settings: customFieldSettingsSchema.optional(),
 });
