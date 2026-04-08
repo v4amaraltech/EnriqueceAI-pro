@@ -29,7 +29,7 @@ export function ActivityPagination({ total, page, perPage, onPageChange, onPerPa
   if (total === 0) return null;
 
   return (
-    <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-lg border bg-[var(--card)] px-4 py-3 shadow-sm mt-4">
+    <div className="flex items-center justify-between rounded-lg border bg-[var(--card)] px-4 py-3 mt-4">
       <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
         Mostrando {from}–{to} de {total} atividade{total !== 1 ? 's' : ''}
       </p>
