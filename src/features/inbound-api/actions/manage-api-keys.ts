@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { logAudit } from '@/lib/audit/audit-log';
-import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { ApiKeySafe } from '../types';
@@ -49,13 +49,9 @@ export async function createApiKeyAction(
 }
 
 export async function listApiKeysAction(): Promise<ActionResult<ApiKeySafe[]>> {
-  let orgId: string;
-  let supabase: Awaited<ReturnType<typeof getManagerOrgId>>['supabase'];
-  try {
-    ({ orgId, supabase } = await getManagerOrgId());
-  } catch {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
 
   const { data, error } = await from(supabase, 'api_keys')
     .select('id, name, key_prefix, scopes, is_active, last_used_at, expires_at, created_at')

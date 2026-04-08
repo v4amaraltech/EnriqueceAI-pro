@@ -1,9 +1,9 @@
-import { requireManager } from '@/lib/auth/require-manager';
+import { requireAuth } from '@/lib/auth/require-auth';
 import { listApiKeysAction } from '@/features/inbound-api/actions/manage-api-keys';
 import { ApiKeyManager } from '@/features/inbound-api/components/ApiKeyManager';
 
 export default async function ApiKeysPage() {
-  await requireManager();
+  await requireAuth();
 
   const result = await listApiKeysAction();
   const keys = result.success ? result.data : [];
