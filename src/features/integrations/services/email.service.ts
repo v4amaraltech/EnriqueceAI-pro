@@ -39,7 +39,14 @@ export interface GmailConnection {
 function injectOpenTracking(html: string, interactionId: string): string {
   const baseUrl = getAppUrl();
   const pixel = `<img src="${baseUrl}/api/track/open/${interactionId}" width="1" height="1" style="display:none" alt="" />`;
-  return html.replace('</body>', `${pixel}</body>`);
+  // Try </body> first, then </html>, otherwise append at end (handles HTML fragments)
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${pixel}</body>`);
+  }
+  if (html.includes('</html>')) {
+    return html.replace('</html>', `${pixel}</html>`);
+  }
+  return html + pixel;
 }
 
 /**
