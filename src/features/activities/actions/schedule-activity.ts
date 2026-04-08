@@ -49,10 +49,16 @@ export async function scheduleActivity(
 
   // Complete active cadence enrollments if requested
   if (completeEnrollments) {
-    await from(supabase, 'cadence_enrollments')
+    const { error: enrollError, count } = await from(supabase, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('lead_id', leadId)
-      .in('status', ['active', 'paused']);
+      .in('status', ['active', 'paused'])
+      .select('id', { count: 'exact', head: true });
+    if (enrollError) {
+      console.error('[schedule-activity] Failed to complete enrollments:', enrollError.message, 'leadId=', leadId);
+    } else {
+      console.warn('[schedule-activity] Completed', count ?? 0, 'enrollments for lead=', leadId);
+    }
   }
 
   // Record system interaction for timeline
