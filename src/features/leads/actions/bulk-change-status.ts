@@ -28,8 +28,17 @@ export async function bulkChangeStatus(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
+  const now = new Date().toISOString();
+  const timestampField: Record<string, string> = {
+    contacted: 'contacted_at',
+    qualified: 'qualified_at',
+  };
+  const updates: Record<string, unknown> = { status: newStatus };
+  const tsField = timestampField[newStatus];
+  if (tsField) updates[tsField] = now;
+
   const { error } = await from(supabase, 'leads')
-    .update({ status: newStatus } as Record<string, unknown>)
+    .update(updates)
     .eq('org_id', orgId)
     .in('id', leadIds);
 

@@ -60,13 +60,17 @@ export async function scheduleMeeting(
         performed_by: userId,
       } as Record<string, unknown>);
 
-    // Save closer_id on lead if provided
+    // Update lead: meeting_scheduled_at + closer_id if provided
+    const leadUpdates: Record<string, unknown> = {
+      meeting_scheduled_at: new Date().toISOString(),
+    };
     if (input.closerId) {
-      await from(supabase, 'leads')
-        .update({ closer_id: input.closerId } as Record<string, unknown>)
-        .eq('id', leadId)
-        .eq('org_id', orgId);
+      leadUpdates.closer_id = input.closerId;
     }
+    await from(supabase, 'leads')
+      .update(leadUpdates)
+      .eq('id', leadId)
+      .eq('org_id', orgId);
 
     // Complete active/paused cadence enrollments — meeting scheduled means cadence is done
     await from(supabase, 'cadence_enrollments')

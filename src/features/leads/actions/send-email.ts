@@ -67,7 +67,7 @@ export async function sendManualEmail(
 
   // Update lead status to contacted if still new
   await from(supabase, 'leads')
-    .update({ status: 'contacted' } as Record<string, unknown>)
+    .update({ status: 'contacted', contacted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('status', 'new');
 

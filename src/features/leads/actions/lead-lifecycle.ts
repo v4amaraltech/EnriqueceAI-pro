@@ -20,7 +20,7 @@ export async function archiveLead(
   const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'leads')
-    .update({ status: 'archived' } as Record<string, unknown>)
+    .update({ status: 'archived', archived_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
 

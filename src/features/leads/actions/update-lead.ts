@@ -79,6 +79,18 @@ export async function updateLead(
     delete safeUpdates.canal;
   }
 
+  // Auto-set stage timestamps when status changes
+  if ('status' in safeUpdates) {
+    const now = new Date().toISOString();
+    const statusTimestamps: Record<string, string> = {
+      contacted: 'contacted_at',
+      qualified: 'qualified_at',
+      archived: 'archived_at',
+    };
+    const tsField = statusTimestamps[safeUpdates.status as string];
+    if (tsField) safeUpdates[tsField] = now;
+  }
+
   // Fetch current lead to detect changes (for audit + email/phone resume)
   const { data: currentLead } = (await from(supabase, 'leads')
     .select('*')
