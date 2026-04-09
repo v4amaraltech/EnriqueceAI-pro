@@ -3,8 +3,11 @@
 import { useTransition, useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 
+import { Info, Linkedin, MessageCircle } from 'lucide-react';
+
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -17,12 +20,11 @@ import { Label } from '@/shared/components/ui/label';
 import { Separator } from '@/shared/components/ui/separator';
 import { Textarea } from '@/shared/components/ui/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/tooltip';
 
 import type { ChannelType } from '@/features/cadences/types';
 import { createActivityTemplate, updateActivityTemplate } from '../actions/manage-activity-templates';
@@ -114,58 +116,64 @@ function ActivityTemplateDialogContent({
 
   const preview = instructions.trim() ? renderTemplatePreview(instructions) : '';
 
+  const channelLabels: Record<string, string> = {
+    phone: 'ligação', email: 'e-mail', whatsapp: 'WhatsApp',
+    linkedin: 'social point', research: 'pesquisa',
+  };
+  const resolvedChannel = isSocialPoint ? socialChannel : channel;
+  const channelLabel = channelLabels[resolvedChannel] ?? resolvedChannel;
+
   return (
-    <DialogContent className="sm:max-w-2xl">
+    <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{isEdit ? 'Editar template' : 'Novo template'}</DialogTitle>
+        <DialogTitle>
+          {isEdit ? `Editar atividade de ${channelLabel}` : `Nova atividade de ${channelLabel}`}
+        </DialogTitle>
       </DialogHeader>
 
-      <div className="flex flex-col gap-6 py-2">
-        {/* Informações básicas */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium">Informações básicas</h4>
-          <div className={isSocialPoint && !isEdit ? 'grid grid-cols-2 gap-4' : ''}>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="at-name">Nome</Label>
-              <Input
-                id="at-name"
-                placeholder="Ex: Ligação de follow-up"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
+      <div className="flex flex-col gap-5 py-2">
+        {/* Dados Gerais */}
+        <div className="space-y-1">
+          <h4 className="font-semibold">Dados Gerais</h4>
+          <p className="text-muted-foreground text-xs">
+            Estas informações não são exibidas para seu cliente.
+          </p>
+        </div>
 
-            {isSocialPoint && !isEdit && (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="at-channel">Canal</Label>
-                <Select value={socialChannel} onValueChange={(v) => setSocialChannel(v as 'linkedin' | 'whatsapp')}>
-                  <SelectTrigger id="at-channel">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="linkedin">LinkedIn</SelectItem>
-                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
+        <div className="space-y-3">
+          <Label htmlFor="at-name">Nome da atividade:</Label>
+          <Input
+            id="at-name"
+            placeholder={`Ex: Mensagem de ${channelLabel}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
 
         <Separator />
 
         {/* Campos dinâmicos */}
         <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-medium">Campos dinâmicos</h4>
-            <p className="text-muted-foreground text-xs mt-1">
-              Clique ou arraste para inserir no texto de instruções.
-            </p>
+          <div className="flex items-center gap-2">
+            <h4 className="font-semibold">Campos dinâmicos</h4>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[250px] text-xs">
+                  Clique nos campos para inserir variáveis dinâmicas no texto de instruções. Elas serão substituídas pelos dados reais do lead e vendedor.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
+          <p className="text-muted-foreground text-xs">
+            Clique ou arraste para inserir.
+          </p>
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground mr-1">Lead:</span>
+              <span className="text-xs font-semibold text-muted-foreground mr-1">Lead:</span>
               {TEMPLATE_VARIABLES.filter((v) => v.category === 'lead').map((v) => (
                 <Badge
                   key={v.key}
@@ -178,7 +186,7 @@ function ActivityTemplateDialogContent({
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground mr-1">Vendedor:</span>
+              <span className="text-xs font-semibold text-muted-foreground mr-1">Vendedor:</span>
               {TEMPLATE_VARIABLES.filter((v) => v.category === 'vendedor').map((v) => (
                 <Badge
                   key={v.key}
@@ -197,23 +205,55 @@ function ActivityTemplateDialogContent({
 
         {/* Instruções */}
         <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-medium">Instruções</h4>
-            <p className="text-muted-foreground text-xs mt-1">
-              Descreva o que o SDR deve fazer nesta atividade.
-            </p>
-          </div>
-
+          <h4 className="font-semibold">Instruções</h4>
           <Textarea
             ref={textareaRef}
             id="at-instructions"
-            placeholder="Descreva o que o SDR deve fazer nesta atividade..."
+            placeholder={`Ex: Fala, {{primeiro_nome}}! Como estão as coisas por aí?\n\nMe chamo {{nome_vendedor}}, sou assessor na V4 Company...`}
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
-            rows={8}
-            className="min-h-[160px]"
+            rows={10}
+            className="min-h-[200px]"
           />
         </div>
+
+        {/* Rede preferencial (social point only) */}
+        {isSocialPoint && !isEdit && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <h4 className="font-semibold">Rede preferencial</h4>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'gap-2',
+                    socialChannel === 'linkedin' && 'border-primary bg-primary/10 text-primary',
+                  )}
+                  onClick={() => setSocialChannel('linkedin')}
+                >
+                  <Linkedin className="h-4 w-4" />
+                  LinkedIn
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'gap-2',
+                    socialChannel === 'whatsapp' && 'border-primary bg-primary/10 text-primary',
+                  )}
+                  onClick={() => setSocialChannel('whatsapp')}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Preview */}
         {preview && (
