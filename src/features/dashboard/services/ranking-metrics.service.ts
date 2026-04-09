@@ -153,11 +153,13 @@ export async function fetchActivitiesRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
 
-  // Get interactions in the period with performed_by for direct attribution
-  // Note: Supabase default limit is 1000 rows — set explicit higher limit
+  // Get actual activities (exclude system events, tracking events like opened/clicked/bounced)
   let interactionsQuery = from(supabase, 'interactions')
     .select('lead_id, type, performed_by')
     .eq('org_id', orgId)
+    .eq('type', 'sent')
+    .not('channel', 'eq', 'system')
+    .not('channel', 'eq', 'calendar')
     .gte('created_at', start)
     .lt('created_at', end)
     .limit(10000);
