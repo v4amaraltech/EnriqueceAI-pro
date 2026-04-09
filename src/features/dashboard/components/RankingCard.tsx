@@ -123,7 +123,7 @@ function RankingContent({
                 <span className="w-20 text-center">{secondaryColumnLabel}</span>
               )}
               {primaryColumnLabel && (
-                <span className="w-20 text-center inline-flex items-center justify-center gap-1">
+                <span className="w-24 text-center inline-flex items-center justify-center gap-1 whitespace-nowrap">
                   {primaryColumnLabel}
                   {primaryColumnTooltip && (
                     <TooltipProvider>
@@ -172,7 +172,7 @@ function RankingContent({
                     </span>
                   )}
                   {primaryColumnLabel && (
-                    <span className="w-20 text-center text-sm font-medium">
+                    <span className="w-24 text-center text-sm font-medium">
                       {primaryValueDivisor && primaryValueDivisor > 0
                         ? Math.round(sdr.value / primaryValueDivisor)
                         : sdr.value}
