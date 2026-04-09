@@ -37,9 +37,10 @@ interface LeadListViewProps {
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
+  canalOptions?: string[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions }: LeadListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -146,7 +147,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} currentUserId={currentUserId} />
+        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} currentUserId={currentUserId} />
       </Suspense>
 
       {/* Table or filtered empty */}

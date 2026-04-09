@@ -53,10 +53,11 @@ interface LeadFiltersProps {
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
+  canalOptions?: string[];
   currentUserId?: string;
 }
 
-export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, currentUserId }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, canalOptions, currentUserId }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -70,6 +71,7 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
   const currentAssigned = searchParams.get('assigned_to') ?? '';
   const currentCadence = searchParams.get('cadence_id') ?? '';
   const currentCnae = searchParams.get('cnae') ?? '';
+  const currentCanal = searchParams.get('canal') ?? '';
 
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,6 +103,7 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
   const activeUf = overrides.uf ?? (currentUf || ALL_VALUE);
   const activeSource = overrides.lead_source ?? (currentSource || ALL_VALUE);
   const activeCnae = overrides.cnae ?? (currentCnae || ALL_VALUE);
+  const activeCanal = overrides.canal ?? (currentCanal || ALL_VALUE);
   const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
   const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);
 
@@ -128,7 +131,7 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
     filterDebounceRef.current = setTimeout(flushFilterParams, 300);
   }
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentSearch || currentAssigned || currentCadence || currentCnae;
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentCanal || currentSearch || currentAssigned || currentCadence || currentCnae;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -216,6 +219,29 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, curre
             </SelectContent>
           </Select>
         </div>
+
+        {/* Sub-origem */}
+        {canalOptions && canalOptions.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">Sub-origem</span>
+            <Select
+              value={activeCanal}
+              onValueChange={(v) => handleFilterChange('canal', v)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                {canalOptions.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Cadência */}
         {cadences && cadences.length > 0 && (

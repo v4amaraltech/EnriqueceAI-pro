@@ -89,6 +89,7 @@ export const leadFiltersSchema = z.object({
   cnae: z.string().optional(),
   uf: z.string().max(2).optional(),
   lead_source: z.string().optional(),
+  canal: z.string().optional(),
   search: z.string().optional(),
   assigned_to: z.string().optional(),
   cadence_id: z.string().optional(),

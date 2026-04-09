@@ -57,6 +57,9 @@ export async function fetchLeads(
   if (filters.lead_source) {
     query = query.eq('lead_source', filters.lead_source);
   }
+  if (filters.canal) {
+    query = query.eq('canal', filters.canal);
+  }
 
   // Filter by cadence enrollment (cadence_enrollments has no org_id — scope via cadence_id)
   if (filters.cadence_id) {
@@ -206,6 +209,9 @@ export async function fetchFilteredLeadIds(
   if (filters.lead_source) {
     query = query.eq('lead_source', filters.lead_source);
   }
+  if (filters.canal) {
+    query = query.eq('canal', filters.canal);
+  }
   if (filters.search) {
     const term = filters.search.replace(/[%_]/g, '');
     query = query.or(
@@ -246,5 +252,29 @@ export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
   }
 
   const unique = [...new Set((data ?? []).map((r) => r.cnae))];
+  return { success: true, data: unique };
+}
+
+export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  const { data, error } = (await from(supabase, 'leads')
+    .select('canal')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .not('canal', 'is', null)
+    .not('canal', 'eq', '')
+    .order('canal')) as {
+    data: Array<{ canal: string }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar sub-origens' };
+  }
+
+  const unique = [...new Set((data ?? []).map((r) => r.canal))];
   return { success: true, data: unique };
 }
