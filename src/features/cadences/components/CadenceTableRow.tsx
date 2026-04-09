@@ -106,22 +106,20 @@ export function CadenceTableRow({
         <PriorityIcon priority={cadence.priority} className="h-5 w-5" />
       </div>
 
-      {/* Name */}
-      <div className="w-48 shrink-0">
+      {/* Name + Description */}
+      <div className="min-w-0 flex-1">
         <button
           type="button"
           onClick={() => router.push(`/cadences/${cadence.id}`)}
-          className="truncate text-sm font-medium text-[var(--foreground)] hover:text-[var(--primary)] hover:underline"
+          className="block w-full truncate text-left text-sm font-medium text-[var(--foreground)] hover:text-[var(--primary)] hover:underline"
         >
           {cadence.name}
         </button>
-      </div>
-
-      {/* Description */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm italic text-[var(--foreground)]/80">
-          {cadence.description || ''}
-        </p>
+        {cadence.description && (
+          <p className="truncate text-xs text-muted-foreground mt-0.5">
+            {cadence.description}
+          </p>
+        )}
       </div>
 
       {/* Status badge */}

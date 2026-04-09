@@ -407,12 +407,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
             <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--muted)]/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-[var(--foreground)]">
               <div className="w-7 shrink-0" />
               <div className="w-6 shrink-0" />
-              <div className="w-48 shrink-0">
+              <div className="min-w-0 flex-1">
                 <button type="button" className="flex items-center hover:text-[var(--primary)]" onClick={() => handleSort('name')}>
                   Nome {sortIcon('name')}
                 </button>
               </div>
-              <div className="min-w-0 flex-1">Descrição</div>
               <div className="w-20 shrink-0 text-center">Status</div>
               <div className="w-16 shrink-0 text-center">Passos</div>
               <div className="w-16 shrink-0 text-center">Leads</div>
