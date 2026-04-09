@@ -1,9 +1,29 @@
 'use client';
 
-import { useTransition, useState, useRef, useCallback } from 'react';
+import { useTransition, useState, useCallback } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import LinkExtension from '@tiptap/extension-link';
+import Placeholder from '@tiptap/extension-placeholder';
 import { toast } from 'sonner';
 
-import { Info, Linkedin, MessageCircle } from 'lucide-react';
+import {
+  Bold,
+  Braces,
+  Facebook,
+  Globe,
+  Heading,
+  Info,
+  Instagram,
+  Italic,
+  Link,
+  Linkedin,
+  List,
+  ListOrdered,
+  MessageCircle,
+  Twitter,
+  Underline as UnderlineIcon,
+} from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -18,7 +38,6 @@ import {
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Separator } from '@/shared/components/ui/separator';
-import { Textarea } from '@/shared/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -28,8 +47,17 @@ import {
 
 import type { ChannelType } from '@/features/cadences/types';
 import { createActivityTemplate, updateActivityTemplate } from '../actions/manage-activity-templates';
-import { TEMPLATE_VARIABLES, renderTemplatePreview } from '../constants/template-variables';
+import { TEMPLATE_VARIABLES } from '../constants/template-variables';
 import type { ActivityTemplateRow } from '../types';
+
+const SOCIAL_NETWORKS = [
+  { key: 'linkedin', label: 'LinkedIn', icon: Linkedin },
+  { key: 'facebook', label: 'Facebook', icon: Facebook },
+  { key: 'twitter', label: 'Twitter', icon: Twitter },
+  { key: 'instagram', label: 'Instagram', icon: Instagram },
+  { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { key: 'outro', label: 'Outro', icon: Globe },
+] as const;
 
 interface Props {
   open: boolean;
@@ -59,41 +87,73 @@ function ActivityTemplateDialogContent({
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(template?.name ?? '');
-  const [instructions, setInstructions] = useState(template?.instructions ?? '');
-  const [socialChannel, setSocialChannel] = useState<'linkedin' | 'whatsapp'>(
+  const [socialChannel, setSocialChannel] = useState<string>(
     template?.channel === 'linkedin' || template?.channel === 'whatsapp'
       ? template.channel
       : 'linkedin',
   );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isEdit = !!template;
 
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      LinkExtension.configure({
+        openOnClick: false,
+      }),
+      Placeholder.configure({
+        placeholder: 'Fala, {{primeiro_nome}}! Como estão as coisas por aí?\n\nMe chamo {{nome_vendedor}}, sou assessor na V4 Company...',
+      }),
+    ],
+    content: template?.instructions
+      ? template.instructions.replace(/\n/g, '<br/>')
+      : '',
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm dark:prose-invert max-w-none min-h-[200px] px-4 py-3 focus:outline-none',
+      },
+    },
+  });
+
   const insertVariable = useCallback((placeholder: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+    if (!editor) return;
+    editor.chain().focus().insertContent(placeholder).run();
+  }, [editor]);
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const before = instructions.slice(0, start);
-    const after = instructions.slice(end);
-    const newValue = before + placeholder + after;
-
-    setInstructions(newValue);
-
-    requestAnimationFrame(() => {
-      const cursorPos = start + placeholder.length;
-      textarea.focus();
-      textarea.setSelectionRange(cursorPos, cursorPos);
-    });
-  }, [instructions]);
+  function handleLink() {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('URL:', previousUrl ?? 'https://');
+    if (url === null) return;
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }
 
   function handleSubmit() {
+    const html = editor?.getHTML() ?? '';
+    // Convert HTML to plain text for storage (strip tags)
+    const plainText = html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>\s*<p>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
     const resolvedChannel = isSocialPoint ? socialChannel : channel;
 
     startTransition(async () => {
       if (isEdit) {
-        const result = await updateActivityTemplate(template.id, { name, instructions });
+        const result = await updateActivityTemplate(template.id, { name, instructions: plainText });
         if (result.success) {
           toast.success('Template atualizado');
           onSaved(result.data);
@@ -102,7 +162,7 @@ function ActivityTemplateDialogContent({
           toast.error(result.error);
         }
       } else {
-        const result = await createActivityTemplate({ name, channel: resolvedChannel, instructions });
+        const result = await createActivityTemplate({ name, channel: resolvedChannel as ChannelType, instructions: plainText });
         if (result.success) {
           toast.success('Template criado');
           onSaved(result.data);
@@ -113,8 +173,6 @@ function ActivityTemplateDialogContent({
       }
     });
   }
-
-  const preview = instructions.trim() ? renderTemplatePreview(instructions) : '';
 
   const channelLabels: Record<string, string> = {
     phone: 'ligação', email: 'e-mail', whatsapp: 'WhatsApp',
@@ -203,18 +261,98 @@ function ActivityTemplateDialogContent({
 
         <Separator />
 
-        {/* Instruções */}
+        {/* Instruções com Rich Text Editor */}
         <div className="space-y-3">
           <h4 className="font-semibold">Instruções</h4>
-          <Textarea
-            ref={textareaRef}
-            id="at-instructions"
-            placeholder={`Ex: Fala, {{primeiro_nome}}! Como estão as coisas por aí?\n\nMe chamo {{nome_vendedor}}, sou assessor na V4 Company...`}
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            rows={10}
-            className="min-h-[200px]"
-          />
+
+          <div className="rounded-lg border bg-[var(--card)] overflow-hidden">
+            {/* Editor content */}
+            <EditorContent editor={editor} className="min-h-[200px]" />
+
+            {/* Toolbar bottom */}
+            {editor && (
+              <div className="flex flex-wrap items-center gap-0.5 border-t px-2 py-1.5 bg-[var(--muted)]/30">
+                {/* Bold */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('bold') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                  title="Negrito"
+                >
+                  <Bold className="h-3.5 w-3.5" />
+                </Button>
+                {/* Italic */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('italic') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                  title="Itálico"
+                >
+                  <Italic className="h-3.5 w-3.5" />
+                </Button>
+                {/* Underline - use strike as fallback since underline needs extension */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('strike') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleStrike().run()}
+                  title="Tachado"
+                >
+                  <UnderlineIcon className="h-3.5 w-3.5" />
+                </Button>
+
+                <Separator orientation="vertical" className="mx-1 h-4" />
+
+                {/* Heading */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('heading') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                  title="Título"
+                >
+                  <Heading className="h-3.5 w-3.5" />
+                </Button>
+                {/* Bullet list */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('bulletList') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleBulletList().run()}
+                  title="Lista"
+                >
+                  <List className="h-3.5 w-3.5" />
+                </Button>
+                {/* Ordered list */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('orderedList') && 'bg-[var(--accent)]')}
+                  onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                  title="Lista numerada"
+                >
+                  <ListOrdered className="h-3.5 w-3.5" />
+                </Button>
+
+                <Separator orientation="vertical" className="mx-1 h-4" />
+
+                {/* Link */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className={cn('h-7 w-7 p-0', editor.isActive('link') && 'bg-[var(--accent)]')}
+                  onClick={handleLink}
+                  title="Link"
+                >
+                  <Link className="h-3.5 w-3.5" />
+                </Button>
+                {/* Variables */}
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className="h-7 gap-1 px-2"
+                  onClick={() => insertVariable('{{primeiro_nome}}')}
+                  title="Inserir variável"
+                >
+                  <Braces className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Rede preferencial (social point only) */}
@@ -222,47 +360,43 @@ function ActivityTemplateDialogContent({
           <>
             <Separator />
             <div className="space-y-3">
-              <h4 className="font-semibold">Rede preferencial</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold">Rede preferencial</h4>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[200px] text-xs">
+                      Selecione a rede social preferencial para esta atividade.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'gap-2',
-                    socialChannel === 'linkedin' && 'border-primary bg-primary/10 text-primary',
-                  )}
-                  onClick={() => setSocialChannel('linkedin')}
-                >
-                  <Linkedin className="h-4 w-4" />
-                  LinkedIn
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'gap-2',
-                    socialChannel === 'whatsapp' && 'border-primary bg-primary/10 text-primary',
-                  )}
-                  onClick={() => setSocialChannel('whatsapp')}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  WhatsApp
-                </Button>
+                {SOCIAL_NETWORKS.map((net) => {
+                  const Icon = net.icon;
+                  const isActive = socialChannel === net.key;
+                  return (
+                    <Button
+                      key={net.key}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        'gap-2 px-4',
+                        isActive && 'border-primary bg-primary/10 text-primary',
+                      )}
+                      onClick={() => setSocialChannel(net.key)}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {net.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           </>
-        )}
-
-        {/* Preview */}
-        {preview && (
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Preview</Label>
-            <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap">
-              {highlightVariables(preview)}
-            </div>
-          </div>
         )}
       </div>
 
@@ -271,60 +405,9 @@ function ActivityTemplateDialogContent({
           Cancelar
         </Button>
         <Button onClick={handleSubmit} disabled={isPending || !name.trim()}>
-          {isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar'}
+          {isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Criar'}
         </Button>
       </DialogFooter>
     </DialogContent>
   );
-}
-
-function highlightVariables(text: string): React.ReactNode {
-  const highlights: Array<{ key: string; value: string }> = [];
-  let remaining = text;
-  let keyIndex = 0;
-
-  for (const v of TEMPLATE_VARIABLES) {
-    const segments = remaining.split(v.sampleValue);
-    if (segments.length <= 1) continue;
-
-    remaining = '';
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      if (seg !== undefined) {
-        remaining += seg;
-      }
-      if (i < segments.length - 1) {
-        const key = `hl-${String(keyIndex)}`;
-        remaining += `\x00${key}\x00`;
-        highlights.push({ key, value: v.sampleValue });
-        keyIndex++;
-      }
-    }
-  }
-
-  if (highlights.length === 0) return text;
-
-  const finalParts: React.ReactNode[] = [];
-  const pattern = new RegExp(`\x00(hl-\\d+)\x00`);
-  const tokens = remaining.split(pattern);
-
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token === undefined) continue;
-
-    if (i % 2 === 0) {
-      if (token) finalParts.push(token);
-    } else {
-      const match = highlights.find((h) => h.key === token);
-      if (match) {
-        finalParts.push(
-          <span key={match.key} className="font-semibold text-primary">
-            {match.value}
-          </span>,
-        );
-      }
-    }
-  }
-
-  return finalParts;
 }
