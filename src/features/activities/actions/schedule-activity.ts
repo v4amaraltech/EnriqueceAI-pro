@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 
@@ -47,17 +48,15 @@ export async function scheduleActivity(
     return { success: false, error: error?.message ?? 'Erro ao agendar atividade' };
   }
 
-  // Complete active cadence enrollments if requested
+  // Complete active cadence enrollments if requested (use service role to bypass RLS)
   if (completeEnrollments) {
-    const { error: enrollError, count } = await from(supabase, 'cadence_enrollments')
+    const serviceClient = createServiceRoleClient();
+    const { error: enrollError } = await from(serviceClient, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('lead_id', leadId)
-      .in('status', ['active', 'paused'])
-      .select('id', { count: 'exact', head: true });
+      .in('status', ['active', 'paused']);
     if (enrollError) {
       console.error('[schedule-activity] Failed to complete enrollments:', enrollError.message, 'leadId=', leadId);
-    } else {
-      console.warn('[schedule-activity] Completed', count ?? 0, 'enrollments for lead=', leadId);
     }
   }
 
