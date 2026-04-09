@@ -152,8 +152,8 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     setSelectedIndex(index);
   }, []);
 
-  // Only current-step activities are shown in the list; future steps stay in state for promotion & counter
-  const visibleActivities = useMemo(() => activities.filter((a) => a.isCurrentStep), [activities]);
+  // Show all activities (current + future within 24h window) grouped by lead
+  const visibleActivities = useMemo(() => activities, [activities]);
 
   // Unique leads being prospected
   const prospectingLeadsCount = useMemo(() => new Set(activities.map((a) => a.lead.id)).size, [activities]);
