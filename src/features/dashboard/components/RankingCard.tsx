@@ -1,10 +1,11 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { TrendingDown, TrendingUp } from 'lucide-react';
+import { HelpCircle, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 import type { RankingCardData } from '../types';
 
@@ -34,6 +35,8 @@ interface RankingCardProps {
   unit?: string;
   data: RankingCardData;
   primaryColumnLabel?: string;
+  primaryColumnTooltip?: string;
+  primaryValueDivisor?: number;
   secondaryColumnLabel?: string;
   averageLabel?: string;
   onSdrClick?: (userId: string) => void;
@@ -46,6 +49,8 @@ interface RankingContentProps {
   unit: string;
   data: RankingCardData;
   primaryColumnLabel?: string;
+  primaryColumnTooltip?: string;
+  primaryValueDivisor?: number;
   secondaryColumnLabel?: string;
   averageLabel?: string;
   onSdrClick?: (userId: string) => void;
@@ -58,6 +63,8 @@ function RankingContent({
   unit,
   data,
   primaryColumnLabel,
+  primaryColumnTooltip,
+  primaryValueDivisor,
   secondaryColumnLabel,
   averageLabel,
   onSdrClick,
@@ -116,7 +123,21 @@ function RankingContent({
                 <span className="w-20 text-center">{secondaryColumnLabel}</span>
               )}
               {primaryColumnLabel && (
-                <span className="w-20 text-center">{primaryColumnLabel}</span>
+                <span className="w-20 text-center inline-flex items-center justify-center gap-1">
+                  {primaryColumnLabel}
+                  {primaryColumnTooltip && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3 w-3 opacity-50" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[200px] text-xs">
+                          {primaryColumnTooltip}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </span>
               )}
             </div>
 
@@ -152,7 +173,9 @@ function RankingContent({
                   )}
                   {primaryColumnLabel && (
                     <span className="w-20 text-center text-sm font-medium">
-                      {sdr.value}
+                      {primaryValueDivisor && primaryValueDivisor > 0
+                        ? Math.round(sdr.value / primaryValueDivisor)
+                        : sdr.value}
                       {unit}
                     </span>
                   )}
@@ -197,6 +220,8 @@ export function RankingCard({
   unit = '',
   data,
   primaryColumnLabel,
+  primaryColumnTooltip,
+  primaryValueDivisor,
   secondaryColumnLabel,
   averageLabel,
   onSdrClick,
@@ -208,6 +233,8 @@ export function RankingCard({
     unit,
     data,
     primaryColumnLabel,
+    primaryColumnTooltip,
+    primaryValueDivisor,
     secondaryColumnLabel,
     averageLabel,
     onSdrClick,

@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { differenceInCalendarDays } from 'date-fns';
 
 import { CheckCircle2, TrendingUp, Users } from 'lucide-react';
 
@@ -35,6 +36,22 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
   const handleActivitySdrClick = useCallback((_userId: string) => {
     router.push('/statistics/activities');
   }, [router]);
+
+  // Calculate business days in the filter period for daily average
+  const businessDays = useMemo(() => {
+    if (!filters.dateFrom || !filters.dateTo) return 1;
+    const from = new Date(filters.dateFrom);
+    const to = new Date(filters.dateTo);
+    let count = 0;
+    const current = new Date(from);
+    const totalDays = differenceInCalendarDays(to, from) + 1;
+    for (let i = 0; i < totalDays; i++) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) count++;
+      current.setDate(current.getDate() + 1);
+    }
+    return count || 1;
+  }, [filters.dateFrom, filters.dateTo]);
 
   return (
     <div className="space-y-6">
@@ -83,7 +100,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             iconColor="bg-amber-500/10"
             iconTextColor="text-amber-500"
             data={ranking.activitiesDone}
-            primaryColumnLabel="atividades"
+            primaryColumnLabel="média diária"
+            primaryColumnTooltip="Total de atividades ÷ dias úteis no período"
+            primaryValueDivisor={businessDays}
             averageLabel="média atividades/vendedor"
             onSdrClick={handleActivitySdrClick}
           />
