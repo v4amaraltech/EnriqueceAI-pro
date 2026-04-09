@@ -225,24 +225,29 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 </tr>
               </thead>
               <tbody className="font-mono">
-                <tr className="border-b"><td className="p-2">first_name</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Primeiro nome do contato</td></tr>
-                <tr className="border-b"><td className="p-2">last_name</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sobrenome</td></tr>
+                {/* Contato (obrigatórios) */}
+                <tr className="border-b"><td className="p-2">first_name</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Nome do contato</td></tr>
+                <tr className="border-b"><td className="p-2">last_name</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sobrenome do contato</td></tr>
                 <tr className="border-b"><td className="p-2">email</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">E-mail do contato</td></tr>
-                <tr className="border-b"><td className="p-2">telefone</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Telefone (formato livre)</td></tr>
-                <tr className="border-b"><td className="p-2">empresa</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Nome da empresa (nome fantasia)</td></tr>
-                <tr className="border-b"><td className="p-2">cnpj</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">CNPJ (14 dígitos, sem pontuação)</td></tr>
+                <tr className="border-b"><td className="p-2">telefone</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Telefone principal (formato livre, ex: +5511999999999)</td></tr>
                 <tr className="border-b"><td className="p-2">job_title</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Cargo do contato</td></tr>
-                <tr className="border-b"><td className="p-2">lead_source</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Origem (ex: Outbound, Inbound Marketing)</td></tr>
-                <tr className="border-b"><td className="p-2">canal</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sub-origem (ex: Facebook, Google, Instagram)</td></tr>
-                <tr className="border-b"><td className="p-2">instagram</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">@ ou URL do Instagram</td></tr>
-                <tr className="border-b"><td className="p-2">linkedin</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do LinkedIn</td></tr>
-                <tr className="border-b"><td className="p-2">website</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do site</td></tr>
-                <tr className="border-b"><td className="p-2">razao_social</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Razão social da empresa</td></tr>
-                <tr className="border-b"><td className="p-2">porte</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Porte da empresa (ex: MEI, ME, EPP)</td></tr>
-                <tr className="border-b"><td className="p-2">faturamento_estimado</td><td className="p-2">number</td><td className="p-2">Não</td><td className="p-2 font-sans">Faturamento estimado em R$</td></tr>
+                {/* Empresa */}
+                <tr className="border-b"><td className="p-2">empresa</td><td className="p-2">string</td><td className="p-2 text-primary">Sim</td><td className="p-2 font-sans">Nome fantasia da empresa</td></tr>
+                <tr className="border-b"><td className="p-2">razao_social</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Razão social (nome jurídico registrado)</td></tr>
+                <tr className="border-b"><td className="p-2">cnpj</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">CNPJ (aceita com ou sem pontuação)</td></tr>
+                <tr className="border-b"><td className="p-2">porte</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Porte da empresa (ex: MEI, ME, EPP, Média, Grande)</td></tr>
+                <tr className="border-b"><td className="p-2">faturamento_estimado</td><td className="p-2">number</td><td className="p-2">Não</td><td className="p-2 font-sans">Faturamento estimado mensal em R$</td></tr>
+                {/* Origem e classificação */}
+                <tr className="border-b"><td className="p-2">lead_source</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Origem do lead (ex: Outbound, Inbound, Indicação)</td></tr>
+                <tr className="border-b"><td className="p-2">canal</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Sub-origem (ex: Facebook, Google, LinkedIn, Landing Page)</td></tr>
                 <tr className="border-b"><td className="p-2">is_inbound</td><td className="p-2">boolean</td><td className="p-2">Não</td><td className="p-2 font-sans">Se é lead inbound (default: true)</td></tr>
-                <tr className="border-b"><td className="p-2">assigned_to</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID do SDR responsável</td></tr>
-                <tr className="border-b"><td className="p-2">cadence_id</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID da cadência para inscrever o lead automaticamente</td></tr>
+                {/* Redes sociais */}
+                <tr className="border-b"><td className="p-2">instagram</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">@ ou URL do Instagram</td></tr>
+                <tr className="border-b"><td className="p-2">linkedin</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do perfil no LinkedIn</td></tr>
+                <tr className="border-b"><td className="p-2">website</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">URL do site da empresa</td></tr>
+                {/* Atribuição e automação */}
+                <tr className="border-b"><td className="p-2">assigned_to</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID do SDR responsável pelo lead</td></tr>
+                <tr className="border-b"><td className="p-2">cadence_id</td><td className="p-2">UUID</td><td className="p-2">Não</td><td className="p-2 font-sans">ID da cadência para inscrição automática</td></tr>
                 <tr className="border-b"><td className="p-2">notes</td><td className="p-2">string</td><td className="p-2">Não</td><td className="p-2 font-sans">Observações sobre o lead</td></tr>
                 <tr><td className="p-2">custom_fields</td><td className="p-2">object</td><td className="p-2">Não</td><td className="p-2 font-sans">Campos personalizados por ID ou nome {"{ \"Valor do Lead\": 5000 }"}</td></tr>
               </tbody>
