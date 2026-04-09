@@ -242,16 +242,31 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     callScript: row.notes,
   }));
 
-  // 7. Merge and sort: current steps first (by due date), then future steps
-  const activities = [...cadenceActivities, ...scheduledActivities]
-    .sort((a, b) => {
-      // Current steps first (sorted by nextStepDue), then future steps (sorted by stepOrder)
-      if (a.isCurrentStep !== b.isCurrentStep) return a.isCurrentStep ? -1 : 1;
-      if (a.isCurrentStep) {
-        return new Date(a.nextStepDue).getTime() - new Date(b.nextStepDue).getTime();
-      }
-      return a.stepOrder - b.stepOrder;
-    });
+  // 7. Merge and sort: group by lead so SDR finishes all steps for one lead before moving to the next
+  // Example: Pesquisa Lead A → Ligação Lead A → Pesquisa Lead B → Ligação Lead B
+  const allActivities = [...cadenceActivities, ...scheduledActivities];
+
+  // Build a map of earliest due date per lead (for ordering leads)
+  const leadEarliestDue = new Map<string, number>();
+  for (const a of allActivities) {
+    const due = new Date(a.nextStepDue).getTime();
+    const current = leadEarliestDue.get(a.lead.id);
+    if (current === undefined || due < current) {
+      leadEarliestDue.set(a.lead.id, due);
+    }
+  }
+
+  const activities = allActivities.sort((a, b) => {
+    // Group by lead: order leads by their earliest due date
+    if (a.lead.id !== b.lead.id) {
+      const aDue = leadEarliestDue.get(a.lead.id) ?? 0;
+      const bDue = leadEarliestDue.get(b.lead.id) ?? 0;
+      return aDue - bDue;
+    }
+    // Within same lead: current steps first, then by step order
+    if (a.isCurrentStep !== b.isCurrentStep) return a.isCurrentStep ? -1 : 1;
+    return a.stepOrder - b.stepOrder;
+  });
 
   return { success: true, data: activities };
 }
