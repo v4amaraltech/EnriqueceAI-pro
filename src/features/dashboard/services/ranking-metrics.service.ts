@@ -72,7 +72,8 @@ export async function fetchLeadsFinishedRanking(
   // Query enrollments in the period with lead_id for attribution
   let query = from(supabase, 'cadence_enrollments')
     .select('lead_id, enrolled_by, status')
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .limit(10000);
 
   query = query.gte('enrolled_at', start).lt('enrolled_at', end);
 
@@ -153,11 +154,13 @@ export async function fetchActivitiesRanking(
   const { start, end } = getDateRange(filters);
 
   // Get interactions in the period with performed_by for direct attribution
+  // Note: Supabase default limit is 1000 rows — set explicit higher limit
   let interactionsQuery = from(supabase, 'interactions')
     .select('lead_id, type, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', start)
-    .lt('created_at', end);
+    .lt('created_at', end)
+    .limit(10000);
 
   if (filters.cadenceIds.length > 0) {
     interactionsQuery = interactionsQuery.in('cadence_id', filters.cadenceIds);
@@ -238,7 +241,8 @@ export async function fetchConversionRanking(
     .select('id, status, assigned_to, won_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .in('status', ['new', 'contacted', 'qualified', 'unqualified']);
+    .in('status', ['new', 'contacted', 'qualified', 'unqualified'])
+    .limit(10000);
 
   const { data: allLeads } = (await allLeadsQuery) as {
     data: Array<{ id: string; status: string; assigned_to: string | null; won_by: string | null }> | null;

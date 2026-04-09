@@ -86,7 +86,8 @@ export async function fetchOpportunityKpi(
     .is('deleted_at', null)
     .not('won_at', 'is', null)
     .gte('won_at', start)
-    .lt('won_at', end);
+    .lt('won_at', end)
+    .limit(10000);
 
   const { data: leads } = (await leadsQuery) as {
     data: Array<{ id: string; won_at: string; assigned_to: string | null; won_by: string | null }> | null;
