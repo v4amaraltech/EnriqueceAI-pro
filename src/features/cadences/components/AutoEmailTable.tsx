@@ -192,7 +192,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, avatarMap = {}
           <TableHead className="w-20 text-center">Finalizado</TableHead>
           <TableHead className="w-20 text-center">Respondido</TableHead>
           <TableHead className="w-20 text-center">Responder %</TableHead>
-          <TableHead className="w-24 text-center">Interessados %</TableHead>
+          <TableHead className="w-24 text-center">Abertura %</TableHead>
           <TableHead className="w-12"></TableHead>
           <TableHead className="w-16">Fluxo</TableHead>
           <TableHead className="w-12">Ações</TableHead>
