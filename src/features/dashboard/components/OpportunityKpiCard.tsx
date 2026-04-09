@@ -83,6 +83,7 @@ function OpportunityChart({ chartData, daysInMonth, monthAbbr, yMax, height, gra
           axisLine={false}
           tickLine={false}
           domain={[0, yMax]}
+          ticks={Array.from({ length: yMax / 25 + 1 }, (_, i) => i * 25)}
           allowDecimals={false}
         />
         <Tooltip
@@ -162,7 +163,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
 
   const maxTarget = kpi.monthTarget > 0 ? kpi.monthTarget : 5;
   const maxActual = Math.max(...kpi.dailyData.map((d) => d.actual));
-  const yMax = Math.max(maxTarget, maxActual) + 1;
+  const rawMax = Math.max(maxTarget, maxActual);
+  // Round up to next multiple of 25, minimum 125
+  const yMax = Math.max(125, Math.ceil(rawMax / 25) * 25);
 
   return (
     <>
