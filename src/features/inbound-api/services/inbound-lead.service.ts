@@ -180,10 +180,7 @@ async function ingestSingleLead(
     source: 'inbound_api',
   }).catch((err) => console.error('[webhook] lead.created dispatch failed:', err));
 
-  // Trigger enrichment if CNPJ present (fire-and-forget via dynamic import)
-  if (data.cnpj) {
-    triggerEnrichment(leadId).catch((err) => console.error('[inbound] enrichment failed:', err));
-  }
+  // Enrichment via CNPJ is only triggered for CSV imports, not API/webhook
 
   // Enroll in cadence if cadence_id provided
   if (data.cadence_id) {
@@ -317,11 +314,3 @@ async function resolveCustomFieldKeys(
   return resolved;
 }
 
-async function triggerEnrichment(leadId: string): Promise<void> {
-  try {
-    const { enrichLeadByService } = await import('./enrich-inbound.service');
-    await enrichLeadByService(leadId);
-  } catch {
-    // Enrichment failure should not affect lead creation
-  }
-}

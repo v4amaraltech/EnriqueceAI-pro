@@ -16,7 +16,6 @@ import { RESOURCE_ALERT_THRESHOLD } from '@/lib/constants/limits';
 
 import { createLeadSchema } from '../schemas/lead.schemas';
 import { logLeadEvent } from './log-lead-event';
-import { enrichLeadAction } from './enrich-lead';
 
 export async function createLead(
   rawData: Record<string, unknown>,
@@ -180,12 +179,9 @@ export async function createLead(
     }
   }
 
-  // 3. Trigger enrichment (awaited to avoid runtime cutoff, but errors swallowed)
-  await enrichLeadAction(leadId).catch(() => {
-    // Enrichment failure should not fail lead creation
-  });
+  // Enrichment via CNPJ is only triggered for CSV imports, not manual creation
 
-  // 4. Fire 80% lead threshold alert (fire-and-forget)
+  // 3. Fire 80% lead threshold alert (fire-and-forget)
   if (hasLimitInfo && maxLeads > 0) {
     const newCount = currentLeads + 1;
     const threshold = Math.floor(maxLeads * RESOURCE_ALERT_THRESHOLD);
