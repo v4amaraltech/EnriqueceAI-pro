@@ -5,7 +5,7 @@ import { checkEmailReplies } from '@/features/cadences/actions/check-email-repli
 
 export const maxDuration = 300;
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
