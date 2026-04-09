@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { from } from '@/lib/supabase/from';
 
 import type { TimelineEntry, CadenceMetrics } from '../cadences.contract';
@@ -54,9 +55,31 @@ export async function fetchLeadTimeline(
     }
   }
 
+  // Resolve user names for performed_by
+  const performerIds = [...new Set(
+    (interactions ?? []).map((i) => i.performed_by as string | null).filter((id): id is string => id != null),
+  )];
+  const userNameMap = new Map<string, string>();
+  if (performerIds.length > 0) {
+    try {
+      const adminClient = createAdminSupabaseClient();
+      const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
+      for (const u of usersData?.users ?? []) {
+        if (performerIds.includes(u.id)) {
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const name = (meta?.full_name ?? meta?.name ?? '') as string;
+          userNameMap.set(u.id, name || u.email?.split('@')[0] || u.id.slice(0, 8));
+        }
+      }
+    } catch {
+      // Fallback silently
+    }
+  }
+
   const timeline: TimelineEntry[] = (interactions ?? []).map((i) => {
     const meta = i.metadata as Record<string, unknown> | null;
     const stepData = i.step_id ? stepMap[i.step_id] : undefined;
+    const performedBy = i.performed_by as string | null;
     return {
       id: i.id,
       type: i.type,
@@ -72,6 +95,7 @@ export async function fetchLeadTimeline(
       step_activity_name: stepData?.activity_name ?? undefined,
       step_instructions: stepData?.instructions ?? undefined,
       metadata: meta,
+      performed_by_name: performedBy ? userNameMap.get(performedBy) : undefined,
     };
   });
 

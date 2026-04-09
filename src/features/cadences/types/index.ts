@@ -114,6 +114,7 @@ export interface InteractionRow {
   metadata: Record<string, unknown> | null;
   ai_generated: boolean;
   original_template_id: string | null;
+  performed_by: string | null;
   created_at: string;
 }
 

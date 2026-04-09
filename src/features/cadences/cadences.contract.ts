@@ -173,4 +173,5 @@ export interface TimelineEntry {
   step_activity_name?: string;
   step_instructions?: string;
   metadata?: Record<string, unknown> | null;
+  performed_by_name?: string;
 }

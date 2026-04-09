@@ -12,6 +12,7 @@ import {
   Reply,
   Search,
   Send,
+  UserCog,
   XCircle,
 } from 'lucide-react';
 
@@ -37,6 +38,8 @@ export const channelIcon: Record<string, typeof Mail> = {
   phone: Phone,
   linkedin: Linkedin,
   research: Search,
+  system: UserCog,
+  calendar: Calendar,
 };
 
 export const channelLabel: Record<string, string> = {
@@ -45,6 +48,8 @@ export const channelLabel: Record<string, string> = {
   phone: 'Telefone',
   linkedin: 'LinkedIn',
   research: 'Pesquisa',
+  system: 'Atividade',
+  calendar: 'Reunião',
 };
 
 export const channelColor: Record<string, string> = {
@@ -53,6 +58,8 @@ export const channelColor: Record<string, string> = {
   phone: 'bg-amber-500',
   linkedin: 'bg-[#0A66C2]',
   research: 'bg-violet-500',
+  system: 'bg-gray-500',
+  calendar: 'bg-indigo-500',
 };
 
 export function formatTimelineDate(dateStr: string): string {
@@ -117,8 +124,13 @@ export function LeadTimelineTab({ timeline }: LeadTimelineTabProps) {
                       </span>
                     )}
                     <span className="text-sm font-semibold">
-                      {label}{stepLabel}
+                      {entry.channel === 'system' && entry.performed_by_name
+                        ? entry.performed_by_name
+                        : label}{stepLabel}
                     </span>
+                    {entry.channel !== 'system' && entry.performed_by_name && (
+                      <span className="text-xs text-muted-foreground">por {entry.performed_by_name}</span>
+                    )}
                     {entry.ai_generated && (
                       <Badge variant="outline" className="h-4 px-1 text-[10px]">IA</Badge>
                     )}
