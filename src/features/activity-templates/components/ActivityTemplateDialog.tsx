@@ -182,7 +182,7 @@ function ActivityTemplateDialogContent({
   const channelLabel = channelLabels[resolvedChannel] ?? resolvedChannel;
 
   return (
-    <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>
           {isEdit ? `Editar atividade de ${channelLabel}` : `Nova atividade de ${channelLabel}`}
