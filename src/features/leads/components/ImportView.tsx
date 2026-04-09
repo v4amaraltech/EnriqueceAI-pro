@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Progress } from '@/shared/components/ui/progress';
@@ -16,6 +16,20 @@ import { CsvPreview } from './CsvPreview';
 import { ImportReport } from './ImportReport';
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'report';
+
+const TEMPLATE_HEADERS = 'cnpj;razao_social;nome_fantasia;origem';
+const TEMPLATE_EXAMPLE = '12345678000190;Empresa Exemplo LTDA;Empresa Exemplo;Outbound';
+
+function downloadTemplate() {
+  const content = `${TEMPLATE_HEADERS}\n${TEMPLATE_EXAMPLE}`;
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'template-importacao-enriqueceai.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ImportView() {
   const [step, setStep] = useState<ImportStep>('upload');
@@ -75,10 +89,14 @@ export function ImportView() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">Importar Leads</h1>
           <p className="text-muted-foreground">Importe leads em massa via arquivo CSV com CNPJs.</p>
         </div>
+        <Button variant="outline" size="sm" onClick={downloadTemplate}>
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          Baixar template
+        </Button>
       </div>
 
       {error && (
