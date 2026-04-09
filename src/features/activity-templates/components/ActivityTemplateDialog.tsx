@@ -154,29 +154,54 @@ function ActivityTemplateDialogContent({
 
         <Separator />
 
-        {/* Instruções */}
+        {/* Campos dinâmicos */}
         <div className="space-y-3">
           <div>
-            <h4 className="text-sm font-medium">Instruções</h4>
-            <p className="text-muted-foreground text-sm mt-1">
-              Descreva o que o SDR deve fazer nesta atividade.
+            <h4 className="text-sm font-medium">Campos dinâmicos</h4>
+            <p className="text-muted-foreground text-xs mt-1">
+              Clique ou arraste para inserir no texto de instruções.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Variáveis disponíveis</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {TEMPLATE_VARIABLES.map((v) => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground mr-1">Lead:</span>
+              {TEMPLATE_VARIABLES.filter((v) => v.category === 'lead').map((v) => (
                 <Badge
                   key={v.key}
-                  variant="secondary"
-                  className="cursor-pointer select-none hover:bg-secondary/80"
+                  variant="outline"
+                  className="cursor-pointer select-none text-xs hover:bg-primary/10 hover:border-primary/30"
                   onClick={() => insertVariable(v.placeholder)}
                 >
                   {v.label}
                 </Badge>
               ))}
             </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground mr-1">Vendedor:</span>
+              {TEMPLATE_VARIABLES.filter((v) => v.category === 'vendedor').map((v) => (
+                <Badge
+                  key={v.key}
+                  variant="outline"
+                  className="cursor-pointer select-none text-xs hover:bg-primary/10 hover:border-primary/30"
+                  onClick={() => insertVariable(v.placeholder)}
+                >
+                  {v.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Instruções */}
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-medium">Instruções</h4>
+            <p className="text-muted-foreground text-xs mt-1">
+              Descreva o que o SDR deve fazer nesta atividade.
+            </p>
           </div>
 
           <Textarea
