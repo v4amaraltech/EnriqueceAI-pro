@@ -260,6 +260,14 @@ export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
+  // Fetch configured options from standard_field_settings
+  const { data: settings } = (await from(supabase, 'standard_field_settings')
+    .select('options')
+    .eq('org_id', orgId)
+    .eq('field_key', 'canal')
+    .maybeSingle()) as { data: { options: string[] | null } | null };
+
+  // Fetch distinct values from leads
   const { data, error } = (await from(supabase, 'leads')
     .select('canal')
     .eq('org_id', orgId)
@@ -275,6 +283,9 @@ export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
     return { success: false, error: 'Erro ao buscar sub-origens' };
   }
 
-  const unique = [...new Set((data ?? []).map((r) => r.canal))];
+  // Merge configured options + existing values, deduplicate and sort
+  const fromLeads = (data ?? []).map((r) => r.canal);
+  const fromSettings = settings?.options ?? [];
+  const unique = [...new Set([...fromSettings, ...fromLeads])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return { success: true, data: unique };
 }
