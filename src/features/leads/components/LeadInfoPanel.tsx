@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useContext, useEffect, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   CalendarDays,
@@ -101,7 +100,6 @@ export function LeadInfoPanel({
   jobTitleOptions,
   standardFieldSettings,
 }: LeadInfoPanelProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
   const cargoOptions = jobTitleOptions ?? [];
@@ -289,12 +287,11 @@ export function LeadInfoPanel({
         }));
         toast.success('Lead atualizado');
         setIsEditing(false);
-        router.refresh();
       } else {
         toast.error(result.error);
       }
     });
-  }, [data.id, editFields, editCustomFieldValues, phoneEntries, router]);
+  }, [data.id, editFields, editCustomFieldValues, phoneEntries]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({
