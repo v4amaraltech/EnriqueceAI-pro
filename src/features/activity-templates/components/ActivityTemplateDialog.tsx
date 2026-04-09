@@ -149,11 +149,18 @@ function ActivityTemplateDialogContent({
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    const resolvedChannel = isSocialPoint ? socialChannel : channel;
+    // Social networks map to 'linkedin' channel in DB; the specific network is noted in instructions
+    const dbChannel = isSocialPoint
+      ? (socialChannel === 'whatsapp' ? 'whatsapp' : 'linkedin')
+      : channel;
+    const networkNote = isSocialPoint && !['linkedin', 'whatsapp'].includes(socialChannel)
+      ? `[Rede: ${socialChannel}]\n`
+      : '';
+    const finalInstructions = networkNote + plainText;
 
     startTransition(async () => {
       if (isEdit) {
-        const result = await updateActivityTemplate(template.id, { name, instructions: plainText });
+        const result = await updateActivityTemplate(template.id, { name, instructions: finalInstructions });
         if (result.success) {
           toast.success('Template atualizado');
           onSaved(result.data);
@@ -162,7 +169,7 @@ function ActivityTemplateDialogContent({
           toast.error(result.error);
         }
       } else {
-        const result = await createActivityTemplate({ name, channel: resolvedChannel as ChannelType, instructions: plainText });
+        const result = await createActivityTemplate({ name, channel: dbChannel, instructions: finalInstructions });
         if (result.success) {
           toast.success('Template criado');
           onSaved(result.data);
