@@ -191,6 +191,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, avatarMap = {}
           <TableHead className="w-20 text-center">Bloqueado</TableHead>
           <TableHead className="w-20 text-center">Finalizado</TableHead>
           <TableHead className="w-20 text-center">Respondido</TableHead>
+          <TableHead className="w-16 text-center">Abertos</TableHead>
           <TableHead className="w-20 text-center">Responder %</TableHead>
           <TableHead className="w-24 text-center">Abertura %</TableHead>
           <TableHead className="w-12"></TableHead>
@@ -265,6 +266,7 @@ export function AutoEmailTable({ cadences, metrics, userMap = {}, avatarMap = {}
               <MetricCell value={m?.failed ?? 0} />
               <MetricCell value={m?.completed ?? 0} />
               <MetricCell value={m?.replied ?? 0} />
+              <MetricCell value={m?.opened ?? 0} />
               <MetricCell value={m?.replyRate ?? 0} isPercent />
               <MetricCell value={m?.openRate ?? 0} isPercent />
 
