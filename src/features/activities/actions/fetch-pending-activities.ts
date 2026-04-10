@@ -185,18 +185,18 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     return { success: true, data: [] };
   }
 
-  // 5. Filter out activities already executed (interaction exists for cadence+step+lead)
+  // 5. Filter out activities already executed (using optimized SQL function with composite index)
   const stepIds = [...new Set(candidates.map((c) => c.stepId))];
   const leadIds = [...new Set(candidates.map((c) => c.leadId))];
 
-  const { data: existingInteractions } = (await from(supabase, 'interactions')
-    .select('cadence_id, step_id, lead_id')
-    .in('cadence_id', cadenceIds)
-    .in('step_id', stepIds)
-    .in('lead_id', leadIds)) as { data: { cadence_id: string; step_id: string; lead_id: string }[] | null };
+  const { data: executedSteps } = await (supabase.rpc as any)('get_executed_steps', {
+    p_cadence_ids: cadenceIds,
+    p_step_ids: stepIds,
+    p_lead_ids: leadIds,
+  }) as { data: { cadence_id: string; step_id: string; lead_id: string }[] | null };
 
   const executedSet = new Set(
-    (existingInteractions ?? []).map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
+    (executedSteps ?? []).map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
   );
 
   const cadenceActivities = candidates
