@@ -79,7 +79,7 @@ function sortUsers(users: UserActivityRow[], sort: { column: SortColumn; directi
         cmp = a.name.localeCompare(b.name, 'pt-BR');
         break;
       case 'leads':
-        cmp = a.leads - b.leads;
+        cmp = a.totalLeads - b.totalLeads;
         break;
       case 'activities':
         cmp = a.activitiesCompleted - b.activitiesCompleted;
@@ -259,7 +259,7 @@ function UserRow({ user, isExpanded, onToggle }: { user: UserActivityRow; isExpa
             <span className="text-sm font-medium">{user.name}</span>
           </div>
         </td>
-        <td className="py-4 px-4 text-center text-sm">{fmt(user.leads)}</td>
+        <td className="py-4 px-4 text-center text-sm">{fmt(user.totalLeads)}</td>
         <td className="py-4 px-4 text-center text-sm">
           <span className="font-medium">{fmt(user.activitiesCompleted)}</span>
           <span className="text-[var(--muted-foreground)]"> de {fmt(user.activitiesTotal)}</span>

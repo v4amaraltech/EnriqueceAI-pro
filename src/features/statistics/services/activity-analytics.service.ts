@@ -106,8 +106,22 @@ export async function fetchActivityAnalyticsData(
   // Channel completion (% of steps completed vs total per channel)
   const channelCompletion = calculateChannelCompletion(interactions);
 
+  // Fetch total leads per SDR (all time, no date filter) for "Leads" column
+  const { data: allLeadsForCount } = (await from(supabase, 'leads')
+    .select('id, assigned_to')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
+
+  const totalLeadsByUser = new Map<string, number>();
+  for (const l of allLeadsForCount ?? []) {
+    if (l.assigned_to) {
+      totalLeadsByUser.set(l.assigned_to, (totalLeadsByUser.get(l.assigned_to) ?? 0) + 1);
+    }
+  }
+
   // User breakdown — fetch user names via admin
-  const userBreakdown = await calculateUserBreakdown(supabase, orgId, interactions, leads, allActiveLeads);
+  const userBreakdown = await calculateUserBreakdown(supabase, orgId, interactions, leads, allActiveLeads, totalLeadsByUser);
 
   return { kpis, channelVolume, dailyTrend, activityTypes, goal, leadsInPeriod, totalLost, totalWon, channelCompletion, userBreakdown };
 }
@@ -311,6 +325,7 @@ async function calculateUserBreakdown(
   interactions: InteractionQueryRow[],
   statusLeads: Array<{ id: string; status: string; assigned_to: string | null }>,
   activeLeads: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }>,
+  totalLeadsByUser: Map<string, number>,
 ): Promise<UserActivityRow[]> {
   // Group interactions by performed_by
   const userMap = new Map<string, InteractionQueryRow[]>();
@@ -404,6 +419,7 @@ async function calculateUserBreakdown(
       userId,
       name: memberInfo?.name ?? userId.slice(0, 8),
       avatarUrl: memberInfo?.avatarUrl,
+      totalLeads: totalLeadsByUser.get(userId) ?? 0,
       leads,
       activitiesCompleted: completed,
       activitiesTotal: total,
@@ -420,5 +436,5 @@ async function calculateUserBreakdown(
     });
   }
 
-  return rows.sort((a, b) => b.leads - a.leads);
+  return rows.sort((a, b) => b.totalLeads - a.totalLeads);
 }

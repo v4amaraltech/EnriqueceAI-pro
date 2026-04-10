@@ -51,6 +51,7 @@ export interface UserActivityRow {
   userId: string;
   name: string;
   avatarUrl?: string;
+  totalLeads: number;
   leads: number;
   activitiesCompleted: number;
   activitiesTotal: number;
