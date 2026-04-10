@@ -74,7 +74,7 @@ async function sendFeedbackReminders() {
     const leadName = leadMap.get(fb.lead_id) ?? 'Lead';
     const feedbackUrl = `${appUrl}/feedback/${fb.token}`;
 
-    const html = buildReminderHtml(closer.name, leadName, feedbackUrl);
+    const html = buildReminderHtml(closer.name, leadName, feedbackUrl, appUrl);
 
     const result = await sendPlatformEmail({
       to: closer.email,
@@ -97,7 +97,7 @@ async function sendFeedbackReminders() {
   return { reminders: sent, errors };
 }
 
-function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: string): string {
+function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: string, appUrl: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -109,7 +109,10 @@ function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: st
         <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background: #1a1a1a; padding: 24px 32px;">
-              <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td style="vertical-align: middle; padding-right: 12px;"><img src="${appUrl}/logos/logo-ea-red.png" alt="EnriqueceAI" width="36" height="36" style="border-radius: 8px;" /></td>
+                <td style="vertical-align: middle;"><h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1></td>
+              </tr></table>
             </td>
           </tr>
           <tr>

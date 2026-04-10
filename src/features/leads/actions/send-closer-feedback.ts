@@ -61,7 +61,7 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
     }
 
     const feedbackUrl = `${appUrl}/feedback/${feedbackToken}`;
-    const html = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl);
+    const html = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl, appUrl);
 
     // Send via platform email (Resend) — no Gmail dependency
     const result = await sendPlatformEmail({
@@ -78,7 +78,7 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
   }
 }
 
-function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUrl: string): string {
+function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUrl: string, appUrl: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -93,7 +93,10 @@ function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUr
         <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background: #1a1a1a; padding: 24px 32px;">
-              <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td style="vertical-align: middle; padding-right: 12px;"><img src="${appUrl}/logos/logo-ea-red.png" alt="EnriqueceAI" width="36" height="36" style="border-radius: 8px;" /></td>
+                <td style="vertical-align: middle;"><h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1></td>
+              </tr></table>
             </td>
           </tr>
           <tr>

@@ -244,7 +244,10 @@ function buildBriefingHtml(data: {
           <!-- Header -->
           <tr>
             <td style="background: #1a1a1a; padding: 28px 36px;">
-              <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 600;">EnriqueceAI</h1>
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td style="vertical-align: middle; padding-right: 12px;"><img src="${data.leadUrl.split('/leads/')[0]}/logos/logo-ea-red.png" alt="EnriqueceAI" width="36" height="36" style="border-radius: 8px;" /></td>
+                <td style="vertical-align: middle;"><h1 style="color: white; margin: 0; font-size: 22px; font-weight: 600;">EnriqueceAI</h1></td>
+              </tr></table>
               <p style="color: #9ca3af; font-size: 14px; margin: 4px 0 0;">Nova reunião agendada</p>
             </td>
           </tr>
