@@ -153,28 +153,17 @@ export async function fetchActivitiesRanking(
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
 
-  // Get actual activities (exclude system events, tracking events like opened/clicked/bounced)
-  let interactionsQuery = from(supabase, 'interactions')
-    .select('lead_id, type, performed_by')
-    .eq('org_id', orgId)
-    .eq('type', 'sent')
-    .not('channel', 'eq', 'system')
-    .not('channel', 'eq', 'calendar')
-    .gte('created_at', start)
-    .lt('created_at', end)
-    .limit(10000);
+  // Get activity counts per performer using SQL GROUP BY (efficient at any scale)
+  const { data: activityCounts } = await (supabase.rpc as any)('count_activities_by_performer', {
+    p_org_id: orgId,
+    p_start: start,
+    p_end: end,
+    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
+  }) as { data: Array<{ performer_id: string; cnt: number }> | null };
 
-  if (filters.cadenceIds.length > 0) {
-    interactionsQuery = interactionsQuery.in('cadence_id', filters.cadenceIds);
-  }
+  const rows = activityCounts ?? [];
 
-  const { data: interactions } = (await interactionsQuery) as {
-    data: Array<{ lead_id: string; type: string; performed_by: string | null }> | null;
-  };
-
-  const interactionRows = interactions ?? [];
-
-  if (interactionRows.length === 0) {
+  if (rows.length === 0) {
     const monthStart = `${filters.month}-01`;
     const { data: goal } = (await from(supabase, 'goals')
       .select('activities_target')
@@ -185,36 +174,12 @@ export async function fetchActivitiesRanking(
     return buildRankingCardData([], 0, goal?.activities_target ?? 0, filters.month);
   }
 
-  // For interactions without performed_by, fallback to lead's assigned_to
-  const leadIdsWithoutPerformer = [
-    ...new Set(interactionRows.filter((i) => !i.performed_by).map((i) => i.lead_id)),
-  ];
-  const leadAssignedTo = new Map<string, string>();
-  if (leadIdsWithoutPerformer.length > 0) {
-    const { data: leadData } = (await from(supabase, 'leads')
-      .select('id, assigned_to')
-      .in('id', leadIdsWithoutPerformer)) as {
-      data: Array<{ id: string; assigned_to: string | null }> | null;
-    };
-    for (const l of leadData ?? []) {
-      if (l.assigned_to) leadAssignedTo.set(l.id, l.assigned_to);
-    }
-  }
-
-  // Count activities per SDR (performed_by, fallback to lead's assigned_to)
-  const sdrCounts = new Map<string, number>();
-  for (const interaction of interactionRows) {
-    const sdr = interaction.performed_by ?? leadAssignedTo.get(interaction.lead_id);
-    if (!sdr) continue;
-    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
-    sdrCounts.set(sdr, (sdrCounts.get(sdr) ?? 0) + 1);
-  }
-
   const entries: SdrRankingEntry[] = [];
   let totalActivities = 0;
-  for (const [userId, count] of sdrCounts) {
-    totalActivities += count;
-    entries.push({ userId, userName: '', value: count });
+  for (const row of rows) {
+    if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
+    totalActivities += row.cnt;
+    entries.push({ userId: row.performer_id, userName: '', value: row.cnt });
   }
 
   // Get goal
