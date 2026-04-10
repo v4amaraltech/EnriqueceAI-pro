@@ -63,14 +63,17 @@ export async function fetchActivityLog(
   const channel = typeof rawFilters.channel === 'string' ? rawFilters.channel : undefined;
   const status = typeof rawFilters.status === 'string' ? rawFilters.status : undefined;
   const search = typeof rawFilters.search === 'string' ? rawFilters.search : undefined;
+  const page = typeof rawFilters.page === 'number' ? rawFilters.page : (typeof rawFilters.page === 'string' ? parseInt(rawFilters.page, 10) : 1);
+  const perPage = typeof rawFilters.per_page === 'number' ? rawFilters.per_page : (typeof rawFilters.per_page === 'string' ? parseInt(rawFilters.per_page, 10) : 50);
+  const rangeFrom = (page - 1) * perPage;
 
-  // Fetch active enrollments (all — not filtered by next_step_due)
+  // Fetch active enrollments with pagination
   let query = from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)', { count: 'exact' })
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .order('next_step_due', { ascending: true })
-    .limit(200);
+    .range(rangeFrom, rangeFrom + perPage - 1);
 
   const { data: enrollments, count, error: enrollError } = (await query) as {
     data: EnrollmentRow[] | null;
