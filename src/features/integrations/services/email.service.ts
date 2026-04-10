@@ -210,24 +210,39 @@ export class EmailService {
       accessToken = refreshResult.accessToken;
     }
 
-    // Fetch signature: priority custom > Gmail API
+    // Fetch signature: priority custom > cached > Gmail API (cached 24h)
     let signature = '';
     if (connection.custom_signature) {
       signature = connection.custom_signature;
     } else {
-      try {
-        const sigResponse = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/${encodeURIComponent(connection.email_address)}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-        if (sigResponse.ok) {
-          const sigData = (await sigResponse.json()) as { signature?: string };
-          if (sigData.signature) {
-            signature = sigData.signature;
+      const cachedSig = (connection as unknown as Record<string, unknown>).cached_signature as string | null;
+      const cachedAt = (connection as unknown as Record<string, unknown>).signature_cached_at as string | null;
+      const cacheValid = cachedAt && (Date.now() - new Date(cachedAt).getTime() < 86_400_000); // 24h TTL
+
+      if (cachedSig && cacheValid) {
+        signature = cachedSig;
+      } else {
+        try {
+          const sigResponse = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/${encodeURIComponent(connection.email_address)}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+          if (sigResponse.ok) {
+            const sigData = (await sigResponse.json()) as { signature?: string };
+            if (sigData.signature) {
+              signature = sigData.signature;
+              // Cache the signature (fire-and-forget)
+              const dbClient = supabase;
+              (dbClient as any).from('gmail_connections')
+                .update({ cached_signature: signature, signature_cached_at: new Date().toISOString() })
+                .eq('user_id', userId)
+                .then(() => {});
+            }
           }
+        } catch {
+          // Signature fetch failed — use cached if available, else send without
+          if (cachedSig) signature = cachedSig;
         }
-      } catch {
-        // Signature fetch failed — send without it
       }
     }
 
