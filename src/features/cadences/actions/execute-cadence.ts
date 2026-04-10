@@ -20,10 +20,10 @@ import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow, ReplyType } from '../types';
 
-const BATCH_SIZE = 25;
+const BATCH_SIZE = parseInt(process.env.CADENCE_BATCH_SIZE || '25', 10);
 const MAX_SEND_RETRIES = 3;
 /** Delay between successful sends (ms) to avoid Gmail rate limits */
-const SEND_DELAY_MS = 2000;
+const SEND_DELAY_MS = parseInt(process.env.CADENCE_SEND_DELAY_MS || '2000', 10);
 
 /** Patterns that indicate a permanent (non-retryable) email error */
 const PERMANENT_EMAIL_ERRORS = [
