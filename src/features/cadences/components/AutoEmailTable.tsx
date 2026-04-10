@@ -77,7 +77,7 @@ function getCreatorFirstName(userId: string | null, userMap: Record<string, stri
   return fullName.split(' ')[0] ?? fullName;
 }
 
-function getCreatorInitial(userId: string | null, userMap: Record<string, string>): string {
+function _getCreatorInitial(userId: string | null, userMap: Record<string, string>): string {
   if (!userId) return '?';
   const fullName = userMap[userId];
   return (fullName?.[0] ?? userId[0] ?? '?').toUpperCase();

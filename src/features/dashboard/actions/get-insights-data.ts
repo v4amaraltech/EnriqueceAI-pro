@@ -20,7 +20,7 @@ const filtersSchema = z.object({
 export async function getInsightsData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<InsightsData>> {
-  const { userId, orgId, role } = await requireAuthWithMember();
+  const { userId: _userId, orgId, role: _role } = await requireAuthWithMember();
   const supabase = createServiceRoleClient();
 
   const parsed = filtersSchema.safeParse(rawFilters);

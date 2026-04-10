@@ -23,7 +23,7 @@ const filtersSchema = z.object({
 export async function getDashboardData(
   rawFilters: DashboardFilters,
 ): Promise<ActionResult<DashboardData>> {
-  const { userId, orgId, role } = await requireAuthWithMember();
+  const { userId: _userId, orgId, role: _role } = await requireAuthWithMember();
   const supabase = createServiceRoleClient();
 
   // Validate filters

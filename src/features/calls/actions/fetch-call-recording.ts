@@ -24,7 +24,7 @@ export async function fetchCallRecording(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  const { orgId: _orgId, userId: _userId, supabase } = auth.data;
 
   // 1. Get the call
   const { data: call } = (await from(supabase, 'calls')

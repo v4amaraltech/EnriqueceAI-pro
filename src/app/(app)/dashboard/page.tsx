@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';

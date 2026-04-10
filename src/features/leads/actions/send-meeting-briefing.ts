@@ -176,7 +176,7 @@ function buildBriefingHtml(data: {
   recordingDuration: number | null;
   transcription: string | null;
 }): string {
-  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl, customFields, recordingUrl, recordingDuration, transcription } = data;
+  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl: _leadUrl, customFields, recordingUrl, recordingDuration, transcription } = data;
 
   const contactName = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
 

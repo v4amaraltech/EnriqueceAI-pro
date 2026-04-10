@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useTransition } from 'react';
+import { useCallback, useMemo, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { format } from 'date-fns';
@@ -30,8 +30,13 @@ export function ProspectingSidebarFilters({
   const [isPending, startTransition] = useTransition();
 
   // Initialize date range from URL params or default to last 30 days
-  const defaultTo = format(new Date(), 'yyyy-MM-dd');
-  const defaultFrom = format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+  const { defaultFrom, defaultTo } = useMemo(() => {
+    const now = new Date();
+    return {
+      defaultTo: format(now, 'yyyy-MM-dd'),
+      defaultFrom: format(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
+    };
+  }, []);
   const dateFrom = searchParams.get('from') ?? defaultFrom;
   const dateTo = searchParams.get('to') ?? defaultTo;
 

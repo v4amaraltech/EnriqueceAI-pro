@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         const hdrs = { 'Content-Type': 'application/json', Authorization: apiKey };
 
         // Parallel fetch: integrations + recent calls per connection
-        const [intResponse, callsResponse] = await Promise.all([
+        const [_intResponse, callsResponse] = await Promise.all([
           fetch(`${baseUrl}/integrations`, { method: 'GET', headers: hdrs }),
           fetch(`${baseUrl}/calls?page=1`, { method: 'GET', headers: hdrs }),
         ]);

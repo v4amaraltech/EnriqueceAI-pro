@@ -88,7 +88,7 @@ export function ActivityEmailCompose({
       const draft = JSON.parse(raw) as { subject?: string; body?: string };
       if (draft.subject && draft.subject !== subject) onSubjectChange(draft.subject);
       if (draft.body && draft.body !== body) onBodyChange(draft.body);
-      setDraftStatus('saved');
+      setDraftStatus('saved'); // eslint-disable-line react-hooks/set-state-in-effect
     } catch { /* ignore corrupt drafts */ }
   }, [draftKey, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,7 +96,7 @@ export function ActivityEmailCompose({
   useEffect(() => {
     if (!draftKey || isLoading) return;
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    setDraftStatus('saving');
+    setDraftStatus('saving'); // eslint-disable-line react-hooks/set-state-in-effect
     draftTimerRef.current = setTimeout(() => {
       try {
         localStorage.setItem(`email-draft:${draftKey}`, JSON.stringify({ subject, body }));

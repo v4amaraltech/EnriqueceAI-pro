@@ -55,7 +55,7 @@ export function DateRangePicker({ from, to, onChange, compare, onCompareChange }
   // Clear pending range when popover opens so user starts fresh
   useEffect(() => {
     if (open) {
-      setPendingRange(undefined);
+      setPendingRange(undefined); // eslint-disable-line react-hooks/set-state-in-effect
       setRangeComplete(false);
     }
   }, [open]);

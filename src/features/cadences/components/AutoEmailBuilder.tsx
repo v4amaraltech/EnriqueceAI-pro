@@ -85,7 +85,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
-  const isContentEditable = isEditable || cadence?.status === 'active'; // Can edit templates even when active
+  const _isContentEditable = isEditable || cadence?.status === 'active'; // Can edit templates even when active
   const statusCfg = cadence ? statusConfig[cadence.status] : null;
 
   function updateStep(index: number, updated: AutoEmailStep) {

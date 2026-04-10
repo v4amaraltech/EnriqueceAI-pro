@@ -72,6 +72,7 @@ export function DialerCallPanel({
   const hasMultiplePhones = (item.phones?.length ?? 0) > 1;
 
   // Reset state when lead changes
+  /* eslint-disable react-hooks/set-state-in-effect -- resetting state on prop change is intentional */
   useEffect(() => {
     setSelectedPhone(item.phone ?? '');
     setCallStatus('');
@@ -79,6 +80,7 @@ export function DialerCallPanel({
     setAttempts([]);
     setElapsed(0);
   }, [item.enrollmentId, item.phone]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Timer for call duration — starts on calling/connected, resets on idle
   useEffect(() => {

@@ -155,7 +155,7 @@ function DayContainer({
 
   // Sync local state when external value changes (e.g. after swap/sort)
   useEffect(() => {
-    setLocalDay(String(dayData.day));
+    setLocalDay(String(dayData.day)); // eslint-disable-line react-hooks/set-state-in-effect
   }, [dayData.day]);
 
   function commitDayNumber() {

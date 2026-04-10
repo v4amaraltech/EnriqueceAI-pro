@@ -15,7 +15,7 @@ import {
 } from '@/shared/components/ui/select';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { enrichmentStatusValues, LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
+import { LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
 
 const statusLabels: Record<string, string> = {
   new: 'Novo',
@@ -24,27 +24,6 @@ const statusLabels: Record<string, string> = {
   unqualified: 'Não Qualificado',
   archived: 'Arquivado',
 };
-
-const enrichmentLabels: Record<string, string> = {
-  pending: 'Pendente',
-  enriching: 'Enriquecendo',
-  enriched: 'Enriquecido',
-  enrichment_failed: 'Falhou',
-  not_found: 'Não Encontrado',
-};
-
-const porteOptions = [
-  { value: 'MEI', label: 'MEI' },
-  { value: 'ME', label: 'ME' },
-  { value: 'EPP', label: 'EPP' },
-  { value: 'DEMAIS', label: 'Demais' },
-];
-
-const ufOptions = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
-  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
-  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-];
 
 const ALL_VALUE = '__all__';
 
@@ -57,7 +36,7 @@ interface LeadFiltersProps {
   currentUserId?: string;
 }
 
-export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, canalOptions, currentUserId }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOptions, canalOptions, currentUserId }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -98,11 +77,11 @@ export function LeadFilters({ members, cadences, cnaes, leadSourceOptions, canal
   }
 
   const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
-  const activeEnrichment = overrides.enrichment_status ?? (currentEnrichment || ALL_VALUE);
-  const activePorte = overrides.porte ?? (currentPorte || ALL_VALUE);
-  const activeUf = overrides.uf ?? (currentUf || ALL_VALUE);
+  const _activeEnrichment = overrides.enrichment_status ?? (currentEnrichment || ALL_VALUE);
+  const _activePorte = overrides.porte ?? (currentPorte || ALL_VALUE);
+  const _activeUf = overrides.uf ?? (currentUf || ALL_VALUE);
   const activeSource = overrides.lead_source ?? (currentSource || ALL_VALUE);
-  const activeCnae = overrides.cnae ?? (currentCnae || ALL_VALUE);
+  const _activeCnae = overrides.cnae ?? (currentCnae || ALL_VALUE);
   const activeCanal = overrides.canal ?? (currentCanal || ALL_VALUE);
   const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
   const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);

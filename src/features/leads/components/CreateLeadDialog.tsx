@@ -101,6 +101,12 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
     return cadences.filter((c) => c.name.toLowerCase().includes(q));
   }, [cadences, cadenceSearch]);
 
+  // Track which fields have been touched (blurred)
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const markTouched = useCallback((field: string) => {
+    setTouched((prev) => new Set(prev).add(field));
+  }, []);
+
   const resetForm = useCallback(() => {
     setForm({ ...INITIAL_FORM, assigned_to: currentUserId });
     setCadenceSearch('');
@@ -114,12 +120,6 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
 
   const hasCadence = form.cadence_id !== '';
   const isScheduled = form.enrollment_mode === 'scheduled';
-
-  // Track which fields have been touched (blurred)
-  const [touched, setTouched] = useState<Set<string>>(new Set());
-  const markTouched = useCallback((field: string) => {
-    setTouched((prev) => new Set(prev).add(field));
-  }, []);
 
   // Field-level validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

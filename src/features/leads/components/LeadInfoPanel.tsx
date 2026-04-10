@@ -316,7 +316,7 @@ export function LeadInfoPanel({
   const fullName = contactFullName ?? primarySocio?.nome ?? data.razao_social ?? null;
   const firstName = data.first_name ?? fullName?.split(' ')[0] ?? null;
   const companyName = data.nome_fantasia ?? data.razao_social ?? null;
-  const cargo = data.job_title
+  const _cargo = data.job_title
     || primarySocio?.qualificacao
     || (primarySocio?.nome ? (primarySocio.nome.trim().split(/\s+/)[0]?.toLowerCase().endsWith('a') ? 'Sócia' : 'Sócio') : null);
 
