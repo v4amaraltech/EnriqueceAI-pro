@@ -14,6 +14,7 @@ import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp
 import { WhatsAppService } from '@/features/integrations/services/whatsapp.service';
 
 import { toPlainText } from '@/lib/utils/html-to-plaintext';
+import { withTimeout } from '@/lib/utils/with-timeout';
 
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
 
@@ -106,12 +107,16 @@ export async function executeScheduledActivity(
       return { success: false, error: waResult.error ?? 'Falha ao enviar WhatsApp' };
     }
   } else if (channel === 'email') {
-    const emailResult = await EmailService.sendEmail(
-      userId,
-      orgId,
-      { to, subject: subject || '', htmlBody: body },
-      interaction.id,
-      supabase,
+    const emailResult = await withTimeout(
+      EmailService.sendEmail(
+        userId,
+        orgId,
+        { to, subject: subject || '', htmlBody: body },
+        interaction.id,
+        supabase,
+      ),
+      30_000,
+      'Email send',
     );
 
     if (emailResult.success && emailResult.messageId) {
