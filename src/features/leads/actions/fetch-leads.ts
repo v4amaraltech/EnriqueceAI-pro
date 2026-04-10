@@ -143,11 +143,8 @@ export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCo
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data, error } = (await from(supabase, 'leads')
-    .select('status')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)) as {
-    data: Array<{ status: string }> | null;
+  const { data, error } = await (supabase.rpc as any)('count_leads_by_status', { p_org_id: orgId }) as {
+    data: Array<{ status: string; cnt: number }> | null;
     error: { message: string } | null;
   };
 
@@ -157,9 +154,9 @@ export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCo
 
   const counts: LeadStatusCounts = { all: 0, new: 0, contacted: 0, qualified: 0, unqualified: 0, archived: 0 };
   for (const row of data ?? []) {
-    counts.all++;
+    counts.all += row.cnt;
     if (row.status in counts && row.status !== 'all') {
-      counts[row.status as keyof Omit<LeadStatusCounts, 'all'>]++;
+      counts[row.status as keyof Omit<LeadStatusCounts, 'all'>] = row.cnt;
     }
   }
 
