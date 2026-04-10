@@ -186,8 +186,22 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                 const channel = isNote ? noteConfig : (channelConfig[entry.channel] ?? defaultChannel);
                 const ChannelIcon = channel.icon;
                 const stepLabel = !isNote && !isSystem && entry.step_order != null ? ` ${entry.step_order}` : '';
+                const systemEvent = (entry.metadata as Record<string, unknown> | null)?.system_event as string | undefined;
+                const systemTitles: Record<string, string> = {
+                  lead_created: 'Lead criado',
+                  activity_scheduled: 'Atividade agendada',
+                  fields_updated: 'Campos atualizados',
+                  enrollment_added: 'Inscrito em cadência',
+                  enrollment_status_changed: 'Cadência atualizada',
+                  enrollment_removed: 'Removido da cadência',
+                  status_changed: 'Status alterado',
+                  lead_assigned: 'Lead atribuído',
+                  lead_archived: 'Lead arquivado',
+                };
                 const title = isSystem
-                  ? 'Sistema criou um lead'
+                  ? (entry.performed_by_name
+                    ? `${entry.performed_by_name}`
+                    : systemTitles[systemEvent ?? ''] ?? 'Atividade do sistema')
                   : entry.step_activity_name || `${channel.label}${stepLabel}`;
 
                 return (
