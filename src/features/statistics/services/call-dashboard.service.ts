@@ -67,10 +67,13 @@ function calculateKpis(calls: CallRow[]): CallDashboardKpis {
   const totalDuration = calls.reduce((sum, c) => sum + c.duration_seconds, 0);
   const avgDurationSeconds = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
 
+  const CONNECTED_DURATION_THRESHOLD = 50; // seconds
   const connected = calls.filter(
-    (c) => c.status === 'significant' || c.status === 'not_significant',
+    (c) => c.status === 'significant' || c.status === 'not_significant' || c.duration_seconds >= CONNECTED_DURATION_THRESHOLD,
   ).length;
-  const significant = calls.filter((c) => c.status === 'significant').length;
+  const significant = calls.filter(
+    (c) => c.status === 'significant' || c.duration_seconds >= CONNECTED_DURATION_THRESHOLD,
+  ).length;
 
   return {
     totalCalls,

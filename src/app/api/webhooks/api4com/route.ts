@@ -220,9 +220,11 @@ async function updateCallFromWebhook(
     updates.status = mappedStatus;
   }
 
-  // If the call was answered and has duration, it was connected
-  if (payload.answeredAt && payload.duration > 0 && currentStatus === 'not_connected') {
+  // If the call was answered and has meaningful duration (>= 50s), mark as significant
+  if (payload.answeredAt && payload.duration >= 50 && currentStatus === 'not_connected') {
     updates.status = 'significant';
+  } else if (payload.answeredAt && payload.duration > 0 && currentStatus === 'not_connected') {
+    updates.status = 'not_significant';
   }
 
   // NORMAL_CLEARING without answeredAt means it rang but was not answered
