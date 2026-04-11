@@ -6,7 +6,7 @@ import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAM
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 const CLAUDE_MAX_TOKENS = 2048;
-const MIN_DURATION_SECONDS = 30;
+const MIN_DURATION_SECONDS = 180;
 
 interface CallForTranscription {
   id: string;

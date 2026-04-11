@@ -235,7 +235,7 @@ async function updateCallFromWebhook(
     .eq('id', callId);
 
   // Trigger automatic transcription + SPICED analysis if recording available
-  if (payload.recordUrl && payload.duration >= 30) {
+  if (payload.recordUrl && payload.duration >= 180) {
     const appUrl = getAppUrl();
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (appUrl && serviceRoleKey) {
