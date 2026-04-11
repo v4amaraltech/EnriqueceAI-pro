@@ -133,10 +133,20 @@ export async function POST(request: Request) {
   }
   const webhookUrl = new URL(request.url);
   const token = webhookUrl.searchParams.get('token') ?? request.headers.get('x-webhook-secret') ?? '';
+
+  // Log incoming request details for debugging
+  console.warn(`[api4com-webhook] POST received: url=${webhookUrl.pathname}?${webhookUrl.search} tokenPresent=${!!token} tokenLength=${token.length}`);
+
+  if (!token) {
+    // API4COM may strip query params — log and reject
+    console.error('[api4com-webhook] No token in request. Full URL:', request.url);
+    return NextResponse.json({ error: 'Unauthorized - no token' }, { status: 401 });
+  }
+
   const tokenBuf = Buffer.from(token);
   const secretBuf = Buffer.from(webhookSecret);
   if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
-    logger.warn('Invalid webhook secret');
+    logger.warn('Invalid webhook secret', { tokenLength: token.length, secretLength: webhookSecret.length });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
