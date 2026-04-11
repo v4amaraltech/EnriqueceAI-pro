@@ -1,7 +1,7 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-import { buildSpicedAnalysisPrompt, SPICED_FIELD_NAMES } from '@/features/ai/prompts/spiced-analysis';
+import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES } from '@/features/ai/prompts/spiced-analysis';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
@@ -165,10 +165,11 @@ async function analyzeAndSaveSpiced(
   const prompt = buildSpicedAnalysisPrompt(transcription);
   const spicedJson = await callClaudeForSpiced(prompt);
 
-  // Map field names to field IDs
+  // Map prompt response keys → database field names → field IDs
+  const dbMapped = mapSpicedResponseToDbNames(spicedJson);
   const spicedValues: Record<string, string> = {};
-  for (const [fieldName, value] of Object.entries(spicedJson)) {
-    const fieldId = fieldNameToId.get(fieldName);
+  for (const [dbFieldName, value] of Object.entries(dbMapped)) {
+    const fieldId = fieldNameToId.get(dbFieldName);
     if (fieldId && value) {
       spicedValues[fieldId] = value;
     }

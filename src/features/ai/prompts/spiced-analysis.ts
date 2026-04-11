@@ -1,22 +1,59 @@
 /**
  * Prompt for SPICED qualification analysis from call transcription.
+ * Field names MUST match the custom_fields.field_name values in the database.
  */
 
-const SPICED_FIELD_DESCRIPTIONS: Record<string, string> = {
-  'Situação': 'Contexto atual do prospect. Como operam hoje? Qual a equipe? Quais ferramentas usam? Qual o modelo de negócio?',
-  'Problemas': 'Dores e desafios mencionados. O que não funciona bem? Onde perdem tempo/dinheiro? Quais frustrações?',
-  'Impacto': 'Consequências dos problemas. Quanto custa não resolver? Impacto nos resultados, equipe, clientes?',
-  'Evento Crítico': 'O que motivou a busca por solução agora? Mudança de liderança? Nova meta? Prazo? Perda de cliente?',
-  'Processo de Decisão': 'Quem decide? Quantas pessoas envolvidas? Orçamento disponível? Timeline? Próximos passos?',
-};
+const SPICED_FIELDS: Array<{ dbName: string; promptName: string; description: string }> = [
+  {
+    dbName: 'S (Situação da Empresa - Operacional)',
+    promptName: 'S - Situação',
+    description: 'Contexto atual do prospect. Como operam hoje? Qual a equipe? Quais ferramentas usam? Qual o modelo de negócio?',
+  },
+  {
+    dbName: 'P (Problemas Identificados - Prioridade)',
+    promptName: 'P - Problemas',
+    description: 'Dores e desafios mencionados. O que não funciona bem? Onde perdem tempo/dinheiro? Quais frustrações?',
+  },
+  {
+    dbName: 'I (Impacto do problema descoberto)',
+    promptName: 'I - Impacto',
+    description: 'Consequências dos problemas. Quanto custa não resolver? Impacto nos resultados, equipe, clientes?',
+  },
+  {
+    dbName: 'CE (Evento Crítico)',
+    promptName: 'CE - Evento Crítico',
+    description: 'O que motivou a busca por solução agora? Mudança de liderança? Nova meta? Prazo? Perda de cliente?',
+  },
+  {
+    dbName: 'D (Qual é o Processo de tomada de decisão)',
+    promptName: 'D - Processo de Decisão',
+    description: 'Quem decide? Quantas pessoas envolvidas? Orçamento disponível? Timeline? Próximos passos?',
+  },
+];
 
 /** Known SPICED field names for matching against custom_fields table */
-export const SPICED_FIELD_NAMES = Object.keys(SPICED_FIELD_DESCRIPTIONS);
+export const SPICED_FIELD_NAMES = SPICED_FIELDS.map((f) => f.dbName);
+
+/** Map from prompt response key → database field name */
+const PROMPT_TO_DB = new Map(SPICED_FIELDS.map((f) => [f.promptName, f.dbName]));
+
+export function mapSpicedResponseToDbNames(response: Record<string, string>): Record<string, string> {
+  const mapped: Record<string, string> = {};
+  for (const [key, value] of Object.entries(response)) {
+    const dbName = PROMPT_TO_DB.get(key);
+    if (dbName && value) {
+      mapped[dbName] = value;
+    }
+  }
+  return mapped;
+}
 
 export function buildSpicedAnalysisPrompt(transcription: string): string {
-  const fieldDescriptions = Object.entries(SPICED_FIELD_DESCRIPTIONS)
-    .map(([name, desc]) => `- ${name}: ${desc}`)
+  const fieldDescriptions = SPICED_FIELDS
+    .map((f) => `- ${f.promptName}: ${f.description}`)
     .join('\n');
+
+  const jsonKeys = SPICED_FIELDS.map((f) => `"${f.promptName}": "..."`).join(', ');
 
   return `Você é um analista de vendas B2B especializado na metodologia SPICED.
 
@@ -33,5 +70,5 @@ ${transcription}
 
 ## Formato de Resposta:
 Responda APENAS com JSON válido, sem markdown, sem explicações adicionais:
-{"Situação": "...", "Problemas": "...", "Impacto": "...", "Evento Crítico": "...", "Processo de Decisão": "..."}`;
+{${jsonKeys}}`;
 }
