@@ -101,6 +101,29 @@ async function processApi4ComEvent(
   logger.info('Call updated', { callId: call.id, api4comId: body.id });
 }
 
+// GET handler for health check / connectivity test
+export async function GET(request: Request) {
+  const webhookUrl = new URL(request.url);
+  const token = webhookUrl.searchParams.get('token') ?? '';
+  const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    return NextResponse.json({ status: 'error', message: 'API4COM_WEBHOOK_SECRET not configured' }, { status: 503 });
+  }
+
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(webhookSecret);
+  const tokenValid = tokenBuf.length === secretBuf.length && crypto.timingSafeEqual(tokenBuf, secretBuf);
+
+  return NextResponse.json({
+    status: 'ok',
+    tokenValid,
+    tokenLength: token.length,
+    secretLength: webhookSecret.length,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 export async function POST(request: Request) {
   // Verify webhook secret (passed as query param or header)
   const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
