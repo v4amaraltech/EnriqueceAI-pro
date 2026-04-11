@@ -174,4 +174,7 @@ export interface TimelineEntry {
   step_instructions?: string;
   metadata?: Record<string, unknown> | null;
   performed_by_name?: string;
+  recording_url?: string | null;
+  transcription?: string | null;
+  call_duration?: number | null;
 }

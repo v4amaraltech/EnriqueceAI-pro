@@ -76,10 +76,27 @@ export async function fetchLeadTimeline(
     }
   }
 
+  // Enrich phone interactions with call data (recording + transcription)
+  const callIds = (interactions ?? [])
+    .map((i) => (i.metadata as Record<string, unknown> | null)?.callId as string | undefined)
+    .filter((id): id is string => !!id);
+
+  const callDataMap = new Map<string, { recording_url: string | null; transcription: string | null; duration_seconds: number }>();
+  if (callIds.length > 0) {
+    const { data: calls } = (await from(supabase, 'calls')
+      .select('id, recording_url, transcription, duration_seconds')
+      .in('id', callIds)) as { data: Array<{ id: string; recording_url: string | null; transcription: string | null; duration_seconds: number }> | null };
+    for (const c of calls ?? []) {
+      callDataMap.set(c.id, c);
+    }
+  }
+
   const timeline: TimelineEntry[] = (interactions ?? []).map((i) => {
     const meta = i.metadata as Record<string, unknown> | null;
     const stepData = i.step_id ? stepMap[i.step_id] : undefined;
     const performedBy = i.performed_by as string | null;
+    const callId = meta?.callId as string | undefined;
+    const callData = callId ? callDataMap.get(callId) : undefined;
     return {
       id: i.id,
       type: i.type,
@@ -96,6 +113,9 @@ export async function fetchLeadTimeline(
       step_instructions: stepData?.instructions ?? undefined,
       metadata: meta,
       performed_by_name: performedBy ? userNameMap.get(performedBy) : undefined,
+      recording_url: callData?.recording_url ?? null,
+      transcription: callData?.transcription ?? null,
+      call_duration: callData?.duration_seconds ?? null,
     };
   });
 

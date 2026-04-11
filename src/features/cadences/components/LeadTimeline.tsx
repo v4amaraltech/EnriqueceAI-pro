@@ -237,6 +237,32 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                       ) : (
                         <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
                       )}
+
+                      {/* Call recording + transcription */}
+                      {entry.channel === 'phone' && entry.recording_url && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <audio controls preload="none" className="h-8 max-w-[300px]">
+                              <source src={entry.recording_url} type="audio/mpeg" />
+                            </audio>
+                            {entry.call_duration && (
+                              <span className="text-[10px] text-[var(--muted-foreground)]">
+                                {Math.floor(entry.call_duration / 60)}:{String(entry.call_duration % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                          {entry.transcription && (
+                            <details className="text-xs">
+                              <summary className="cursor-pointer text-[var(--primary)] hover:underline">
+                                Ver transcrição
+                              </summary>
+                              <p className="mt-1 whitespace-pre-line text-[var(--muted-foreground)] bg-[var(--muted)]/30 rounded p-2">
+                                {entry.transcription}
+                              </p>
+                            </details>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
