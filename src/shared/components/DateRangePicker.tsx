@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarIcon, Check } from 'lucide-react';
-import { differenceInDays, format, startOfWeek, startOfMonth, startOfYear, subDays } from 'date-fns';
+import { differenceInDays, endOfMonth, format, startOfWeek, startOfMonth, startOfYear, subDays, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 
@@ -26,6 +26,7 @@ const presets: Array<{ label: string; getRange: PresetFn }> = [
   { label: 'Últimos 7 dias', getRange: () => ({ from: subDays(new Date(), 7), to: new Date() }) },
   { label: 'Últimos 30 dias', getRange: () => ({ from: subDays(new Date(), 30), to: new Date() }) },
   { label: 'Esse mês', getRange: () => ({ from: startOfMonth(new Date()), to: new Date() }) },
+  { label: 'Mês passado', getRange: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
   { label: 'Esse ano', getRange: () => ({ from: startOfYear(new Date()), to: new Date() }) },
 ];
 
