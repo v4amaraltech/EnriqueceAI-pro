@@ -100,19 +100,21 @@ export async function handleGmailCallback(
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
   // Preserve existing refresh_token if Google didn't send a new one (happens on re-auth)
-  let refreshToken = tokens.refresh_token ?? '';
-  if (!refreshToken) {
+  const encryptedAccessToken = encrypt(tokens.access_token);
+  let encryptedRefreshToken = '';
+
+  if (tokens.refresh_token) {
+    // Google sent a new refresh token — encrypt and store
+    encryptedRefreshToken = encrypt(tokens.refresh_token);
+  } else {
+    // No new refresh token — preserve existing encrypted value from DB (do NOT re-encrypt)
     const { data: existing } = (await from(supabase, 'gmail_connections')
       .select('refresh_token_encrypted')
       .eq('org_id', orgId)
       .eq('user_id', userId)
       .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
-    // Existing value may already be encrypted — keep as-is for storage
-    refreshToken = existing?.refresh_token_encrypted ?? '';
+    encryptedRefreshToken = existing?.refresh_token_encrypted ?? '';
   }
-
-  const encryptedAccessToken = encrypt(tokens.access_token);
-  const encryptedRefreshToken = refreshToken ? encrypt(refreshToken) : '';
 
   // Upsert connection
   const { data, error } = (await from(supabase, 'gmail_connections')
