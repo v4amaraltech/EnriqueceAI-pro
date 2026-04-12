@@ -96,8 +96,8 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
       </div>
 
       {/* Column 2: CADÊNCIA (nome + passo) */}
-      <div className="w-full text-center">
-        <p className="truncate text-sm font-medium">
+      <div className="justify-self-center text-center">
+        <p className="text-sm font-medium">
           {activity.cadenceName}
         </p>
         <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
