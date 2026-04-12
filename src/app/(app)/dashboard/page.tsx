@@ -54,11 +54,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dateTo,
   };
 
+  const safe = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+    p.catch((err) => { console.error('[dashboard] Query failed:', err); return fallback; });
+
   const [result, rankingResult, insightsResult, responseTimeResult] = await Promise.all([
-    getDashboardData(filters),
-    getRankingData(filters),
-    getInsightsData(filters),
-    getResponseTimeData(30, { from: dateFrom, to: dateTo }),
+    safe(getDashboardData(filters), { success: false as const, error: 'Erro ao carregar métricas' }),
+    safe(getRankingData(filters), { success: false as const, error: 'Erro ao carregar ranking' }),
+    safe(getInsightsData(filters), { success: false as const, error: 'Erro ao carregar insights' }),
+    safe(getResponseTimeData(30, { from: dateFrom, to: dateTo }), { success: false as const, error: 'Erro ao carregar tempo de resposta' }),
   ]);
 
   if (!result.success) {
