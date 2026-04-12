@@ -6,7 +6,6 @@ import {
   Calendar,
   Clock,
   ExternalLink,
-  History,
   Linkedin,
   Mail,
   MessageSquare,
@@ -37,7 +36,6 @@ import { ScheduleMeetingModal } from '@/features/integrations/components/Schedul
 import { ScheduleActivityForm } from '@/features/activities/components/ScheduleActivityForm';
 
 import type { LeadRow } from '../types';
-import { LeadAuditTab } from './LeadAuditTab';
 import { LeadNotes } from './LeadNotes';
 
 interface LeadDetailTabsProps {
@@ -132,10 +130,6 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           <TabsTrigger value="atividade">Agendar atividade</TabsTrigger>
           <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
           <TabsTrigger value="reuniao">Agendar reunião</TabsTrigger>
-          <TabsTrigger value="alteracoes">
-            <History className="mr-1 h-3.5 w-3.5" />
-            Alterações
-          </TabsTrigger>
         </TabsList>
 
         {/* Histórico Tab */}
@@ -265,10 +259,6 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           </div>
         </TabsContent>
 
-        {/* Alterações Tab */}
-        <TabsContent value="alteracoes" className="pt-4">
-          <LeadAuditTab leadId={lead.id} />
-        </TabsContent>
       </Tabs>
 
       <ScheduleMeetingModal
