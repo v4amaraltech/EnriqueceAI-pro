@@ -9,6 +9,7 @@ import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
+import { createMeetingWhatsAppGroup } from '../services/whatsapp-group.service';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
 import {
@@ -92,6 +93,29 @@ export async function scheduleMeeting(
         meetingEnd: event.endTime,
         meetLink: event.meetLink,
       }).catch((err) => console.error('[scheduleMeeting] Briefing email error:', err));
+    }
+
+    // Create WhatsApp group for the meeting (fire-and-forget)
+    if (input.closerId) {
+      const { data: leadData } = (await from(supabase, 'leads')
+        .select('telefone, nome_fantasia, razao_social')
+        .eq('id', leadId)
+        .single()) as { data: { telefone: string | null; nome_fantasia: string | null; razao_social: string | null } | null };
+
+      if (leadData?.telefone) {
+        const startDate = new Date(event.startTime);
+        createMeetingWhatsAppGroup(supabase, {
+          orgId,
+          sdrUserId: userId,
+          closerId: input.closerId,
+          leadPhone: leadData.telefone,
+          leadCompanyName: leadData.nome_fantasia ?? leadData.razao_social ?? 'Lead',
+          meetingTitle: input.title,
+          meetingDate: startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }),
+          meetingTime: `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} (60 min)`,
+          meetLink: event.meetLink ?? null,
+        }).catch((err) => console.error('[scheduleMeeting] WhatsApp group error:', err));
+      }
     }
 
     revalidatePath('/atividades');
