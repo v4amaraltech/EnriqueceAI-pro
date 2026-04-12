@@ -95,7 +95,7 @@ export async function fetchAvailableLeads(
 
   if (enrolledIds.length > 0) {
     // Filter out already enrolled leads
-    query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
+    query = query.not('id', 'in', enrolledIds);
   }
 
   if (search && search.trim()) {

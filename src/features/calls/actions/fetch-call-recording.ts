@@ -132,7 +132,7 @@ export async function fetchCallRecording(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ callId }),
-        }).catch(() => {});
+        }).catch((err) => console.error('[fetch-call-recording] Failed to trigger transcription:', err));
       }
     }
 

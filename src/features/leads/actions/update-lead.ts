@@ -26,7 +26,7 @@ async function resumePausedEnrollments(
     .select('cadence_id')
     .eq('lead_id', leadId)
     .eq('type', 'failed')
-    .filter('metadata->>error', 'in', `(${reasons.join(',')})`)
+    .in('metadata->>error', reasons)
   ) as { data: Array<{ cadence_id: string }> | null };
 
   if (!failedInteractions?.length) return 0;
@@ -164,8 +164,8 @@ export async function updateLead(
     const reasons: string[] = [];
     if (emailChanged) reasons.push('no_lead_email', 'email_bounced');
     if (telefoneChanged) reasons.push('invalid_phone');
-    resumePausedEnrollments(supabase, leadId, reasons).catch(() => {
-      // Fire-and-forget
+    resumePausedEnrollments(supabase, leadId, reasons).catch((err) => {
+      console.error('[lead-update] Failed to resume paused enrollments:', err);
     });
   }
 
@@ -173,8 +173,8 @@ export async function updateLead(
   const fitScoreFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'notes'];
   const hasRelevantChange = fitScoreFields.some((f) => f in safeUpdates);
   if (hasRelevantChange) {
-    recalcFitScoreForLead(supabase, leadId, orgId).catch(() => {
-      // Fire-and-forget: don't block the update response
+    recalcFitScoreForLead(supabase, leadId, orgId).catch((err) => {
+      console.error('[lead-update] Failed to recalc fit score:', err);
     });
   }
 

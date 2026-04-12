@@ -644,7 +644,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
       // Mark lead as contacted on first activity
       const { markLeadContacted } = await import('@/features/leads/actions/mark-contacted');
-      markLeadContacted(supabase, enrollment.lead_id).catch(() => {});
+      markLeadContacted(supabase, enrollment.lead_id).catch((err) => console.error('[cadence-engine] Failed to mark lead contacted:', err));
 
       console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=sent ai=${aiGenerated} send_success=${sendSuccess} duration_ms=${Date.now() - stepStart}`);
 
