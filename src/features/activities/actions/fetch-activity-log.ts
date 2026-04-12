@@ -31,6 +31,8 @@ interface RawLead {
   notes: string | null;
   fit_score: number | null;
   engagement_score: number | null;
+  is_inbound: boolean;
+  created_at: string;
 }
 
 interface EnrollmentRow {

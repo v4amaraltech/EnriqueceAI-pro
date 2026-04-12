@@ -33,6 +33,8 @@ interface RawLead {
   notes: string | null;
   fit_score: number | null;
   engagement_score: number | null;
+  is_inbound: boolean;
+  created_at: string;
 }
 
 interface EnrollmentRow {
@@ -257,7 +259,12 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   }
 
   const activities = allActivities.sort((a, b) => {
-    // Group by lead: order leads by their earliest due date
+    // Priority 1: Inbound leads first (they need immediate attention)
+    const aInbound = a.lead.is_inbound ? 1 : 0;
+    const bInbound = b.lead.is_inbound ? 1 : 0;
+    if (aInbound !== bInbound) return bInbound - aInbound;
+
+    // Priority 2: Group by lead, order leads by earliest due date
     if (a.lead.id !== b.lead.id) {
       const aDue = leadEarliestDue.get(a.lead.id) ?? 0;
       const bDue = leadEarliestDue.get(b.lead.id) ?? 0;

@@ -25,6 +25,8 @@ export interface ActivityLead {
   notes: string | null;
   fit_score: number | null;
   engagement_score: number | null;
+  is_inbound: boolean;
+  created_at: string;
 }
 
 // A single pending activity derived from enrollment + step + cadence

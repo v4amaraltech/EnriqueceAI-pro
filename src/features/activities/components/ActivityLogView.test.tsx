@@ -56,6 +56,8 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
       notes: null,
       fit_score: null,
       engagement_score: null,
+      is_inbound: false,
+      created_at: '2026-01-15T10:00:00Z',
     },
     activityName: null,
     callScript: null,

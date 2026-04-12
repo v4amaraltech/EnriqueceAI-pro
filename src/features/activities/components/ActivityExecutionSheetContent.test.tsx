@@ -60,6 +60,8 @@ const baseLead = {
   notes: null as string | null,
   fit_score: null as number | null,
   engagement_score: null as number | null,
+  is_inbound: false,
+  created_at: '2026-01-15T10:00:00Z',
 };
 
 function makeActivity(channel: string, overrides: Partial<PendingActivity> = {}): PendingActivity {
