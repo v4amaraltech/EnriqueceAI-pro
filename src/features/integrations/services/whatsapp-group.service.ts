@@ -55,16 +55,15 @@ export async function createMeetingWhatsAppGroup(
       return { success: false, error: 'WhatsApp do SDR não conectado' };
     }
 
-    // 2. Get Closer's WhatsApp phone
-    const { data: closerInstance } = (await from(supabase, 'whatsapp_instances' as never)
+    // 2. Get Closer's phone from closers table
+    const { data: closer } = (await from(supabase, 'closers')
       .select('phone')
-      .eq('org_id', orgId)
-      .eq('user_id', closerId)
+      .eq('id', closerId)
       .maybeSingle()) as { data: { phone: string | null } | null };
 
-    if (!closerInstance?.phone) {
-      console.warn('[whatsapp-group] Closer WhatsApp not found, skipping group creation');
-      return { success: false, error: 'WhatsApp do Closer não encontrado' };
+    if (!closer?.phone) {
+      console.warn('[whatsapp-group] Closer phone not registered, skipping group creation');
+      return { success: false, error: 'Telefone do Closer não cadastrado' };
     }
 
     // 3. Validate and format phone numbers
@@ -73,8 +72,10 @@ export async function createMeetingWhatsAppGroup(
       return { success: false, error: 'Telefone do lead inválido' };
     }
 
+    const closerPhoneFormatted = closer.phone.replace(/\D/g, '');
+
     const participants = [
-      `${closerInstance.phone}@s.whatsapp.net`,
+      `${closerPhoneFormatted}@s.whatsapp.net`,
       `${leadPhoneFormatted}@s.whatsapp.net`,
     ];
 

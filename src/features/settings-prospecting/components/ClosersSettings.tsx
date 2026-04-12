@@ -23,19 +23,22 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
   const [closers, setClosers] = useState<CloserRow[]>(initial);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function handleAdd() {
     if (!newName.trim() || !newEmail.trim()) return;
     startTransition(async () => {
-      const result = await addCloser(newName, newEmail);
+      const result = await addCloser(newName, newEmail, newPhone);
       if (result.success) {
         setClosers((prev) => [...prev, result.data].sort((a, b) => a.name.localeCompare(b.name)));
         setNewName('');
         setNewEmail('');
+        setNewPhone('');
         toast.success('Closer adicionado');
       } else {
         toast.error(result.error);
@@ -47,12 +50,13 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
     setEditingId(closer.id);
     setEditName(closer.name);
     setEditEmail(closer.email);
+    setEditPhone(closer.phone ?? '');
   }
 
   function handleSaveEdit(id: string) {
     if (!editName.trim() || !editEmail.trim()) return;
     startTransition(async () => {
-      const result = await updateCloser(id, editName, editEmail);
+      const result = await updateCloser(id, editName, editEmail, editPhone);
       if (result.success) {
         setClosers((prev) =>
           prev.map((c) => (c.id === id ? result.data : c)),
@@ -99,8 +103,15 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
           placeholder="email@empresa.com"
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           className="max-w-[250px]"
+        />
+        <Input
+          type="tel"
+          placeholder="WhatsApp (ex: 11999999999)"
+          value={newPhone}
+          onChange={(e) => setNewPhone(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          className="max-w-[200px]"
         />
         <Button onClick={handleAdd} disabled={isPending || !newName.trim() || !newEmail.trim()} size="sm">
           <Plus className="mr-1 h-4 w-4" />
@@ -133,11 +144,18 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
                       type="email"
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
+                      className="max-w-[250px]"
+                    />
+                    <Input
+                      type="tel"
+                      placeholder="WhatsApp"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSaveEdit(closer.id);
                         if (e.key === 'Escape') setEditingId(null);
                       }}
-                      className="max-w-[250px]"
+                      className="max-w-[180px]"
                     />
                     <Button
                       size="sm"
@@ -161,6 +179,11 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
                       <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                         {closer.email}
                       </span>
+                      {closer.phone && (
+                        <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                          📱 {closer.phone}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button

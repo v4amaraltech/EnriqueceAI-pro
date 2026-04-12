@@ -14,6 +14,7 @@ export interface CloserRow {
   org_id: string;
   name: string;
   email: string;
+  phone: string | null;
   created_at: string;
 }
 
@@ -28,7 +29,7 @@ export async function listClosers(): Promise<ActionResult<CloserRow[]>> {
   const { orgId, supabase } = authResult.data;
 
   const { data, error } = (await closersFrom(supabase)
-    .select('id, org_id, name, email, created_at')
+    .select('id, org_id, name, email, phone, created_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .order('name', { ascending: true })) as { data: CloserRow[] | null; error: unknown };
@@ -38,7 +39,7 @@ export async function listClosers(): Promise<ActionResult<CloserRow[]>> {
 }
 
 /** Add a new closer — manager only. */
-export async function addCloser(name: string, email: string): Promise<ActionResult<CloserRow>> {
+export async function addCloser(name: string, email: string, phone?: string): Promise<ActionResult<CloserRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
   try {
@@ -52,9 +53,11 @@ export async function addCloser(name: string, email: string): Promise<ActionResu
   if (!trimmedName) return { success: false, error: 'Nome é obrigatório' };
   if (!trimmedEmail) return { success: false, error: 'Email é obrigatório' };
 
+  const trimmedPhone = phone?.replace(/\D/g, '').trim() || null;
+
   const { data, error } = (await closersFrom(supabase)
-    .insert({ org_id: orgId, name: trimmedName, email: trimmedEmail })
-    .select('id, org_id, name, email, created_at')
+    .insert({ org_id: orgId, name: trimmedName, email: trimmedEmail, phone: trimmedPhone })
+    .select('id, org_id, name, email, phone, created_at')
     .single()) as { data: CloserRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao adicionar closer' };
@@ -68,6 +71,7 @@ export async function updateCloser(
   id: string,
   name: string,
   email: string,
+  phone?: string,
 ): Promise<ActionResult<CloserRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -82,11 +86,13 @@ export async function updateCloser(
   if (!trimmedName) return { success: false, error: 'Nome é obrigatório' };
   if (!trimmedEmail) return { success: false, error: 'Email é obrigatório' };
 
+  const trimmedPhone = phone?.replace(/\D/g, '').trim() || null;
+
   const { data, error } = (await closersFrom(supabase)
-    .update({ name: trimmedName, email: trimmedEmail })
+    .update({ name: trimmedName, email: trimmedEmail, phone: trimmedPhone })
     .eq('id', id)
     .eq('org_id', orgId)
-    .select('id, org_id, name, email, created_at')
+    .select('id, org_id, name, email, phone, created_at')
     .single()) as { data: CloserRow | null; error: unknown };
 
   if (error || !data) return { success: false, error: 'Erro ao atualizar closer' };
