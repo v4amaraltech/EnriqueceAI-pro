@@ -322,7 +322,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             {filtered.length > 0 && (
               <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
                 <span>Atividade</span>
-                <span className="text-center">Cadência</span>
+                <span>Cadência</span>
                 <span>Lead</span>
                 <span />
               </div>
