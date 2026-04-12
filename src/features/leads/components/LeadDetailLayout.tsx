@@ -169,13 +169,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       }
       const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id });
       if (result.success) {
-        toast.success('Ligação iniciada — atenda no webphone');
+        toast('Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
+          icon: '📞',
+          duration: 5000,
+        });
       } else {
-        if (result.error?.includes('ramal') || result.error?.includes('offline') || result.error?.includes('not registered') || result.error?.includes('503')) {
-          toast.error('Abra a extensão API4COM (webphone) antes de ligar', { duration: 5000 });
-        } else {
-          toast.error(result.error);
-        }
+        toast.error(result.error ?? 'Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
       }
     } catch {
       toast.error('Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
