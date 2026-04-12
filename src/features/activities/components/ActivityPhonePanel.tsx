@@ -139,7 +139,7 @@ export function ActivityPhonePanel({
       });
 
       if (!result.success) {
-        toast.error(result.error);
+        toast.error('Verifique se a extensão API4COM está aberta e tente novamente.', { duration: 5000 });
         setCallState('idle');
         return;
       }
@@ -282,6 +282,16 @@ export function ActivityPhonePanel({
 
   return (
     <div className="flex h-full flex-col">
+      {/* API4COM webphone reminder */}
+      {dialerProvider === 'api4com' && callState === 'idle' && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+          <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Certifique-se de que a <strong>extensão API4COM (webphone)</strong> está aberta no navegador antes de ligar.
+          </p>
+        </div>
+      )}
+
       {/* Origem / Destino header */}
       <div className="flex items-start justify-between rounded-lg border border-[var(--border)] p-4">
         <div className="flex items-center gap-3">
