@@ -123,7 +123,11 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       });
 
       if (!result.success) {
-        toast.error(result.error);
+        if (result.error?.includes('ramal') || result.error?.includes('offline') || result.error?.includes('not registered') || result.error?.includes('503')) {
+          toast.error('Abra a extensão API4COM (webphone) antes de ligar', { duration: 5000 });
+        } else {
+          toast.error(result.error);
+        }
         setCallState('idle');
         return;
       }
