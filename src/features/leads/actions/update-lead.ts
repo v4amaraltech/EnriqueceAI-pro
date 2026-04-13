@@ -142,15 +142,18 @@ export async function updateLead(
         status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
         faturamento_estimado: 'Faturamento', phones: 'Telefones',
       };
-      const changedFields = Object.keys(changes)
-        .map((k) => fieldLabels[k] ?? k)
-        .join(', ');
+      const changeDescriptions = Object.entries(changes).map(([key, { from, to }]) => {
+        const label = fieldLabels[key] ?? key;
+        const fromStr = from != null && from !== '' ? String(from) : '(vazio)';
+        const toStr = to != null && to !== '' ? String(to) : '(vazio)';
+        return `${label}: ${fromStr} → ${toStr}`;
+      });
       logLeadEvent(supabase, {
         orgId,
         leadId,
         userId: auth.data.userId,
         event: 'fields_updated',
-        message: `Campos atualizados: ${changedFields}`,
+        message: changeDescriptions.join('\n'),
         metadata: { changes },
       });
     }
