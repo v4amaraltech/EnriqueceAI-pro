@@ -378,11 +378,12 @@ export class KommoAdapter implements CRMAdapter {
           ],
         });
       } else {
-        // Generic custom field — send as-is
+        // Generic custom field — use field_id if numeric, field_name otherwise
+        const isNumericId = /^\d+$/.test(crmField);
         customFields.push({
-          field_id: 0,
-          field_name: crmField,
-          field_code: crmField,
+          field_id: isNumericId ? parseInt(crmField, 10) : 0,
+          field_name: isNumericId ? '' : crmField,
+          field_code: isNumericId ? '' : crmField,
           values: [{ value }],
         });
       }
@@ -393,14 +394,19 @@ export class KommoAdapter implements CRMAdapter {
     const lastName = lead[Object.keys(fieldMapping).find((k) => fieldMapping[k] === 'last_name') ?? ''];
     contactName = [firstName, lastName].filter(Boolean).join(' ') || lead.nome_fantasia || 'Contato';
 
+    // Build clean custom fields payload — use field_id for numeric IDs, field_code for standard fields
+    const cleanCustomFields = customFields.map((f) => {
+      if (f.field_id > 0) {
+        return { field_id: f.field_id, values: f.values };
+      }
+      return { field_code: f.field_code, values: f.values };
+    });
+
     if (externalId) {
       // Update existing contact
       const body = {
         name: contactName,
-        custom_fields_values: customFields.map((f) => ({
-          field_code: f.field_code,
-          values: f.values,
-        })),
+        custom_fields_values: cleanCustomFields,
       };
 
       await kommoFetch<unknown>(
@@ -423,10 +429,7 @@ export class KommoAdapter implements CRMAdapter {
         name: contactName,
         first_name: firstName || undefined,
         last_name: lastName || undefined,
-        custom_fields_values: customFields.map((f) => ({
-          field_code: f.field_code,
-          values: f.values,
-        })),
+        custom_fields_values: cleanCustomFields,
         ...(companyName
           ? { _embedded: { companies: [{ name: companyName }] } }
           : {}),
