@@ -95,6 +95,7 @@ export function ActivityPhonePanel({
   // Use first resolved phone or fallback to lead.telefone
   const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
   const [selectedPhone, setSelectedPhone] = useState(initialPhone);
+  const [availablePhones, setAvailablePhones] = useState(phones);
   const [callState, setCallState] = useState<CallState>('idle');
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
@@ -198,6 +199,15 @@ export function ActivityPhonePanel({
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
+
+    // Re-fetch lead phones in case new ones were added during the call
+    import('@/features/leads/actions/fetch-lead-phones').then(({ fetchLeadPhones }) =>
+      fetchLeadPhones(leadId).then((result) => {
+        if (result.success && result.data.length > 0) {
+          setAvailablePhones(result.data);
+        }
+      }),
+    ).catch(() => {});
 
     setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
@@ -315,7 +325,7 @@ export function ActivityPhonePanel({
       </div>
 
       {/* Phone selector — show when multiple phones or retrying */}
-      {phones.length > 0 && (hasMultiplePhones || attempts.length > 0) && (
+      {availablePhones.length > 0 && (availablePhones.length > 1 || attempts.length > 0) && (
         <div className="mt-4 space-y-1.5">
           <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             Selecionar telefone
@@ -325,7 +335,7 @@ export function ActivityPhonePanel({
               <SelectValue placeholder="Selecione um telefone..." />
             </SelectTrigger>
             <SelectContent>
-              {phones.map((p) => (
+              {availablePhones.map((p) => (
                 <SelectItem key={p.raw} value={p.formatted}>
                   {p.label}
                 </SelectItem>
