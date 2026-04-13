@@ -377,6 +377,14 @@ export class KommoAdapter implements CRMAdapter {
             },
           ],
         });
+      } else {
+        // Generic custom field — send as-is
+        customFields.push({
+          field_id: 0,
+          field_name: crmField,
+          field_code: crmField,
+          values: [{ value }],
+        });
       }
     }
 

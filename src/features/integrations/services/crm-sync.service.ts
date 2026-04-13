@@ -269,7 +269,7 @@ export class CrmSyncService {
 
     // Get leads updated since last sync
     let query = from(supabase, 'leads')
-      .select('id, org_id, cnpj, razao_social, nome_fantasia, first_name, last_name, job_title, email, telefone, porte, cnae, situacao_cadastral, faturamento_estimado, uf, lead_source, instagram, linkedin, website, notes, updated_at')
+      .select('id, org_id, cnpj, razao_social, nome_fantasia, first_name, last_name, job_title, email, telefone, porte, cnae, situacao_cadastral, faturamento_estimado, uf, lead_source, instagram, linkedin, website, notes, custom_field_values, updated_at')
       .eq('org_id', connection.org_id)
       .is('deleted_at', null)
       .limit(200);
@@ -317,6 +317,19 @@ export class CrmSyncService {
           website: lead.website,
           notes: lead.notes,
         };
+
+        // Include custom fields in lead record (for CRM field mapping)
+        const cfv = (lead as unknown as Record<string, unknown>).custom_field_values as Record<string, string> | null;
+        if (cfv) {
+          for (const [fieldId, value] of Object.entries(cfv)) {
+            if (value) {
+              // Currency custom fields store in centavos — convert to reais for CRM
+              const numVal = Number(value);
+              const isLikelyCentavos = !isNaN(numVal) && numVal >= 100 && Number.isInteger(numVal);
+              leadRecord[`custom_${fieldId}`] = isLikelyCentavos ? String(numVal / 100) : value;
+            }
+          }
+        }
 
         const existingExternalId = syncMap.get(lead.id);
 
