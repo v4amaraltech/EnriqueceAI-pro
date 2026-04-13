@@ -43,14 +43,14 @@ export async function createMeetingWhatsAppGroup(
       return { success: false, error: 'Evolution API não configurada' };
     }
 
-    // 1. Get SDR's WhatsApp instance (the one creating the group)
+    // 1. Get SDR's WhatsApp instance (the one creating the group — SDR is auto-added as admin)
     const { data: sdrInstance } = (await from(supabase, 'whatsapp_instances' as never)
-      .select('id, instance_name, status, phone')
+      .select('id, instance_name, status')
       .eq('org_id', orgId)
       .eq('user_id', sdrUserId)
-      .maybeSingle()) as { data: { id: string; instance_name: string; status: string; phone: string | null } | null };
+      .maybeSingle()) as { data: { id: string; instance_name: string; status: string } | null };
 
-    if (!sdrInstance || sdrInstance.status !== 'connected' || !sdrInstance.phone) {
+    if (!sdrInstance || sdrInstance.status !== 'connected') {
       console.warn('[whatsapp-group] SDR WhatsApp not connected, skipping group creation');
       return { success: false, error: 'WhatsApp do SDR não conectado' };
     }
