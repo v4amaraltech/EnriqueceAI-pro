@@ -403,18 +403,30 @@ export class KommoAdapter implements CRMAdapter {
     });
 
     if (externalId) {
-      // Update existing contact
-      const body = {
-        name: contactName,
-        custom_fields_values: cleanCustomFields,
-      };
+      // Update existing contact — send standard fields first, then extras (best-effort)
+      const stdFields = cleanCustomFields.filter((f) => 'field_code' in f && (f.field_code === 'PHONE' || f.field_code === 'EMAIL'));
+      const extFields = cleanCustomFields.filter((f) => !('field_code' in f) || (f.field_code !== 'PHONE' && f.field_code !== 'EMAIL'));
 
       await kommoFetch<unknown>(
         subdomain,
         `/contacts/${externalId}`,
         credentials.access_token,
-        { method: 'PATCH', body: JSON.stringify(body) },
+        { method: 'PATCH', body: JSON.stringify({ name: contactName, custom_fields_values: stdFields }) },
       );
+
+      if (extFields.length > 0) {
+        try {
+          await kommoFetch<unknown>(
+            subdomain,
+            `/contacts/${externalId}`,
+            credentials.access_token,
+            { method: 'PATCH', body: JSON.stringify({ custom_fields_values: extFields }) },
+          );
+        } catch (cfErr) {
+          console.warn('[kommo] Failed to update custom fields (non-blocking):', cfErr);
+        }
+      }
+
       return { external_id: externalId };
     }
 
@@ -424,12 +436,16 @@ export class KommoAdapter implements CRMAdapter {
     );
     const companyName = companyNameField ? lead[companyNameField] : null;
 
+    // Only standard fields (PHONE, EMAIL) for initial contact creation — custom fields can fail
+    const standardFields = cleanCustomFields.filter((f) => 'field_code' in f && (f.field_code === 'PHONE' || f.field_code === 'EMAIL'));
+    const extraFields = cleanCustomFields.filter((f) => !('field_code' in f) || (f.field_code !== 'PHONE' && f.field_code !== 'EMAIL'));
+
     const contactPayload = [
       {
         name: contactName,
         first_name: firstName || undefined,
         last_name: lastName || undefined,
-        custom_fields_values: cleanCustomFields,
+        custom_fields_values: standardFields,
         ...(companyName
           ? { _embedded: { companies: [{ name: companyName }] } }
           : {}),
@@ -447,6 +463,20 @@ export class KommoAdapter implements CRMAdapter {
     if (!createdId) {
       console.error('[kommo] POST /contacts unexpected response:', JSON.stringify(result));
       throw new Error('Kommo: failed to create contact, no ID returned');
+    }
+
+    // Try to add extra custom fields (best-effort — don't fail if Kommo rejects)
+    if (extraFields.length > 0) {
+      try {
+        await kommoFetch<unknown>(
+          subdomain,
+          `/contacts/${createdId}`,
+          credentials.access_token,
+          { method: 'PATCH', body: JSON.stringify({ custom_fields_values: extraFields }) },
+        );
+      } catch (cfErr) {
+        console.warn('[kommo] Failed to set custom fields on contact (non-blocking):', cfErr);
+      }
     }
 
     return { external_id: createdId.toString() };
