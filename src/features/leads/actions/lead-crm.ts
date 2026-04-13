@@ -322,11 +322,27 @@ export async function markLeadAsWon(
           const fieldMapping = connection.field_mapping?.leads ?? DEFAULT_FIELD_MAPPINGS[crmOptions.provider].leads;
 
           // Build flat lead with custom field values resolved as top-level keys
+          // Currency custom fields store values in centavos — convert to reais for CRM
           const flatLead: Record<string, string | null> = { ...lead };
           const cfValues = lead.custom_field_values as unknown as Record<string, string> | null;
           if (cfValues && typeof cfValues === 'object') {
+            // Fetch currency field IDs to know which values to divide by 100
+            const { data: currencyFields } = (await from(supabase, 'custom_fields')
+              .select('id')
+              .eq('org_id', orgId)
+              .eq('field_type', 'currency')) as { data: Array<{ id: string }> | null };
+            const currencyIds = new Set((currencyFields ?? []).map((f) => f.id));
+
             for (const [cfId, cfVal] of Object.entries(cfValues)) {
-              flatLead[`custom_${cfId}`] = typeof cfVal === 'string' ? cfVal : String(cfVal ?? '');
+              let value = typeof cfVal === 'string' ? cfVal : String(cfVal ?? '');
+              // Convert centavos to reais for currency fields
+              if (currencyIds.has(cfId) && value) {
+                const numVal = Number(value);
+                if (!isNaN(numVal)) {
+                  value = String(numVal / 100);
+                }
+              }
+              flatLead[`custom_${cfId}`] = value;
             }
           }
 
