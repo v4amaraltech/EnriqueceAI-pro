@@ -343,16 +343,22 @@ export async function markLeadAsWon(
             .eq('type', 'crm_synced')
             .maybeSingle()) as { data: { external_id: string } | null };
 
-          // Create/update Contact/Person
-          const { external_id: contactExternalId } = await adapter.pushContact(
-            credentials,
-            flatLead,
-            fieldMapping,
-            existingSync?.external_id ?? undefined,
-          );
+          // Create/update Contact/Person (don't block won status if CRM push fails)
+          let contactExternalId: string | undefined;
+          try {
+            const pushResult = await adapter.pushContact(
+              credentials,
+              flatLead,
+              fieldMapping,
+              existingSync?.external_id ?? undefined,
+            );
+            contactExternalId = pushResult.external_id;
+          } catch (pushErr) {
+            console.error('[lead-crm] pushContact failed (lead already marked as won):', pushErr);
+          }
 
           // Record contact sync if new
-          if (!existingSync) {
+          if (contactExternalId && !existingSync) {
             await from(supabase, 'interactions').insert({
               org_id: orgId,
               lead_id: leadId,
@@ -424,7 +430,7 @@ export async function markLeadAsWon(
 
             const result = await pipedriveAdapter.pushDeal(credentials, {
               title: dealTitle,
-              person_id: parseInt(contactExternalId, 10),
+              person_id: parseInt(contactExternalId ?? existingSync?.external_id ?? '0', 10),
               pipeline_id: parseInt(crmOptions.pipelineId, 10),
               stage_id: parseInt(crmOptions.stageId, 10),
               org_id: orgExternalId,
@@ -436,7 +442,7 @@ export async function markLeadAsWon(
             if (leadSource && origemFieldFailed) {
               try {
                 await pipedriveAdapter.pushActivity(credentials, {
-                  contact_external_id: contactExternalId,
+                  contact_external_id: contactExternalId ?? '',
                   type: 'note',
                   subject: 'Origem do Lead',
                   body: `Origem: ${leadSource}`,
@@ -480,7 +486,9 @@ export async function markLeadAsWon(
             const companyId = companyResult.external_id;
 
             // Associate Contact to Company
-            await hubspotAdapter.associateContactToCompany(credentials, contactExternalId, companyId);
+            if (contactExternalId) {
+              await hubspotAdapter.associateContactToCompany(credentials, contactExternalId, companyId);
+            }
 
             // Try to set lead source as custom property (requires crm.schemas.deals.write scope)
             const hsLeadSource = lead.lead_source as string | null;
@@ -497,7 +505,7 @@ export async function markLeadAsWon(
             // Create Deal linked to Contact + Company
             const result = await hubspotAdapter.pushDeal(credentials, {
               title: dealTitle,
-              contactId: contactExternalId,
+              contactId: contactExternalId ?? existingSync?.external_id ?? '',
               pipelineId: crmOptions.pipelineId,
               stageId: crmOptions.stageId,
               companyId,
@@ -554,7 +562,7 @@ export async function markLeadAsWon(
             const rdDealResult = await rdAdapter.pushDeal(credentials, {
               name: dealTitle,
               deal_stage_id: crmOptions.stageId,
-              contacts: [contactExternalId],
+              contacts: [contactExternalId ?? existingSync?.external_id ?? ''],
               organization_id: organizationId,
             });
             dealExternalId = rdDealResult.external_id;
@@ -593,7 +601,7 @@ export async function markLeadAsWon(
             // Kommo creates leads (deals) with contacts via pushDeal
             const result = await kommoAdapter.pushDeal(credentials, {
               title: dealTitle,
-              contactExternalId,
+              contactExternalId: contactExternalId ?? existingSync?.external_id ?? '',
               pipelineId: parseInt(crmOptions.pipelineId, 10),
               stageId: parseInt(crmOptions.stageId, 10),
               responsibleUserId: crmOptions.responsibleUserId ? parseInt(crmOptions.responsibleUserId, 10) : undefined,
