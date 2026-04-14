@@ -12,12 +12,12 @@ const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
   archived: { label: 'Arquivado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-300' },
 };
 
-// Meetime-style engagement labels
+// Labels consistent with filters
 const meetimeConfig: Record<LeadStatus, { label: string; className: string }> = {
-  new: { label: 'ESPERANDO INÍCIO', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
-  contacted: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
-  qualified: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
-  unqualified: { label: 'DESCARTADO', className: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' },
+  new: { label: 'NOVO', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  contacted: { label: 'CONTATADO', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' },
+  qualified: { label: 'QUALIFICADO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
+  unqualified: { label: 'NÃO QUALIFICADO', className: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' },
   archived: { label: 'ARQUIVADO', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300' },
 };
 
