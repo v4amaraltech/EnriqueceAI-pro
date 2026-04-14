@@ -635,7 +635,7 @@ export function LeadInfoPanel({
                     />
                   )}
                   {isFieldVisible('canal') && <MeetimeFieldRow label="Sub-origem" value={data.canal || '—'} />}
-                  {isFieldVisible('cnpj') && data.cnpj && <MeetimeFieldRow label="CNPJ" value={data.cnpj} />}
+                  {isFieldVisible('cnpj') && <MeetimeFieldRow label="CNPJ" value={data.cnpj || '—'} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
                   {isFieldVisible('created_at') && (
                     <MeetimeFieldRow
