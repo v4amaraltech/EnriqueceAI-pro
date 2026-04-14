@@ -71,21 +71,32 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   // Data loading states
   const [members, setMembers] = useState<OrgMemberOption[]>([]);
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
+  const [canalOptions, setCanalOptions] = useState<string[]>([...CANAL_OPTIONS]);
   const [loaded, setLoaded] = useState(false);
   const [cadenceSearch, setCadenceSearch] = useState('');
 
   const isLoading = open && !loaded;
 
-  // Load members and cadences when dialog opens
+  // Load members, cadences, and canal options when dialog opens
   useEffect(() => {
     if (!open || loaded) return;
     let cancelled = false;
 
-    Promise.all([fetchOrgMembersAuth(), fetchActiveCadences()]).then(
-      ([membersResult, cadencesResult]) => {
+    Promise.all([
+      fetchOrgMembersAuth(),
+      fetchActiveCadences(),
+      import('@/features/settings-prospecting/actions/standard-field-settings').then((m) => m.listStandardFieldSettingsForMember()),
+    ]).then(
+      ([membersResult, cadencesResult, settingsResult]) => {
         if (cancelled) return;
         if (membersResult.success) setMembers(membersResult.data);
         if (cadencesResult.success) setCadences(cadencesResult.data);
+        if (settingsResult.success) {
+          const canalSetting = settingsResult.data.find((s) => s.field_key === 'canal');
+          if (canalSetting?.options?.length) {
+            setCanalOptions(canalSetting.options);
+          }
+        }
         setLoaded(true);
       },
     );
@@ -455,8 +466,8 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione a sub-origem" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {CANAL_OPTIONS.map((c) => (
+                    <SelectContent className="max-h-[250px] overflow-y-auto">
+                      {canalOptions.map((c) => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>
