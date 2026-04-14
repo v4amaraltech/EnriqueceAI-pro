@@ -79,6 +79,8 @@ export async function createMeetingWhatsAppGroup(
       `${leadPhoneFormatted}@s.whatsapp.net`,
     ];
 
+    console.warn(`[whatsapp-group] Creating group: closer=${closerPhoneFormatted} lead=${leadPhoneFormatted} sdr_instance=${sdrInstance.instance_name}`);
+
     // 4. Create group via Evolution API
     const groupName = `V4 Company <> ${leadCompanyName}`;
 
