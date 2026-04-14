@@ -142,12 +142,16 @@ export async function updateLead(
         status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
         faturamento_estimado: 'Faturamento', phones: 'Telefones',
       };
-      const changeDescriptions = Object.entries(changes).map(([key, { from, to }]) => {
-        const label = fieldLabels[key] ?? key;
-        const fromStr = from != null && from !== '' ? String(from) : '(vazio)';
-        const toStr = to != null && to !== '' ? String(to) : '(vazio)';
-        return `${label}: ${fromStr} → ${toStr}`;
-      });
+      // Skip complex object fields (phones, custom_field_values) from the message — they're in metadata
+      const skipFields = new Set(['phones', 'socios', 'custom_field_values']);
+      const changeDescriptions = Object.entries(changes)
+        .filter(([key]) => !skipFields.has(key))
+        .map(([key, { from, to }]) => {
+          const label = fieldLabels[key] ?? key;
+          const fromStr = from != null && from !== '' && typeof from !== 'object' ? String(from) : '(vazio)';
+          const toStr = to != null && to !== '' && typeof to !== 'object' ? String(to) : '(vazio)';
+          return `${label}: ${fromStr} → ${toStr}`;
+        });
       logLeadEvent(supabase, {
         orgId,
         leadId,
