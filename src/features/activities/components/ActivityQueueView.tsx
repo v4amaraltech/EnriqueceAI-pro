@@ -401,6 +401,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
+            onLeadLost={handleLeadLost}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
           />

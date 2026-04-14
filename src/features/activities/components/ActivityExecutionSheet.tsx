@@ -29,6 +29,7 @@ interface ActivityExecutionSheetProps {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onActivityDone: (enrollmentId: string, stepId: string) => void;
+  onLeadLost?: (activity: PendingActivity) => void;
   dialerProvider?: DialerProvider;
   quickMode?: boolean;
 }
@@ -39,6 +40,7 @@ export function ActivityExecutionSheet({
   onClose,
   onNavigate,
   onActivityDone,
+  onLeadLost,
   dialerProvider,
   quickMode = false,
 }: ActivityExecutionSheetProps) {
@@ -305,6 +307,7 @@ export function ActivityExecutionSheet({
                 onSend={handleSend}
                 onSkip={handleSkip}
                 onMarkDone={handleMarkDone}
+                onLeadLost={onLeadLost ? () => onLeadLost(activity) : undefined}
                 dialerProvider={dialerProvider}
               />
             </div>

@@ -12,6 +12,7 @@ import {
   PhoneCall,
   PhoneOff,
   RotateCcw,
+  ThumbsDown,
   User,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -75,6 +76,7 @@ interface ActivityPhonePanelProps {
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
+  onLeadLost?: () => void;
   activityName?: string | null;
   callScript?: string | null;
   dialerProvider?: DialerProvider;
@@ -88,6 +90,7 @@ export function ActivityPhonePanel({
   isSending,
   onMarkDone,
   onSkip,
+  onLeadLost,
   activityName,
   callScript,
   dialerProvider = 'api4com',
@@ -585,6 +588,12 @@ export function ActivityPhonePanel({
               <Button variant="secondary" onClick={handleRetryAttempt} disabled={!callStatus}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Tentar novamente
+              </Button>
+            )}
+            {onLeadLost && (
+              <Button variant="destructive" onClick={onLeadLost} disabled={isSending}>
+                <ThumbsDown className="mr-2 h-4 w-4" />
+                Perdido
               </Button>
             )}
             <Button onClick={handleSubmitResult} disabled={isSending || !callStatus}>

@@ -29,6 +29,7 @@ interface ActivityExecutionSheetContentProps {
   onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string) => void;
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
+  onLeadLost?: () => void;
   dialerProvider?: DialerProvider;
 }
 
@@ -38,6 +39,7 @@ export function ActivityExecutionSheetContent({
   onSend,
   onSkip,
   onMarkDone,
+  onLeadLost,
   dialerProvider,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -214,6 +216,7 @@ export function ActivityExecutionSheetContent({
         isSending={isSending}
         onMarkDone={onMarkDone}
         onSkip={onSkip}
+        onLeadLost={onLeadLost}
         activityName={activity.activityName}
         callScript={activity.callScript}
         dialerProvider={dialerProvider}
