@@ -61,24 +61,18 @@ export async function fetchLeads(
     query = query.eq('canal', filters.canal);
   }
 
-  // Filter by cadence enrollment (cadence_enrollments has no org_id — scope via cadence_id)
+  // Filter by cadence enrollment
   if (filters.cadence_id) {
     if (filters.cadence_id === '__none__') {
-      // Leads without active enrollment — get org cadence IDs first
-      const { data: orgCadences } = (await from(supabase, 'cadences')
-        .select('id')
-        .eq('org_id', orgId)
-        .is('deleted_at', null)) as { data: Array<{ id: string }> | null };
-      const orgCadenceIds = (orgCadences ?? []).map((c) => c.id);
-      if (orgCadenceIds.length > 0) {
-        const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
-          .select('lead_id')
-          .in('cadence_id', orgCadenceIds)
-          .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
-        const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
-        if (enrolledIds.length > 0) {
-          query = query.not('id', 'in', enrolledIds);
-        }
+      // Leads without active enrollment — use database function (efficient, no ID limit)
+      const { data: noEnrollmentIds } = await (supabase.rpc as any)('leads_without_active_enrollment', {
+        p_org_id: orgId,
+      }) as { data: string[] | null };
+
+      if (noEnrollmentIds && noEnrollmentIds.length > 0) {
+        query = query.in('id', noEnrollmentIds);
+      } else {
+        return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
       }
     } else {
       // Leads enrolled in a specific cadence
