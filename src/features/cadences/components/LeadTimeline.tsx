@@ -189,6 +189,8 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                 const systemEvent = (entry.metadata as Record<string, unknown> | null)?.system_event as string | undefined;
                 const systemTitles: Record<string, string> = {
                   lead_created: 'Lead criado',
+                  lead_won: 'Lead ganho',
+                  lead_lost: 'Lead perdido',
                   activity_scheduled: 'Atividade agendada',
                   fields_updated: 'Campos atualizados',
                   enrollment_added: 'Inscrito em cadência',
@@ -197,6 +199,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                   status_changed: 'Status alterado',
                   lead_assigned: 'Lead atribuído',
                   lead_archived: 'Lead arquivado',
+                  meeting_invite_sent: 'Convite de reunião enviado',
                 };
                 const title = isSystem
                   ? (entry.performed_by_name
