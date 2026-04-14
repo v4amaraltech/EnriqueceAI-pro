@@ -16,6 +16,8 @@ const filtersSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, 'Month must be YYYY-MM format'),
   cadenceIds: z.array(z.string().uuid()).default([]),
   userIds: z.array(z.string().uuid()).default([]),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
 });
 
 export async function getRankingData(
