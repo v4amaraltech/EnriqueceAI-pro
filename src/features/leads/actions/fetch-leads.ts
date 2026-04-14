@@ -77,7 +77,7 @@ export async function fetchLeads(
           .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
         const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
         if (enrolledIds.length > 0) {
-          query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
+          query = query.not('id', 'in', enrolledIds);
         }
       }
     } else {
