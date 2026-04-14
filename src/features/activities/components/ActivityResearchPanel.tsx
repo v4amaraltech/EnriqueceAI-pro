@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 
-import { CheckCircle2, Loader2, Search } from 'lucide-react';
+import { Bot, CheckCircle2, Loader2, Search } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
+import { toast } from 'sonner';
 
 interface ActivityResearchPanelProps {
   leadName: string;
@@ -15,24 +16,39 @@ interface ActivityResearchPanelProps {
   onSkip: () => void;
 }
 
-const researchChecklist = [
-  'Pesquisar empresa no Google',
-  'Verificar site da empresa',
-  'Identificar decisores / contatos-chave',
-  'Verificar redes sociais da empresa',
-  'Anotar informações relevantes',
-];
+const N8N_WEBHOOK_URL = 'https://webhook-n8n.v4companyamaral.com/webhook/deep-research-lead';
 
 export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip }: ActivityResearchPanelProps) {
   const [notes, setNotes] = useState('');
-  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [isResearching, startResearch] = useTransition();
 
-  function toggleCheck(index: number) {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
+  function handleDeepResearch() {
+    startResearch(async () => {
+      try {
+        const response = await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empresa: leadName }),
+        });
+
+        if (!response.ok) {
+          toast.error('Erro ao executar Deep Research');
+          return;
+        }
+
+        const data = (await response.json()) as { dossie?: string } | Array<{ dossie?: string }>;
+        const result = Array.isArray(data) ? data[0] : data;
+        const dossie = result?.dossie;
+
+        if (dossie) {
+          setNotes(dossie);
+          toast.success('Deep Research concluído!');
+        } else {
+          toast.error('Nenhum resultado retornado');
+        }
+      } catch {
+        toast.error('Erro de conexão com o serviço de pesquisa');
+      }
     });
   }
 
@@ -46,32 +62,34 @@ export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip 
       </div>
 
       <div className="mt-4 space-y-4 flex-1">
-        {/* Checklist */}
-        <div className="space-y-2">
-          <Label className="text-xs">Checklist de Pesquisa</Label>
-          {researchChecklist.map((item, i) => (
-            <label key={i} className="flex items-center gap-2 rounded-md p-2 hover:bg-[var(--accent)]/50">
-              <input
-                type="checkbox"
-                checked={checked.has(i)}
-                onChange={() => toggleCheck(i)}
-                className="h-4 w-4 rounded border-[var(--border)]"
-              />
-              <span className={`text-sm ${checked.has(i) ? 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] line-through' : ''}`}>
-                {item}
-              </span>
-            </label>
-          ))}
-        </div>
+        {/* Deep Research AI Button */}
+        <Button
+          onClick={handleDeepResearch}
+          disabled={isResearching}
+          className="w-full gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white"
+          size="lg"
+        >
+          {isResearching ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Pesquisando com IA... (~30s)
+            </>
+          ) : (
+            <>
+              <Bot className="h-5 w-5" />
+              Deep Research com IA
+            </>
+          )}
+        </Button>
 
-        {/* Notes */}
+        {/* Notes / Dossiê */}
         <div className="space-y-1">
           <Label className="text-xs">Anotações da Pesquisa</Label>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Informações encontradas sobre o lead..."
-            className="min-h-[120px] resize-none"
+            placeholder="Clique em 'Deep Research com IA' para pesquisar automaticamente ou escreva manualmente..."
+            className="min-h-[200px] resize-y font-mono text-xs"
           />
         </div>
       </div>
