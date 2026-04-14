@@ -81,11 +81,12 @@ export async function createMeetingWhatsAppGroup(
 
     console.warn(`[whatsapp-group] Creating group: closer=${closerPhoneFormatted} lead=${leadPhoneFormatted} sdr_instance=${sdrInstance.instance_name}`);
 
-    // 4. Create group via Evolution API
+    // 4. Create group via Evolution API (create first, then add participants)
     const groupName = `V4 Company <> ${leadCompanyName}`;
+    const baseUrl = apiUrl.replace(/\/+$/, '');
 
     const createResponse = await fetch(
-      `${apiUrl.replace(/\/+$/, '')}/group/create/${sdrInstance.instance_name}`,
+      `${baseUrl}/group/create/${sdrInstance.instance_name}`,
       {
         method: 'POST',
         headers: {
@@ -107,6 +108,32 @@ export async function createMeetingWhatsAppGroup(
 
     const createData = (await createResponse.json()) as { id?: string; groupMetadata?: { id?: string } };
     const groupId = createData.id ?? createData.groupMetadata?.id;
+
+    // Try adding participants individually if they weren't added during creation
+    if (groupId) {
+      for (const participant of participants) {
+        try {
+          const addResponse = await fetch(
+            `${baseUrl}/group/updateParticipant/${sdrInstance.instance_name}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', apikey: apiKey },
+              body: JSON.stringify({
+                groupJid: groupId,
+                action: 'add',
+                participants: [participant],
+              }),
+            },
+          );
+          if (!addResponse.ok) {
+            const errText = await addResponse.text();
+            console.warn(`[whatsapp-group] Failed to add ${participant}:`, addResponse.status, errText);
+          }
+        } catch (addErr) {
+          console.warn(`[whatsapp-group] Error adding ${participant}:`, addErr);
+        }
+      }
+    }
 
     if (!groupId) {
       console.error('[whatsapp-group] No group ID returned');
