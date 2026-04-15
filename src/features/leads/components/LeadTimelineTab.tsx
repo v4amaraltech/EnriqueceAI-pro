@@ -148,7 +148,6 @@ export function LeadTimelineTab({ timeline }: LeadTimelineTabProps) {
                       __html: sanitizeHtml(
                         entry.message_content
                           .replace(/\{\{[^}]+\}\}/g, '')
-                          .replace(/\s{2,}/g, ' ')
                           .trim(),
                       ),
                     }}
