@@ -114,7 +114,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
   const filteredTimeline = useMemo(() => {
     if (channelFilter === 'all') return timelineWithCreation;
-    return timelineWithCreation.filter((e) => e.channel === channelFilter || e.channel === 'system');
+    return timelineWithCreation.filter((e) => e.channel === channelFilter);
   }, [timelineWithCreation, channelFilter]);
 
   const meetings = useMemo(
