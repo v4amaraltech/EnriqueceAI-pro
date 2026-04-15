@@ -66,7 +66,7 @@ export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip 
         <Button
           onClick={handleDeepResearch}
           disabled={isResearching}
-          className="w-full gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white"
+          className="w-full gap-2 bg-[#e63027] hover:bg-[#cc2920] text-white"
           size="lg"
         >
           {isResearching ? (
