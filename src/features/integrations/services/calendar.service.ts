@@ -73,9 +73,46 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
     return decrypt(connection.access_token_encrypted);
   }
 
+  // Check if refresh token exists
+  if (!connection.refresh_token_encrypted) {
+    console.error(`[gcal] No refresh token for connection ${connection.id} — user must reconnect`);
+    const serviceClient = createServiceRoleClient();
+    await from(serviceClient, 'calendar_connections')
+      .update({ status: 'error' } as Record<string, unknown>)
+      .eq('id', connection.id);
+    const err = new Error('Google Calendar desconectado. Reconecte em Configurações > Integrações.');
+    err.name = 'GCalTokenExpired';
+    throw err;
+  }
+
   // Refresh the token
   const clientId = getGcalClientId();
   const clientSecret = getGcalClientSecret();
+
+  let refreshToken: string;
+  try {
+    refreshToken = decrypt(connection.refresh_token_encrypted);
+  } catch (decryptErr) {
+    console.error(`[gcal] Failed to decrypt refresh token for connection ${connection.id}:`, decryptErr);
+    const serviceClient = createServiceRoleClient();
+    await from(serviceClient, 'calendar_connections')
+      .update({ status: 'error' } as Record<string, unknown>)
+      .eq('id', connection.id);
+    const err = new Error('Token do Google corrompido. Reconecte em Configurações > Integrações.');
+    err.name = 'GCalTokenExpired';
+    throw err;
+  }
+
+  if (!refreshToken) {
+    console.error(`[gcal] Empty refresh token after decrypt for connection ${connection.id}`);
+    const serviceClient = createServiceRoleClient();
+    await from(serviceClient, 'calendar_connections')
+      .update({ status: 'error' } as Record<string, unknown>)
+      .eq('id', connection.id);
+    const err = new Error('Google Calendar desconectado. Reconecte em Configurações > Integrações.');
+    err.name = 'GCalTokenExpired';
+    throw err;
+  }
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -83,7 +120,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: decrypt(connection.refresh_token_encrypted),
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   });
@@ -102,7 +139,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
       .eq('id', connection.id);
 
     const err = new Error(
-      'Sessão do Google Calendar expirada. Reconectando...',
+      'Sessão do Google Calendar expirada. Reconecte em Configurações > Integrações.',
     );
     err.name = 'GCalTokenExpired';
     throw err;

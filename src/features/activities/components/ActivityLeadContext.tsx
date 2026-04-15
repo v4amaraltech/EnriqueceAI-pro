@@ -29,15 +29,27 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
   useEffect(() => {
     const supabase = createClient();
 
-    (async () => {
+    async function fetchTimeline() {
       const { data } = (await from(supabase, 'interactions')
-        .select('id, type, channel, message_content, ai_generated, created_at')
+        .select('id, type, channel, message_content, ai_generated, created_at, metadata, performed_by')
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false })
-        .limit(20)) as { data: TimelineEntry[] | null };
+        .limit(50)) as { data: TimelineEntry[] | null };
 
       setTimeline(data ?? []);
-    })();
+    }
+
+    fetchTimeline();
+
+    // Subscribe to new interactions for this lead
+    const channel = supabase
+      .channel(`timeline-${lead.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'interactions', filter: `lead_id=eq.${lead.id}` },
+        () => { fetchTimeline(); },
+      )
+      .subscribe();
 
     // Fetch visible custom fields if not provided via props
     if (!propDefs) {
@@ -59,6 +71,8 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
 
       setStandardFieldSettings(data ?? []);
     })();
+
+    return () => { supabase.removeChannel(channel); };
   }, [lead.id, propDefs]);
 
   return (

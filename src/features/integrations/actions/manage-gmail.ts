@@ -185,7 +185,7 @@ export async function refreshGmailToken(
 ): Promise<ActionResult<{ refreshed: boolean }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { userId, supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return { success: false, error: 'Configuração do Google OAuth não encontrada' };
@@ -237,14 +237,15 @@ export async function refreshGmailToken(
     } as Record<string, unknown>)
     .eq('id', connectionId);
 
-  // Also refresh calendar token (unified OAuth)
+  // Also refresh calendar token (unified OAuth) — filter by org_id too
   await from(supabase, 'calendar_connections')
     .update({
       access_token_encrypted: encryptedNewAccessToken,
       token_expires_at: expiresAt,
       status: 'connected',
     } as Record<string, unknown>)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('org_id', orgId);
 
   return { success: true, data: { refreshed: true } };
 }
