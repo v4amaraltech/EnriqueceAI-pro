@@ -6,7 +6,7 @@
  */
 
 const APOLLO_BASE_URL = 'https://api.apollo.io/api/v1';
-const APOLLO_TIMEOUT_MS = 15_000;
+const APOLLO_TIMEOUT_MS = 30_000;
 
 export interface ApolloSearchParams {
   personTitles?: string[];
