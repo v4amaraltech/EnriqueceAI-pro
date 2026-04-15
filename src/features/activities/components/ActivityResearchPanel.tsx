@@ -9,6 +9,8 @@ import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { toast } from 'sonner';
 
+import { deepResearchLead } from '../actions/deep-research';
+
 interface ActivityResearchPanelProps {
   leadName: string;
   isSending: boolean;
@@ -16,38 +18,18 @@ interface ActivityResearchPanelProps {
   onSkip: () => void;
 }
 
-const N8N_WEBHOOK_URL = 'https://webhook-n8n.v4companyamaral.com/webhook/deep-research-lead';
-
 export function ActivityResearchPanel({ leadName, isSending, onMarkDone, onSkip }: ActivityResearchPanelProps) {
   const [notes, setNotes] = useState('');
   const [isResearching, startResearch] = useTransition();
 
   function handleDeepResearch() {
     startResearch(async () => {
-      try {
-        const response = await fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empresa: leadName }),
-        });
-
-        if (!response.ok) {
-          toast.error('Erro ao executar Deep Research');
-          return;
-        }
-
-        const data = (await response.json()) as { dossie?: string } | Array<{ dossie?: string }>;
-        const result = Array.isArray(data) ? data[0] : data;
-        const dossie = result?.dossie;
-
-        if (dossie) {
-          setNotes(dossie);
-          toast.success('Deep Research concluído!');
-        } else {
-          toast.error('Nenhum resultado retornado');
-        }
-      } catch {
-        toast.error('Erro de conexão com o serviço de pesquisa');
+      const result = await deepResearchLead(leadName);
+      if (result.success) {
+        setNotes(result.data.dossie);
+        toast.success('Deep Research concluído!');
+      } else {
+        toast.error(result.error);
       }
     });
   }
