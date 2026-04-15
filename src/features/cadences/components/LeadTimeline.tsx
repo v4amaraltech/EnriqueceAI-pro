@@ -103,7 +103,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
         )}
         {hasHtml ? (
           <div
-            className="prose prose-sm max-w-none mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
+            className="prose prose-sm max-w-none whitespace-pre-line mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
           />
         ) : (
@@ -130,7 +130,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
             }`}
           >
             <div
-              className="prose prose-sm max-w-none text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
+              className="prose prose-sm max-w-none whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
             />
           </div>
