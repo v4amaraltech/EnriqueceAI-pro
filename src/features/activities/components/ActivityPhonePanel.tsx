@@ -464,7 +464,7 @@ export function ActivityPhonePanel({
 
       {/* Post-call result modal */}
       <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resultado da Ligação</DialogTitle>
           </DialogHeader>
@@ -580,7 +580,7 @@ export function ActivityPhonePanel({
             )}
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <DialogFooter className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleDismissModal}>
               Cancelar
             </Button>
