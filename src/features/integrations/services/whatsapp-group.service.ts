@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import { validateBrazilianPhone } from './whatsapp.service';
 
@@ -140,7 +141,25 @@ export async function createMeetingWhatsAppGroup(
       return { success: false, error: 'Grupo criado mas ID não retornado' };
     }
 
-    // 5. Send meeting invite message to the group
+    // 5. Set group profile picture (V4 logo)
+    try {
+      const appUrl = getAppUrl();
+      await fetch(
+        `${baseUrl}/group/updateGroupPicture/${sdrInstance.instance_name}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', apikey: apiKey },
+          body: JSON.stringify({
+            groupJid: groupId,
+            image: `${appUrl}/logos/v4-group-cover.jpeg`,
+          }),
+        },
+      );
+    } catch (picErr) {
+      console.warn('[whatsapp-group] Failed to set group picture:', picErr);
+    }
+
+    // 6. Send meeting invite message to the group
     const inviteMessage = [
       `📋 *${meetingTitle}*`,
       `📅 ${meetingDate}`,
