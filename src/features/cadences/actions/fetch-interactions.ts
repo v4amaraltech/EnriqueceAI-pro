@@ -10,7 +10,7 @@ import type { CadenceEnrollmentRow, InteractionRow } from '../types';
 
 export async function fetchLeadTimeline(
   leadId: string,
-  limit = 20,
+  limit = 50,
 ): Promise<ActionResult<TimelineEntry[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
