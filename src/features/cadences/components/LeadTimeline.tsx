@@ -87,9 +87,28 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
         </p>
       );
     }
+
+    // Context-aware fallback: give user useful info instead of just "Nenhuma anotação"
+    let fallback = 'Nenhuma anotação';
+    if (entry.channel === 'phone') {
+      if (entry.call_duration && entry.call_duration > 0) {
+        const mins = Math.floor(entry.call_duration / 60);
+        const secs = entry.call_duration % 60;
+        fallback = `Ligação sem anotações (${mins}:${String(secs).padStart(2, '0')})`;
+      } else {
+        fallback = 'Ligação concluída sem anotações';
+      }
+    } else if (entry.channel === 'email') {
+      fallback = entry.ai_generated ? 'E-mail enviado automaticamente pela cadência' : 'E-mail enviado (sem corpo registrado)';
+    } else if (entry.channel === 'whatsapp') {
+      fallback = entry.ai_generated ? 'WhatsApp enviado automaticamente pela cadência' : 'WhatsApp enviado (sem corpo registrado)';
+    } else if (entry.channel === 'research') {
+      fallback = 'Pesquisa concluída sem anotações';
+    }
+
     return (
       <p className="mt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] italic">
-        Nenhuma anotação
+        {fallback}
       </p>
     );
   }
