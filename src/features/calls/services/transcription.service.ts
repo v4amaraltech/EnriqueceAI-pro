@@ -1,7 +1,7 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES } from '@/features/ai/prompts/spiced-analysis';
+import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES, type SpicedLeadContext } from '@/features/ai/prompts/spiced-analysis';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
@@ -161,8 +161,46 @@ async function analyzeAndSaveSpiced(
 
   const fieldNameToId = new Map(customFields.map((f) => [f.field_name, f.id]));
 
+  // Build lead context (cabeçalho) for the prompt
+  const { data: leadInfo } = (await from(supabase, 'leads')
+    .select('first_name, last_name, job_title, razao_social, nome_fantasia, cnpj, cnae, endereco, lead_source, canal, website, instagram, linkedin')
+    .eq('id', leadId)
+    .single()) as {
+    data: {
+      first_name: string | null;
+      last_name: string | null;
+      job_title: string | null;
+      razao_social: string | null;
+      nome_fantasia: string | null;
+      cnpj: string | null;
+      cnae: string | null;
+      endereco: { cidade?: string; uf?: string } | null;
+      lead_source: string | null;
+      canal: string | null;
+      website: string | null;
+      instagram: string | null;
+      linkedin: string | null;
+    } | null;
+  };
+
+  const leadContext: SpicedLeadContext | undefined = leadInfo
+    ? {
+        decisorNome: [leadInfo.first_name, leadInfo.last_name].filter(Boolean).join(' ') || null,
+        decisorCargo: leadInfo.job_title,
+        empresa: leadInfo.razao_social ?? leadInfo.nome_fantasia,
+        cnpj: leadInfo.cnpj,
+        segmento: leadInfo.cnae,
+        cidade: leadInfo.endereco?.cidade ?? null,
+        uf: leadInfo.endereco?.uf ?? null,
+        origem: [leadInfo.lead_source, leadInfo.canal].filter(Boolean).join(' / ') || null,
+        site: leadInfo.website,
+        instagram: leadInfo.instagram,
+        linkedin: leadInfo.linkedin,
+      }
+    : undefined;
+
   // Call Claude for SPICED analysis
-  const prompt = buildSpicedAnalysisPrompt(transcription);
+  const prompt = buildSpicedAnalysisPrompt(transcription, leadContext);
   const spicedJson = await callClaudeForSpiced(prompt);
 
   // Map prompt response keys → database field names → field IDs
