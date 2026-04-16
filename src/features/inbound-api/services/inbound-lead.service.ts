@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+import { normalizeOriginFields } from '@/features/leads/schemas/lead.schemas';
 
 import { inboundLeadSchema } from '../schemas/inbound-lead.schemas';
 import type { InboundLeadResult, InboundBatchResult } from '../types';
@@ -83,7 +84,9 @@ async function ingestSingleLead(
   }
 
   const data = parsed.data;
-  const source = data.lead_source || defaultSource;
+  const normalized = normalizeOriginFields(data.lead_source || defaultSource, data.canal ?? null);
+  const source = normalized.lead_source;
+  const canal = normalized.canal;
 
   // Check for duplicate by email (within same org)
   if (data.email) {
@@ -137,7 +140,7 @@ async function ingestSingleLead(
     cnpj: data.cnpj ?? null,
     job_title: data.job_title ?? null,
     lead_source: source,
-    canal: data.canal ?? null,
+    canal,
     is_inbound: data.is_inbound,
     assigned_to: data.assigned_to ?? null,
     linkedin: data.linkedin ?? null,

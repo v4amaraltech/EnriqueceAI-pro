@@ -13,6 +13,7 @@ import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { LeadImportErrorRow } from '../types';
 import { logLeadEventBulk } from './log-lead-event';
+import { normalizeOriginFields } from '../schemas/lead.schemas';
 import { parseCsv } from '../utils/csv-parser';
 
 export interface ImportLeadsResult {
@@ -126,6 +127,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
   // Insert valid rows
   for (const row of parsed.rows) {
+    const normalized = normalizeOriginFields(leadSource ?? row.lead_source ?? null, null);
     const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
       .insert({
         org_id: orgId,
@@ -134,7 +136,8 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         enrichment_status: 'pending',
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
-        lead_source: leadSource ?? row.lead_source ?? null,
+        lead_source: normalized.lead_source,
+        canal: normalized.canal,
         created_by: userId,
         assigned_to: autoAssignTo,
         import_id: importId,
@@ -163,7 +166,11 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           if (row.razao_social) restoreFields.razao_social = row.razao_social;
           if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
           const effectiveSource = leadSource ?? row.lead_source;
-          if (effectiveSource) restoreFields.lead_source = effectiveSource;
+          if (effectiveSource) {
+            const normRestore = normalizeOriginFields(effectiveSource, null);
+            restoreFields.lead_source = normRestore.lead_source;
+            if (normRestore.canal) restoreFields.canal = normRestore.canal;
+          }
 
           const { error: restoreError } = await from(supabase, 'leads')
             .update(restoreFields)

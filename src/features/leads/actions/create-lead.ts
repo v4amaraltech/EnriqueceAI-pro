@@ -14,7 +14,7 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 
 import { RESOURCE_ALERT_THRESHOLD } from '@/lib/constants/limits';
 
-import { createLeadSchema } from '../schemas/lead.schemas';
+import { createLeadSchema, normalizeOriginFields } from '../schemas/lead.schemas';
 import { logLeadEvent } from './log-lead-event';
 
 export async function createLead(
@@ -118,6 +118,8 @@ export async function createLead(
     }
   }
 
+  const normalized = normalizeOriginFields(parsed.data.lead_source, parsed.data.canal || null);
+
   // 1. Create the lead
   const { data: lead, error } = await from(supabase, 'leads')
     .insert({
@@ -128,8 +130,8 @@ export async function createLead(
       email: parsed.data.email,
       telefone: parsed.data.telefone,
       job_title: parsed.data.job_title,
-      lead_source: parsed.data.lead_source,
-      canal: parsed.data.canal || null,
+      lead_source: normalized.lead_source,
+      canal: normalized.canal,
       is_inbound: parsed.data.is_inbound,
       assigned_to: parsed.data.assigned_to,
       created_by: userId,

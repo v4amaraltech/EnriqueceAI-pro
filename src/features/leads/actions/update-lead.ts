@@ -11,6 +11,7 @@ import { from } from '@/lib/supabase/from';
 
 import { logLeadEvent } from './log-lead-event';
 import { recalcFitScoreForLead } from './recalc-fit-scores';
+import { normalizeOriginFields } from '../schemas/lead.schemas';
 
 /**
  * Resume paused enrollments when lead data is updated.
@@ -77,6 +78,19 @@ export async function updateLead(
   }
   if ('canal' in safeUpdates && !(safeUpdates.canal as string)?.trim()) {
     delete safeUpdates.canal;
+  }
+
+  // Normalize lead_source/canal: only Outbound/Blackbox/Leadbroker valid as Origem;
+  // any other value moves to canal as sub-origem.
+  if ('lead_source' in safeUpdates) {
+    const norm = normalizeOriginFields(
+      safeUpdates.lead_source as string | null,
+      ('canal' in safeUpdates ? safeUpdates.canal : undefined) as string | null | undefined,
+    );
+    safeUpdates.lead_source = norm.lead_source;
+    if (norm.canal !== null && norm.canal !== undefined) {
+      safeUpdates.canal = norm.canal;
+    }
   }
 
   // Auto-set stage timestamps when status changes

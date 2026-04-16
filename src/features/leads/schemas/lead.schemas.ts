@@ -64,6 +64,37 @@ export const LEAD_SOURCE_OPTIONS = [
 ] as const;
 
 export const leadSourceValues = LEAD_SOURCE_OPTIONS.map((o) => o.value) as [string, ...string[]];
+export const VALID_LEAD_SOURCES = new Set(leadSourceValues.map((v) => v.toLowerCase()));
+
+/**
+ * Normalize lead_source/canal: only Outbound/Blackbox/Leadbroker are valid lead_source.
+ * Anything else (Apollo, Reativação, Indicação, etc.) belongs in canal as sub-origem.
+ *
+ * Returns the validated pair { lead_source, canal }.
+ */
+export function normalizeOriginFields(
+  rawSource: string | null | undefined,
+  rawCanal: string | null | undefined,
+): { lead_source: string | null; canal: string | null } {
+  const source = rawSource?.trim() || null;
+  const canal = rawCanal?.trim() || null;
+
+  if (!source) return { lead_source: null, canal };
+
+  // Case-insensitive match against valid origens
+  const lower = source.toLowerCase();
+  if (VALID_LEAD_SOURCES.has(lower)) {
+    // Normalize to canonical capitalization (Outbound, Blackbox, Leadbroker)
+    const canonical = LEAD_SOURCE_OPTIONS.find((o) => o.value.toLowerCase() === lower);
+    return { lead_source: canonical?.value ?? source, canal };
+  }
+
+  // Source value is actually a sub-origem — move it to canal, default to Outbound
+  return {
+    lead_source: 'Outbound',
+    canal: canal ?? source,
+  };
+}
 
 export const createLeadSchema = z.object({
   first_name: z.string().min(1, 'Primeiro nome é obrigatório'),
