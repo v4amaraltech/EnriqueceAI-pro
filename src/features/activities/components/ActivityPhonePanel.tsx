@@ -74,6 +74,7 @@ interface ActivityPhonePanelProps {
   leadName: string;
   leadId: string;
   leadEmail?: string | null;
+  leadFirstName?: string | null;
   phoneNumber: string | null;
   phones: ResolvedPhone[];
   isSending: boolean;
@@ -89,6 +90,7 @@ export function ActivityPhonePanel({
   leadName,
   leadId,
   leadEmail,
+  leadFirstName,
   phoneNumber,
   phones,
   isSending,
@@ -631,6 +633,7 @@ export function ActivityPhonePanel({
         leadId={leadId}
         leadEmail={leadEmail ?? null}
         leadName={leadName}
+        leadFirstName={leadFirstName}
         defaultTitle={`V4 Company + ${leadName}`}
         onScheduled={() => {
           // Auto-set status and complete the activity after meeting scheduled

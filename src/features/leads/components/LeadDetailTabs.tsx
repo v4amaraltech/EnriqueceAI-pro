@@ -173,6 +173,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
               leadId={lead.id}
               leadEmail={lead.email}
               leadName={lead.nome_fantasia ?? lead.razao_social}
+              leadFirstName={lead.first_name}
               inline
             />
 
@@ -270,6 +271,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         leadId={lead.id}
         leadEmail={lead.email}
         leadName={lead.nome_fantasia ?? lead.razao_social}
+        leadFirstName={lead.first_name}
         editData={editingMeeting ? (() => {
           const meta = editingMeeting.metadata as Record<string, unknown> | undefined;
           // Parse start/end time from message_content (format: "Horário: DD/MM/YYYY HH:mm:ss - DD/MM/YYYY HH:mm:ss")

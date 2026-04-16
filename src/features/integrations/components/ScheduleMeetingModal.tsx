@@ -42,6 +42,8 @@ interface ScheduleMeetingModalProps {
   leadId: string;
   leadEmail?: string | null;
   leadName?: string | null;
+  /** First name of the contact person — used for WhatsApp invite greeting */
+  leadFirstName?: string | null;
   editData?: MeetingEditData | null;
   /** Render inline (no Dialog wrapper) — used in the lead detail tab */
   inline?: boolean;
@@ -79,6 +81,7 @@ export function ScheduleMeetingModal({
   leadId,
   leadEmail,
   leadName,
+  leadFirstName,
   editData,
   inline = false,
   defaultTitle,
@@ -401,6 +404,7 @@ export function ScheduleMeetingModal({
       onOpenChange={setWhatsAppInviteOpen}
       leadId={leadId}
       leadName={leadName ?? 'Lead'}
+      recipientFirstName={leadFirstName}
       hasWhatsApp={hasWhatsApp}
       meeting={meetingForInvite}
     />

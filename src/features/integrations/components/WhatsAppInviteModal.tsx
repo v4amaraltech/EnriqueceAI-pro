@@ -29,11 +29,13 @@ interface WhatsAppInviteModalProps {
   onOpenChange: (open: boolean) => void;
   leadId: string;
   leadName: string;
+  /** First name of the contact person — used for the greeting. Falls back to leadName. */
+  recipientFirstName?: string | null;
   hasWhatsApp: boolean;
   meeting: MeetingDetails;
 }
 
-function buildInviteMessage(leadName: string, meeting: MeetingDetails): string {
+function buildInviteMessage(greetingName: string, meeting: MeetingDetails): string {
   const dateObj = new Date(`${meeting.date}T${meeting.time}:00`);
   const formattedDate = dateObj.toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -42,7 +44,7 @@ function buildInviteMessage(leadName: string, meeting: MeetingDetails): string {
   });
   const formattedTime = meeting.time;
 
-  let msg = `Olá ${leadName}! 👋\n\n`;
+  let msg = `Olá ${greetingName}! 👋\n\n`;
   msg += `Sua reunião foi agendada:\n\n`;
   msg += `📋 *${meeting.title}*\n`;
   msg += `📅 ${formattedDate}\n`;
@@ -62,10 +64,12 @@ export function WhatsAppInviteModal({
   onOpenChange,
   leadId,
   leadName,
+  recipientFirstName,
   hasWhatsApp,
   meeting,
 }: WhatsAppInviteModalProps) {
-  const [message, setMessage] = useState(() => buildInviteMessage(leadName, meeting));
+  const greetingName = recipientFirstName?.trim() || leadName;
+  const [message, setMessage] = useState(() => buildInviteMessage(greetingName, meeting));
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
 

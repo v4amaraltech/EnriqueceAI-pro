@@ -212,6 +212,7 @@ export function ActivityExecutionSheetContent({
         leadName={leadName}
         leadId={activity.lead.id}
         leadEmail={resolvedEmail || activity.lead.email}
+        leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
         phoneNumber={activity.lead.telefone}
         phones={phones}
         isSending={isSending}
