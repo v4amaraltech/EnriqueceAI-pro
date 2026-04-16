@@ -11,6 +11,7 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  RefreshCw,
   Search,
   StickyNote,
   UserPlus,
@@ -31,7 +32,13 @@ const channelConfig: Record<string, { label: string; icon: typeof Mail; bg: stri
   linkedin: { label: 'LinkedIn', icon: MessageSquare, bg: 'bg-purple-100 dark:bg-purple-950', text: 'text-purple-600 dark:text-purple-400' },
   research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-300' },
   calendar: { label: 'Reunião agendada', icon: CalendarCheck, bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-600 dark:text-emerald-400' },
+  crm: { label: 'CRM', icon: RefreshCw, bg: 'bg-cyan-100 dark:bg-cyan-950', text: 'text-cyan-600 dark:text-cyan-400' },
   system: { label: 'Sistema', icon: UserPlus, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-500 dark:text-gray-400' },
+};
+
+const CRM_TYPE_LABELS: Record<string, string> = {
+  crm_synced: 'Lead sincronizado com o CRM',
+  crm_deal_created: 'Oportunidade criada no CRM',
 };
 
 const noteConfig = { label: 'Anotação', icon: StickyNote, bg: 'bg-yellow-100 dark:bg-yellow-950', text: 'text-yellow-600 dark:text-yellow-400' };
@@ -90,7 +97,8 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
 
     // Context-aware fallback: give user useful info instead of just "Nenhuma anotação"
     let fallback = 'Nenhuma anotação';
-    if (entry.channel === 'phone') {
+    const channelKey = entry.channel as string;
+    if (channelKey === 'phone') {
       if (entry.call_duration && entry.call_duration > 0) {
         const mins = Math.floor(entry.call_duration / 60);
         const secs = entry.call_duration % 60;
@@ -98,12 +106,14 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
       } else {
         fallback = 'Ligação concluída sem anotações';
       }
-    } else if (entry.channel === 'email') {
+    } else if (channelKey === 'email') {
       fallback = entry.ai_generated ? 'E-mail enviado automaticamente pela cadência' : 'E-mail enviado (sem corpo registrado)';
-    } else if (entry.channel === 'whatsapp') {
+    } else if (channelKey === 'whatsapp') {
       fallback = entry.ai_generated ? 'WhatsApp enviado automaticamente pela cadência' : 'WhatsApp enviado (sem corpo registrado)';
-    } else if (entry.channel === 'research') {
+    } else if (channelKey === 'research') {
       fallback = 'Pesquisa concluída sem anotações';
+    } else if (channelKey === 'crm') {
+      fallback = CRM_TYPE_LABELS[entry.type] ?? 'Atividade do CRM';
     }
 
     return (
@@ -181,7 +191,34 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
   );
 }
 
-export function LeadTimeline({ entries }: LeadTimelineProps) {
+/**
+ * Filter out noise entries that provide no useful context to the SDR:
+ * - Abandoned phone attempts (no message, no recording, no call_duration)
+ * - Fields-updated events with empty message (no changes survived the filter)
+ */
+function filterNoiseEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => {
+    const hasMessage = !!entry.message_content?.trim() || !!entry.html_body;
+    const hasRecording = !!entry.recording_url;
+    const hasCallDuration = (entry.call_duration ?? 0) > 0;
+
+    // Abandoned phone attempts with zero context
+    if (entry.channel === 'phone' && !hasMessage && !hasRecording && !hasCallDuration) {
+      return false;
+    }
+
+    // System fields_updated with empty body (nothing meaningful to show)
+    const systemEvent = (entry.metadata as Record<string, unknown> | null)?.system_event;
+    if (entry.channel === 'system' && systemEvent === 'fields_updated' && !hasMessage) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
+  const entries = filterNoiseEntries(rawEntries);
   return (
     <Card>
       <CardHeader>
