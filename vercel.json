@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/process-pending-transcriptions",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/check-google-connections",
+      "schedule": "0 11 * * *"
     }
   ]
 }
