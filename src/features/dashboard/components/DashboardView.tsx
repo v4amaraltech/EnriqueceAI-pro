@@ -86,10 +86,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           <RankingCard
             title="Leads Finalizados"
             titleTooltip={
-              'Inscrições em cadência (enrollments) no período.\n\n' +
-              '• Finalizados: enrollments com status completed ou replied\n' +
-              '• Prospectando: enrollments com status active\n\n' +
-              'Atribuído ao SDR via lead.assigned_to. Apenas usuários com role=SDR aparecem.'
+              'Quantos leads cada SDR colocou em cadência no período.\n\n' +
+              '• Finalizados: leads cuja cadência foi concluída ou que responderam\n' +
+              '• Prospectando: leads ainda em cadência ativa\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
             }
             icon={Users}
             iconColor="bg-blue-500/10"
@@ -103,15 +103,15 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           <RankingCard
             title="Atividades Realizadas"
             titleTooltip={
-              'Atividades enviadas (interactions com type=sent) no período, agrupadas por SDR via performed_by.\n\n' +
-              'Exclui canais system e calendar. Não conta envios automáticos da cadência (sem performed_by).'
+              'Quantas atividades cada SDR executou no período (e-mails, WhatsApp, ligações, etc.).\n\n' +
+              'Conta apenas atividades feitas manualmente pelo SDR. Envios automáticos da cadência e eventos do sistema não entram.'
             }
             icon={CheckCircle2}
             iconColor="bg-amber-500/10"
             iconTextColor="text-amber-500"
             data={ranking.activitiesDone}
             primaryColumnLabel="média diária"
-            primaryColumnTooltip="Total de atividades ÷ dias úteis no período"
+            primaryColumnTooltip="Total de atividades dividido pelos dias úteis do período"
             primaryValueDivisor={businessDays}
             averageLabel="média atividades/vendedor"
             onSdrClick={handleActivitySdrClick}
@@ -119,10 +119,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           <RankingCard
             title="Taxa de Conversão"
             titleTooltip={
-              'Conversão = leads ganhos no período ÷ leads trabalhados no período\n\n' +
-              '• Numerador: leads com status=qualified e won_at dentro do período\n' +
-              '• Denominador: leads que tiveram cadência iniciada no período (enrolled_at)\n\n' +
-              'Atribuído ao SDR via lead.assigned_to. Apenas usuários com role=SDR.'
+              'Quantos leads viraram oportunidade entre os que foram trabalhados no período.\n\n' +
+              '• Numerador: leads marcados como ganhos no período\n' +
+              '• Denominador: leads que entraram em cadência no período\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
             }
             icon={TrendingUp}
             iconColor="bg-emerald-500/10"
