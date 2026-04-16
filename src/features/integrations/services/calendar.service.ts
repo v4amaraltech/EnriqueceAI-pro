@@ -132,8 +132,56 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
       errorBody,
     );
 
-    // Use service role to bypass RLS — user session may be unavailable in error path
     const serviceClient = createServiceRoleClient();
+
+    // Recovery: try the Gmail connection's refresh token (unified OAuth — same Google account).
+    // This handles drift between gmail_connections and calendar_connections refresh tokens.
+    const { data: calConn } = (await from(serviceClient, 'calendar_connections')
+      .select('user_id, org_id')
+      .eq('id', connection.id)
+      .maybeSingle()) as { data: { user_id: string; org_id: string } | null };
+
+    if (calConn) {
+      const { data: gmailConn } = (await from(serviceClient, 'gmail_connections')
+        .select('refresh_token_encrypted')
+        .eq('user_id', calConn.user_id)
+        .eq('org_id', calConn.org_id)
+        .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
+
+      const gmailToken = gmailConn?.refresh_token_encrypted;
+      if (gmailToken && gmailToken !== connection.refresh_token_encrypted) {
+        try {
+          const recoveredRefreshToken = decrypt(gmailToken);
+          const retryResponse = await fetch(GOOGLE_TOKEN_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: clientId,
+              client_secret: clientSecret,
+              refresh_token: recoveredRefreshToken,
+              grant_type: 'refresh_token',
+            }),
+          });
+          if (retryResponse.ok) {
+            const recoveredTokens = (await retryResponse.json()) as { access_token: string; expires_in: number };
+            const newExpiresAt = new Date(Date.now() + recoveredTokens.expires_in * 1000).toISOString();
+            await from(serviceClient, 'calendar_connections')
+              .update({
+                access_token_encrypted: encrypt(recoveredTokens.access_token),
+                refresh_token_encrypted: gmailToken,
+                token_expires_at: newExpiresAt,
+                status: 'connected',
+              } as Record<string, unknown>)
+              .eq('id', connection.id);
+            console.log('[gcal] Recovered token via gmail_connections sync');
+            return recoveredTokens.access_token;
+          }
+        } catch (e) {
+          console.warn('[gcal] Recovery via gmail_connections failed:', e);
+        }
+      }
+    }
+
     await from(serviceClient, 'calendar_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);

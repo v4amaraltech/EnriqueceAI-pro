@@ -139,6 +139,21 @@ export async function handleCalendarCallback(
     return { success: false, error: 'Erro ao salvar conexão Google Calendar' };
   }
 
+  // Also sync Gmail connection (unified OAuth — same tokens used by both)
+  await from(supabase, 'gmail_connections')
+    .upsert(
+      {
+        org_id: orgId,
+        user_id: userId,
+        access_token_encrypted: encryptedAccessToken,
+        refresh_token_encrypted: encryptedRefreshToken,
+        token_expires_at: expiresAt,
+        email_address: userInfo.email,
+        status: 'connected',
+      } as Record<string, unknown>,
+      { onConflict: 'org_id,user_id' },
+    );
+
   revalidatePath('/settings/integrations');
   return { success: true, data: data! };
 }
