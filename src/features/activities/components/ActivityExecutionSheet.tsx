@@ -247,9 +247,10 @@ export function ActivityExecutionSheet({
         {/* Split layout — key forces remount when activity changes */}
         {activity && (
           <div className="flex flex-1 overflow-hidden">
-            {/* Left — Lead Context with tabs */}
+            {/* Left — Lead Context with tabs (key forces remount on activity change to refresh timeline) */}
             <div className="w-[400px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-4">
               <ActivityLeadContext
+                key={`${activity.lead.id}:${activity.stepId}`}
                 lead={activity.lead}
                 cadenceName={activity.cadenceName}
                 stepOrder={activity.stepOrder}
