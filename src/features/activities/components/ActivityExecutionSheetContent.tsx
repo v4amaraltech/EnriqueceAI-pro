@@ -211,6 +211,7 @@ export function ActivityExecutionSheetContent({
       <ActivityPhonePanel
         leadName={leadName}
         leadId={activity.lead.id}
+        leadEmail={resolvedEmail || activity.lead.email}
         phoneNumber={activity.lead.telefone}
         phones={phones}
         isSending={isSending}

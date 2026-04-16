@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   CalendarIcon,
+  CalendarPlus,
   CheckCircle2,
   Clock,
   FileText,
@@ -46,6 +47,7 @@ import type { CallStatus } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
+import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
@@ -71,6 +73,7 @@ const uiStatusToCallStatus: Record<string, CallStatus> = {
 interface ActivityPhonePanelProps {
   leadName: string;
   leadId: string;
+  leadEmail?: string | null;
   phoneNumber: string | null;
   phones: ResolvedPhone[];
   isSending: boolean;
@@ -85,6 +88,7 @@ interface ActivityPhonePanelProps {
 export function ActivityPhonePanel({
   leadName,
   leadId,
+  leadEmail,
   phoneNumber,
   phones,
   isSending,
@@ -113,6 +117,7 @@ export function ActivityPhonePanel({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
   const [attempts, setAttempts] = useState<CallAttempt[]>([]);
+  const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
@@ -464,7 +469,7 @@ export function ActivityPhonePanel({
 
       {/* Post-call result modal */}
       <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resultado da Ligação</DialogTitle>
           </DialogHeader>
@@ -596,6 +601,17 @@ export function ActivityPhonePanel({
                 Perdido
               </Button>
             )}
+            {(callStatus === 'connected' || callStatus === 'meeting_scheduled') && (
+              <Button
+                variant="default"
+                onClick={() => setScheduleMeetingOpen(true)}
+                disabled={isSending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <CalendarPlus className="mr-2 h-4 w-4" />
+                Agendar Reunião
+              </Button>
+            )}
             <Button onClick={handleSubmitResult} disabled={isSending || !callStatus}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -607,6 +623,43 @@ export function ActivityPhonePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Schedule Meeting Modal — opens on top of result modal */}
+      <ScheduleMeetingModal
+        open={scheduleMeetingOpen}
+        onOpenChange={setScheduleMeetingOpen}
+        leadId={leadId}
+        leadEmail={leadEmail ?? null}
+        leadName={leadName}
+        defaultTitle={`V4 Company + ${leadName}`}
+        onScheduled={() => {
+          // Auto-set status and complete the activity after meeting scheduled
+          setCallStatus('meeting_scheduled');
+          // Append meeting note to the call notes
+          const meetingNote = '✅ Reunião agendada durante a ligação.';
+          const finalNotes = notes ? `${notes}\n\n${meetingNote}` : meetingNote;
+          setNotes(finalNotes);
+          // Build attempt with updated values and submit
+          const allAttempts = [...attempts, {
+            attemptNumber: currentAttemptNumber,
+            phone: selectedPhone,
+            status: 'meeting_scheduled',
+            notes: finalNotes,
+            durationSeconds: callDuration,
+          }];
+          const aggregated = formatAggregatedNotes(allAttempts);
+          onMarkDone(aggregated);
+          // Reset state
+          setCallStatus('');
+          setNotes('');
+          setCallState('idle');
+          setCallId(null);
+          setProviderCallId(null);
+          setElapsed(0);
+          setCallDuration(0);
+          setAttempts([]);
+        }}
+      />
     </div>
   );
 }

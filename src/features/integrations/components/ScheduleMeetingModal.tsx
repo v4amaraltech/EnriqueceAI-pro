@@ -45,6 +45,12 @@ interface ScheduleMeetingModalProps {
   editData?: MeetingEditData | null;
   /** Render inline (no Dialog wrapper) — used in the lead detail tab */
   inline?: boolean;
+  /** Optional pre-filled title (e.g., "V4 Company + {leadName}") */
+  defaultTitle?: string;
+  /** Optional pre-filled notes for the meeting description */
+  defaultDescription?: string;
+  /** Called after a meeting is successfully scheduled (not on edit) */
+  onScheduled?: () => void;
 }
 
 const DURATION_OPTIONS = [
@@ -75,6 +81,9 @@ export function ScheduleMeetingModal({
   leadName,
   editData,
   inline = false,
+  defaultTitle,
+  defaultDescription,
+  onScheduled,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -128,7 +137,7 @@ export function ScheduleMeetingModal({
         setGenerateMeetLink(editData.generateMeetLink);
         getLoggedUserEmail().then((r) => { if (r.success) setSdrEmail(r.data); });
       } else {
-        setTitle(`V4 Company + ${leadName ?? 'Lead'}`);
+        setTitle(defaultTitle ?? `V4 Company + ${leadName ?? 'Lead'}`);
         setSelectedDate(undefined);
         setSelectedTime('09:00');
         setDuration('60');
@@ -187,6 +196,7 @@ export function ScheduleMeetingModal({
 
         // After scheduling (not editing), prompt WhatsApp invite
         if (!editData) {
+          onScheduled?.();
           const whatsAppStatus = await checkWhatsAppConnected();
           setHasWhatsApp(whatsAppStatus);
           setMeetingForInvite({
