@@ -214,8 +214,12 @@ export function ScheduleMeetingModal({
       } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
         toast.info('Reconectando ao Google Calendar...');
         const authResult = await getCalendarAuthUrl();
-        if (authResult.success) window.location.href = authResult.data.url;
-        else toast.error('Não foi possível reconectar.');
+        if (authResult.success) {
+          window.location.href = authResult.data.url;
+        } else {
+          toast.error('Conexão com o Google expirou. Reconecte em Configurações > Integrações.', { duration: 8000 });
+          setTimeout(() => { window.location.href = '/settings/integrations'; }, 1500);
+        }
       } else {
         toast.error(result.error);
       }
