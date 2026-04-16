@@ -31,7 +31,12 @@ export async function getCalendarAuthUrl(): Promise<ActionResult<{ url: string }
     return { success: false, error: 'Configuração do Google Calendar OAuth não encontrada' };
   }
 
+  // Unified OAuth scopes: same as Gmail callback. Google invalidates old refresh
+  // tokens when issuing new ones with different scopes — keeping these identical
+  // ensures reconnecting via Calendar doesn't break Gmail (and vice versa).
   const scopes = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/calendar.freebusy',
     'https://www.googleapis.com/auth/userinfo.email',
