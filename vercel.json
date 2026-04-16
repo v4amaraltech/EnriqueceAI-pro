@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/reconcile-calls",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/check-email-replies",

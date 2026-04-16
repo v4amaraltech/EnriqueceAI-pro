@@ -5,9 +5,12 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { Api4ComCallListResponse, Api4ComCallRecord } from '@/features/integrations/types/api4com';
 import type { CallStatus } from '@/features/calls/types';
+
+const TRANSCRIPTION_MIN_DURATION = 180;
 
 export const maxDuration = 300; // 5 min — may process many pages
 
@@ -78,7 +81,9 @@ export async function POST(request: Request) {
 
   let totalUpdated = 0;
   let totalChecked = 0;
+  let totalTranscriptionTriggered = 0;
   const errors: string[] = [];
+  const callsToTranscribe: string[] = [];
 
   // Re-register webhook for all connections (ensures webhook URL has auth token)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.enriqueceai.com.br';
@@ -196,15 +201,23 @@ export async function POST(request: Request) {
           }
 
           // Update recording URL if missing
+          let recordingJustAdded = false;
           if (!localCall.recording_url && record.record_url) {
             updates.recording_url = record.record_url;
             needsUpdate = true;
+            recordingJustAdded = true;
           }
 
           if (needsUpdate) {
             updates.updated_at = new Date().toISOString();
             await from(supabase, 'calls').update(updates).eq('id', localCall.id);
             totalUpdated++;
+
+            // Queue transcription if recording was just added and duration is sufficient
+            const finalDuration = (updates.duration_seconds as number) ?? localCall.duration_seconds;
+            if (recordingJustAdded && finalDuration >= TRANSCRIPTION_MIN_DURATION) {
+              callsToTranscribe.push(localCall.id);
+            }
           }
 
         }
@@ -219,11 +232,33 @@ export async function POST(request: Request) {
     }
   }
 
+  // Fire-and-forget transcription triggers for newly recorded calls
+  if (callsToTranscribe.length > 0) {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const transcribeUrl = `${appUrl}/api/workers/transcribe-call`;
+    if (serviceRoleKey) {
+      for (const callId of callsToTranscribe) {
+        fetch(transcribeUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ callId }),
+        }).catch((err) => {
+          console.warn(`[reconcile-calls] Failed to trigger transcription for ${callId}:`, err);
+        });
+        totalTranscriptionTriggered++;
+      }
+    }
+  }
+
   return NextResponse.json({
     message: 'Reconciliation complete',
     connections: connections.length,
     checked: totalChecked,
     updated: totalUpdated,
+    transcriptionTriggered: totalTranscriptionTriggered,
     errors: errors.length > 0 ? errors : undefined,
   });
 }
