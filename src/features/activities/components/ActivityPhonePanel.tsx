@@ -150,7 +150,10 @@ export function ActivityPhonePanel({
       });
 
       if (!result.success) {
-        toast.error('Verifique se a extensão API4COM está aberta e tente novamente.', { duration: 5000 });
+        // Show backend error if present, otherwise generic guidance
+        const errorMsg = result.error || 'Verifique se a extensão API4COM está aberta e tente novamente.';
+        console.error('[ActivityPhonePanel] initiateCall failed:', result.error);
+        toast.error(errorMsg, { duration: 8000 });
         setCallState('idle');
         return;
       }
