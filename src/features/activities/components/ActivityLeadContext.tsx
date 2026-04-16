@@ -19,9 +19,12 @@ interface ActivityLeadContextProps {
   stepOrder: number;
   totalSteps: number;
   customFieldDefs?: CustomFieldRow[];
+  /** When this changes, the timeline is silently refetched (no remount). Useful when SDR completes
+   * an activity for the same lead and the next activity needs to show the just-saved interaction. */
+  refreshKey?: string | number;
 }
 
-export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, customFieldDefs: propDefs }: ActivityLeadContextProps) {
+export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, customFieldDefs: propDefs, refreshKey }: ActivityLeadContextProps) {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldRow[]>(propDefs ?? []);
   const [standardFieldSettings, setStandardFieldSettings] = useState<StandardFieldSettingRow[]>([]);
@@ -74,6 +77,20 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
 
     return () => { supabase.removeChannel(channel); };
   }, [lead.id, propDefs]);
+
+  // Refetch only the timeline when refreshKey changes (e.g., advancing to next activity for same lead)
+  useEffect(() => {
+    if (refreshKey === undefined) return;
+    const supabase = createClient();
+    (async () => {
+      const { data } = (await from(supabase, 'interactions')
+        .select('id, type, channel, message_content, ai_generated, created_at, metadata, performed_by')
+        .eq('lead_id', lead.id)
+        .order('created_at', { ascending: false })
+        .limit(50)) as { data: TimelineEntry[] | null };
+      setTimeline(data ?? []);
+    })();
+  }, [refreshKey, lead.id]);
 
   return (
     <LeadInfoPanel
