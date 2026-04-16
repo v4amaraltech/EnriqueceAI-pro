@@ -18,6 +18,20 @@ const STATUS_PRIORITY: Record<string, number> = {
   wrong_number: 0,
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  meeting_scheduled: 'Reunião agendada',
+  connected: 'Conectou — falou com decisor',
+  gatekeeper: 'Conectou — falou com intermediário',
+  voicemail: 'Caixa postal',
+  busy: 'Ocupado',
+  no_answer: 'Não atendeu',
+  wrong_number: 'Número errado',
+};
+
+export function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
 export function pickBestStatus(attempts: CallAttempt[]): string {
   if (attempts.length === 0) return '';
   let best = attempts[0]!;
@@ -32,9 +46,9 @@ export function pickBestStatus(attempts: CallAttempt[]): string {
 export function formatAggregatedNotes(attempts: CallAttempt[]): string {
   if (attempts.length === 1) {
     const a = attempts[0]!;
-    return `[${a.status}] ${a.notes}`.trim();
+    return `[${statusLabel(a.status)}] ${a.notes}`.trim();
   }
   return attempts
-    .map((a) => `[Tentativa ${a.attemptNumber}] ${a.phone} - [${a.status}] ${a.notes} (${a.durationSeconds}s)`)
+    .map((a) => `[Tentativa ${a.attemptNumber}] ${a.phone} - [${statusLabel(a.status)}] ${a.notes} (${a.durationSeconds}s)`)
     .join('\n');
 }

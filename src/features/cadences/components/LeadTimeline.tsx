@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import {
+  CalendarCheck,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -29,6 +30,7 @@ const channelConfig: Record<string, { label: string; icon: typeof Mail; bg: stri
   phone: { label: 'Ligação', icon: Phone, bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-600 dark:text-orange-400' },
   linkedin: { label: 'LinkedIn', icon: MessageSquare, bg: 'bg-purple-100 dark:bg-purple-950', text: 'text-purple-600 dark:text-purple-400' },
   research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-300' },
+  calendar: { label: 'Reunião agendada', icon: CalendarCheck, bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-600 dark:text-emerald-400' },
   system: { label: 'Sistema', icon: UserPlus, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-500 dark:text-gray-400' },
 };
 
