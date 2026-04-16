@@ -154,7 +154,7 @@ export function ConversionByOriginChart({ data: initialData, filters }: Conversi
       <div className="rounded-lg border bg-card p-4 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium">
-            Conversão por Origem
+            {selectedSubOrigins.length > 0 ? 'Conversão por Sub-origem' : 'Conversão por Origem'}
             {isLoading && <Loader2 className="ml-2 inline h-3 w-3 animate-spin" />}
           </h3>
           <div className="flex items-center gap-2">

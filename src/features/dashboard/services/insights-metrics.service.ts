@@ -171,20 +171,25 @@ export async function fetchConversionByOrigin(
 
   if (!filteredLeads.length) return [];
 
-  // Group by lead_source: count converted (qualified) vs lost (unqualified/archived)
+  // When sub-origens filter is active, group by canal (sub-origem) instead of lead_source.
+  // This shows one bar per selected sub-origem.
+  const groupByCanal = filters.subOrigins && filters.subOrigins.length > 0;
+
   const sourceStats = new Map<string, { converted: number; lost: number }>();
 
   for (const lead of filteredLeads) {
-    const source = lead.lead_source || 'unknown';
+    const groupKey = groupByCanal
+      ? (lead.canal || 'Sem sub-origem')
+      : (lead.lead_source || 'unknown');
 
     if (lead.status === 'qualified') {
-      const stats = sourceStats.get(source) ?? { converted: 0, lost: 0 };
+      const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.converted++;
-      sourceStats.set(source, stats);
+      sourceStats.set(groupKey, stats);
     } else if (lead.status === 'unqualified' || lead.status === 'archived') {
-      const stats = sourceStats.get(source) ?? { converted: 0, lost: 0 };
+      const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.lost++;
-      sourceStats.set(source, stats);
+      sourceStats.set(groupKey, stats);
     }
   }
 
@@ -192,7 +197,7 @@ export async function fetchConversionByOrigin(
   for (const [source, stats] of sourceStats) {
     if (stats.converted === 0 && stats.lost === 0) continue;
     entries.push({
-      origin: SOURCE_LABELS[source] ?? source,
+      origin: groupByCanal ? source : (SOURCE_LABELS[source] ?? source),
       converted: stats.converted,
       lost: stats.lost,
     });
