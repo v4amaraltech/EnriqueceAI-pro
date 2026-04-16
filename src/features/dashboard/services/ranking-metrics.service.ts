@@ -61,6 +61,7 @@ function buildRankingCardData(
 
 /**
  * Card 1: Leads Finalizados — enrollments completed/replied, attributed to lead's assigned_to
+ * Only counts users with role='sdr' — managers are excluded.
  */
 export async function fetchLeadsFinishedRanking(
   supabase: SupabaseClient,
@@ -68,6 +69,14 @@ export async function fetchLeadsFinishedRanking(
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
+
+  // Get list of SDRs in the org (exclude managers)
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   // Query enrollments in the period with lead_id for attribution
   let query = from(supabase, 'cadence_enrollments')
@@ -105,10 +114,14 @@ export async function fetchLeadsFinishedRanking(
   };
   const leadAssignedTo = new Map((leadData ?? []).map((l) => [l.id, l.assigned_to]));
 
-  // Group by SDR (use lead's assigned_to, fallback to enrolled_by)
+  // Group by SDR (use lead's assigned_to, fallback to enrolled_by only if SDR)
   const sdrMap = new Map<string, { finished: number; prospecting: number }>();
   for (const e of rows) {
-    const sdr = leadAssignedTo.get(e.lead_id) ?? e.enrolled_by;
+    const assignedTo = leadAssignedTo.get(e.lead_id);
+    // Prefer assigned_to if it's an SDR; fallback to enrolled_by only if it's an SDR
+    let sdr: string | null = null;
+    if (assignedTo && sdrIds.has(assignedTo)) sdr = assignedTo;
+    else if (e.enrolled_by && sdrIds.has(e.enrolled_by)) sdr = e.enrolled_by;
     if (!sdr) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     const entry = sdrMap.get(sdr) ?? { finished: 0, prospecting: 0 };
@@ -145,6 +158,7 @@ export async function fetchLeadsFinishedRanking(
 
 /**
  * Card 2: Atividades Realizadas — interactions count by SDR (via performed_by)
+ * Only counts users with role='sdr' — managers are excluded.
  */
 export async function fetchActivitiesRanking(
   supabase: SupabaseClient,
@@ -152,6 +166,14 @@ export async function fetchActivitiesRanking(
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
+
+  // Get list of SDRs (exclude managers)
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   // Get activity counts per performer using SQL GROUP BY (efficient at any scale)
   const { data: activityCounts } = await (supabase.rpc as any)('count_activities_by_performer', {
@@ -177,6 +199,7 @@ export async function fetchActivitiesRanking(
   const entries: SdrRankingEntry[] = [];
   let totalActivities = 0;
   for (const row of rows) {
+    if (!sdrIds.has(row.performer_id)) continue; // Exclude managers
     if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
     totalActivities += row.cnt;
     entries.push({ userId: row.performer_id, userName: '', value: row.cnt });
@@ -195,6 +218,7 @@ export async function fetchActivitiesRanking(
 
 /**
  * Card 3: Taxa de Conversão — qualified / total leads per SDR
+ * Only counts users with role='sdr' — managers are excluded.
  */
 export async function fetchConversionRanking(
   supabase: SupabaseClient,
@@ -202,6 +226,14 @@ export async function fetchConversionRanking(
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
+
+  // Get list of SDRs (exclude managers)
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   // Get all active leads in the org (denominator: total leads being worked)
   let allLeadsQuery = from(supabase, 'leads')
@@ -271,19 +303,20 @@ export async function fetchConversionRanking(
     if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
     const sdr = lead.assigned_to;
     if (!sdr) continue;
+    if (!sdrIds.has(sdr)) continue; // Exclude managers
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
     stats.total++;
     // Count as qualified only if won in the period
     if (wonLeadIds.has(lead.id)) {
       const wonSdr = wonLeadSdr.get(lead.id) ?? sdr;
-      if (wonSdr === sdr) {
-        stats.qualified++;
-      } else {
+      if (wonSdr !== sdr && sdrIds.has(wonSdr)) {
         // Won by different SDR — attribute to the one who won it
         const wonStats = sdrStats.get(wonSdr) ?? { qualified: 0, total: 0 };
         wonStats.qualified++;
         sdrStats.set(wonSdr, wonStats);
+      } else if (wonSdr === sdr) {
+        stats.qualified++;
       }
     }
     sdrStats.set(sdr, stats);
