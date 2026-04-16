@@ -38,7 +38,7 @@ export async function deepResearchLead(
         if (errorBody) detail = ` — ${errorBody.slice(0, 200)}`;
       } catch { /* ignore */ }
       console.error(`[deep-research] n8n returned ${response.status}${detail}`);
-      return { success: false, error: `Erro no serviço de pesquisa (${response.status})${detail}` };
+      return { success: false, error: 'A pesquisa não pôde ser concluída agora. Tente novamente em instantes.' };
     }
 
     const raw = await response.text();
@@ -52,7 +52,7 @@ export async function deepResearchLead(
       if (raw.trim().length > 50) {
         return { success: true, data: { dossie: cleanDossie(raw) } };
       }
-      return { success: false, error: 'Resposta inválida do serviço de pesquisa' };
+      return { success: false, error: 'Resposta inesperada da pesquisa. Tente novamente.' };
     }
 
     // Unwrap array
@@ -82,11 +82,11 @@ export async function deepResearchLead(
       return { success: true, data: { dossie: cleanDossie(fallback) } };
     }
 
-    return { success: false, error: 'Nenhum resultado retornado' };
+    return { success: false, error: 'Nenhum resultado encontrado para esta empresa.' };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return { success: false, error: 'Pesquisa excedeu o tempo limite (60s)' };
+      return { success: false, error: 'A pesquisa demorou muito para responder. Tente novamente.' };
     }
-    return { success: false, error: 'Erro de conexão com o serviço de pesquisa' };
+    return { success: false, error: 'Não foi possível conectar à pesquisa. Verifique sua conexão e tente novamente.' };
   }
 }

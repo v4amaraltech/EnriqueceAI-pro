@@ -98,7 +98,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
     await from(serviceClient, 'calendar_connections')
       .update({ status: 'error' } as Record<string, unknown>)
       .eq('id', connection.id);
-    const err = new Error('Token do Google corrompido. Reconecte em Configurações > Integrações.');
+    const err = new Error('A conexão com o Google expirou. Reconecte em Configurações > Integrações.');
     err.name = 'GCalTokenExpired';
     throw err;
   }
