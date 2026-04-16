@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
-import { Maximize2 } from 'lucide-react';
+import { Loader2, Maximize2 } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -19,11 +19,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { CANAL_OPTIONS } from '@/features/leads/schemas/lead.schemas';
 
-import type { ConversionByOriginEntry } from '../types';
+import { getInsightsData } from '../actions/get-insights-data';
+import type { ConversionByOriginEntry, DashboardFilters } from '../types';
 
 interface ConversionByOriginChartProps {
   data: ConversionByOriginEntry[];
+  filters?: DashboardFilters;
 }
 
 function ConversionBarChart({ data, height }: { data: ConversionByOriginEntry[]; height: number }) {
@@ -74,26 +77,86 @@ function ConversionBarChart({ data, height }: { data: ConversionByOriginEntry[];
   );
 }
 
-export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) {
+export function ConversionByOriginChart({ data: initialData, filters }: ConversionByOriginChartProps) {
   const [expanded, setExpanded] = useState(false);
   const [selectedOrigin, setSelectedOrigin] = useState('');
+  const [subOriginOpen, setSubOriginOpen] = useState(false);
+  const [selectedSubOrigins, setSelectedSubOrigins] = useState<string[]>([]);
+  const [data, setData] = useState<ConversionByOriginEntry[]>(initialData);
+  const [isLoading, startTransition] = useTransition();
+
+  // Sync data when initial data changes (e.g., when filters change at parent level)
+  useEffect(() => { setData(initialData); }, [initialData]);
+
+  // Refetch when sub-origins change
+  useEffect(() => {
+    if (!filters || selectedSubOrigins.length === 0) {
+      setData(initialData);
+      return;
+    }
+    startTransition(async () => {
+      const result = await getInsightsData({ ...filters, subOrigins: selectedSubOrigins });
+      if (result.success) setData(result.data.conversionByOrigin);
+    });
+  }, [selectedSubOrigins, filters, initialData]);
+
   const filteredData = selectedOrigin ? data.filter((d) => d.origin === selectedOrigin) : data;
 
-  if (data.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center rounded-lg border bg-card">
-        <p className="text-sm text-muted-foreground">
-          Sem dados de conversão por origem
-        </p>
-      </div>
+  function toggleSubOrigin(canal: string) {
+    setSelectedSubOrigins((prev) =>
+      prev.includes(canal) ? prev.filter((s) => s !== canal) : [...prev, canal],
     );
   }
+
+  const subOriginLabel = selectedSubOrigins.length === 0
+    ? 'Todas sub-origens'
+    : selectedSubOrigins.length === 1
+      ? selectedSubOrigins[0]
+      : `${selectedSubOrigins.length} sub-origens`;
+
+  const subOriginPicker = filters && (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setSubOriginOpen((s) => !s)}
+        className="h-7 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+      >
+        {subOriginLabel} ▾
+      </button>
+      {subOriginOpen && (
+        <div className="absolute right-0 top-8 z-10 max-h-64 w-48 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => { setSelectedSubOrigins([]); setSubOriginOpen(false); }}
+            className="w-full px-3 py-1.5 text-left text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]"
+          >
+            Limpar seleção
+          </button>
+          <div className="my-1 border-t border-[var(--border)]" />
+          {CANAL_OPTIONS.map((canal) => (
+            <label key={canal} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--accent)]">
+              <input
+                type="checkbox"
+                checked={selectedSubOrigins.includes(canal)}
+                onChange={() => toggleSubOrigin(canal)}
+                className="h-3 w-3"
+              />
+              {canal}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
       <div className="rounded-lg border bg-card p-4 flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium">Conversão por Origem</h3>
+          <h3 className="text-sm font-medium">
+            Conversão por Origem
+            {isLoading && <Loader2 className="ml-2 inline h-3 w-3 animate-spin" />}
+          </h3>
           <div className="flex items-center gap-2">
             <select
               value={selectedOrigin}
@@ -105,18 +168,29 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
                 <option key={d.origin} value={d.origin}>{d.origin}</option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-              title="Expandir"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
+            {subOriginPicker}
+            {data.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                title="Expandir"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex-1 min-h-[350px]">
-          <ConversionBarChart data={filteredData} height={420} />
+          {data.length === 0 ? (
+            <div className="flex h-64 items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Sem dados de conversão por origem
+              </p>
+            </div>
+          ) : (
+            <ConversionBarChart data={filteredData} height={420} />
+          )}
         </div>
       </div>
 

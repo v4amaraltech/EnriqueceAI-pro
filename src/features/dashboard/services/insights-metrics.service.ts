@@ -119,23 +119,35 @@ export async function fetchConversionByOrigin(
   const { start, end } = getDateRange(filters);
 
   // Get leads won or lost in the period (using won_at/lost_at for accuracy)
-  const { data: wonLeads } = (await from(supabase, 'leads')
-    .select('id, status, lead_source')
+  let wonQuery = from(supabase, 'leads')
+    .select('id, status, lead_source, canal')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .eq('status', 'qualified')
     .not('won_at', 'is', null)
     .gte('won_at', start)
-    .lt('won_at', end)) as { data: Array<{ id: string; status: string; lead_source: string | null }> | null };
+    .lt('won_at', end);
 
-  const { data: lostLeads } = (await from(supabase, 'leads')
-    .select('id, status, lead_source')
+  let lostQuery = from(supabase, 'leads')
+    .select('id, status, lead_source, canal')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .eq('status', 'unqualified')
     .not('lost_at', 'is', null)
     .gte('lost_at', start)
-    .lt('lost_at', end)) as { data: Array<{ id: string; status: string; lead_source: string | null }> | null };
+    .lt('lost_at', end);
+
+  if (filters.subOrigins && filters.subOrigins.length > 0) {
+    wonQuery = wonQuery.in('canal', filters.subOrigins);
+    lostQuery = lostQuery.in('canal', filters.subOrigins);
+  }
+
+  const { data: wonLeads } = (await wonQuery) as {
+    data: Array<{ id: string; status: string; lead_source: string | null; canal: string | null }> | null;
+  };
+  const { data: lostLeads } = (await lostQuery) as {
+    data: Array<{ id: string; status: string; lead_source: string | null; canal: string | null }> | null;
+  };
 
   const allLeads = [...(wonLeads ?? []), ...(lostLeads ?? [])];
   // Apply cadence/user filters if needed — build a mutable set of lead IDs

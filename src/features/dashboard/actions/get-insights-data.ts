@@ -17,6 +17,7 @@ const filtersSchema = z.object({
   userIds: z.array(z.string().uuid()).default([]),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
+  subOrigins: z.array(z.string()).default([]),
 });
 
 export async function getInsightsData(

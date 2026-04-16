@@ -33,17 +33,22 @@ export const leadAddressSchema = z.object({
   cep: z.string().optional(),
 });
 
+// Sub-origem options — what specific channel/method the lead came from
 export const CANAL_OPTIONS = [
+  'Apollo',
+  'LDR Autonomo IA',
+  'Indicação',
+  'Recomendação',
+  'Reativação',
+  'Recuperação',
+  'Prospecção Fria',
   'Facebook',
   'Google',
   'Instagram',
   'Orgânico',
   'TikTok',
   'LinkedIn',
-  'Indicação',
   'Bing',
-  'Prospecção Fria',
-  'Outbound',
   'Landing Page Indicação',
   'Closer',
   'Lavras',
@@ -51,17 +56,11 @@ export const CANAL_OPTIONS = [
   'Torres',
 ] as const;
 
+// Origem options — high-level lead source category (only 3 real origins)
 export const LEAD_SOURCE_OPTIONS = [
-  { value: 'outbound', label: 'Outbound' },
-  { value: 'leadbroker', label: 'Leadbroker' },
-  { value: 'blackbox', label: 'Blackbox' },
-  { value: 'indicacao', label: 'Indicação' },
-  { value: 'recomendacao', label: 'Recomendação' },
-  { value: 'apollo', label: 'Apollo' },
-  { value: 'reativacao', label: 'Reativação' },
-  { value: 'recuperacao', label: 'Recuperação' },
-  { value: 'api', label: 'API' },
-  { value: 'webhook', label: 'Webhook' },
+  { value: 'Outbound', label: 'Outbound' },
+  { value: 'Blackbox', label: 'Blackbox' },
+  { value: 'Leadbroker', label: 'Leadbroker' },
 ] as const;
 
 export const leadSourceValues = LEAD_SOURCE_OPTIONS.map((o) => o.value) as [string, ...string[]];

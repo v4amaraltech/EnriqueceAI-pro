@@ -124,7 +124,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
       {insights && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-h-[480px]" data-slot="insights-charts">
           <LossReasonsChart data={insights.lossReasons} />
-          <ConversionByOriginChart data={insights.conversionByOrigin} />
+          <ConversionByOriginChart data={insights.conversionByOrigin} filters={filters} />
         </div>
       )}
 

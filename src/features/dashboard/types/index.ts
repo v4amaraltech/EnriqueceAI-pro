@@ -5,6 +5,8 @@ export interface DashboardFilters {
   /** Override date range (ISO date strings). When set, takes precedence over month. */
   dateFrom?: string;
   dateTo?: string;
+  /** Filter by sub-origens (canal field). When set, only leads with these canais are counted. */
+  subOrigins?: string[];
 }
 
 export interface DailyDataPoint {
