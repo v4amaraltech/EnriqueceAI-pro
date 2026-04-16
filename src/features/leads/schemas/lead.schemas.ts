@@ -63,6 +63,40 @@ export const LEAD_SOURCE_OPTIONS = [
   { value: 'Leadbroker', label: 'Leadbroker' },
 ] as const;
 
+// Segmento options — business segment of the lead's company
+export const SEGMENTO_OPTIONS = [
+  'Agronegócio',
+  'Aplicativo',
+  'Automotivo',
+  'Bens de Consumo',
+  'Casa e Decoração',
+  'Construção/Imobiliária',
+  'Consultoria',
+  'Cosmética',
+  'E-commerce',
+  'Educação',
+  'Energia solar',
+  'Estética',
+  'Farmácia',
+  'Finanças',
+  'Food Service',
+  'Franquia',
+  'Indústria',
+  'Logística',
+  'Moda',
+  'ONG',
+  'PDV',
+  'Prestação de serviços',
+  'SaaS',
+  'Saúde e Fitness',
+  'Serviço',
+  'Tecnologia e StartUp',
+  'Telecom',
+  'Turismo',
+  'Varejo',
+  'Outro',
+] as const;
+
 export const leadSourceValues = LEAD_SOURCE_OPTIONS.map((o) => o.value) as [string, ...string[]];
 export const VALID_LEAD_SOURCES = new Set(leadSourceValues.map((v) => v.toLowerCase()));
 

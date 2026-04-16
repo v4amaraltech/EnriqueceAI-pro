@@ -59,7 +59,7 @@ export async function updateLead(
   const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'segmento', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {
@@ -152,6 +152,7 @@ export async function updateLead(
       const fieldLabels: Record<string, string> = {
         first_name: 'Nome', last_name: 'Sobrenome', nome_fantasia: 'Empresa', email: 'Email',
         telefone: 'Telefone', job_title: 'Cargo', lead_source: 'Origem', canal: 'Sub-origem',
+        segmento: 'Segmento',
         cnpj: 'CNPJ', instagram: 'Instagram', linkedin: 'LinkedIn', website: 'Website',
         status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
         faturamento_estimado: 'Faturamento', phones: 'Telefones',

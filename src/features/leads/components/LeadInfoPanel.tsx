@@ -38,7 +38,7 @@ import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
 import type { LeadPhone } from '../types';
 import { updateLead } from '../actions/update-lead';
 
@@ -153,6 +153,7 @@ export function LeadInfoPanel({
     job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
     lead_source: data.lead_source ?? '',
     canal: data.canal ?? '',
+    segmento: data.segmento ?? '',
     cnpj: data.cnpj ?? '',
     instagram: data.instagram ?? '',
     linkedin: data.linkedin ?? '',
@@ -177,6 +178,7 @@ export function LeadInfoPanel({
       job_title: data.job_title ?? socio?.qualificacao ?? '',
       lead_source: data.lead_source ?? '',
       canal: data.canal ?? '',
+      segmento: data.segmento ?? '',
       cnpj: data.cnpj ?? '',
       instagram: data.instagram ?? '',
       linkedin: data.linkedin ?? '',
@@ -255,10 +257,11 @@ export function LeadInfoPanel({
       const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
 
-      // Remove empty cnpj/canal to avoid check constraint violations
+      // Remove empty cnpj/canal/segmento to avoid check constraint violations
       const cleanFields: Record<string, unknown> = { ...leadFields };
       if (!(cleanFields.cnpj as string)?.trim()) delete cleanFields.cnpj;
       if (!(cleanFields.canal as string)?.trim()) delete cleanFields.canal;
+      if (!(cleanFields.segmento as string)?.trim()) delete cleanFields.segmento;
 
       const result = await updateLead(data.id, {
         ...cleanFields,
@@ -279,6 +282,7 @@ export function LeadInfoPanel({
           job_title: editFields.job_title || null,
           lead_source: editFields.lead_source || null,
           canal: editFields.canal || null,
+          segmento: editFields.segmento || null,
           cnpj: editFields.cnpj || null,
           instagram: editFields.instagram || null,
           linkedin: editFields.linkedin || null,
@@ -302,6 +306,7 @@ export function LeadInfoPanel({
       job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
       lead_source: data.lead_source ?? '',
       canal: data.canal ?? '',
+      segmento: data.segmento ?? '',
       cnpj: data.cnpj ?? '',
       instagram: data.instagram ?? '',
       linkedin: data.linkedin ?? '',
@@ -578,6 +583,27 @@ export function LeadInfoPanel({
                       </Select>
                     </div>
                   )}
+                  {isFieldVisible('segmento') && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Segmento</p>
+                      <Select
+                        value={editFields.segmento ?? 'none'}
+                        onValueChange={(value) => {
+                          setEditFields((prev) => ({ ...prev, segmento: value === 'none' ? '' : value }));
+                        }}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Selecione o segmento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {(standardFieldSettings?.find((s) => s.field_key === 'segmento')?.options ?? SEGMENTO_OPTIONS).map((s) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {isFieldVisible('cnpj') && (
                     <div className="space-y-1">
                       <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">CNPJ</p>
@@ -635,6 +661,7 @@ export function LeadInfoPanel({
                     />
                   )}
                   {isFieldVisible('canal') && <MeetimeFieldRow label="Sub-origem" value={data.canal || '—'} />}
+                  {isFieldVisible('segmento') && <MeetimeFieldRow label="Segmento" value={data.segmento || '—'} />}
                   {isFieldVisible('cnpj') && <MeetimeFieldRow label="CNPJ" value={data.cnpj || '—'} />}
                   {isFieldVisible('assigned_to') && <MeetimeFieldRow label="SDR Responsável" value={assignedMemberName || '—'} />}
                   {isFieldVisible('created_at') && (

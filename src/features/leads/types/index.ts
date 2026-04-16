@@ -50,6 +50,7 @@ export interface LeadRow {
   job_title: string | null;
   lead_source: string | null;
   canal: string | null;
+  segmento?: string | null;
   source_id: string | null;
   is_inbound: boolean;
   endereco: LeadAddress | null;

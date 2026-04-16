@@ -12,6 +12,7 @@ export interface LeadInfoPanelData {
   job_title: string | null;
   lead_source: string | null;
   canal: string | null;
+  segmento?: string | null;
   email: string | null;
   telefone: string | null;
   phones: LeadPhone[] | null;
@@ -45,6 +46,7 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     job_title: lead.job_title,
     lead_source: lead.lead_source,
     canal: lead.canal,
+    segmento: lead.segmento ?? null,
     email: lead.email,
     telefone: lead.telefone,
     phones: lead.phones,
@@ -79,6 +81,7 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     job_title: (lead as ActivityLead & { job_title?: string | null }).job_title ?? null,
     lead_source: (lead as ActivityLead & { lead_source?: string | null }).lead_source ?? null,
     canal: (lead as ActivityLead & { canal?: string | null }).canal ?? null,
+    segmento: (lead as ActivityLead & { segmento?: string | null }).segmento ?? null,
     email: lead.email,
     telefone: lead.telefone,
     phones: (lead as ActivityLead & { phones?: LeadPhone[] | null }).phones ?? null,
