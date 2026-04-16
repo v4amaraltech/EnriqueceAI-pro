@@ -156,16 +156,41 @@ export async function updateLead(
         status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
         faturamento_estimado: 'Faturamento', phones: 'Telefones',
       };
-      // Skip complex object fields (phones, custom_field_values) from the message — they're in metadata
-      const skipFields = new Set(['phones', 'socios', 'custom_field_values']);
-      const changeDescriptions = Object.entries(changes)
-        .filter(([key]) => !skipFields.has(key))
-        .map(([key, { from, to }]) => {
-          const label = fieldLabels[key] ?? key;
-          const fromStr = from != null && from !== '' && typeof from !== 'object' ? String(from) : '(vazio)';
-          const toStr = to != null && to !== '' && typeof to !== 'object' ? String(to) : '(vazio)';
-          return `${label}: ${fromStr} → ${toStr}`;
-        });
+      // Skip complex object fields (phones, socios) from the message — they're in metadata
+      const skipFields = new Set(['phones', 'socios']);
+      const changeDescriptions: string[] = [];
+      for (const [key, change] of Object.entries(changes)) {
+        if (skipFields.has(key)) continue;
+        const oldVal = change.from;
+        const newVal = change.to;
+
+        // Special handling for custom_field_values: lookup field name by UUID
+        if (key === 'custom_field_values') {
+          const fromObj = (oldVal ?? {}) as Record<string, string>;
+          const toObj = (newVal ?? {}) as Record<string, string>;
+          const allFieldIds = new Set([...Object.keys(fromObj), ...Object.keys(toObj)]);
+          if (allFieldIds.size > 0) {
+            const { data: cfDefs } = (await from(supabase, 'custom_fields')
+              .select('id, field_name')
+              .in('id', [...allFieldIds])) as { data: Array<{ id: string; field_name: string }> | null };
+            const cfNameMap = new Map((cfDefs ?? []).map((f) => [f.id, f.field_name]));
+            for (const fieldId of allFieldIds) {
+              const fieldName = cfNameMap.get(fieldId) ?? fieldId.slice(0, 8);
+              const oldStr = fromObj[fieldId]?.trim() || '(vazio)';
+              const newStr = toObj[fieldId]?.trim() || '(vazio)';
+              if (oldStr !== newStr) {
+                changeDescriptions.push(`${fieldName}: ${oldStr} → ${newStr}`);
+              }
+            }
+          }
+          continue;
+        }
+
+        const label = fieldLabels[key] ?? key;
+        const fromStr = oldVal != null && oldVal !== '' && typeof oldVal !== 'object' ? String(oldVal) : '(vazio)';
+        const toStr = newVal != null && newVal !== '' && typeof newVal !== 'object' ? String(newVal) : '(vazio)';
+        changeDescriptions.push(`${label}: ${fromStr} → ${toStr}`);
+      }
       logLeadEvent(supabase, {
         orgId,
         leadId,
