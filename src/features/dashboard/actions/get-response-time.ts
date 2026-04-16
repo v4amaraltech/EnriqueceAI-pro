@@ -120,6 +120,14 @@ export async function getResponseTimeData(
     }
   }
 
+  // Get SDRs (exclude managers from response time metrics)
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
   // Calculate per-user breakdown
   const userMap = new Map<string, { total: number; within: number }>();
   let overallWithin = 0;
@@ -128,6 +136,7 @@ export async function getResponseTimeData(
   for (const lead of filteredLeads) {
     const userId = lead.assigned_to;
     if (!userId) continue;
+    if (!sdrIds.has(userId)) continue; // Exclude managers
 
     overallTotal++;
     const entry = userMap.get(userId) ?? { total: 0, within: 0 };

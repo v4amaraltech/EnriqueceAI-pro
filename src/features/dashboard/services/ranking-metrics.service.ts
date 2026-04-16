@@ -235,12 +235,33 @@ export async function fetchConversionRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // Get all active leads in the org (denominator: total leads being worked)
+  // Denominator: leads that were "worked" in the period — meaning they were either:
+  // - enrolled in a cadence in the period, OR
+  // - had a status change in the period (contacted_at, qualified_at, lost_at)
+  // We use cadence_enrollments enrolled_at to define "worked in period".
+  const { data: enrolledInPeriod } = (await from(supabase, 'cadence_enrollments')
+    .select('lead_id')
+    .eq('org_id', orgId)
+    .gte('enrolled_at', start)
+    .lt('enrolled_at', end)
+    .limit(10000)) as { data: Array<{ lead_id: string }> | null };
+  const workedLeadIds = [...new Set((enrolledInPeriod ?? []).map((e) => e.lead_id))];
+
+  if (workedLeadIds.length === 0) {
+    const monthStart = `${filters.month}-01`;
+    const { data: goal } = (await from(supabase, 'goals')
+      .select('conversion_target')
+      .eq('org_id', orgId)
+      .eq('month', monthStart)
+      .maybeSingle()) as { data: { conversion_target: number } | null };
+    return buildRankingCardData([], 0, goal?.conversion_target ?? 0, filters.month);
+  }
+
   let allLeadsQuery = from(supabase, 'leads')
     .select('id, status, assigned_to, won_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .in('status', ['new', 'contacted', 'qualified', 'unqualified'])
+    .in('id', workedLeadIds)
     .limit(10000);
 
   const { data: allLeads } = (await allLeadsQuery) as {
