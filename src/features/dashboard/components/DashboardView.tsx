@@ -85,6 +85,12 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards">
           <RankingCard
             title="Leads Finalizados"
+            titleTooltip={
+              'Inscrições em cadência (enrollments) no período.\n\n' +
+              '• Finalizados: enrollments com status completed ou replied\n' +
+              '• Prospectando: enrollments com status active\n\n' +
+              'Atribuído ao SDR via lead.assigned_to. Apenas usuários com role=SDR aparecem.'
+            }
             icon={Users}
             iconColor="bg-blue-500/10"
             iconTextColor="text-blue-500"
@@ -96,6 +102,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           />
           <RankingCard
             title="Atividades Realizadas"
+            titleTooltip={
+              'Atividades enviadas (interactions com type=sent) no período, agrupadas por SDR via performed_by.\n\n' +
+              'Exclui canais system e calendar. Não conta envios automáticos da cadência (sem performed_by).'
+            }
             icon={CheckCircle2}
             iconColor="bg-amber-500/10"
             iconTextColor="text-amber-500"
@@ -108,6 +118,12 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           />
           <RankingCard
             title="Taxa de Conversão"
+            titleTooltip={
+              'Conversão = leads ganhos no período ÷ leads trabalhados no período\n\n' +
+              '• Numerador: leads com status=qualified e won_at dentro do período\n' +
+              '• Denominador: leads que tiveram cadência iniciada no período (enrolled_at)\n\n' +
+              'Atribuído ao SDR via lead.assigned_to. Apenas usuários com role=SDR.'
+            }
             icon={TrendingUp}
             iconColor="bg-emerald-500/10"
             iconTextColor="text-emerald-500"

@@ -29,6 +29,7 @@ function getInitials(name: string): string {
 
 interface RankingCardProps {
   title: string;
+  titleTooltip?: string;
   icon: LucideIcon;
   iconColor?: string;
   iconTextColor?: string;
@@ -214,6 +215,7 @@ function RankingContent({
 
 export function RankingCard({
   title,
+  titleTooltip,
   icon: Icon,
   iconColor = 'bg-primary/10',
   iconTextColor = 'text-primary',
@@ -244,7 +246,21 @@ export function RankingCard({
     <div className="flex flex-col rounded-lg border bg-card">
       {/* Title */}
       <div className="px-6 pt-6">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 className="text-sm font-semibold inline-flex items-center gap-1.5">
+          {title}
+          {titleTooltip && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[280px] text-xs whitespace-pre-line">
+                  {titleTooltip}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </h3>
       </div>
 
       <RankingContent {...contentProps} />
