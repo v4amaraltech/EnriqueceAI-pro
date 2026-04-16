@@ -235,55 +235,31 @@ export async function fetchConversionRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // Denominator: leads that were "worked" in the period — meaning they were either:
-  // - enrolled in a cadence in the period, OR
-  // - had a status change in the period (contacted_at, qualified_at, lost_at)
-  // We use cadence_enrollments enrolled_at to define "worked in period".
-  const { data: enrolledInPeriod } = (await from(supabase, 'cadence_enrollments')
-    .select('lead_id')
-    .eq('org_id', orgId)
-    .gte('enrolled_at', start)
-    .lt('enrolled_at', end)
-    .limit(10000)) as { data: Array<{ lead_id: string }> | null };
-  const workedLeadIds = [...new Set((enrolledInPeriod ?? []).map((e) => e.lead_id))];
-
-  if (workedLeadIds.length === 0) {
-    const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await from(supabase, 'goals')
-      .select('conversion_target')
-      .eq('org_id', orgId)
-      .eq('month', monthStart)
-      .maybeSingle()) as { data: { conversion_target: number } | null };
-    return buildRankingCardData([], 0, goal?.conversion_target ?? 0, filters.month);
-  }
-
-  let allLeadsQuery = from(supabase, 'leads')
-    .select('id, status, assigned_to, won_by')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .in('id', workedLeadIds)
-    .limit(10000);
-
-  const { data: allLeads } = (await allLeadsQuery) as {
-    data: Array<{ id: string; status: string; assigned_to: string | null; won_by: string | null }> | null;
+  // Denominator: leads that were "worked" in the period (had a cadence enrollment in the period).
+  // Uses SQL function to avoid PostgREST .in() URL length limit.
+  const { data: workedRows } = await (supabase.rpc as any)('fetch_conversion_ranking_data', {
+    p_org_id: orgId,
+    p_start: start,
+    p_end: end,
+  }) as {
+    data: Array<{
+      lead_id: string;
+      status: string;
+      assigned_to: string | null;
+      won_by: string | null;
+      won_in_period: boolean;
+    }> | null;
   };
 
-  // Get leads won in the period (numerator: qualified via won_at)
-  let wonLeadsQuery = from(supabase, 'leads')
-    .select('id, assigned_to, won_by')
-    .eq('org_id', orgId)
-    .eq('status', 'qualified')
-    .is('deleted_at', null)
-    .not('won_at', 'is', null)
-    .gte('won_at', start)
-    .lt('won_at', end);
-
-  const { data: wonLeads } = (await wonLeadsQuery) as {
-    data: Array<{ id: string; assigned_to: string | null; won_by: string | null }> | null;
-  };
-
-  const leadRows = allLeads ?? [];
-  const wonRows = wonLeads ?? [];
+  const leadRows = (workedRows ?? []).map((r) => ({
+    id: r.lead_id,
+    status: r.status,
+    assigned_to: r.assigned_to,
+    won_by: r.won_by,
+  }));
+  const wonRows = (workedRows ?? [])
+    .filter((r) => r.won_in_period)
+    .map((r) => ({ id: r.lead_id, assigned_to: r.assigned_to, won_by: r.won_by }));
 
   if (leadRows.length === 0) {
     const monthStart = `${filters.month}-01`;
