@@ -132,31 +132,33 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Search (debounced) */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
-        <Input
-          placeholder="Buscar lead por nome, email, empresa ou CNPJ..."
-          className="pl-8"
-          value={searchValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSearchValue(v);
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-            debounceRef.current = setTimeout(() => {
-              updateParam('search', v);
-            }, 400);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (debounceRef.current) clearTimeout(debounceRef.current);
-              updateParam('search', searchValue);
-            }
-          }}
-        />
-      </div>
-
       <div className="flex flex-wrap items-end gap-4">
+        {/* Search (debounced) */}
+        <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Buscar</span>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
+            <Input
+              placeholder="Nome, email, empresa ou CNPJ..."
+              className="pl-8"
+              value={searchValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearchValue(v);
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => {
+                  updateParam('search', v);
+                }, 400);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  updateParam('search', searchValue);
+                }
+              }}
+            />
+          </div>
+        </div>
         {/* Status */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Status</span>
