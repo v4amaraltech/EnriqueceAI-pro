@@ -4,7 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES, type SpicedLeadContext } from '@/features/ai/prompts/spiced-analysis';
 
 const WHISPER_MODEL = 'whisper-1';
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 const CLAUDE_MAX_TOKENS = 2048;
 const MIN_DURATION_SECONDS = 180;
 
