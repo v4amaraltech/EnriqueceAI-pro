@@ -6,19 +6,19 @@ interface EngagementScoreBadgeProps {
 }
 
 function getStrokeColor(score: number | null): string {
-  if (score === null) return 'stroke-gray-300 dark:stroke-gray-500';
+  if (score === null) return 'stroke-gray-400 dark:stroke-gray-500';
   if (score >= 70) return 'stroke-red-500';
   if (score >= 40) return 'stroke-amber-500';
-  if (score >= 15) return 'stroke-blue-400';
-  return 'stroke-blue-200';
+  if (score >= 15) return 'stroke-blue-500 dark:stroke-blue-400';
+  return 'stroke-blue-400 dark:stroke-blue-300';
 }
 
 function getTextColor(score: number | null): string {
-  if (score === null) return 'text-gray-300 dark:text-gray-400';
+  if (score === null) return 'text-gray-400 dark:text-gray-400';
   if (score >= 70) return 'text-red-500';
   if (score >= 40) return 'text-amber-500';
-  if (score >= 15) return 'text-blue-400';
-  return 'text-blue-200';
+  if (score >= 15) return 'text-blue-600 dark:text-blue-400';
+  return 'text-blue-500 dark:text-blue-300';
 }
 
 export function EngagementScoreBadge({ score, size = 36 }: EngagementScoreBadgeProps) {
@@ -41,7 +41,7 @@ export function EngagementScoreBadge({ score, size = 36 }: EngagementScoreBadgeP
           r={radius}
           fill="none"
           strokeWidth={2.5}
-          className="stroke-gray-200 dark:stroke-gray-500"
+          className="stroke-gray-300 dark:stroke-gray-600"
         />
         {/* Score ring */}
         {score !== null && (
