@@ -288,32 +288,44 @@ async function resolveCustomFieldKeys(
 ): Promise<Record<string, unknown>> {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const entries = Object.entries(fields);
-  const hasNames = entries.some(([key]) => !UUID_RE.test(key));
 
-  if (!hasNames) return fields; // All keys are UUIDs already
-
-  // Fetch org's custom fields to map names → IDs
+  // Fetch org's custom fields to map names → IDs + get field_type for currency conversion
   const { data: orgFields } = await from(supabase, 'custom_fields')
-    .select('id, field_name')
-    .eq('org_id', orgId) as { data: Array<{ id: string; field_name: string }> | null };
+    .select('id, field_name, field_type')
+    .eq('org_id', orgId) as { data: Array<{ id: string; field_name: string; field_type: string }> | null };
 
   if (!orgFields?.length) return fields;
 
-  const nameToId = new Map(
-    orgFields.map((f) => [f.field_name.toLowerCase().trim(), f.id]),
+  const nameToField = new Map(
+    orgFields.map((f) => [f.field_name.toLowerCase().trim(), f]),
+  );
+  const idToType = new Map(
+    orgFields.map((f) => [f.id, f.field_type]),
   );
 
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of entries) {
     if (UUID_RE.test(key)) {
-      resolved[key] = value;
+      // UUID key — convert currency values from reais to centavos if needed
+      const fieldType = idToType.get(key);
+      resolved[key] = fieldType === 'currency' ? convertToCentavos(value) : value;
     } else {
-      const id = nameToId.get(key.toLowerCase().trim());
-      if (id) resolved[id] = value;
+      const field = nameToField.get(key.toLowerCase().trim());
+      if (field) {
+        resolved[field.id] = field.field_type === 'currency' ? convertToCentavos(value) : value;
+      }
       // Skip unknown field names silently
     }
   }
 
   return resolved;
+}
+
+/** Convert a value from reais (e.g. 676 or "676.00") to centavos string ("67600") */
+function convertToCentavos(value: unknown): string {
+  if (value == null) return '';
+  const num = typeof value === 'number' ? value : parseFloat(String(value).replace(',', '.'));
+  if (Number.isNaN(num)) return String(value);
+  return String(Math.round(num * 100));
 }
 
