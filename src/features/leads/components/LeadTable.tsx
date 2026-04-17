@@ -549,8 +549,8 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                       {info?.enrollment_status && (
                         <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${
                           info.enrollment_status === 'active'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            ? 'bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                         }`}>
                           {info.enrollment_status === 'active' ? 'Ativo' : 'Pausado'}
                         </span>
