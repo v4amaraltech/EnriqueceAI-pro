@@ -88,12 +88,16 @@ export async function fetchLeads(
     }
   }
 
-  // Full-text search
+  // Full-text search — split by space so "Empresa teste" matches leads with "empresa" OR "teste"
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '');
-    query = query.or(
-      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
-    );
+    const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
+    const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
+    if (terms.length > 0) {
+      const clauses = terms.flatMap((term) =>
+        searchFields.map((field) => `${field}.ilike.%${term}%`),
+      );
+      query = query.or(clauses.join(','));
+    }
   }
 
   // Order and paginate
@@ -204,10 +208,14 @@ export async function fetchFilteredLeadIds(
     query = query.eq('canal', filters.canal);
   }
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '');
-    query = query.or(
-      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
-    );
+    const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
+    const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
+    if (terms.length > 0) {
+      const clauses = terms.flatMap((term) =>
+        searchFields.map((field) => `${field}.ilike.%${term}%`),
+      );
+      query = query.or(clauses.join(','));
+    }
   }
 
   const { data, error } = (await query) as {
