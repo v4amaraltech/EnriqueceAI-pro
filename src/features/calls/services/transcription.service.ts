@@ -226,6 +226,27 @@ async function analyzeAndSaveSpiced(
   await from(supabase, 'leads')
     .update({ custom_field_values: merged } as Record<string, unknown>)
     .eq('id', leadId);
+
+  // Log SPICED analysis to lead timeline
+  const filledFields = Object.entries(dbMapped)
+    .filter(([, v]) => v?.trim())
+    .map(([name, value]) => `${name}:\n${value}`)
+    .join('\n\n');
+
+  if (filledFields) {
+    await from(supabase, 'interactions')
+      .insert({
+        org_id: orgId,
+        lead_id: leadId,
+        channel: 'system',
+        type: 'sent',
+        message_content: filledFields,
+        metadata: {
+          system_event: 'spiced_analysis',
+          fields_filled: Object.keys(dbMapped).filter((k) => dbMapped[k]?.trim()),
+        },
+      } as Record<string, unknown>);
+  }
 }
 
 async function callClaudeForSpiced(prompt: string): Promise<Record<string, string>> {

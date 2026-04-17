@@ -258,6 +258,8 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   lead_assigned: 'Lead atribuído',
                   lead_archived: 'Lead arquivado',
                   meeting_invite_sent: 'Convite de reunião enviado',
+                  spiced_analysis: 'Análise SPICED (IA)',
+                  cadence_enrolled: 'Inscrito em cadência',
                 };
                 const title = isSystem
                   ? (entry.performed_by_name
