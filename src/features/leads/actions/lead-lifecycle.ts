@@ -8,9 +8,19 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { logLeadEvent } from './log-lead-event';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+
+/** Complete all active/paused enrollments for a lead (uses service role to bypass RLS) */
+async function completeEnrollmentsForLead(leadId: string) {
+  const serviceClient = createServiceRoleClient();
+  await from(serviceClient, 'cadence_enrollments')
+    .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('lead_id', leadId)
+    .in('status', ['active', 'paused']);
+}
 
 export async function archiveLead(
   leadId: string,
@@ -27,6 +37,9 @@ export async function archiveLead(
   const qErr = handleQueryError(error, 'Erro ao arquivar lead', 'lead-lifecycle');
   if (qErr) return qErr;
 
+  // Complete active cadence enrollments
+  await completeEnrollmentsForLead(leadId);
+
   logLeadEvent(supabase, {
     orgId,
     leadId,
@@ -38,6 +51,7 @@ export async function archiveLead(
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);
+  revalidatePath('/atividades');
 
   return { success: true, data: undefined };
 }
@@ -83,7 +97,7 @@ export async function markLeadAsLost(
     loss_notes: lossNotes ?? null,
   }).catch((err) => console.error('[webhook] lead.unqualified dispatch failed:', err));
 
-  // 2. Complete active/paused enrollments with loss reason
+  // 2. Complete active/paused enrollments with loss reason (service role to bypass RLS)
   const enrollmentUpdate: Record<string, unknown> = {
     status: 'completed',
     loss_reason_id: lossReasonId,
@@ -92,8 +106,8 @@ export async function markLeadAsLost(
   if (lossNotes) {
     enrollmentUpdate.loss_notes = lossNotes;
   }
-  // cadence_enrollments has no org_id column — RLS via cadences.org_id handles isolation
-  await from(supabase, 'cadence_enrollments')
+  const serviceClient = createServiceRoleClient();
+  await from(serviceClient, 'cadence_enrollments')
     .update(enrollmentUpdate)
     .eq('lead_id', leadId)
     .in('status', ['active', 'paused']);

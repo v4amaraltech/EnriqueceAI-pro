@@ -128,6 +128,19 @@ export async function updateLead(
     return { success: false, error: 'Erro ao atualizar lead. Tente novamente.' };
   }
 
+  // Auto-complete cadence enrollments when lead is finalized (won, lost, archived)
+  if ('status' in safeUpdates) {
+    const finalStatuses = ['qualified', 'unqualified', 'archived'];
+    if (finalStatuses.includes(safeUpdates.status as string)) {
+      const { createServiceRoleClient: createSvc } = await import('@/lib/supabase/service');
+      const svc = createSvc();
+      await from(svc, 'cadence_enrollments')
+        .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+        .eq('lead_id', leadId)
+        .in('status', ['active', 'paused']);
+    }
+  }
+
   // Log field changes to audit log
   if (currentLead) {
     const changes: Record<string, { from: unknown; to: unknown }> = {};
