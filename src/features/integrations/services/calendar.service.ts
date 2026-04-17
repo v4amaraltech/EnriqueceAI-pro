@@ -8,10 +8,10 @@ import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
 
 function getGcalClientId() {
-  return process.env.GCAL_CLIENT_ID ?? '';
+  return process.env.GCAL_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID ?? '';
 }
 function getGcalClientSecret() {
-  return process.env.GCAL_CLIENT_SECRET ?? '';
+  return process.env.GCAL_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET ?? '';
 }
 
 interface CalendarConnectionTokens {

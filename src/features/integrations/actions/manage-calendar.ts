@@ -14,10 +14,10 @@ import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 import type { CalendarConnectionSafe } from '../types';
 
 function getGcalClientId() {
-  return process.env.GCAL_CLIENT_ID ?? '';
+  return process.env.GCAL_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID ?? '';
 }
 function getGcalClientSecret() {
-  return process.env.GCAL_CLIENT_SECRET ?? '';
+  return process.env.GCAL_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET ?? '';
 }
 function getGcalRedirectUri() {
   return `${getAppUrl()}/api/auth/callback/calendar`;
