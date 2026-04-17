@@ -177,8 +177,8 @@ export async function updateLead(
             const cfNameMap = new Map((cfDefs ?? []).map((f) => [f.id, f.field_name]));
             for (const fieldId of allFieldIds) {
               const fieldName = cfNameMap.get(fieldId) ?? fieldId.slice(0, 8);
-              const oldStr = fromObj[fieldId]?.trim() || '(vazio)';
-              const newStr = toObj[fieldId]?.trim() || '(vazio)';
+              const oldStr = String(fromObj[fieldId] ?? '').trim() || '(vazio)';
+              const newStr = String(toObj[fieldId] ?? '').trim() || '(vazio)';
               if (oldStr !== newStr) {
                 changeDescriptions.push(`${fieldName}: ${oldStr} → ${newStr}`);
               }
