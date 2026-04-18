@@ -48,15 +48,18 @@ export interface NavSection {
   href?: string;
   items?: NavDropdownItem[];
   placeholder?: string;
+  icon?: LucideIcon;
 }
 
 export const navSections: NavSection[] = [
   {
     label: 'Dashboard',
     href: '/dashboard',
+    icon: TrendingUp,
   },
   {
     label: 'Prospecção',
+    icon: Users,
     items: [
       { label: 'Execução', href: '/atividades', icon: PlayCircle },
       { label: 'Atividades', href: '/activities', icon: ListChecks },
@@ -68,6 +71,7 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Ligações',
+    icon: Phone,
     items: [
       { label: 'Painel', href: '/calls/dashboard', icon: TrendingUp },
       { label: 'Ligações', href: '/calls', icon: Phone },
@@ -77,6 +81,7 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Estatísticas',
+    icon: FileText,
     items: [
       { label: 'Ligação', href: '/statistics/calls', icon: Phone },
       { label: 'Prospecção', href: '/statistics/prospecting', icon: TrendingUp },
@@ -98,12 +103,13 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
         <button
           suppressHydrationWarning
           className={cn(
-            'flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
             isActive
               ? 'text-primary'
               : 'text-muted-foreground dark:text-[var(--foreground)] hover:text-foreground',
           )}
         >
+          {section.icon && <section.icon className="h-4 w-4" />}
           {section.label}
           <ChevronDown className="h-3 w-3" />
         </button>
@@ -188,13 +194,14 @@ export function TopBar({ pendingActivitiesCount }: TopBarProps) {
                 href={section.href}
                 prefetch
                 className={cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   pathname === section.href ||
                     pathname.startsWith(section.href + '/')
                     ? 'text-primary'
                     : 'text-muted-foreground dark:text-[var(--foreground)] hover:text-foreground',
                 )}
               >
+                {section.icon && <section.icon className="h-4 w-4" />}
                 {section.label}
               </Link>
             ) : (
