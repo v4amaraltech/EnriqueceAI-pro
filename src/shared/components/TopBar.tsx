@@ -4,7 +4,21 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { ChevronDown } from 'lucide-react';
+import {
+  ChevronDown,
+  FileText,
+  ListChecks,
+  Mail,
+  MessageSquare,
+  Phone,
+  PlayCircle,
+  Receipt,
+  Settings,
+  TrendingUp,
+  Users,
+  Workflow,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/features/auth/components/UserMenu';
@@ -26,6 +40,7 @@ export interface NavDropdownItem {
   href?: string;
   placeholder?: string;
   badge?: number;
+  icon?: LucideIcon;
 }
 
 export interface NavSection {
@@ -43,30 +58,30 @@ export const navSections: NavSection[] = [
   {
     label: 'Prospecção',
     items: [
-      { label: 'Execução', href: '/atividades' },
-      { label: 'Templates de Atividades', href: '/activities' },
-      { label: 'Templates de Mensagens', href: '/templates' },
-      { label: 'Cadências', href: '/cadences' },
-      { label: 'Leads', href: '/leads' },
-      { label: 'Ajustes', href: '/settings/prospecting' },
+      { label: 'Execução', href: '/atividades', icon: PlayCircle },
+      { label: 'Atividades', href: '/activities', icon: ListChecks },
+      { label: 'Mensagens', href: '/templates', icon: Mail },
+      { label: 'Cadências', href: '/cadences', icon: Workflow },
+      { label: 'Leads', href: '/leads', icon: Users },
+      { label: 'Ajustes', href: '/settings/prospecting', icon: Settings },
     ],
   },
   {
     label: 'Ligações',
     items: [
-      { label: 'Painel de Ligações', href: '/calls/dashboard' },
-      { label: 'Lista de Ligações', href: '/calls' },
-      { label: 'Extrato', href: '/calls/extrato' },
-      { label: 'Ajustes', href: '/calls/ajustes' },
+      { label: 'Painel', href: '/calls/dashboard', icon: TrendingUp },
+      { label: 'Ligações', href: '/calls', icon: Phone },
+      { label: 'Extrato', href: '/calls/extrato', icon: Receipt },
+      { label: 'Ajustes', href: '/calls/ajustes', icon: Settings },
     ],
   },
   {
     label: 'Estatísticas',
     items: [
-      { label: 'Ligação', href: '/statistics/calls' },
-      { label: 'Prospecção', href: '/statistics/prospecting' },
-      { label: 'Feedback de Oportunidade', href: '/statistics/conversion' },
-      { label: 'Equipe', href: '/statistics/team' },
+      { label: 'Ligação', href: '/statistics/calls', icon: Phone },
+      { label: 'Prospecção', href: '/statistics/prospecting', icon: TrendingUp },
+      { label: 'Feedback de Oportunidade', href: '/statistics/conversion', icon: MessageSquare },
+      { label: 'Equipe', href: '/statistics/team', icon: Users },
     ],
   },
 ];
@@ -107,11 +122,14 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
                 href={item.href!}
                 prefetch
                 className={cn(
-                  'flex items-center justify-between',
+                  'flex items-center justify-between gap-2',
                   pathname === item.href && 'font-medium text-primary',
                 )}
               >
-                {item.label}
+                <span className="flex items-center gap-2">
+                  {item.icon && <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  {item.label}
+                </span>
                 {item.badge != null && item.badge > 0 && (
                   <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
                     {item.badge > 99 ? '99+' : item.badge}
