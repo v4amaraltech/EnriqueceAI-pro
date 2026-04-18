@@ -221,7 +221,7 @@ export function StartNewLeadsModal({
                 </div>
               </div>
 
-              <ResponsiveContainer width="100%" height={140}>
+              <ResponsiveContainer width="100%" height={220}>
                 <BarChart
                   data={forecast}
                   margin={{ top: 4, right: 0, left: -20, bottom: 0 }}
