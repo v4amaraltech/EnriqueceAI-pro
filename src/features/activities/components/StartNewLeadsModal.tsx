@@ -108,7 +108,7 @@ export function StartNewLeadsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Iniciar novos leads</DialogTitle>
         </DialogHeader>
