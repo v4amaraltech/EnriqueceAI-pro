@@ -27,17 +27,29 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
   // Count pending activities for THIS SDR only:
-  // 1. Active enrollments where the lead is assigned to the current user
-  // 2. next_step_due is set (ready to execute)
-  // 3. Exclude auto_email cadences
-  const { data: pendingEnrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, cadence:cadences!inner(type), lead:leads!inner(id, assigned_to)')
-    .eq('status', 'active')
-    .eq('lead.assigned_to', userId)
-    .neq('cadence.type', 'auto_email')
-    .not('next_step_due', 'is', null)
-    .lte('next_step_due', new Date().toISOString())
-    .limit(500)) as { data: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null };
+  // Step 1: Get lead IDs assigned to this user
+  const { data: myLeads } = (await from(supabase, 'leads')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('assigned_to', userId)
+    .is('deleted_at', null)
+    .limit(1000)) as { data: Array<{ id: string }> | null };
+
+  const myLeadIds = (myLeads ?? []).map((l) => l.id);
+
+  // Step 2: Get active enrollments for MY leads only
+  let pendingEnrollments: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null = null;
+
+  if (myLeadIds.length > 0) {
+    const { data } = (await from(supabase, 'cadence_enrollments')
+      .select('id, cadence_id, lead_id, current_step')
+      .eq('status', 'active')
+      .in('lead_id', myLeadIds)
+      .not('next_step_due', 'is', null)
+      .lte('next_step_due', new Date().toISOString())
+      .limit(500)) as { data: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null };
+    pendingEnrollments = data;
+  }
 
   let pending: number | null = 0;
 
