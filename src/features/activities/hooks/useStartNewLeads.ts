@@ -153,25 +153,41 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
     const leadsToEnroll = availableLeadIds.slice(0, quantity);
     const cadenceIds = [...selectedIds];
 
-    // Enroll leads in each selected cadence
+    // Distribute leads across cadences (Meetime style — each lead in ONE cadence)
     startTransition(async () => {
       let totalEnrolled = 0;
       let totalErrors = 0;
+      const cadenceNames: string[] = [];
 
-      for (const cadenceId of cadenceIds) {
-        const result = await enrollLeads(cadenceId, leadsToEnroll);
+      // Round-robin distribution: lead 0 → cadence 0, lead 1 → cadence 1, etc.
+      const buckets = new Map<string, string[]>();
+      for (const cId of cadenceIds) {
+        buckets.set(cId, []);
+      }
+      for (let i = 0; i < leadsToEnroll.length; i++) {
+        const cadenceId = cadenceIds[i % cadenceIds.length]!;
+        buckets.get(cadenceId)!.push(leadsToEnroll[i]!);
+      }
+
+      for (const [cadenceId, leadIds] of buckets) {
+        if (leadIds.length === 0) continue;
+        const result = await enrollLeads(cadenceId, leadIds);
         if (result.success) {
           totalEnrolled += result.data.enrolled;
           totalErrors += result.data.errors.length;
+          if (result.data.enrolled > 0) {
+            const cad = cadences.find((c) => c.id === cadenceId);
+            if (cad) cadenceNames.push(cad.name);
+          }
         } else {
-          totalErrors += leadsToEnroll.length;
+          totalErrors += leadIds.length;
         }
       }
 
       if (totalEnrolled > 0) {
-        toast.success(
-          `${totalEnrolled} lead${totalEnrolled > 1 ? 's' : ''} inscrito${totalEnrolled > 1 ? 's' : ''} com sucesso`,
-        );
+        const first = cadenceNames[0] ?? '';
+        const rest = cadenceNames.length > 1 ? ` e ${cadenceNames.length - 1} outra${cadenceNames.length > 2 ? 's' : ''}` : '';
+        toast.success(`${totalEnrolled} lead${totalEnrolled > 1 ? 's' : ''} iniciado${totalEnrolled > 1 ? 's' : ''} em ${first}${rest}`);
         if (totalErrors > 0) {
           toast.warning(`${totalErrors} erro(s) ao inscrever`);
         }
@@ -182,7 +198,7 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
       setIsStarting(false);
       router.refresh();
     });
-  }, [selectedIds, availableLeadIds, quantity, router]);
+  }, [selectedIds, availableLeadIds, quantity, cadences, router]);
 
   return {
     cadences,
