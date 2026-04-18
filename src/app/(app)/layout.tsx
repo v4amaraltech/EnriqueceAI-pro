@@ -152,7 +152,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   <TrialBanner periodEnd={subscriptionPeriodEnd} />
                 )}
                 <TopBar pendingActivitiesCount={pendingCount} />
-                <main className="flex-1 overflow-auto px-12 py-6" data-tour="main-content">
+                <main className="flex-1 overflow-auto px-20 py-6" data-tour="main-content">
                   <Breadcrumbs />
                   <Suspense fallback={<PageSkeleton />}>
                     {children}
