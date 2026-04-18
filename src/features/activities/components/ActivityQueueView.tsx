@@ -28,6 +28,7 @@ import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 import { PendingCallsSection } from './PendingCallsSection';
 import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
+import { StartNewLeadsModal } from './StartNewLeadsModal';
 
 interface ActivityQueueViewProps {
   initialActivities: PendingActivity[];
@@ -95,6 +96,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
+  const [startNewLeadsOpen, setStartNewLeadsOpen] = useState(false);
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -239,7 +241,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         <Button
           size="sm"
           className="bg-emerald-500 hover:bg-emerald-600 text-white shrink-0"
-          onClick={() => router.push('/leads')}
+          onClick={() => setStartNewLeadsOpen(true)}
         >
           Iniciar novos leads
         </Button>
@@ -407,6 +409,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           />
         </>
       )}
+      <StartNewLeadsModal open={startNewLeadsOpen} onOpenChange={setStartNewLeadsOpen} />
     </div>
   );
 }
