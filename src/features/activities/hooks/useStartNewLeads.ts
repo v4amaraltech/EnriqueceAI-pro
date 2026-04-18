@@ -21,27 +21,42 @@ interface UseStartNewLeadsReturn {
   setQuantity: (n: number) => void;
   startLeads: () => void;
   isStarting: boolean;
+  todayActivities: number;
+  newActivitiesPerDay: (dayOffset: number) => number;
+}
+
+const DAY_MULTIPLIERS = [1.0, 0.3, 0.2, 0.15, 0.1];
+
+function getBusinessDayLabels(count: number): string[] {
+  const labels: string[] = [];
+  const dayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+  const now = new Date();
+  const current = new Date(now);
+
+  for (let i = 0; labels.length < count; i++) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      labels.push(labels.length === 0 ? 'hoje' : dayNames[day]!);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return labels;
 }
 
 function buildForecast(
-  quantity: number,
-  selectedCadences: AvailableCadence[],
+  _quantity: number,
+  _selectedCadences: AvailableCadence[],
 ): ForecastDay[] {
-  const avgSteps =
-    selectedCadences.length > 0
-      ? selectedCadences.reduce((sum, c) => sum + c.totalSteps, 0) /
-        selectedCadences.length
-      : 6;
+  const dayLabels = getBusinessDayLabels(5);
 
-  return Array.from({ length: 14 }, (_, i) => {
-    const decay = Math.exp(-i / 6);
-    const peak = i >= 8 && i <= 10 ? 1.3 : 1;
-    const base = (quantity / 10) * decay * peak;
+  return dayLabels.map((dayLabel, i) => {
+    // Mock existing activities (will be replaced by RPC later)
+    const existingActivities = Math.floor(Math.random() * 21) + 20;
+
     return {
-      day: i,
-      label: i === 0 ? 'hoje' : `+${i}`,
-      calls: Math.round(base * avgSteps * 0.4),
-      messages: Math.round(base * avgSteps * 0.6),
+      dayOffset: i,
+      dayLabel,
+      existingActivities,
     };
   });
 }
@@ -69,7 +84,7 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
           // Select all cadences with available leads by default
           const ids = new Set(
             result.data.cadences
-              .filter((c) => result.data.totalAvailable > 0)
+              .filter(() => result.data.totalAvailable > 0)
               .map((c) => c.id),
           );
           setSelectedIds(ids);
@@ -99,6 +114,31 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
   const selectedCadences = useMemo(
     () => cadences.filter((c) => selectedIds.has(c.id)),
     [cadences, selectedIds],
+  );
+
+  const leadsPerCadence = useCallback(
+    (_c: AvailableCadence) => {
+      if (selectedCadences.length === 0) return 0;
+      return Math.ceil(quantity / selectedCadences.length);
+    },
+    [quantity, selectedCadences.length],
+  );
+
+  const todayActivities = useMemo(
+    () =>
+      selectedCadences.reduce(
+        (sum, c) => sum + leadsPerCadence(c) * c.firstDayActivities,
+        0,
+      ),
+    [selectedCadences, leadsPerCadence],
+  );
+
+  const newActivitiesPerDay = useCallback(
+    (dayOffset: number) => {
+      const multiplier = DAY_MULTIPLIERS[dayOffset] ?? 0.1;
+      return Math.round(todayActivities * multiplier);
+    },
+    [todayActivities],
   );
 
   const forecast = useMemo(
@@ -156,5 +196,7 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
     setQuantity,
     startLeads,
     isStarting,
+    todayActivities,
+    newActivitiesPerDay,
   };
 }

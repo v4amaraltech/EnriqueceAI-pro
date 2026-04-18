@@ -54,6 +54,7 @@ export async function fetchCadencesWithAvailability(): Promise<
       origin: (c.origin as AvailableCadence['origin']) ?? 'outbound',
       availableLeads: totalAvailable,
       totalSteps: c.total_steps,
+      firstDayActivities: Math.ceil(c.total_steps * 0.25),
       priority: (c.priority as AvailableCadence['priority']) ?? 'medium',
     }));
 

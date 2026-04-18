@@ -4,18 +4,12 @@ export interface AvailableCadence {
   origin: 'inbound_active' | 'inbound_passive' | 'outbound';
   availableLeads: number;
   totalSteps: number;
+  firstDayActivities: number;
   priority: 'high' | 'medium' | 'low';
 }
 
 export interface ForecastDay {
-  day: number;
-  label: string;
-  calls: number;
-  messages: number;
-}
-
-export interface StartNewLeadsData {
-  availableCadences: AvailableCadence[];
-  forecast: ForecastDay[];
-  totalAvailable: number;
+  dayOffset: number;
+  dayLabel: string;
+  existingActivities: number;
 }
