@@ -107,15 +107,15 @@ export function StartNewLeadsModal({
     const todayPercent = Math.round((todayTotalVal / DAILY_TARGET) * 100);
 
     if (todayTotalVal > DAILY_TARGET) {
-      return `Aten\u00e7\u00e3o: hoje ficaria em ${todayPercent}% da meta di\u00e1ria.`;
+      return `Atenção: hoje ficaria em ${todayPercent}% da meta diária.`;
     }
 
     const allUnderTarget = chartData.every((d) => d.total <= DAILY_TARGET);
     if (allUnderTarget) {
-      return 'Ritmo sustent\u00e1vel pra 5 dias.';
+      return 'Ritmo sustentável pra 5 dias.';
     }
 
-    return `Pico em ${peakDay.dayLabel} \u00b7 ${peakDay.total} atividades.`;
+    return `Pico em ${peakDay.dayLabel} · ${peakDay.total} atividades.`;
   }, [chartData, peakDay]);
 
   const isInsightWarning = useMemo(() => {
@@ -161,7 +161,7 @@ export function StartNewLeadsModal({
               <div>
                 <p className="text-sm font-medium">Leads a iniciar</p>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Ser\u00e3o disparados agora na sua fila.
+                  Serão disparados agora na sua fila.
                 </p>
               </div>
               <Input
@@ -188,7 +188,7 @@ export function StartNewLeadsModal({
                   Atividades adicionais hoje
                 </p>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  {effectiveQuantity} leads \u00d7 {avgFirstDayActivities} ativ. no passo 1
+                  {effectiveQuantity} leads × {avgFirstDayActivities} ativ. no passo 1
                 </p>
               </div>
               <span
@@ -204,14 +204,14 @@ export function StartNewLeadsModal({
 
             {/* Zone 4 - Cadence Table */}
             <div>
-              <p className="text-sm font-medium">Selecione cad\u00eancias</p>
+              <p className="text-sm font-medium">Selecione cadências</p>
               <p className="mb-2 text-xs text-[var(--muted-foreground)]">
-                Os leads ser\u00e3o inscritos nas cad\u00eancias selecionadas
+                Os leads serão inscritos nas cadências selecionadas
               </p>
 
               {cadences.length === 0 ? (
                 <p className="py-4 text-center text-sm text-[var(--muted-foreground)]">
-                  Nenhuma cad\u00eancia ativa encontrada.
+                  Nenhuma cadência ativa encontrada.
                 </p>
               ) : (
                 <div className="max-h-48 overflow-y-auto rounded-md border">
@@ -219,8 +219,8 @@ export function StartNewLeadsModal({
                     <thead>
                       <tr className="border-b bg-[var(--muted)]/50 text-left text-xs text-[var(--muted-foreground)]">
                         <th className="w-8 px-3 py-2" />
-                        <th className="px-3 py-2">Cad\u00eancia</th>
-                        <th className="px-3 py-2 text-right">Dispon\u00edveis</th>
+                        <th className="px-3 py-2">Cadência</th>
+                        <th className="px-3 py-2 text-right">Disponíveis</th>
                         <th className="px-3 py-2 text-right">Etapas</th>
                         <th className="px-3 py-2 text-right">Ativ/d1</th>
                       </tr>
@@ -277,12 +277,12 @@ export function StartNewLeadsModal({
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-medium">
-                  Previs\u00e3o \u00b7 pr\u00f3ximos 5 dias \u00fateis
+                  Previsão · próximos 5 dias úteis
                 </p>
                 <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--muted-foreground)]/30" />
-                    J\u00e1 agendadas
+                    Já agendadas
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--primary)]" />
@@ -350,7 +350,7 @@ export function StartNewLeadsModal({
                             Novas: {day.newActivities}
                           </p>
                           <p className="text-[var(--muted-foreground)]">
-                            J\u00e1 agendadas: {day.existingActivities}
+                            Já agendadas: {day.existingActivities}
                           </p>
                         </div>
                       )}
@@ -378,7 +378,7 @@ export function StartNewLeadsModal({
             <div className="flex items-center justify-between border-t pt-4">
               <p className="text-xs text-[var(--muted-foreground)]">
                 {totalAvailable} lead{totalAvailable !== 1 ? 's' : ''}{' '}
-                dispon\u00edve{totalAvailable !== 1 ? 'is' : 'l'}
+                disponíve{totalAvailable !== 1 ? 'is' : 'l'}
               </p>
               <div className="flex gap-2">
                 <Button
