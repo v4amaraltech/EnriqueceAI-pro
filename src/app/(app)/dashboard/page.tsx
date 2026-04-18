@@ -66,7 +66,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if (!result.success) {
     return (
-      <div className="mx-auto max-w-[1600px] px-10">
+      <div>
         <h1 className="mb-6 text-lg font-normal text-foreground">Visão geral</h1>
         <EmptyState
           icon={AlertTriangle}
@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-10">
+    <div>
       <DashboardView
         data={result.data}
         filters={filters}
