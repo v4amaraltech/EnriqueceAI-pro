@@ -26,14 +26,17 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     .eq('performed_by', userId)
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
-  // Count pending activities — must match fetchPendingActivities logic exactly:
-  // 1. ALL active enrollments with next_step_due set, excluding auto_email
-  // 2. Subtract activities that already have an interaction (already executed)
+  // Count pending activities for THIS SDR only:
+  // 1. Active enrollments where the lead is assigned to the current user
+  // 2. next_step_due is set (ready to execute)
+  // 3. Exclude auto_email cadences
   const { data: pendingEnrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, cadence:cadences!inner(type), lead:leads!inner(id)')
+    .select('id, cadence_id, lead_id, current_step, cadence:cadences!inner(type), lead:leads!inner(id, assigned_to)')
     .eq('status', 'active')
+    .eq('lead.assigned_to', userId)
     .neq('cadence.type', 'auto_email')
     .not('next_step_due', 'is', null)
+    .lte('next_step_due', new Date().toISOString())
     .limit(500)) as { data: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null };
 
   let pending: number | null = 0;
