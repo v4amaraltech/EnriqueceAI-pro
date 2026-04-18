@@ -366,7 +366,7 @@ export function StartNewLeadsModal({
                 className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
                   isInsightWarning
                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
-                    : 'bg-[var(--primary)]/10 border-[var(--primary)]/30 text-[var(--foreground)]'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                 }`}
               >
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
