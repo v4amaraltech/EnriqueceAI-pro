@@ -18,16 +18,16 @@ export default async function ProspectingStatisticsLayout({
   ]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex gap-6">
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 space-y-6 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-4">
+      <aside className="w-64 shrink-0 space-y-5 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <ProspectingSidebarFilters members={members} cadences={cadences} />
-        <div className="border-t border-[var(--border)]" />
+        <hr className="border-[var(--border)]" />
         <ProspectingSidebarNav />
       </aside>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto">
         {children}
       </main>
     </div>
