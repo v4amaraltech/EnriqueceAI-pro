@@ -45,7 +45,7 @@ export function ConversionAnalyticsView({ data, members, cadences, hideFilters, 
   const { from, to } = useDateRange('/statistics/conversion');
   const drilldown = useDrilldown();
 
-  const qualified = data.funnel.find((s) => s.label === 'Qualificado');
+  const qualified = data.funnel.find((s) => s.label === 'Qualificados');
   const totalLeads = data.funnel[0]?.count ?? 0;
   const conversionRate = totalLeads > 0 && qualified ? ((qualified.count / totalLeads) * 100).toFixed(0) : '0';
 
