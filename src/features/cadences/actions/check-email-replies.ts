@@ -24,6 +24,7 @@ interface SentInteraction {
   cadence_id: string;
   external_id: string;
   metadata: Record<string, unknown> | null;
+  performed_by: string | null;
 }
 
 interface CadenceCreator {
@@ -44,10 +45,11 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   cutoffDate.setDate(cutoffDate.getDate() - REPLY_CHECK_DAYS);
 
   const { data: sentInteractions, error: fetchError } = (await from(supabase, 'interactions')
-    .select('id, lead_id, cadence_id, external_id, metadata')
+    .select('id, lead_id, cadence_id, external_id, metadata, performed_by')
     .eq('type', 'sent')
     .eq('channel', 'email')
     .not('external_id', 'is', null)
+    .not('performed_by', 'is', null)
     .gte('created_at', cutoffDate.toISOString())
     .limit(BATCH_SIZE)) as { data: SentInteraction[] | null; error: { message: string } | null };
 
@@ -89,37 +91,17 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
 
   console.warn(`[reply-check] Checking ${toCheck.length} interactions (${sentInteractions.length} total sent, ${alreadyProcessedMap.size} already processed)`);
 
-  // 3. Group by cadence → get created_by (the Gmail user)
-  const cadenceIds = [...new Set(toCheck.map((i) => i.cadence_id))];
-  const { data: cadences } = (await from(supabase, 'cadences')
-    .select('id, created_by')
-    .in('id', cadenceIds)) as { data: CadenceCreator[] | null };
-
-  if (!cadences?.length) {
-    return { success: true, data: { found: 0 } };
-  }
-
-  const cadenceCreatorMap = new Map<string, string>();
-  for (const c of cadences) {
-    if (c.created_by) {
-      cadenceCreatorMap.set(c.id, c.created_by);
-    }
-  }
-
-  // 4. Group interactions by user_id → process per user's Gmail
+  // 3. Group interactions by performed_by (the SDR who sent the email — has the Gmail token)
   const byUser = new Map<string, SentInteraction[]>();
   for (const interaction of toCheck) {
-    const userId = cadenceCreatorMap.get(interaction.cadence_id);
+    const userId = interaction.performed_by;
     if (!userId) continue;
     const list = byUser.get(userId) ?? [];
     list.push(interaction);
     byUser.set(userId, list);
   }
 
-  console.warn(`[reply-check] cadences found: ${cadences?.length ?? 0}, users to check: ${byUser.size}, cadenceCreatorMap entries: ${cadenceCreatorMap.size}`);
-  for (const [cId, uId] of cadenceCreatorMap) {
-    console.warn(`[reply-check] cadence=${cId} creator=${uId}`);
-  }
+  console.warn(`[reply-check] Users to check: ${byUser.size}`);
 
   // 5. For each user, get Gmail connection and check threads
   for (const [userId, interactions] of byUser) {
