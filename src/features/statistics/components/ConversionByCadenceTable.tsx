@@ -21,7 +21,7 @@ export function ConversionByCadenceTable({ data }: ConversionByCadenceTableProps
         <thead>
           <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
             <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cadência</th>
-            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Enrollments</th>
+            <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Inscritos</th>
             <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Respostas</th>
             <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Reuniões</th>
             <th className="px-4 py-2 text-right font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Qualificados</th>
