@@ -65,10 +65,10 @@ export async function fetchConversionAnalyticsData(
   // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column)
   const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
   let enrQuery = from(supabase, 'cadence_enrollments')
-    .select('cadence_id, lead_id, status, enrolled_by, created_at, updated_at')
+    .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
     .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
+    .gte('enrolled_at', periodStart)
+    .lte('enrolled_at', periodEnd);
 
   if (userIds && userIds.length > 0) {
     enrQuery = enrQuery.in('enrolled_by', userIds);
