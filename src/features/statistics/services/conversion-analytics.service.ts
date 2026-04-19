@@ -103,8 +103,8 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
     { label: 'Contactados', count: contactedLeads.size, percentage: safeRate(contactedLeads.size, totalLeads), color: CONVERSION_COLORS.contacted },
     { label: 'Respondidos', count: repliedLeads.size, percentage: safeRate(repliedLeads.size, totalLeads), color: CONVERSION_COLORS.replied },
-    { label: 'Reunião', count: meetingLeads.size, percentage: safeRate(meetingLeads.size, totalLeads), color: CONVERSION_COLORS.meeting },
     { label: 'Qualificados', count: qualifiedLeads, percentage: safeRate(qualifiedLeads, totalLeads), color: CONVERSION_COLORS.qualified },
+    { label: 'Reunião', count: meetingLeads.size, percentage: safeRate(meetingLeads.size, totalLeads), color: CONVERSION_COLORS.meeting },
   ];
 }
 
