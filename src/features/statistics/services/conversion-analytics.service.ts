@@ -167,18 +167,25 @@ function calculateCadenceConversion(
     leads.filter((l) => l.status === 'qualified').map((l) => l.id),
   );
 
+  // Build set of lead IDs that have meetings (meeting_scheduled often has no cadence_id)
+  const meetingLeadIds = new Set(
+    interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
+  );
+  // Build set of lead IDs that have replies
+  const repliedLeadIds = new Set(
+    interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
+  );
+
   const enrollmentsByCadence = groupBy(enrollments, (e) => e.cadence_id);
-  const interactionsByCadence = groupBy(interactions, (i) => i.cadence_id ?? '');
 
   return cadences
     .map((cadence) => {
       const cadenceEnrollments = enrollmentsByCadence.get(cadence.id) ?? [];
-      const cadenceInteractions = interactionsByCadence.get(cadence.id) ?? [];
-
-      const replies = cadenceInteractions.filter((i) => i.type === 'replied').length;
-      const meetings = cadenceInteractions.filter((i) => i.type === 'meeting_scheduled').length;
-
       const cadenceLeadIds = new Set(cadenceEnrollments.map((e) => e.lead_id));
+
+      // Count by lead membership: if lead is enrolled in this cadence AND has reply/meeting, count it
+      const replies = [...cadenceLeadIds].filter((id) => repliedLeadIds.has(id)).length;
+      const meetings = [...cadenceLeadIds].filter((id) => meetingLeadIds.has(id)).length;
       const qualified = [...cadenceLeadIds].filter((id) => qualifiedLeadIds.has(id)).length;
 
       return {
