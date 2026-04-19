@@ -68,11 +68,12 @@ export async function fetchEmailAnalyticsData(
 
 function calculateEmailAnalytics(interactions: InteractionQueryRow[]): EmailAnalyticsData {
   const totalSent = interactions.filter((i) => i.type === 'sent').length;
-  const totalDelivered = interactions.filter((i) => i.type === 'delivered').length;
+  const totalBounced = interactions.filter((i) => i.type === 'bounced').length;
+  // Estimate delivered as sent - bounced (Gmail doesn't provide delivery receipts)
+  const totalDelivered = Math.max(0, totalSent - totalBounced);
   const totalOpened = interactions.filter((i) => i.type === 'opened').length;
   const totalClicked = interactions.filter((i) => i.type === 'clicked').length;
   const totalReplied = interactions.filter((i) => i.type === 'replied').length;
-  const totalBounced = interactions.filter((i) => i.type === 'bounced').length;
 
   const funnel = buildFunnel(totalSent, totalDelivered, totalOpened, totalClicked, totalReplied);
   const dailyTrend = buildDailyTrend(interactions);
