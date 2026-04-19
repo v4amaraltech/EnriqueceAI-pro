@@ -43,8 +43,8 @@ export function ConversionFunnelChart({ stages, onStageClick }: ConversionFunnel
                   minWidth: '80px',
                 }}
               >
-                <span>{stage.count}</span>
-                <span className="text-xs opacity-80">{stage.percentage}%</span>
+                <span style={{ color: 'white' }}>{stage.count}</span>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.8)' }}>{stage.percentage}%</span>
               </div>
             </div>
           </div>
