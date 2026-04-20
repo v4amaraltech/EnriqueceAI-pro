@@ -21,19 +21,31 @@ interface StackedRow {
 }
 
 function StackedBar({ row }: { row: StackedRow }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   return (
     <div className="flex items-center gap-3 py-2.5">
       <div className="w-[240px] shrink-0 text-right text-sm truncate" title={row.label}>
         {row.label}
       </div>
-      <div className="flex-1 flex h-8 rounded-sm overflow-hidden">
+      <div className="relative flex-1 flex h-8 rounded-sm overflow-hidden">
         {row.reasons.map((r, i) => (
           <div
             key={i}
-            style={{ width: `${(r.count / row.totalLost) * 100}%`, backgroundColor: r.color }}
-            className="h-full min-w-[2px]"
-            title={`${r.reasonName}: ${r.count}`}
-          />
+            style={{ width: `${(r.count / row.totalLost) * 100}%`, backgroundColor: r.color, opacity: hoveredIndex !== null && hoveredIndex !== i ? 0.4 : 1 }}
+            className="h-full min-w-[2px] transition-opacity cursor-pointer relative"
+            onMouseEnter={() => setHoveredIndex(i)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          >
+            {hoveredIndex === i && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+                <div className="bg-[var(--popover)] text-[var(--popover-foreground)] border border-[var(--border)] rounded-md px-3 py-1.5 shadow-lg whitespace-nowrap flex items-center gap-2">
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                  <span className="text-xs font-medium">{r.reasonName}: {r.count}</span>
+                </div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
       <div className="w-[60px] shrink-0 text-right">
