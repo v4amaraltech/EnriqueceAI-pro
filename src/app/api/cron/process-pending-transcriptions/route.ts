@@ -5,10 +5,9 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { processCallTranscription } from '@/features/calls/services/transcription.service';
+import { TRANSCRIPTION_TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
 
 export const maxDuration = 300; // 5 min — sequential processing
-
-const MIN_DURATION_SECONDS = 180;
 const BATCH_LIMIT = 10;
 
 /**
@@ -29,7 +28,7 @@ export async function POST(request: Request) {
   const { data: pending } = (await from(supabase, 'calls')
     .select('id')
     .not('recording_url', 'is', null)
-    .gte('duration_seconds', MIN_DURATION_SECONDS)
+    .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
     .or('transcription_status.is.null,transcription_status.eq.pending')
     .order('created_at', { ascending: true })
     .limit(BATCH_LIMIT)) as { data: { id: string }[] | null };

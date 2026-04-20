@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Minimum call duration in seconds to trigger transcription + SPICED analysis */
+export const TRANSCRIPTION_MIN_DURATION_SECONDS = 180;
+
 export const callStatusValues = ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'] as const;
 export const callTypeValues = ['inbound', 'outbound', 'manual'] as const;
 

@@ -14,6 +14,7 @@ import {
 
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import type { CallStatus } from '@/features/calls/types';
+import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
 
 export const maxDuration = 60;
 
@@ -235,7 +236,7 @@ async function updateCallFromWebhook(
     .eq('id', callId);
 
   // Trigger automatic transcription + SPICED analysis if recording available
-  if (payload.recordUrl && payload.duration >= 180) {
+  if (payload.recordUrl && payload.duration >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
     const appUrl = getAppUrl();
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (appUrl && serviceRoleKey) {

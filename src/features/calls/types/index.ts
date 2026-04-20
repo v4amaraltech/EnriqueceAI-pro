@@ -19,7 +19,7 @@ export interface CallRow {
   recording_url: string | null;
   notes: string | null;
   is_important: boolean;
-  metadata: Record<string, string> | null;
+  metadata: Record<string, unknown> | null;
   transcription: string | null;
   transcription_status: TranscriptionStatus;
   transcription_error: string | null;

@@ -2,11 +2,11 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES, type SpicedLeadContext } from '@/features/ai/prompts/spiced-analysis';
+import { TRANSCRIPTION_TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 const CLAUDE_MAX_TOKENS = 2048;
-const MIN_DURATION_SECONDS = 180;
 
 interface CallForTranscription {
   id: string;
@@ -40,7 +40,7 @@ export async function processCallTranscription(callId: string): Promise<void> {
     return;
   }
 
-  if (call.duration_seconds < MIN_DURATION_SECONDS) {
+  if (call.duration_seconds < TRANSCRIPTION_MIN_DURATION_SECONDS) {
     await updateTranscriptionStatus(supabase, callId, 'skipped', null, 'duration_too_short');
     return;
   }
@@ -281,7 +281,11 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
 
   // Parse JSON — handle potential markdown wrapping
   const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  return JSON.parse(cleaned) as Record<string, string>;
+  try {
+    return JSON.parse(cleaned) as Record<string, string>;
+  } catch {
+    throw new Error(`claude_response_parse_failed: ${cleaned.substring(0, 200)}`);
+  }
 }
 
 async function updateTranscriptionStatus(
