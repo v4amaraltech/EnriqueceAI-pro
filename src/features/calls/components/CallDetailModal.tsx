@@ -142,9 +142,9 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl w-full max-h-[85vh] p-0 flex flex-col overflow-hidden">
-        <DialogHeader className="border-b px-6 py-4 space-y-0">
+        <DialogHeader className="border-b border-[var(--border)] bg-[var(--muted)]/50 px-6 py-4 space-y-0">
           <DialogTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
+            <Phone className="h-5 w-5 text-[var(--primary)]" />
             Detalhes da Ligação
           </DialogTitle>
         </DialogHeader>
@@ -215,10 +215,10 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
             )}
 
             {/* Metadata */}
-            <div className="border-b px-6 py-4 space-y-3">
+            <div className="border-b border-[var(--border)] px-6 py-4 space-y-3">
               {/* Status dropdown */}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Status</span>
+                <span className="text-sm font-semibold">Status</span>
                 <Select value={displayStatus} onValueChange={handleStatusChange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue />
@@ -239,36 +239,36 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
               <Separator />
 
               {/* Details grid */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 rounded-lg bg-[var(--muted)]/40 p-3">
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
-                  <p className="text-sm font-medium">{activeCall.origin}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                  <p className="text-sm font-semibold">{activeCall.origin}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
-                  <p className="text-sm font-medium">{activeCall.destination}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Destino</p>
+                  <p className="text-sm font-semibold">{activeCall.destination}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Data</p>
-                  <p className="text-sm">{formatDateTime(activeCall.started_at)}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Data</p>
+                  <p className="text-sm font-medium">{formatDateTime(activeCall.started_at)}</p>
                 </div>
-                <div className="flex items-start gap-1">
-                  <Clock className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                <div className="flex items-start gap-1.5">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 text-blue-400" />
                   <div>
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
-                    <p className="text-sm tabular-nums">{formatDuration(activeCall.duration_seconds)}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">Duração</p>
+                    <p className="text-sm font-medium tabular-nums">{formatDuration(activeCall.duration_seconds)}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>
-                  <Badge variant="outline">{typeLabels[activeCall.type] ?? activeCall.type}</Badge>
+                  <p className="text-xs text-[var(--muted-foreground)]">Tipo</p>
+                  <Badge variant="outline" className="mt-0.5">{typeLabels[activeCall.type] ?? activeCall.type}</Badge>
                 </div>
                 {activeCall.cost != null && (
-                  <div className="flex items-start gap-1">
-                    <DollarSign className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                  <div className="flex items-start gap-1.5">
+                    <DollarSign className="mt-0.5 h-3.5 w-3.5 text-green-400" />
                     <div>
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Custo</p>
-                      <p className="text-sm">R$ {activeCall.cost.toFixed(2)}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Custo</p>
+                      <p className="text-sm font-medium">R$ {activeCall.cost.toFixed(2)}</p>
                     </div>
                   </div>
                 )}
@@ -287,8 +287,11 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
             </div>
 
             {/* Feedback section */}
-            <div className="px-6 py-4 space-y-3">
-              <h3 className="text-sm font-semibold">Feedback</h3>
+            <div className="bg-[var(--muted)]/30 px-6 py-4 space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Send className="h-3.5 w-3.5 text-[var(--primary)]" />
+                Feedback
+              </h3>
 
               {/* Existing feedback */}
               {displayFeedback.length > 0 ? (
