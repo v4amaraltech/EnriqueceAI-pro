@@ -96,10 +96,16 @@ function ReasonBar({ entry, maxCount }: { entry: LossReasonEntry; maxCount: numb
           ))}
         </div>
         <div
-          className="relative h-full rounded-sm bg-[var(--primary)]"
+          className="relative h-full rounded-sm bg-[var(--primary)] flex items-center"
           style={{ width: `${widthPercent}%` }}
-        />
-        <span className="absolute text-xs font-semibold ml-1.5" style={{ left: `${widthPercent}%`, top: '50%', transform: 'translateY(-50%)' }}>{entry.percentage.toFixed(0)}%</span>
+        >
+          {widthPercent > 85 && (
+            <span className="absolute right-2 text-xs font-semibold text-white">{entry.percentage.toFixed(0)}%</span>
+          )}
+        </div>
+        {widthPercent <= 85 && (
+          <span className="absolute text-xs font-semibold ml-1.5" style={{ left: `${widthPercent}%`, top: '50%', transform: 'translateY(-50%)' }}>{entry.percentage.toFixed(0)}%</span>
+        )}
       </div>
     </div>
   );
