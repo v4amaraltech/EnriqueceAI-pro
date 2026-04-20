@@ -213,23 +213,19 @@ async function updateCallFromWebhook(
     updates.started_at = payload.startedAt;
   }
 
-  // Only override status if hangup cause maps to a specific status
-  // and the current status hasn't been manually set by the SDR
-  const mappedStatus = hangupCauseToStatus[payload.hangupCause];
-  if (mappedStatus && currentStatus === 'not_connected') {
-    updates.status = mappedStatus;
-  }
-
-  // >= 50s = Conectada (significant), < 50s = Não Conectada (no_contact)
-  if (payload.duration >= 50) {
-    updates.status = 'significant';
-  } else if (currentStatus === 'not_connected') {
-    updates.status = 'no_contact';
-  }
-
-  // NORMAL_CLEARING without answeredAt means it rang but was not answered
-  if (payload.hangupCause === 'NORMAL_CLEARING' && !payload.answeredAt && currentStatus === 'not_connected') {
-    updates.status = 'no_contact';
+  // Status decision tree — only override if SDR hasn't manually set it
+  if (currentStatus === 'not_connected') {
+    if (payload.duration >= 50) {
+      // Long call = connected and significant
+      updates.status = 'significant';
+    } else if (payload.hangupCause === 'NORMAL_CLEARING' && !payload.answeredAt) {
+      // Rang but not answered
+      updates.status = 'no_contact';
+    } else {
+      // Check hangup cause mapping, fallback to no_contact
+      const mappedStatus = hangupCauseToStatus[payload.hangupCause];
+      updates.status = mappedStatus ?? 'no_contact';
+    }
   }
 
   await from(supabase, 'calls')

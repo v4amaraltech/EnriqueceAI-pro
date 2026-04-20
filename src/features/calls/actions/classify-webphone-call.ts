@@ -56,7 +56,7 @@ export async function classifyWebphoneCall(
     updates.duration_seconds = clientDurationSeconds;
   }
 
-  await from(supabase, 'calls').update(updates).eq('id', callId);
+  await from(supabase, 'calls').update(updates).eq('id', callId).eq('org_id', orgId);
 
   // Create interaction record so the call appears in prospecting stats
   const effectiveLeadId = leadId ?? call.lead_id;

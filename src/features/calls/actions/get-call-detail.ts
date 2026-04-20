@@ -16,11 +16,12 @@ export async function getCallDetail(callId: string): Promise<ActionResult<CallDe
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, supabase } = auth.data;
 
   const { data: call, error } = (await from(supabase, 'calls')
     .select('*')
     .eq('id', callId)
+    .eq('org_id', orgId)
     .single()) as { data: CallRow | null; error: { message: string } | null };
 
   if (error || !call) {
