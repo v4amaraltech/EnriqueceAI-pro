@@ -2,7 +2,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES, type SpicedLeadContext } from '@/features/ai/prompts/spiced-analysis';
-import { TRANSCRIPTION_TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
+import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';

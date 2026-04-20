@@ -5,7 +5,7 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { processCallTranscription } from '@/features/calls/services/transcription.service';
-import { TRANSCRIPTION_TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
 
 export const maxDuration = 300; // 5 min — sequential processing
 const BATCH_LIMIT = 10;
