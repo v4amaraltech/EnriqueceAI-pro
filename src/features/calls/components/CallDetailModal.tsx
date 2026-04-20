@@ -163,7 +163,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl w-full max-h-[85vh] p-0 flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-5xl w-full max-h-[85vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="border-b border-[var(--border)] bg-[var(--muted)]/50 px-6 py-4 space-y-0">
           <DialogTitle className="flex items-center gap-2">
             <Phone className="h-5 w-5 text-[var(--primary)]" />
