@@ -18,26 +18,23 @@ export async function getCallDetail(callId: string): Promise<ActionResult<CallDe
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data: call, error } = (await from(supabase, 'calls')
-    .select('*')
+  const { data: callWithFeedback, error } = (await from(supabase, 'calls')
+    .select('*, call_feedback(*)')
     .eq('id', callId)
     .eq('org_id', orgId)
-    .single()) as { data: CallRow | null; error: { message: string } | null };
+    .single()) as { data: (CallRow & { call_feedback: CallFeedbackRow[] }) | null; error: { message: string } | null };
 
-  if (error || !call) {
+  if (error || !callWithFeedback) {
     return { success: false, error: 'Ligação não encontrada' };
   }
 
-  const { data: feedback } = (await from(supabase, 'call_feedback')
-    .select('*')
-    .eq('call_id', callId)
-    .order('created_at', { ascending: true })) as { data: CallFeedbackRow[] | null };
+  const { call_feedback, ...call } = callWithFeedback;
 
   return {
     success: true,
     data: {
       ...call,
-      feedback: feedback ?? [],
+      feedback: call_feedback ?? [],
     },
   };
 }

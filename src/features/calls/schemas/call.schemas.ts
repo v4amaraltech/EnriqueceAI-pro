@@ -23,7 +23,7 @@ export const updateCallStatusSchema = z.object({
 });
 
 export const callFiltersSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().max(100).optional(),
   status: callStatusSchema.optional(),
   user_id: z.string().uuid().optional(),
   period: z.enum(['today', 'week', 'month', 'all']).default('all'),

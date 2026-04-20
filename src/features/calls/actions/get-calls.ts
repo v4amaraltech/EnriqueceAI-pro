@@ -63,12 +63,14 @@ export async function getCalls(
     query = query.gte('started_at', start);
   }
 
-  // Search
+  // Search (limited to origin + destination for performance, notes excluded from ILIKE)
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '');
-    query = query.or(
-      `origin.ilike.%${term}%,destination.ilike.%${term}%,notes.ilike.%${term}%`,
-    );
+    const term = filters.search.replace(/[%_]/g, '').substring(0, 50);
+    if (term.length > 0) {
+      query = query.or(
+        `origin.ilike.%${term}%,destination.ilike.%${term}%`,
+      );
+    }
   }
 
   // Order and paginate

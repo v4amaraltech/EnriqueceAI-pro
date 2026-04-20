@@ -46,12 +46,14 @@ async function findMatchingCall(
 
   if (call) return call;
 
-  // Fallback: try matching by caller (ramal) + called (phone)
+  // Fallback: try matching by caller (ramal) + called (phone) within last 2 hours
   const calledNormalized = body.called.replace(/\D/g, '');
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: fallbackCall } = (await from(supabase, 'calls')
     .select('id, status, recording_url')
     .eq('origin', body.caller)
     .like('destination', `%${calledNormalized.slice(-8)}`)
+    .gte('created_at', twoHoursAgo)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()) as { data: { id: string; status: CallStatus; recording_url: string | null } | null };
