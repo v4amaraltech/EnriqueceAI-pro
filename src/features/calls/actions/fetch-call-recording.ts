@@ -28,7 +28,7 @@ export async function fetchCallRecording(
 
   // 1. Get the call
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, recording_url, metadata, destination, started_at, created_at, user_id, origin')
+    .select('id, recording_url, metadata, destination, started_at, created_at, user_id, origin, duration_seconds')
     .eq('id', callId)
     .single()) as {
     data: {
@@ -40,6 +40,7 @@ export async function fetchCallRecording(
       created_at: string;
       user_id: string;
       origin: string | null;
+      duration_seconds: number;
     } | null;
   };
 
@@ -121,8 +122,14 @@ export async function fetchCallRecording(
         if (phoneMatch) {
           const remoteTime = new Date(record.started_at).getTime();
           const localTime = new Date(call.started_at ?? call.created_at).getTime();
-          // Wider window: 2 hours for timezone differences
-          if (Math.abs(remoteTime - localTime) < 2 * 60 * 60 * 1000) {
+          const timeDiff = Math.abs(remoteTime - localTime);
+          // Duration must be within 30% tolerance to avoid mismatches
+          const durationMatch = record.duration > 0 && call.duration_seconds > 0
+            ? Math.abs(record.duration - call.duration_seconds) / Math.max(record.duration, call.duration_seconds) < 0.3
+            : true; // skip check if either is 0
+
+          // Time window: 10 minutes + duration must match
+          if (timeDiff < 10 * 60 * 1000 && durationMatch) {
             recordingUrl = record.record_url;
             break;
           }
