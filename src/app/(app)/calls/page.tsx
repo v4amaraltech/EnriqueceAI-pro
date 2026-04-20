@@ -1,10 +1,5 @@
-import { AlertTriangle } from 'lucide-react';
-
 import { requireAuth } from '@/lib/auth/require-auth';
 
-import { EmptyState } from '@/shared/components/EmptyState';
-
-import { getCalls } from '@/features/calls/actions/get-calls';
 import { CallsListView } from '@/features/calls/components/CallsListView';
 
 interface CallsPageProps {
@@ -25,19 +20,5 @@ export default async function CallsPage({ searchParams }: CallsPageProps) {
   if (params.important_only) filters.important_only = params.important_only;
   if (params.page) filters.page = params.page;
 
-  const hasFilters = !!(params.status || params.period || params.search || params.important_only === 'true');
-
-  const result = await getCalls(filters);
-
-  if (!result.success) {
-    return (
-      <EmptyState
-        icon={AlertTriangle}
-        title="Erro ao carregar ligações"
-        description={result.error}
-      />
-    );
-  }
-
-  return <CallsListView result={result.data} hasFilters={hasFilters} currentFilters={filters} />;
+  return <CallsListView initialFilters={filters} />;
 }
