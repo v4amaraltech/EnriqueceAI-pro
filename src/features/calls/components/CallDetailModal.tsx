@@ -14,11 +14,11 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/shared/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import { Separator } from '@/shared/components/ui/separator';
 import { Textarea } from '@/shared/components/ui/textarea';
 
@@ -140,14 +140,14 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
   );
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="sm:max-w-lg w-full p-0 flex flex-col">
-        <SheetHeader className="border-b px-6 py-4 space-y-0">
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="border-b px-6 py-4 space-y-0">
+          <DialogTitle className="flex items-center gap-2">
             <Phone className="h-5 w-5" />
             Detalhes da Ligação
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+        </DialogHeader>
 
         {activeCall && (
           <div className="flex-1 overflow-y-auto">
@@ -336,7 +336,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
             </div>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
