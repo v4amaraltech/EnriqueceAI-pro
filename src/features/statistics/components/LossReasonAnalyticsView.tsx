@@ -99,8 +99,8 @@ function ReasonBar({ entry, maxCount }: { entry: LossReasonEntry; maxCount: numb
           className="relative h-full rounded-sm bg-[var(--primary)]"
           style={{ width: `${widthPercent}%` }}
         />
+        <span className="absolute text-xs font-semibold ml-1.5" style={{ left: `${widthPercent}%`, top: '50%', transform: 'translateY(-50%)' }}>{entry.percentage.toFixed(0)}%</span>
       </div>
-      <span className="w-[45px] shrink-0 text-sm font-semibold">{entry.percentage.toFixed(0)}%</span>
     </div>
   );
 }
