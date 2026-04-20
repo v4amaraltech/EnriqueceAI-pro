@@ -34,16 +34,24 @@ const hangupCauseToStatus: Record<string, CallStatus> = {
   // NORMAL_CLEARING handled separately below (depends on answeredAt)
 };
 
-/** Find a matching call record by api4com_call_id or caller+phone fallback */
+interface MatchedCall {
+  id: string;
+  status: CallStatus;
+  recording_url: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/** Find a matching call record by api4com_call_id or caller+phone fallback.
+ *  When matched via fallback, persists the api4com_call_id for future lookups. */
 async function findMatchingCall(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
-): Promise<{ id: string; status: CallStatus; recording_url: string | null } | null> {
+): Promise<MatchedCall | null> {
   // Try by api4com_call_id first
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, status, recording_url')
+    .select('id, status, recording_url, metadata')
     .eq('metadata->>api4com_call_id', body.id)
-    .maybeSingle()) as { data: { id: string; status: CallStatus; recording_url: string | null } | null };
+    .maybeSingle()) as { data: MatchedCall | null };
 
   if (call) return call;
 
@@ -51,15 +59,60 @@ async function findMatchingCall(
   const calledNormalized = body.called.replace(/\D/g, '');
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: fallbackCall } = (await from(supabase, 'calls')
-    .select('id, status, recording_url')
+    .select('id, status, recording_url, metadata')
     .eq('origin', body.caller)
     .like('destination', `%${calledNormalized.slice(-8)}`)
     .gte('created_at', twoHoursAgo)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()) as { data: { id: string; status: CallStatus; recording_url: string | null } | null };
+    .maybeSingle()) as { data: MatchedCall | null };
+
+  // Persist api4com_call_id so future events match by ID
+  if (fallbackCall) {
+    const existingMeta = (fallbackCall.metadata ?? {}) as Record<string, unknown>;
+    await from(supabase, 'calls')
+      .update({ metadata: { ...existingMeta, api4com_call_id: body.id } })
+      .eq('id', fallbackCall.id);
+    logger.info('Saved api4com_call_id via fallback match', { callId: fallbackCall.id, api4comId: body.id });
+  }
 
   return fallbackCall;
+}
+
+/** Auto-create a call record from webhook when no local match exists (e.g. calls from softphone/Kommo) */
+async function createCallFromWebhook(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  body: Api4ComWebhookPayload,
+): Promise<{ id: string } | null> {
+  // Resolve user_id and org_id from the caller ramal
+  const { data: conn } = (await from(supabase, 'api4com_connections' as never)
+    .select('user_id, org_id')
+    .eq('ramal', body.caller)
+    .eq('status', 'connected')
+    .maybeSingle()) as { data: { user_id: string; org_id: string } | null };
+
+  if (!conn) {
+    logger.warn('Cannot auto-create call: no api4com_connection for ramal', { ramal: body.caller });
+    return null;
+  }
+
+  const { data: newCall } = (await from(supabase, 'calls')
+    .insert({
+      org_id: conn.org_id,
+      user_id: conn.user_id,
+      origin: body.caller,
+      destination: body.called,
+      started_at: body.startedAt || new Date().toISOString(),
+      duration_seconds: Number(body.duration) || 0,
+      status: 'not_connected',
+      type: body.direction === 'inbound' ? 'inbound' : 'outbound',
+      recording_url: body.recordUrl || null,
+      metadata: { api4com_call_id: body.id },
+    })
+    .select('id')
+    .single()) as { data: { id: string } | null };
+
+  return newCall;
 }
 
 /** Process an API4COM event (runs in background via after()) */
@@ -70,6 +123,15 @@ async function processApi4ComEvent(
   const call = await findMatchingCall(supabase, body);
 
   if (!call) {
+    // No matching call — auto-create from webhook for calls made outside EnriqueceAI
+    if (body.eventType === 'channel-hangup') {
+      const created = await createCallFromWebhook(supabase, body);
+      if (created) {
+        logger.info('Auto-created call from webhook', { callId: created.id, api4comId: body.id });
+        await updateCallFromWebhook(supabase, created.id, 'not_connected', body);
+        return;
+      }
+    }
     logger.warn('No matching call found', {
       api4comId: body.id,
       caller: body.caller,
