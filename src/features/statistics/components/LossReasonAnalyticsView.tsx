@@ -96,8 +96,8 @@ function ReasonBar({ entry, maxCount }: { entry: LossReasonEntry; maxCount: numb
           ))}
         </div>
         <div
-          className="relative h-full rounded-sm"
-          style={{ width: `${widthPercent}%`, backgroundColor: entry.color }}
+          className="relative h-full rounded-sm bg-[var(--primary)]"
+          style={{ width: `${widthPercent}%` }}
         />
       </div>
       <span className="w-[45px] shrink-0 text-sm font-semibold">{entry.percentage.toFixed(0)}%</span>
