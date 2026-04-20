@@ -80,9 +80,13 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
       .then((result) => {
         if (result.success && result.data.recording_url) {
           setFetchedRecordingUrl(result.data.recording_url);
+          toast.success('Gravação encontrada!');
           onUpdated?.();
+        } else if (!result.success) {
+          console.warn('[CallDetailModal] auto-fetch failed:', result.error);
         }
       })
+      .catch((err) => console.error('[CallDetailModal] auto-fetch error:', err))
       .finally(() => setIsFetchingRecording(false));
   }, [open, activeCall, fetchedRecordingUrl, onUpdated]);
 

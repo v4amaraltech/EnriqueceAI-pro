@@ -28,7 +28,7 @@ export async function fetchCallRecording(
 
   // 1. Get the call
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, recording_url, metadata, destination, created_at, user_id')
+    .select('id, recording_url, metadata, destination, started_at, created_at, user_id, origin')
     .eq('id', callId)
     .single()) as {
     data: {
@@ -36,8 +36,10 @@ export async function fetchCallRecording(
       recording_url: string | null;
       metadata: Record<string, string> | null;
       destination: string;
+      started_at: string;
       created_at: string;
       user_id: string;
+      origin: string | null;
     } | null;
   };
 
@@ -69,7 +71,7 @@ export async function fetchCallRecording(
   let recordingUrl: string | null = null;
 
   // Search recent pages from API4COM
-  for (let page = 1; page <= 5; page++) {
+  for (let page = 1; page <= 10; page++) {
     const response = await fetch(`${baseUrl}/calls?page=${page}`, {
       headers: { 'Content-Type': 'application/json', Authorization: apiKey },
     });
@@ -88,16 +90,23 @@ export async function fetchCallRecording(
         }
       }
 
-      // Match by phone + timestamp
+      // Match by phone + timestamp (use started_at for better accuracy)
       if (!recordingUrl && record.record_url) {
         const rawTo = (record.to ?? '').replace(/\D/g, '');
+        const rawFrom = (record.from ?? '').replace(/\D/g, '');
         const phoneKey = rawTo.slice(-8);
+        const fromKey = rawFrom.slice(-8);
         const destKey = call.destination.replace(/\D/g, '').slice(-8);
+        const originKey = (call.origin ?? '').replace(/\D/g, '').slice(-4);
 
-        if (phoneKey === destKey) {
+        // Match destination OR origin (ramal)
+        const phoneMatch = phoneKey === destKey || (originKey.length >= 3 && fromKey.endsWith(originKey));
+
+        if (phoneMatch) {
           const remoteTime = new Date(record.started_at).getTime();
-          const localTime = new Date(call.created_at).getTime();
-          if (Math.abs(remoteTime - localTime) < 60 * 60 * 1000) {
+          const localTime = new Date(call.started_at ?? call.created_at).getTime();
+          // Wider window: 2 hours for timezone differences
+          if (Math.abs(remoteTime - localTime) < 2 * 60 * 60 * 1000) {
             recordingUrl = record.record_url;
             break;
           }
