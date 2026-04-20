@@ -114,9 +114,12 @@ function calculateHourlyDistribution(calls: CallRow[]): HourlyCallEntry[] {
     hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
   }
 
-  return hourCounts.map((count, hour) => ({
-    hour,
-    label: `${hour.toString().padStart(2, '0')}h`,
-    count,
-  }));
+  // Only show business hours (8h–20h)
+  return hourCounts
+    .map((count, hour) => ({
+      hour,
+      label: `${hour.toString().padStart(2, '0')}h`,
+      count,
+    }))
+    .filter((entry) => entry.hour >= 8 && entry.hour <= 20);
 }
