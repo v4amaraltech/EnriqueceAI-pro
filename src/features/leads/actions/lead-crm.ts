@@ -590,6 +590,15 @@ export async function markLeadAsWon(
               'first_name', 'last_name', 'name', 'company_name', 'position', 'EMAIL', 'PHONE',
             ]);
 
+            // Fetch lead field types to skip select/enum fields (they require enum_id, not text value)
+            const ENUM_FIELD_TYPES = new Set(['select', 'multiselect', 'radiobutton', 'category']);
+            let leadFieldTypes = new Map<string, string>();
+            try {
+              leadFieldTypes = await kommoAdapter.getLeadFieldTypes(credentials);
+            } catch {
+              // If we can't fetch field types, proceed without filtering
+            }
+
             // Build deal custom fields from mapping
             const customFieldsValues: Array<{
               field_id?: number;
@@ -599,6 +608,12 @@ export async function markLeadAsWon(
 
             for (const [appField, crmField] of Object.entries(fieldMapping)) {
               if (KOMMO_CONTACT_FIELDS.has(crmField)) continue;
+
+              // Skip select/enum fields — they require enum_id which we don't have
+              const fieldType = leadFieldTypes.get(crmField);
+              if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
+                continue;
+              }
 
               // Use flatLead which already has custom_ fields resolved
               const value = flatLead[appField];

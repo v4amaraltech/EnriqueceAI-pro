@@ -349,6 +349,25 @@ export class KommoAdapter implements CRMAdapter {
     const subdomain = credentials.subdomain;
     if (!subdomain) throw new Error('Kommo subdomain missing');
 
+    // Fetch contact field types to skip select/enum fields (they require enum_id, not text value)
+    const ENUM_FIELD_TYPES = new Set(['select', 'multiselect', 'radiobutton', 'category']);
+    let contactFieldTypes = new Map<string, string>();
+    try {
+      type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
+      const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
+        subdomain,
+        '/contacts/custom_fields?limit=250',
+        credentials.access_token,
+      );
+      const fields = result._embedded?.custom_fields ?? [];
+      for (const f of fields) {
+        contactFieldTypes.set(f.id.toString(), f.type);
+        if (f.code) contactFieldTypes.set(f.code, f.type);
+      }
+    } catch {
+      // If we can't fetch field types, proceed without filtering
+    }
+
     // Build custom fields from mapping
     const customFields: KommoCustomField[] = [];
     let contactName = '';
@@ -378,6 +397,12 @@ export class KommoAdapter implements CRMAdapter {
           ],
         });
       } else {
+        // Skip select/enum fields — they require enum_id which we don't have
+        const fieldType = contactFieldTypes.get(crmField);
+        if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
+          continue;
+        }
+
         // Generic custom field — use field_id if numeric, field_name otherwise
         const isNumericId = /^\d+$/.test(crmField);
         customFields.push({
@@ -623,6 +648,38 @@ export class KommoAdapter implements CRMAdapter {
     }
 
     return { external_id: createdId.toString() };
+  }
+
+  /**
+   * Fetch lead (deal) custom field definitions to determine field types.
+   * Fields of type select/multiselect/radiobutton/category require enum_id
+   * instead of a plain text value — callers should skip those fields.
+   */
+  async getLeadFieldTypes(
+    credentials: CrmCredentials,
+  ): Promise<Map<string, string>> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) return new Map();
+
+    type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
+    try {
+      const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
+        subdomain,
+        '/leads/custom_fields?limit=250',
+        credentials.access_token,
+      );
+      const fields = result._embedded?.custom_fields ?? [];
+      const map = new Map<string, string>();
+      for (const f of fields) {
+        // Map both numeric ID and code to type
+        map.set(f.id.toString(), f.type);
+        if (f.code) map.set(f.code, f.type);
+      }
+      return map;
+    } catch (err) {
+      console.warn('[kommo] Failed to fetch lead field types:', err);
+      return new Map();
+    }
   }
 
   async validateConnection(credentials: CrmCredentials): Promise<boolean> {
