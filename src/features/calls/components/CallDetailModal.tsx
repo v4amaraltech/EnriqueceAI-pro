@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Clock, DollarSign, FileText, Mic, Phone, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -60,10 +60,31 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
   const [isFetchingRecording, setIsFetchingRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const autoFetchedRef = useRef<string | null>(null);
+
   // Sync state when call changes
   const activeCall = call;
   const displayFeedback = feedbackList.length > 0 ? feedbackList : (activeCall?.feedback ?? []);
   const displayStatus = currentStatus ?? activeCall?.status ?? 'not_connected';
+
+  // Auto-fetch recording when modal opens if call has duration but no recording
+  useEffect(() => {
+    if (!open || !activeCall) return;
+    if (activeCall.recording_url || fetchedRecordingUrl) return;
+    if (activeCall.duration_seconds <= 0) return;
+    if (autoFetchedRef.current === activeCall.id) return;
+
+    autoFetchedRef.current = activeCall.id;
+    setIsFetchingRecording(true);
+    fetchCallRecording(activeCall.id)
+      .then((result) => {
+        if (result.success && result.data.recording_url) {
+          setFetchedRecordingUrl(result.data.recording_url);
+          onUpdated?.();
+        }
+      })
+      .finally(() => setIsFetchingRecording(false));
+  }, [open, activeCall, fetchedRecordingUrl, onUpdated]);
 
   const handleStatusChange = useCallback(
     (newStatus: string) => {
@@ -133,6 +154,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
         setFeedbackList([]);
         setCurrentStatus(null);
         setFetchedRecordingUrl(null);
+        autoFetchedRef.current = null;
         onClose();
       }
     },
@@ -175,17 +197,19 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                     <Mic className="h-5 w-5 text-muted-foreground" />
                     <div className="flex-1">
                       <div className="h-2 rounded-full bg-[var(--border)]">
-                        <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+                        {isFetchingRecording && (
+                          <div className="h-2 w-1/3 rounded-full bg-[var(--primary)] animate-pulse" />
+                        )}
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Gravação não disponível
+                        {isFetchingRecording ? 'Buscando gravação...' : 'Gravação não disponível'}
                       </p>
                     </div>
                     <span className="text-sm tabular-nums text-muted-foreground">
                       {formatDuration(activeCall.duration_seconds)}
                     </span>
                   </div>
-                  {activeCall.duration_seconds > 0 && (
+                  {activeCall.duration_seconds > 0 && !isFetchingRecording && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -194,7 +218,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                       onClick={handleFetchRecording}
                     >
                       <Mic className="mr-2 h-4 w-4" />
-                      {isFetchingRecording ? 'Buscando gravação...' : 'Buscar gravação na API4COM'}
+                      Tentar novamente
                     </Button>
                   )}
                 </div>
