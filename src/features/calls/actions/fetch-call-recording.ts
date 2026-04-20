@@ -50,17 +50,33 @@ export async function fetchCallRecording(
     return { success: true, data: { recording_url: call.recording_url } };
   }
 
-  // 2. Get API4COM credentials for the call's user
-  const { data: conn } = (await from(supabase, 'api4com_connections' as never)
+  // 2. Get API4COM credentials — try call's user first, then fallback to any org connection
+  let conn: { api_key_encrypted: string; base_url: string; ramal: string } | null = null;
+
+  const { data: userConn } = (await from(supabase, 'api4com_connections' as never)
     .select('api_key_encrypted, base_url, ramal')
     .eq('user_id', call.user_id)
     .eq('status', 'connected')
     .maybeSingle()) as {
     data: { api_key_encrypted: string; base_url: string; ramal: string } | null;
   };
+  conn = userConn;
 
   if (!conn?.api_key_encrypted) {
-    return { success: false, error: 'API4COM não configurada para este usuário' };
+    // Fallback: any connected API4COM in the org
+    const { data: orgConn } = (await from(supabase, 'api4com_connections' as never)
+      .select('api_key_encrypted, base_url, ramal')
+      .eq('org_id', _orgId)
+      .eq('status', 'connected')
+      .limit(1)
+      .maybeSingle()) as {
+      data: { api_key_encrypted: string; base_url: string; ramal: string } | null;
+    };
+    conn = orgConn;
+  }
+
+  if (!conn?.api_key_encrypted) {
+    return { success: false, error: 'API4COM não configurada para nenhum usuário da organização' };
   }
 
   const apiKey = decrypt(conn.api_key_encrypted);
