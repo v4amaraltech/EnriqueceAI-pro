@@ -58,7 +58,7 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">Configurações Gerais</h2>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+        <p className="mt-1 text-sm text-muted-foreground">
           Configure o módulo de ligações da organização.
         </p>
       </div>
@@ -68,7 +68,7 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
         <div className="flex items-center justify-between">
           <div>
             <Label htmlFor="calls-enabled">Módulo de Ligações</Label>
-            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            <p className="text-xs text-muted-foreground">
               Habilitar ou desabilitar o módulo de ligações.
             </p>
           </div>
@@ -107,7 +107,7 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
               onChange={(e) => setThreshold(Math.max(1, parseInt(e.target.value, 10) || 1))}
               className="w-24 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
-            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">segundos</span>
+            <span className="text-sm text-muted-foreground">segundos</span>
           </div>
         </div>
 
@@ -122,7 +122,7 @@ export function CallGeneralSettings({ initial }: CallGeneralSettingsProps) {
               onChange={(e) => setDailyTarget(Math.max(0, parseInt(e.target.value, 10) || 0))}
               className="w-24 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
-            <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">ligações por dia</span>
+            <span className="text-sm text-muted-foreground">ligações por dia</span>
           </div>
         </div>
       </div>

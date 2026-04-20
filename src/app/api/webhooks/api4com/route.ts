@@ -237,19 +237,30 @@ async function updateCallFromWebhook(
 
   // Trigger automatic transcription + SPICED analysis if recording available
   if (payload.recordUrl && payload.duration >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
-    const appUrl = getAppUrl();
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (appUrl && serviceRoleKey) {
-      fetch(`${appUrl}/api/workers/transcribe-call`, {
+    triggerTranscription(callId);
+  }
+}
+
+async function triggerTranscription(callId: string, retries = 2): Promise<void> {
+  const appUrl = getAppUrl();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!appUrl || !serviceRoleKey) return;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${appUrl}/api/workers/transcribe-call`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${serviceRoleKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ callId }),
-      }).catch((err) => {
-        logger.warn('Failed to trigger transcription worker', { callId, error: String(err) });
       });
+      if (res.ok) return;
+      logger.warn('Transcription trigger failed', { callId, attempt, status: res.status });
+    } catch (err) {
+      logger.warn('Transcription trigger error', { callId, attempt, error: String(err) });
     }
+    if (attempt < retries) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
   }
 }

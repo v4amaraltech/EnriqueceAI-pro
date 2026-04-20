@@ -38,7 +38,7 @@ export async function classifyWebphoneCall(
     .single()) as { data: { id: string; duration_seconds: number; lead_id: string | null; org_id: string } | null };
 
   if (!call) {
-    return { success: false, error: 'Chamada não encontrada' };
+    return { success: false, error: 'Ligação não encontrada' };
   }
 
   // Build update: status + notes, use client duration as fallback

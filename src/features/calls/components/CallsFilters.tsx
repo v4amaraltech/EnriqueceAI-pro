@@ -96,7 +96,7 @@ export function CallsFilters() {
       <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por origem, destino ou notas..."
             className="pl-8"

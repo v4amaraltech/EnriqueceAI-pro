@@ -9,6 +9,7 @@ import { decrypt } from '@/lib/security/encryption';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
+import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const callIdSchema = z.string().uuid('ID inválido');
 
@@ -147,13 +148,8 @@ export async function fetchCallRecording(
       .update({ recording_url: recordingUrl, updated_at: new Date().toISOString() })
       .eq('id', callId);
 
-    // Trigger transcription if duration >= 30s
-    const { data: callDuration } = (await from(supabase, 'calls')
-      .select('duration_seconds')
-      .eq('id', callId)
-      .single()) as { data: { duration_seconds: number } | null };
-
-    if (callDuration && callDuration.duration_seconds >= 30) {
+    // Trigger transcription if duration meets minimum
+    if (call.duration_seconds >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
       const appUrl = getAppUrl();
       const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (appUrl && serviceRoleKey) {

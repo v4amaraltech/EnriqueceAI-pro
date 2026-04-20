@@ -55,7 +55,7 @@ export function PhoneBlacklistSettings({ initial }: PhoneBlacklistSettingsProps)
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">Blacklist de Telefones</h2>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+        <p className="mt-1 text-sm text-muted-foreground">
           Padrões de telefone bloqueados não serão utilizados em ligações automáticas.
         </p>
       </div>
@@ -89,7 +89,7 @@ export function PhoneBlacklistSettings({ initial }: PhoneBlacklistSettingsProps)
       {/* List */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
         {entries.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="p-4 text-sm text-muted-foreground">
             Nenhum telefone na blacklist.
           </p>
         ) : (
@@ -102,7 +102,7 @@ export function PhoneBlacklistSettings({ initial }: PhoneBlacklistSettingsProps)
                 <div>
                   <span className="text-sm font-mono">{item.phone_pattern}</span>
                   {item.reason && (
-                    <span className="ml-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    <span className="ml-2 text-xs text-muted-foreground">
                       — {item.reason}
                     </span>
                   )}

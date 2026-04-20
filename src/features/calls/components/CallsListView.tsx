@@ -79,7 +79,7 @@ export function CallsListView({ result, hasFilters, currentFilters }: CallsListV
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Ligações</h1>
-          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="text-sm text-muted-foreground">
             {total} ligaç{total !== 1 ? 'ões' : 'ão'} encontrada{total !== 1 ? 's' : ''}
           </p>
         </div>
@@ -98,10 +98,10 @@ export function CallsListView({ result, hasFilters, currentFilters }: CallsListV
       {calls.length === 0 && hasFilters ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <SearchX className="h-10 w-10 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+            <SearchX className="h-10 w-10 text-muted-foreground" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">Nenhuma ligação encontrada</h3>
-          <p className="max-w-sm text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="max-w-sm text-sm text-muted-foreground">
             Tente ajustar os filtros para encontrar o que procura.
           </p>
         </div>

@@ -307,7 +307,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                 <>
                   <Separator />
                   <div>
-                    <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] mb-1">Anotações</p>
+                    <p className="text-xs text-muted-foreground mb-1">Anotações</p>
                     <p className="text-sm whitespace-pre-wrap">{activeCall.notes}</p>
                   </div>
                 </>
@@ -330,10 +330,10 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                       className="flex gap-3 rounded-lg border border-[var(--border)] p-3"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
-                        <User className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                        <User className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                        <p className="text-xs text-muted-foreground">
                           {formatDateTime(fb.created_at)}
                         </p>
                         <p className="mt-1 text-sm whitespace-pre-wrap">{fb.content}</p>
@@ -342,7 +342,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                <p className="text-sm text-muted-foreground">
                   Nenhum feedback adicionado.
                 </p>
               )}

@@ -50,7 +50,7 @@ export function ExtratoView({ data, members, userId }: ExtratoViewProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Extrato de Ligações</h1>
-          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="text-sm text-muted-foreground">
             Relatório de uso, custos e atividade de ligações.
           </p>
         </div>
@@ -98,7 +98,7 @@ export function ExtratoView({ data, members, userId }: ExtratoViewProps) {
           <h2 className="text-lg font-semibold">Extrato Diário</h2>
         </div>
         {data.dailyBreakdown.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="p-4 text-sm text-muted-foreground">
             Nenhuma ligação no período selecionado.
           </p>
         ) : (
@@ -137,7 +137,7 @@ export function ExtratoView({ data, members, userId }: ExtratoViewProps) {
           <h2 className="text-lg font-semibold">Por Vendedor</h2>
         </div>
         {data.sdrBreakdown.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="p-4 text-sm text-muted-foreground">
             Nenhum dado de vendedor no período selecionado.
           </p>
         ) : (

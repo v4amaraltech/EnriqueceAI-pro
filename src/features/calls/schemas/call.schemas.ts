@@ -18,6 +18,7 @@ export const createCallSchema = z.object({
   type: callTypeSchema.default('outbound'),
   notes: z.string().optional(),
   lead_id: z.string().uuid().optional(),
+  recording_url: z.string().url().max(2048).optional(),
 });
 
 export const updateCallStatusSchema = z.object({
