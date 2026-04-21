@@ -620,6 +620,7 @@ export class KommoAdapter implements CRMAdapter {
     const subdomain = credentials.subdomain;
     if (!subdomain) throw new Error('Kommo subdomain missing');
 
+    // Step 1: Create deal with basic info only (no custom fields — they can cause NotSupportedChoice errors)
     const payload = [
       {
         name: options.title,
@@ -629,9 +630,6 @@ export class KommoAdapter implements CRMAdapter {
         _embedded: {
           contacts: [{ id: parseInt(options.contactExternalId, 10) }],
         },
-        ...(options.customFieldsValues?.length
-          ? { custom_fields_values: options.customFieldsValues }
-          : {}),
       },
     ];
 
@@ -645,6 +643,20 @@ export class KommoAdapter implements CRMAdapter {
     const createdId = result._embedded?.leads?.[0]?.id;
     if (!createdId) {
       throw new Error('Kommo: failed to create deal/lead, no ID returned');
+    }
+
+    // Step 2: Add custom fields via PATCH (best-effort — don't fail deal creation)
+    if (options.customFieldsValues?.length) {
+      try {
+        await kommoFetch<unknown>(
+          subdomain,
+          `/leads/${createdId}`,
+          credentials.access_token,
+          { method: 'PATCH', body: JSON.stringify({ custom_fields_values: options.customFieldsValues }) },
+        );
+      } catch (cfErr) {
+        console.warn('[kommo] Failed to set custom fields on deal (non-blocking):', cfErr);
+      }
     }
 
     return { external_id: createdId.toString() };
