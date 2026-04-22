@@ -9,6 +9,8 @@ import { ensureFreshCredentials } from '@/features/integrations/services/crm-tok
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import type { CrmConnectionRow } from '@/features/integrations/types/crm';
 
+export const maxDuration = 30;
+
 /**
  * Temporary worker to resync custom fields for existing Kommo deals.
  * POST /api/workers/resync-kommo-deal
@@ -23,8 +25,11 @@ export async function POST(request: Request) {
   }
 
   const { leadId } = (await request.json()) as { leadId: string };
-  if (!leadId) {
-    return NextResponse.json({ error: 'leadId required' }, { status: 400 });
+
+  // C2: Validate UUID format
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!leadId || !UUID_RE.test(leadId)) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
   const supabase = createServiceRoleClient();
@@ -35,22 +40,21 @@ export async function POST(request: Request) {
     .eq('id', leadId)
     .single()) as { data: Record<string, string | null> | null };
 
-  if (!lead) {
-    return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
-  }
+  const orgId = lead?.org_id as string | undefined;
 
-  const orgId = lead.org_id as string;
+  // Get Kommo connection (only if lead found)
+  const { data: connection } = orgId
+    ? ((await from(supabase, 'crm_connections')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('crm_provider', 'kommo')
+        .eq('status', 'connected')
+        .single()) as { data: CrmConnectionRow | null })
+    : { data: null };
 
-  // Get Kommo connection
-  const { data: connection } = (await from(supabase, 'crm_connections')
-    .select('*')
-    .eq('org_id', orgId)
-    .eq('crm_provider', 'kommo')
-    .eq('status', 'connected')
-    .single()) as { data: CrmConnectionRow | null };
-
-  if (!connection) {
-    return NextResponse.json({ error: 'No Kommo connection found' }, { status: 404 });
+  // C2: Unified error — don't reveal whether lead or connection is missing
+  if (!lead || !connection) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const adapter = new KommoAdapter();
@@ -203,11 +207,13 @@ export async function POST(request: Request) {
         if (singleRes.ok) {
           succeeded.push(fieldKey);
         } else {
+          // C3: Don't expose Kommo internal errors — log server-side only
           const errText = await singleRes.text();
-          failed.push(`${fieldKey}: ${errText.slice(0, 100)}`);
+          console.warn(`[resync-kommo] Field ${fieldKey} failed (${singleRes.status}):`, errText.slice(0, 200));
+          failed.push(fieldKey);
         }
-      } catch (err) {
-        failed.push(`${fieldKey}: ${String(err).slice(0, 100)}`);
+      } catch {
+        failed.push(fieldKey);
       }
     }
   } else {

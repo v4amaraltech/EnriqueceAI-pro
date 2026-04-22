@@ -81,6 +81,13 @@ function getWeight(type: string, channel?: string): number {
 /**
  * Calculate the engagement score for a lead based on interaction signals.
  * Returns null if no interactions exist, otherwise 0-100.
+ *
+ * NOTE: The PostgreSQL function (calculate_engagement_score) handles an edge case
+ * this TS version cannot: when a lead has old interactions (>90 days) but none recent,
+ * SQL returns 0 while this function would return null (since it only receives the
+ * interactions array without knowledge of older ones). The authoritative score always
+ * comes from the SQL function via recalc_engagement_score(). This TS version exists
+ * for client-side preview and testing parity only.
  */
 export function calculateEngagementScore(
   interactions: InteractionSignal[],

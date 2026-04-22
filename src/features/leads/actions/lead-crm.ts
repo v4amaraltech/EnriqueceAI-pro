@@ -642,16 +642,24 @@ export async function markLeadAsWon(
               }
             }
 
+            // H3: Guard — ensure we have a contact ID before creating deal
+            const resolvedContactId = contactExternalId ?? existingSync?.external_id ?? '';
+            if (!resolvedContactId) {
+              console.error('[lead-crm] No contact ID to link Kommo deal, skipping deal creation');
+              dealExternalId = '';
+            } else {
+
             // Kommo creates leads (deals) with contacts via pushDeal
             const result = await kommoAdapter.pushDeal(credentials, {
               title: dealTitle,
-              contactExternalId: contactExternalId ?? existingSync?.external_id ?? '',
+              contactExternalId: resolvedContactId,
               pipelineId: parseInt(crmOptions.pipelineId, 10),
               stageId: parseInt(crmOptions.stageId, 10),
               responsibleUserId: crmOptions.responsibleUserId ? parseInt(crmOptions.responsibleUserId, 10) : undefined,
               customFieldsValues: customFieldsValues.length > 0 ? customFieldsValues : undefined,
             });
             dealExternalId = result.external_id;
+            } // end resolvedContactId guard
           } else {
             // Unsupported provider for deal creation — skip
             dealExternalId = '';

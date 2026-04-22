@@ -183,8 +183,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     status: 'ok',
     tokenValid,
-    tokenLength: token.length,
-    secretLength: webhookSecret.length,
     timestamp: new Date().toISOString(),
   });
 }
