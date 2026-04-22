@@ -90,6 +90,7 @@ async function kommoFetch<T>(
 ): Promise<T> {
   const response = await fetch(`https://${subdomain}.kommo.com/api/v4${path}`, {
     ...options,
+    signal: options.signal ?? AbortSignal.timeout(15_000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,

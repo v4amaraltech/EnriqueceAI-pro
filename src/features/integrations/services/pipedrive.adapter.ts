@@ -79,6 +79,7 @@ async function pipedriveFetch<T>(
   const baseUrl = apiDomain || 'https://api.pipedrive.com';
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
+    signal: options.signal ?? AbortSignal.timeout(15_000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,

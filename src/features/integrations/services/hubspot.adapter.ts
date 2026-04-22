@@ -74,6 +74,7 @@ async function hubspotFetch<T>(
 ): Promise<T> {
   const response = await fetch(`${HUBSPOT_API_BASE}${path}`, {
     ...options,
+    signal: options.signal ?? AbortSignal.timeout(15_000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,

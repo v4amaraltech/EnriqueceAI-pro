@@ -116,6 +116,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: clientId,
@@ -154,6 +155,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
           const recoveredRefreshToken = decrypt(gmailToken);
           const retryResponse = await fetch(GOOGLE_TOKEN_URL, {
             method: 'POST',
+            signal: AbortSignal.timeout(10_000),
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
               client_id: clientId,

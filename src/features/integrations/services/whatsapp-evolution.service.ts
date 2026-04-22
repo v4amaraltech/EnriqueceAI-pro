@@ -64,6 +64,7 @@ export class EvolutionWhatsAppService {
         `${apiUrl.replace(/\/+$/, '')}/message/sendText/${instance.instance_name}`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(15_000),
           headers: {
             'Content-Type': 'application/json',
             apikey: apiKey,

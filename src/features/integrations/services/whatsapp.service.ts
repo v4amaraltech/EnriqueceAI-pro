@@ -120,6 +120,7 @@ export class WhatsAppService {
       `${WhatsAppService.META_API_URL}/${connection.phone_number_id}/messages`,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           Authorization: `Bearer ${decrypt(connection.access_token_encrypted)}`,
           'Content-Type': 'application/json',

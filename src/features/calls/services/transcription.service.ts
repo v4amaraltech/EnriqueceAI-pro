@@ -89,7 +89,7 @@ export async function processCallTranscription(callId: string): Promise<void> {
 }
 
 async function downloadAudio(url: string): Promise<Buffer> {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) {
     throw new Error(`audio_download_failed: ${response.status}`);
   }
@@ -116,6 +116,7 @@ async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
     try {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
+        signal: AbortSignal.timeout(120_000),
         headers: { Authorization: `Bearer ${apiKey}` },
         body: formData,
       });
@@ -257,6 +258,7 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
+    signal: AbortSignal.timeout(90_000),
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
