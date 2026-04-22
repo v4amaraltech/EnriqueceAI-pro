@@ -33,8 +33,8 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
     router.push(`/leads?assigned_to=${userId}`);
   }, [router]);
 
-  const handleActivitySdrClick = useCallback((_userId: string) => {
-    router.push('/statistics/activities');
+  const handleActivitySdrClick = useCallback((userId: string) => {
+    router.push(`/leads?assigned_to=${userId}`);
   }, [router]);
 
   // Calculate business days in the filter period for daily average
