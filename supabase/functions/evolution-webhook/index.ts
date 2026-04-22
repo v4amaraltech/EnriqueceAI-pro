@@ -133,12 +133,11 @@ serve(async (req)=>{
       instance: instanceName
     });
   } catch (error) {
-    console.error("Error processing webhook:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    // Retornar 200 mesmo em erro para evitar retries infinitos
+    console.error("[evolution-webhook] Error processing webhook:", error);
+    // Return 200 to prevent infinite retries, but log error server-side
     return jsonResponse({
       received: true,
-      error: message
+      error: "processing_error"
     });
   }
 });
