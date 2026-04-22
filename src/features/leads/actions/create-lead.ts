@@ -163,6 +163,23 @@ export async function createLead(
     last_name: parsed.data.last_name ?? null,
   }).catch((err) => console.error('[webhook] lead.created dispatch failed:', err));
 
+  // Notify assigned SDR if different from creator (manager assigned lead to SDR)
+  const assignedTo = parsed.data.assigned_to;
+  if (assignedTo && assignedTo !== userId) {
+    import('@/features/notifications/services/notification.service').then(({ createNotification }) => {
+      const leadName = parsed.data.empresa || [parsed.data.first_name, parsed.data.last_name].filter(Boolean).join(' ') || 'Lead';
+      createNotification({
+        org_id: orgId,
+        user_id: assignedTo,
+        type: 'lead_inbound',
+        title: `Novo lead atribuído: ${leadName}`,
+        body: [parsed.data.lead_source, parsed.data.canal].filter(Boolean).join(' / ') || 'Criado manualmente',
+        resource_type: 'lead',
+        resource_id: leadId,
+      }).catch((err: unknown) => console.error('[notification] lead_assigned failed:', err));
+    });
+  }
+
   // 2. Enroll in cadence if selected (non-blocking for lead creation)
   const cadenceId = parsed.data.cadence_id;
   if (cadenceId) {

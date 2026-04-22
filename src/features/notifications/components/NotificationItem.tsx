@@ -41,6 +41,7 @@ const ICON_MAP: Record<NotificationType, React.ElementType> = {
   meeting_reminder: Calendar,
   lead_won: ThumbsUp,
   lead_lost: ThumbsDown,
+  lead_inbound: UserPlus,
   import_completed: FileUp,
   goal_reached: Target,
   cadence_completed: CheckCircle2,

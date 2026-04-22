@@ -13,6 +13,7 @@ export type NotificationType =
   | 'meeting_reminder'
   | 'lead_won'
   | 'lead_lost'
+  | 'lead_inbound'
   | 'import_completed'
   | 'goal_reached'
   | 'cadence_completed'

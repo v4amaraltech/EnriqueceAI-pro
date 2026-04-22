@@ -183,6 +183,23 @@ async function ingestSingleLead(
     source: 'inbound_api',
   }).catch((err) => console.error('[webhook] lead.created dispatch failed:', err));
 
+  // Notify assigned SDR about new inbound lead
+  if (data.assigned_to) {
+    import('@/features/notifications/services/notification.service').then(({ createNotification }) => {
+      const leadName = data.empresa || [data.first_name, data.last_name].filter(Boolean).join(' ') || 'Lead';
+      createNotification({
+        org_id: orgId,
+        user_id: data.assigned_to!,
+        type: 'lead_inbound',
+        title: `Novo lead inbound: ${leadName}`,
+        body: [source, canal].filter(Boolean).join(' / ') || 'Via API',
+        resource_type: 'lead',
+        resource_id: leadId,
+        metadata: { lead_source: source ?? null, canal: canal ?? null },
+      }).catch((err: unknown) => console.error('[inbound] notification failed:', err));
+    });
+  }
+
   // Enrichment via CNPJ is only triggered for CSV imports, not API/webhook
 
   // Enroll in cadence if cadence_id provided
