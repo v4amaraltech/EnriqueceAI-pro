@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 
@@ -15,6 +15,7 @@ import {
 } from '@/shared/components/ui/select';
 
 import { callStatusValues } from '../schemas/call.schemas';
+import type { OrgMemberOption } from '@/features/leads/actions/fetch-org-members';
 
 const statusLabels: Record<string, string> = {
   significant: 'Significativa',
@@ -40,7 +41,18 @@ export function CallsFilters() {
   const currentSearch = searchParams.get('search') ?? '';
   const currentStatus = searchParams.get('status') ?? '';
   const currentPeriod = searchParams.get('period') ?? '';
+  const currentUserId = searchParams.get('user_id') ?? '';
   const currentImportant = searchParams.get('important_only') === 'true';
+
+  const [members, setMembers] = useState<OrgMemberOption[]>([]);
+
+  useEffect(() => {
+    import('@/features/leads/actions/fetch-org-members').then(({ fetchOrgMembersAuth }) =>
+      fetchOrgMembersAuth().then((res) => {
+        if (res.success) setMembers(res.data);
+      }),
+    );
+  }, []);
 
   // Optimistic overrides for instant Select feedback
   const paramsKey = searchParams.toString();
@@ -54,13 +66,14 @@ export function CallsFilters() {
 
   const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
   const activePeriod = overrides.period ?? (currentPeriod || ALL_VALUE);
+  const activeUserId = overrides.user_id ?? (currentUserId || ALL_VALUE);
 
   function handleFilterChange(key: string, value: string) {
     setOverrides((prev) => ({ ...prev, [key]: value }));
     updateParam(key, value);
   }
 
-  const hasFilters = currentStatus || currentPeriod || currentSearch || currentImportant;
+  const hasFilters = currentStatus || currentPeriod || currentSearch || currentImportant || currentUserId;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -144,6 +157,26 @@ export function CallsFilters() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* SDR filter */}
+        {members.length > 1 && (
+          <Select
+            value={activeUserId}
+            onValueChange={(v) => handleFilterChange('user_id', v)}
+          >
+            <SelectTrigger className="w-full sm:w-[170px]">
+              <SelectValue placeholder="SDR" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos SDRs</SelectItem>
+              {members.map((m) => (
+                <SelectItem key={m.userId} value={m.userId}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Important toggle */}
         <Button
