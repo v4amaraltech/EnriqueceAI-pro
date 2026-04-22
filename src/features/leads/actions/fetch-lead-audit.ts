@@ -10,6 +10,8 @@ export interface AuditLogEntry {
   metadata: Record<string, unknown>;
   created_at: string;
   user_name: string | null;
+  /** Map of closer UUIDs → names for resolving closer_id changes */
+  closerNames?: Record<string, string>;
 }
 
 export async function fetchLeadAudit(leadId: string): Promise<ActionResult<AuditLogEntry[]>> {
@@ -51,12 +53,33 @@ export async function fetchLeadAudit(leadId: string): Promise<ActionResult<Audit
     }
   }
 
+  // Collect closer_ids from changes to resolve names
+  const closerIds = new Set<string>();
+  for (const d of data) {
+    const changes = d.metadata?.changes as Record<string, { from: unknown; to: unknown }> | undefined;
+    if (changes?.closer_id) {
+      if (typeof changes.closer_id.from === 'string' && changes.closer_id.from) closerIds.add(changes.closer_id.from);
+      if (typeof changes.closer_id.to === 'string' && changes.closer_id.to) closerIds.add(changes.closer_id.to);
+    }
+  }
+
+  let closerMap: Record<string, string> = {};
+  if (closerIds.size > 0) {
+    const { data: closers } = await from(supabase, 'closers')
+      .select('id, name')
+      .in('id', [...closerIds]) as { data: Array<{ id: string; name: string }> | null };
+    if (closers) {
+      closerMap = Object.fromEntries(closers.map((c) => [c.id, c.name]));
+    }
+  }
+
   const entries: AuditLogEntry[] = data.map((d) => ({
     id: d.id,
     action: d.action,
     metadata: d.metadata,
     created_at: d.created_at,
     user_name: d.user_id ? (userMap.get(d.user_id) ?? null) : null,
+    closerNames: Object.keys(closerMap).length > 0 ? closerMap : undefined,
   }));
 
   return { success: true, data: entries };

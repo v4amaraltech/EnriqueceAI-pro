@@ -47,9 +47,10 @@ const ACTION_LABELS: Record<string, string> = {
   'lead.created': 'Lead criado',
 };
 
-function formatValue(key: string, value: unknown): string {
+function formatValue(key: string, value: unknown, closerNames?: Record<string, string>): string {
   if (value === null || value === undefined || value === '') return '(vazio)';
   if (key === 'status' && typeof value === 'string') return STATUS_LABELS[value] ?? value;
+  if (key === 'closer_id' && typeof value === 'string' && closerNames?.[value]) return closerNames[value];
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
@@ -131,11 +132,11 @@ export function LeadAuditTab({ leadId }: LeadAuditTabProps) {
                     {FIELD_LABELS[field] ?? field}:
                   </span>
                   <span className="text-red-500 line-through text-xs">
-                    {formatValue(field, change.from)}
+                    {formatValue(field, change.from, entry.closerNames)}
                   </span>
                   <span className="text-[var(--muted-foreground)]">&rarr;</span>
                   <span className="text-emerald-600 text-xs">
-                    {formatValue(field, change.to)}
+                    {formatValue(field, change.to, entry.closerNames)}
                   </span>
                 </div>
               ))}
