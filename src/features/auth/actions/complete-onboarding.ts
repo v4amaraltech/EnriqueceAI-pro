@@ -13,50 +13,55 @@ interface OnboardingInput {
 export async function completeOnboarding(
   input: OnboardingInput,
 ): Promise<ActionResult<{ orgId: string }>> {
-  const auth = await getAuthOrgIdResult();
-  if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  try {
+    const auth = await getAuthOrgIdResult();
+    if (!auth.success) return auth;
+    const { orgId, userId, supabase } = auth.data;
 
-  const orgName = input.orgName.trim();
-  if (!orgName || orgName.length < 2) {
-    return { success: false, error: 'Nome da empresa deve ter pelo menos 2 caracteres' };
+    const orgName = input.orgName.trim();
+    if (!orgName || orgName.length < 2) {
+      return { success: false, error: 'Nome da empresa deve ter pelo menos 2 caracteres' };
+    }
+
+    // Fetch role for permission check
+    const { data: member } = (await from(supabase, 'organization_members')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+      .single()) as { data: { role: string } | null };
+
+    if (!member) {
+      return { success: false, error: 'Organização não encontrada' };
+    }
+
+    if (member.role !== 'manager') {
+      return { success: false, error: 'Sem permissão para configurar a organização' };
+    }
+
+    // Generate slug from name
+    const baseSlug = orgName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const slug = input.orgSlug?.trim() || `${baseSlug}-${Date.now().toString(36)}`;
+
+    // Update organization name and advance to step 1
+    const { error: updateError } = await from(supabase, 'organizations')
+      .update({ name: orgName, slug, onboarding_step: 1 } as Record<string, unknown>)
+      .eq('id', orgId);
+
+    if (updateError) {
+      return { success: false, error: 'Falha ao atualizar organização' };
+    }
+
+    return { success: true, data: { orgId } };
+  } catch (error) {
+    console.error('[completeOnboarding] Unhandled error:', error);
+    return { success: false, error: 'Erro ao completar onboarding.' };
   }
-
-  // Fetch role for permission check
-  const { data: member } = (await from(supabase, 'organization_members')
-    .select('role')
-    .eq('user_id', userId)
-    .eq('org_id', orgId)
-    .eq('status', 'active')
-    .single()) as { data: { role: string } | null };
-
-  if (!member) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
-
-  if (member.role !== 'manager') {
-    return { success: false, error: 'Sem permissão para configurar a organização' };
-  }
-
-  // Generate slug from name
-  const baseSlug = orgName
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  const slug = input.orgSlug?.trim() || `${baseSlug}-${Date.now().toString(36)}`;
-
-  // Update organization name and advance to step 1
-  const { error: updateError } = await from(supabase, 'organizations')
-    .update({ name: orgName, slug, onboarding_step: 1 } as Record<string, unknown>)
-    .eq('id', orgId);
-
-  if (updateError) {
-    return { success: false, error: 'Falha ao atualizar organização' };
-  }
-
-  return { success: true, data: { orgId } };
 }
 
 /**

@@ -11,6 +11,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { signInSchema } from '../schemas/auth.schemas';
 
 export async function signIn(formData: FormData): Promise<ActionResult<void>> {
+  try {
   const headerStore = await headers();
   const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const rateLimitKey = `login:${ip}`;
@@ -49,4 +50,8 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   await resetRateLimit(rateLimitKey);
 
   return { success: true, data: undefined };
+  } catch (error) {
+    console.error('[signIn] Unhandled error:', error);
+    return { success: false, error: 'Erro ao fazer login. Tente novamente.' };
+  }
 }
