@@ -290,7 +290,7 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
   // Parse JSON — handle markdown wrapping and unescaped newlines in values
   // Step 1: Extract JSON from markdown code fence if present
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  let cleaned = (fenceMatch ? fenceMatch[1] : text).trim();
+  let cleaned = (fenceMatch?.[1] ?? text).trim();
 
   try {
     return JSON.parse(cleaned) as Record<string, string>;
