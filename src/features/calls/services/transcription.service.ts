@@ -287,17 +287,20 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
 
   const text = data.content.find((c) => c.type === 'text')?.text ?? '';
 
-  // Parse JSON — handle potential markdown wrapping and unescaped newlines
-  let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  // Parse JSON — handle markdown wrapping and unescaped newlines in values
+  // Step 1: Extract JSON from markdown code fence if present
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  let cleaned = (fenceMatch ? fenceMatch[1] : text).trim();
 
   try {
     return JSON.parse(cleaned) as Record<string, string>;
   } catch {
-    // Claude sometimes returns newlines inside JSON string values — fix them
-    // Replace literal newlines inside quoted strings with \\n
-    cleaned = cleaned.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-    // Fix double-escaped that were already correct
-    cleaned = cleaned.replace(/\\\\n/g, '\\n').replace(/\\\\r/g, '\\r');
+    // Step 2: Claude returns literal newlines inside JSON string values.
+    // Escape newlines only INSIDE quoted strings, not structural ones.
+    cleaned = cleaned.replace(/"([^"]*?)"/g, (_match, value: string) => {
+      const escaped = value.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+      return `"${escaped}"`;
+    });
     try {
       return JSON.parse(cleaned) as Record<string, string>;
     } catch {
