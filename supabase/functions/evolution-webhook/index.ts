@@ -52,8 +52,14 @@ serve(async (req)=>{
         duplicate: true
       });
     }
-    // Registrar evento
-    await createProviderEvent(instance.organization_id, "evolution", eventId, event, payload);
+    // Only store full payload for connection/qrcode events — message events
+    // generate ~153KB each and are never re-read after processing
+    const isMessageEvent = event === 'messages.upsert' || event === 'MESSAGES_UPSERT'
+      || event === 'messages.update' || event === 'MESSAGES_UPDATE';
+    const storedPayload = isMessageEvent
+      ? { event, instance: instanceName, trimmed: true }
+      : payload;
+    await createProviderEvent(instance.organization_id, "evolution", eventId, event, storedPayload);
     // Processar evento conforme tipo
     switch(event){
       case "CONNECTION_UPDATE":
