@@ -188,10 +188,22 @@ export function LeadInfoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackedLeadId]);
 
-  // Build initial phone entries from phones JSONB (preferred) + telefone fallback
+  // Build initial phone entries from socios + phones JSONB + telefone fallback
   const buildInitialPhones = useCallback((): LeadPhone[] => {
     const entries: LeadPhone[] = [];
     const seen = new Set<string>();
+
+    // Socios celulares first (enrichment data)
+    for (const socio of data.socios ?? []) {
+      for (const cel of socio.celulares ?? []) {
+        const formatted = `(${cel.ddd}) ${cel.numero}`;
+        const key = formatted.replace(/\D/g, '');
+        if (!seen.has(key)) {
+          seen.add(key);
+          entries.push({ tipo: 'celular', numero: formatted });
+        }
+      }
+    }
 
     // phones JSONB has explicit type — preferred source
     for (const p of data.phones ?? []) {
@@ -207,12 +219,10 @@ export function LeadInfoPanel({
       const key = data.telefone.replace(/\D/g, '');
       if (!seen.has(key)) {
         seen.add(key);
-        // Remove country code (55) if present, then DDD (2 digits) to get local number
         let local = key;
-        if (local.length >= 12 && local.startsWith('55')) local = local.slice(2); // remove +55
-        if (local.length >= 10) local = local.slice(2); // remove DDD
+        if (local.length >= 12 && local.startsWith('55')) local = local.slice(2);
+        if (local.length >= 10) local = local.slice(2);
         const isCelular = local.length >= 9 && local.startsWith('9');
-        // Leads from Leadbroker/Blackbox are always WhatsApp contacts
         const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
         const tipo = isWhatsAppSource ? 'whatsapp' : (isCelular ? 'celular' : 'fixo');
         entries.push({ tipo, numero: data.telefone });
@@ -224,7 +234,7 @@ export function LeadInfoPanel({
     }
 
     return entries;
-  }, [data.telefone, data.phones, data.lead_source]);
+  }, [data.telefone, data.phones, data.socios, data.lead_source]);
 
   const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
 
