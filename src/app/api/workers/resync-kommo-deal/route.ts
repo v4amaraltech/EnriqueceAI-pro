@@ -174,20 +174,45 @@ export async function POST(request: Request) {
     }
   }
 
-  // PATCH the deal with custom fields
-  const patchRes = await fetch(
-    `https://${subdomain}.kommo.com/api/v4/leads/${dealId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${credentials.access_token}`,
-      },
-      body: JSON.stringify({ custom_fields_values: customFieldsValues }),
-    },
-  );
+  // Try PATCH all fields at once first
+  const kommoHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${credentials.access_token}`,
+  };
+  const dealUrl = `https://${subdomain}.kommo.com/api/v4/leads/${dealId}`;
 
-  const patchBody = await patchRes.text();
+  let patchRes = await fetch(dealUrl, {
+    method: 'PATCH',
+    headers: kommoHeaders,
+    body: JSON.stringify({ custom_fields_values: customFieldsValues }),
+  });
+
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  if (!patchRes.ok) {
+    // Batch failed — send fields one by one to skip bad ones
+    for (const field of customFieldsValues) {
+      const fieldKey = 'field_id' in field ? `id:${field.field_id}` : `code:${field.field_code}`;
+      try {
+        const singleRes = await fetch(dealUrl, {
+          method: 'PATCH',
+          headers: kommoHeaders,
+          body: JSON.stringify({ custom_fields_values: [field] }),
+        });
+        if (singleRes.ok) {
+          succeeded.push(fieldKey);
+        } else {
+          const errText = await singleRes.text();
+          failed.push(`${fieldKey}: ${errText.slice(0, 100)}`);
+        }
+      } catch (err) {
+        failed.push(`${fieldKey}: ${String(err).slice(0, 100)}`);
+      }
+    }
+  } else {
+    succeeded.push(`all ${customFieldsValues.length} fields`);
+  }
 
   // Record crm_deal_created if missing
   const { data: existingDeal } = (await from(supabase, 'interactions')
@@ -208,10 +233,10 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    success: patchRes.ok,
+    success: succeeded.length > 0,
     dealId,
-    fieldsCount: customFieldsValues.length,
-    kommoStatus: patchRes.status,
-    kommoResponse: patchBody.slice(0, 500),
+    fieldsTotal: customFieldsValues.length,
+    succeeded,
+    failed,
   });
 }
