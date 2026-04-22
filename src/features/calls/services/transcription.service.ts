@@ -75,7 +75,8 @@ export async function processCallTranscription(callId: string): Promise<void> {
         await analyzeAndSaveSpiced(supabase, call.org_id, call.lead_id, transcription);
       } catch (spicedErr) {
         // Partial success: transcription saved, SPICED failed
-        console.error('[transcription] SPICED analysis failed:', spicedErr);
+        const errMsg = spicedErr instanceof Error ? spicedErr.message : String(spicedErr);
+        console.error(`[transcription] SPICED analysis failed for lead ${call.lead_id}: ${errMsg}`);
       }
     }
 
@@ -272,7 +273,8 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
   });
 
   if (!response.ok) {
-    throw new Error(`claude_api_error: ${response.status}`);
+    const errBody = await response.text().catch(() => 'no body');
+    throw new Error(`claude_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const data = (await response.json()) as {
