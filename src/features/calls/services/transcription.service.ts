@@ -287,12 +287,22 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
 
   const text = data.content.find((c) => c.type === 'text')?.text ?? '';
 
-  // Parse JSON — handle potential markdown wrapping
-  const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  // Parse JSON — handle potential markdown wrapping and unescaped newlines
+  let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
   try {
     return JSON.parse(cleaned) as Record<string, string>;
   } catch {
-    throw new Error(`claude_response_parse_failed: ${cleaned.substring(0, 200)}`);
+    // Claude sometimes returns newlines inside JSON string values — fix them
+    // Replace literal newlines inside quoted strings with \\n
+    cleaned = cleaned.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    // Fix double-escaped that were already correct
+    cleaned = cleaned.replace(/\\\\n/g, '\\n').replace(/\\\\r/g, '\\r');
+    try {
+      return JSON.parse(cleaned) as Record<string, string>;
+    } catch {
+      throw new Error(`claude_response_parse_failed: ${text.substring(0, 200)}`);
+    }
   }
 }
 
