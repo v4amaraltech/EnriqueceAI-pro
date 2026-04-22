@@ -590,42 +590,55 @@ export async function markLeadAsWon(
               'first_name', 'last_name', 'name', 'company_name', 'position', 'EMAIL', 'PHONE',
             ]);
 
-            // Fetch lead field types to skip select/enum fields (they require enum_id, not text value)
             const ENUM_FIELD_TYPES = new Set(['select', 'multiselect', 'radiobutton', 'category']);
-            let leadFieldTypes = new Map<string, string>();
+
+            // Fetch lead field definitions (types + enum options for select fields)
+            let leadFieldDefs: { types: Map<string, string>; enums: Map<string, Array<{ id: number; value: string }>> } = { types: new Map(), enums: new Map() };
             try {
-              leadFieldTypes = await kommoAdapter.getLeadFieldTypes(credentials);
+              leadFieldDefs = await kommoAdapter.getFieldDefinitions(credentials, 'leads');
             } catch {
-              // If we can't fetch field types, proceed without filtering
+              // If we can't fetch field defs, proceed without enum resolution
             }
 
             // Build deal custom fields from mapping
             const customFieldsValues: Array<{
               field_id?: number;
               field_code?: string;
-              values: Array<{ value: string }>;
+              values: Array<{ value: string; enum_id?: number }>;
             }> = [];
 
             for (const [appField, crmField] of Object.entries(fieldMapping)) {
               if (KOMMO_CONTACT_FIELDS.has(crmField)) continue;
 
-              // Skip select/enum fields — they require enum_id which we don't have
-              const fieldType = leadFieldTypes.get(crmField);
-              if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
-                continue;
-              }
-
               // Use flatLead which already has custom_ fields resolved
               const value = flatLead[appField];
               if (!value) continue;
 
-              // Determine if crmField is a numeric ID or a field code
+              const fieldType = leadFieldDefs.types.get(crmField);
               const numericId = parseInt(crmField, 10);
-              const formatted = formatValueForKommo(value);
-              if (!isNaN(numericId) && crmField === numericId.toString()) {
-                customFieldsValues.push({ field_id: numericId, values: [{ value: formatted }] });
+              const isNumeric = !isNaN(numericId) && crmField === numericId.toString();
+
+              if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
+                // Select/enum field — resolve text value to enum_id
+                const options = leadFieldDefs.enums.get(crmField);
+                if (!options) continue;
+                const normalized = value.trim().toLowerCase();
+                const match = options.find((o) => o.value.trim().toLowerCase() === normalized);
+                if (!match) continue; // No matching enum option, skip
+
+                if (isNumeric) {
+                  customFieldsValues.push({ field_id: numericId, values: [{ value: match.value, enum_id: match.id }] });
+                } else {
+                  customFieldsValues.push({ field_code: crmField, values: [{ value: match.value, enum_id: match.id }] });
+                }
               } else {
-                customFieldsValues.push({ field_code: crmField, values: [{ value: formatted }] });
+                // Text/numeric/date field — send value directly
+                const formatted = formatValueForKommo(value);
+                if (isNumeric) {
+                  customFieldsValues.push({ field_id: numericId, values: [{ value: formatted }] });
+                } else {
+                  customFieldsValues.push({ field_code: crmField, values: [{ value: formatted }] });
+                }
               }
             }
 

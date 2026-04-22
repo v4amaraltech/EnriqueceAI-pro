@@ -37,7 +37,7 @@ interface KommoCustomField {
   field_id: number;
   field_name: string;
   field_code: string | null;
-  values: Array<{ value: string; enum_code?: string }>;
+  values: Array<{ value: string; enum_code?: string; enum_id?: number }>;
 }
 
 interface KommoListResponse<T> {
@@ -51,6 +51,29 @@ interface KommoCreateResponse {
     leads?: Array<{ id: number; request_id: string }>;
     contacts?: Array<{ id: number; request_id: string }>;
   };
+}
+
+interface KommoFieldDefsResult {
+  types: Map<string, string>;
+  enums: Map<string, Array<{ id: number; value: string }>>;
+}
+
+const ENUM_FIELD_TYPES = new Set(['select', 'multiselect', 'radiobutton', 'category']);
+
+/**
+ * Resolve a text value to an enum_id for select-type fields.
+ * Returns the enum_id if found, or null if no match (field will be skipped).
+ */
+function resolveEnumId(
+  enums: Map<string, Array<{ id: number; value: string }>>,
+  fieldKey: string,
+  textValue: string,
+): number | null {
+  const options = enums.get(fieldKey);
+  if (!options) return null;
+  const normalized = textValue.trim().toLowerCase();
+  const match = options.find((o) => o.value.trim().toLowerCase() === normalized);
+  return match?.id ?? null;
 }
 
 interface KommoAccountResponse {
@@ -349,23 +372,12 @@ export class KommoAdapter implements CRMAdapter {
     const subdomain = credentials.subdomain;
     if (!subdomain) throw new Error('Kommo subdomain missing');
 
-    // Fetch contact field types to skip select/enum fields (they require enum_id, not text value)
-    const ENUM_FIELD_TYPES = new Set(['select', 'multiselect', 'radiobutton', 'category']);
-    let contactFieldTypes = new Map<string, string>();
+    // Fetch contact field definitions (types + enum options) to properly handle select fields
+    let contactFieldDefs: KommoFieldDefsResult = { types: new Map(), enums: new Map() };
     try {
-      type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
-      const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
-        subdomain,
-        '/contacts/custom_fields?limit=250',
-        credentials.access_token,
-      );
-      const fields = result._embedded?.custom_fields ?? [];
-      for (const f of fields) {
-        contactFieldTypes.set(f.id.toString(), f.type);
-        if (f.code) contactFieldTypes.set(f.code, f.type);
-      }
+      contactFieldDefs = await this.getFieldDefinitions(credentials, 'contacts');
     } catch {
-      // If we can't fetch field types, proceed without filtering
+      // If we can't fetch field defs, proceed without enum resolution
     }
 
     // Build custom fields from mapping
@@ -397,20 +409,28 @@ export class KommoAdapter implements CRMAdapter {
           ],
         });
       } else {
-        // Skip select/enum fields — they require enum_id which we don't have
-        const fieldType = contactFieldTypes.get(crmField);
-        if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
-          continue;
-        }
-
-        // Generic custom field — use field_id if numeric, field_name otherwise
+        const fieldType = contactFieldDefs.types.get(crmField);
         const isNumericId = /^\d+$/.test(crmField);
-        customFields.push({
-          field_id: isNumericId ? parseInt(crmField, 10) : 0,
-          field_name: isNumericId ? '' : crmField,
-          field_code: isNumericId ? '' : crmField,
-          values: [{ value }],
-        });
+
+        if (fieldType && ENUM_FIELD_TYPES.has(fieldType)) {
+          // Select/enum field — resolve text value to enum_id
+          const enumId = resolveEnumId(contactFieldDefs.enums, crmField, value);
+          if (!enumId) continue; // No matching enum option, skip
+          customFields.push({
+            field_id: isNumericId ? parseInt(crmField, 10) : 0,
+            field_name: isNumericId ? '' : crmField,
+            field_code: isNumericId ? '' : crmField,
+            values: [{ value: enumId.toString(), enum_id: enumId } as { value: string; enum_code?: string }],
+          });
+        } else {
+          // Text/numeric/date field — send value directly
+          customFields.push({
+            field_id: isNumericId ? parseInt(crmField, 10) : 0,
+            field_name: isNumericId ? '' : crmField,
+            field_code: isNumericId ? '' : crmField,
+            values: [{ value }],
+          });
+        }
       }
     }
 
@@ -663,35 +683,58 @@ export class KommoAdapter implements CRMAdapter {
   }
 
   /**
-   * Fetch lead (deal) custom field definitions to determine field types.
-   * Fields of type select/multiselect/radiobutton/category require enum_id
-   * instead of a plain text value — callers should skip those fields.
+   * Fetch custom field definitions for an entity (leads or contacts).
+   * Returns field type info and enum options for select/multiselect fields.
    */
-  async getLeadFieldTypes(
+  async getFieldDefinitions(
     credentials: CrmCredentials,
-  ): Promise<Map<string, string>> {
+    entity: 'leads' | 'contacts' = 'leads',
+  ): Promise<KommoFieldDefsResult> {
     const subdomain = credentials.subdomain;
-    if (!subdomain) return new Map();
+    if (!subdomain) return { types: new Map(), enums: new Map() };
 
-    type KommoFieldDef = { id: number; name: string; type: string; code: string | null };
+    type KommoFieldDef = {
+      id: number;
+      name: string;
+      type: string;
+      code: string | null;
+      enums?: Array<{ id: number; value: string; sort: number }>;
+    };
     try {
       const result = await kommoFetch<KommoListResponse<KommoFieldDef>>(
         subdomain,
-        '/leads/custom_fields?limit=250',
+        `/${entity}/custom_fields?limit=250`,
         credentials.access_token,
       );
       const fields = result._embedded?.custom_fields ?? [];
-      const map = new Map<string, string>();
+      const types = new Map<string, string>();
+      const enums = new Map<string, Array<{ id: number; value: string }>>();
+
       for (const f of fields) {
-        // Map both numeric ID and code to type
-        map.set(f.id.toString(), f.type);
-        if (f.code) map.set(f.code, f.type);
+        const key = f.id.toString();
+        types.set(key, f.type);
+        if (f.code) types.set(f.code, f.type);
+
+        // Store enum options for select-type fields
+        if (f.enums?.length) {
+          const options = f.enums.map((e) => ({ id: e.id, value: e.value }));
+          enums.set(key, options);
+          if (f.code) enums.set(f.code, options);
+        }
       }
-      return map;
+      return { types, enums };
     } catch (err) {
-      console.warn('[kommo] Failed to fetch lead field types:', err);
-      return new Map();
+      console.warn(`[kommo] Failed to fetch ${entity} field definitions:`, err);
+      return { types: new Map(), enums: new Map() };
     }
+  }
+
+  /** @deprecated Use getFieldDefinitions instead */
+  async getLeadFieldTypes(
+    credentials: CrmCredentials,
+  ): Promise<Map<string, string>> {
+    const result = await this.getFieldDefinitions(credentials, 'leads');
+    return result.types;
   }
 
   async validateConnection(credentials: CrmCredentials): Promise<boolean> {
