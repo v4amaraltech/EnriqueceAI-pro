@@ -28,6 +28,18 @@ const envSchema = z.object({
   EVOLUTION_API_URL: z.string().url().optional(),
   EVOLUTION_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
+  // T3: Previously unvalidated env vars (used via process.env directly)
+  KOMMO_CLIENT_ID: z.string().min(1).optional(),
+  KOMMO_CLIENT_SECRET: z.string().min(1).optional(),
+  RDSTATION_CLIENT_ID: z.string().min(1).optional(),
+  RDSTATION_CLIENT_SECRET: z.string().min(1).optional(),
+  API4COM_WEBHOOK_SECRET: z.string().min(1).optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
+  WHATSAPP_APP_SECRET: z.string().min(1).optional(),
+  APOLLO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
