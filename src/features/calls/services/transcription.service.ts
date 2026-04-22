@@ -77,6 +77,10 @@ export async function processCallTranscription(callId: string): Promise<void> {
         // Partial success: transcription saved, SPICED failed
         const errMsg = spicedErr instanceof Error ? spicedErr.message : String(spicedErr);
         console.error(`[transcription] SPICED analysis failed for lead ${call.lead_id}: ${errMsg}`);
+        // Persist error in call metadata for debugging (Vercel truncates logs)
+        await from(supabase, 'calls')
+          .update({ metadata: { spiced_error: errMsg.slice(0, 500), spiced_failed_at: new Date().toISOString() } } as Record<string, unknown>)
+          .eq('id', callId);
       }
     }
 
