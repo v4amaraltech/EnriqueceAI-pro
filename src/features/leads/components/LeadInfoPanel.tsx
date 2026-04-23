@@ -334,14 +334,18 @@ export function LeadInfoPanel({
       if (!(cleanFields.canal as string)?.trim()) delete cleanFields.canal;
       if (!(cleanFields.segmento as string)?.trim()) delete cleanFields.segmento;
 
-      const result = await updateLead(data.id, {
+      const updatePayload: Record<string, unknown> = {
         ...cleanFields,
         email: primaryEmailValue,
-        emails: validEmails,
         telefone: primaryPhone,
         phones: validPhones,
         custom_field_values: editCustomFieldValues,
-      });
+      };
+      // Only send emails if column exists (migration applied)
+      if (Array.isArray(data.emails) || validEmails.length > 0) {
+        updatePayload.emails = validEmails;
+      }
+      const result = await updateLead(data.id, updatePayload);
       if (result.success) {
         setData((prev) => ({
           ...prev,
