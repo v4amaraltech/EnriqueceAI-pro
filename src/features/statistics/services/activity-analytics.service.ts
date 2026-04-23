@@ -43,7 +43,7 @@ export async function fetchActivityAnalyticsData(
     query = query.in('performed_by', userIds);
   }
 
-  const { data: rawInteractions } = (await query) as { data: InteractionQueryRow[] | null };
+  const { data: rawInteractions } = (await query.limit(10000)) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Get goal target
@@ -63,7 +63,8 @@ export async function fetchActivityAnalyticsData(
     .eq('status', 'qualified')
     .not('won_at', 'is', null)
     .gte('won_at', periodStart)
-    .lte('won_at', periodEnd)) as {
+    .lte('won_at', periodEnd)
+    .limit(10000)) as {
     data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
   };
   const { data: lostLeadsRaw } = (await from(supabase, 'leads')
@@ -72,7 +73,8 @@ export async function fetchActivityAnalyticsData(
     .eq('status', 'unqualified')
     .not('lost_at', 'is', null)
     .gte('lost_at', periodStart)
-    .lte('lost_at', periodEnd)) as {
+    .lte('lost_at', periodEnd)
+    .limit(10000)) as {
     data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
   };
   const leads = [...(wonLeadsRaw ?? []), ...(lostLeadsRaw ?? [])];
@@ -83,7 +85,8 @@ export async function fetchActivityAnalyticsData(
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
+    .lte('created_at', periodEnd)
+    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
 
   const allActiveLeads = activeLeads ?? [];
   const leadsInPeriod = allActiveLeads.length;

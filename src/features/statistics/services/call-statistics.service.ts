@@ -51,7 +51,7 @@ export async function fetchCallStatisticsData(
     query = query.in('user_id', userIds);
   }
 
-  const { data: rawCalls } = (await query) as { data: CallRow[] | null };
+  const { data: rawCalls } = (await query.limit(10000)) as { data: CallRow[] | null };
   const calls = rawCalls ?? [];
 
   // Fetch members for name mapping (via admin client — org_members has no email column)

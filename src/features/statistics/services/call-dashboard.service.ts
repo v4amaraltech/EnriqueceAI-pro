@@ -35,7 +35,8 @@ export async function fetchCallDashboardData(
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)
-    .order('started_at', { ascending: false });
+    .order('started_at', { ascending: false })
+    .limit(10000);
 
   if (userIds && userIds.length > 0) {
     callsQuery = callsQuery.in('user_id', userIds);

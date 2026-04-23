@@ -56,7 +56,7 @@ export async function fetchLossReasonAnalyticsData(
     enrQuery = enrQuery.in('enrolled_by', userIds);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   if (enrollments.length === 0) {

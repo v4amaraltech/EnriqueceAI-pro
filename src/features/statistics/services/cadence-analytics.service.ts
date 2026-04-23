@@ -62,7 +62,7 @@ export async function fetchCadenceAnalyticsData(
     enrQuery = enrQuery.in('enrolled_by', userIds);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   // Fetch interactions for reply/meeting counts
@@ -74,7 +74,7 @@ export async function fetchCadenceAnalyticsData(
     .lte('created_at', periodEnd)
     .in('type', ['replied', 'meeting_scheduled']);
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
+  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch cadence steps for progression
@@ -91,7 +91,8 @@ export async function fetchCadenceAnalyticsData(
     .in('cadence_id', cadenceIds)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
-    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])) as { data: InteractionQueryRow[] | null };
+    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])
+    .limit(10000)) as { data: InteractionQueryRow[] | null };
   const engagementInteractions = rawEngagement ?? [];
 
   const activeCadences = cadences.filter((c) => c.status === 'active').length;

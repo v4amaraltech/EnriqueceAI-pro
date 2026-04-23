@@ -38,7 +38,7 @@ export async function fetchConversionAnalyticsData(
     leadsQuery = leadsQuery.in('created_by', userIds);
   }
 
-  const { data: rawLeads } = (await leadsQuery) as { data: LeadQueryRow[] | null };
+  const { data: rawLeads } = (await leadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
   const leads = rawLeads ?? [];
 
   // Fetch interactions
@@ -52,7 +52,7 @@ export async function fetchConversionAnalyticsData(
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
+  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch cadences first (for org isolation of enrollments)
@@ -74,7 +74,7 @@ export async function fetchConversionAnalyticsData(
     enrQuery = enrQuery.in('enrolled_by', userIds);
   }
 
-  const { data: rawEnrollments } = (await enrQuery) as { data: EnrollmentQueryRow[] | null };
+  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
   const funnel = calculateFunnel(leads, interactions);

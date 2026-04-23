@@ -56,7 +56,7 @@ export async function fetchEmailAnalyticsData(
     query = query.in('lead_id', leadIdFilter);
   }
 
-  const { data: rawInteractions } = (await query) as { data: InteractionQueryRow[] | null };
+  const { data: rawInteractions } = (await query.limit(10000)) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   if (interactions.length === 0) {

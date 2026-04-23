@@ -49,7 +49,8 @@ export async function fetchTeamAnalyticsData(
     .select('id, type, lead_id, performed_by, created_at')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: InteractionQueryRow[] | null };
+    .lte('created_at', periodEnd)
+    .limit(10000)) as { data: InteractionQueryRow[] | null };
 
   // cadence_enrollments has no org_id — scope via org cadences
   const { data: orgCadencesForTeam } = (await from(supabase, 'cadences')
@@ -60,19 +61,22 @@ export async function fetchTeamAnalyticsData(
     .select('lead_id, enrolled_by, status')
     .in('cadence_id', teamCadenceIds.length > 0 ? teamCadenceIds : ['__none__'])
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: EnrollmentQueryRow[] | null };
+    .lte('created_at', periodEnd)
+    .limit(10000)) as { data: EnrollmentQueryRow[] | null };
 
   const { data: rawCalls } = (await from(supabase, 'calls')
     .select('id, user_id, status')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
-    .lte('started_at', periodEnd)) as { data: CallRow[] | null };
+    .lte('started_at', periodEnd)
+    .limit(10000)) as { data: CallRow[] | null };
 
   const { data: rawLeads } = (await from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
     .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)) as { data: LeadQueryRow[] | null };
+    .lte('created_at', periodEnd)
+    .limit(10000)) as { data: LeadQueryRow[] | null };
 
   const interactions = rawInteractions ?? [];
   const enrollments = rawEnrollments ?? [];

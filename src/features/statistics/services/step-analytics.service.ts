@@ -61,7 +61,7 @@ export async function fetchStepAnalyticsData(
     .order('step_order', { ascending: true });
 
   const [{ data: rawInteractions }, { data: rawSteps }] = await Promise.all([
-    intQuery as unknown as Promise<{ data: StepInteractionRow[] | null }>,
+    intQuery.limit(10000) as unknown as Promise<{ data: StepInteractionRow[] | null }>,
     stepsQuery as unknown as Promise<{ data: CadenceStepRow[] | null }>,
   ]);
 

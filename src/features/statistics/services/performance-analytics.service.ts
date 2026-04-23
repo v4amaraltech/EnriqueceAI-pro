@@ -51,7 +51,7 @@ export async function fetchPerformanceAnalyticsData(
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 
-  const { data: rawInteractions } = (await intQuery) as { data: InteractionQueryRow[] | null };
+  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
   const interactions = rawInteractions ?? [];
 
   // Fetch leads in period (don't filter by assigned_to here — won_by may differ)
@@ -61,7 +61,7 @@ export async function fetchPerformanceAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
-  const { data: rawLeads } = (await leadsQuery) as { data: LeadQueryRow[] | null };
+  const { data: rawLeads } = (await leadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
   const leads = rawLeads ?? [];
 
   // memberLookup: user_id → name for display; memberInfoLookup: user_id → full info
