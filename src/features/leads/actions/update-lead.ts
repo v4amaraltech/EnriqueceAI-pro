@@ -201,8 +201,22 @@ export async function updateLead(
         }
 
         const label = fieldLabels[key] ?? key;
-        const fromStr = oldVal != null && oldVal !== '' && typeof oldVal !== 'object' ? String(oldVal) : '(vazio)';
-        const toStr = newVal != null && newVal !== '' && typeof newVal !== 'object' ? String(newVal) : '(vazio)';
+        let fromStr = oldVal != null && oldVal !== '' && typeof oldVal !== 'object' ? String(oldVal) : '(vazio)';
+        let toStr = newVal != null && newVal !== '' && typeof newVal !== 'object' ? String(newVal) : '(vazio)';
+
+        // Resolve closer_id UUIDs to names
+        if (key === 'closer_id') {
+          const closerIds = [oldVal, newVal].filter((v): v is string => typeof v === 'string' && v.length > 0);
+          if (closerIds.length > 0) {
+            const { data: closers } = await from(supabase, 'closers')
+              .select('id, name')
+              .in('id', closerIds) as { data: Array<{ id: string; name: string }> | null };
+            const closerMap = new Map((closers ?? []).map((c) => [c.id, c.name]));
+            if (typeof oldVal === 'string' && closerMap.has(oldVal)) fromStr = closerMap.get(oldVal)!;
+            if (typeof newVal === 'string' && closerMap.has(newVal)) toStr = closerMap.get(newVal)!;
+          }
+        }
+
         changeDescriptions.push(`${label}: ${fromStr} → ${toStr}`);
       }
       logLeadEvent(supabase, {
