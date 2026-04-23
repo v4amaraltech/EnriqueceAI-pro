@@ -135,7 +135,7 @@ async function ingestSingleLead(
     first_name: data.first_name,
     last_name: data.last_name ?? null,
     email: data.email || null,
-    emails: data.emails ?? null,
+    ...(data.emails ? { emails: data.emails } : {}),
     telefone: data.telefone ?? null,
     nome_fantasia: data.empresa ?? null,
     cnpj: data.cnpj ?? null,
