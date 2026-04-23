@@ -73,6 +73,8 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
   const searchParams = useSearchParams();
   const { kpis, feedbacks, closerRanking } = data;
 
+  const statusFilter = searchParams.get('status') ?? '';
+
   const updateFilter = useCallback(
     (key: string, value: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -85,6 +87,10 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
     },
     [router, searchParams],
   );
+
+  const filteredFeedbacks = statusFilter
+    ? feedbacks.filter((f) => f.status === statusFilter)
+    : feedbacks;
 
   const recentComments = feedbacks
     .filter((f) => f.comment?.trim())
@@ -128,6 +134,20 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
               </SelectContent>
             </Select>
           )}
+          <Select
+            value={statusFilter || ALL_VALUE}
+            onValueChange={(v) => updateFilter('status', v)}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Todos status</SelectItem>
+              <SelectItem value="responded">Respondido</SelectItem>
+              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="expired">Expirado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -211,7 +231,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
       {/* Feedback Table */}
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <div className="p-5 border-b border-[var(--border)]">
-          <h2 className="font-semibold">Todos os Feedbacks ({feedbacks.length})</h2>
+          <h2 className="font-semibold">Todos os Feedbacks ({filteredFeedbacks.length})</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -226,14 +246,14 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
               </tr>
             </thead>
             <tbody>
-              {feedbacks.length === 0 ? (
+              {filteredFeedbacks.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-[var(--muted-foreground)]">
                     Nenhum feedback encontrado no período.
                   </td>
                 </tr>
               ) : (
-                feedbacks.map((f) => (
+                filteredFeedbacks.map((f) => (
                   <tr key={f.id} className="border-b border-[var(--border)] hover:bg-[var(--muted)]/50">
                     <td className="px-5 py-3">
                       <Link href={`/leads/${f.leadId}`} className="text-[var(--primary)] hover:underline">
