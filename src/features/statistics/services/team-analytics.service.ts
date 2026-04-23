@@ -92,15 +92,23 @@ export async function fetchTeamAnalyticsData(
 
   const memberMap = new Map(members.map((m) => [m.user_id, m.displayName]));
 
+  // Filter out system events and email tracking — only count SDR-executed activities
+  const TRACKING_TYPES = new Set(['delivered', 'opened', 'clicked', 'bounced', 'failed']);
+  const sdrActivities = interactions.filter(
+    (i) => i.performed_by && !TRACKING_TYPES.has(i.type) && i.type !== 'crm_synced' && i.type !== 'crm_deal_created',
+  );
+
   // Build lookup maps once — O(n) instead of O(n×m) per member
-  const interactionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
+  const interactionsByUser = groupBy(sdrActivities, (i) => i.performed_by ?? '');
+  // Keep all interactions for replies/meetings counting
+  const allInteractionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
   const callsByUser = groupBy(calls, (c) => c.user_id);
   const leadsByCreator = groupBy(leads, (l) => l.created_by ?? '');
   const enrollmentsByUser = groupBy(enrollments, (e) => e.enrolled_by ?? '');
 
-  const comparison = buildComparison(members, interactionsByUser, enrollmentsByUser, callsByUser, leadsByCreator, goalMap, defaultTarget);
+  const comparison = buildComparison(members, interactionsByUser, allInteractionsByUser, enrollmentsByUser, callsByUser, leadsByCreator, goalMap, defaultTarget);
   const sdrNames = members.map((m) => m.displayName);
-  const trends = buildTrends(members, interactions, periodStart, periodEnd, memberMap);
+  const trends = buildTrends(members, sdrActivities, periodStart, periodEnd, memberMap);
   const rankings = buildRankings(comparison);
   const goals = buildGoals(members, interactionsByUser, goalMap, defaultTarget, memberMap);
 
@@ -110,6 +118,7 @@ export async function fetchTeamAnalyticsData(
 function buildComparison(
   members: MemberInfo[],
   interactionsByUser: Map<string, InteractionQueryRow[]>,
+  allInteractionsByUser: Map<string, InteractionQueryRow[]>,
   enrollmentsByUser: Map<string, EnrollmentQueryRow[]>,
   callsByUser: Map<string, CallRow[]>,
   leadsByCreator: Map<string, LeadQueryRow[]>,
@@ -121,12 +130,13 @@ function buildComparison(
     const userName = member.displayName;
 
     const sdrInteractions = interactionsByUser.get(userId) ?? [];
+    const allSdrInteractions = allInteractionsByUser.get(userId) ?? [];
     const sdrCalls = callsByUser.get(userId) ?? [];
     const sdrLeads = leadsByCreator.get(userId) ?? [];
     const sdrEnrollments = enrollmentsByUser.get(userId) ?? [];
 
-    const replies = sdrInteractions.filter((i) => i.type === 'replied').length;
-    const meetings = sdrInteractions.filter((i) => i.type === 'meeting_scheduled').length;
+    const replies = allSdrInteractions.filter((i) => i.type === 'replied').length;
+    const meetings = allSdrInteractions.filter((i) => i.type === 'meeting_scheduled').length;
 
     const repliedOrCompleted = sdrEnrollments.filter(
       (e) => e.status === 'replied' || e.status === 'completed',
