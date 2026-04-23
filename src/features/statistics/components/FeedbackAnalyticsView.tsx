@@ -96,7 +96,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
     .filter((f) => f.comment?.trim())
     .slice(0, 10);
 
-  const closerOptions = [...new Map(feedbacks.map((f) => [f.closerId, f.closerName])).entries()];
+  const closerOptions = closerRanking.map((c) => [c.closerId, c.closerName] as const);
 
   return (
     <div className="space-y-6 p-6">
@@ -118,7 +118,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
               router.push(`/statistics/feedback?${params.toString()}`);
             }}
           />
-          {closerOptions.length > 1 && (
+          {closerOptions.length > 0 && (
             <Select
               value={filters.closer ?? ALL_VALUE}
               onValueChange={(v) => updateFilter('closer', v)}
