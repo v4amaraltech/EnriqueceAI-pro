@@ -22,9 +22,15 @@ const statisticsPages = [
     icon: Activity,
   },
   {
-    title: 'Feedback de Oportunidade',
+    title: 'Conversão',
     description: 'Funil de conversão e análise por cadência.',
     href: '/statistics/conversion',
+    icon: BarChart3,
+  },
+  {
+    title: 'Feedback de Oportunidade',
+    description: 'Feedbacks dos closers sobre oportunidades enviadas.',
+    href: '/statistics/feedback',
     icon: BarChart3,
   },
   {
