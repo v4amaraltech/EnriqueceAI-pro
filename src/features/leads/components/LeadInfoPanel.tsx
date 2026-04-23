@@ -188,12 +188,21 @@ export function LeadInfoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackedLeadId]);
 
-  // Build initial phone entries from socios + phones JSONB + telefone fallback
+  // Build initial phone entries from phones JSONB (primary) or socios + telefone (bootstrap)
   const buildInitialPhones = useCallback((): LeadPhone[] => {
+    // If phones JSONB was explicitly set (even empty []), it's the source of truth
+    if (Array.isArray(data.phones)) {
+      if (data.phones.length > 0) {
+        return data.phones.map((p) => ({ tipo: p.tipo, numero: p.numero }));
+      }
+      // phones is [] — user removed all phones, show empty row
+      return [{ tipo: 'celular', numero: '' }];
+    }
+
+    // Bootstrap: merge socios + telefone for leads that never had phones edited
     const entries: LeadPhone[] = [];
     const seen = new Set<string>();
 
-    // Socios celulares first (enrichment data)
     for (const socio of data.socios ?? []) {
       for (const cel of socio.celulares ?? []) {
         const formatted = `(${cel.ddd}) ${cel.numero}`;
@@ -205,16 +214,6 @@ export function LeadInfoPanel({
       }
     }
 
-    // phones JSONB has explicit type — preferred source
-    for (const p of data.phones ?? []) {
-      const key = p.numero.replace(/\D/g, '');
-      if (!seen.has(key)) {
-        seen.add(key);
-        entries.push({ tipo: p.tipo, numero: p.numero });
-      }
-    }
-
-    // telefone TEXT fallback (only if not already in phones)
     if (data.telefone) {
       const key = data.telefone.replace(/\D/g, '');
       if (!seen.has(key)) {
