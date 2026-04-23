@@ -23,10 +23,10 @@ describe('LeadStatusBadge', () => {
 
 describe('LeadStatusBadge (meetime variant)', () => {
   const meetimeStatuses: Array<{ status: LeadStatus; label: string }> = [
-    { status: 'new', label: 'ESPERANDO INÍCIO' },
-    { status: 'contacted', label: 'ATIVO' },
-    { status: 'qualified', label: 'ATIVO' },
-    { status: 'unqualified', label: 'DESCARTADO' },
+    { status: 'new', label: 'NOVO' },
+    { status: 'contacted', label: 'CONTATADO' },
+    { status: 'qualified', label: 'QUALIFICADO' },
+    { status: 'unqualified', label: 'NÃO QUALIFICADO' },
     { status: 'archived', label: 'ARQUIVADO' },
   ];
 

@@ -90,8 +90,11 @@ describe('TopBar', () => {
 
     await user.click(screen.getByText('Ligações'));
 
-    expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
-    expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
+    expect(await screen.findByText('Painel')).toBeInTheDocument();
+
+    // "Ligações" appears as both the dropdown trigger and a submenu item
+    const ligacoesItems = screen.getAllByText('Ligações');
+    expect(ligacoesItems.length).toBeGreaterThanOrEqual(2);
 
     // Extrato and Ajustes are links to their routes (inside Ligações dropdown)
     const extratoLink = screen.getByRole('menuitem', { name: 'Extrato' });
@@ -110,10 +113,10 @@ describe('TopBar', () => {
     expect(navSections).toHaveLength(4);
     expect(navSections[0]?.label).toBe('Dashboard');
     expect(navSections[1]?.label).toBe('Prospecção');
-    expect(navSections[1]?.items).toHaveLength(5);
+    expect(navSections[1]?.items).toHaveLength(6);
     expect(navSections[2]?.label).toBe('Ligações');
     expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');
-    expect(navSections[3]?.items).toHaveLength(4);
+    expect(navSections[3]?.items).toHaveLength(5);
   });
 });

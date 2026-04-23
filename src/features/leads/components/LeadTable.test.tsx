@@ -96,15 +96,15 @@ describe('LeadTable', () => {
 
     render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
-    expect(screen.getByText('ESPERANDO INÍCIO')).toBeInTheDocument();
+    expect(screen.getByText('NOVO')).toBeInTheDocument();
   });
 
-  it('should display ATIVO badge for contacted leads', () => {
+  it('should display CONTATADO badge for contacted leads', () => {
     const leads = [createMockLead({ status: 'contacted' })];
 
     render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} userMap={emptyUserMap} total={leads.length} />);
 
-    expect(screen.getByText('ATIVO')).toBeInTheDocument();
+    expect(screen.getByText('CONTATADO')).toBeInTheDocument();
   });
 
   it('should render checkboxes for selection', () => {

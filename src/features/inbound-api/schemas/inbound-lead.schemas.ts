@@ -6,6 +6,10 @@ export const inboundLeadSchema = z.object({
   first_name: z.string().min(1, 'first_name é obrigatório'),
   last_name: z.string().optional(),
   email: z.string().email('email inválido').min(1, 'email é obrigatório'),
+  emails: z.array(z.object({
+    tipo: z.enum(['corporativo', 'pessoal']),
+    email: z.string().email('email inválido'),
+  })).optional(),
   telefone: z.string().min(1, 'telefone é obrigatório'),
   empresa: z.string().min(1, 'empresa é obrigatório'),
   cnpj: cnpjOptionalSchema,

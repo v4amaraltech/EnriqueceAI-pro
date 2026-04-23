@@ -55,9 +55,12 @@ describe('MobileNav', () => {
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     await user.click(await screen.findByText('Ligações'));
 
-    expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
-    expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
+    expect(await screen.findByText('Painel')).toBeInTheDocument();
     expect(screen.getByText('Extrato')).toBeInTheDocument();
+
+    // "Ligações" appears as both the section header and a submenu item
+    const allLigacoes = screen.getAllByText('Ligações');
+    expect(allLigacoes.length).toBeGreaterThanOrEqual(2);
 
     // Ajustes appears in both Prospecção and Ligações sections
     const allAjustes = screen.getAllByText('Ajustes');
