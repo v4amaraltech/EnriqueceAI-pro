@@ -37,6 +37,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     cnae: '6201-5/01',
     situacao_cadastral: 'Ativa',
     email: null,
+    emails: null,
     telefone: null,
     phones: null,
     socios: null,

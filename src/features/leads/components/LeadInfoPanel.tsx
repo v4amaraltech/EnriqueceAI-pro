@@ -39,7 +39,7 @@ import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
-import type { LeadPhone } from '../types';
+import type { LeadPhone, LeadEmail } from '../types';
 import { updateLead } from '../actions/update-lead';
 
 import { CurrencyInput, formatBRL } from './CurrencyInput';
@@ -258,13 +258,75 @@ export function LeadInfoPanel({
     );
   }, []);
 
+  // Build initial email entries from emails JSONB or socios + email fallback
+  const buildInitialEmails = useCallback((): LeadEmail[] => {
+    if (Array.isArray(data.emails)) {
+      if (data.emails.length > 0) {
+        return data.emails.map((e) => ({ tipo: e.tipo, email: e.email }));
+      }
+      return [{ tipo: 'corporativo', email: '' }];
+    }
+
+    // Bootstrap: merge socios emails + lead.email
+    const entries: LeadEmail[] = [];
+    const seen = new Set<string>();
+
+    for (const socio of data.socios ?? []) {
+      for (const se of socio.emails ?? []) {
+        const key = se.email.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          entries.push({ tipo: 'corporativo', email: se.email });
+        }
+      }
+    }
+
+    if (data.email) {
+      const key = data.email.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        entries.push({ tipo: 'corporativo', email: data.email });
+      }
+    }
+
+    if (entries.length === 0) {
+      entries.push({ tipo: 'corporativo', email: '' });
+    }
+
+    return entries;
+  }, [data.email, data.emails, data.socios]);
+
+  const [emailEntries, setEmailEntries] = useState<LeadEmail[]>(buildInitialEmails);
+
+  useEffect(() => {
+    setEmailEntries(buildInitialEmails());
+  }, [trackedLeadId, buildInitialEmails]);
+
+  const handleAddEmail = useCallback(() => {
+    setEmailEntries((prev) => [...prev, { tipo: 'corporativo', email: '' }]);
+  }, []);
+
+  const handleRemoveEmail = useCallback((index: number) => {
+    setEmailEntries((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleEmailEntryChange = useCallback((index: number, field: 'tipo' | 'email', value: string) => {
+    setEmailEntries((prev) =>
+      prev.map((entry, i) =>
+        i === index ? { ...entry, [field]: value } : entry,
+      ),
+    );
+  }, []);
+
   const handleSave = useCallback(() => {
     startTransition(async () => {
-      const { email: editEmail, ...leadFields } = editFields;
+      const { email: _editEmail, ...leadFields } = editFields;
 
-      // Filter out empty phone entries
+      // Filter out empty phone/email entries
       const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
+      const validEmails = emailEntries.filter((e) => e.email.trim() !== '');
+      const primaryEmailValue = validEmails[0]?.email ?? '';
 
       // Remove empty cnpj/canal/segmento to avoid check constraint violations
       const cleanFields: Record<string, unknown> = { ...leadFields };
@@ -274,7 +336,8 @@ export function LeadInfoPanel({
 
       const result = await updateLead(data.id, {
         ...cleanFields,
-        email: editEmail,
+        email: primaryEmailValue,
+        emails: validEmails,
         telefone: primaryPhone,
         phones: validPhones,
         custom_field_values: editCustomFieldValues,
@@ -285,7 +348,8 @@ export function LeadInfoPanel({
           first_name: editFields.first_name || null,
           last_name: editFields.last_name || null,
           nome_fantasia: editFields.nome_fantasia || null,
-          email: editEmail || null,
+          email: primaryEmailValue || null,
+          emails: validEmails,
           telefone: primaryPhone || null,
           phones: validPhones,
           job_title: editFields.job_title || null,
@@ -304,7 +368,7 @@ export function LeadInfoPanel({
         toast.error(result.error);
       }
     });
-  }, [data.id, editFields, editCustomFieldValues, phoneEntries]);
+  }, [data.id, editFields, editCustomFieldValues, phoneEntries, emailEntries]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({
@@ -390,6 +454,18 @@ export function LeadInfoPanel({
       });
       seenPhones.add(key);
     }
+  }
+
+  // Gather all emails for read mode
+  const allEmails: Array<{ tipo: string; email: string }> = [];
+  if (Array.isArray(data.emails) && data.emails.length > 0) {
+    for (const e of data.emails) {
+      allEmails.push({ tipo: e.tipo === 'pessoal' ? 'Pessoal' : 'Corporativo', email: e.email });
+    }
+  } else {
+    // Fallback: show primary email
+    const pe = primaryEmail;
+    if (pe) allEmails.push({ tipo: 'Corporativo', email: pe });
   }
 
   const avatarInitial = (firstName ?? companyName ?? data.cnpj ?? '?')[0]?.toUpperCase() ?? '?';
@@ -497,17 +573,7 @@ export function LeadInfoPanel({
                       />
                     </div>
                   )}
-                  {isFieldVisible('email') && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>
-                      <Input
-                        value={editFields.email}
-                        onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
-                        className="h-8 text-sm"
-                        placeholder="email@empresa.com"
-                      />
-                    </div>
-                  )}
+                  {/* Email is now in the E-MAIL(S) section below */}
                   {isFieldVisible('nome_fantasia') && (
                     <div className="space-y-1">
                       <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Empresa</p>
@@ -633,16 +699,7 @@ export function LeadInfoPanel({
                   ) : fullName && fullName !== firstName ? (
                     <MeetimeFieldRow label="Nome completo" value={fullName} />
                   ) : null)}
-                  {isFieldVisible('email') && (
-                    <InlineEditField
-                      leadId={data.id}
-                      fieldKey="email"
-                      label="E-mail"
-                      value={primaryEmail || null}
-                      placeholder="Adicionar email"
-                      onSaved={(v) => setData((prev) => ({ ...prev, email: v || null }))}
-                    />
-                  )}
+                  {/* Email is shown in the E-MAIL(S) section below */}
                   {isFieldVisible('nome_fantasia') && (
                     <InlineEditField
                       leadId={data.id}
@@ -688,6 +745,83 @@ export function LeadInfoPanel({
             <hr className="border-t-2 border-[var(--border)]" />
 
             {/* TELEFONE(S) — with type descriptor */}
+            <CollapsibleSection title="E-mail(s)">
+              {isEditing ? (
+                <div className="space-y-2">
+                  {emailEntries.map((entry, index) => (
+                    <div key={`email-edit-${index}`} className="flex items-end gap-1.5">
+                      <div className="w-[100px] shrink-0 space-y-1">
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
+                        <Select
+                          value={entry.tipo}
+                          onValueChange={(val) => handleEmailEntryChange(index, 'tipo', val)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="corporativo">Corporativo</SelectItem>
+                            <SelectItem value="pessoal">Pessoal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>}
+                        <Input
+                          value={entry.email}
+                          onChange={(e) => handleEmailEntryChange(index, 'email', e.target.value)}
+                          className="h-8 text-sm"
+                          placeholder="email@empresa.com"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remover email"
+                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
+                        onClick={() => handleRemoveEmail(index)}
+                        disabled={emailEntries.length <= 1}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 h-7 text-xs text-[var(--primary)]"
+                    onClick={handleAddEmail}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Adicionar email
+                  </Button>
+                </div>
+              ) : allEmails.length === 0 ? (
+                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum email informado.</p>
+              ) : (
+                allEmails.map((em, i) => (
+                  <div key={`email-${i}`} className="flex gap-2">
+                    <div className="w-20 shrink-0 space-y-1">
+                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
+                      <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
+                        {em.tipo}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail:</p>
+                      <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
+                        <a href={`mailto:${em.email}`} className="text-[var(--primary)] hover:underline truncate">
+                          {em.email}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CollapsibleSection>
+
             <CollapsibleSection title="Telefone(s)">
               {isEditing ? (
                 <div className="space-y-2">

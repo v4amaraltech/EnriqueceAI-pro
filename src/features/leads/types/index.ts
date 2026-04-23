@@ -10,6 +10,12 @@ export interface LeadPhone {
   numero: string;
 }
 
+// Email entry stored in emails JSONB array
+export interface LeadEmail {
+  tipo: 'corporativo' | 'pessoal';
+  email: string;
+}
+
 // Lead address (stored as JSONB)
 export interface LeadAddress {
   logradouro?: string;
@@ -58,6 +64,7 @@ export interface LeadRow {
   cnae: string | null;
   situacao_cadastral: string | null;
   email: string | null;
+  emails: LeadEmail[] | null;
   telefone: string | null;
   phones: LeadPhone[] | null;
   socios: LeadSocio[] | null;
@@ -150,6 +157,7 @@ export interface LeadInsert {
   cnae?: string | null;
   situacao_cadastral?: string | null;
   email?: string | null;
+  emails?: LeadEmail[] | null;
   telefone?: string | null;
   phones?: LeadPhone[] | null;
   socios?: LeadSocio[] | null;
