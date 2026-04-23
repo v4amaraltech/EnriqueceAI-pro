@@ -173,15 +173,18 @@ export function ScheduleMeetingModal({
       return;
     }
 
-    const startDateTime = new Date(`${dateString}T${selectedTime}:00`);
-    const endDateTime = new Date(startDateTime.getTime() + parseInt(effectiveDuration, 10) * 60 * 1000);
+    // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
+    const startIso = `${dateString}T${selectedTime}:00`;
+    const endMs = new Date(startIso).getTime() + parseInt(effectiveDuration, 10) * 60 * 1000;
+    const endDate = new Date(endMs);
+    const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
 
     startTransition(async () => {
       const emails = attendeeEmails.split(',').map((e) => e.trim()).filter(Boolean);
       const eventInput = {
         title,
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
+        startTime: startIso,
+        endTime: endIso,
         attendeeEmails: emails.length > 0 ? emails : undefined,
         generateMeetLink,
         closerId: selectedCloserId || undefined,

@@ -48,7 +48,7 @@ export async function scheduleMeeting(
           input.title,
           input.description ?? '',
           event.meetLink ? `Google Meet: ${event.meetLink}` : '',
-          `Horário: ${new Date(event.startTime).toLocaleString('pt-BR')} - ${new Date(event.endTime).toLocaleString('pt-BR')}`,
+          `Horário: ${new Date(event.startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} - ${new Date(event.endTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].filter(Boolean).join('\n'),
         metadata: {
           subject: input.title,
@@ -57,6 +57,8 @@ export async function scheduleMeeting(
           meet_link: event.meetLink,
           attendees: input.attendeeEmails ?? [],
           closer_id: input.closerId ?? null,
+          start_time: input.startTime,
+          end_time: input.endTime,
         },
         performed_by: userId,
       } as Record<string, unknown>);
@@ -111,8 +113,8 @@ export async function scheduleMeeting(
           leadPhone: leadData.telefone,
           leadCompanyName: leadData.nome_fantasia ?? leadData.razao_social ?? 'Lead',
           meetingTitle: input.title,
-          meetingDate: startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }),
-          meetingTime: `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} (60 min)`,
+          meetingDate: startDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long' }),
+          meetingTime: `${startDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })} (60 min)`,
           meetLink: event.meetLink ?? null,
         }).catch((err) => console.error('[scheduleMeeting] WhatsApp group error:', err));
       }
@@ -247,7 +249,7 @@ export async function updateMeeting(
           input.title,
           input.description ?? '',
           event.meetLink ? `Google Meet: ${event.meetLink}` : '',
-          `Horário: ${new Date(event.startTime).toLocaleString('pt-BR')} - ${new Date(event.endTime).toLocaleString('pt-BR')}`,
+          `Horário: ${new Date(event.startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} - ${new Date(event.endTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].filter(Boolean).join('\n'),
         metadata: {
           subject: input.title,
@@ -256,6 +258,8 @@ export async function updateMeeting(
           meet_link: event.meetLink,
           attendees: input.attendeeEmails ?? [],
           closer_id: input.closerId ?? null,
+          start_time: input.startTime,
+          end_time: input.endTime,
         },
       } as Record<string, unknown>)
       .eq('id', interactionId)

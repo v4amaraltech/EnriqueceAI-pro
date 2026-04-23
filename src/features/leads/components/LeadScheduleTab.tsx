@@ -175,15 +175,18 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
         className="w-full"
         disabled={!meetingDate || !meetingTime || isMeetingPending}
         onClick={() => {
-          const startDateTime = new Date(`${meetingDate}T${meetingTime}:00`);
-          const endDateTime = new Date(startDateTime.getTime() + parseInt(meetingDuration, 10) * 60 * 1000);
+          // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
+          const startIso = `${meetingDate}T${meetingTime}:00`;
+          const endMs = new Date(startIso).getTime() + parseInt(meetingDuration, 10) * 60 * 1000;
+          const endDate = new Date(endMs);
+          const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
           const title = meetingTitle || defaultTitle;
 
           startMeetingTransition(async () => {
             const result = await scheduleMeeting(leadId, {
               title,
-              startTime: startDateTime.toISOString(),
-              endTime: endDateTime.toISOString(),
+              startTime: startIso,
+              endTime: endIso,
               attendeeEmails: (meetingAttendee || leadEmail)
                 ? (meetingAttendee || leadEmail || '').split(',').map((e: string) => e.trim()).filter(Boolean)
                 : undefined,
