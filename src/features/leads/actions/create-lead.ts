@@ -168,11 +168,12 @@ export async function createLead(
   if (assignedTo && assignedTo !== userId) {
     import('@/features/notifications/services/notification.service').then(({ createNotification }) => {
       const leadName = parsed.data.empresa || [parsed.data.first_name, parsed.data.last_name].filter(Boolean).join(' ') || 'Lead';
+      const isInbound = parsed.data.is_inbound === true;
       createNotification({
         org_id: orgId,
         user_id: assignedTo,
-        type: 'lead_inbound',
-        title: `Novo lead atribuído: ${leadName}`,
+        type: isInbound ? 'lead_inbound' : 'activity_reminder',
+        title: isInbound ? `Novo lead inbound: ${leadName}` : `Novo lead atribuído: ${leadName}`,
         body: [parsed.data.lead_source, parsed.data.canal].filter(Boolean).join(' / ') || 'Criado manualmente',
         resource_type: 'lead',
         resource_id: leadId,
