@@ -42,10 +42,13 @@ export function useCallHangupDetection({
         (payload) => {
           const newRecord = payload.new as { duration_seconds?: number; status?: string };
           const duration = newRecord.duration_seconds ?? 0;
+          const status = newRecord.status;
 
-          // Any UPDATE from the webhook means the call has ended
-          // (channel-hangup is the only event the webhook processes)
-          onHangupRef.current(duration);
+          // Only trigger hangup when the call has a final status
+          // (channel-answer also updates the row but shouldn't end the UI)
+          if (status && status !== 'not_connected') {
+            onHangupRef.current(duration);
+          }
         },
       )
       .subscribe();
