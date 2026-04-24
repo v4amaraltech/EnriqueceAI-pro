@@ -134,6 +134,9 @@ export function LeadTimelineTab({ timeline }: LeadTimelineTabProps) {
                     {entry.ai_generated && (
                       <Badge variant="outline" className="h-4 px-1 text-[10px]">IA</Badge>
                     )}
+                    {(entry.metadata as Record<string, unknown> | null)?.source === 'external_api4com' && (
+                      <Badge variant="outline" className="h-4 px-1 text-[10px] border-amber-500/50 text-amber-600">Externa</Badge>
+                    )}
                   </div>
                   {relDate !== 'AGORA' && (
                     <span className="shrink-0 text-[11px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">

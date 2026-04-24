@@ -15,6 +15,11 @@ import {
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import type { CallStatus } from '@/features/calls/types';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import {
+  findLeadByPhoneService,
+  createExternalCallInteraction,
+  advanceExternalCallCadence,
+} from '@/features/calls/services/external-call.service';
 
 export const maxDuration = 60;
 
@@ -83,7 +88,7 @@ async function findMatchingCall(
 async function createCallFromWebhook(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
-): Promise<{ id: string } | null> {
+): Promise<{ call: { id: string } | null; leadId: string | null; userId: string; orgId: string } | null> {
   // Resolve user_id and org_id from the caller ramal
   const { data: conn } = (await from(supabase, 'api4com_connections' as never)
     .select('user_id, org_id')
@@ -96,23 +101,33 @@ async function createCallFromWebhook(
     return null;
   }
 
+  // Try to find matching lead by destination phone (outbound calls only)
+  const isOutbound = body.direction !== 'inbound';
+  let leadId: string | null = null;
+
+  if (isOutbound && body.called) {
+    const leadMatch = await findLeadByPhoneService(supabase, conn.org_id, body.called);
+    leadId = leadMatch?.leadId ?? null;
+  }
+
   const { data: newCall } = (await from(supabase, 'calls')
     .insert({
       org_id: conn.org_id,
       user_id: conn.user_id,
+      lead_id: leadId,
       origin: body.caller,
       destination: body.called,
       started_at: body.startedAt || new Date().toISOString(),
       duration_seconds: Number(body.duration) || 0,
       status: 'not_connected',
-      type: body.direction === 'inbound' ? 'inbound' : 'outbound',
+      type: isOutbound ? 'outbound' : 'inbound',
       recording_url: body.recordUrl || null,
-      metadata: { api4com_call_id: body.id },
+      metadata: { api4com_call_id: body.id, source: 'external_api4com' },
     })
     .select('id')
     .single()) as { data: { id: string } | null };
 
-  return newCall;
+  return { call: newCall, leadId, userId: conn.user_id, orgId: conn.org_id };
 }
 
 /** Process an API4COM event (runs in background via after()) */
@@ -125,10 +140,37 @@ async function processApi4ComEvent(
   if (!call) {
     // No matching call — auto-create from webhook for calls made outside EnriqueceAI
     if (body.eventType === 'channel-hangup') {
-      const created = await createCallFromWebhook(supabase, body);
-      if (created) {
-        logger.info('Auto-created call from webhook', { callId: created.id, api4comId: body.id });
-        await updateCallFromWebhook(supabase, created.id, 'not_connected', body);
+      const result = await createCallFromWebhook(supabase, body);
+      if (result?.call) {
+        logger.info('Auto-created external call', { callId: result.call.id, api4comId: body.id, leadId: result.leadId });
+        await updateCallFromWebhook(supabase, result.call.id, 'not_connected', body);
+
+        // Create interaction + advance cadence for outbound calls with matched lead
+        if (result.leadId && body.direction !== 'inbound') {
+          const duration = Number(body.duration) || 0;
+          const status = duration >= 50 ? 'significant' : 'no_contact';
+
+          await createExternalCallInteraction(supabase, {
+            orgId: result.orgId,
+            leadId: result.leadId,
+            userId: result.userId,
+            duration,
+            api4comId: body.id,
+            status,
+            recordingUrl: body.recordUrl,
+          });
+
+          // Advance cadence if current step is phone
+          const leadMatch = await findLeadByPhoneService(supabase, result.orgId, body.called);
+          if (leadMatch?.enrollmentId && leadMatch.stepChannel === 'phone') {
+            await advanceExternalCallCadence(supabase, {
+              enrollmentId: leadMatch.enrollmentId,
+              cadenceId: leadMatch.cadenceId!,
+              currentStep: leadMatch.currentStep!,
+            });
+            logger.info('Advanced cadence from external call', { leadId: result.leadId, enrollmentId: leadMatch.enrollmentId });
+          }
+        }
         return;
       }
     }
