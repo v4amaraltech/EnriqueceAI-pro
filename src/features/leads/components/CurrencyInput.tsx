@@ -9,9 +9,19 @@ const valueFormatter = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 });
 
-/** Format a raw numeric string (cents stored as string) to "123.000,00" */
-export function formatBRL(raw: string | undefined | null): string {
-  if (!raw) return '—';
+/** Format a raw value (cents as string OR reais as number) to "123.000,00" */
+export function formatBRL(raw: string | number | undefined | null): string {
+  if (raw == null || raw === '') return '—';
+  // If it's a number (reais from API) — display directly
+  if (typeof raw === 'number') {
+    return valueFormatter.format(raw);
+  }
+  // If string contains a dot (reais like "1094.4") — display directly
+  if (raw.includes('.')) {
+    const reais = parseFloat(raw);
+    if (!Number.isNaN(reais)) return valueFormatter.format(reais);
+  }
+  // Otherwise treat as centavos string (from UI input)
   const cents = parseInt(raw, 10);
   if (Number.isNaN(cents)) return raw;
   return valueFormatter.format(cents / 100);
