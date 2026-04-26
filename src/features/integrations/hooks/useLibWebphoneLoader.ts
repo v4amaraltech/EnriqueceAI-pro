@@ -65,6 +65,11 @@ export function useLibWebphoneLoader(): UseLibWebphoneLoaderReturn {
       };
     }
 
+    // Polyfill `require` for CommonJS-style libwebphone.js (prevents "require is not defined" error)
+    if (!(window as unknown as Record<string, unknown>).require) {
+      (window as unknown as Record<string, unknown>).require = () => ({});
+    }
+
     // Inject script
     const script = document.createElement('script');
     script.id = SCRIPT_ID;
