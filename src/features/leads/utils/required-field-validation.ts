@@ -43,6 +43,7 @@ export function getMissingRequiredFields(
       key: setting.field_key,
       label: def.label,
       fieldType: def.type,
+      options: setting.options?.length ? setting.options : def.defaultOptions,
       isCustom: false,
     });
   }
