@@ -328,18 +328,9 @@ export async function updateCalendarEvent(
     event.attendees = input.attendeeEmails.map((email) => ({ email }));
   }
 
-  const params = input.generateMeetLink
-    ? '?conferenceDataVersion=1&sendUpdates=all'
-    : '?sendUpdates=all';
-
-  if (input.generateMeetLink) {
-    event.conferenceData = {
-      createRequest: {
-        requestId: `enriqueceai-${Date.now()}`,
-        conferenceSolutionKey: { type: 'hangoutsMeet' },
-      },
-    };
-  }
+  // For updates, don't send conferenceData.createRequest — it causes 400 if a Meet link already exists.
+  // The existing conference is preserved automatically by Google Calendar on PATCH.
+  const params = '?sendUpdates=all';
 
   const response = await fetch(
     `${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}${params}`,
