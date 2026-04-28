@@ -93,6 +93,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  // Sync with server data when revalidatePath triggers a re-render with fresh activities
+  useEffect(() => {
+    setActivities(initialActivities);
+  }, [initialActivities]);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
