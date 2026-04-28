@@ -98,7 +98,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   useEffect(() => {
     setActivities(initialActivities);
   }, [initialActivities]);
-  const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
+  const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
   const [startNewLeadsOpen, setStartNewLeadsOpen] = useState(false);
@@ -283,6 +283,17 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         >
           Execução
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('returns')}
+          className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+            activeTab === 'returns'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
+          }`}
+        >
+          Retornos{scheduledReturns.length > 0 && ` (${scheduledReturns.length})`}
+        </button>
         {showPowerDialer && (
           <button
             type="button"
@@ -298,28 +309,25 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         )}
       </div>
 
-      {activeTab === 'dialer' && showPowerDialer ? (
-        <PowerDialerTab
-          initialQueue={dialerQueue}
-          stats={dialerStats ?? defaultStats}
-          preferences={dialerPreferences ?? defaultPrefs}
-          dialerProvider={dialerProvider}
-        />
-      ) : (
-        <>
-          {/* Pending calls section */}
-          <PendingCallsSection leads={pendingCalls} />
+      {activeTab === 'returns' ? (
+        /* Returns tab */
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <h2 className="text-lg font-semibold">
+              Retornos agendados ({scheduledReturns.length})
+            </h2>
+          </div>
 
-          {/* Scheduled returns section — always visible at the top */}
-          <div className="rounded-lg border-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-500/20">
-              <CalendarClock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
-              <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                Retornos agendados ({scheduledReturns.length})
-              </h2>
-            </div>
-            {scheduledReturns.length > 0 ? (
-              <div className="space-y-2 p-2">
+          {scheduledReturns.length > 0 ? (
+            <>
+              <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
+                <span>Atividade</span>
+                <span>Cadência</span>
+                <span>Lead</span>
+                <span />
+              </div>
+              <div className="space-y-2">
                 {scheduledReturns.map((activity) => (
                   <ActivityRow
                     key={`${activity.enrollmentId}:${activity.stepId}`}
@@ -332,12 +340,36 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                   />
                 ))}
               </div>
-            ) : (
-              <div className="px-4 py-6 text-center text-sm text-amber-700/60 dark:text-amber-400/50">
-                Nenhum retorno agendado
-              </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed border-amber-500/30 px-4 py-12 text-center text-sm text-[var(--muted-foreground)]">
+              Nenhum retorno agendado
+            </div>
+          )}
+
+          {/* Execution Sheet for returns */}
+          <ActivityExecutionSheet
+            activities={visibleActivities}
+            selectedIndex={selectedIndex}
+            onClose={handleClose}
+            onNavigate={handleNavigate}
+            onActivityDone={handleActivityDone}
+            onLeadLost={handleLeadLost}
+            dialerProvider={dialerProvider}
+            quickMode={false}
+          />
+        </div>
+      ) : activeTab === 'dialer' && showPowerDialer ? (
+        <PowerDialerTab
+          initialQueue={dialerQueue}
+          stats={dialerStats ?? defaultStats}
+          preferences={dialerPreferences ?? defaultPrefs}
+          dialerProvider={dialerProvider}
+        />
+      ) : (
+        <>
+          {/* Pending calls section */}
+          <PendingCallsSection leads={pendingCalls} />
 
           {/* Filters + Quick mode toggle */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
