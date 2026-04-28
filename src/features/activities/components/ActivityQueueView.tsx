@@ -311,14 +311,14 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           <PendingCallsSection leads={pendingCalls} />
 
           {/* Scheduled returns section — always visible at the top */}
-          {scheduledReturns.length > 0 && (
-            <div className="rounded-lg border-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-500/20">
-                <CalendarClock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
-                <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                  Retornos agendados ({scheduledReturns.length})
-                </h2>
-              </div>
+          <div className="rounded-lg border-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-500/20">
+              <CalendarClock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+              <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Retornos agendados ({scheduledReturns.length})
+              </h2>
+            </div>
+            {scheduledReturns.length > 0 ? (
               <div className="space-y-2 p-2">
                 {scheduledReturns.map((activity) => (
                   <ActivityRow
@@ -332,8 +332,12 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                   />
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="px-4 py-6 text-center text-sm text-amber-700/60 dark:text-amber-400/50">
+                Nenhum retorno agendado
+              </div>
+            )}
+          </div>
 
           {/* Filters + Quick mode toggle */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -207,7 +207,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
   const { data: scheduledRows } = (await from(supabase, 'scheduled_activities' as never)
-    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score)')
+    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, is_inbound, created_at)')
     .eq('status', 'pending')
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
