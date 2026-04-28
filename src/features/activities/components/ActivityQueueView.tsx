@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronDown, ListChecks, Zap } from 'lucide-react';
+import { ChevronDown, ListChecks, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -28,6 +28,7 @@ import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 import { PendingCallsSection } from './PendingCallsSection';
 import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
+import { ReturnsTab } from './ReturnsTab';
 import { StartNewLeadsModal } from './StartNewLeadsModal';
 
 interface ActivityQueueViewProps {
@@ -310,44 +311,15 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       </div>
 
       {activeTab === 'returns' ? (
-        /* Returns tab */
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <h2 className="text-lg font-semibold">
-              Retornos agendados ({scheduledReturns.length})
-            </h2>
-          </div>
-
-          {scheduledReturns.length > 0 ? (
-            <>
-              <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
-                <span>Atividade</span>
-                <span>Cadência</span>
-                <span>Lead</span>
-                <span />
-              </div>
-              <div className="space-y-2">
-                {scheduledReturns.map((activity) => (
-                  <ActivityRow
-                    key={`${activity.enrollmentId}:${activity.stepId}`}
-                    activity={activity}
-                    onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
-                    onIgnore={() => handleIgnore(activity)}
-                    onViewLead={() => handleViewLead(activity.lead.id)}
-                    onLeadWon={() => handleLeadWon(activity)}
-                    onLeadLost={() => handleLeadLost(activity)}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="rounded-lg border border-dashed border-amber-500/30 px-4 py-12 text-center text-sm text-[var(--muted-foreground)]">
-              Nenhum retorno agendado
-            </div>
-          )}
-
-          {/* Execution Sheet for returns */}
+        <>
+          <ReturnsTab
+            returns={scheduledReturns}
+            onExecute={(a) => setSelectedIndex(findGlobalIndex(a))}
+            onIgnore={handleIgnore}
+            onViewLead={handleViewLead}
+            onLeadWon={handleLeadWon}
+            onLeadLost={handleLeadLost}
+          />
           <ActivityExecutionSheet
             activities={visibleActivities}
             selectedIndex={selectedIndex}
@@ -358,7 +330,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             dialerProvider={dialerProvider}
             quickMode={false}
           />
-        </div>
+        </>
       ) : activeTab === 'dialer' && showPowerDialer ? (
         <PowerDialerTab
           initialQueue={dialerQueue}
