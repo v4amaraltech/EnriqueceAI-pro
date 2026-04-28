@@ -4,11 +4,10 @@ import { useCallback } from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { ChevronDown } from 'lucide-react';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 
 import { useOrganization } from '@/features/auth/hooks/useOrganization';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
-import { DateRangePicker } from '@/shared/components/DateRangePicker';
 
 import {
   DropdownMenu,
@@ -20,6 +19,23 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 
 import type { CadenceOption, DashboardFilters as Filters } from '../types';
+
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+function getLast12Months(): { value: string; label: string }[] {
+  const months: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    months.push({ value, label: label ?? value });
+  }
+  return months;
+}
 
 function GreenDot() {
   return <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />;
@@ -38,6 +54,11 @@ export function DashboardFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { members, isManager } = useOrganization();
+
+  const months = getLast12Months();
+  const currentMonthLabel =
+    months.find((m) => m.value === currentFilters.month)?.label ??
+    currentFilters.month;
 
   const updateParams = useCallback(
     (key: string, value: string | string[]) => {
@@ -65,17 +86,6 @@ export function DashboardFilters({
     [updateParams],
   );
 
-  const handleDateRangeChange = useCallback(
-    (from: string, to: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('dateFrom', from);
-      params.set('dateTo', to);
-      params.delete('month');
-      router.push(`${pathname}?${params.toString()}`);
-    },
-    [router, pathname, searchParams],
-  );
-
   const sdrMembers = members.filter((m) => m.status === 'active');
 
   const cadenceCount = currentFilters.cadenceIds.length > 0
@@ -88,12 +98,33 @@ export function DashboardFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {/* Date range picker */}
-      <DateRangePicker
-        from={currentFilters.dateFrom!}
-        to={currentFilters.dateTo!}
-        onChange={handleDateRangeChange}
-      />
+      {/* Month selector */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2 py-1 text-sm text-foreground transition-colors hover:bg-accent/80">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>{currentMonthLabel.toLowerCase()}</span>
+            <ChevronDown className="h-3 w-3 opacity-50" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {months.map((m) => (
+            <DropdownMenuCheckboxItem
+              key={m.value}
+              checked={m.value === currentFilters.month}
+              onCheckedChange={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set('month', m.value);
+                params.delete('dateFrom');
+                params.delete('dateTo');
+                router.push(`${pathname}?${params.toString()}`);
+              }}
+            >
+              {m.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Cadence filter */}
       {availableCadences.length > 0 && (

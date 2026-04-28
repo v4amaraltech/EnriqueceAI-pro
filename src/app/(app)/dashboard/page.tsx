@@ -34,13 +34,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = await searchParams;
   const defaults = getDefaultDateRange();
 
-  const dateFrom = typeof params.dateFrom === 'string' ? params.dateFrom : defaults.from;
-  const dateTo = typeof params.dateTo === 'string' ? params.dateTo : defaults.to;
-
-  // Derive month from dateTo (use most recent month as reference for goals/charts)
+  // Month-based filter (primary) — dateFrom/dateTo derived from month
   const month = typeof params.month === 'string'
     ? params.month
-    : dateTo.slice(0, 7);
+    : defaults.month;
+
+  // Derive date range from month
+  const [yearStr, monthStr] = month.split('-');
+  const monthStart = `${yearStr}-${monthStr}-01`;
+  const monthEndDate = new Date(Number(yearStr), Number(monthStr), 0);
+  const today = new Date();
+  const effectiveEnd = monthEndDate < today ? monthEndDate : today;
+  const dateFrom = monthStart;
+  const dateTo = format(effectiveEnd, 'yyyy-MM-dd');
 
   const filters: DashboardFilters = {
     month,
