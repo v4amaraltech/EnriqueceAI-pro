@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ListChecks, Zap } from 'lucide-react';
+import { CalendarClock, ChevronDown, ListChecks, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -165,8 +165,18 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // Unique leads being prospected
   const prospectingLeadsCount = useMemo(() => new Set(activities.map((a) => a.lead.id)).size, [activities]);
 
-  // Filtered activities (from visible only)
-  const filtered = useMemo(() => applyFilters(visibleActivities, filters), [visibleActivities, filters]);
+  // Separate scheduled returns from cadence activities
+  const scheduledReturns = useMemo(
+    () => visibleActivities.filter((a) => a.enrollmentId.startsWith('scheduled:')),
+    [visibleActivities],
+  );
+  const cadenceActivities = useMemo(
+    () => visibleActivities.filter((a) => !a.enrollmentId.startsWith('scheduled:')),
+    [visibleActivities],
+  );
+
+  // Filtered activities (cadence only — retornos are always shown separately)
+  const filtered = useMemo(() => applyFilters(cadenceActivities, filters), [cadenceActivities, filters]);
 
   // Auto-open first activity when quick mode is activated
   const handleToggleQuickMode = useCallback(() => {
@@ -299,6 +309,31 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         <>
           {/* Pending calls section */}
           <PendingCallsSection leads={pendingCalls} />
+
+          {/* Scheduled returns section — always visible at the top */}
+          {scheduledReturns.length > 0 && (
+            <div className="rounded-lg border-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-500/20">
+                <CalendarClock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+                <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  Retornos agendados ({scheduledReturns.length})
+                </h2>
+              </div>
+              <div className="space-y-2 p-2">
+                {scheduledReturns.map((activity) => (
+                  <ActivityRow
+                    key={`${activity.enrollmentId}:${activity.stepId}`}
+                    activity={activity}
+                    onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+                    onIgnore={() => handleIgnore(activity)}
+                    onViewLead={() => handleViewLead(activity.lead.id)}
+                    onLeadWon={() => handleLeadWon(activity)}
+                    onLeadLost={() => handleLeadLost(activity)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Filters + Quick mode toggle */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
