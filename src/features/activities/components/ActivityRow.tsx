@@ -73,21 +73,32 @@ const channelLabel: Record<string, string> = {
 /** Grid column definition shared with ActivityQueueView header */
 export const ACTIVITY_GRID_COLS = 'grid grid-cols-[minmax(140px,1.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_auto]';
 
+function formatScheduledTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+  if (isToday) return `Hoje ${time}`;
+  const date = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
+  return `${date} ${time}`;
+}
+
 export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
   const Icon = channelIcon[activity.channel] ?? Mail;
   const label = channelLabel[activity.channel] ?? activity.channel;
+  const isScheduled = activity.enrollmentId.startsWith('scheduled:');
 
   return (
     <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50`}>
       {/* Column 1: ATIVIDADE (tempo + canal) */}
       <div className="flex items-center gap-2 min-w-0">
         <span
-          className={`shrink-0 min-w-[50px] text-xs font-bold uppercase tabular-nums ${
+          className={`shrink-0 min-w-[80px] text-xs font-bold uppercase tabular-nums ${
             isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]'
           }`}
         >
-          {timeText}
+          {isScheduled ? formatScheduledTime(activity.nextStepDue) : timeText}
         </span>
         <Badge variant="outline" className="shrink-0 gap-1">
           <Icon className="h-3 w-3" />
@@ -95,14 +106,29 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
         </Badge>
       </div>
 
-      {/* Column 2: CADÊNCIA (nome + passo) */}
+      {/* Column 2: CADÊNCIA (nome + passo) or RETORNO (notes) */}
       <div className="min-w-0">
-        <p className="text-sm font-medium">
-          {activity.cadenceName}
-        </p>
-        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-          Passo {activity.stepOrder} de {activity.totalSteps}
-        </p>
+        {activity.enrollmentId.startsWith('scheduled:') ? (
+          <>
+            <p className="text-sm font-medium truncate">
+              Retorno agendado
+            </p>
+            {activity.callScript && (
+              <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] line-clamp-2">
+                {activity.callScript}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium">
+              {activity.cadenceName}
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Passo {activity.stepOrder} de {activity.totalSteps}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Column 3: LEAD (nome + email + engagement) */}
