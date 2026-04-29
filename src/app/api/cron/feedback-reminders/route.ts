@@ -6,6 +6,8 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+
 export const maxDuration = 60;
 
 interface PendingFeedback {
@@ -87,6 +89,18 @@ async function sendFeedbackReminders() {
       await from(supabase, 'closer_feedback_requests')
         .update({ reminder_sent_at: new Date().toISOString() } as Record<string, unknown>)
         .eq('id', fb.id);
+
+      // Notify managers that closer hasn't responded
+      createNotificationsForOrgMembers({
+        orgId: fb.org_id,
+        type: 'closer_feedback',
+        title: `Closer ${closer.name} não respondeu feedback`,
+        body: `O feedback da reunião com ${leadName} está pendente há mais de 3 dias.`,
+        resourceType: 'lead',
+        resourceId: fb.lead_id,
+        roleFilter: 'manager',
+      }).catch((err) => console.error('[feedback-reminders] notification error:', err));
+
       sent++;
     } else {
       console.error('[feedback-reminders] Failed to send to', closer.email, result.error);
