@@ -135,6 +135,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     // Build lead data once per enrollment
     const leadData = {
       ...enrollment.lead,
+      municipio: (enrollment.lead.endereco as Record<string, string> | null)?.municipio ?? null,
+      uf: (enrollment.lead.endereco as Record<string, string> | null)?.uf ?? null,
       primeiro_nome: enrollment.lead.first_name
         ?? enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
         ?? null,
@@ -215,7 +217,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
   const scheduledResult = (await from(supabase, 'scheduled_activities')
-    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
+    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
     .eq('status', 'pending')
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
@@ -249,6 +251,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     isCurrentStep: true,
     lead: {
       ...row.leads,
+      municipio: (row.leads.endereco as Record<string, string> | null)?.municipio ?? null,
+      uf: (row.leads.endereco as Record<string, string> | null)?.uf ?? null,
       primeiro_nome: row.leads.first_name
         ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
         ?? null,
