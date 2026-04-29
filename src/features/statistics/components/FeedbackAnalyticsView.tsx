@@ -161,7 +161,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
           subtitle={`${kpis.totalResponded} respondidos · ${kpis.pendingCount} pendentes`}
         />
         <KpiCard
-          label="Rating Médio"
+          label="Nota Média"
           value={kpis.averageRating != null ? `${kpis.averageRating}/5` : '—'}
           icon={Star}
         />
