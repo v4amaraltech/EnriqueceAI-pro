@@ -214,8 +214,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .map((c) => c.activity);
 
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
-  const { data: scheduledRows } = (await from(supabase, 'scheduled_activities' as never)
-    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, is_inbound, created_at)')
+  const scheduledResult = (await from(supabase, 'scheduled_activities')
+    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, municipio, uf, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
     .eq('status', 'pending')
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
@@ -225,7 +225,12 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       scheduled_at: string;
       notes: string | null;
       leads: RawLead;
-    }> | null };
+    }> | null; error: { message: string } | null };
+
+  if (scheduledResult.error) {
+    console.error('[activities] scheduled_activities query error:', scheduledResult.error.message);
+  }
+  const scheduledRows = scheduledResult.data;
 
   const scheduledActivities: PendingActivity[] = (scheduledRows ?? []).map((row) => ({
     enrollmentId: `scheduled:${row.id}`,
