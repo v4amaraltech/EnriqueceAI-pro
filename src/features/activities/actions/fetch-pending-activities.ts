@@ -6,7 +6,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
-import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
+import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
 import type { PendingActivity } from '../types';
 
@@ -35,6 +35,14 @@ interface RawLead {
   engagement_score: number | null;
   is_inbound: boolean;
   created_at: string;
+  phones: LeadPhone[] | null;
+  emails: LeadEmail[] | null;
+  job_title: string | null;
+  lead_source: string | null;
+  canal: string | null;
+  segmento: string | null;
+  assigned_to: string | null;
+  custom_field_values: Record<string, string> | null;
 }
 
 interface EnrollmentRow {

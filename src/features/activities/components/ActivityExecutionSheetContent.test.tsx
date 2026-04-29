@@ -49,6 +49,8 @@ const baseLead = {
   municipio: null as string | null,
   uf: null as string | null,
   porte: null as string | null,
+  first_name: null,
+  last_name: null,
   primeiro_nome: null as string | null,
   socios: null,
   endereco: null,
@@ -62,6 +64,14 @@ const baseLead = {
   engagement_score: null as number | null,
   is_inbound: false,
   created_at: '2026-01-15T10:00:00Z',
+  phones: null,
+  emails: null,
+  job_title: null,
+  lead_source: null,
+  canal: null,
+  segmento: null,
+  assigned_to: null,
+  custom_field_values: null,
 };
 
 function makeActivity(channel: string, overrides: Partial<PendingActivity> = {}): PendingActivity {

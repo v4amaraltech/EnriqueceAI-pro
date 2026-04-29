@@ -48,7 +48,9 @@ const mockLead: ActivityLead = {
   municipio: 'São Paulo',
   uf: 'SP',
   porte: 'ME',
-  primeiro_nome: 'João',
+  first_name: null,
+  last_name: null,
+  primeiro_nome: 'John',
   socios: null,
   endereco: null,
   instagram: null,
@@ -61,6 +63,14 @@ const mockLead: ActivityLead = {
   engagement_score: null,
   is_inbound: false,
   created_at: '2026-01-15T10:00:00Z',
+  phones: null,
+  emails: null,
+  job_title: null,
+  lead_source: null,
+  canal: null,
+  segmento: null,
+  assigned_to: null,
+  custom_field_values: null,
 };
 
 // ---------------------------------------------------------------------------

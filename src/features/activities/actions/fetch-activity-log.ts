@@ -6,7 +6,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
-import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
+import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
 import type { PendingActivity } from '../types';
 
@@ -21,6 +21,8 @@ interface RawLead {
   municipio: string | null;
   uf: string | null;
   porte: string | null;
+  first_name: string | null;
+  last_name: string | null;
   socios: LeadSocio[] | null;
   endereco: LeadAddress | null;
   instagram: string | null;
@@ -33,6 +35,14 @@ interface RawLead {
   engagement_score: number | null;
   is_inbound: boolean;
   created_at: string;
+  phones: LeadPhone[] | null;
+  emails: LeadEmail[] | null;
+  job_title: string | null;
+  lead_source: string | null;
+  canal: string | null;
+  segmento: string | null;
+  assigned_to: string | null;
+  custom_field_values: Record<string, string> | null;
 }
 
 interface EnrollmentRow {
@@ -163,6 +173,14 @@ export async function fetchActivityLog(
       lead: {
         ...enrollment.lead,
         primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+        phones: enrollment.lead.phones ?? null,
+        emails: enrollment.lead.emails ?? null,
+        job_title: enrollment.lead.job_title ?? null,
+        lead_source: enrollment.lead.lead_source ?? null,
+        canal: enrollment.lead.canal ?? null,
+        segmento: enrollment.lead.segmento ?? null,
+        assigned_to: enrollment.lead.assigned_to ?? null,
+        custom_field_values: enrollment.lead.custom_field_values ?? null,
       },
       activityName: currentStep.activity_name ?? null,
       callScript: currentStep.instructions ?? null,

@@ -1,5 +1,5 @@
 import type { ChannelType, InteractionType } from '@/features/cadences/types';
-import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
+import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
 // Lead info embedded in a pending activity
 export interface ActivityLead {
@@ -13,6 +13,8 @@ export interface ActivityLead {
   municipio: string | null;
   uf: string | null;
   porte: string | null;
+  first_name: string | null;
+  last_name: string | null;
   primeiro_nome: string | null;
   // Enrichment data for sidebar
   socios: LeadSocio[] | null;
@@ -27,6 +29,14 @@ export interface ActivityLead {
   engagement_score: number | null;
   is_inbound: boolean;
   created_at: string;
+  phones: LeadPhone[] | null;
+  emails: LeadEmail[] | null;
+  job_title: string | null;
+  lead_source: string | null;
+  canal: string | null;
+  segmento: string | null;
+  assigned_to: string | null;
+  custom_field_values: Record<string, string> | null;
 }
 
 // A single pending activity derived from enrollment + step + cadence
