@@ -31,20 +31,23 @@ export async function fetchLeads(
     .eq('org_id', orgId)
     .is('deleted_at', null);
 
-  // Apply filters
-  if (filters.status) {
+  // When searching by text, skip other filters so the SDR always finds the lead
+  const hasSearch = !!filters.search?.trim();
+
+  // Apply filters (skipped when searching)
+  if (!hasSearch && filters.status) {
     query = query.eq('status', filters.status);
   }
-  if (filters.enrichment_status) {
+  if (!hasSearch && filters.enrichment_status) {
     query = query.eq('enrichment_status', filters.enrichment_status);
   }
-  if (filters.porte) {
+  if (!hasSearch && filters.porte) {
     query = query.eq('porte', filters.porte);
   }
-  if (filters.cnae) {
+  if (!hasSearch && filters.cnae) {
     query = query.ilike('cnae', `${filters.cnae}%`);
   }
-  if (filters.uf) {
+  if (!hasSearch && filters.uf) {
     query = query.eq('endereco->>uf', filters.uf);
   }
   if (filters.assigned_to) {
@@ -54,15 +57,15 @@ export async function fetchLeads(
       query = query.eq('assigned_to', filters.assigned_to);
     }
   }
-  if (filters.lead_source) {
+  if (!hasSearch && filters.lead_source) {
     query = query.eq('lead_source', filters.lead_source);
   }
-  if (filters.canal) {
+  if (!hasSearch && filters.canal) {
     query = query.eq('canal', filters.canal);
   }
 
-  // Filter by cadence enrollment
-  if (filters.cadence_id) {
+  // Filter by cadence enrollment (skipped when searching)
+  if (!hasSearch && filters.cadence_id) {
     if (filters.cadence_id === '__none__') {
       // Leads without active enrollment — use database function (efficient, no ID limit)
       const { data: noEnrollmentIds } = await (supabase.rpc as any)('leads_without_active_enrollment', {
