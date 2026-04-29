@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 import { logLeadEventBulk } from './log-lead-event';
 
@@ -46,18 +47,22 @@ export async function bulkAssignLeads(
   }
 
   // Fetch assigned user name for log message
-  const { data: targetUser } = (await from(supabase, 'organization_members')
-    .select('full_name')
-    .eq('user_id', userId)
-    .eq('org_id', orgId)
-    .single()) as { data: { full_name: string | null } | null };
+  let assigneeName = 'Usuário';
+  try {
+    const admin = createAdminSupabaseClient();
+    const { data } = await admin.auth.admin.getUserById(userId);
+    if (data?.user) {
+      const meta = data.user.user_metadata as Record<string, string> | undefined;
+      assigneeName = meta?.full_name ?? meta?.name ?? data.user.email?.split('@')[0] ?? 'Usuário';
+    }
+  } catch { /* fallback to default */ }
 
   logLeadEventBulk(supabase, {
     orgId,
     leadIds,
     userId: auth.data.userId,
     event: 'assigned',
-    message: `Responsável alterado para: ${targetUser?.full_name ?? 'Usuário'}`,
+    message: `Responsável alterado para: ${assigneeName}`,
     metadata: { assigned_to: userId },
   });
 
