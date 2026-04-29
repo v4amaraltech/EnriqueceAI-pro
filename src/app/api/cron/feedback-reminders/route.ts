@@ -7,6 +7,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
 export const maxDuration = 60;
 
@@ -23,6 +24,7 @@ interface CloserInfo {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
 }
 
 interface LeadInfo {
@@ -59,7 +61,7 @@ async function sendFeedbackReminders() {
   const leadIds = [...new Set(pending.map((p) => p.lead_id))];
 
   const [closersResult, leadsResult] = await Promise.all([
-    from(supabase, 'closers').select('id, name, email').in('id', closerIds) as Promise<{ data: CloserInfo[] | null }>,
+    from(supabase, 'closers').select('id, name, email, phone').in('id', closerIds) as Promise<{ data: CloserInfo[] | null }>,
     from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds).is('deleted_at', null) as Promise<{ data: LeadInfo[] | null }>,
   ]);
 
@@ -89,6 +91,14 @@ async function sendFeedbackReminders() {
       await from(supabase, 'closer_feedback_requests')
         .update({ reminder_sent_at: new Date().toISOString() } as Record<string, unknown>)
         .eq('id', fb.id);
+
+      // Send WhatsApp reminder if closer has phone
+      if (closer.phone && validateBrazilianPhone(closer.phone)) {
+        WhatsAppService.sendMessage(fb.org_id, {
+          to: closer.phone,
+          body: `Olá ${closer.name}! 👋\n\nAinda não recebemos seu feedback sobre a reunião com *${leadName}*.\n\nSua avaliação é muito importante para melhorarmos a qualidade dos leads.\n\n📋 Responda aqui: ${feedbackUrl}\n\n_Leva menos de 1 minuto!_`,
+        }, supabase).catch((err) => console.error('[feedback-reminders] WhatsApp error:', err));
+      }
 
       // Notify managers that closer hasn't responded
       createNotificationsForOrgMembers({
