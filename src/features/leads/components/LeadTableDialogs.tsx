@@ -112,7 +112,7 @@ export function AssignDialog({ open, onOpenChange, members, assignTarget, onTarg
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reatribuir leads</DialogTitle>
+          <DialogTitle>Atribuir leads</DialogTitle>
           <DialogDescription>
             Selecione o responsável para {selectedSize} lead{selectedSize > 1 ? 's' : ''}.
           </DialogDescription>
@@ -134,7 +134,7 @@ export function AssignDialog({ open, onOpenChange, members, assignTarget, onTarg
             Cancelar
           </Button>
           <Button onClick={onConfirm} disabled={!assignTarget || isPending}>
-            {isPending ? 'Reatribuindo...' : 'Reatribuir'}
+            {isPending ? 'Atribuindo...' : 'Atribuir'}
           </Button>
         </DialogFooter>
       </DialogContent>

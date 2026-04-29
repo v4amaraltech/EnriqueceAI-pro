@@ -272,7 +272,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     startTransition(async () => {
       const result = await bulkAssignLeads(ids, assignTarget);
       if (result.success) {
-        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} reatribuído${result.data.count > 1 ? 's' : ''}`);
+        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} atribuído${result.data.count > 1 ? 's' : ''}`);
         setSelected(new Set());
         setShowAssignDialog(false);
         router.refresh();
@@ -417,7 +417,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
               disabled={isPending}
             >
               <UserCheck className="mr-1 h-3.5 w-3.5" />
-              Reatribuir
+              Atribuir
             </Button>
             <Button
               variant="outline"
