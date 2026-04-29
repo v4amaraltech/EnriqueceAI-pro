@@ -63,14 +63,17 @@ export async function fetchLeadTimeline(
   if (performerIds.length > 0) {
     try {
       const adminClient = createAdminSupabaseClient();
-      const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-      for (const u of usersData?.users ?? []) {
-        if (performerIds.includes(u.id)) {
-          const meta = u.user_metadata as Record<string, unknown> | undefined;
-          const name = (meta?.full_name ?? meta?.name ?? '') as string;
-          userNameMap.set(u.id, name || u.email?.split('@')[0] || u.id.slice(0, 8));
-        }
-      }
+      await Promise.all(
+        performerIds.map(async (id) => {
+          const { data } = await adminClient.auth.admin.getUserById(id);
+          if (data?.user) {
+            const u = data.user;
+            const meta = u.user_metadata as Record<string, unknown> | undefined;
+            const name = (meta?.full_name ?? meta?.name ?? '') as string;
+            userNameMap.set(u.id, name || u.email?.split('@')[0] || u.id.slice(0, 8));
+          }
+        }),
+      );
     } catch {
       // Fallback silently
     }

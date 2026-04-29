@@ -51,18 +51,19 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   try {
     const adminClient = createAdminSupabaseClient();
     const userIds = sdrs.map((s) => s.user_id);
-    const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-    if (usersData?.users) {
-      for (const u of usersData.users) {
-        if (userIds.includes(u.id)) {
+    await Promise.all(
+      userIds.map(async (id) => {
+        const { data } = await adminClient.auth.admin.getUserById(id);
+        if (data?.user) {
+          const u = data.user;
           const meta = u.user_metadata as Record<string, unknown> | undefined;
           const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
           const avatarUrl = (meta?.avatar_url ?? meta?.picture ?? '') as string;
           const displayName = fullName || (u.email ? u.email.split('@')[0]! : u.id.slice(0, 8));
           userInfoMap.set(u.id, { name: displayName, avatarUrl: avatarUrl || undefined });
         }
-      }
-    }
+      }),
+    );
   } catch {
     // Fallback: if service_role key is missing, use truncated user_id
   }

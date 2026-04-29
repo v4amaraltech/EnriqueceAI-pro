@@ -39,21 +39,22 @@ export default async function CallDailyTargetsPage() {
 
   const members = membersResult.data ?? [];
 
-  // Get display names via admin client
+  // Get display names via admin client (getUserById — listUsers fails)
   const nameMap = new Map<string, string>();
   try {
     const adminClient = createAdminSupabaseClient();
-    const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-    if (usersData?.users) {
-      const userIds = new Set(members.map((m) => m.user_id));
-      for (const u of usersData.users) {
-        if (userIds.has(u.id)) {
+    const userIds = members.map((m) => m.user_id);
+    await Promise.all(
+      userIds.map(async (id) => {
+        const { data } = await adminClient.auth.admin.getUserById(id);
+        if (data?.user) {
+          const u = data.user;
           const meta = u.user_metadata as Record<string, unknown> | undefined;
           const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
           nameMap.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
         }
-      }
-    }
+      }),
+    );
   } catch {
     // Fallback
   }

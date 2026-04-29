@@ -159,14 +159,18 @@ export async function getResponseTimeData(
   const nameMap = new Map<string, { name: string; avatarUrl: string | null }>();
   try {
     const admin = createAdminSupabaseClient();
-    const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 100 });
-    if (authUsers?.users) {
-      for (const u of authUsers.users) {
-        const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
-        const avatarUrl = (u.user_metadata?.avatar_url as string) || (u.user_metadata?.picture as string) || null;
-        nameMap.set(u.id, { name, avatarUrl });
-      }
-    }
+    const userIdsToResolve = [...userMap.keys()];
+    await Promise.all(
+      userIdsToResolve.map(async (id) => {
+        const { data } = await admin.auth.admin.getUserById(id);
+        if (data?.user) {
+          const u = data.user;
+          const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
+          const avatarUrl = (u.user_metadata?.avatar_url as string) || (u.user_metadata?.picture as string) || null;
+          nameMap.set(u.id, { name, avatarUrl });
+        }
+      }),
+    );
   } catch { /* fallback to truncated IDs */ }
 
   const byUser: ResponseTimeByUser[] = Array.from(userMap.entries())

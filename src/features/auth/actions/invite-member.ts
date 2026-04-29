@@ -58,9 +58,23 @@ export async function inviteMember(
     const admin = createAdminSupabaseClient();
     const redirectTo = `${getAppUrl()}/api/auth/confirm`;
 
-    // Check if user already exists
-    const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });
-    const existingUser = usersData?.users?.find((u) => u.email === parsed.data.email);
+    // Check if user already exists by email — search org members via getUserById
+    let existingUser: { id: string; email?: string } | undefined;
+    {
+      const { data: allMembers } = (await from(admin, 'organization_members')
+        .select('user_id')
+        .eq('status', 'active')) as { data: Array<{ user_id: string }> | null };
+
+      if (allMembers) {
+        for (const member of allMembers) {
+          const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
+          if (userData?.user?.email === parsed.data.email) {
+            existingUser = userData.user;
+            break;
+          }
+        }
+      }
+    }
 
     if (existingUser) {
       // User already exists — just add to org with active status

@@ -75,7 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Fetch subscription, members and user names in parallel
   const orgId = memberData.organization.id;
 
-  const [subscriptionResult, membersResult, namesResult, pendingCount] = await Promise.all([
+  const [subscriptionResult, membersResult, pendingCount] = await Promise.all([
     (from(supabase, 'subscriptions')
       .select('status, current_period_end')
       .eq('org_id', orgId)
@@ -85,28 +85,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .select('*')
       .eq('org_id', orgId) as unknown as Promise<{ data: OrganizationMemberRow[] | null }>),
 
-    (async () => {
-      const map = new Map<string, { name: string; avatar_url?: string }>();
-      try {
-        const adminClient = createAdminSupabaseClient();
-        const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-        if (usersData?.users) {
-          for (const u of usersData.users) {
-            const meta = u.user_metadata as Record<string, unknown> | undefined;
-            const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-            const avatarUrl = (meta?.avatar_url ?? '') as string;
-            map.set(u.id, {
-              name: fullName || u.email?.split('@')[0] || u.id.slice(0, 8),
-              avatar_url: avatarUrl || undefined,
-            });
-          }
-        }
-      } catch {
-        // Fallback: names will be undefined, consumers use user_id slice
-      }
-      return map;
-    })(),
-
     fetchPendingActivitiesCount(),
   ]);
 
@@ -114,7 +92,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
   const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
   const members = membersResult.data;
-  const userInfoMap = namesResult;
+
+  // Resolve user names via getUserById (listUsers fails with "Database error finding users")
+  const userInfoMap = new Map<string, { name: string; avatar_url?: string }>();
+  try {
+    const adminClient = createAdminSupabaseClient();
+    const memberUserIds = (members ?? []).map((m) => m.user_id);
+    await Promise.all(
+      memberUserIds.map(async (id) => {
+        const { data } = await adminClient.auth.admin.getUserById(id);
+        if (data?.user) {
+          const u = data.user;
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+          const avatarUrl = (meta?.avatar_url ?? '') as string;
+          userInfoMap.set(u.id, {
+            name: fullName || u.email?.split('@')[0] || u.id.slice(0, 8),
+            avatar_url: avatarUrl || undefined,
+          });
+        }
+      }),
+    );
+  } catch {
+    // Fallback: names will be undefined, consumers use user_id slice
+  }
 
   const enrichedMembers = (members ?? []).map((m) => ({
     ...m,

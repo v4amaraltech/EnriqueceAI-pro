@@ -39,18 +39,18 @@ export async function fetchImports(): Promise<ActionResult<ImportListResult>> {
   if (userIds.length > 0) {
     try {
       const adminClient = createAdminSupabaseClient();
-      const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-      if (usersData?.users) {
-        const targetIds = new Set(userIds);
-        for (const u of usersData.users) {
-          if (targetIds.has(u.id)) {
+      await Promise.all(
+        userIds.map(async (id) => {
+          const { data } = await adminClient.auth.admin.getUserById(id);
+          if (data?.user) {
+            const u = data.user;
             const meta = u.user_metadata as Record<string, unknown> | undefined;
             const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
             const email = u.email ?? '';
             userMap[u.id] = fullName || email.split('@')[0] || u.id.slice(0, 8);
           }
-        }
-      }
+        }),
+      );
     } catch {
       for (const id of userIds) {
         userMap[id] = id.slice(0, 8);

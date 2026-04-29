@@ -36,13 +36,18 @@ export async function createOrgWithManager(
   const { orgName, managerName, managerEmail, tempPassword } = parsed.data;
   const admin = createAdminSupabaseClient();
 
-  // Check if email already exists
-  const { data: existingUsers } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const emailExists = existingUsers?.users?.some(
-    (u) => u.email?.toLowerCase() === managerEmail.toLowerCase(),
-  );
-  if (emailExists) {
-    return { success: false, error: 'Esse email já está cadastrado' };
+  // Check if email already exists — search all org members by getUserById
+  {
+    const { data: allMembers } = (await from(admin, 'organization_members')
+      .select('user_id')) as { data: Array<{ user_id: string }> | null };
+    if (allMembers) {
+      for (const member of allMembers) {
+        const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
+        if (userData?.user?.email?.toLowerCase() === managerEmail.toLowerCase()) {
+          return { success: false, error: 'Esse email já está cadastrado' };
+        }
+      }
+    }
   }
 
   // Create user — trigger handle_new_user() auto-creates org + member + subscription

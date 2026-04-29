@@ -51,10 +51,11 @@ export async function getRankingData(
     if (allUserIds.size > 0) {
       try {
         const adminClient = createAdminSupabaseClient();
-        const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
-        if (usersData?.users) {
-          for (const u of usersData.users) {
-            if (allUserIds.has(u.id)) {
+        await Promise.all(
+          [...allUserIds].map(async (id) => {
+            const { data } = await adminClient.auth.admin.getUserById(id);
+            if (data?.user) {
+              const u = data.user;
               const meta = u.user_metadata as { full_name?: string; avatar_url?: string } | undefined;
               const name = meta?.full_name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
               userNameMap.set(u.id, name);
@@ -62,8 +63,8 @@ export async function getRankingData(
                 userAvatarMap.set(u.id, meta.avatar_url);
               }
             }
-          }
-        }
+          }),
+        );
       } catch {
         // Fallback: keep userId truncated
       }
