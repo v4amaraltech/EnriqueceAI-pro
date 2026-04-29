@@ -149,10 +149,10 @@ export async function executeActivity(
       return { success: false, error: waResult.error ?? 'Falha ao enviar WhatsApp' };
     }
   } else if (channel === 'email') {
-    // Email flow (30s timeout)
+    // Email flow (30s timeout) — send from the SDR's own Gmail, not the cadence creator's
     const emailResult = await withTimeout(
       EmailService.sendEmail(
-        cadenceCreatedBy,
+        userId,
         orgId,
         {
           to,
