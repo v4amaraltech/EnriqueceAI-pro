@@ -26,33 +26,30 @@ export async function buildMemberInfoMap(
 
   const memberIdSet = new Set(rawMembers.map((m) => m.user_id));
 
-  // Use service role client to list auth users (auth.admin requires service_role key)
+  // Resolve each member individually via auth.admin.getUserById
+  // (listUsers fails with "Database error finding users" on this project)
   try {
     const { createServiceRoleClient } = await import('@/lib/supabase/service');
     const service = createServiceRoleClient();
-    const { data: usersData, error } = await service.auth.admin.listUsers({ perPage: 1000 });
+    const result = new Map<string, MemberInfo>();
 
-    if (error) {
-      console.error('[member-lookup] listUsers error:', error.message);
-    }
-
-    if (usersData?.users) {
-      const result = new Map<string, MemberInfo>();
-      for (const u of usersData.users) {
-        if (memberIdSet.has(u.id)) {
-          const meta = u.user_metadata as Record<string, string> | undefined;
-          const name = meta?.full_name ?? meta?.name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
-          const avatarUrl = meta?.avatar_url;
-          result.set(u.id, { email: u.email ?? u.id.slice(0, 8), name, avatarUrl });
-        }
-      }
-      for (const m of rawMembers) {
-        if (!result.has(m.user_id)) {
+    await Promise.all(
+      rawMembers.map(async (m) => {
+        const { data, error } = await service.auth.admin.getUserById(m.user_id);
+        if (error || !data?.user) {
+          console.error(`[member-lookup] getUserById(${m.user_id.slice(0, 8)}) error:`, error?.message);
           result.set(m.user_id, { email: m.user_id.slice(0, 8), name: m.user_id.slice(0, 8) });
+          return;
         }
-      }
-      return result;
-    }
+        const u = data.user;
+        const meta = u.user_metadata as Record<string, string> | undefined;
+        const name = meta?.full_name ?? meta?.name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
+        const avatarUrl = meta?.avatar_url;
+        result.set(u.id, { email: u.email ?? u.id.slice(0, 8), name, avatarUrl });
+      }),
+    );
+
+    return result;
   } catch (err) {
     console.error('[member-lookup] Failed to resolve member names:', err);
   }
