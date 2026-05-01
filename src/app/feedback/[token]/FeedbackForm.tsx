@@ -23,7 +23,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!result || !rating) return;
+    const needsRating = result === 'meeting_done';
+    if (!result || (needsRating && !rating)) return;
 
     setSubmitting(true);
     setError('');
@@ -32,7 +33,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, result, rating, comment: comment.trim() || null }),
+        body: JSON.stringify({ token, result, rating: needsRating ? rating : null, comment: comment.trim() || null }),
       });
 
       if (res.ok) {
@@ -80,7 +81,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
                 name="result"
                 value={option.value}
                 checked={result === option.value}
-                onChange={() => setResult(option.value)}
+                onChange={() => { setResult(option.value); if (option.value !== 'meeting_done') setRating(0); }}
                 className="accent-primary"
               />
               <span className="text-sm text-[var(--foreground)]">{option.label}</span>
@@ -89,37 +90,39 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       </div>
 
-      {/* Rating */}
-      <div>
-        <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
-          Qualidade do lead (1-5) <span className="text-primary">*</span>
-        </label>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={() => setRating(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(0)}
-              className="text-3xl transition-transform hover:scale-110 focus:outline-none"
-            >
-              <span style={{ color: star <= (hoverRating || rating) ? 'var(--primary)' : 'var(--muted-foreground)' }}>
-                &#9733;
-              </span>
-            </button>
-          ))}
+      {/* Rating — only for meeting_done */}
+      {result === 'meeting_done' && (
+        <div>
+          <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
+            Qualidade do lead (1-5) <span className="text-primary">*</span>
+          </label>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setRating(star)}
+                onMouseEnter={() => setHoverRating(star)}
+                onMouseLeave={() => setHoverRating(0)}
+                className="text-3xl transition-transform hover:scale-110 focus:outline-none"
+              >
+                <span style={{ color: star <= (hoverRating || rating) ? 'var(--primary)' : 'var(--muted-foreground)' }}>
+                  &#9733;
+                </span>
+              </button>
+            ))}
+          </div>
+          {rating > 0 && (
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              {rating === 1 && 'Muito baixa'}
+              {rating === 2 && 'Baixa'}
+              {rating === 3 && 'Regular'}
+              {rating === 4 && 'Boa'}
+              {rating === 5 && 'Excelente'}
+            </p>
+          )}
         </div>
-        {rating > 0 && (
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">
-            {rating === 1 && 'Muito baixa'}
-            {rating === 2 && 'Baixa'}
-            {rating === 3 && 'Regular'}
-            {rating === 4 && 'Boa'}
-            {rating === 5 && 'Excelente'}
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Comment */}
       <div>
@@ -141,7 +144,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
       <button
         type="submit"
-        disabled={submitting || !result || !rating}
+        disabled={submitting || !result || (result === 'meeting_done' && !rating)}
         className="w-full bg-primary hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar Feedback'}

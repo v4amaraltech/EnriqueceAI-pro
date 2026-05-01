@@ -43,7 +43,9 @@ export async function POST(request: Request) {
     if (!result || !VALID_RESULTS.includes(result)) {
       return NextResponse.json({ error: 'Resultado inválido' }, { status: 400 });
     }
-    if (!rating || typeof rating !== 'number' || rating < 1 || rating > 5) {
+    // Rating is required only for meeting_done
+    const needsRating = result === 'meeting_done';
+    if (needsRating && (!rating || typeof rating !== 'number' || rating < 1 || rating > 5)) {
       return NextResponse.json({ error: 'Nota deve ser entre 1 e 5' }, { status: 400 });
     }
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
     const { data: updated, error: updateError } = await from(supabase, 'closer_feedback_requests')
       .update({
         result,
-        rating,
+        rating: rating ?? null,
         comment: comment || null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
