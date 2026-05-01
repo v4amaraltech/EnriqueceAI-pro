@@ -81,13 +81,13 @@ export async function sendMeetingBriefingEmail(
         .eq('org_id', orgId)
         .order('sort_order') as Promise<{ data: CustomFieldDef[] | null }>,
       from(supabase, 'calls')
-        .select('recording_url, duration_seconds, transcription')
+        .select('id, recording_url, duration_seconds, transcription')
         .eq('lead_id', leadId)
         .eq('org_id', orgId)
         .not('recording_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle() as Promise<{ data: { recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
+        .maybeSingle() as Promise<{ data: { id: string; recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
     ]);
 
     const lead = leadResult.data;
@@ -140,7 +140,7 @@ export async function sendMeetingBriefingEmail(
       feedbackUrl,
       leadUrl: `${appUrl}/leads/${leadId}`,
       customFields: customFieldsResult.data ?? [],
-      recordingUrl: lastCall?.recording_url ?? null,
+      recordingUrl: lastCall?.id ? `${appUrl}/api/calls/recording/${lastCall.id}` : null,
       recordingDuration: lastCall?.duration_seconds ?? null,
       transcription: lastCall?.transcription ?? null,
     });
