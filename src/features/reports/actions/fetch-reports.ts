@@ -38,10 +38,10 @@ export async function fetchReportData(
   const { orgId, supabase } = auth.data;
 
   const sinceDate = dateRange
-    ? new Date(dateRange.from).toISOString()
+    ? `${dateRange.from}T03:00:00Z`
     : getPeriodDate(period);
   const untilDate = dateRange
-    ? new Date(dateRange.to + 'T23:59:59').toISOString()
+    ? `${dateRange.to}T23:59:59-03:00`
     : undefined;
 
   // Fetch org cadence IDs for enrollment isolation (cadence_enrollments has no org_id column)

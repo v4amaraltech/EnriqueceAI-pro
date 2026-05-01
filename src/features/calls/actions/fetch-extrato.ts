@@ -17,7 +17,7 @@ export async function fetchExtrato(
     const { orgId } = await getManagerOrgId();
     const supabase = await createServerSupabaseClient();
     const { start, end } = dateRange
-      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      ? { start: `${dateRange.from}T03:00:00Z`, end: `${dateRange.to}T23:59:59-03:00` }
       : getPeriodDates(period);
 
     const data = await fetchExtratoData(supabase, orgId, start, end, userIds);

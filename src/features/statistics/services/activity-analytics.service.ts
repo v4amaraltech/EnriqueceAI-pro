@@ -160,8 +160,9 @@ function calculateKpis(
 ): ActivityAnalyticsKpis {
   const total = interactions.length;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // BRT midnight: shift "now" by -3h then truncate to UTC midnight
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
   const activitiesToday = interactions.filter(
     (i) => new Date(i.created_at) >= todayStart,
   ).length;
@@ -204,16 +205,20 @@ function calculateDailyTrend(
   const dayMap = new Map<string, number>();
 
   for (const interaction of interactions) {
-    const day = new Date(interaction.created_at).toISOString().split('T')[0] ?? '';
+    // Convert UTC timestamp to BRT (UTC-3) for correct date grouping
+    const brt = new Date(new Date(interaction.created_at).getTime() - 3 * 60 * 60 * 1000);
+    const day = brt.toISOString().split('T')[0] ?? '';
     dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
   }
 
   const result: DailyActivityEntry[] = [];
   const current = new Date(start);
-  current.setHours(0, 0, 0, 0);
+  current.setUTCHours(0, 0, 0, 0);
 
   while (current <= end) {
-    const key = current.toISOString().split('T')[0] ?? '';
+    // Use BRT-adjusted date for key generation
+    const brtCurrent = new Date(current.getTime() - 3 * 60 * 60 * 1000);
+    const key = brtCurrent.toISOString().split('T')[0] ?? '';
     result.push({
       date: key,
       label: `${current.getDate().toString().padStart(2, '0')}/${(current.getMonth() + 1).toString().padStart(2, '0')}`,
@@ -247,8 +252,9 @@ function calculateActivityTypes(interactions: InteractionQueryRow[]): ActivityTy
 }
 
 function calculateGoal(interactions: InteractionQueryRow[], target: number): GoalData {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // BRT midnight: shift "now" by -3h then truncate to UTC midnight, shift back
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
   const actual = interactions.filter(
     (i) => new Date(i.created_at) >= todayStart,
   ).length;

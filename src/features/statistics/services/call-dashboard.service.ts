@@ -111,7 +111,9 @@ function calculateHourlyDistribution(calls: CallRow[]): HourlyCallEntry[] {
   const hourCounts = new Array<number>(24).fill(0);
 
   for (const call of calls) {
-    const hour = new Date(call.started_at).getHours();
+    // Convert UTC timestamp to BRT (UTC-3) for correct hour extraction
+    const brt = new Date(new Date(call.started_at).getTime() - 3 * 60 * 60 * 1000);
+    const hour = brt.getUTCHours();
     hourCounts[hour] = (hourCounts[hour] ?? 0) + 1;
   }
 

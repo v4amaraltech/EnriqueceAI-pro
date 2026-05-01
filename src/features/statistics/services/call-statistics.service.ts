@@ -75,10 +75,12 @@ function calculateKpis(calls: CallRow[]): CallStatisticsKpis {
   const dayCounts = new Map<string, number>();
   const hourCounts = new Map<number, number>();
   for (const call of calls) {
-    const d = new Date(call.started_at);
-    const dayKey = DAY_LABELS[d.getDay()] ?? 'N/A';
+    // Convert UTC timestamp to BRT (UTC-3) for correct day/hour extraction
+    const brt = new Date(new Date(call.started_at).getTime() - 3 * 60 * 60 * 1000);
+    const dayKey = DAY_LABELS[brt.getUTCDay()] ?? 'N/A';
     dayCounts.set(dayKey, (dayCounts.get(dayKey) ?? 0) + 1);
-    hourCounts.set(d.getHours(), (hourCounts.get(d.getHours()) ?? 0) + 1);
+    const hour = brt.getUTCHours();
+    hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1);
   }
 
   let bestDay = '-';
@@ -160,9 +162,10 @@ function calculateHeatmap(calls: CallRow[]): HeatmapCell[] {
   }
 
   for (const call of calls) {
-    const d = new Date(call.started_at);
-    const dayIdx = d.getDay();
-    const blockIdx = Math.floor(d.getHours() / 2);
+    // Convert UTC timestamp to BRT (UTC-3) for correct day/hour extraction
+    const brt = new Date(new Date(call.started_at).getTime() - 3 * 60 * 60 * 1000);
+    const dayIdx = brt.getUTCDay();
+    const blockIdx = Math.floor(brt.getUTCHours() / 2);
     const cellIdx = dayIdx * 12 + blockIdx;
     const cell = cells[cellIdx];
     if (cell) cell.count++;

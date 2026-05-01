@@ -31,8 +31,8 @@ export async function fetchCloserFeedbacks(
     .order('sent_at', { ascending: false })
     .limit(200);
 
-  if (dateFrom) query = query.gte('sent_at', new Date(dateFrom).toISOString());
-  if (dateTo) query = query.lte('sent_at', new Date(dateTo + 'T23:59:59').toISOString());
+  if (dateFrom) query = query.gte('sent_at', `${dateFrom}T03:00:00Z`);
+  if (dateTo) query = query.lte('sent_at', `${dateTo}T23:59:59-03:00`);
 
   const { data, error } = (await query) as {
     data: Array<{

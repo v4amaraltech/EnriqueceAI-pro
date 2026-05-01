@@ -52,14 +52,18 @@ export async function getCalls(
   // Period filter
   const now = new Date();
   if (filters.period === 'today') {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    // BRT midnight: shift "now" by -3h, truncate to date, shift back to get 03:00Z
+    const nowBrt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+    const start = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000).toISOString();
     query = query.gte('started_at', start);
   } else if (filters.period === 'week') {
     const start = new Date(now);
     start.setDate(start.getDate() - 7);
     query = query.gte('started_at', start.toISOString());
   } else if (filters.period === 'month') {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    // BRT midnight of first day of month
+    const nowBrt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+    const start = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), 1) + 3 * 60 * 60 * 1000).toISOString();
     query = query.gte('started_at', start);
   }
 

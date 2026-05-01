@@ -16,9 +16,12 @@ function getPeriodDates(period: string): { start: string; end: string } {
   let start: Date;
 
   switch (period) {
-    case 'today':
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case 'today': {
+      const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const todayStr = nowBrt.toISOString().split('T')[0];
+      start = new Date(`${todayStr}T03:00:00Z`);
       break;
+    }
     case '7d':
       start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       break;
@@ -46,7 +49,7 @@ export async function fetchStatisticsData(
     const { orgId, supabase } = auth.data;
 
     const { start, end } = dateRange
-      ? { start: new Date(dateRange.from).toISOString(), end: new Date(dateRange.to + 'T23:59:59').toISOString() }
+      ? { start: `${dateRange.from}T03:00:00Z`, end: `${dateRange.to}T23:59:59-03:00` }
       : getPeriodDates(period);
 
     const filters: StatisticsFilters = {

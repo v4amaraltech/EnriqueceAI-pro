@@ -79,8 +79,9 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
 
   // Count leads at daily limit — check calls made today
   const leadIds = [...new Set(phoneEnrollments.map((e) => e.lead_id))];
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // BRT midnight: shift "now" by -3h then truncate to UTC midnight, shift back
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
 
   const { data: todayCalls } = (await from(supabase, 'calls')
     .select('lead_id')

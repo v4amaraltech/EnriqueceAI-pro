@@ -9,16 +9,22 @@ import { fetchDrilldownInputSchema, type FetchDrilldownInput } from '@/shared/sc
 
 const PAGE_SIZE = 25;
 
+/** Convert a YYYY-MM-DD date string to BRT start-of-day (03:00:00Z) as ISO. */
 function toIso(dateStr: string): string {
-  return `${dateStr}T00:00:00.000Z`;
+  return `${dateStr}T03:00:00.000Z`;
 }
 
+/** Convert a YYYY-MM-DD date string to BRT end-of-day (next day 02:59:59.999Z) as ISO. */
 function toIsoEnd(dateStr: string): string {
-  return `${dateStr}T23:59:59.999Z`;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(year!, month! - 1, day! + 1, 2, 59, 59, 999));
+  return nextDay.toISOString();
 }
 
 function todayRange(): { start: string; end: string } {
-  const today = new Date().toISOString().split('T')[0] ?? '';
+  // Get today's date in BRT (UTC-3)
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const today = nowBrt.toISOString().split('T')[0] ?? '';
   return { start: toIso(today), end: toIsoEnd(today) };
 }
 
