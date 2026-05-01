@@ -15,6 +15,12 @@ function parseTimeToMinutes(time: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
+/** Convert a UTC date to BRT (UTC-3) hours/minutes/day-of-week */
+function toBRT(date: Date): { hours: number; minutes: number; dayOfWeek: number } {
+  const brt = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return { hours: brt.getUTCHours(), minutes: brt.getUTCMinutes(), dayOfWeek: brt.getUTCDay() };
+}
+
 export interface ResponseTimeFilters {
   cadenceFocus?: string[];
   days?: number[];
@@ -33,11 +39,12 @@ export async function getResponseTimeData(
   const supabase = createServiceRoleClient();
 
   const now = new Date();
+  // Use BRT (UTC-3) for date boundaries so "2026-04-01" means midnight BRT, not UTC
   const monthStart = dateRange?.from
-    ? new Date(dateRange.from).toISOString()
-    : new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    ? `${dateRange.from}T03:00:00Z`
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3)).toISOString();
   const monthEnd = dateRange?.to
-    ? new Date(dateRange.to + 'T23:59:59').toISOString()
+    ? `${dateRange.to}T23:59:59-03:00`
     : now.toISOString();
 
   // Fetch leads created in period
@@ -57,15 +64,15 @@ export async function getResponseTimeData(
 
   if (filters?.days && filters.days.length < 7) {
     const daySet = new Set(filters.days);
-    filteredLeads = filteredLeads.filter((l) => daySet.has(new Date(l.created_at).getDay()));
+    filteredLeads = filteredLeads.filter((l) => daySet.has(toBRT(new Date(l.created_at)).dayOfWeek));
   }
 
   if (filters?.timeFrom || filters?.timeTo) {
     const fromMin = parseTimeToMinutes(filters.timeFrom ?? '00:00');
     const toMin = parseTimeToMinutes(filters.timeTo ?? '23:59');
     filteredLeads = filteredLeads.filter((l) => {
-      const d = new Date(l.created_at);
-      const leadMin = d.getHours() * 60 + d.getMinutes();
+      const brt = toBRT(new Date(l.created_at));
+      const leadMin = brt.hours * 60 + brt.minutes;
       return leadMin >= fromMin && leadMin <= toMin;
     });
   }

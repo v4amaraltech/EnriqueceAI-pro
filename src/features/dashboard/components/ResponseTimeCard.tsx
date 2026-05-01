@@ -51,9 +51,10 @@ const DEFAULT_FILTERS: Filters = {
 
 interface ResponseTimeCardProps {
   data: DashboardResponseTimeData;
+  dateRange?: { from: string; to: string };
 }
 
-export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
+export function ResponseTimeCard({ data, dateRange }: ResponseTimeCardProps) {
   const threshold = formatThreshold(data.thresholdMinutes);
   const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [tempFilters, setTempFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
@@ -93,7 +94,7 @@ export function ResponseTimeCard({ data }: ResponseTimeCardProps) {
     }
 
     startTransition(async () => {
-      const result = await getResponseTimeData(data.thresholdMinutes, undefined, {
+      const result = await getResponseTimeData(data.thresholdMinutes, dateRange, {
         cadenceFocus: [...applied.cadenceFocus],
         days: [...applied.days],
         timeFrom: applied.timeFrom,

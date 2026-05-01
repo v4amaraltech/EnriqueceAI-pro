@@ -145,7 +145,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
       )}
 
       {/* Response Time */}
-      {responseTime && <ResponseTimeCard data={responseTime} />}
+      {responseTime && <ResponseTimeCard data={responseTime} dateRange={filters.dateFrom && filters.dateTo ? { from: filters.dateFrom, to: filters.dateTo } : undefined} />}
     </div>
   );
 }
