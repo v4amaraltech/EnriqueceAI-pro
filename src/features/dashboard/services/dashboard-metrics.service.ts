@@ -11,11 +11,10 @@ import type {
 
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  const start = new Date(year, mon - 1, 1);
-  const end = new Date(year, mon, 1);
+  const lastDay = new Date(year, mon, 0).getDate();
   return {
-    start: start.toISOString(),
-    end: end.toISOString(),
+    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
@@ -23,8 +22,8 @@ function getMonthRange(month: string): { start: string; end: string } {
 function getDateRange(filters: DashboardFilters): { start: string; end: string } {
   if (filters.dateFrom && filters.dateTo) {
     return {
-      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
-      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+      start: `${filters.dateFrom}T03:00:00Z`,
+      end: `${filters.dateTo}T23:59:59-03:00`,
     };
   }
   return getMonthRange(filters.month);
@@ -42,15 +41,15 @@ function computeDailyData(
 ): DailyDataPoint[] {
   const days = getDaysInMonth(month);
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  const today = new Date();
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const isCurrentMonth =
-    today.getFullYear() === year && today.getMonth() + 1 === mon;
-  const maxDay = isCurrentMonth ? today.getDate() : days;
+    nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
+  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
 
   const countByDay = new Map<number, number>();
   for (const dateStr of leadDates) {
-    const d = new Date(dateStr);
-    const day = d.getDate();
+    const brt = new Date(new Date(dateStr).getTime() - 3 * 60 * 60 * 1000);
+    const day = brt.getUTCDate();
     countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
   }
 
@@ -132,12 +131,12 @@ export async function fetchOpportunityKpi(
   const monthTarget = goal?.opportunity_target ?? 0;
   const conversionTarget = goal?.conversion_target ?? 0;
 
-  // Calculate % of target based on linear projection
-  const today = new Date();
+  // Calculate % of target based on linear projection (BRT)
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
   const isCurrentMonth =
-    today.getFullYear() === yr && today.getMonth() + 1 === mo;
-  const currentDay = isCurrentMonth ? today.getDate() : days;
+    nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
+  const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
 
   const expectedByToday =
     monthTarget > 0 ? (monthTarget / days) * currentDay : 0;

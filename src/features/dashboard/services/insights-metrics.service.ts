@@ -11,16 +11,18 @@ import type {
 
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  const start = new Date(year, mon - 1, 1);
-  const end = new Date(year, mon, 1);
-  return { start: start.toISOString(), end: end.toISOString() };
+  const lastDay = new Date(year, mon, 0).getDate();
+  return {
+    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
+  };
 }
 
 function getDateRange(filters: DashboardFilters): { start: string; end: string } {
   if (filters.dateFrom && filters.dateTo) {
     return {
-      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
-      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+      start: `${filters.dateFrom}T03:00:00Z`,
+      end: `${filters.dateTo}T23:59:59-03:00`,
     };
   }
   return getMonthRange(filters.month);

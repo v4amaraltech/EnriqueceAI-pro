@@ -11,16 +11,18 @@ import type {
 
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  const start = new Date(year, mon - 1, 1);
-  const end = new Date(year, mon, 1);
-  return { start: start.toISOString(), end: end.toISOString() };
+  const lastDay = new Date(year, mon, 0).getDate();
+  return {
+    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
+  };
 }
 
 function getDateRange(filters: DashboardFilters): { start: string; end: string } {
   if (filters.dateFrom && filters.dateTo) {
     return {
-      start: new Date(filters.dateFrom + 'T00:00:00').toISOString(),
-      end: new Date(filters.dateTo + 'T23:59:59').toISOString(),
+      start: `${filters.dateFrom}T03:00:00Z`,
+      end: `${filters.dateTo}T23:59:59-03:00`,
     };
   }
   return getMonthRange(filters.month);
@@ -33,10 +35,10 @@ function getDaysInMonth(month: string): number {
 
 function computePercentOfTarget(actual: number, target: number, days: number, month: string): number {
   if (target <= 0) return 0;
-  const today = new Date();
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const [yr, mo] = month.split('-').map(Number) as [number, number];
-  const isCurrentMonth = today.getFullYear() === yr && today.getMonth() + 1 === mo;
-  const currentDay = isCurrentMonth ? today.getDate() : days;
+  const isCurrentMonth = nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
+  const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
   const expectedByToday = (target / days) * currentDay;
   if (expectedByToday <= 0) return 0;
   return Math.round(((actual - expectedByToday) / expectedByToday) * 100);

@@ -37,18 +37,18 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
     router.push(`/leads?assigned_to=${userId}`);
   }, [router]);
 
-  // Calculate business days in the filter period for daily average
+  // Calculate business days in the filter period for daily average (BRT-aware)
   const businessDays = useMemo(() => {
     if (!filters.dateFrom || !filters.dateTo) return 1;
-    const from = new Date(filters.dateFrom);
-    const to = new Date(filters.dateTo);
+    const from = new Date(filters.dateFrom + 'T03:00:00Z');
+    const to = new Date(filters.dateTo + 'T03:00:00Z');
     let count = 0;
     const current = new Date(from);
     const totalDays = differenceInCalendarDays(to, from) + 1;
     for (let i = 0; i < totalDays; i++) {
-      const day = current.getDay();
+      const day = current.getUTCDay();
       if (day !== 0 && day !== 6) count++;
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
     return count || 1;
   }, [filters.dateFrom, filters.dateTo]);
