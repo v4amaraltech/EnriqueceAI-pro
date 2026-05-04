@@ -87,15 +87,12 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     evolutionRow = orgEvolution;
   }
 
-  // Fetch Apollo connection (per org, manager-only)
-  let apolloRow: ApolloConnectionSafe | null = null;
-  if (isManager) {
-    const { data } = (await from(supabase, 'apollo_connections' as never)
-      .select('id, status, created_at, updated_at')
-      .eq('org_id', orgId)
-      .maybeSingle()) as { data: ApolloConnectionSafe | null };
-    apolloRow = data;
-  }
+  // Fetch Apollo connection (per org). RLS allows any active member to read, so SDRs
+  // see the org-level status without sensitive fields (api_key_encrypted is never selected).
+  const { data: apolloRow } = (await from(supabase, 'apollo_connections' as never)
+    .select('id, status, created_at, updated_at')
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: ApolloConnectionSafe | null };
 
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {

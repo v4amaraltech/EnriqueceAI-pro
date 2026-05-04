@@ -385,19 +385,29 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             {apollo && <StatusBadge status={apollo.status} />}
             <div className="ml-auto shrink-0 flex items-center gap-2">
               {apollo ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                  onClick={() => setShowDisconnect('apollo')}
-                >
-                  <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  Desconectar
-                </Button>
-              ) : (
+                isManager ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    onClick={() => setShowDisconnect('apollo')}
+                  >
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                    Desconectar
+                  </Button>
+                ) : (
+                  <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    Conectado pela organização
+                  </span>
+                )
+              ) : isManager ? (
                 <Button size="sm" onClick={() => setShowApolloConfig(true)}>
                   Conectar
                 </Button>
+              ) : (
+                <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                  Apenas o gestor pode conectar
+                </span>
               )}
             </div>
           </div>
