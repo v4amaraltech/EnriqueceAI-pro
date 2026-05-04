@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { checkMemberLimit } from './member-limits.service';
 
-function createMockSupabase(subscriptionData: unknown, memberCount: number) {
-  const singleMock = vi.fn().mockResolvedValue({ data: subscriptionData });
-  const inMock = vi.fn().mockResolvedValue({ count: memberCount });
+function createMockSupabase(
+  subscriptionData: unknown,
+  memberCount: number,
+  organizationData: unknown = { member_limit_override: null },
+) {
+  const subscriptionSingle = vi.fn().mockResolvedValue({ data: subscriptionData });
+  const organizationSingle = vi.fn().mockResolvedValue({ data: organizationData });
+  const memberInMock = vi.fn().mockResolvedValue({ count: memberCount });
 
   return {
     from: vi.fn((table: string) => {
@@ -12,7 +17,16 @@ function createMockSupabase(subscriptionData: unknown, memberCount: number) {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: singleMock,
+              single: subscriptionSingle,
+            }),
+          }),
+        };
+      }
+      if (table === 'organizations') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: organizationSingle,
             }),
           }),
         };
@@ -21,7 +35,7 @@ function createMockSupabase(subscriptionData: unknown, memberCount: number) {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            in: inMock,
+            in: memberInMock,
           }),
         }),
       };
@@ -35,10 +49,7 @@ describe('checkMemberLimit', () => {
   });
 
   it('should allow when under limit', async () => {
-    const supabase = createMockSupabase(
-      { plan_id: 'plan-1', plans: { included_users: 4 } },
-      2,
-    );
+    const supabase = createMockSupabase({ plan_id: 'plan-1', plans: { included_users: 4 } }, 2);
 
     const result = await checkMemberLimit(supabase as any, 'org-123');
 
@@ -46,10 +57,7 @@ describe('checkMemberLimit', () => {
   });
 
   it('should not allow when at limit', async () => {
-    const supabase = createMockSupabase(
-      { plan_id: 'plan-1', plans: { included_users: 4 } },
-      4,
-    );
+    const supabase = createMockSupabase({ plan_id: 'plan-1', plans: { included_users: 4 } }, 4);
 
     const result = await checkMemberLimit(supabase as any, 'org-123');
 
@@ -62,5 +70,29 @@ describe('checkMemberLimit', () => {
     const result = await checkMemberLimit(supabase as any, 'org-123');
 
     expect(result).toEqual({ allowed: true, current: 1, max: 4 });
+  });
+
+  it('should use member_limit_override when set, ignoring plan included_users', async () => {
+    const supabase = createMockSupabase(
+      { plan_id: 'plan-1', plans: { included_users: 4 } },
+      6,
+      { member_limit_override: 10 },
+    );
+
+    const result = await checkMemberLimit(supabase as any, 'org-123');
+
+    expect(result).toEqual({ allowed: true, current: 6, max: 10 });
+  });
+
+  it('should block when current reaches override', async () => {
+    const supabase = createMockSupabase(
+      { plan_id: 'plan-1', plans: { included_users: 4 } },
+      10,
+      { member_limit_override: 10 },
+    );
+
+    const result = await checkMemberLimit(supabase as any, 'org-123');
+
+    expect(result).toEqual({ allowed: false, current: 10, max: 10 });
   });
 });

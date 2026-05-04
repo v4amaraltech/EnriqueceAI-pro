@@ -12,21 +12,29 @@ export async function checkMemberLimit(
   supabase: SupabaseClient,
   orgId: string,
 ): Promise<MemberLimitResult> {
-  // Get plan limits via subscription
-  const { data: subscription } = (await from(supabase, 'subscriptions')
-    .select('plan_id, plans(included_users)')
-    .eq('org_id', orgId)
-    .single()) as { data: { plan_id: string; plans: { included_users: number } } | null };
+  const [subscriptionResult, organizationResult, memberCountResult] = await Promise.all([
+    from(supabase, 'subscriptions')
+      .select('plan_id, plans(included_users)')
+      .eq('org_id', orgId)
+      .single() as unknown as Promise<{
+      data: { plan_id: string; plans: { included_users: number } } | null;
+    }>,
+    from(supabase, 'organizations')
+      .select('member_limit_override')
+      .eq('id', orgId)
+      .single() as unknown as Promise<{
+      data: { member_limit_override: number | null } | null;
+    }>,
+    from(supabase, 'organization_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .in('status', ['active', 'invited']) as unknown as Promise<{ count: number | null }>,
+  ]);
 
-  const max = subscription?.plans?.included_users ?? 4;
-
-  // Count active + invited members
-  const { count } = (await from(supabase, 'organization_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('org_id', orgId)
-    .in('status', ['active', 'invited'])) as { count: number | null };
-
-  const current = count ?? 0;
+  const override = organizationResult.data?.member_limit_override ?? null;
+  const planLimit = subscriptionResult.data?.plans?.included_users ?? 4;
+  const max = override ?? planLimit;
+  const current = memberCountResult.count ?? 0;
 
   return {
     allowed: current < max,
