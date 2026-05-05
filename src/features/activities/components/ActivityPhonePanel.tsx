@@ -601,7 +601,14 @@ export function ActivityPhonePanel({
               </Button>
             )}
             {onLeadLost && (
-              <Button variant="destructive" onClick={onLeadLost} disabled={isSending}>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  handleDismissModal();
+                  onLeadLost();
+                }}
+                disabled={isSending}
+              >
                 <ThumbsDown className="mr-2 h-4 w-4" />
                 Perdido
               </Button>

@@ -16,6 +16,8 @@ import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { PendingActivity } from '../types';
 
+import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
+
 import { ActivityEmptyState } from './ActivityEmptyState';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
 import {
@@ -152,9 +154,22 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     );
   }, [handleActivityDone]);
 
+  // Centralized lost-lead dialog. Both the post-call panel and ActivityRow's
+  // "Perdido" button funnel through this state so the SDR selects a loss reason
+  // without leaving the activity queue. After confirmation the enrollment is
+  // already 'completed' on the server (markLeadAsLost), so we just drop the
+  // activity locally and the sheet auto-closes (selectedKey no longer matches).
+  const [lostDialogActivity, setLostDialogActivity] = useState<PendingActivity | null>(null);
+
   const handleLeadLost = useCallback((activity: PendingActivity) => {
-    router.push(`/leads/${activity.lead.id}`);
-  }, [router]);
+    setLostDialogActivity(activity);
+  }, []);
+
+  const handleLostDialogSuccess = useCallback(() => {
+    if (!lostDialogActivity) return;
+    handleActivityDone(lostDialogActivity.enrollmentId, lostDialogActivity.stepId);
+    setLostDialogActivity(null);
+  }, [lostDialogActivity, handleActivityDone]);
 
   const handleClose = useCallback(() => {
     setSelectedKey(null);
@@ -458,6 +473,14 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         </>
       )}
       <StartNewLeadsModal open={startNewLeadsOpen} onOpenChange={setStartNewLeadsOpen} />
+      <MarkLeadLostDialog
+        leadId={lostDialogActivity?.lead.id ?? ''}
+        open={lostDialogActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setLostDialogActivity(null);
+        }}
+        onSuccess={handleLostDialogSuccess}
+      />
     </div>
   );
 }

@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
+
 import type { PendingActivity } from '../types';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
 import { ActivityPagination } from './ActivityPagination';
@@ -166,9 +168,20 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
     );
   }, [handleActivityDone]);
 
+  // Centralized lost-lead dialog (mirror of ActivityQueueView): both row and
+  // post-call panel funnel through this state so the SDR picks a loss reason
+  // without leaving the log view.
+  const [lostDialogActivity, setLostDialogActivity] = useState<PendingActivity | null>(null);
+
   const handleLeadLost = useCallback((activity: PendingActivity) => {
-    router.push(`/leads/${activity.lead.id}`);
-  }, [router]);
+    setLostDialogActivity(activity);
+  }, []);
+
+  const handleLostDialogSuccess = useCallback(() => {
+    if (!lostDialogActivity) return;
+    handleActivityDone(lostDialogActivity.enrollmentId, lostDialogActivity.stepId);
+    setLostDialogActivity(null);
+  }, [lostDialogActivity, handleActivityDone]);
 
   const handleClose = useCallback(() => {
     setSelectedKey(null);
@@ -350,6 +363,16 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         onClose={handleClose}
         onNavigate={handleNavigate}
         onActivityDone={handleActivityDone}
+        onLeadLost={handleLeadLost}
+      />
+
+      <MarkLeadLostDialog
+        leadId={lostDialogActivity?.lead.id ?? ''}
+        open={lostDialogActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setLostDialogActivity(null);
+        }}
+        onSuccess={handleLostDialogSuccess}
       />
     </div>
   );
