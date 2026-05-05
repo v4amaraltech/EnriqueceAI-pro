@@ -179,9 +179,22 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
 
   const handleLostDialogSuccess = useCallback(() => {
     if (!lostDialogActivity) return;
+    const lostKey = `${lostDialogActivity.enrollmentId}:${lostDialogActivity.stepId}`;
+    // Advance the open sheet to the next activity (or close it) before removing
+    // the lost one — otherwise the sheet stays open with empty content and
+    // looks like a black screen on dark theme.
+    const idx = activities.findIndex(
+      (a) => `${a.enrollmentId}:${a.stepId}` === lostKey,
+    );
+    const nextActivity = idx >= 0 ? activities[idx + 1] : undefined;
+
     handleActivityDone(lostDialogActivity.enrollmentId, lostDialogActivity.stepId);
     setLostDialogActivity(null);
-  }, [lostDialogActivity, handleActivityDone]);
+
+    if (selectedKey === lostKey) {
+      setSelectedKey(nextActivity ? `${nextActivity.enrollmentId}:${nextActivity.stepId}` : null);
+    }
+  }, [lostDialogActivity, handleActivityDone, activities, selectedKey]);
 
   const handleClose = useCallback(() => {
     setSelectedKey(null);

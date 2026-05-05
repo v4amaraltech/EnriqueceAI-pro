@@ -156,9 +156,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   // Centralized lost-lead dialog. Both the post-call panel and ActivityRow's
   // "Perdido" button funnel through this state so the SDR selects a loss reason
-  // without leaving the activity queue. After confirmation the enrollment is
-  // already 'completed' on the server (markLeadAsLost), so we just drop the
-  // activity locally and the sheet auto-closes (selectedKey no longer matches).
+  // without leaving the activity queue.
   const [lostDialogActivity, setLostDialogActivity] = useState<PendingActivity | null>(null);
 
   const handleLeadLost = useCallback((activity: PendingActivity) => {
@@ -167,9 +165,20 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   const handleLostDialogSuccess = useCallback(() => {
     if (!lostDialogActivity) return;
+    const lostKey = keyOf(lostDialogActivity);
+    // Resolve the next activity BEFORE handleActivityDone removes the lost one
+    // so the sheet can advance instead of rendering empty (used to look like a
+    // "black screen" because the sheet stayed open with no inner content).
+    const idx = activities.findIndex((a) => keyOf(a) === lostKey);
+    const nextActivity = idx >= 0 ? activities[idx + 1] : undefined;
+
     handleActivityDone(lostDialogActivity.enrollmentId, lostDialogActivity.stepId);
     setLostDialogActivity(null);
-  }, [lostDialogActivity, handleActivityDone]);
+
+    if (selectedKey === lostKey) {
+      setSelectedKey(nextActivity ? keyOf(nextActivity) : null);
+    }
+  }, [lostDialogActivity, handleActivityDone, activities, selectedKey]);
 
   const handleClose = useCallback(() => {
     setSelectedKey(null);
