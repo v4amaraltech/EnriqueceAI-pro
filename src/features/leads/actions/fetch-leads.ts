@@ -25,14 +25,22 @@ export async function fetchLeads(
   const rangeFrom = (filters.page - 1) * filters.per_page;
   const to = rangeFrom + filters.per_page - 1;
 
+  // When searching by text, skip other filters so the SDR always finds the lead
+  const hasSearch = !!filters.search?.trim();
+
+  // Source table: switch to the leads_no_active_enrollment view when filtering
+  // "Sem cadência" — pushes the anti-join into SQL and avoids a 1k+ UUID IN()
+  // clause that exceeds the PostgREST URL limit.
+  const sourceTable =
+    !hasSearch && filters.cadence_id === '__none__'
+      ? 'leads_no_active_enrollment'
+      : 'leads';
+
   // Build query
-  let query = from(supabase, 'leads')
+  let query = from(supabase, sourceTable)
     .select('*', { count: 'exact' })
     .eq('org_id', orgId)
     .is('deleted_at', null);
-
-  // When searching by text, skip other filters so the SDR always finds the lead
-  const hasSearch = !!filters.search?.trim();
 
   // Apply filters (skipped when searching)
   if (!hasSearch && filters.status) {
@@ -64,31 +72,20 @@ export async function fetchLeads(
     query = query.eq('canal', filters.canal);
   }
 
-  // Filter by cadence enrollment (skipped when searching)
-  if (!hasSearch && filters.cadence_id) {
-    if (filters.cadence_id === '__none__') {
-      // Leads without active enrollment — use database function (efficient, no ID limit)
-      const { data: noEnrollmentIds } = await (supabase.rpc as any)('leads_without_active_enrollment', {
-        p_org_id: orgId,
-      }) as { data: string[] | null };
-
-      if (noEnrollmentIds && noEnrollmentIds.length > 0) {
-        query = query.in('id', noEnrollmentIds);
-      } else {
-        return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
-      }
-    } else {
-      // Leads enrolled in a specific cadence
-      const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
-        .select('lead_id')
-        .eq('cadence_id', filters.cadence_id)
-        .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
-      const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
-      if (enrolledIds.length === 0) {
-        return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
-      }
-      query = query.in('id', enrolledIds);
+  // Filter by cadence enrollment (skipped when searching).
+  // The "__none__" case is handled at the source-table level (view above), so
+  // we only need to handle a specific cadence here.
+  if (!hasSearch && filters.cadence_id && filters.cadence_id !== '__none__') {
+    // Leads enrolled in a specific cadence
+    const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
+      .select('lead_id')
+      .eq('cadence_id', filters.cadence_id)
+      .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
+    const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
+    if (enrolledIds.length === 0) {
+      return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
     }
+    query = query.in('id', enrolledIds);
   }
 
   // Full-text search — split by space so "Empresa teste" matches leads with "empresa" OR "teste"
