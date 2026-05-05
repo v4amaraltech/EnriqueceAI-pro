@@ -188,34 +188,36 @@ export function LeadInfoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackedLeadId]);
 
-  // Build initial phone entries from phones JSONB (primary) or socios + telefone (bootstrap)
+  // Build initial phone entries — mirrors the view-mode `allPhones` sources so
+  // clicking the pencil never makes a visible phone disappear.
   const buildInitialPhones = useCallback((): LeadPhone[] => {
-    // If phones JSONB was explicitly set (even empty []), it's the source of truth
-    if (Array.isArray(data.phones)) {
-      if (data.phones.length > 0) {
-        return data.phones.map((p) => ({ tipo: p.tipo, numero: p.numero }));
-      }
-      // phones is [] — user removed all phones, show empty row
-      return [{ tipo: 'celular', numero: '' }];
-    }
-
-    // Bootstrap: merge socios + telefone for leads that never had phones edited
     const entries: LeadPhone[] = [];
     const seen = new Set<string>();
 
+    // Socios celulares (auto-enriched from CNPJ, may have whatsapp flag)
     for (const socio of data.socios ?? []) {
       for (const cel of socio.celulares ?? []) {
         const formatted = `(${cel.ddd}) ${cel.numero}`;
-        const key = formatted.replace(/\D/g, '');
+        const key = normalizePhone(formatted);
         if (!seen.has(key)) {
           seen.add(key);
-          entries.push({ tipo: 'celular', numero: formatted });
+          entries.push({ tipo: cel.whatsapp ? 'whatsapp' : 'celular', numero: formatted });
         }
       }
     }
 
+    // Phones JSONB (user-edited list, has explicit type)
+    for (const phone of data.phones ?? []) {
+      const key = normalizePhone(phone.numero);
+      if (!seen.has(key)) {
+        seen.add(key);
+        entries.push({ tipo: phone.tipo, numero: phone.numero });
+      }
+    }
+
+    // Legacy company-level telefone fallback
     if (data.telefone) {
-      const key = data.telefone.replace(/\D/g, '');
+      const key = normalizePhone(data.telefone);
       if (!seen.has(key)) {
         seen.add(key);
         let local = key;
@@ -223,7 +225,7 @@ export function LeadInfoPanel({
         if (local.length >= 10) local = local.slice(2);
         const isCelular = local.length >= 9 && local.startsWith('9');
         const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
-        const tipo = isWhatsAppSource ? 'whatsapp' : (isCelular ? 'celular' : 'fixo');
+        const tipo: LeadPhone['tipo'] = isWhatsAppSource ? 'whatsapp' : (isCelular ? 'celular' : 'fixo');
         entries.push({ tipo, numero: data.telefone });
       }
     }
