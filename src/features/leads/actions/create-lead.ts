@@ -7,6 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { ERR_LEAD_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { exceedsLimit, isUnlimited } from '@/lib/utils/plan-limits';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
@@ -56,7 +57,7 @@ export async function createLead(
       currentLeads = leadCount ?? 0;
       hasLimitInfo = true;
 
-      if (currentLeads >= maxLeads) {
+      if (exceedsLimit(currentLeads, 1, maxLeads)) {
         return {
           success: false,
           error: `Limite de leads atingido (${currentLeads}/${maxLeads}). Faça upgrade para adicionar mais.`,
@@ -201,8 +202,9 @@ export async function createLead(
 
   // Enrichment via CNPJ is only triggered for CSV imports, not manual creation
 
-  // 3. Fire 80% lead threshold alert (fire-and-forget)
-  if (hasLimitInfo && maxLeads > 0) {
+  // 3. Fire 80% lead threshold alert (fire-and-forget). Skipped for unlimited
+  // plans — there's no meaningful threshold to alert on.
+  if (hasLimitInfo && maxLeads > 0 && !isUnlimited(maxLeads)) {
     const newCount = currentLeads + 1;
     const threshold = Math.floor(maxLeads * RESOURCE_ALERT_THRESHOLD);
     if (currentLeads < threshold && newCount >= threshold) {

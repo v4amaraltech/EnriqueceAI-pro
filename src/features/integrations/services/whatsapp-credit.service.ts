@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { isUnlimited } from '@/lib/utils/plan-limits';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
@@ -61,7 +62,8 @@ async function deductFromExisting(
   credit: { id: string; plan_credits: number; used_credits: number; overage_count: number },
   orgId: string,
 ): Promise<CreditCheckResult> {
-  const isOverage = credit.used_credits >= credit.plan_credits;
+  const unlimited = isUnlimited(credit.plan_credits);
+  const isOverage = !unlimited && credit.used_credits >= credit.plan_credits;
   const newUsed = credit.used_credits + 1;
 
   const updatePayload: Record<string, unknown> = {
@@ -75,12 +77,14 @@ async function deductFromExisting(
     .update(updatePayload as Record<string, unknown>)
     .eq('id', credit.id);
 
-  // Send alert when crossing the 80% threshold
-  const threshold = Math.floor(credit.plan_credits * ALERT_THRESHOLD);
-  if (credit.used_credits < threshold && newUsed >= threshold) {
-    fireThresholdAlert(orgId, newUsed, credit.plan_credits).catch((err) =>
-      console.error('[whatsapp-credits] Failed to send threshold alert:', err),
-    );
+  // Send alert when crossing the 80% threshold (skipped on unlimited plans)
+  if (!unlimited) {
+    const threshold = Math.floor(credit.plan_credits * ALERT_THRESHOLD);
+    if (credit.used_credits < threshold && newUsed >= threshold) {
+      fireThresholdAlert(orgId, newUsed, credit.plan_credits).catch((err) =>
+        console.error('[whatsapp-credits] Failed to send threshold alert:', err),
+      );
+    }
   }
 
   return {

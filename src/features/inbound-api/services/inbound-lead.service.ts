@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { exceedsLimit } from '@/lib/utils/plan-limits';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { normalizeOriginFields } from '@/features/leads/schemas/lead.schemas';
@@ -257,7 +258,7 @@ async function checkLeadLimitForOrg(
 
   const currentLeads = leadCount ?? 0;
 
-  if (currentLeads + batchSize > plan.max_leads) {
+  if (exceedsLimit(currentLeads, batchSize, plan.max_leads)) {
     return {
       allowed: false,
       error: `Limite de leads atingido (${currentLeads}/${plan.max_leads}). Faça upgrade para adicionar mais.`,

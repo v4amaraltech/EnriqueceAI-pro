@@ -5,6 +5,8 @@ import { AlertTriangle, Bot, Database, MessageSquare, Users } from 'lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Progress } from '@/shared/components/ui/progress';
 
+import { isUnlimited } from '@/lib/utils/plan-limits';
+
 import { isNearLimit } from '../services/feature-flags';
 import type { UsageDashboardData } from '../types';
 import { AiUsageChart } from './AiUsageChart';
@@ -22,16 +24,17 @@ interface UsageBarProps {
 }
 
 function UsageBar({ label, current, max, unlimited, overageLabel }: UsageBarProps) {
-  const percentage = unlimited ? 0 : max > 0 ? Math.min((current / max) * 100, 100) : 0;
-  const nearLimit = !unlimited && isNearLimit(current, max);
-  const exceeded = !unlimited && max > 0 && current >= max;
+  const isMaxUnlimited = unlimited || isUnlimited(max);
+  const percentage = isMaxUnlimited ? 0 : max > 0 ? Math.min((current / max) * 100, 100) : 0;
+  const nearLimit = !isMaxUnlimited && isNearLimit(current, max);
+  const exceeded = !isMaxUnlimited && max > 0 && current >= max;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium">{label}</span>
         <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-          {unlimited ? (
+          {isMaxUnlimited ? (
             `${current} (ilimitado)`
           ) : (
             <>
@@ -41,7 +44,7 @@ function UsageBar({ label, current, max, unlimited, overageLabel }: UsageBarProp
           )}
         </span>
       </div>
-      {!unlimited && (
+      {!isMaxUnlimited && (
         <div className="flex items-center gap-2">
           <Progress
             value={percentage}

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { isUnlimited } from '@/lib/utils/plan-limits';
 
 import type { PlanRow } from '../types';
 
@@ -26,7 +27,11 @@ export async function fetchDowngradeWarnings(
     .select('id', { count: 'exact', head: true })
     .eq('org_id', orgId)) as { count: number | null };
 
-  if (leadCount && leadCount > targetPlan.max_leads) {
+  if (
+    leadCount &&
+    !isUnlimited(targetPlan.max_leads) &&
+    leadCount > targetPlan.max_leads
+  ) {
     warnings.push(
       `Você tem ${leadCount.toLocaleString('pt-BR')} leads, mas o plano ${targetPlan.name} permite apenas ${targetPlan.max_leads.toLocaleString('pt-BR')}.`,
     );

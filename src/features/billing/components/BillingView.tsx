@@ -8,6 +8,8 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
+import { formatLimit, isUnlimited } from '@/lib/utils/plan-limits';
+
 import { createPortalSession } from '../actions/create-portal';
 import { formatCents } from '../services/feature-flags';
 import type { BillingOverview } from '../types';
@@ -32,7 +34,9 @@ function statusLabel(status: string): { label: string; variant: 'default' | 'sec
 export function BillingView({ data }: BillingViewProps) {
   const { plan, subscription, memberCount, additionalUsers, monthlyTotal } = data;
   const status = statusLabel(subscription.status);
-  const aiUnlimited = plan.max_ai_per_day === -1;
+  const aiUnlimited = isUnlimited(plan.max_ai_per_day);
+  const leadsUnlimited = isUnlimited(plan.max_leads);
+  const waUnlimited = isUnlimited(plan.max_whatsapp_per_month);
   const hasStripeSubscription = !!subscription.stripe_subscription_id;
 
   const [isPending, startTransition] = useTransition();
@@ -120,14 +124,14 @@ export function BillingView({ data }: BillingViewProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            <FeatureItem label="Leads" value={`Até ${plan.max_leads.toLocaleString('pt-BR')}`} />
+            <FeatureItem label="Leads" value={leadsUnlimited ? 'Ilimitado' : `Até ${formatLimit(plan.max_leads)}`} />
             <FeatureItem
               label="IA por dia"
               value={aiUnlimited ? 'Ilimitado' : `${plan.max_ai_per_day} gerações`}
             />
             <FeatureItem
               label="WhatsApp por mês"
-              value={`${plan.max_whatsapp_per_month.toLocaleString('pt-BR')} mensagens`}
+              value={waUnlimited ? 'Ilimitado' : `${formatLimit(plan.max_whatsapp_per_month)} mensagens`}
             />
             <FeatureItem
               label="Usuários inclusos"

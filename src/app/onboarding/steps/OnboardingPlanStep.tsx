@@ -7,6 +7,8 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
 
+import { formatLimit, isUnlimited } from '@/lib/utils/plan-limits';
+
 import { formatCents } from '@/features/billing/services/feature-flags';
 import type { PlanRow } from '@/features/billing/types';
 
@@ -66,9 +68,9 @@ export function OnboardingPlanStep({ plans, onSelect, onBack }: OnboardingPlanSt
                       )}
                     </div>
                     <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                      {plan.max_leads.toLocaleString('pt-BR')} leads
+                      {isUnlimited(plan.max_leads) ? 'Leads ilimitados' : `${formatLimit(plan.max_leads)} leads`}
                       {' · '}
-                      {plan.max_ai_per_day === -1 ? 'IA ilimitada' : `${plan.max_ai_per_day} IA/dia`}
+                      {isUnlimited(plan.max_ai_per_day) ? 'IA ilimitada' : `${plan.max_ai_per_day} IA/dia`}
                       {' · '}
                       {plan.included_users} usuários inclusos
                     </p>

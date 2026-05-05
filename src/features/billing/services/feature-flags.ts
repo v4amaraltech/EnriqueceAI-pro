@@ -1,3 +1,5 @@
+import { formatLimit as formatPlanLimit, isUnlimited } from '@/lib/utils/plan-limits';
+
 import type { PlanFeatures, PlanRow } from '../types';
 
 export interface UsageLimits {
@@ -24,14 +26,16 @@ export function calculateUsageLimits(
   waUsedThisMonth: number,
   memberCount: number,
 ): UsageLimits {
-  const aiUnlimited = plan.max_ai_per_day === -1;
+  const leadsUnlimited = isUnlimited(plan.max_leads);
+  const aiUnlimited = isUnlimited(plan.max_ai_per_day);
+  const waUnlimited = isUnlimited(plan.max_whatsapp_per_month);
   const additionalUsers = Math.max(0, memberCount - plan.included_users);
 
   return {
     leads: {
       current: currentLeads,
       max: plan.max_leads,
-      exceeded: currentLeads >= plan.max_leads,
+      exceeded: !leadsUnlimited && currentLeads >= plan.max_leads,
     },
     aiPerDay: {
       current: aiUsedToday,
@@ -42,7 +46,7 @@ export function calculateUsageLimits(
     whatsappPerMonth: {
       current: waUsedThisMonth,
       max: plan.max_whatsapp_per_month,
-      exceeded: waUsedThisMonth >= plan.max_whatsapp_per_month,
+      exceeded: !waUnlimited && waUsedThisMonth >= plan.max_whatsapp_per_month,
     },
     users: {
       current: memberCount,
@@ -61,7 +65,7 @@ export function calculateMonthlyTotal(
 }
 
 export function isNearLimit(current: number, max: number, threshold = 0.8): boolean {
-  if (max <= 0) return false;
+  if (isUnlimited(max) || max <= 0) return false;
   return current / max >= threshold;
 }
 
@@ -89,7 +93,7 @@ const ENRICHMENT_LABELS: Record<string, string> = {
 };
 
 function formatLimit(value: number, suffix: string): string {
-  if (value === -1) return 'Ilimitado';
+  if (isUnlimited(value)) return 'Ilimitado';
   return `${value.toLocaleString('pt-BR')} ${suffix}`;
 }
 
@@ -131,8 +135,8 @@ export function getPlanDiff(currentPlan: PlanRow, targetPlan: PlanRow): PlanDiff
   if (currentPlan.max_leads !== targetPlan.max_leads) {
     limitsChanged.push({
       name: 'Leads',
-      from: currentPlan.max_leads.toLocaleString('pt-BR'),
-      to: targetPlan.max_leads.toLocaleString('pt-BR'),
+      from: formatPlanLimit(currentPlan.max_leads),
+      to: formatPlanLimit(targetPlan.max_leads),
     });
   }
 
@@ -147,8 +151,8 @@ export function getPlanDiff(currentPlan: PlanRow, targetPlan: PlanRow): PlanDiff
   if (currentPlan.max_whatsapp_per_month !== targetPlan.max_whatsapp_per_month) {
     limitsChanged.push({
       name: 'WhatsApp/mês',
-      from: currentPlan.max_whatsapp_per_month.toLocaleString('pt-BR'),
-      to: targetPlan.max_whatsapp_per_month.toLocaleString('pt-BR'),
+      from: formatPlanLimit(currentPlan.max_whatsapp_per_month),
+      to: formatPlanLimit(targetPlan.max_whatsapp_per_month),
     });
   }
 

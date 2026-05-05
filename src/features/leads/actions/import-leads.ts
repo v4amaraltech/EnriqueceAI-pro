@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
 
 import type { LeadImportErrorRow } from '../types';
 import { logLeadEventBulk } from './log-lead-event';
@@ -77,7 +78,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         .is('deleted_at', null)) as { count: number | null };
 
       const currentLeads = leadCount ?? 0;
-      if (currentLeads >= plan.max_leads) {
+      if (exceedsLimit(currentLeads, 1, plan.max_leads)) {
         return {
           success: false,
           error: `Limite de leads atingido (${currentLeads}/${plan.max_leads}). Faça upgrade para adicionar mais.`,
@@ -85,7 +86,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         };
       }
 
-      const availableSlots = plan.max_leads - currentLeads;
+      const availableSlots = remainingSlots(currentLeads, plan.max_leads);
       if (parsed.rows.length > availableSlots) {
         return {
           success: false,

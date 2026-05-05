@@ -7,6 +7,8 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
+import { formatLimit, isUnlimited } from '@/lib/utils/plan-limits';
+
 import { formatCents } from '../services/feature-flags';
 import type { PlanComparison as PlanComparisonData, PlanRow } from '../types';
 
@@ -84,7 +86,9 @@ interface PlanCardProps {
 }
 
 function PlanCard({ plan, isCurrent, onSelect, isUpgrade }: PlanCardProps) {
-  const aiUnlimited = plan.max_ai_per_day === -1;
+  const aiUnlimited = isUnlimited(plan.max_ai_per_day);
+  const leadsUnlimited = isUnlimited(plan.max_leads);
+  const waUnlimited = isUnlimited(plan.max_whatsapp_per_month);
 
   return (
     <Card className={isCurrent ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]' : ''}>
@@ -105,13 +109,13 @@ function PlanCard({ plan, isCurrent, onSelect, isUpgrade }: PlanCardProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-2 text-sm">
-          <PlanFeatureRow label={`${plan.max_leads.toLocaleString('pt-BR')} leads`} included />
+          <PlanFeatureRow label={leadsUnlimited ? 'Leads ilimitados' : `${formatLimit(plan.max_leads)} leads`} included />
           <PlanFeatureRow
             label={aiUnlimited ? 'IA ilimitada' : `${plan.max_ai_per_day} IA/dia`}
             included
           />
           <PlanFeatureRow
-            label={`${plan.max_whatsapp_per_month.toLocaleString('pt-BR')} WhatsApp/mês`}
+            label={waUnlimited ? 'WhatsApp ilimitado' : `${formatLimit(plan.max_whatsapp_per_month)} WhatsApp/mês`}
             included
           />
           <PlanFeatureRow

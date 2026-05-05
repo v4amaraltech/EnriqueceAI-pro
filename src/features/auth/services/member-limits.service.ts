@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUnlimited } from '@/lib/utils/plan-limits';
 
 export interface MemberLimitResult {
   allowed: boolean;
@@ -37,7 +38,7 @@ export async function checkMemberLimit(
   const current = memberCountResult.count ?? 0;
 
   return {
-    allowed: current < max,
+    allowed: isUnlimited(max) || current < max,
     current,
     max,
   };
