@@ -13,31 +13,21 @@ interface AvailableLeadsData {
 /**
  * Counts leads in the org that are NOT enrolled in any active/paused cadence.
  * Returns their IDs so the UI can pass them to EnrollInCadenceDialog.
+ *
+ * Uses leads_no_active_enrollment view — the anti-join runs in SQL so we
+ * avoid a NOT IN(...) clause whose URL would exceed the PostgREST limit
+ * on orgs with many enrolled leads.
  */
 export async function fetchAvailableLeadsCount(): Promise<ActionResult<AvailableLeadsData>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // Get lead IDs already enrolled in active or paused cadences
-  const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
-    .select('lead_id')
-    .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
-
-  const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
-
-  // Get available leads: only 'new' status (not yet started), not enrolled, not deleted
-  let query = from(supabase, 'leads')
+  const { data, error } = (await from(supabase, 'leads_no_active_enrollment')
     .select('id')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .eq('status', 'new');
-
-  if (enrolledIds.length > 0) {
-    query = query.not('id', 'in', `(${enrolledIds.join(',')})`);
-  }
-
-  const { data, error } = (await query) as {
+    .eq('status', 'new')) as {
     data: Array<{ id: string }> | null;
     error: { message: string } | null;
   };

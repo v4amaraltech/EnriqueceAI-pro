@@ -102,20 +102,33 @@ export async function POST(request: Request) {
       const leadIds = [...new Set(upcomingMeetings.map((m) => m.lead_id))];
       const meetingIds = upcomingMeetings.map((m) => m.id);
 
-      // Batch: fetch lead names + existing reminders in parallel (fixes N+1)
-      const [leadsResult, existingRemindersResult] = await Promise.all([
+      // Chunk large IN(...) clauses to keep each PostgREST URL under the limit.
+      // Without this the cron silently misses reminders once meetingIds grows.
+      const CHUNK = 100;
+
+      const [leadsResult, ...reminderChunks] = await Promise.all([
         from(supabase, 'leads')
           .select('id, nome_fantasia, razao_social')
-          .in('id', leadIds) as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
-        from(supabase, 'notifications')
-          .select('metadata')
-          .eq('type', 'meeting_reminder')
-          .in('metadata->>interaction_id', meetingIds) as Promise<{ data: Array<{ metadata: Record<string, unknown> }> | null }>,
+          .in('id', leadIds.slice(0, CHUNK)) as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
+        ...Array.from({ length: Math.ceil(meetingIds.length / CHUNK) }, (_, i) =>
+          from(supabase, 'notifications')
+            .select('metadata')
+            .eq('type', 'meeting_reminder')
+            .in('metadata->>interaction_id', meetingIds.slice(i * CHUNK, (i + 1) * CHUNK)) as Promise<{ data: Array<{ metadata: Record<string, unknown> }> | null }>,
+        ),
       ]);
 
+      // Fetch remaining lead-name chunks (rare path — kept simple, sequential)
       const leadNameMap = new Map((leadsResult.data ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']));
+      for (let i = CHUNK; i < leadIds.length; i += CHUNK) {
+        const { data } = (await from(supabase, 'leads')
+          .select('id, nome_fantasia, razao_social')
+          .in('id', leadIds.slice(i, i + CHUNK))) as { data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null };
+        for (const l of data ?? []) leadNameMap.set(l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead');
+      }
+
       const sentMeetingIds = new Set(
-        (existingRemindersResult.data ?? []).map((n) => n.metadata?.interaction_id as string),
+        reminderChunks.flatMap((r) => (r.data ?? []).map((n) => n.metadata?.interaction_id as string)),
       );
 
       for (const meeting of upcomingMeetings) {
