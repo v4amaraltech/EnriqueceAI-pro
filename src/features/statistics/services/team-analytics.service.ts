@@ -74,6 +74,7 @@ export async function fetchTeamAnalyticsData(
   const { data: rawLeads } = (await from(supabase, 'leads')
     .select('id, status, created_by')
     .eq('org_id', orgId)
+    .is('deleted_at', null)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
     .limit(10000)) as { data: LeadQueryRow[] | null };

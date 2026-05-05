@@ -31,6 +31,7 @@ export async function fetchConversionAnalyticsData(
   let leadsQuery = from(supabase, 'leads')
     .select('id, status, created_at, created_by')
     .eq('org_id', orgId)
+    .is('deleted_at', null)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 

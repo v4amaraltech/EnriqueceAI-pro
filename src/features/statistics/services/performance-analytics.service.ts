@@ -58,6 +58,7 @@ export async function fetchPerformanceAnalyticsData(
   const leadsQuery = from(supabase, 'leads')
     .select('id, status, created_by, assigned_to, won_by')
     .eq('org_id', orgId)
+    .is('deleted_at', null)
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 

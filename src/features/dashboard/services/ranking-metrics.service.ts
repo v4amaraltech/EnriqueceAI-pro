@@ -111,7 +111,8 @@ export async function fetchLeadsFinishedRanking(
   const leadIds = [...new Set(rows.map((r) => r.lead_id))];
   const { data: leadData } = (await from(supabase, 'leads')
     .select('id, assigned_to')
-    .in('id', leadIds)) as {
+    .in('id', leadIds)
+    .is('deleted_at', null)) as {
     data: Array<{ id: string; assigned_to: string | null }> | null;
   };
   const leadAssignedTo = new Map((leadData ?? []).map((l) => [l.id, l.assigned_to]));

@@ -81,7 +81,7 @@ export async function fetchLossReasonAnalyticsData(
   const memberInfoMap = await buildMemberInfoMap(supabase, orgId);
   const lostLeadIds = [...new Set(lostEnrollments.map((e) => e.lead_id))];
   const { data: lostLeads } = lostLeadIds.length > 0
-    ? (await from(supabase, 'leads').select('id, assigned_to').in('id', lostLeadIds)) as { data: Array<{ id: string; assigned_to: string | null }> | null }
+    ? (await from(supabase, 'leads').select('id, assigned_to').in('id', lostLeadIds).is('deleted_at', null)) as { data: Array<{ id: string; assigned_to: string | null }> | null }
     : { data: [] as Array<{ id: string; assigned_to: string | null }> };
   const leadAssignedMap = new Map((lostLeads ?? []).map((l) => [l.id, l.assigned_to]));
   const lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap, leadAssignedMap);
