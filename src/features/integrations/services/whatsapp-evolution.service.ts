@@ -19,6 +19,29 @@ interface WhatsAppInstance {
   user_id: string | null;
 }
 
+const RECONNECT_HINT =
+  'Sua sessão do WhatsApp expirou. Reconecte o WhatsApp em Configurações → Integrações.';
+
+// Baileys / Evolution returns these phrases when the WhatsApp Web session is
+// dropped (logged out from phone, network outage, expired session, etc.).
+// Match is case-insensitive and looks for substrings, since Evolution wraps
+// them in different shapes ("Connection Closed", "no session", "not authorized").
+const SESSION_DEAD_PATTERNS = [
+  'connection closed',
+  'connection failure',
+  'connection terminated',
+  'connection lost',
+  'no session',
+  'not authorized',
+  'instance not connected',
+  'not logged',
+];
+
+function isSessionDeadError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return SESSION_DEAD_PATTERNS.some((pattern) => lower.includes(pattern));
+}
+
 export class EvolutionWhatsAppService {
   /**
    * Sends a text message via Evolution API (WhatsApp Web).
@@ -87,6 +110,12 @@ export class EvolutionWhatsAppService {
           if (rawError) errorMsg = rawError;
         }
         console.error('[evolution] sendMessage failed:', response.status, errorMsg, 'instance:', instance.instance_name, 'phone:', formattedPhone);
+
+        if (isSessionDeadError(errorMsg)) {
+          await this.markInstanceDisconnected(supabase, instance.id);
+          return { success: false, error: RECONNECT_HINT };
+        }
+
         return { success: false, error: errorMsg };
       }
 
@@ -103,10 +132,30 @@ export class EvolutionWhatsAppService {
 
       return { success: true, messageId };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Erro ao conectar com Evolution API',
-      };
+      const message = err instanceof Error ? err.message : 'Erro ao conectar com Evolution API';
+      if (isSessionDeadError(message)) {
+        await this.markInstanceDisconnected(supabase, instance.id);
+        return { success: false, error: RECONNECT_HINT };
+      }
+      return { success: false, error: message };
+    }
+  }
+
+  /**
+   * Marks an Evolution instance as disconnected so the UI prompts the user to
+   * reconnect via QR Code. Failures are swallowed: surfacing a clear error to
+   * the caller is more important than the bookkeeping update.
+   */
+  private static async markInstanceDisconnected(
+    supabase: SupabaseClient,
+    instanceId: string,
+  ): Promise<void> {
+    try {
+      await from(supabase, 'whatsapp_instances' as never)
+        .update({ status: 'disconnected' } as Record<string, unknown>)
+        .eq('id', instanceId);
+    } catch (err) {
+      console.error('[evolution] markInstanceDisconnected failed:', err);
     }
   }
 
