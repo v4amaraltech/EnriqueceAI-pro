@@ -236,15 +236,10 @@ export async function fetchFilteredLeadIds(
 export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { supabase } = auth.data;
 
-  const { data, error } = (await from(supabase, 'leads')
-    .select('cnae')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .not('cnae', 'is', null)
-    .not('cnae', 'eq', '')
-    .order('cnae')) as {
+  // DISTINCT at DB level — avoids PostgREST row limit truncating rare values.
+  const { data, error } = (await supabase.rpc('get_distinct_lead_cnaes')) as {
     data: Array<{ cnae: string }> | null;
     error: { message: string } | null;
   };
@@ -253,8 +248,7 @@ export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
     return { success: false, error: 'Erro ao buscar CNAEs' };
   }
 
-  const unique = [...new Set((data ?? []).map((r) => r.cnae))];
-  return { success: true, data: unique };
+  return { success: true, data: (data ?? []).map((r) => r.cnae) };
 }
 
 export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
@@ -269,14 +263,9 @@ export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
     .eq('field_key', 'canal')
     .maybeSingle()) as { data: { options: string[] | null } | null };
 
-  // Fetch distinct values from leads
-  const { data, error } = (await from(supabase, 'leads')
-    .select('canal')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .not('canal', 'is', null)
-    .not('canal', 'eq', '')
-    .order('canal')) as {
+  // DISTINCT at DB level — avoids PostgREST row limit truncating rare values
+  // (e.g. "Recovery") on orgs with many leads.
+  const { data, error } = (await supabase.rpc('get_distinct_lead_canais')) as {
     data: Array<{ canal: string }> | null;
     error: { message: string } | null;
   };

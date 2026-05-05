@@ -1595,6 +1595,8 @@ export type Database = {
     Functions: {
       is_manager: { Args: never; Returns: boolean }
       user_org_id: { Args: never; Returns: string }
+      get_distinct_lead_canais: { Args: never; Returns: { canal: string }[] }
+      get_distinct_lead_cnaes: { Args: never; Returns: { cnae: string }[] }
     }
     Enums: {
       cadence_status: "draft" | "active" | "paused" | "archived"
