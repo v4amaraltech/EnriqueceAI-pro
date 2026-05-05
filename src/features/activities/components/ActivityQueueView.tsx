@@ -93,7 +93,11 @@ const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_pe
 export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
+  // a numeric index. Otherwise, when revalidatePath triggers an RSC re-render that
+  // reorders the list (new enrollments arriving on top, scheduled activities, etc.),
+  // a numeric selection silently slides to a different lead.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   // Sync with server data when revalidatePath triggers a re-render with fresh activities
   useEffect(() => {
@@ -153,12 +157,14 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   }, [router]);
 
   const handleClose = useCallback(() => {
-    setSelectedIndex(null);
+    setSelectedKey(null);
   }, []);
 
-  const handleNavigate = useCallback((index: number) => {
-    setSelectedIndex(index);
+  const handleNavigate = useCallback((key: string) => {
+    setSelectedKey(key);
   }, []);
+
+  const keyOf = (a: PendingActivity) => `${a.enrollmentId}:${a.stepId}`;
 
   // Show all activities (current + future within 24h window) grouped by lead
   const visibleActivities = useMemo(() => activities, [activities]);
@@ -183,10 +189,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   const handleToggleQuickMode = useCallback(() => {
     const newMode = !quickMode;
     setQuickMode(newMode);
-    if (newMode && filtered.length > 0 && selectedIndex === null) {
-      setSelectedIndex(0);
+    if (newMode && filtered.length > 0 && selectedKey === null) {
+      const first = filtered[0];
+      if (first) setSelectedKey(`${first.enrollmentId}:${first.stepId}`);
     }
-  }, [quickMode, filtered.length, selectedIndex]);
+  }, [quickMode, filtered, selectedKey]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -238,13 +245,6 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       else next.add(channel);
       return next;
     });
-  }
-
-  // Find index in visible activities array for execution sheet
-  function findGlobalIndex(activity: PendingActivity) {
-    return visibleActivities.findIndex(
-      (a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId,
-    );
   }
 
   return (
@@ -314,7 +314,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         <>
           <ReturnsTab
             returns={scheduledReturns}
-            onExecute={(a) => setSelectedIndex(findGlobalIndex(a))}
+            onExecute={(a) => setSelectedKey(keyOf(a))}
             onIgnore={handleIgnore}
             onViewLead={handleViewLead}
             onLeadWon={handleLeadWon}
@@ -322,7 +322,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           />
           <ActivityExecutionSheet
             activities={visibleActivities}
-            selectedIndex={selectedIndex}
+            selectedKey={selectedKey}
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
@@ -400,7 +400,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                         <ActivityRow
                           key={`${activity.enrollmentId}:${activity.stepId}`}
                           activity={activity}
-                          onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+                          onExecute={() => setSelectedKey(keyOf(activity))}
 
                           onIgnore={() => handleIgnore(activity)}
                           onViewLead={() => handleViewLead(activity.lead.id)}
@@ -427,7 +427,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                 <ActivityRow
                   key={`${activity.enrollmentId}:${activity.stepId}`}
                   activity={activity}
-                  onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+                  onExecute={() => setSelectedKey(keyOf(activity))}
                   onIgnore={() => handleIgnore(activity)}
                   onViewLead={() => handleViewLead(activity.lead.id)}
                   onLeadWon={() => handleLeadWon(activity)}
@@ -447,7 +447,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           {/* Execution Sheet */}
           <ActivityExecutionSheet
             activities={visibleActivities}
-            selectedIndex={selectedIndex}
+            selectedKey={selectedKey}
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}

@@ -25,18 +25,20 @@ import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
 
 interface ActivityExecutionSheetProps {
   activities: PendingActivity[];
-  selectedIndex: number | null;
+  selectedKey: string | null;
   onClose: () => void;
-  onNavigate: (index: number) => void;
+  onNavigate: (key: string) => void;
   onActivityDone: (enrollmentId: string, stepId: string) => void;
   onLeadLost?: (activity: PendingActivity) => void;
   dialerProvider?: DialerProvider;
   quickMode?: boolean;
 }
 
+const keyOf = (a: PendingActivity) => `${a.enrollmentId}:${a.stepId}`;
+
 export function ActivityExecutionSheet({
   activities,
-  selectedIndex,
+  selectedKey,
   onClose,
   onNavigate,
   onActivityDone,
@@ -46,21 +48,31 @@ export function ActivityExecutionSheet({
 }: ActivityExecutionSheetProps) {
   const [isSending, startSendTransition] = useTransition();
 
-  const activity = selectedIndex !== null ? activities[selectedIndex] : null;
+  const selectedIndex = selectedKey !== null
+    ? activities.findIndex((a) => keyOf(a) === selectedKey)
+    : -1;
+  const activity = selectedIndex >= 0 ? activities[selectedIndex] : null;
 
-  // Advance to next activity or close if last
+  // Advance to next activity or close if last. Resolves the next activity by key
+  // BEFORE the parent removes the completed one, so subsequent re-renders (RSC
+  // revalidation, server reordering) cannot misalign the selection.
   function advanceOrClose(enrollmentId: string, stepId: string) {
+    const currentIdx = activities.findIndex(
+      (a) => a.enrollmentId === enrollmentId && a.stepId === stepId,
+    );
+    const nextActivity = currentIdx >= 0 ? activities[currentIdx + 1] : undefined;
+
     onActivityDone(enrollmentId, stepId);
 
     const remaining = activities.length - 1;
 
-    if (selectedIndex !== null && selectedIndex < activities.length - 1) {
+    if (nextActivity) {
       toast.success(
         remaining <= 3
           ? `Quase lá! ${remaining} restante${remaining > 1 ? 's' : ''}`
-          : `Feito! (${selectedIndex + 1}/${activities.length})`,
+          : `Feito! (${currentIdx + 1}/${activities.length})`,
       );
-      onNavigate(selectedIndex);
+      onNavigate(keyOf(nextActivity));
     } else {
       toast('Todas as atividades concluídas!', {
         icon: '🎉',
@@ -213,12 +225,14 @@ export function ActivityExecutionSheet({
     });
   };
 
-  const hasPrev = selectedIndex !== null && selectedIndex > 0;
-  const hasNext = selectedIndex !== null && selectedIndex < activities.length - 1;
+  const hasPrev = selectedIndex > 0;
+  const hasNext = selectedIndex >= 0 && selectedIndex < activities.length - 1;
+  const prevActivity = hasPrev ? activities[selectedIndex - 1] : undefined;
+  const nextActivity = hasNext ? activities[selectedIndex + 1] : undefined;
 
   // Keyboard shortcuts: ← → to navigate, Escape to close
   useEffect(() => {
-    if (selectedIndex === null) return;
+    if (selectedIndex < 0) return;
 
     function handleKeyDown(e: KeyboardEvent) {
       // Don't intercept when typing in inputs/textareas/editors
@@ -226,21 +240,21 @@ export function ActivityExecutionSheet({
       const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable;
       if (isEditable) return;
 
-      if (e.key === 'ArrowLeft' && hasPrev) {
+      if (e.key === 'ArrowLeft' && prevActivity) {
         e.preventDefault();
-        onNavigate(selectedIndex! - 1);
-      } else if (e.key === 'ArrowRight' && hasNext) {
+        onNavigate(keyOf(prevActivity));
+      } else if (e.key === 'ArrowRight' && nextActivity) {
         e.preventDefault();
-        onNavigate(selectedIndex! + 1);
+        onNavigate(keyOf(nextActivity));
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, hasPrev, hasNext, onNavigate]);
+  }, [selectedIndex, prevActivity, nextActivity, onNavigate]);
 
   return (
-    <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={selectedKey !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col" showCloseButton={false}>
         <SheetTitle className="sr-only">Executar Atividade</SheetTitle>
 
@@ -266,21 +280,21 @@ export function ActivityExecutionSheet({
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
-                  disabled={!hasPrev}
-                  onClick={() => selectedIndex !== null && onNavigate(selectedIndex - 1)}
+                  disabled={!prevActivity}
+                  onClick={() => prevActivity && onNavigate(keyOf(prevActivity))}
                   title="Anterior (←)"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  {selectedIndex !== null ? selectedIndex + 1 : 0} de {activities.length}
+                  {selectedIndex >= 0 ? selectedIndex + 1 : 0} de {activities.length}
                 </span>
                 <Button
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
-                  disabled={!hasNext}
-                  onClick={() => selectedIndex !== null && onNavigate(selectedIndex + 1)}
+                  disabled={!nextActivity}
+                  onClick={() => nextActivity && onNavigate(keyOf(nextActivity))}
                   title="Próxima (→)"
                 >
                   <ChevronRight className="h-4 w-4" />

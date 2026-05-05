@@ -47,7 +47,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const currentStatus = searchParams.get('status') ?? '';
   const currentChannel = searchParams.get('channel') ?? '';
@@ -171,18 +171,14 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   }, [router]);
 
   const handleClose = useCallback(() => {
-    setSelectedIndex(null);
+    setSelectedKey(null);
   }, []);
 
-  const handleNavigate = useCallback((index: number) => {
-    setSelectedIndex(index);
+  const handleNavigate = useCallback((key: string) => {
+    setSelectedKey(key);
   }, []);
 
-  function findGlobalIndex(activity: PendingActivity) {
-    return visibleActivities.findIndex(
-      (a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId,
-    );
-  }
+  const keyOf = (a: PendingActivity) => `${a.enrollmentId}:${a.stepId}`;
 
   return (
     <div className="space-y-4">
@@ -329,7 +325,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
             <ActivityRow
               key={`${activity.enrollmentId}:${activity.stepId}`}
               activity={activity}
-              onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+              onExecute={() => setSelectedKey(keyOf(activity))}
 
               onIgnore={() => handleIgnore(activity)}
               onViewLead={() => handleViewLead(activity.lead.id)}
@@ -350,7 +346,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       {/* Execution Sheet */}
       <ActivityExecutionSheet
         activities={visibleActivities}
-        selectedIndex={selectedIndex}
+        selectedKey={selectedKey}
         onClose={handleClose}
         onNavigate={handleNavigate}
         onActivityDone={handleActivityDone}
