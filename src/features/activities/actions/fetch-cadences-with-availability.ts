@@ -39,13 +39,23 @@ export async function fetchCadencesWithAvailability(): Promise<
       return { success: true, data: { cadences: [], totalAvailable: 0, availableLeadIds: [] } };
     }
 
-    // 2. Count available leads via SQL (avoids PostgREST .not('id','in',...) URL limit)
-    const { data: availResult } = await (supabase.rpc as any)('leads_without_active_enrollment', {
-      p_org_id: orgId,
-    }) as { data: Array<{ lead_id: string }> | null };
+    // 2. Count + sample available leads via the leads_no_active_enrollment view.
+    // Service role bypasses RLS so org scoping has to be explicit. The dialog
+    // only needs ~200 IDs to enroll, so cap the row read at the same number.
+    const [{ count }, { data: sampleRows }] = await Promise.all([
+      from(supabase, 'leads_no_active_enrollment')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .is('deleted_at', null) as Promise<{ count: number | null }>,
+      from(supabase, 'leads_no_active_enrollment')
+        .select('id')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .limit(200) as Promise<{ data: Array<{ id: string }> | null }>,
+    ]);
 
-    const availableLeadIds = (availResult ?? []).map((r: { lead_id: string }) => r.lead_id);
-    const totalAvailable = availableLeadIds.length;
+    const totalAvailable = count ?? 0;
+    const availableLeadIds = (sampleRows ?? []).map((r) => r.id);
 
     // 3. Map cadences with availability
     const result: AvailableCadence[] = cadences.map((c) => ({
@@ -68,7 +78,7 @@ export async function fetchCadencesWithAvailability(): Promise<
 
     return {
       success: true,
-      data: { cadences: result, totalAvailable, availableLeadIds: availableLeadIds.slice(0, 200) },
+      data: { cadences: result, totalAvailable, availableLeadIds },
     };
   } catch (err) {
     console.error('[fetch-cadences-with-availability]', err);
