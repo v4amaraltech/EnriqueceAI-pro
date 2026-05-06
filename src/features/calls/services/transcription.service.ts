@@ -6,7 +6,9 @@ import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-const CLAUDE_MAX_TOKENS = 2048;
+// 2048 truncated SPICED responses on long calls (~13min, transcription >11k chars).
+// 8192 fits the 6-field JSON output for any realistic call length.
+const CLAUDE_MAX_TOKENS = 8192;
 
 interface CallForTranscription {
   id: string;
