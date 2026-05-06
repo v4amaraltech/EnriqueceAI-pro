@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { brtDayStartIso } from '@/lib/utils/brt-date';
 
 export const maxDuration = 60;
 
@@ -25,8 +26,11 @@ async function expireTrials() {
   if (trials.length > 0) {
     const orgIds = trials.map((t) => t.org_id);
 
-    // Batch: fetch all managers + existing notifications in parallel (fixes N+1)
-    const today = new Date().toISOString().slice(0, 10);
+    // Batch: fetch all managers + existing notifications in parallel (fixes N+1).
+    // Dedup by "today in BRT" — the cron runs in UTC, so a naive YYYY-MM-DD
+    // slice would leak the previous BRT evening into the dedup window.
+    const todayBrt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = brtDayStartIso(todayBrt);
     const [managersResult, notifsResult] = await Promise.all([
       from(supabase, 'organization_members')
         .select('user_id, org_id')
