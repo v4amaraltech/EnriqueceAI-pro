@@ -53,6 +53,17 @@ export function ActivityExecutionSheet({
     : -1;
   const activity = selectedIndex >= 0 ? activities[selectedIndex] : null;
 
+  // Defensive guard: when selectedKey points to an activity that no longer
+  // exists (markLeadAsLost / scheduleActivity completes every enrollment for
+  // the lead at once, so the next item the sheet tried to advance to may also
+  // have vanished), close the sheet instead of rendering an empty SheetContent
+  // that looks like a "black screen" on dark theme.
+  useEffect(() => {
+    if (selectedKey !== null && activity === null) {
+      onClose();
+    }
+  }, [selectedKey, activity, onClose]);
+
   // Advance to next activity or close if last. Resolves the next activity by key
   // BEFORE the parent removes the completed one, so subsequent re-renders (RSC
   // revalidation, server reordering) cannot misalign the selection.
