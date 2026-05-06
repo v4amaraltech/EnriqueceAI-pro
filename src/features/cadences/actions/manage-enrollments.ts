@@ -183,6 +183,14 @@ export async function removeEnrollment(
   if (qErr4) return qErr4;
 
   if (enrollment) {
+    // Cancel pending scheduled return-activities for this lead. Without this,
+    // removing the cadence still leaves "ligar de volta" tasks in the SDR's
+    // queue — same root cause as the markLeadAsLost / markLeadAsWon gaps.
+    await from(supabase, 'scheduled_activities' as never)
+      .update({ status: 'cancelled' } as Record<string, unknown>)
+      .eq('lead_id', enrollment.lead_id)
+      .eq('status', 'pending');
+
     logLeadEvent(supabase, {
       orgId,
       leadId: enrollment.lead_id,

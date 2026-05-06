@@ -112,6 +112,16 @@ export async function markLeadAsLost(
     .eq('lead_id', leadId)
     .in('status', ['active', 'paused']);
 
+  // 2b. Cancel pending scheduled return-activities for this lead. Without this,
+  // a return scheduled before the loss decision keeps showing up in the SDR's
+  // queue and they can "execute" the cadence on a lost lead — exactly what
+  // happened on M&A distribuidora (lost on May 5, the SDR ran another call
+  // from a stale scheduled activity on May 6).
+  await from(serviceClient, 'scheduled_activities' as never)
+    .update({ status: 'cancelled' } as Record<string, unknown>)
+    .eq('lead_id', leadId)
+    .eq('status', 'pending');
+
   // 3. Record system interaction for timeline visibility
   const { data: reason } = (await from(supabase, 'loss_reasons')
     .select('name')

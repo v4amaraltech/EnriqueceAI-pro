@@ -58,6 +58,16 @@ export async function scheduleActivity(
     if (enrollError) {
       console.error('[schedule-activity] Failed to complete enrollments:', enrollError.message, 'leadId=', leadId);
     }
+
+    // Also cancel OTHER pending scheduled activities for the same lead — when
+    // the SDR schedules a new return ("ligar de volta amanhã"), older returns
+    // for the same lead should drop out of the queue. Excludes the row we
+    // just inserted via .neq('id', data.id).
+    await from(serviceClient, 'scheduled_activities' as never)
+      .update({ status: 'cancelled' } as Record<string, unknown>)
+      .eq('lead_id', leadId)
+      .eq('status', 'pending')
+      .neq('id', data.id);
   }
 
   // Record system interaction for timeline

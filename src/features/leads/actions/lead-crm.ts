@@ -284,6 +284,13 @@ export async function markLeadAsWon(
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
 
+    // 2a. Cancel pending scheduled return-activities for the lead. Once it's
+    // won, the SDR shouldn't see "ligar de volta" tasks lingering in the queue.
+    await from(supabase, 'scheduled_activities' as never)
+      .update({ status: 'cancelled' } as Record<string, unknown>)
+      .eq('lead_id', leadId)
+      .eq('status', 'pending');
+
     // 2b. Record system interaction for timeline visibility
     await from(supabase, 'interactions')
       .insert({
