@@ -557,7 +557,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         defaultRamal={api4com?.ramal ?? ''}
         defaultBaseUrl={api4com?.base_url ?? ''}
         hasExistingApiKey={api4com?.has_api_key ?? false}
-        defaultSipDomain={api4com?.sip_domain ?? ''}
+        defaultSipDomain={api4com?.sip_domain ?? api4com?.org_sip_domain ?? ''}
         hasExistingSipPassword={api4com?.has_sip_password ?? false}
       />
 

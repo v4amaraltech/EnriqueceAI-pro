@@ -88,7 +88,11 @@ export interface Api4ComConnectionSafe {
   id: string;
   ramal: string;
   base_url: string;
+  /** SIP domain stored on this user's row. Null if the SDR hasn't filled it. */
   sip_domain: string | null;
+  /** SIP domain inferred from the org. Used as default in the config modal so
+   *  SDRs don't need to discover it manually. */
+  org_sip_domain: string | null;
   has_api_key: boolean;
   has_sip_password: boolean;
   status: ConnectionStatus;

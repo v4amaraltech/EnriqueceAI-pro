@@ -94,12 +94,26 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('org_id', orgId)
     .maybeSingle()) as { data: ApolloConnectionSafe | null };
 
+  // sip_domain is the same for every SDR in the org. Fetch the manager's value
+  // so the modal can suggest it when the SDR's own row hasn't been filled yet.
+  let orgSipDomain: string | null = api4comRaw?.sip_domain ?? null;
+  if (!orgSipDomain) {
+    const { data: domainFallback } = (await from(supabase, 'api4com_connections' as never)
+      .select('sip_domain')
+      .eq('org_id', orgId)
+      .not('sip_domain', 'is', null)
+      .limit(1)
+      .maybeSingle()) as { data: { sip_domain: string | null } | null };
+    orgSipDomain = domainFallback?.sip_domain ?? null;
+  }
+
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {
         id: api4comRaw.id,
         ramal: api4comRaw.ramal,
         base_url: api4comRaw.base_url,
         sip_domain: api4comRaw.sip_domain,
+        org_sip_domain: orgSipDomain,
         has_api_key: !!api4comRaw.api_key_encrypted,
         has_sip_password: !!api4comRaw.sip_password_encrypted,
         status: api4comRaw.status as Api4ComConnectionSafe['status'],

@@ -112,6 +112,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   ramal: '1014',
   base_url: 'https://api.api4com.com/api/v1/',
   sip_domain: null,
+  org_sip_domain: null,
   has_api_key: true,
   has_sip_password: false,
   status: 'connected',

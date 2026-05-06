@@ -46,10 +46,26 @@ export async function getApi4ComSipCredentials(): Promise<ActionResult<Api4ComSi
     return { success: false, error: 'API4COM não configurado para este usuário' };
   }
 
-  if (!data.sip_domain || !data.sip_password_encrypted) {
-    return { success: false, error: 'Credenciais SIP do webphone não configuradas. Configure o Domínio SIP e a Senha do Ramal nas integrações.' };
+  // sip_domain is per-account (same for every SDR in the org). When the SDR
+  // skipped that field but the manager filled it, inherit it instead of
+  // refusing to start the webphone.
+  let resolvedSipDomain = data.sip_domain;
+  if (!resolvedSipDomain) {
+    const { data: orgFallback } = (await from(serviceClient, 'api4com_connections' as never)
+      .select('sip_domain')
+      .eq('org_id', orgId)
+      .not('sip_domain', 'is', null)
+      .limit(1)
+      .maybeSingle()) as { data: { sip_domain: string | null } | null };
+    resolvedSipDomain = orgFallback?.sip_domain ?? null;
   }
 
+  if (!resolvedSipDomain) {
+    return { success: false, error: 'Domínio SIP não configurado. Peça ao gestor para preencher o Domínio SIP nas integrações da organização.' };
+  }
+  if (!data.sip_password_encrypted) {
+    return { success: false, error: 'Senha SIP do ramal não configurada. Abra Integrações → API4COM e preencha a Senha do Ramal.' };
+  }
   if (!data.api_key_encrypted) {
     return { success: false, error: 'API Token da API4COM não configurado' };
   }
@@ -57,7 +73,7 @@ export async function getApi4ComSipCredentials(): Promise<ActionResult<Api4ComSi
   return {
     success: true,
     data: {
-      sipDomain: data.sip_domain,
+      sipDomain: resolvedSipDomain,
       ramal: data.ramal,
       sipPassword: decrypt(data.sip_password_encrypted),
       apiToken: decrypt(data.api_key_encrypted),
