@@ -23,9 +23,11 @@ const RECONNECT_HINT =
   'Sua sessão do WhatsApp expirou. Reconecte o WhatsApp em Configurações → Integrações.';
 
 // Baileys / Evolution returns these phrases when the WhatsApp Web session is
-// dropped (logged out from phone, network outage, expired session, etc.).
+// dropped (logged out from phone, network outage, expired session, etc.) or
+// when the Evolution server lost the instance from memory (after a restart).
 // Match is case-insensitive and looks for substrings, since Evolution wraps
-// them in different shapes ("Connection Closed", "no session", "not authorized").
+// them in different shapes ("Connection Closed", "no session", "not authorized",
+// "The 'ea_xxx' instance does not exist").
 const SESSION_DEAD_PATTERNS = [
   'connection closed',
   'connection failure',
@@ -35,6 +37,9 @@ const SESSION_DEAD_PATTERNS = [
   'not authorized',
   'instance not connected',
   'not logged',
+  'instance does not exist',
+  'instance not found',
+  'does not exist',
 ];
 
 function isSessionDeadError(message: string): boolean {

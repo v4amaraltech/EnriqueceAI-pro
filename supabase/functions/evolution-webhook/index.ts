@@ -10,7 +10,7 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { validateWebhookSecret } from "../_shared/auth.ts";
 import { normalizeConnectionState, extractPhoneFromPayload } from "../_shared/evolution.ts";
-import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, deleteWhatsAppInstance, eventExists, createProviderEvent } from "../_shared/supabase.ts";
+import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
 serve(async (req)=>{
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -83,11 +83,13 @@ serve(async (req)=>{
               updates.phone = phone;
             }
           } else if (normalizedStatus === "disconnected") {
-            // User disconnected from their phone — delete instance entirely
-            console.log(`[webhook] Instance ${instanceName} disconnected — deleting from DB`);
-            const instanceId = instance.id as string;
-            await deleteWhatsAppInstance(instanceId);
-            break;
+            // Mark as disconnected instead of deleting the row. Deleting causes
+            // the next "Conectar" click to race with the orphaned Evolution
+            // instance ("already in use" → retry path → flapping instance
+            // names), and erases the user's history (last_seen, phone). The
+            // create-instance flow already destroys + recreates on reconnect.
+            console.log(`[webhook] Instance ${instanceName} disconnected — marking, not deleting`);
+            updates.qr_base64 = null;
           }
           await updateWhatsAppInstanceByName(instanceName, updates);
           break;
