@@ -32,7 +32,10 @@ const CNPJ_COLUMN_NAMES = ['cnpj', 'cnpj_cpf', 'documento', 'document', 'cpf_cnp
  * Parses a CSV string and extracts rows with valid CNPJs.
  */
 export function parseCsv(content: string): CsvParseResult {
-  const lines = content.trim().split(/\r?\n/);
+  // Strip UTF-8 BOM (﻿) — Excel and Google Sheets export it on the first
+  // byte, which would otherwise contaminate the first header (e.g. "﻿cnpj")
+  // and make the column-name match silently fail with "Coluna CNPJ não encontrada".
+  const lines = content.replace(/^﻿/, '').trim().split(/\r?\n/);
   if (lines.length < 2) {
     return { rows: [], errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Arquivo vazio ou sem dados' }], totalRows: 0 };
   }
@@ -87,6 +90,9 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
   for (let i = 0; i < dataLines.length; i++) {
     const line = dataLines[i]!;
     const rowNumber = i + 2; // 1-indexed, +1 for header
+    // Skip blank lines (Excel often leaves a trailing empty row that would
+    // otherwise show up as "CNPJ vazio" in the import report).
+    if (!line.trim()) continue;
     const cells = parseRow(line);
 
     const rawCnpj = cells[cnpjIndex]?.trim() ?? '';
