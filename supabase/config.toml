@@ -345,3 +345,10 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# Evolution API webhook is signed via X-EVOLUTION-SECRET — Supabase JWT
+# verification would reject every request before our handler runs, since the
+# Evolution server doesn't send an Authorization header. Without this flag,
+# every webhook returns 401 and provider_events stays empty.
+[functions.evolution-webhook]
+verify_jwt = false
