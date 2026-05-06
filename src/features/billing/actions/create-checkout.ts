@@ -47,13 +47,37 @@ export async function createCheckoutSession(
       name: org.name,
       metadata: { org_id: org.id },
     });
-    customerId = customer.id;
 
-    // Save customer ID (use service role to bypass RLS for this update)
+    // Conditional save — only persist this customer if no concurrent checkout
+    // already wrote one. If we lose the race, drop our customer in Stripe and
+    // use the winner's ID. Without this, two simultaneous "Assinar" clicks
+    // create two Stripe customers and one becomes an orphan.
     const serviceClient = createServiceRoleClient();
-    await from(serviceClient, 'organizations')
-      .update({ stripe_customer_id: customerId } as Record<string, unknown>)
-      .eq('id', org.id);
+    const { data: claimed } = (await from(serviceClient, 'organizations')
+      .update({ stripe_customer_id: customer.id } as Record<string, unknown>)
+      .eq('id', org.id)
+      .is('stripe_customer_id', null)
+      .select('stripe_customer_id')
+      .maybeSingle()) as { data: { stripe_customer_id: string } | null };
+
+    if (claimed?.stripe_customer_id) {
+      customerId = claimed.stripe_customer_id;
+    } else {
+      // Lost the race — fetch the winner and delete our orphan customer.
+      const { data: winner } = (await from(serviceClient, 'organizations')
+        .select('stripe_customer_id')
+        .eq('id', org.id)
+        .single()) as { data: { stripe_customer_id: string | null } | null };
+      customerId = winner?.stripe_customer_id ?? null;
+      try {
+        await stripe.customers.del(customer.id);
+      } catch (err) {
+        console.error('[create-checkout] Failed to delete orphan Stripe customer:', err);
+      }
+      if (!customerId) {
+        return { success: false, error: 'Erro ao criar cliente Stripe' };
+      }
+    }
   }
 
   // Create checkout session

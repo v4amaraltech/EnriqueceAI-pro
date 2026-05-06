@@ -247,6 +247,24 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // Load blacklisted email domains for all orgs in this batch
   const orgIds = [...new Set((enrollments ?? []).map((e) => e.lead.org_id))];
   const blacklistedDomains = new Set<string>();
+
+  // Pre-fetch every cadence step for the batch's cadences in one query.
+  // Avoids the N+1 of fetching the current step per enrollment inside the loop.
+  const cadenceIdsInBatch = [...new Set((enrollments ?? []).map((e) => e.cadence_id))];
+  const stepsByCadence = new Map<string, Map<number, CadenceStepRow>>();
+  if (cadenceIdsInBatch.length > 0) {
+    const { data: allSteps } = (await from(supabase, 'cadence_steps')
+      .select('*')
+      .in('cadence_id', cadenceIdsInBatch)) as { data: CadenceStepRow[] | null };
+    for (const s of allSteps ?? []) {
+      let bucket = stepsByCadence.get(s.cadence_id);
+      if (!bucket) {
+        bucket = new Map<number, CadenceStepRow>();
+        stepsByCadence.set(s.cadence_id, bucket);
+      }
+      bucket.set(s.step_order, s);
+    }
+  }
   if (orgIds.length > 0) {
     const { data: blacklistRows } = (await from(supabase, 'email_blacklist')
       .select('domain, org_id')
@@ -261,12 +279,8 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     result.processed++;
 
     try {
-      // Fetch current step
-      const { data: step } = (await from(supabase, 'cadence_steps')
-        .select('*')
-        .eq('cadence_id', enrollment.cadence_id)
-        .eq('step_order', enrollment.current_step)
-        .single()) as { data: CadenceStepRow | null };
+      // Fetch current step from the pre-loaded map (avoids per-enrollment query)
+      const step = stepsByCadence.get(enrollment.cadence_id)?.get(enrollment.current_step) ?? null;
 
       if (!step) {
         const { error: completeErr } = await from(supabase, 'cadence_enrollments')
@@ -298,13 +312,12 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
       if (existingInteraction) {
         // Already executed this step — advance to next so enrollment doesn't get stuck
-        const { data: nextIdempStep } = (await from(supabase, 'cadence_steps')
-          .select('step_order')
-          .eq('cadence_id', enrollment.cadence_id)
-          .gt('step_order', enrollment.current_step)
-          .order('step_order', { ascending: true })
-          .limit(1)
-          .maybeSingle()) as { data: { step_order: number } | null };
+        const cadenceSteps = stepsByCadence.get(enrollment.cadence_id);
+        const nextIdempStep = cadenceSteps
+          ? [...cadenceSteps.values()]
+              .filter((s) => s.step_order > enrollment.current_step)
+              .sort((a, b) => a.step_order - b.step_order)[0] ?? null
+          : null;
 
         if (nextIdempStep) {
           const { error: advErr } = await from(supabase, 'cadence_enrollments')
@@ -613,14 +626,14 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         }
       }
 
-      // Check if there's a next step (handles non-contiguous step_order)
-      const { data: nextStep } = (await from(supabase, 'cadence_steps')
-        .select('step_order')
-        .eq('cadence_id', enrollment.cadence_id)
-        .gt('step_order', enrollment.current_step)
-        .order('step_order', { ascending: true })
-        .limit(1)
-        .maybeSingle()) as { data: { step_order: number } | null };
+      // Check if there's a next step (handles non-contiguous step_order) —
+      // resolved from the pre-loaded map.
+      const cadenceStepsForNext = stepsByCadence.get(enrollment.cadence_id);
+      const nextStep = cadenceStepsForNext
+        ? [...cadenceStepsForNext.values()]
+            .filter((s) => s.step_order > enrollment.current_step)
+            .sort((a, b) => a.step_order - b.step_order)[0] ?? null
+        : null;
 
       if (nextStep) {
         const { error: nextErr } = await from(supabase, 'cadence_enrollments')
