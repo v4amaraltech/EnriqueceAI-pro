@@ -101,9 +101,21 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // a numeric selection silently slides to a different lead.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  // Sync with server data when revalidatePath triggers a re-render with fresh activities
+  // Sync with server data when revalidatePath triggers a re-render with fresh
+  // activities — but preserve the SDR's local ordering. Each executeActivity
+  // bumps the enrollment's next_step_due, which pushes that lead later in the
+  // server's leadEarliestDue ranking. If we replaced the list outright, the SDR
+  // would finish ECO RENOVA's first step and then jump to a different lead
+  // because ECO RENOVA fell to the bottom on the next refetch. Keep the prev
+  // order for activities that still exist on the server, and append new ones.
   useEffect(() => {
-    setActivities(initialActivities);
+    setActivities((prev) => {
+      const initialKeys = new Set(initialActivities.map((a) => `${a.enrollmentId}:${a.stepId}`));
+      const prevKeys = new Set(prev.map((a) => `${a.enrollmentId}:${a.stepId}`));
+      const kept = prev.filter((a) => initialKeys.has(`${a.enrollmentId}:${a.stepId}`));
+      const newOnes = initialActivities.filter((a) => !prevKeys.has(`${a.enrollmentId}:${a.stepId}`));
+      return [...kept, ...newOnes];
+    });
   }, [initialActivities]);
   const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
