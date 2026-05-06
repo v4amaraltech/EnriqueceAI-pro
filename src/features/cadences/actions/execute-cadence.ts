@@ -539,6 +539,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
         // Reply threading: fetch previous thread info when reply_type is 'reply'
         let replyThreadId: string | undefined;
+        let inReplyToMessageId: string | undefined;
         const stepReplyType = (step as CadenceStepRow & { reply_type?: ReplyType }).reply_type;
         if (stepReplyType === 'reply') {
           const { data: prevInteraction } = (await from(supabase, 'interactions')
@@ -554,8 +555,12 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           if (prevInteraction?.metadata) {
             const prevThreadId = prevInteraction.metadata.thread_id as string | undefined;
             const prevSubject = prevInteraction.metadata.subject as string | undefined;
+            const prevRfcId = prevInteraction.metadata.rfc_message_id as string | undefined;
             if (prevThreadId) {
               replyThreadId = prevThreadId;
+            }
+            if (prevRfcId) {
+              inReplyToMessageId = prevRfcId;
             }
             if (prevSubject && subject) {
               subject = subject.startsWith('Re:') ? subject : `Re: ${prevSubject}`;
@@ -574,17 +579,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             subject: subject ?? '',
             htmlBody: messageContent,
             threadId: replyThreadId,
+            inReplyToMessageId,
           },
           interaction.id,
           supabase,
         );
 
         if (emailResult.success && emailResult.messageId) {
-          // Save messageId, threadId and subject for reply tracking
+          // Save messageId, threadId, RFC Message-ID and subject for reply tracking
           const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
           const metaUpdate: Record<string, unknown> = {};
           if (subject) metaUpdate.subject = subject;
           if (emailResult.threadId) metaUpdate.thread_id = emailResult.threadId;
+          if (emailResult.rfcMessageId) metaUpdate.rfc_message_id = emailResult.rfcMessageId;
           if (abVariant) metaUpdate.ab_variant = abVariant;
           if (Object.keys(metaUpdate).length > 0) {
             updateData.metadata = metaUpdate;

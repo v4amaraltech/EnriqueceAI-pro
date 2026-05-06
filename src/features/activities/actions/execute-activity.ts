@@ -167,15 +167,14 @@ export async function executeActivity(
     );
 
     if (emailResult.success && emailResult.messageId) {
-      // Store messageId and threadId for reply tracking
+      // Store messageId, threadId and RFC Message-ID for reply tracking
       const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
-      if (emailResult.threadId) {
-        updateData.metadata = {
-          ...(subject ? { subject } : {}),
-          ...(body ? { html_body: body } : {}),
-          thread_id: emailResult.threadId,
-        };
-      }
+      const meta: Record<string, unknown> = {};
+      if (subject) meta.subject = subject;
+      if (body) meta.html_body = body;
+      if (emailResult.threadId) meta.thread_id = emailResult.threadId;
+      if (emailResult.rfcMessageId) meta.rfc_message_id = emailResult.rfcMessageId;
+      if (Object.keys(meta).length > 0) updateData.metadata = meta;
       await from(supabase, 'interactions')
         .update(updateData)
         .eq('id', interaction.id);

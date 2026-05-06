@@ -12,6 +12,11 @@ interface SendEmailParams {
   subject: string;
   htmlBody: string;
   threadId?: string;
+  /** RFC 2822 Message-ID of the message being replied to (e.g.
+   *  `<abc@mail.gmail.com>`). When set, the outgoing message gets
+   *  `In-Reply-To` and `References` headers so non-Gmail recipients see the
+   *  conversation as a thread instead of a brand-new email each time. */
+  inReplyToMessageId?: string;
   trackOpens?: boolean;
   trackClicks?: boolean;
 }
@@ -20,6 +25,9 @@ interface SendEmailResult {
   success: boolean;
   messageId?: string;
   threadId?: string;
+  /** RFC 2822 Message-ID assigned to the sent message — persist this on the
+   *  interaction so future replies can quote it via inReplyToMessageId. */
+  rfcMessageId?: string;
   error?: string;
 }
 
@@ -91,15 +99,48 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
-function buildRawEmail(from: string, to: string, subject: string, htmlBody: string): string {
+/** Generate an RFC 2822 Message-ID using the sender's domain. Gmail rewrites
+ *  this on send anyway, but having one upfront lets us persist a stable ID
+ *  on the interaction record before the API call returns. */
+function generateMessageId(fromAddress: string): string {
+  const domain = fromAddress.split('@')[1] ?? 'enriqueceai.com.br';
+  const random = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 12)}`;
+  return `<${random}@${domain}>`;
+}
+
+interface BuildRawEmailOptions {
+  messageId?: string;
+  inReplyTo?: string;
+}
+
+function buildRawEmail(
+  from: string,
+  to: string,
+  subject: string,
+  htmlBody: string,
+  options: BuildRawEmailOptions = {},
+): string {
   const boundary = `boundary_${Date.now()}`;
   const plainText = htmlToPlainText(htmlBody);
-  const message = [
+  const headers: string[] = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${encodeSubject(subject)}`,
     'MIME-Version: 1.0',
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  if (options.messageId) {
+    headers.push(`Message-ID: ${options.messageId}`);
+  }
+  if (options.inReplyTo) {
+    // RFC 5322: References should accumulate; with only one prior message we
+    // mirror In-Reply-To.
+    headers.push(`In-Reply-To: ${options.inReplyTo}`);
+    headers.push(`References: ${options.inReplyTo}`);
+  }
+  headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+
+  const message = [
+    ...headers,
     '',
     `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
@@ -259,8 +300,13 @@ export class EmailService {
       }
     }
 
-    // Build raw email
-    const raw = buildRawEmail(connection.email_address, params.to, params.subject, html);
+    // Build raw email — include a stable Message-ID + In-Reply-To/References
+    // so that non-Gmail recipients see replies as a continuing thread.
+    const rfcMessageId = generateMessageId(connection.email_address);
+    const raw = buildRawEmail(connection.email_address, params.to, params.subject, html, {
+      messageId: rfcMessageId,
+      inReplyTo: params.inReplyToMessageId,
+    });
 
     // Send via Gmail API
     const requestBody: Record<string, string> = { raw };
@@ -304,6 +350,6 @@ export class EmailService {
       }
     }
 
-    return { success: true, messageId: result.id, threadId };
+    return { success: true, messageId: result.id, threadId, rfcMessageId };
   }
 }
