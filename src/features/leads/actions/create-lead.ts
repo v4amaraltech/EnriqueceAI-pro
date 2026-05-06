@@ -79,12 +79,13 @@ export async function createLead(
     return { success: false, error: 'Responsável não pertence à organização' };
   }
 
-  // Check duplicate by email within same org
+  // Check duplicate by email within same org (case-insensitive — providers
+  // treat email as case-insensitive and we have legacy rows with mixed case)
   if (parsed.data.email) {
     const { data: existingByEmail } = await from(supabase, 'leads')
       .select('id, email, first_name, last_name')
       .eq('org_id', orgId)
-      .eq('email', parsed.data.email)
+      .ilike('email', parsed.data.email)
       .is('deleted_at', null)
       .maybeSingle();
 

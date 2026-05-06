@@ -235,10 +235,11 @@ export class CrmSyncService {
     }
 
     if (!existingId && email) {
+      // Case-insensitive — matches CRM addresses regardless of stored casing.
       const { data } = (await from(supabase, 'leads')
         .select('id, updated_at')
         .eq('org_id', orgId)
-        .eq('email', email)
+        .ilike('email', email)
         .maybeSingle()) as { data: { id: string; updated_at: string } | null };
       if (data) existingId = data.id;
     }

@@ -89,12 +89,13 @@ async function ingestSingleLead(
   const source = normalized.lead_source;
   const canal = normalized.canal;
 
-  // Check for duplicate by email (within same org)
+  // Check for duplicate by email (within same org, case-insensitive — providers
+  // treat email as case-insensitive)
   if (data.email) {
     const { data: existing } = await from(supabase, 'leads')
       .select('id')
       .eq('org_id', orgId)
-      .eq('email', data.email)
+      .ilike('email', data.email)
       .is('deleted_at', null)
       .maybeSingle() as { data: { id: string } | null };
 

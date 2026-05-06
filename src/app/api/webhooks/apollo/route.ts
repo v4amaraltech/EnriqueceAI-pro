@@ -143,12 +143,14 @@ export async function POST(request: Request) {
 
     lead = bySourceId;
 
-    // Fallback: match by email if available
+    // Fallback: match by email if available (case-insensitive — gmail and most
+    // providers treat the local part as case-insensitive, and we still have
+    // legacy rows with mixed-case emails)
     if (!lead && person.email) {
       const { data: byEmail } = await from(supabase, 'leads')
         .select('id, phones')
         .eq('lead_source', 'apollo')
-        .eq('email', person.email)
+        .ilike('email', person.email)
         .eq('org_id', orgId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
