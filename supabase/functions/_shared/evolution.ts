@@ -231,23 +231,34 @@ export function normalizeConnectionState(
   return 'error';
 }
 
-/** Try to extract a phone number from various Evolution payloads */
+/** Try to extract a phone number from various Evolution payloads. Different
+ *  Evolution versions/events expose the WhatsApp ID under different keys —
+ *  `instance.owner`, `instance.ownerJid`, `data.instance.ownerJid`, `data.wuid`,
+ *  `data.user.id`, etc. — all in the JID format `5511999999999@s.whatsapp.net`. */
 export function extractPhoneFromPayload(payload: Record<string, unknown>): string | null {
-  // instance.owner format: "5511999999999@s.whatsapp.net"
-  const owner =
-    (payload as { instance?: { owner?: string } })?.instance?.owner ||
-    (payload as { data?: { instance?: { owner?: string } } })?.data?.instance?.owner ||
-    '';
-  if (owner) {
-    const match = owner.match(/^(\d+)@/);
-    if (match) return match[1]!;
+  const candidates: unknown[] = [
+    (payload as { instance?: { owner?: string } })?.instance?.owner,
+    (payload as { instance?: { ownerJid?: string } })?.instance?.ownerJid,
+    (payload as { instance?: { wuid?: string } })?.instance?.wuid,
+    (payload as { data?: { instance?: { owner?: string; ownerJid?: string; wuid?: string } } })?.data?.instance?.owner,
+    (payload as { data?: { instance?: { ownerJid?: string } } })?.data?.instance?.ownerJid,
+    (payload as { data?: { instance?: { wuid?: string } } })?.data?.instance?.wuid,
+    (payload as { data?: { wuid?: string } })?.data?.wuid,
+    (payload as { data?: { user?: { id?: string } } })?.data?.user?.id,
+    (payload as { wuid?: string })?.wuid,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) {
+      const match = candidate.match(/^(\d+)/); // strip @s.whatsapp.net or :device suffix
+      if (match) return match[1]!;
+    }
   }
 
   // Direct phone field
   const phone =
     (payload as { phone?: string })?.phone ||
     (payload as { data?: { phone?: string } })?.data?.phone;
-  if (phone) return phone;
+  if (typeof phone === 'string' && phone) return phone;
 
   return null;
 }

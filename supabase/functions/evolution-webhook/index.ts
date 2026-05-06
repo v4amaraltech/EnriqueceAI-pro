@@ -9,7 +9,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { validateWebhookSecret } from "../_shared/auth.ts";
-import { normalizeConnectionState, extractPhoneFromPayload } from "../_shared/evolution.ts";
+import { normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
 serve(async (req)=>{
   // Handle CORS preflight
@@ -77,8 +77,16 @@ serve(async (req)=>{
             updates.qr_base64 = null;
             updates.reconnect_attempts = 0;
             updates.next_reconnect_at = null;
-            // Tentar extrair telefone
-            const phone = extractPhoneFromPayload(payload);
+            // Try to extract phone from the webhook payload first; fall back
+            // to fetchInstance when Evolution sends a minimal payload (newer
+            // versions only include {state, instanceName} on connection.update).
+            let phone = extractPhoneFromPayload(payload);
+            if (!phone) {
+              const fetchResult = await fetchInstance(instanceName);
+              if (fetchResult.ok) {
+                phone = extractPhoneFromPayload(fetchResult.data as Record<string, unknown>);
+              }
+            }
             if (phone) {
               updates.phone = phone;
             }
