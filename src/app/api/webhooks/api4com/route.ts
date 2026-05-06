@@ -281,8 +281,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  // Mark as received (pending) before returning response
-  await markEventReceived(supabase, 'api4com', compositeEventId, body.eventType);
+  // Mark as received (pending) before returning response. Passing the body
+  // here is what fills webhook_events.payload — without it every API4COM
+  // event was being persisted with payload=null, blocking post-mortems.
+  await markEventReceived(supabase, 'api4com', compositeEventId, body.eventType, body);
 
   // Process in background after response is sent
   after(() =>
