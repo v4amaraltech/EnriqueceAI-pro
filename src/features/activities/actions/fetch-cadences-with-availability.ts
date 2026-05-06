@@ -15,7 +15,18 @@ export async function fetchCadencesWithAvailability(): Promise<
 > {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId } = auth.data;
+  const { orgId, userId, supabase: rlsSupabase } = auth.data;
+
+  // Determine role — managers see all org leads, SDRs only their own. Without
+  // this filter an SDR could "Iniciar novos leads" and end up enrolling leads
+  // assigned to teammates, effectively stealing them from other SDRs' queues.
+  const { data: memberRow } = (await from(rlsSupabase, 'organization_members')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
+    .single()) as { data: { role: string } | null };
+  const isManager = memberRow?.role === 'manager';
+
   const supabase = createServiceRoleClient();
 
   try {
@@ -40,18 +51,25 @@ export async function fetchCadencesWithAvailability(): Promise<
     }
 
     // 2. Count + sample available leads via the leads_no_active_enrollment view.
-    // Service role bypasses RLS so org scoping has to be explicit. The dialog
-    // only needs ~200 IDs to enroll, so cap the row read at the same number.
+    // Service role bypasses RLS so org scoping has to be explicit. SDRs are
+    // additionally scoped to assigned_to = userId; managers see all.
+    // The dialog only needs ~200 IDs to enroll, so cap the row read at the same number.
+    const baseCountQuery = from(supabase, 'leads_no_active_enrollment')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .is('deleted_at', null);
+    const baseSampleQuery = from(supabase, 'leads_no_active_enrollment')
+      .select('id')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .limit(200);
+
+    const countQuery = isManager ? baseCountQuery : baseCountQuery.eq('assigned_to', userId);
+    const sampleQuery = isManager ? baseSampleQuery : baseSampleQuery.eq('assigned_to', userId);
+
     const [{ count }, { data: sampleRows }] = await Promise.all([
-      from(supabase, 'leads_no_active_enrollment')
-        .select('id', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .is('deleted_at', null) as Promise<{ count: number | null }>,
-      from(supabase, 'leads_no_active_enrollment')
-        .select('id')
-        .eq('org_id', orgId)
-        .is('deleted_at', null)
-        .limit(200) as Promise<{ data: Array<{ id: string }> | null }>,
+      countQuery as Promise<{ count: number | null }>,
+      sampleQuery as Promise<{ data: Array<{ id: string }> | null }>,
     ]);
 
     const totalAvailable = count ?? 0;
