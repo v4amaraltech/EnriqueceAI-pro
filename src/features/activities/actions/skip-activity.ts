@@ -21,7 +21,29 @@ export async function skipActivity(
   if (!auth.success) return auth;
   const { supabase } = auth.data;
 
-  const nextStepDue = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  // Look up the current step's configured delay so a skip respects the
+  // cadence design. A 2h floor keeps the snooze useful even for delay=0
+  // steps (otherwise the same activity would reappear immediately).
+  const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
+    .select('cadence_id, current_step')
+    .eq('id', enrollmentId)
+    .single()) as { data: { cadence_id: string; current_step: number } | null };
+
+  let stepDelayMs = 0;
+  if (enrollment) {
+    const { data: step } = (await from(supabase, 'cadence_steps')
+      .select('delay_days, delay_hours')
+      .eq('cadence_id', enrollment.cadence_id)
+      .eq('step_order', enrollment.current_step)
+      .maybeSingle()) as { data: { delay_days: number; delay_hours: number } | null };
+    if (step) {
+      stepDelayMs = (step.delay_days * 24 + step.delay_hours) * 60 * 60 * 1000;
+    }
+  }
+
+  const minSnoozeMs = 2 * 60 * 60 * 1000;
+  const pushMs = Math.max(minSnoozeMs, stepDelayMs);
+  const nextStepDue = new Date(Date.now() + pushMs).toISOString();
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .update({ next_step_due: nextStepDue } as Record<string, unknown>)

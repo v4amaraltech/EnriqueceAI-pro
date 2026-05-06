@@ -61,13 +61,17 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   if (!auth.success) return auth;
   const { supabase } = auth.data;
 
-  // 1. Fetch ALL active enrollments with due steps (no time window — show everything pending)
+  // 1. Fetch active enrollments whose current step is actually due (next_step_due <= now()).
+  // Without this filter the queue ignores the cadence's configured delay_days — every step
+  // appears as soon as the previous one is executed, defeating multi-day cadence designs
+  // (e.g. an SDR could "burn through" a 6-day Outbound cadence in 30 minutes the same day).
   // RLS on leads table filters by assigned_to for SDRs: leads not visible to this
   // user will come back as null in the join, and are filtered out below.
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
+    .lte('next_step_due', new Date().toISOString())
     .order('enrolled_at', { ascending: false })
     .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
