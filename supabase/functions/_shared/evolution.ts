@@ -234,18 +234,25 @@ export function normalizeConnectionState(
 /** Try to extract a phone number from various Evolution payloads. Different
  *  Evolution versions/events expose the WhatsApp ID under different keys —
  *  `instance.owner`, `instance.ownerJid`, `data.instance.ownerJid`, `data.wuid`,
- *  `data.user.id`, etc. — all in the JID format `5511999999999@s.whatsapp.net`. */
+ *  `data.user.id`, the root `ownerJid` (returned by /instance/fetchInstances),
+ *  etc. — all in the JID format `5511999999999@s.whatsapp.net`. */
 export function extractPhoneFromPayload(payload: Record<string, unknown>): string | null {
   const candidates: unknown[] = [
+    // Root-level fields (e.g. /instance/fetchInstances response: { ownerJid, name, ... })
+    (payload as { ownerJid?: string })?.ownerJid,
+    (payload as { owner?: string })?.owner,
+    (payload as { wuid?: string })?.wuid,
+    // Nested under `instance` (older webhook payloads)
     (payload as { instance?: { owner?: string } })?.instance?.owner,
     (payload as { instance?: { ownerJid?: string } })?.instance?.ownerJid,
     (payload as { instance?: { wuid?: string } })?.instance?.wuid,
+    // Nested under `data` (newer webhook envelope)
     (payload as { data?: { instance?: { owner?: string; ownerJid?: string; wuid?: string } } })?.data?.instance?.owner,
     (payload as { data?: { instance?: { ownerJid?: string } } })?.data?.instance?.ownerJid,
     (payload as { data?: { instance?: { wuid?: string } } })?.data?.instance?.wuid,
     (payload as { data?: { wuid?: string } })?.data?.wuid,
+    (payload as { data?: { ownerJid?: string } })?.data?.ownerJid,
     (payload as { data?: { user?: { id?: string } } })?.data?.user?.id,
-    (payload as { wuid?: string })?.wuid,
   ];
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate) {
