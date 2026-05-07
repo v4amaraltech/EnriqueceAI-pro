@@ -108,9 +108,26 @@ export class EvolutionWhatsAppService {
         const rawError = await response.text().catch(() => '');
         let errorMsg = `Evolution API error: ${response.status}`;
         try {
-          const errorBody = JSON.parse(rawError) as { message?: string; error?: string; response?: { message?: string[] | string } };
-          const responseMsg = Array.isArray(errorBody?.response?.message) ? errorBody.response.message.join(', ') : errorBody?.response?.message;
-          errorMsg = responseMsg ?? errorBody?.message ?? errorBody?.error ?? errorMsg;
+          const errorBody = JSON.parse(rawError) as { message?: unknown; error?: unknown; response?: { message?: unknown } };
+          // Evolution sometimes returns nested error objects (e.g. PrismaClientKnownRequestError
+          // wrapped in response.message). Coerce defensively to a string so we never
+          // persist "[object Object]" as the failure reason in interactions.metadata.
+          const pickString = (v: unknown): string | null => {
+            if (typeof v === 'string' && v.length > 0) return v;
+            if (Array.isArray(v)) {
+              const joined = v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(', ');
+              return joined.length > 0 ? joined : null;
+            }
+            if (v && typeof v === 'object') {
+              try { return JSON.stringify(v); } catch { return null; }
+            }
+            return null;
+          };
+          errorMsg =
+            pickString(errorBody?.response?.message) ??
+            pickString(errorBody?.message) ??
+            pickString(errorBody?.error) ??
+            errorMsg;
         } catch {
           if (rawError) errorMsg = rawError;
         }
