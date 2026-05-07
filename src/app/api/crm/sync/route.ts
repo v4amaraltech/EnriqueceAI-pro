@@ -48,7 +48,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Sync all active connections using service role (no cookies in cron)
+    // Sync all active connections using service role (no cookies in cron).
+    // The service-role client is forwarded into syncConnection so its internal
+    // crm_connections SELECT doesn't get blocked by RLS.
     const supabase = createServiceRoleClient();
     const { data: connections } = (await from(supabase, 'crm_connections')
       .select('id')
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
     const results = [];
     for (const conn of connections ?? []) {
       try {
-        const result = await CrmSyncService.syncConnection(conn.id);
+        const result = await CrmSyncService.syncConnection(conn.id, supabase);
         results.push({ connectionId: conn.id, ...result });
       } catch (error) {
         results.push({

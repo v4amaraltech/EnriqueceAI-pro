@@ -123,11 +123,19 @@ export class EvolutionWhatsAppService {
             }
             return null;
           };
-          errorMsg =
-            pickString(errorBody?.response?.message) ??
-            pickString(errorBody?.message) ??
-            pickString(errorBody?.error) ??
-            errorMsg;
+          // Evolution returns { jid, exists: false, number } when the destination
+          // is not a registered WhatsApp account. Surface that as a clean user
+          // message instead of the raw JSON.
+          const respMsg = errorBody?.response?.message;
+          if (respMsg && typeof respMsg === 'object' && 'exists' in respMsg && (respMsg as { exists?: unknown }).exists === false) {
+            errorMsg = 'Esse número não está cadastrado no WhatsApp';
+          } else {
+            errorMsg =
+              pickString(errorBody?.response?.message) ??
+              pickString(errorBody?.message) ??
+              pickString(errorBody?.error) ??
+              errorMsg;
+          }
         } catch {
           if (rawError) errorMsg = rawError;
         }

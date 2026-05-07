@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
@@ -50,12 +52,17 @@ export class CrmSyncService {
    * Run full bidirectional sync for a connection.
    * Called by /api/crm/sync route.
    */
-  static async syncConnection(connectionId: string): Promise<{
+  static async syncConnection(
+    connectionId: string,
+    suppliedClient?: SupabaseClient,
+  ): Promise<{
     pull: SyncResult;
     push: SyncResult;
     activities: SyncResult;
   }> {
-    const supabase = await createServerSupabaseClient();
+    // Cron context (no cookies) supplies a service-role client; manual UI calls
+    // can rely on the cookie-based session client.
+    const supabase = suppliedClient ?? (await createServerSupabaseClient());
 
     // Get connection with credentials
     const { data: connection } = (await from(supabase, 'crm_connections')
