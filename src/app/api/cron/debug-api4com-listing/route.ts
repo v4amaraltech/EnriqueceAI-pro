@@ -30,7 +30,8 @@ export async function POST(request: Request) {
   const apiKey = decrypt(conn.api_key_encrypted);
   const baseUrl = conn.base_url.replace(/\/$/, '');
 
-  const targetCallId = '86d80879-fe2a-4ed5-9a85-9d810ba6a830'; // INESA call
+  const targetCallId = '86d80879-fe2a-4ed5-9a85-9d810ba6a830';
+  const targetDestSuffix = '31455000'; // (47) 3145-5000 → 4731455000 → match last 8
 
   const out: Record<string, unknown> = {
     base_url: baseUrl,
@@ -38,33 +39,56 @@ export async function POST(request: Request) {
     user_id: conn.user_id,
     apiKey_length: apiKey.length,
     apiKey_prefix: apiKey.slice(0, 8),
-    pages: [],
+    matches_by_destination: [] as unknown[],
+    target_id_found_at: null as null | number,
+    pages_summary: [] as unknown[],
   };
 
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= 10; page++) {
     const r = await fetch(`${baseUrl}/calls?page=${page}`, {
       headers: { 'Content-Type': 'application/json', Authorization: apiKey },
     });
     const text = await r.text();
     let json: unknown = null;
     try { json = JSON.parse(text); } catch { /* ignore */ }
-    const pageInfo: Record<string, unknown> = {
-      page,
-      status: r.status,
-      ok: r.ok,
-    };
-    if (json && typeof json === 'object') {
-      const j = json as Record<string, unknown>;
-      const records = (j.data as Array<Record<string, unknown>>) ?? [];
-      pageInfo.recordCount = records.length;
-      pageInfo.metadata = j.metadata;
-      pageInfo.firstRecord = records[0];
-      pageInfo.matchTarget = records.find((rec) => rec.id === targetCallId) ?? null;
-      pageInfo.recordIds = records.slice(0, 5).map((rec) => rec.id);
-    } else {
-      pageInfo.bodyPreview = text.slice(0, 500);
+
+    if (!json || typeof json !== 'object') {
+      (out.pages_summary as unknown[]).push({ page, status: r.status, error: text.slice(0, 200) });
+      continue;
     }
-    (out.pages as unknown[]).push(pageInfo);
+
+    const j = json as Record<string, unknown>;
+    const records = (j.data as Array<Record<string, unknown>>) ?? [];
+
+    if (records.length === 0) {
+      (out.pages_summary as unknown[]).push({ page, status: r.status, recordCount: 0 });
+      break;
+    }
+
+    const firstStarted = records[0]?.started_at as string | undefined;
+    const lastStarted = records[records.length - 1]?.started_at as string | undefined;
+    (out.pages_summary as unknown[]).push({
+      page, status: r.status, recordCount: records.length, firstStarted, lastStarted,
+    });
+
+    if (records.find((rec) => rec.id === targetCallId)) {
+      out.target_id_found_at = page;
+    }
+
+    for (const rec of records) {
+      const to = String(rec.to ?? '').replace(/\D/g, '');
+      if (to.endsWith(targetDestSuffix)) {
+        (out.matches_by_destination as unknown[]).push({
+          page,
+          id: rec.id,
+          to: rec.to,
+          started_at: rec.started_at,
+          duration: rec.duration,
+          record_url: rec.record_url,
+          from: rec.from,
+        });
+      }
+    }
   }
 
   return NextResponse.json(out);
