@@ -13,11 +13,12 @@ import { fetchDialerStats } from '@/features/activities/actions/fetch-dialer-sta
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
 import { fetchPendingCalls } from '@/features/activities/actions/fetch-pending-calls';
 import { ActivityQueueView } from '@/features/activities';
+import { fetchActiveCadenceNames } from '@/features/cadences/actions/fetch-cadence-names';
 
 export default async function AtividadesPage() {
   await requireAuth();
 
-  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult] = await Promise.all([
+  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
     fetchPendingCalls(),
@@ -26,6 +27,7 @@ export default async function AtividadesPage() {
     fetchDialerStats(),
     fetchDialerPreferences(),
     getDialerProvider(),
+    fetchActiveCadenceNames(),
   ]);
 
   if (!activitiesResult.success) {
@@ -62,6 +64,7 @@ export default async function AtividadesPage() {
   const dialerStats = statsResult.success ? statsResult.data : undefined;
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
   const dialerProvider = providerResult.success ? providerResult.data.provider : null;
+  const cadenceNames = cadenceNamesResult.success ? cadenceNamesResult.data : [];
 
   return (
     <div>
@@ -76,6 +79,7 @@ export default async function AtividadesPage() {
         dialerProvider={dialerProvider}
         availableLeadsCount={availableLeads.count}
         availableLeadIds={availableLeads.leadIds}
+        allCadenceNames={cadenceNames}
       />
     </div>
   );

@@ -44,6 +44,7 @@ interface ActivityQueueViewProps {
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
   availableLeadIds?: string[];
+  allCadenceNames?: string[];
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -92,7 +93,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
@@ -254,9 +255,17 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   }, []);
 
   // Cadence options for filter (from visible activities only, trimmed to avoid duplicates)
+  // Show every active cadence in the org-wide list, not just ones currently
+  // surfacing activities — otherwise a cadence whose next step is days in the
+  // future (e.g. Outbound after the 2/4/6-day delays kick in) disappears from
+  // the filter even though the SDR has leads enrolled in it.
   const cadenceOptions = useMemo(
-    () => [...new Set(visibleActivities.map((a) => a.cadenceName.trim()))].sort(),
-    [visibleActivities],
+    () => {
+      const fromQueue = visibleActivities.map((a) => a.cadenceName.trim());
+      const merged = new Set<string>([...allCadenceNames, ...fromQueue]);
+      return [...merged].sort();
+    },
+    [visibleActivities, allCadenceNames],
   );
 
   // Grouped by channel for quick mode (uses paginated slice)
