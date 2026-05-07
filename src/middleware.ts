@@ -28,8 +28,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Cron endpoints use Bearer auth, not session — skip session handling
-  if (pathname.startsWith('/api/cron/')) {
+  // Cron endpoints use Bearer auth, not session — skip session handling.
+  // /api/crm/sync has dual auth (cron-secret for batch, user session for manual);
+  // its route handler picks the right path, the middleware just lets it through.
+  if (pathname.startsWith('/api/cron/') || pathname === '/api/crm/sync') {
     return NextResponse.next();
   }
 
