@@ -39,7 +39,6 @@ interface LeadDetailHeaderProps {
   onShowArchive: () => void;
   onShowLost: () => void;
   onShowWon: () => void;
-  onEnrich: () => void;
   onEnrichApollo: () => void;
   onReenrichApollo: () => void;
   onCall?: () => void;
@@ -56,7 +55,6 @@ export function LeadDetailHeader({
   onShowArchive,
   onShowLost,
   onShowWon,
-  onEnrich,
   onEnrichApollo,
   onReenrichApollo,
   onCall,
@@ -190,10 +188,6 @@ export function LeadDetailHeader({
               Agendar Reunião
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEnrich} disabled={isEnriching}>
-              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-              {isEnriching ? 'Enriquecendo...' : 'Enriquecer (CNPJ)'}
-            </DropdownMenuItem>
             {lead.source_id ? (
               <DropdownMenuItem onClick={onReenrichApollo} disabled={isEnriching}>
                 <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />

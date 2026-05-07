@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -24,7 +24,7 @@ import {
 } from '@/shared/components/ui/table';
 
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
-import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkEnrichLeads, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -60,7 +60,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
-  const [showEnrichConfirm, setShowEnrichConfirm] = useState<'cnpj' | 'apollo' | null>(null);
+  const [showEnrichConfirm, setShowEnrichConfirm] = useState<'apollo' | null>(null);
   const [singleArchiveId, setSingleArchiveId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
@@ -168,20 +168,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     });
   }, [selected, router]);
 
-  const handleEnrich = useCallback(() => {
-    const ids = Array.from(selected);
-    startTransition(async () => {
-      const result = await bulkEnrichLeads(ids);
-      if (result.success) {
-        toast.success(`${result.data.successCount} enriquecidos, ${result.data.failCount} falharam`);
-        setSelected(new Set());
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [selected, router]);
-
   const handleEnrichApollo = useCallback(() => {
     const ids = Array.from(selected);
     startTransition(async () => {
@@ -219,18 +205,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
       }
     });
   }, [selected]);
-
-  const handleSingleEnrich = useCallback((id: string) => {
-    startTransition(async () => {
-      const result = await bulkEnrichLeads([id]);
-      if (result.success) {
-        toast.success('Enriquecimento iniciado');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [router]);
 
   const handleSingleEnrichApollo = useCallback((id: string) => {
     startTransition(async () => {
@@ -580,10 +554,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                           <Pencil className="mr-2 h-3.5 w-3.5" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleSingleEnrich(lead.id)}>
-                          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                          Enriquecer (CNPJ)
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleSingleEnrichApollo(lead.id)}>
                           <Globe className="mr-2 h-3.5 w-3.5" />
                           Enriquecer (Apollo)
@@ -630,8 +600,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         enrichType={showEnrichConfirm}
         onClose={() => setShowEnrichConfirm(null)}
         onConfirm={() => {
-          if (showEnrichConfirm === 'cnpj') handleEnrich();
-          else handleEnrichApollo();
+          handleEnrichApollo();
           setShowEnrichConfirm(null);
         }}
         selectedSize={selected.size}

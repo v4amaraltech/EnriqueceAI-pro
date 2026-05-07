@@ -15,25 +15,8 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
-vi.mock('../services/enrichment-provider', () => {
-  return {
-    CnpjWsProvider: class MockCnpjWsProvider {},
-    LemitProvider: class MockLemitProvider {},
-  };
-});
-
-vi.mock('../services/enrichment.service', () => ({
-  enrichLead: vi.fn(),
-  enrichLeadFull: vi.fn(),
-}));
-
-vi.mock('../services/lemit-cpf-provider', () => ({
-  LemitCpfProvider: class MockLemitCpfProvider {},
-}));
-
 import { revalidatePath } from 'next/cache';
-import { enrichLead } from '../services/enrichment.service';
-import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from './bulk-actions';
+import { bulkArchiveLeads, bulkDeleteLeads, exportLeadsCsv } from './bulk-actions';
 
 // Helper to build a chainable mock for: .from().select().eq().eq().single()
 function makeOrgMemberChain(orgId: string | null) {
@@ -50,14 +33,6 @@ function makeUpdateChain(error: { message: string } | null = null) {
   const eqMock = vi.fn().mockReturnValue({ in: inMock });
   const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
   return { update: updateMock };
-}
-
-// Helper to build a chainable mock for: .from('leads').select().eq().single()
-function makeLeadSingleChain(leadData: { cnpj: string; org_id: string } | null) {
-  const singleMock = vi.fn().mockResolvedValue({ data: leadData });
-  const eqMock = vi.fn().mockReturnValue({ single: singleMock });
-  const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
-  return { select: selectMock };
 }
 
 // Helper to build a chainable mock for: .from('leads').select().eq().in()
@@ -201,98 +176,6 @@ describe('bulkArchiveLeads', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBe('Erro ao arquivar leads');
-    }
-  });
-});
-
-describe('bulkEnrichLeads', () => {
-  beforeEach(() => {
-    resetMocks();
-    vi.useFakeTimers();
-  });
-
-  it('should enrich all leads successfully', async () => {
-    vi.mocked(enrichLead).mockResolvedValue({ success: true, data: undefined });
-
-    let fromCallCount = 0;
-    mockFrom.mockImplementation(() => {
-      fromCallCount++;
-      if (fromCallCount === 1) {
-        // getOrgId
-        return makeOrgMemberChain('org-1');
-      }
-      // Per-lead: leads select -> single
-      return makeLeadSingleChain({ cnpj: '11222333000181', org_id: 'org-1' });
-    });
-
-    const promise = bulkEnrichLeads(['lead-1', 'lead-2']);
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.successCount).toBe(2);
-      expect(result.data.failCount).toBe(0);
-    }
-  });
-
-  it('should count partial failures when some leads fail or belong to different org', async () => {
-    vi.mocked(enrichLead)
-      .mockResolvedValueOnce({ success: true, data: undefined })
-      .mockResolvedValueOnce({ success: false, error: 'Enrichment failed' });
-
-    let fromCallCount = 0;
-    mockFrom.mockImplementation(() => {
-      fromCallCount++;
-      if (fromCallCount === 1) {
-        // getOrgId
-        return makeOrgMemberChain('org-1');
-      }
-      if (fromCallCount === 2) {
-        // lead-1: correct org
-        return makeLeadSingleChain({ cnpj: '11222333000181', org_id: 'org-1' });
-      }
-      if (fromCallCount === 3) {
-        // lead-2: correct org but enrichment fails
-        return makeLeadSingleChain({ cnpj: '22333444000195', org_id: 'org-1' });
-      }
-      if (fromCallCount === 4) {
-        // lead-3: belongs to another org -> failCount++
-        return makeLeadSingleChain({ cnpj: '33444555000107', org_id: 'org-other' });
-      }
-      return makeLeadSingleChain(null);
-    });
-
-    const promise = bulkEnrichLeads(['lead-1', 'lead-2', 'lead-3']);
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.successCount).toBe(1);
-      expect(result.data.failCount).toBe(2);
-    }
-  });
-
-  it('should return error when leadIds is empty', async () => {
-    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1'));
-
-    const result = await bulkEnrichLeads([]);
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe('Nenhum lead selecionado');
-    }
-  });
-
-  it('should return error when org is not found', async () => {
-    mockFrom.mockImplementation(() => makeOrgMemberChain(null));
-
-    const result = await bulkEnrichLeads(['lead-1']);
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe('Organização não encontrada');
     }
   });
 });

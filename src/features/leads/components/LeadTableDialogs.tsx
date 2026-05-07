@@ -63,7 +63,7 @@ function ConfirmDialog({
 }
 
 interface EnrichDialogProps {
-  enrichType: 'cnpj' | 'apollo' | null;
+  enrichType: 'apollo' | null;
   onClose: () => void;
   onConfirm: () => void;
   selectedSize: number;
@@ -77,10 +77,7 @@ export function EnrichConfirmDialog({ enrichType, onClose, onConfirm, selectedSi
         <DialogHeader>
           <DialogTitle>Enriquecer leads</DialogTitle>
           <DialogDescription>
-            {enrichType === 'cnpj'
-              ? `Deseja enriquecer ${selectedSize} lead${selectedSize > 1 ? 's' : ''} via CNPJ? Essa operação pode levar alguns minutos.`
-              : `Deseja enriquecer ${selectedSize} lead${selectedSize > 1 ? 's' : ''} via Apollo? Cada enriquecimento consome 1 crédito.`
-            }
+            {`Deseja enriquecer ${selectedSize} lead${selectedSize > 1 ? 's' : ''} via Apollo? Cada enriquecimento consome 1 crédito.`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

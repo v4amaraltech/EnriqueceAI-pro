@@ -1,7 +1,6 @@
 export { bulkDeleteLeads } from './bulk-delete-leads';
 export { bulkArchiveLeads } from './bulk-archive-leads';
 export { bulkAssignLeads } from './bulk-assign-leads';
-export { bulkEnrichLeads } from './bulk-enrich-leads';
 export { bulkEnrichApollo } from './bulk-enrich-apollo';
 export { bulkChangeStatus } from './bulk-change-status';
 export { bulkPauseEnrollments } from './bulk-pause-enrollments';

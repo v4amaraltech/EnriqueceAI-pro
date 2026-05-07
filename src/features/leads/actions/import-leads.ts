@@ -9,7 +9,6 @@ import { MAX_CSV_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 import { createNotification } from '@/features/notifications/services/notification.service';
-import { getAppUrl } from '@/lib/utils/app-url';
 import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
 
 import type { LeadImportErrorRow } from '../types';
@@ -134,7 +133,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         org_id: orgId,
         cnpj: row.cnpj,
         status: 'new',
-        enrichment_status: 'pending',
+        enrichment_status: 'not_found',
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
         lead_source: normalized.lead_source,
@@ -255,11 +254,6 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     });
   }
 
-  // Trigger auto-enrichment (fire-and-forget)
-  if (successCount > 0) {
-    triggerAutoEnrichment(importId).catch((err) => console.error('[import] auto-enrichment failed:', err));
-  }
-
   // Notify user that import completed
   createNotification({
     org_id: orgId,
@@ -287,26 +281,3 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   };
 }
 
-async function triggerAutoEnrichment(importId: string): Promise<void> {
-  const appUrl = getAppUrl();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceRoleKey) {
-    console.warn('[import-leads] Cannot trigger enrichment: missing SUPABASE_SERVICE_ROLE_KEY');
-    return;
-  }
-
-  // Fire-and-forget: don't await the full processing, just ensure the request is sent.
-  // The worker processes synchronously (needed for Vercel serverless), but we don't
-  // need to wait for it to finish — the import response should return immediately.
-  fetch(`${appUrl}/api/workers/enrich-leads`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${serviceRoleKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ importId }),
-  }).catch((err) => {
-    console.error('[import-leads] Enrichment trigger failed:', err);
-  });
-}

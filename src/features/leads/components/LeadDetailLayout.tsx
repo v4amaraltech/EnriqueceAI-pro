@@ -38,7 +38,6 @@ import type { CrmProvider } from '@/features/integrations/types/crm';
 
 import { CurrencyInput } from './CurrencyInput';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { enrichLeadAction } from '../actions/enrich-lead';
 import { updateLead } from '../actions/update-lead';
 import type { MissingRequiredField } from '../utils/required-field-validation';
 import { getMissingRequiredFields } from '../utils/required-field-validation';
@@ -168,18 +167,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       setIsCalling(false);
     }
   }, [lead.id, lead.telefone, lead.phones]);
-
-  const handleEnrich = useCallback(() => {
-    startTransition(async () => {
-      const result = await enrichLeadAction(lead.id);
-      if (result.success) {
-        toast.success('Lead enriquecido com sucesso');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [lead.id, router]);
 
   const handleEnrichApollo = useCallback(() => {
     startTransition(async () => {
@@ -362,7 +349,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         onShowArchive={() => setShowArchiveDialog(true)}
         onShowLost={handleOpenLostDialog}
         onShowWon={handleOpenWonDialog}
-        onEnrich={handleEnrich}
         onEnrichApollo={handleEnrichApollo}
         onReenrichApollo={handleReenrichApollo}
         onCall={handleCall}
