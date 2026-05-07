@@ -9,6 +9,10 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import type { CrmConnectionRow } from '@/features/integrations/types/crm';
 import { CrmSyncService } from '@/features/integrations/services/crm-sync.service';
 
+// Batch sync may iterate over hundreds of CRM contacts — give it Vercel's full
+// serverless budget instead of the 10/60s default.
+export const maxDuration = 300;
+
 interface SyncRequestBody {
   connectionId?: string;
 }
