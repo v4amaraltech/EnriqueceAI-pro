@@ -155,6 +155,7 @@ interface EnrollmentWithLead {
     status: string;
     name: string;
     type: string;
+    created_by: string | null;
   };
 }
 
@@ -222,7 +223,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
-    .select('*, lead:leads(*), cadence:cadences!inner(status, name, type)')
+    .select('*, lead:leads(*), cadence:cadences!inner(status, name, type, created_by)')
     .eq('status', 'active')
     .eq('cadence.status', 'active')
     .eq('cadence.type', 'auto_email')
@@ -465,6 +466,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           metadata: Object.keys(interactionMeta).length > 0 ? interactionMeta : null,
           ai_generated: aiGenerated,
           original_template_id: selectedTemplateId,
+          // Stamp the cadence creator as performed_by so check-email-replies
+          // can find the right Gmail token to inspect the thread. Without this,
+          // every auto_email interaction came in with performed_by=NULL and
+          // the reply-detection cron skipped 100% of them.
+          performed_by: enrollment.cadence.created_by ?? cadenceCreatedBy ?? null,
         } as Record<string, unknown>)
         .select('id')
         .single()) as { data: Pick<InteractionRow, 'id'> | null };
