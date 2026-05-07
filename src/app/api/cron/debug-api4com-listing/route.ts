@@ -16,11 +16,11 @@ export async function POST(request: Request) {
   const supabase = createServiceRoleClient();
 
   // Pick the V4 Amaral connection (any connected one in that org)
+  // Use Guilherme's credentials specifically (he has 22 calls without recording)
   const { data: conn } = (await from(supabase, 'api4com_connections' as never)
     .select('api_key_encrypted, base_url, ramal, user_id')
-    .eq('org_id', 'c2727473-1df8-4faa-9264-a9fc1759fe3b')
+    .eq('user_id', 'e2f24cd5-ce36-495b-840f-88900bf989e5')
     .eq('status', 'connected')
-    .limit(1)
     .maybeSingle()) as { data: { api_key_encrypted: string; base_url: string; ramal: string; user_id: string } | null };
 
   if (!conn?.api_key_encrypted) {
