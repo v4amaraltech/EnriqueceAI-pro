@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-/** Minimum call duration in seconds to trigger transcription + SPICED analysis */
-export const TRANSCRIPTION_MIN_DURATION_SECONDS = 180;
+/** Minimum call duration in seconds to trigger transcription + SPICED analysis.
+ *  Reduced from 180s → 90s on 2026-05-08: SDR qualification calls of 60-180s
+ *  were being silently dropped, preventing SPICED enrichment for those leads. */
+export const TRANSCRIPTION_MIN_DURATION_SECONDS = 90;
 
 export const callStatusValues = ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'] as const;
 export const callTypeValues = ['inbound', 'outbound', 'manual'] as const;

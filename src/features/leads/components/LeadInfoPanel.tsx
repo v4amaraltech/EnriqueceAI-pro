@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   User,
   X,
@@ -51,6 +52,7 @@ import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
 import { LeadTimelineTab } from './LeadTimelineTab';
 import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
+import { GenerateSpicedDialog } from './GenerateSpicedDialog';
 
 function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -139,6 +141,15 @@ export function LeadInfoPanel({
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
   const [isEditing, setIsEditing] = useState(false);
+  const [isSpicedDialogOpen, setIsSpicedDialogOpen] = useState(false);
+
+  // Detect if org has any SPICED-style custom fields configured
+  const hasSpicedFields = (customFieldDefs ?? []).some((cf) =>
+    /^(S|P|I|CE|E|D)\s*\(/.test(cf.field_name) ||
+    cf.field_name === 'Oportunidades' ||
+    cf.field_name === 'Gaps da ligação' ||
+    cf.field_name === 'Observação Decisor',
+  );
 
   // Primary contact (first socio)
   const primarySocio = data.socios?.[0] ?? null;
@@ -965,6 +976,18 @@ export function LeadInfoPanel({
               <>
                 <hr className="border-t-2 border-[var(--border)]" />
                 <CollapsibleSection title="Campos personalizados">
+                  {hasSpicedFields && !isEditing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSpicedDialogOpen(true)}
+                      className="w-full justify-center gap-2 border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-300"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Gerar SPICED via IA
+                    </Button>
+                  )}
                   {isEditing ? (
                     customFieldDefs.map((cf) => (
                       <div key={cf.id} className="space-y-1">
@@ -1104,6 +1127,12 @@ export function LeadInfoPanel({
           )}
         </div>
       )}
+
+      <GenerateSpicedDialog
+        open={isSpicedDialogOpen}
+        onOpenChange={setIsSpicedDialogOpen}
+        leadId={data.id}
+      />
     </div>
   );
 }

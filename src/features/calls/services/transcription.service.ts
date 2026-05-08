@@ -150,7 +150,7 @@ async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
   throw lastError ?? new Error('whisper_unknown_error');
 }
 
-async function analyzeAndSaveSpiced(
+export async function analyzeAndSaveSpiced(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
   leadId: string,
