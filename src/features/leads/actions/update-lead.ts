@@ -93,11 +93,16 @@ export async function updateLead(
     }
   }
 
-  // Auto-set stage timestamps when status changes
+  // Auto-set stage timestamps when status changes — covers manual status
+  // edits via the lead detail UI. The dashboard/analytics queries pivot on
+  // these columns (won_at/lost_at/contacted_at), so leaving any of them
+  // NULL after a status flip silently drops the lead from those metrics.
   if ('status' in safeUpdates) {
     const now = new Date().toISOString();
     const statusTimestamps: Record<string, string> = {
       contacted: 'contacted_at',
+      qualified: 'won_at',
+      unqualified: 'lost_at',
       archived: 'archived_at',
     };
     const tsField = statusTimestamps[safeUpdates.status as string];
