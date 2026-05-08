@@ -102,29 +102,12 @@ export async function sendMeetingBriefingEmail(
     const dateStr = startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = `${startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às ${endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-    // Reuse existing pending feedback request or create new one
-    let feedbackUrl: string | null = null;
-    const serviceSupabase = createServiceRoleClient();
-
-    // Check for existing pending feedback for this lead+closer
-    const { data: existingReq } = (await from(serviceSupabase, 'closer_feedback_requests')
-      .select('token')
-      .eq('lead_id', leadId)
-      .eq('closer_id', closerId)
-      .is('responded_at', null)
-      .maybeSingle()) as { data: { token: string } | null };
-
-    if (existingReq) {
-      feedbackUrl = `${appUrl}/feedback/${existingReq.token}`;
-    } else {
-      const { data: feedbackReq } = (await from(serviceSupabase, 'closer_feedback_requests')
-        .insert({ org_id: orgId, lead_id: leadId, closer_id: closerId })
-        .select('token')
-        .single()) as { data: { token: string } | null };
-      if (feedbackReq) {
-        feedbackUrl = `${appUrl}/feedback/${feedbackReq.token}`;
-      }
-    }
+    // Feedback link is intentionally NOT included in the briefing email.
+    // Feedback requests are created only when the SDR clicks "Marcar como ganho"
+    // in markLeadAsWon — i.e., after the meeting actually happened. Including
+    // the link in the briefing (which fires at scheduling time) led to closers
+    // receiving feedback requests for meetings that hadn't occurred yet.
+    const feedbackUrl: string | null = null;
 
     const lastCall = lastCallResult.data;
 
