@@ -130,5 +130,61 @@ describe('csv-parser', () => {
 
       expect(result.rows).toHaveLength(2);
     });
+
+    it('should extract telefone column and build phones array (celular)', () => {
+      const csv = 'cnpj,telefone\n11222333000181,(11) 99876-5432';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.telefone).toBe('(11) 99876-5432');
+      expect(result.rows[0]?.phones).toEqual([{ tipo: 'celular', numero: '(11) 99876-5432' }]);
+    });
+
+    it('should classify landline phones as fixo', () => {
+      const csv = 'cnpj,telefone\n11222333000181,(11) 3456-7890';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.phones?.[0]?.tipo).toBe('fixo');
+    });
+
+    it('should extract email column and classify domain', () => {
+      const csv = 'cnpj,email\n11222333000181,contato@empresa.com.br';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.email).toBe('contato@empresa.com.br');
+      expect(result.rows[0]?.emails).toEqual([{ tipo: 'corporativo', email: 'contato@empresa.com.br' }]);
+    });
+
+    it('should classify gmail/hotmail as pessoal', () => {
+      const csv = 'cnpj,email\n11222333000181,joao@gmail.com';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.emails?.[0]?.tipo).toBe('pessoal');
+    });
+
+    it('should extract decisor and job_title', () => {
+      const csv = 'cnpj,decisor,cargo\n11222333000181,João Silva,CEO';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.decisor).toBe('João Silva');
+      expect(result.rows[0]?.job_title).toBe('CEO');
+    });
+
+    it('should extract website/instagram/linkedin', () => {
+      const csv = 'cnpj,website,instagram,linkedin\n11222333000181,https://x.com,@xco,linkedin.com/x';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.website).toBe('https://x.com');
+      expect(result.rows[0]?.instagram).toBe('@xco');
+      expect(result.rows[0]?.linkedin).toBe('linkedin.com/x');
+    });
+
+    it('should accept Brazilian header variants (telefone, e-mail, contato)', () => {
+      const csv = 'cnpj,e-mail,celular,contato\n11222333000181,a@b.com,(11) 99999-9999,Maria';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.email).toBe('a@b.com');
+      expect(result.rows[0]?.telefone).toBe('(11) 99999-9999');
+      expect(result.rows[0]?.decisor).toBe('Maria');
+    });
   });
 });

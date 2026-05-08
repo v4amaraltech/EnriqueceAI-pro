@@ -128,14 +128,34 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   // Insert valid rows
   for (const row of parsed.rows) {
     const normalized = normalizeOriginFields(leadSource ?? row.lead_source ?? null, null);
+
+    // Detect whether the CSV row carries any contact data — when it does, the
+    // lead is treated as already enriched (Rafael's "_enriquecido_" CSV use case).
+    const hasContactData = !!(row.telefone || row.email || row.decisor || row.website);
+    const socios = row.decisor
+      ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }]
+      : null;
+
     const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
       .insert({
         org_id: orgId,
         cnpj: row.cnpj,
         status: 'new',
-        enrichment_status: 'not_found',
+        enrichment_status: hasContactData ? 'enriched' : 'not_found',
+        enriched_at: hasContactData ? new Date().toISOString() : null,
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
+        telefone: row.telefone ?? null,
+        phones: row.phones ?? [],
+        email: row.email ?? null,
+        emails: row.emails ?? null,
+        socios,
+        job_title: row.job_title ?? null,
+        website: row.website ?? null,
+        instagram: row.instagram ?? null,
+        linkedin: row.linkedin ?? null,
+        first_name: row.decisor ? row.decisor.split(' ')[0] ?? null : null,
+        last_name: row.decisor ? (row.decisor.split(' ').slice(1).join(' ') || null) : null,
         lead_source: normalized.lead_source,
         canal: normalized.canal,
         created_by: userId,

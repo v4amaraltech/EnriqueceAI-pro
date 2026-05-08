@@ -17,6 +17,21 @@ export interface ParsedRow {
   razao_social?: string;
   nome_fantasia?: string;
   lead_source?: string;
+  /** Primary phone in legacy `telefone` column. */
+  telefone?: string;
+  /** Phone array (filled when CSV has telefone column). */
+  phones?: Array<{ tipo: 'celular' | 'fixo' | 'whatsapp'; numero: string }>;
+  /** Primary email in legacy `email` column. */
+  email?: string;
+  /** Email array (filled when CSV has email column). */
+  emails?: Array<{ tipo: 'corporativo' | 'pessoal'; email: string }>;
+  /** Decision-maker name (becomes a single-entry socios array). */
+  decisor?: string;
+  /** Decision-maker job title. */
+  job_title?: string;
+  website?: string;
+  instagram?: string;
+  linkedin?: string;
 }
 
 export interface ParseError {
@@ -86,6 +101,13 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
   const razaoIndex = headers.findIndex((h) => ['razao_social', 'razao social', 'razão social', 'empresa', 'company'].includes(h));
   const fantasiaIndex = headers.findIndex((h) => ['nome_fantasia', 'nome fantasia', 'fantasia', 'trade_name'].includes(h));
   const sourceIndex = headers.findIndex((h) => ['lead_source', 'origem', 'fonte', 'source'].includes(h));
+  const telefoneIndex = headers.findIndex((h) => ['telefone', 'phone', 'celular', 'fone', 'whatsapp', 'tel'].includes(h));
+  const emailIndex = headers.findIndex((h) => ['email', 'e-mail', 'mail'].includes(h));
+  const decisorIndex = headers.findIndex((h) => ['decisor', 'contato', 'responsavel', 'responsável', 'contact_name', 'contact name', 'nome'].includes(h));
+  const jobTitleIndex = headers.findIndex((h) => ['cargo', 'job_title', 'job title', 'posição', 'posicao', 'role'].includes(h));
+  const websiteIndex = headers.findIndex((h) => ['website', 'site', 'url'].includes(h));
+  const instagramIndex = headers.findIndex((h) => ['instagram', 'ig'].includes(h));
+  const linkedinIndex = headers.findIndex((h) => ['linkedin', 'linked_in', 'linked in'].includes(h));
 
   for (let i = 0; i < dataLines.length; i++) {
     const line = dataLines[i]!;
@@ -107,12 +129,29 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
       continue;
     }
 
+    const cellAt = (idx: number): string | undefined =>
+      idx >= 0 ? cells[idx]?.trim() || undefined : undefined;
+
+    const telefone = cellAt(telefoneIndex);
+    const email = cellAt(emailIndex);
+    const decisor = cellAt(decisorIndex);
+    const jobTitle = cellAt(jobTitleIndex);
+
     rows.push({
       rowNumber,
       cnpj,
-      razao_social: razaoIndex >= 0 ? cells[razaoIndex]?.trim() || undefined : undefined,
-      nome_fantasia: fantasiaIndex >= 0 ? cells[fantasiaIndex]?.trim() || undefined : undefined,
-      lead_source: sourceIndex >= 0 ? cells[sourceIndex]?.trim() || undefined : undefined,
+      razao_social: cellAt(razaoIndex),
+      nome_fantasia: cellAt(fantasiaIndex),
+      lead_source: cellAt(sourceIndex),
+      telefone,
+      phones: telefone ? [{ tipo: detectPhoneTipo(telefone), numero: telefone }] : undefined,
+      email,
+      emails: email ? [{ tipo: detectEmailTipo(email), email }] : undefined,
+      decisor,
+      job_title: jobTitle,
+      website: cellAt(websiteIndex),
+      instagram: cellAt(instagramIndex),
+      linkedin: cellAt(linkedinIndex),
     });
   }
 
@@ -151,6 +190,27 @@ function parseRow(line: string): string[] {
   }
   cells.push(current);
   return cells;
+}
+
+function detectPhoneTipo(raw: string): 'celular' | 'fixo' | 'whatsapp' {
+  const digits = raw.replace(/\D/g, '');
+  // Brazilian mobile numbers start with 9 after the area code (10 or 11 digits total)
+  // Last 9 digits start with 9 → celular; otherwise fixo.
+  if (digits.length >= 10) {
+    const startsWithNine = digits.length === 11
+      ? digits.charAt(2) === '9'
+      : digits.length === 10
+        ? digits.charAt(2) === '9'
+        : false;
+    return startsWithNine ? 'celular' : 'fixo';
+  }
+  return 'fixo';
+}
+
+function detectEmailTipo(raw: string): 'corporativo' | 'pessoal' {
+  const lower = raw.toLowerCase();
+  const personalDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'yahoo.com.br', 'live.com', 'icloud.com', 'uol.com.br', 'bol.com.br'];
+  return personalDomains.some((d) => lower.endsWith('@' + d)) ? 'pessoal' : 'corporativo';
 }
 
 export { MAX_ROWS };
