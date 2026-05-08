@@ -263,9 +263,12 @@ export async function markLeadAsWon(
     if (!auth.success) return auth;
     const { orgId, userId, supabase } = auth.data;
 
-    // 1. Update lead status to qualified + record who won it
+    // 1. Update lead status to qualified + record SDR who pushed it forward.
+    // qualified_at marks the SDR's qualification step; won_at is reserved for the
+    // moment the closer confirms the meeting actually happened (result=meeting_done
+    // in /api/feedback). Stamping won_at here would conflate scheduling with realization.
     const { error: leadError } = await from(supabase, 'leads')
-      .update({ status: 'qualified', won_by: userId, won_at: new Date().toISOString() } as Record<string, unknown>)
+      .update({ status: 'qualified', won_by: userId, qualified_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
 

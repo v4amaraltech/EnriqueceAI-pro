@@ -90,6 +90,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este feedback já foi enviado' }, { status: 409 });
     }
 
+    // Stamp won_at + meeting_held_at on the lead when closer confirms the meeting
+    // actually happened. This is when the lead becomes a real Opportunity / SAL,
+    // separate from the qualified_at timestamp that fired at scheduling time.
+    if (result === 'meeting_done') {
+      const heldAt = new Date().toISOString();
+      await from(supabase, 'leads')
+        .update({ won_at: heldAt, meeting_held_at: heldAt } as Record<string, unknown>)
+        .eq('id', feedbackReq.lead_id)
+        .eq('org_id', feedbackReq.org_id)
+        .is('won_at', null);
+    }
+
     // Notify SDR in background after response is sent
     after(() =>
       notifySdr(supabase, feedbackReq, result, rating, comment).catch((err) =>

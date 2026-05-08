@@ -94,14 +94,15 @@ export async function updateLead(
   }
 
   // Auto-set stage timestamps when status changes — covers manual status
-  // edits via the lead detail UI. The dashboard/analytics queries pivot on
-  // these columns (won_at/lost_at/contacted_at), so leaving any of them
-  // NULL after a status flip silently drops the lead from those metrics.
+  // edits via the lead detail UI. qualified_at fires when SDR pushes the lead
+  // forward (manual flip mirrors what scheduleMeeting does). won_at is NOT
+  // stamped here: it's reserved for /api/feedback (result=meeting_done), so
+  // the dashboard "Oportunidades" only counts realized meetings.
   if ('status' in safeUpdates) {
     const now = new Date().toISOString();
     const statusTimestamps: Record<string, string> = {
       contacted: 'contacted_at',
-      qualified: 'won_at',
+      qualified: 'qualified_at',
       unqualified: 'lost_at',
       archived: 'archived_at',
     };
