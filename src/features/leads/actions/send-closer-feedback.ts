@@ -43,6 +43,29 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
       feedbackToken = existing.token;
       console.warn('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
     } else {
+      // Don't create a feedback request before the meeting actually happens.
+      // Otherwise the closer gets pestered to grade a meeting that's still in the future.
+      const { data: latestMeeting } = (await from(supabase, 'interactions')
+        .select('metadata')
+        .eq('lead_id', leadId)
+        .eq('type', 'meeting_scheduled')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()) as { data: { metadata: Record<string, unknown> | null } | null };
+
+      const startTimeRaw = latestMeeting?.metadata?.start_time as string | undefined;
+      if (startTimeRaw) {
+        const startTime = new Date(startTimeRaw);
+        if (startTime.getTime() > Date.now()) {
+          console.warn(
+            '[closer-feedback] Skipping feedback creation — meeting still in future. lead=%s start=%s',
+            leadId,
+            startTimeRaw,
+          );
+          return;
+        }
+      }
+
       // Create new feedback request
       const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
         .insert({

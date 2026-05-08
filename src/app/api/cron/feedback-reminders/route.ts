@@ -11,6 +11,10 @@ import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations
 
 export const maxDuration = 60;
 
+const REMINDER_INTERVAL_HOURS = 24;
+const MAX_REMINDERS = 3;
+const ESCALATE_AFTER_REMINDERS = 2;
+
 interface PendingFeedback {
   id: string;
   token: string;
@@ -18,6 +22,8 @@ interface PendingFeedback {
   lead_id: string;
   closer_id: string;
   org_id: string;
+  reminder_count: number;
+  reminder_sent_at: string | null;
 }
 
 interface CloserInfo {
@@ -33,36 +39,87 @@ interface LeadInfo {
   razao_social: string | null;
 }
 
+interface MeetingTiming {
+  lead_id: string;
+  start_time: string;
+}
+
 /**
- * Cron: Send reminder emails to closers who haven't responded to feedback after 3 days.
- * Runs daily. Only sends one reminder per feedback request (tracked via reminder_sent_at).
+ * Cron: Send reminders to closers who haven't responded to feedback.
+ *
+ * Eligibility (per request):
+ *  - responded_at IS NULL (still pending)
+ *  - expires_at > now() (not expired)
+ *  - reminder_count < MAX_REMINDERS (cap on cobrança)
+ *  - Either: never reminded AND meeting start_time + 24h <= now (gives closer 24h grace after meeting)
+ *  - Or: reminder_sent_at + 24h <= now (next reminder is 24h after the previous)
+ *
+ * Side effects per delivery:
+ *  - Email via Resend + WhatsApp via Evolution
+ *  - reminder_count++ and reminder_sent_at = now()
+ *  - When new reminder_count >= 2, notify managers
  */
 async function sendFeedbackReminders() {
   const supabase = createServiceRoleClient();
   const appUrl = getAppUrl();
+  const now = new Date();
+  const intervalAgo = new Date(now.getTime() - REMINDER_INTERVAL_HOURS * 60 * 60 * 1000).toISOString();
 
-  // Find feedbacks sent > 3 days ago, not responded, not expired, no reminder sent yet
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data: pending, error } = (await from(supabase, 'closer_feedback_requests')
-    .select('id, token, sent_at, lead_id, closer_id, org_id')
+  // Pull all candidates: pending, not expired, under reminder cap
+  const { data: candidates, error } = (await from(supabase, 'closer_feedback_requests')
+    .select('id, token, sent_at, lead_id, closer_id, org_id, reminder_count, reminder_sent_at')
     .is('responded_at', null)
-    .is('reminder_sent_at', null)
-    .lt('sent_at', threeDaysAgo)
-    .gt('expires_at', new Date().toISOString())
-    .limit(50)) as { data: PendingFeedback[] | null; error: unknown };
+    .lt('reminder_count', MAX_REMINDERS)
+    .gt('expires_at', now.toISOString())
+    .or(`reminder_sent_at.is.null,reminder_sent_at.lt.${intervalAgo}`)
+    .limit(200)) as { data: PendingFeedback[] | null; error: unknown };
 
-  if (error || !pending?.length) {
-    return { reminders: 0, errors: 0 };
+  if (error || !candidates?.length) {
+    return { reminders: 0, errors: 0, skipped: 0 };
   }
 
-  // Batch fetch closer and lead info
-  const closerIds = [...new Set(pending.map((p) => p.closer_id))];
-  const leadIds = [...new Set(pending.map((p) => p.lead_id))];
+  // Pull meeting start_time for each lead (latest meeting_scheduled interaction)
+  const leadIds = [...new Set(candidates.map((c) => c.lead_id))];
+  const { data: meetingsRaw } = (await from(supabase, 'interactions')
+    .select('lead_id, metadata, created_at')
+    .eq('type', 'meeting_scheduled')
+    .in('lead_id', leadIds)
+    .order('created_at', { ascending: false })) as {
+    data: Array<{ lead_id: string; metadata: Record<string, unknown> | null }> | null;
+  };
+
+  const meetingMap = new Map<string, MeetingTiming>();
+  for (const m of meetingsRaw ?? []) {
+    if (meetingMap.has(m.lead_id)) continue; // first row per lead is latest
+    const startTime = (m.metadata?.start_time as string | undefined) ?? null;
+    if (startTime) {
+      meetingMap.set(m.lead_id, { lead_id: m.lead_id, start_time: startTime });
+    }
+  }
+
+  // Filter to truly eligible: meeting + 24h must have passed (only checked on first reminder)
+  const eligible = candidates.filter((fb) => {
+    if (fb.reminder_sent_at) {
+      // Subsequent reminders are gated only by the 24h interval already in the SQL filter
+      return true;
+    }
+    const meeting = meetingMap.get(fb.lead_id);
+    if (!meeting) return false; // No meeting found — don't pester
+    const meetingPlus24h = new Date(new Date(meeting.start_time).getTime() + REMINDER_INTERVAL_HOURS * 60 * 60 * 1000);
+    return meetingPlus24h <= now;
+  });
+
+  if (!eligible.length) {
+    return { reminders: 0, errors: 0, skipped: candidates.length };
+  }
+
+  // Batch fetch closer + lead info
+  const closerIds = [...new Set(eligible.map((e) => e.closer_id))];
+  const eligibleLeadIds = [...new Set(eligible.map((e) => e.lead_id))];
 
   const [closersResult, leadsResult] = await Promise.all([
     from(supabase, 'closers').select('id, name, email, phone').in('id', closerIds) as Promise<{ data: CloserInfo[] | null }>,
-    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds).is('deleted_at', null) as Promise<{ data: LeadInfo[] | null }>,
+    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', eligibleLeadIds).is('deleted_at', null) as Promise<{ data: LeadInfo[] | null }>,
   ]);
 
   const closerMap = new Map((closersResult.data ?? []).map((c) => [c.id, c]));
@@ -71,45 +128,53 @@ async function sendFeedbackReminders() {
   let sent = 0;
   let errors = 0;
 
-  for (const fb of pending) {
+  for (const fb of eligible) {
     const closer = closerMap.get(fb.closer_id);
     if (!closer) continue;
 
     const leadName = leadMap.get(fb.lead_id) ?? 'Lead';
     const feedbackUrl = `${appUrl}/feedback/${fb.token}`;
+    const newCount = fb.reminder_count + 1;
 
-    const html = buildReminderHtml(closer.name, leadName, feedbackUrl, appUrl);
+    const html = buildReminderHtml(closer.name, leadName, feedbackUrl, appUrl, newCount);
 
     const result = await sendPlatformEmail({
       to: closer.email,
-      subject: `Lembrete: Feedback da reunião com ${leadName}`,
+      subject: newCount === 1
+        ? `Lembrete: Feedback da reunião com ${leadName}`
+        : `[${newCount}ª cobrança] Feedback pendente: ${leadName}`,
       html,
     });
 
     if (result.success) {
-      // Mark reminder as sent
+      // Update counters
       await from(supabase, 'closer_feedback_requests')
-        .update({ reminder_sent_at: new Date().toISOString() } as Record<string, unknown>)
+        .update({
+          reminder_sent_at: new Date().toISOString(),
+          reminder_count: newCount,
+        } as Record<string, unknown>)
         .eq('id', fb.id);
 
-      // Send WhatsApp reminder if closer has phone
+      // WhatsApp parallel channel
       if (closer.phone && validateBrazilianPhone(closer.phone)) {
         WhatsAppService.sendMessage(fb.org_id, {
           to: closer.phone,
-          body: `Olá ${closer.name}! 👋\n\nAinda não recebemos seu feedback sobre a reunião com *${leadName}*.\n\nSua avaliação é muito importante para melhorarmos a qualidade dos leads.\n\n📋 Responda aqui: ${feedbackUrl}\n\n_Leva menos de 1 minuto!_`,
+          body: buildWhatsAppBody(closer.name, leadName, feedbackUrl, newCount),
         }, supabase).catch((err) => console.error('[feedback-reminders] WhatsApp error:', err));
       }
 
-      // Notify managers that closer hasn't responded
-      createNotificationsForOrgMembers({
-        orgId: fb.org_id,
-        type: 'closer_feedback',
-        title: `Closer ${closer.name} não respondeu feedback`,
-        body: `O feedback da reunião com ${leadName} está pendente há mais de 3 dias.`,
-        resourceType: 'lead',
-        resourceId: fb.lead_id,
-        roleFilter: 'manager',
-      }).catch((err) => console.error('[feedback-reminders] notification error:', err));
+      // Manager escalation: trigger when reminder count crosses the escalation threshold
+      if (newCount >= ESCALATE_AFTER_REMINDERS) {
+        createNotificationsForOrgMembers({
+          orgId: fb.org_id,
+          type: 'closer_feedback',
+          title: `Closer ${closer.name} ignorou ${newCount} lembretes`,
+          body: `Feedback da reunião com ${leadName} segue pendente após ${newCount} cobranças. Por favor verifique.`,
+          resourceType: 'lead',
+          resourceId: fb.lead_id,
+          roleFilter: 'manager',
+        }).catch((err) => console.error('[feedback-reminders] notification error:', err));
+      }
 
       sent++;
     } else {
@@ -118,10 +183,32 @@ async function sendFeedbackReminders() {
     }
   }
 
-  return { reminders: sent, errors };
+  return { reminders: sent, errors, skipped: candidates.length - eligible.length };
 }
 
-function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: string, appUrl: string): string {
+function buildWhatsAppBody(closerName: string, leadName: string, feedbackUrl: string, count: number): string {
+  if (count === 1) {
+    return `Olá ${closerName}! 👋\n\nAinda não recebemos seu feedback sobre a reunião com *${leadName}*.\n\nSua avaliação é muito importante para melhorarmos a qualidade dos leads.\n\n📋 Responda aqui: ${feedbackUrl}\n\n_Leva menos de 1 minuto!_`;
+  }
+  if (count === 2) {
+    return `Oi ${closerName}, *segunda cobrança* do feedback da reunião com *${leadName}*.\n\nO seu retorno é o que mantém a qualidade do funil. Por favor responda em ${feedbackUrl}\n\n_Leva 1 minuto._`;
+  }
+  return `${closerName}, *terceira e última cobrança* do feedback de *${leadName}*.\n\nSe você não responder, vamos escalar a pendência ao gestor. Link: ${feedbackUrl}`;
+}
+
+function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: string, appUrl: string, count: number): string {
+  const heading = count === 1
+    ? 'Lembrete de feedback'
+    : count === 2
+      ? '⚠️ Feedback ainda pendente — 2ª cobrança'
+      : '🚨 Última cobrança antes de escalar';
+
+  const tone = count === 1
+    ? `Ainda não recebemos seu feedback sobre a reunião com <strong>${leadName}</strong>. Sua avaliação é importante para melhorarmos a qualidade dos leads.`
+    : count === 2
+      ? `Esta é a segunda cobrança sobre o feedback da reunião com <strong>${leadName}</strong>. O retorno é essencial para a operação.`
+      : `Esta é a terceira e última cobrança sobre o feedback de <strong>${leadName}</strong>. Se não responder, a pendência será escalada ao gestor.`;
+
   return `
 <!DOCTYPE html>
 <html>
@@ -142,13 +229,13 @@ function buildReminderHtml(closerName: string, leadName: string, feedbackUrl: st
           <tr>
             <td style="padding: 32px;">
               <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">
-                Lembrete de feedback
+                ${heading}
               </h2>
               <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px;">
                 Olá, <strong>${closerName}</strong>!
               </p>
               <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 24px;">
-                Ainda não recebemos seu feedback sobre a reunião com <strong>${leadName}</strong>. Sua avaliação é importante para melhorarmos a qualidade dos leads.
+                ${tone}
               </p>
               <table cellpadding="0" cellspacing="0" width="100%">
                 <tr>
