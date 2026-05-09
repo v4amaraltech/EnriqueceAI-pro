@@ -31,9 +31,11 @@ import type { LeadContext } from '@/features/ai/types';
 
 import type { AutoEmailStep } from '../cadence.schemas';
 import type { StepAbMetrics } from '../cadences.contract';
+import type { MessageTemplateRow } from '../types';
 import { fetchStepAbMetrics } from '../actions/fetch-step-ab-metrics';
 import { TipTapToolbar } from './TipTapToolbar';
 import { EmailPreviewPanel } from './EmailPreviewPanel';
+import { LoadTemplateDialog } from './LoadTemplateDialog';
 
 interface AutoEmailStepEditorProps {
   step: AutoEmailStep;
@@ -72,6 +74,7 @@ export function AutoEmailStepEditor({
   const [activeVariant, setActiveVariant] = useState<'A' | 'B'>('A');
   const [showPreview, setShowPreview] = useState(false);
   const [showAIDialog, setShowAIDialog] = useState(false);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [abMetrics, setAbMetrics] = useState<StepAbMetrics | null>(null);
   const [_isMetricsPending, startMetricsTransition] = useTransition();
   const subjectRef = useRef<HTMLInputElement>(null);
@@ -177,6 +180,18 @@ export function AutoEmailStepEditor({
     setShowAIDialog(false);
   }
 
+  function handleLoadTemplate(template: MessageTemplateRow) {
+    const subject = template.subject ?? '';
+    const body = template.body;
+    if (activeVariant === 'A') {
+      onChange({ ...step, subject, body });
+      if (editorA) editorA.commands.setContent(body);
+    } else {
+      onChange({ ...step, subject_b: subject, body_b: body });
+      if (editorB) editorB.commands.setContent(body);
+    }
+  }
+
   const delayLabel = isFirst
     ? 'Imediato'
     : step.delay_days > 0 || step.delay_hours > 0
@@ -199,7 +214,7 @@ export function AutoEmailStepEditor({
           {delayLabel}
         </Badge>
         {step.ab_enabled && (
-          <Badge variant="secondary" className="gap-1 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+          <Badge variant="secondary" className="gap-1 text-xs bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
             <FlaskConical className="h-3 w-3" />
             A/B
           </Badge>
@@ -309,7 +324,7 @@ export function AutoEmailStepEditor({
                 onCheckedChange={(checked: boolean) => onChange({ ...step, ab_enabled: checked })}
               />
               <Label htmlFor={`ab-${stepNumber}`} className="flex items-center gap-1.5 text-sm">
-                <FlaskConical className="h-3.5 w-3.5 text-purple-500" />
+                <FlaskConical className="h-3.5 w-3.5 text-red-500" />
                 Teste A/B
               </Label>
             </div>
@@ -324,7 +339,7 @@ export function AutoEmailStepEditor({
                   max={99}
                   value={step.ab_distribution ?? 50}
                   onChange={(e) => onChange({ ...step, ab_distribution: parseInt(e.target.value, 10) })}
-                  className="h-1.5 w-40 cursor-pointer accent-purple-500"
+                  className="h-1.5 w-40 cursor-pointer accent-red-500"
                 />
                 <span className="text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">B: {100 - (step.ab_distribution ?? 50)}%</span>
               </div>
@@ -364,6 +379,7 @@ export function AutoEmailStepEditor({
                         editor={editorA}
                         onInsertVariable={handleInsertVariable}
                         onOpenAI={() => setShowAIDialog(true)}
+                        onLoadTemplate={() => setShowTemplateDialog(true)}
                       />
                     </div>
                   </div>
@@ -396,6 +412,7 @@ export function AutoEmailStepEditor({
                         editor={editorB}
                         onInsertVariable={handleInsertVariable}
                         onOpenAI={() => setShowAIDialog(true)}
+                        onLoadTemplate={() => setShowTemplateDialog(true)}
                       />
                     </div>
                   </div>
@@ -432,6 +449,7 @@ export function AutoEmailStepEditor({
                       editor={editorA}
                       onInsertVariable={handleInsertVariable}
                       onOpenAI={() => setShowAIDialog(true)}
+                      onLoadTemplate={() => setShowTemplateDialog(true)}
                     />
                   </div>
                 </div>
@@ -520,6 +538,13 @@ export function AutoEmailStepEditor({
         onOpenChange={setShowAIDialog}
         leadContext={PLACEHOLDER_LEAD_CONTEXT}
         onSaveAsTemplate={handleAISave}
+      />
+
+      {/* Load Template Dialog */}
+      <LoadTemplateDialog
+        open={showTemplateDialog}
+        onOpenChange={setShowTemplateDialog}
+        onSelect={handleLoadTemplate}
       />
     </div>
   );

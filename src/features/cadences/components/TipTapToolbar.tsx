@@ -4,6 +4,7 @@ import type { Editor } from '@tiptap/react';
 import {
   Bold,
   Braces,
+  FileText,
   Heading,
   Italic,
   Link,
@@ -30,6 +31,7 @@ interface TipTapToolbarProps {
   editor: Editor | null;
   onInsertVariable: (variable: string) => void;
   onOpenAI: () => void;
+  onLoadTemplate?: () => void;
   disabled?: boolean;
 }
 
@@ -37,6 +39,7 @@ export function TipTapToolbar({
   editor,
   onInsertVariable,
   onOpenAI,
+  onLoadTemplate,
   disabled,
 }: TipTapToolbarProps) {
   if (!editor) return null;
@@ -71,6 +74,22 @@ export function TipTapToolbar({
         <Sparkles className="h-4 w-4" />
         <span className="text-xs font-medium">Escrever com IA</span>
       </Button>
+
+      {/* Load template */}
+      {onLoadTemplate && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 px-2 text-blue-600 hover:text-blue-700"
+          onClick={onLoadTemplate}
+          disabled={disabled}
+          title="Carregar template salvo"
+        >
+          <FileText className="h-4 w-4" />
+          <span className="text-xs font-medium">Carregar template</span>
+        </Button>
+      )}
 
       <Separator orientation="vertical" className="mx-1 h-5" />
 
