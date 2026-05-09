@@ -272,11 +272,17 @@ export async function fetchDrilldownData(
 
       case 'conversion_stage': {
         const stage = filters.stage ?? 'new';
+        // Stage may be a single status ('contacted') or a comma-separated list
+        // ('qualified,won') so the funnel can drill into stages that span more
+        // than one status value.
+        const stages = stage.split(',').map((s) => s.trim()).filter(Boolean);
 
-        const { data, count } = (await from(supabase, 'leads')
+        let query = from(supabase, 'leads')
           .select('id, razao_social, nome_fantasia, email, status', { count: 'exact' })
-          .eq('org_id', orgId)
-          .eq('status', stage)
+          .eq('org_id', orgId);
+        query = stages.length > 1 ? query.in('status', stages) : query.eq('status', stages[0] ?? stage);
+
+        const { data, count } = (await query
           .order('razao_social', { ascending: true })
           .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
 

@@ -13,12 +13,13 @@ import type { OrgMember } from '../types/shared';
 import { ConversionByCadenceTable } from './ConversionByCadenceTable';
 import { ConversionFunnelChart } from './ConversionFunnelChart';
 
+// Maps the funnel labels emitted by conversion-analytics.service to a status
+// (or comma-separated list of statuses) the drilldown can filter on.
+// "Qualificados" spans both 'qualified' (meeting scheduled) and 'won' (meeting
+// confirmed) since both belong to the same funnel stage.
 const STAGE_LABEL_MAP: Record<string, string> = {
-  Novo: 'new',
-  Contactado: 'contacted',
-  Qualificado: 'qualified',
-  Desqualificado: 'unqualified',
-  Arquivado: 'archived',
+  Contactados: 'contacted',
+  Qualificados: 'qualified,won',
 };
 
 function BigKpiCard({ value, label, icon: Icon, color }: { value: string; label: string; icon: typeof Users; color?: string }) {
