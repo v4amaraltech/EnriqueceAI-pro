@@ -143,7 +143,7 @@ export async function fetchDrilldownData(
         const { data, count } = (await from(supabase, 'leads')
           .select('id, razao_social, nome_fantasia, email, status, won_at', { count: 'exact' })
           .eq('org_id', orgId)
-          .eq('status', 'qualified')
+          .eq('status', 'won')
           .not('won_at', 'is', null)
           .gte('won_at', fromDate)
           .lte('won_at', toDate)

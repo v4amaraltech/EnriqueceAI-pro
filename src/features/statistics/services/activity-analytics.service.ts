@@ -61,7 +61,7 @@ export async function fetchActivityAnalyticsData(
     .select('id, status, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .eq('status', 'qualified')
+    .eq('status', 'won')
     .not('won_at', 'is', null)
     .gte('won_at', periodStart)
     .lte('won_at', periodEnd)

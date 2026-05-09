@@ -77,11 +77,12 @@ export async function fetchOpportunityKpi(
   const { start, end } = getDateRange(filters);
   const days = getDaysInMonth(filters.month);
 
-  // Query qualified leads in the month (using won_at for accuracy)
+  // Query won leads in the month (status='won' is set by the trigger when
+  // meeting_held_at is stamped, i.e. closer confirmed result=meeting_done).
   let leadsQuery = from(supabase, 'leads')
     .select('id, won_at, assigned_to, won_by')
     .eq('org_id', orgId)
-    .eq('status', 'qualified')
+    .eq('status', 'won')
     .is('deleted_at', null)
     .not('won_at', 'is', null)
     .gte('won_at', start)

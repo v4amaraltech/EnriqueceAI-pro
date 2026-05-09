@@ -125,7 +125,7 @@ export async function fetchConversionByOrigin(
     .select('id, status, lead_source, canal')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .eq('status', 'qualified')
+    .eq('status', 'won')
     .not('won_at', 'is', null)
     .gte('won_at', start)
     .lt('won_at', end);
@@ -184,7 +184,7 @@ export async function fetchConversionByOrigin(
       ? (lead.canal || 'Sem sub-origem')
       : (lead.lead_source || 'unknown');
 
-    if (lead.status === 'qualified') {
+    if (lead.status === 'qualified' || lead.status === 'won') {
       const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.converted++;
       sourceStats.set(groupKey, stats);

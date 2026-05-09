@@ -77,9 +77,10 @@ export async function fetchPerformanceAnalyticsData(
   // Filter leads belonging to filtered SDRs (by assigned_to)
   const filteredLeads = leads.filter((l) => l.assigned_to && filteredIds.includes(l.assigned_to));
   const totalLeadsCreated = filteredLeads.length;
-  // Qualified: attributed to who marked as won (won_by), fallback to assigned_to
+  // Qualified: attributed to who marked as won (won_by), fallback to assigned_to.
+  // 'won' is a downstream stage of 'qualified', so both count here.
   const totalQualified = leads.filter((l) => {
-    if (l.status !== 'qualified') return false;
+    if (l.status !== 'qualified' && l.status !== 'won') return false;
     const responsible = l.won_by ?? l.assigned_to;
     return responsible && filteredIds.includes(responsible);
   }).length;
@@ -119,9 +120,10 @@ function buildSdrTable(
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
       const userInteractions = interactionsByUser.get(userId) ?? [];
       const userLeads = leadsByAssignee.get(userId) ?? [];
-      // Qualified: count leads where this user is won_by (or assigned_to if won_by is null)
+      // Qualified: count leads where this user is won_by (or assigned_to if won_by is null).
+      // Includes both 'qualified' and 'won' (won is a downstream stage of qualified).
       const qualified = allLeads.filter((l) => {
-        if (l.status !== 'qualified') return false;
+        if (l.status !== 'qualified' && l.status !== 'won') return false;
         const responsible = l.won_by ?? l.assigned_to;
         return responsible === userId;
       }).length;
@@ -221,7 +223,7 @@ function buildDailyControl(
     const userLeads = leadsByAssignee.get(userId) ?? [];
     const prospecting = userLeads.filter((l) => l.status === 'contacted' || l.status === 'new').length;
     const available = userLeads.filter((l) => l.status === 'new').length;
-    const won = userLeads.filter((l) => l.status === 'qualified').length;
+    const won = userLeads.filter((l) => l.status === 'won').length;
     const lost = userLeads.filter((l) => l.status === 'unqualified').length;
 
     const completed = userInteractions.filter((i) => ['sent', 'delivered', 'meeting_scheduled'].includes(i.type)).length;

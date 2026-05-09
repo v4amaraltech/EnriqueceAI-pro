@@ -98,7 +98,8 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
   const meetingLeads = new Set(
     interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
   );
-  const qualifiedLeads = leads.filter((l) => l.status === 'qualified').length;
+  // 'won' is a downstream stage of 'qualified' — both count as qualified in the funnel.
+  const qualifiedLeads = leads.filter((l) => l.status === 'qualified' || l.status === 'won').length;
 
   return [
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
@@ -127,7 +128,7 @@ function calculateStageConversions(funnel: FunnelStage[]): StageConversion[] {
 
 function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRow[]): PipelineVelocity {
   const qualifiedLeadIds = new Set(
-    leads.filter((l) => l.status === 'qualified').map((l) => l.id),
+    leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
   );
 
   const durations: number[] = [];
@@ -165,7 +166,7 @@ function calculateCadenceConversion(
   leads: LeadQueryRow[],
 ): CadenceConversionRow[] {
   const qualifiedLeadIds = new Set(
-    leads.filter((l) => l.status === 'qualified').map((l) => l.id),
+    leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
   );
 
   // Build set of lead IDs that have meetings (meeting_scheduled often has no cadence_id)
@@ -210,7 +211,7 @@ function calculateConversionByOrigin(leads: LeadQueryRow[]): ConversionByOriginE
     const origin = (lead.created_by ? 'SDR' : 'Import');
     const entry = originMap.get(origin) ?? { qualified: 0, total: 0 };
     entry.total++;
-    if (lead.status === 'qualified') entry.qualified++;
+    if (lead.status === 'qualified' || lead.status === 'won') entry.qualified++;
     originMap.set(origin, entry);
   }
 
