@@ -67,12 +67,12 @@ export function TipTapToolbar({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-8 gap-1.5 px-2 text-red-600 hover:text-red-700"
+        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
         onClick={onOpenAI}
         disabled={disabled}
+        title="Escrever com IA"
       >
         <Sparkles className="h-4 w-4" />
-        <span className="text-xs font-medium">Escrever com IA</span>
       </Button>
 
       {/* Load template */}
@@ -81,13 +81,12 @@ export function TipTapToolbar({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 gap-1.5 px-2 text-blue-600 hover:text-blue-700"
+          className="h-8 w-8 p-0"
           onClick={onLoadTemplate}
           disabled={disabled}
           title="Carregar template salvo"
         >
           <FileText className="h-4 w-4" />
-          <span className="text-xs font-medium">Carregar template</span>
         </Button>
       )}
 
