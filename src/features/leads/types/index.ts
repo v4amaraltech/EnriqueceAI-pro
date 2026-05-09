@@ -1,5 +1,5 @@
 // Lead status enums matching database
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'archived';
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'won' | 'unqualified' | 'archived';
 export type EnrichmentStatus = 'pending' | 'enriching' | 'enriched' | 'enrichment_failed' | 'not_found';
 export type ImportStatus = 'processing' | 'completed' | 'failed';
 export type EnrichmentProvider = 'cnpj_ws' | 'lemit' | 'apollo';

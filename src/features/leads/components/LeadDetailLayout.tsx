@@ -108,7 +108,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
 
   useEffect(() => {
-    if (lead.status === 'qualified') {
+    if (lead.status === 'qualified' || lead.status === 'won') {
       fetchCloserFeedback(lead.id).then((result) => {
         if (result.success && result.data) setCloserFeedback(result.data);
       });

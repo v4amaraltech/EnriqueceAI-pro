@@ -132,6 +132,7 @@ export interface LeadStatusCounts {
   new: number;
   contacted: number;
   qualified: number;
+  won: number;
   unqualified: number;
   archived: number;
 }
@@ -150,7 +151,7 @@ export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCo
     return { success: false, error: 'Erro ao buscar contagens' };
   }
 
-  const counts: LeadStatusCounts = { all: 0, new: 0, contacted: 0, qualified: 0, unqualified: 0, archived: 0 };
+  const counts: LeadStatusCounts = { all: 0, new: 0, contacted: 0, qualified: 0, won: 0, unqualified: 0, archived: 0 };
   for (const row of data ?? []) {
     counts.all += row.cnt;
     if (row.status in counts && row.status !== 'all') {

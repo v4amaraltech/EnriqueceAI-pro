@@ -59,7 +59,7 @@ export async function updateLead(
   const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'emails', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'segmento', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'emails', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'segmento', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at', 'meeting_held_at'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {
@@ -136,7 +136,7 @@ export async function updateLead(
 
   // Auto-complete cadence enrollments when lead is finalized (won, lost, archived)
   if ('status' in safeUpdates) {
-    const finalStatuses = ['qualified', 'unqualified', 'archived'];
+    const finalStatuses = ['qualified', 'won', 'unqualified', 'archived'];
     if (finalStatuses.includes(safeUpdates.status as string)) {
       const { createServiceRoleClient: createSvc } = await import('@/lib/supabase/service');
       const svc = createSvc();

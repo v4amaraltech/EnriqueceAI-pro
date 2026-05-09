@@ -46,7 +46,7 @@ export async function bulkChangeStatus(
   }
 
   const statusLabels: Record<string, string> = {
-    new: 'Novo', contacted: 'Contactado', qualified: 'Qualificado', unqualified: 'Não Qualificado',
+    new: 'Novo', contacted: 'Contactado', qualified: 'Qualificado', won: 'Ganho', unqualified: 'Não Qualificado',
   };
   logLeadEventBulk(supabase, {
     orgId,

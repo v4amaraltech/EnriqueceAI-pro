@@ -9,6 +9,7 @@ describe('LeadStatusBadge', () => {
     { status: 'new', label: 'Novo' },
     { status: 'contacted', label: 'Contatado' },
     { status: 'qualified', label: 'Qualificado' },
+    { status: 'won', label: 'Ganho' },
     { status: 'unqualified', label: 'Não Qualificado' },
     { status: 'archived', label: 'Arquivado' },
   ];
@@ -26,6 +27,7 @@ describe('LeadStatusBadge (meetime variant)', () => {
     { status: 'new', label: 'NOVO' },
     { status: 'contacted', label: 'CONTATADO' },
     { status: 'qualified', label: 'QUALIFICADO' },
+    { status: 'won', label: 'GANHO' },
     { status: 'unqualified', label: 'NÃO QUALIFICADO' },
     { status: 'archived', label: 'ARQUIVADO' },
   ];

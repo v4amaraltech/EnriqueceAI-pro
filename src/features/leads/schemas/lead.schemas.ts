@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { isValidCnpj, stripCnpj } from '../utils/cnpj';
 
-export const leadStatusValues = ['new', 'contacted', 'qualified', 'unqualified', 'archived'] as const;
+export const leadStatusValues = ['new', 'contacted', 'qualified', 'won', 'unqualified', 'archived'] as const;
 export const enrichmentStatusValues = ['pending', 'enriching', 'enriched', 'enrichment_failed', 'not_found'] as const;
 export const importStatusValues = ['processing', 'completed', 'failed'] as const;
 

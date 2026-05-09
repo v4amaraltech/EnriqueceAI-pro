@@ -70,7 +70,7 @@ export function LeadDetailHeader({
   const primaryName = personName ?? companyName ?? '—';
   const secondaryName = personName ? companyName : null;
 
-  const isWon = lead.status === 'qualified' && !!lead.won_at;
+  const isWon = lead.status === 'won';
   const isLost = lead.status === 'unqualified';
   const isClosed = isWon || isLost;
 
@@ -78,7 +78,7 @@ export function LeadDetailHeader({
     // Reopen: determine the right status to return to
     let reopenStatus: string = 'contacted';
     if (isWon && lead.meeting_scheduled_at) {
-      // Was won → reopen to qualified (reunião agendada) and clear won_at
+      // Was won → reopen to qualified (reunião agendada) and clear won_at + meeting_held_at
       reopenStatus = 'qualified';
     } else if (isLost && (lead.qualified_at || lead.meeting_scheduled_at)) {
       reopenStatus = 'qualified';
@@ -88,8 +88,12 @@ export function LeadDetailHeader({
 
     startTransition(async () => {
       const updates: Record<string, unknown> = { status: reopenStatus };
-      // Clear won_at when reopening from won state
-      if (isWon) updates.won_at = null;
+      // Clear won_at + meeting_held_at when reopening from won state.
+      // The trigger keys off meeting_held_at, so we must clear it here too.
+      if (isWon) {
+        updates.won_at = null;
+        updates.meeting_held_at = null;
+      }
       const result = await updateLead(lead.id, updates);
       if (result.success) {
         toast.success('Lead reaberto');

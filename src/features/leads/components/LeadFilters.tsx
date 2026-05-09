@@ -21,6 +21,7 @@ const statusLabels: Record<string, string> = {
   new: 'Novo',
   contacted: 'Contatado',
   qualified: 'Qualificado',
+  won: 'Ganho',
   unqualified: 'Não Qualificado',
   archived: 'Arquivado',
 };
