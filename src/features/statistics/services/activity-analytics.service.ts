@@ -99,12 +99,12 @@ export async function fetchActivityAnalyticsData(
   let totalLost = 0;
   for (const l of leads) {
     seenIds.add(l.id);
-    if (l.status === 'qualified') totalWon++;
+    if (l.status === 'won') totalWon++;
     if (l.status === 'unqualified') totalLost++;
   }
   for (const l of allActiveLeads) {
     if (seenIds.has(l.id)) continue;
-    if (l.status === 'qualified') totalWon++;
+    if (l.status === 'won') totalWon++;
     if (l.status === 'unqualified') totalLost++;
   }
 
@@ -302,7 +302,7 @@ function computeQuartiles(
 ): { leadsInProspection: number; quartiles: UserQuartileData[] } {
   const now = Date.now();
   const prospectionLeads = userLeads.filter(
-    (l) => !['qualified', 'unqualified', 'archived'].includes(l.status),
+    (l) => !['qualified', 'won', 'unqualified', 'archived'].includes(l.status),
   );
   const total = prospectionLeads.length;
   if (total === 0) return { leadsInProspection: 0, quartiles: [] };
@@ -375,14 +375,14 @@ async function calculateUserBreakdown(
   for (const l of statusLeads) {
     if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
     seenLeadIds.add(l.id);
-    if (l.status === 'qualified') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
+    if (l.status === 'won') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
     if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
 
   for (const l of activeLeads) {
     if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
     seenLeadIds.add(l.id);
-    if (l.status === 'qualified') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
+    if (l.status === 'won') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
     if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
 

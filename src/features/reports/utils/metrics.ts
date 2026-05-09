@@ -118,9 +118,11 @@ export function calculateOverallMetrics(
       .filter((i) => i.type === 'meeting_scheduled')
       .map((i) => i.lead_id),
   );
-  // Only count qualified leads that were actually worked in the period
+  // Only count qualified leads that were actually worked in the period.
+  // 'won' is a downstream stage of 'qualified' — both count toward the funnel's
+  // "Qualificados" bucket.
   const qualifiedLeads = leads.filter(
-    (l) => l.status === 'qualified' && workedLeadIds.has(l.id),
+    (l) => (l.status === 'qualified' || l.status === 'won') && workedLeadIds.has(l.id),
   ).length;
 
   const contacted = contactedLeads.size;

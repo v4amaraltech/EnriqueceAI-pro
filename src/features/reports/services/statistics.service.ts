@@ -135,7 +135,7 @@ export async function fetchConversionByOrigin(
     const origin = lead.created_by ?? 'unknown';
     const current = originMap.get(origin) ?? { qualified: 0, unqualified: 0 };
 
-    if (lead.status === 'qualified') {
+    if (lead.status === 'qualified' || lead.status === 'won') {
       current.qualified++;
     } else if (lead.status === 'unqualified' || lead.status === 'archived') {
       current.unqualified++;
