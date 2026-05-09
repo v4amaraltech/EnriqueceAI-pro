@@ -209,30 +209,40 @@ export function CrmFieldMappingModal({
             </div>
           ) : rows.length > 0 ? (
             <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-[var(--muted)]/50">
-                    <th className="p-3 text-left text-sm font-medium">Campo Enriquece AI</th>
-                    <th className="p-3 text-center text-sm font-medium w-8" />
-                    <th className="p-3 text-left text-sm font-medium">Campo CRM</th>
-                    <th className="p-3 text-right text-sm font-medium w-12" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.tempId} className="border-b last:border-0">
-                      <td className="p-2">
-                        <Select
-                          value={row.appField}
-                          onValueChange={(v) => updateRow(row.tempId, { appField: v })}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecione..." />
-                          </SelectTrigger>
-                          <SelectContent>
+              <div className="flex items-center gap-2 border-b bg-[var(--muted)]/50 px-3 py-2 text-sm font-medium">
+                <span className="flex-1">Campo Enriquece AI</span>
+                <span className="w-4" />
+                <span className="flex-1">Campo CRM</span>
+                <span className="w-8" />
+              </div>
+              <div className="divide-y">
+                {rows.map((row) => (
+                  <div key={row.tempId} className="flex items-center gap-2 p-2">
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        value={row.appField}
+                        onValueChange={(v) => updateRow(row.tempId, { appField: v })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>Padrão</SelectLabel>
+                            {appFields.filter((f) => !f.isCustom).map((f) => (
+                              <SelectItem
+                                key={f.value}
+                                value={f.value}
+                                disabled={usedAppFields.has(f.value) && row.appField !== f.value}
+                              >
+                                {f.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                          {appFields.some((f) => f.isCustom) && (
                             <SelectGroup>
-                              <SelectLabel>Padrão</SelectLabel>
-                              {appFields.filter((f) => !f.isCustom).map((f) => (
+                              <SelectLabel>Personalizado</SelectLabel>
+                              {appFields.filter((f) => f.isCustom).map((f) => (
                                 <SelectItem
                                   key={f.value}
                                   value={f.value}
@@ -242,71 +252,53 @@ export function CrmFieldMappingModal({
                                 </SelectItem>
                               ))}
                             </SelectGroup>
-                            {appFields.some((f) => f.isCustom) && (
-                              <SelectGroup>
-                                <SelectLabel>Personalizado</SelectLabel>
-                                {appFields.filter((f) => f.isCustom).map((f) => (
-                                  <SelectItem
-                                    key={f.value}
-                                    value={f.value}
-                                    disabled={usedAppFields.has(f.value) && row.appField !== f.value}
-                                  >
-                                    {f.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="p-2 text-center">
-                        <ArrowRight className="mx-auto h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-                      </td>
-                      <td className="p-2">
-                        <Select
-                          value={row.crmField}
-                          onValueChange={(v) => updateRow(row.tempId, { crmField: v })}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecione..." />
-                          </SelectTrigger>
-                          <SelectContent>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        value={row.crmField}
+                        onValueChange={(v) => updateRow(row.tempId, { crmField: v })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>Padrão</SelectLabel>
+                            {targetFields.filter((f) => !('isCustom' in f && f.isCustom)).map((f) => (
+                              <SelectItem key={f.value} value={f.value}>
+                                {f.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                          {targetFields.some((f) => 'isCustom' in f && f.isCustom) && (
                             <SelectGroup>
-                              <SelectLabel>Padrão</SelectLabel>
-                              {targetFields.filter((f) => !('isCustom' in f && f.isCustom)).map((f) => (
+                              <SelectLabel>Personalizado</SelectLabel>
+                              {targetFields.filter((f) => 'isCustom' in f && f.isCustom).map((f) => (
                                 <SelectItem key={f.value} value={f.value}>
                                   {f.label}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
-                            {targetFields.some((f) => 'isCustom' in f && f.isCustom) && (
-                              <SelectGroup>
-                                <SelectLabel>Personalizado</SelectLabel>
-                                {targetFields.filter((f) => 'isCustom' in f && f.isCustom).map((f) => (
-                                  <SelectItem key={f.value} value={f.value}>
-                                    {f.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="p-2 text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label="Remover mapeamento"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => removeRow(row.tempId)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Remover mapeamento"
+                      className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => removeRow(row.tempId)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] py-4 text-center">
