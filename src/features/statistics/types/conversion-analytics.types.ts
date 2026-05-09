@@ -23,9 +23,17 @@ export interface CadenceConversionRow {
   cadenceId: string;
   cadenceName: string;
   enrollments: number;
+  contacted: number;
+  /** Leads currently in 'qualified' (meeting scheduled, not yet confirmed). */
+  qualified: number;
+  /** Leads currently in 'won' (closer confirmed meeting_done). */
+  won: number;
+  /** Cadence-level deprecated metrics kept on the type for back-compat with
+   *  other tables that consume CadenceConversionRow elsewhere. Not rendered in
+   *  ConversionByCadenceTable anymore. */
   replies: number;
   meetings: number;
-  qualified: number;
+  /** won / enrollments — final conversion rate. */
   conversionRate: number;
 }
 

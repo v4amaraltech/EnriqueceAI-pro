@@ -165,15 +165,22 @@ function calculateCadenceConversion(
   interactions: InteractionQueryRow[],
   leads: LeadQueryRow[],
 ): CadenceConversionRow[] {
-  const qualifiedLeadIds = new Set(
-    leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
+  // Funnel buckets keyed by lead.status. "Em Contato" is cumulative —
+  // every lead that reached at least the contacted stage counts (so a lead
+  // that's now in 'won' is still counted as contacted).
+  const contactedLeadIds = new Set(
+    leads.filter((l) => ['contacted', 'qualified', 'won'].includes(l.status)).map((l) => l.id),
+  );
+  const qualifiedOnlyLeadIds = new Set(
+    leads.filter((l) => l.status === 'qualified').map((l) => l.id),
+  );
+  const wonLeadIds = new Set(
+    leads.filter((l) => l.status === 'won').map((l) => l.id),
   );
 
-  // Build set of lead IDs that have meetings (meeting_scheduled often has no cadence_id)
   const meetingLeadIds = new Set(
     interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
   );
-  // Build set of lead IDs that have replies
   const repliedLeadIds = new Set(
     interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
   );
@@ -185,19 +192,22 @@ function calculateCadenceConversion(
       const cadenceEnrollments = enrollmentsByCadence.get(cadence.id) ?? [];
       const cadenceLeadIds = new Set(cadenceEnrollments.map((e) => e.lead_id));
 
-      // Count by lead membership: if lead is enrolled in this cadence AND has reply/meeting, count it
+      const contacted = [...cadenceLeadIds].filter((id) => contactedLeadIds.has(id)).length;
+      const qualified = [...cadenceLeadIds].filter((id) => qualifiedOnlyLeadIds.has(id)).length;
+      const won = [...cadenceLeadIds].filter((id) => wonLeadIds.has(id)).length;
       const replies = [...cadenceLeadIds].filter((id) => repliedLeadIds.has(id)).length;
       const meetings = [...cadenceLeadIds].filter((id) => meetingLeadIds.has(id)).length;
-      const qualified = [...cadenceLeadIds].filter((id) => qualifiedLeadIds.has(id)).length;
 
       return {
         cadenceId: cadence.id,
         cadenceName: cadence.name,
         enrollments: cadenceEnrollments.length,
+        contacted,
+        qualified,
+        won,
         replies,
         meetings,
-        qualified,
-        conversionRate: safeRate(qualified, cadenceEnrollments.length),
+        conversionRate: safeRate(won, cadenceEnrollments.length),
       };
     })
     .filter((c) => c.enrollments > 0)
