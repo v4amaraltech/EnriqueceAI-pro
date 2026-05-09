@@ -165,14 +165,15 @@ function calculateCadenceConversion(
   interactions: InteractionQueryRow[],
   leads: LeadQueryRow[],
 ): CadenceConversionRow[] {
-  // Funnel buckets keyed by lead.status. "Em Contato" is cumulative —
-  // every lead that reached at least the contacted stage counts (so a lead
-  // that's now in 'won' is still counted as contacted).
+  // Funnel buckets are cumulative — a lead that reached a stage is counted
+  // there even if it has since moved further along (so won leads still show
+  // up as contacted and qualified). Keeps the invariant
+  // Inscritos ≥ Em Contato ≥ Qualificado ≥ Ganho.
   const contactedLeadIds = new Set(
     leads.filter((l) => ['contacted', 'qualified', 'won'].includes(l.status)).map((l) => l.id),
   );
-  const qualifiedOnlyLeadIds = new Set(
-    leads.filter((l) => l.status === 'qualified').map((l) => l.id),
+  const qualifiedLeadIds = new Set(
+    leads.filter((l) => ['qualified', 'won'].includes(l.status)).map((l) => l.id),
   );
   const wonLeadIds = new Set(
     leads.filter((l) => l.status === 'won').map((l) => l.id),
@@ -193,7 +194,7 @@ function calculateCadenceConversion(
       const cadenceLeadIds = new Set(cadenceEnrollments.map((e) => e.lead_id));
 
       const contacted = [...cadenceLeadIds].filter((id) => contactedLeadIds.has(id)).length;
-      const qualified = [...cadenceLeadIds].filter((id) => qualifiedOnlyLeadIds.has(id)).length;
+      const qualified = [...cadenceLeadIds].filter((id) => qualifiedLeadIds.has(id)).length;
       const won = [...cadenceLeadIds].filter((id) => wonLeadIds.has(id)).length;
       const replies = [...cadenceLeadIds].filter((id) => repliedLeadIds.has(id)).length;
       const meetings = [...cadenceLeadIds].filter((id) => meetingLeadIds.has(id)).length;

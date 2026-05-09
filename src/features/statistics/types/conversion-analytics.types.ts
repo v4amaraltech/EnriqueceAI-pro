@@ -23,8 +23,9 @@ export interface CadenceConversionRow {
   cadenceId: string;
   cadenceName: string;
   enrollments: number;
+  /** Cumulative — leads that reached at least 'contacted' (includes qualified + won). */
   contacted: number;
-  /** Leads currently in 'qualified' (meeting scheduled, not yet confirmed). */
+  /** Cumulative — leads that reached at least 'qualified' (includes won). */
   qualified: number;
   /** Leads currently in 'won' (closer confirmed meeting_done). */
   won: number;
