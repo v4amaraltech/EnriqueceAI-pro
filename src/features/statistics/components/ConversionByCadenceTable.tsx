@@ -22,7 +22,6 @@ export function ConversionByCadenceTable({ data }: ConversionByCadenceTableProps
           <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
             <th className="px-4 py-2 text-left font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cadência</th>
             <th className="px-4 py-2 text-center font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Inscritos</th>
-            <th className="px-4 py-2 text-center font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Respostas</th>
             <th className="px-4 py-2 text-center font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Reuniões</th>
             <th className="px-4 py-2 text-center font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Qualificados</th>
             <th className="px-4 py-2 text-center font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Taxa %</th>
@@ -33,7 +32,6 @@ export function ConversionByCadenceTable({ data }: ConversionByCadenceTableProps
             <tr key={row.cadenceId} className="border-b border-[var(--border)]">
               <td className="px-4 py-2 font-medium">{row.cadenceName}</td>
               <td className="px-4 py-2 text-center">{row.enrollments}</td>
-              <td className="px-4 py-2 text-center">{row.replies}</td>
               <td className="px-4 py-2 text-center">{row.meetings}</td>
               <td className="px-4 py-2 text-center">{row.qualified}</td>
               <td className="px-4 py-2 text-right font-medium">

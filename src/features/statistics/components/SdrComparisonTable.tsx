@@ -47,7 +47,6 @@ export function SdrComparisonTable({ data, previousData }: SdrComparisonTablePro
     { key: 'leads', label: 'Leads' },
     { key: 'activities', label: 'Atividades' },
     { key: 'calls', label: 'Ligações' },
-    { key: 'replies', label: 'Respostas' },
     { key: 'meetings', label: 'Reuniões' },
     { key: 'conversionRate', label: 'Conversão %' },
     { key: 'goalPercentage', label: 'Meta %' },
@@ -90,7 +89,6 @@ export function SdrComparisonTable({ data, previousData }: SdrComparisonTablePro
                   {prev && <> <DeltaIndicator delta={calculateDelta(row.activities, prev.activities)} /></>}
                 </td>
                 <td className="px-4 py-2 text-right">{row.calls}</td>
-                <td className="px-4 py-2 text-right">{row.replies}</td>
                 <td className="px-4 py-2 text-right">{row.meetings}</td>
                 <td className="px-4 py-2 text-right">
                   {row.conversionRate}%
