@@ -127,6 +127,10 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   // SDR auto-assign: when an SDR imports leads, auto-assign to themselves
   const autoAssignTo = role === 'sdr' ? userId : null;
 
+  // Wrap the row-by-row work in a try/catch so an exception (DB hiccup, RLS
+  // violation, etc.) doesn't leave lead_imports stuck in 'processing' forever.
+  // We've seen 2 stuck imports (852f11c4, 9b0967af) before this guard existed.
+  try {
   // Insert valid rows
   for (const row of parsed.rows) {
     const normalized = normalizeOriginFields(leadSource ?? row.lead_source ?? null, null);
@@ -301,5 +305,21 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       errors: importErrors,
     },
   };
+  } catch (err) {
+    // Hard-fail path: mark the import as 'failed' with whatever counts we
+    // accumulated before the exception. Without this, the row sits in
+    // 'processing' forever and the user sees a perpetual spinner.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[importLeads] Aborted import=${importId} after ${successCount} successes:`, message);
+    await from(supabase, 'lead_imports')
+      .update({
+        processed_rows: successCount + importErrors.length,
+        success_count: successCount,
+        error_count: importErrors.length,
+        status: 'failed',
+      } as Record<string, unknown>)
+      .eq('id', importId);
+    return { success: false, error: `Importação interrompida: ${message}` };
+  }
 }
 
