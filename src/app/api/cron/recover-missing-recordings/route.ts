@@ -9,7 +9,12 @@ import { lookupRecordingFromApi4Com } from '@/features/calls/services/recover-re
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
 
 export const maxDuration = 300;
-const BATCH_LIMIT = 20;
+// Process more per run + split between newest/oldest so a deep backlog of
+// missing recordings doesn't starve the oldest items (which are at risk of
+// falling outside API4COM's ~90d retention window). The split also keeps
+// fresh calls flowing through transcription quickly.
+const BATCH_LIMIT_NEW = 30;
+const BATCH_LIMIT_OLD = 30;
 const MAX_AGE_DAYS = 45; // API4COM keeps records ~90d; cap at 45 to stay safely within window
 
 /**
@@ -29,27 +34,40 @@ export async function POST(request: Request) {
 
   const cutoffIso = new Date(Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: pending } = (await from(supabase, 'calls')
-    .select('id, destination, origin, started_at, created_at, duration_seconds, user_id, org_id, metadata')
-    .is('recording_url', null)
-    .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
-    .gte('created_at', cutoffIso)
-    .order('created_at', { ascending: false })
-    .limit(BATCH_LIMIT)) as {
-    data: Array<{
-      id: string;
-      destination: string;
-      origin: string | null;
-      started_at: string | null;
-      created_at: string;
-      duration_seconds: number;
-      user_id: string;
-      org_id: string;
-      metadata: Record<string, string> | null;
-    }> | null;
+  type CallRow = {
+    id: string;
+    destination: string;
+    origin: string | null;
+    started_at: string | null;
+    created_at: string;
+    duration_seconds: number;
+    user_id: string;
+    org_id: string;
+    metadata: Record<string, string> | null;
   };
 
-  const calls = pending ?? [];
+  const baseQuery = () =>
+    from(supabase, 'calls')
+      .select('id, destination, origin, started_at, created_at, duration_seconds, user_id, org_id, metadata')
+      .is('recording_url', null)
+      .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
+      .gte('created_at', cutoffIso);
+
+  const results = (await Promise.all([
+    baseQuery().order('created_at', { ascending: false }).limit(BATCH_LIMIT_NEW),
+    baseQuery().order('created_at', { ascending: true }).limit(BATCH_LIMIT_OLD),
+  ])) as unknown as Array<{ data: CallRow[] | null }>;
+  const newest = results[0]?.data;
+  const oldest = results[1]?.data;
+
+  // Dedup in case the two halves overlap (small backlog).
+  const seen = new Set<string>();
+  const calls: CallRow[] = [];
+  for (const row of [...(newest ?? []), ...(oldest ?? [])]) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    calls.push(row);
+  }
   if (calls.length === 0) {
     return NextResponse.json({ message: 'No calls awaiting recording recovery', processed: 0 });
   }
