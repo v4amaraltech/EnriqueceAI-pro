@@ -34,6 +34,11 @@ const envSchema = z.object({
   RDSTATION_CLIENT_ID: z.string().min(1).optional(),
   RDSTATION_CLIENT_SECRET: z.string().min(1).optional(),
   API4COM_WEBHOOK_SECRET: z.string().min(1).optional(),
+  // BRL per-minute rate used to compute calls.cost. Mobile and landline are
+  // billed differently by API4COM, so each has its own env var. When either
+  // is unset, the matching call's cost stays NULL (no fake zeros).
+  API4COM_PRICE_PER_MIN_MOBILE_BRL: z.coerce.number().nonnegative().optional(),
+  API4COM_PRICE_PER_MIN_LANDLINE_BRL: z.coerce.number().nonnegative().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
   WHATSAPP_APP_SECRET: z.string().min(1).optional(),
   APOLLO_WEBHOOK_SECRET: z.string().min(1).optional(),

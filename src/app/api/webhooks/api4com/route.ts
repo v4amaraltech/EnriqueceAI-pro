@@ -15,6 +15,7 @@ import {
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import type { CallStatus } from '@/features/calls/types';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import { computeCallCostBrl } from '@/features/calls/services/call-cost';
 import {
   findLeadByPhoneService,
   createExternalCallInteraction,
@@ -110,6 +111,7 @@ async function createCallFromWebhook(
     leadId = leadMatch?.leadId ?? null;
   }
 
+  const initialDuration = Number(body.duration) || 0;
   const { data: newCall } = (await from(supabase, 'calls')
     .insert({
       org_id: conn.org_id,
@@ -118,7 +120,8 @@ async function createCallFromWebhook(
       origin: body.caller,
       destination: body.called,
       started_at: body.startedAt || new Date().toISOString(),
-      duration_seconds: Number(body.duration) || 0,
+      duration_seconds: initialDuration,
+      cost: computeCallCostBrl(initialDuration, body.called),
       status: 'not_connected',
       type: isOutbound ? 'outbound' : 'inbound',
       recording_url: body.recordUrl || null,
@@ -308,6 +311,7 @@ async function updateCallFromWebhook(
 ) {
   const updates: Record<string, unknown> = {
     duration_seconds: payload.duration,
+    cost: computeCallCostBrl(payload.duration, payload.called),
   };
 
   // Only update recording_url if webhook provides one (don't overwrite with null)
