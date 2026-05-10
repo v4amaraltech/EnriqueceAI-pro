@@ -982,7 +982,7 @@ export function LeadInfoPanel({
                       variant="outline"
                       size="sm"
                       onClick={() => setIsSpicedDialogOpen(true)}
-                      className="w-full justify-center gap-2 border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-300"
+                      className="w-full justify-center gap-2 border-red-200 bg-red-50/50 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                       Gerar SPICED via IA
