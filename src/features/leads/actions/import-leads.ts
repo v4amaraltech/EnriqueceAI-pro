@@ -29,10 +29,16 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  // Get lead source override from form. Default to 'CSV Import' so attribution
-  // is never lost — without this, conversion-by-origin reports drop these leads.
-  const rawLeadSource = (formData.get('lead_source') as string) || '';
-  const leadSource = rawLeadSource.trim() || 'CSV Import';
+  // Lead source override from the import form. When the operator didn't
+  // pick anything, every imported row falls back to Outbound / Prospecção
+  // Ativa — that's what the V4 playbook calls a CSV-driven outreach push.
+  // (Per-row CSV `lead_source` columns still take precedence over the
+  // default; they only lose to a value the operator explicitly typed.)
+  const rawLeadSource = (formData.get('lead_source') as string)?.trim() || '';
+  const operatorPickedSource = rawLeadSource.length > 0;
+  const leadSource = operatorPickedSource ? rawLeadSource : null;
+  const DEFAULT_SOURCE = 'Outbound';
+  const DEFAULT_CANAL = 'Prospecção Ativa';
 
   // Get file from form
   const file = formData.get('file') as File | null;
@@ -133,7 +139,14 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   try {
   // Insert valid rows
   for (const row of parsed.rows) {
-    const normalized = normalizeOriginFields(leadSource ?? row.lead_source ?? null, null);
+    // Resolution order: operator dropdown → CSV column → DEFAULT_SOURCE.
+    // Same rule for canal, but only the default fallback is named explicitly
+    // — normalizeOriginFields will move sub-origens (Reativação, Apollo, etc.)
+    // to canal automatically when they appear in the source slot.
+    const resolvedSource = leadSource ?? row.lead_source ?? DEFAULT_SOURCE;
+    const resolvedCanal =
+      operatorPickedSource || row.lead_source ? null : DEFAULT_CANAL;
+    const normalized = normalizeOriginFields(resolvedSource, resolvedCanal);
 
     // Detect whether the CSV row carries any contact data — when it does, the
     // lead is treated as already enriched (Rafael's "_enriquecido_" CSV use case).
@@ -191,9 +204,13 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           // Only overwrite fields if the CSV actually provides them
           if (row.razao_social) restoreFields.razao_social = row.razao_social;
           if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
-          const effectiveSource = leadSource ?? row.lead_source;
-          if (effectiveSource) {
-            const normRestore = normalizeOriginFields(effectiveSource, null);
+          // Restore: same resolution order as the insert path. Only overwrite
+          // attribution when the operator picked a source OR the CSV row
+          // carries one — never silently re-tag a soft-deleted lead with the
+          // Outbound/Prospecção Ativa default.
+          const restoreSource = leadSource ?? row.lead_source;
+          if (restoreSource) {
+            const normRestore = normalizeOriginFields(restoreSource, null);
             restoreFields.lead_source = normRestore.lead_source;
             if (normRestore.canal) restoreFields.canal = normRestore.canal;
           }
