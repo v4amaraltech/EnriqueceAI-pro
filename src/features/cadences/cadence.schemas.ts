@@ -20,27 +20,50 @@ export const cadencePrioritySchema = z.enum(['high', 'medium', 'low']);
 // Cadence origin schema
 export const cadenceOriginSchema = z.enum(['inbound_active', 'inbound_passive', 'outbound']);
 
+// Auto-loss is a paired feature: setting one half without the other leaves
+// the cron with no reason to stamp on the enrollment, so the cadence
+// silently does nothing. Reject the partial state at the schema layer.
+const autoLossPairCheck = (
+  data: { auto_loss_after_days?: number | null; auto_loss_reason_id?: string | null },
+  ctx: z.RefinementCtx,
+) => {
+  const hasDays = data.auto_loss_after_days != null;
+  const hasReason = data.auto_loss_reason_id != null && data.auto_loss_reason_id !== '';
+  if (hasDays !== hasReason) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'Para usar perda automática por inatividade, defina os dois campos juntos: dias de inatividade e motivo de perda.',
+      path: hasDays ? ['auto_loss_reason_id'] : ['auto_loss_after_days'],
+    });
+  }
+};
+
 // Cadence creation schema
-export const createCadenceSchema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório').max(200),
-  description: z.string().max(1000).nullable().optional(),
-  type: cadenceTypeSchema.default('standard'),
-  priority: cadencePrioritySchema.default('medium'),
-  origin: cadenceOriginSchema.default('outbound'),
-  auto_loss_after_days: z.number().int().positive().nullable().optional(),
-  auto_loss_reason_id: z.string().uuid().nullable().optional(),
-});
+export const createCadenceSchema = z
+  .object({
+    name: z.string().min(1, 'Nome é obrigatório').max(200),
+    description: z.string().max(1000).nullable().optional(),
+    type: cadenceTypeSchema.default('standard'),
+    priority: cadencePrioritySchema.default('medium'),
+    origin: cadenceOriginSchema.default('outbound'),
+    auto_loss_after_days: z.number().int().positive().nullable().optional(),
+    auto_loss_reason_id: z.string().uuid().nullable().optional(),
+  })
+  .superRefine(autoLossPairCheck);
 
 // Cadence update schema
-export const updateCadenceSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).nullable().optional(),
-  status: cadenceStatusSchema.optional(),
-  priority: cadencePrioritySchema.optional(),
-  origin: cadenceOriginSchema.optional(),
-  auto_loss_after_days: z.number().int().positive().nullable().optional(),
-  auto_loss_reason_id: z.string().uuid().nullable().optional(),
-});
+export const updateCadenceSchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    description: z.string().max(1000).nullable().optional(),
+    status: cadenceStatusSchema.optional(),
+    priority: cadencePrioritySchema.optional(),
+    origin: cadenceOriginSchema.optional(),
+    auto_loss_after_days: z.number().int().positive().nullable().optional(),
+    auto_loss_reason_id: z.string().uuid().nullable().optional(),
+  })
+  .superRefine(autoLossPairCheck);
 
 // Cadence step creation schema
 export const createCadenceStepSchema = z.object({
