@@ -29,8 +29,10 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  // Get lead source override from form
-  const leadSource = (formData.get('lead_source') as string) || null;
+  // Get lead source override from form. Default to 'CSV Import' so attribution
+  // is never lost — without this, conversion-by-origin reports drop these leads.
+  const rawLeadSource = (formData.get('lead_source') as string) || '';
+  const leadSource = rawLeadSource.trim() || 'CSV Import';
 
   // Get file from form
   const file = formData.get('file') as File | null;
