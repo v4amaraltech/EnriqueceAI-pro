@@ -52,7 +52,7 @@ export function GenerateSpicedDialog({ open, onOpenChange, leadId }: GenerateSpi
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-purple-500" />
+            <Sparkles className="h-4 w-4 text-red-500" />
             Gerar SPICED via IA
           </DialogTitle>
           <DialogDescription>
