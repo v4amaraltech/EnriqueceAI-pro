@@ -8,6 +8,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { originateCall } from '@/features/integrations/services/api4com.service';
+import { normalizePhone } from '@/lib/utils/phone';
 
 const initiateCallSchema = z.object({
   phone: z.string().min(8, 'Telefone inválido'),
@@ -42,6 +43,12 @@ export async function initiateApi4ComCall(
 
   const gateway = `flux-${orgId}`;
 
+  // Strip the phone before persisting so the recovery cron + recording lookup
+  // can match against API4COM's record list (which always returns digit-only
+  // numbers). Saving formatted strings like "31 9621-1619" here was the cause
+  // of 514 unmatched recordings on V4 Amaral.
+  const normalizedPhone = normalizePhone(input.phone);
+
   try {
     const { data: api4comResponse, ramal } = await originateCall(userId, input.phone, {
       gateway,
@@ -55,7 +62,7 @@ export async function initiateApi4ComCall(
         user_id: userId,
         lead_id: input.leadId ?? null,
         origin: ramal,
-        destination: input.phone,
+        destination: normalizedPhone,
         duration_seconds: 0,
         status: 'not_connected',
         type: 'outbound',
