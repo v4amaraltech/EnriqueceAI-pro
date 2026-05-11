@@ -57,6 +57,20 @@ export async function POST(request: Request) {
       const leadNameMap = new Map((leads ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']));
 
       for (const activity of pendingActivities) {
+        // Claim atomically BEFORE creating the notification. If two cron ticks
+        // race (or the previous tick crashed between createNotification and the
+        // UPDATE), only the request that successfully flipped reminder_sent_at
+        // from NULL to "now" should fire the notification. Earlier ordering
+        // (notification first, claim second) produced 3+ duplicate sino entries
+        // for the same scheduled_activity_id in production.
+        const { data: claimed } = (await from(supabase, 'scheduled_activities' as never)
+          .update({ reminder_sent_at: now.toISOString() } as Record<string, unknown>)
+          .eq('id', activity.id)
+          .is('reminder_sent_at', null)
+          .select('id')) as { data: Array<{ id: string }> | null };
+
+        if (!claimed?.length) continue;
+
         const leadName = leadNameMap.get(activity.lead_id) ?? 'Lead';
         const channelLabel = CHANNEL_LABELS[activity.channel] ?? activity.channel;
         const timeStr = new Date(activity.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -71,11 +85,6 @@ export async function POST(request: Request) {
           resource_id: activity.lead_id,
           metadata: { scheduled_activity_id: activity.id, channel: activity.channel },
         });
-
-        // Mark reminder as sent
-        await from(supabase, 'scheduled_activities' as never)
-          .update({ reminder_sent_at: now.toISOString() } as Record<string, unknown>)
-          .eq('id', activity.id);
 
         activityReminders++;
       }

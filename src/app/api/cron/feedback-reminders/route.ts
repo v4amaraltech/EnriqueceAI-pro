@@ -147,13 +147,24 @@ async function sendFeedbackReminders() {
     });
 
     if (result.success) {
-      // Update counters
-      await from(supabase, 'closer_feedback_requests')
+      // Claim atomically: only the run that successfully transitions
+      // reminder_count from N to N+1 owns this reminder. Without this guard,
+      // two concurrent ticks (Vercel retries / overlapping cron) both bumped
+      // the counter and both fired manager escalation, leaving 5 duplicate
+      // "Closer X não respondeu" notifications for the same recipient.
+      const { data: claimed } = (await from(supabase, 'closer_feedback_requests')
         .update({
           reminder_sent_at: new Date().toISOString(),
           reminder_count: newCount,
         } as Record<string, unknown>)
-        .eq('id', fb.id);
+        .eq('id', fb.id)
+        .eq('reminder_count', fb.reminder_count)
+        .select('id')) as { data: Array<{ id: string }> | null };
+
+      if (!claimed?.length) {
+        // Someone else already advanced this reminder — skip the side effects.
+        continue;
+      }
 
       // WhatsApp parallel channel
       if (closer.phone && validateBrazilianPhone(closer.phone)) {
