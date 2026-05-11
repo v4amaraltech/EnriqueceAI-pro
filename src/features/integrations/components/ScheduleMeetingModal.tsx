@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
-import { scheduleMeeting, updateMeeting, getLoggedUserEmail } from '../actions/schedule-meeting';
+import { scheduleMeeting, updateMeeting, getLoggedUserEmail, getLeadFaturamento } from '../actions/schedule-meeting';
 import { WhatsAppInviteModal } from './WhatsAppInviteModal';
 import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 
@@ -75,6 +75,18 @@ function generateTimeSlots(): string[] {
 
 const TIME_SLOTS = generateTimeSlots();
 
+/** Parse "1.500.000,50" / "1500000" / "R$ 1.500" → 1500000.5 / 1500000 / 1500. Returns null se inválido. */
+function parseFaturamentoInput(input: string): number | null {
+  const cleaned = input.replace(/[^\d,]/g, '').replace(',', '.');
+  if (!cleaned) return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatFaturamentoForInput(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
+}
+
 export function ScheduleMeetingModal({
   open,
   onOpenChange,
@@ -106,6 +118,9 @@ export function ScheduleMeetingModal({
   const [selectedCloserId, setSelectedCloserId] = useState('');
   const [sdrEmail, setSdrEmail] = useState('');
 
+  // Faturamento estimado (obrigatório ao agendar, ignorado ao editar)
+  const [faturamentoStr, setFaturamentoStr] = useState('');
+
   // WhatsApp invite modal
   const [whatsAppInviteOpen, setWhatsAppInviteOpen] = useState(false);
   const [hasWhatsApp, setHasWhatsApp] = useState(false);
@@ -127,6 +142,18 @@ export function ScheduleMeetingModal({
       });
     }
   }, [open, closersLoaded]);
+
+  // Pré-popular faturamento ao abrir (só no modo agendar — não é editado em update)
+  useEffect(() => {
+    if (open && !editData) {
+      setFaturamentoStr('');
+      getLeadFaturamento(leadId).then((r) => {
+        if (r.success && r.data !== null) {
+          setFaturamentoStr(formatFaturamentoForInput(r.data));
+        }
+      });
+    }
+  }, [open, editData, leadId]);
 
   useEffect(() => {
     if (open) {
@@ -167,9 +194,16 @@ export function ScheduleMeetingModal({
     return `${y}-${m}-${d}`;
   }, [selectedDate]);
 
+  const parsedFaturamento = parseFaturamentoInput(faturamentoStr);
+
   function handleSubmit() {
     if (!dateString || !selectedTime) {
       toast.error('Selecione a data e hora');
+      return;
+    }
+
+    if (!editData && parsedFaturamento === null) {
+      toast.error('Informe o faturamento estimado do lead (em R$) antes de agendar.');
       return;
     }
 
@@ -192,7 +226,7 @@ export function ScheduleMeetingModal({
 
       const result = editData
         ? await updateMeeting(editData.interactionId, leadId, eventInput)
-        : await scheduleMeeting(leadId, eventInput);
+        : await scheduleMeeting(leadId, eventInput, parsedFaturamento!);
 
       if (result.success) {
         const meetInfo = result.data?.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
@@ -275,6 +309,25 @@ export function ScheduleMeetingModal({
               )}
             </select>
           </div>
+
+          {/* Faturamento estimado — obrigatório no agendamento */}
+          {!isEditing && (
+            <div>
+              <Label className="text-sm font-semibold">
+                Faturamento estimado do lead (R$): <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={faturamentoStr}
+                onChange={(e) => setFaturamentoStr(e.target.value)}
+                placeholder="Ex.: 1.500.000"
+                inputMode="numeric"
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                Esse valor vai no briefing enviado ao closer. Obrigatório antes de agendar.
+              </p>
+            </div>
+          )}
 
           {/* Duração — botões */}
           <div>
@@ -394,7 +447,7 @@ export function ScheduleMeetingModal({
       )}
       <Button
         onClick={handleSubmit}
-        disabled={isPending || !dateString || !selectedTime}
+        disabled={isPending || !dateString || !selectedTime || (!editData && parsedFaturamento === null)}
         className="bg-primary hover:bg-primary-700 text-white"
       >
         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -447,7 +500,7 @@ export function ScheduleMeetingModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
-            disabled={isPending || !dateString || !selectedTime}
+            disabled={isPending || !dateString || !selectedTime || (!editData && parsedFaturamento === null)}
             className="bg-primary hover:bg-primary-700 text-white"
           >
             <CalendarIcon className="mr-2 h-4 w-4" />

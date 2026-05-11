@@ -10,8 +10,19 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
-import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected } from '@/features/integrations/actions/schedule-meeting';
+import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected, getLeadFaturamento } from '@/features/integrations/actions/schedule-meeting';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
+
+function parseFaturamentoInput(input: string): number | null {
+  const cleaned = input.replace(/[^\d,]/g, '').replace(',', '.');
+  if (!cleaned) return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatFaturamentoForInput(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
+}
 
 interface LeadScheduleTabProps {
   leadId: string;
@@ -35,6 +46,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [selectedCloserId, setSelectedCloserId] = useState('');
   const [sdrEmail, setSdrEmail] = useState('');
   const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
+  const [faturamentoStr, setFaturamentoStr] = useState('');
 
   // Build attendee list from available emails
   function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
@@ -48,16 +60,24 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   }
 
   useEffect(() => {
-    Promise.all([listClosers(), getLoggedUserEmail(), checkCalendarConnected()]).then(([closersResult, emailResult, calResult]) => {
+    Promise.all([
+      listClosers(),
+      getLoggedUserEmail(),
+      checkCalendarConnected(),
+      getLeadFaturamento(leadId),
+    ]).then(([closersResult, emailResult, calResult, faturamentoResult]) => {
       if (closersResult.success) setClosers(closersResult.data);
       setClosersLoaded(true);
       const userEmail = emailResult.success ? emailResult.data : '';
       setSdrEmail(userEmail);
       setMeetingAttendee(buildAttendees(undefined, userEmail));
       if (calResult.success) setCalendarConnected(calResult.data);
+      if (faturamentoResult.success && faturamentoResult.data !== null) {
+        setFaturamentoStr(formatFaturamentoForInput(faturamentoResult.data));
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [leadId]);
 
   const defaultTitle = `V4 Company + ${companyName ?? 'Lead'}`;
 
@@ -160,6 +180,22 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
         <p className="text-[10px] text-[var(--muted-foreground)] mt-1">Separe múltiplos emails com vírgula</p>
       </div>
 
+      <div>
+        <Label className="text-xs">
+          Faturamento estimado do lead (R$) <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          value={faturamentoStr}
+          onChange={(e) => setFaturamentoStr(e.target.value)}
+          placeholder="Ex.: 1.500.000"
+          inputMode="numeric"
+          className="mt-1"
+        />
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+          Vai no briefing do closer — obrigatório antes de agendar.
+        </p>
+      </div>
+
       <label className="flex items-center gap-2 text-xs">
         <input
           type="checkbox"
@@ -173,7 +209,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
 
       <Button
         className="w-full"
-        disabled={!meetingDate || !meetingTime || isMeetingPending}
+        disabled={!meetingDate || !meetingTime || isMeetingPending || parseFaturamentoInput(faturamentoStr) === null}
         onClick={() => {
           // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
           const startIso = `${meetingDate}T${meetingTime}:00`;
@@ -181,6 +217,12 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
           const endDate = new Date(endMs);
           const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
           const title = meetingTitle || defaultTitle;
+
+          const faturamento = parseFaturamentoInput(faturamentoStr);
+          if (faturamento === null) {
+            toast.error('Informe o faturamento estimado do lead (em R$) antes de agendar.');
+            return;
+          }
 
           startMeetingTransition(async () => {
             const result = await scheduleMeeting(leadId, {
@@ -192,7 +234,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
                 : undefined,
               generateMeetLink: meetingMeetLink,
               closerId: selectedCloserId || undefined,
-            });
+            }, faturamento);
 
             if (result.success) {
               const meetInfo = result.data.meetLink ? ` | Meet: ${result.data.meetLink}` : '';

@@ -24,10 +24,15 @@ import type { BusySlot } from '../services/calendar.service';
 export async function scheduleMeeting(
   leadId: string,
   input: CreateEventInput,
+  faturamentoEstimado: number,
 ): Promise<ActionResult<CalendarEvent>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
+
+  if (!Number.isFinite(faturamentoEstimado) || faturamentoEstimado <= 0) {
+    return { success: false, error: 'Informe o faturamento estimado do lead (valor em R$ maior que zero) antes de agendar a reunião.' };
+  }
 
   const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
@@ -63,11 +68,15 @@ export async function scheduleMeeting(
         performed_by: userId,
       } as Record<string, unknown>);
 
-    // Update lead: qualified_at (reunião agendada = qualificado) + closer_id if provided
+    // Update lead: qualified_at (reunião agendada = qualificado) + closer_id if provided.
+    // faturamento_estimado is updated here too — the SDR is required to fill it
+    // before scheduling so the closer briefing email has the value populated
+    // (96% of briefings were going out with "Faturamento: —" before this gate).
     const leadUpdates: Record<string, unknown> = {
       meeting_scheduled_at: new Date().toISOString(),
       qualified_at: new Date().toISOString(),
       status: 'qualified',
+      faturamento_estimado: faturamentoEstimado,
     };
     if (input.closerId) {
       leadUpdates.closer_id = input.closerId;
@@ -147,6 +156,20 @@ export async function checkCalendarConnected(): Promise<ActionResult<boolean>> {
   const { orgId, userId } = auth.data;
   const connection = await getCalendarConnection(userId, orgId);
   return { success: true, data: !!connection };
+}
+
+export async function getLeadFaturamento(leadId: string): Promise<ActionResult<number | null>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  const { data } = (await from(supabase, 'leads')
+    .select('faturamento_estimado')
+    .eq('id', leadId)
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: { faturamento_estimado: number | null } | null };
+
+  return { success: true, data: data?.faturamento_estimado ?? null };
 }
 
 export async function getLoggedUserEmail(): Promise<ActionResult<string>> {
