@@ -32,6 +32,9 @@ const BASE_CONNECTION: CrmConnectionRow = {
   field_mapping: { leads: { nome_fantasia: 'company', email: 'email', telefone: 'phone' } },
   status: 'connected',
   last_sync_at: '2026-02-18T00:00:00Z',
+  default_pipeline_id: null,
+  default_stage_id: null,
+  default_responsible_user_id: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };

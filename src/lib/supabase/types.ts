@@ -428,6 +428,9 @@ export type Database = {
           created_at: string
           credentials_encrypted: Json
           crm_provider: Database["public"]["Enums"]["crm_type"]
+          default_pipeline_id: string | null
+          default_responsible_user_id: string | null
+          default_stage_id: string | null
           field_mapping: Json | null
           id: string
           last_sync_at: string | null
@@ -439,6 +442,9 @@ export type Database = {
           created_at?: string
           credentials_encrypted: Json
           crm_provider: Database["public"]["Enums"]["crm_type"]
+          default_pipeline_id?: string | null
+          default_responsible_user_id?: string | null
+          default_stage_id?: string | null
           field_mapping?: Json | null
           id?: string
           last_sync_at?: string | null
@@ -450,6 +456,9 @@ export type Database = {
           created_at?: string
           credentials_encrypted?: Json
           crm_provider?: Database["public"]["Enums"]["crm_type"]
+          default_pipeline_id?: string | null
+          default_responsible_user_id?: string | null
+          default_stage_id?: string | null
           field_mapping?: Json | null
           id?: string
           last_sync_at?: string | null

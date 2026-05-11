@@ -17,6 +17,11 @@ export interface CrmConnectionRow {
   field_mapping: FieldMapping | null;
   status: ConnectionStatus;
   last_sync_at: string | null;
+  // Defaults used by automated CRM pushes (closer-feedback flow) where the
+  // caller can't gather pipeline/stage from a UI form.
+  default_pipeline_id: string | null;
+  default_stage_id: string | null;
+  default_responsible_user_id: string | null;
   created_at: string;
   updated_at: string;
 }

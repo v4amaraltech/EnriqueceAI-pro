@@ -4,6 +4,7 @@ import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
@@ -100,6 +101,20 @@ export async function POST(request: Request) {
         .eq('id', feedbackReq.lead_id)
         .eq('org_id', feedbackReq.org_id)
         .is('won_at', null);
+
+      // Push to CRM using org defaults — this path used to leak 30% of won
+      // leads (the ones that reached 'won' via the DB trigger rather than the
+      // UI's markLeadAsWon, which is the path that previously owned the CRM
+      // push). Fire-and-forget: feedback must not fail if Kommo is flaky.
+      after(() =>
+        pushLeadToCrmWithDefaults(feedbackReq.org_id, feedbackReq.lead_id)
+          .then((res) => {
+            if (!res.dealCreated && res.skippedReason && res.skippedReason !== 'already_synced') {
+              console.warn('[api/feedback] CRM push skipped:', res.skippedReason, 'lead=', feedbackReq.lead_id);
+            }
+          })
+          .catch((err) => console.error('[api/feedback] CRM push error:', err)),
+      );
     }
 
     // Notify SDR in background after response is sent
