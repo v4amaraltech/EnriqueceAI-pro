@@ -111,19 +111,26 @@ export async function getResponseTimeData(
 
   const leadIds = filteredLeads.map((l) => l.id);
 
-  // Fetch first interaction per lead (sent or delivered)
-  const { data: interactions } = (await from(supabase, 'interactions')
-    .select('lead_id, created_at')
-    .eq('org_id', orgId)
-    .in('lead_id', leadIds)
-    .in('type', ['sent', 'delivered'])
-    .order('created_at', { ascending: true })) as { data: InteractionQueryRow[] | null };
-
-  // Get first interaction per lead
+  // Fetch first interaction per lead (sent or delivered).
+  // We chunk the .in() because PostgREST's URL is a hard ceiling around 4-8KB:
+  // a single .in() with ~200 UUIDs already approaches that. Without chunking,
+  // the request silently returned no rows for orgs with many leads/month and
+  // the whole "em até 30 min" column collapsed to 0%.
+  const INTERACTIONS_CHUNK = 200;
   const firstInteractionMap = new Map<string, string>();
-  for (const i of interactions ?? []) {
-    if (!firstInteractionMap.has(i.lead_id)) {
-      firstInteractionMap.set(i.lead_id, i.created_at);
+  for (let i = 0; i < leadIds.length; i += INTERACTIONS_CHUNK) {
+    const chunk = leadIds.slice(i, i + INTERACTIONS_CHUNK);
+    const { data: interactions } = (await from(supabase, 'interactions')
+      .select('lead_id, created_at')
+      .eq('org_id', orgId)
+      .in('lead_id', chunk)
+      .in('type', ['sent', 'delivered'])
+      .order('created_at', { ascending: true })) as { data: InteractionQueryRow[] | null };
+    for (const it of interactions ?? []) {
+      const existing = firstInteractionMap.get(it.lead_id);
+      if (!existing || it.created_at < existing) {
+        firstInteractionMap.set(it.lead_id, it.created_at);
+      }
     }
   }
 
