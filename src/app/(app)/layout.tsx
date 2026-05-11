@@ -17,6 +17,7 @@ import type { SubscriptionStatus } from '@/features/billing/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
+import { ChunkReloadFlagReset } from '@/shared/components/ChunkReloadFlagReset';
 import { ClientErrorBoundary } from '@/shared/components/ClientErrorBoundary';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
 import { fetchPendingActivitiesCount } from '@/features/activities/actions/fetch-pending-count';
@@ -164,6 +165,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </div>
             </SubscriptionGuard>
             <Toaster />
+            <ChunkReloadFlagReset />
             <ClientErrorBoundary>
               <Suspense fallback={null}>
                 <Api4ComWebphoneWrapper />
