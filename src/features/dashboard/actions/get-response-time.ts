@@ -148,7 +148,17 @@ export async function getResponseTimeData(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // Calculate per-user breakdown
+  // Calculate per-user breakdown.
+  //
+  // Two filters keep this metric honest:
+  //  1) Leads with NO first interaction are excluded from the denominator —
+  //     they're "not yet contacted", not "contacted slowly". Otherwise SDRs
+  //     who got assigned a lot of fresh leads look slow.
+  //  2) Interactions registered <5s after the lead row was created come from
+  //     inbound automations (Apollo webhooks, CSV imports that pre-create an
+  //     interaction, etc.) and don't reflect human response time. Excluding
+  //     them stops a non-human signal from inflating "em até 30 min" to 100%.
+  const AUTOMATION_GRACE_SECONDS = 5;
   const userMap = new Map<string, { total: number; within: number }>();
   let overallWithin = 0;
   let overallTotal = 0;
@@ -158,18 +168,21 @@ export async function getResponseTimeData(
     if (!userId) continue;
     if (!sdrIds.has(userId)) continue; // Exclude managers
 
+    const firstAt = firstInteractionMap.get(lead.id);
+    if (!firstAt) continue; // Lead not yet contacted — exclude from denominator
+
+    const diffMs = new Date(firstAt).getTime() - new Date(lead.created_at).getTime();
+    const diffSec = diffMs / 1000;
+    if (diffSec < AUTOMATION_GRACE_SECONDS) continue; // Looks like inbound automation, not a human reply
+
     overallTotal++;
     const entry = userMap.get(userId) ?? { total: 0, within: 0 };
     entry.total++;
 
-    const firstAt = firstInteractionMap.get(lead.id);
-    if (firstAt) {
-      const diffMs = new Date(firstAt).getTime() - new Date(lead.created_at).getTime();
-      const diffMin = diffMs / (1000 * 60);
-      if (diffMin <= thresholdMinutes) {
-        entry.within++;
-        overallWithin++;
-      }
+    const diffMin = diffSec / 60;
+    if (diffMin <= thresholdMinutes) {
+      entry.within++;
+      overallWithin++;
     }
 
     userMap.set(userId, entry);
