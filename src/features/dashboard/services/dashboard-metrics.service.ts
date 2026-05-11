@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -99,13 +100,16 @@ export async function fetchOpportunityKpi(
   if (filters.cadenceIds.length > 0) {
     const leadIds = qualifiedLeads.map((l) => l.id);
     if (leadIds.length > 0) {
-      const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
-        .select('lead_id')
-        .in('lead_id', leadIds)
-        .in('cadence_id', filters.cadenceIds)) as {
-        data: Array<{ lead_id: string }> | null;
-      };
-      const enrolledIds = new Set((enrollments ?? []).map((e) => e.lead_id));
+      const enrollments = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+        from(supabase, 'cadence_enrollments')
+          .select('lead_id')
+          .in('lead_id', chunk)
+          .in('cadence_id', filters.cadenceIds) as unknown as PromiseLike<{
+          data: Array<{ lead_id: string }> | null;
+          error: unknown;
+        }>,
+      );
+      const enrolledIds = new Set(enrollments.map((e) => e.lead_id));
       qualifiedLeads = qualifiedLeads.filter((l) => enrolledIds.has(l.id));
     }
   }

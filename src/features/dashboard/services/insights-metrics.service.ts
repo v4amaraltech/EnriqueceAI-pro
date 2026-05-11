@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -159,14 +160,16 @@ export async function fetchConversionByOrigin(
   if (filters.cadenceIds.length > 0 || filters.userIds.length > 0) {
     const leadIds = filteredLeads.map((l) => l.id);
     if (leadIds.length > 0) {
-      let enrollmentQuery = from(supabase, 'cadence_enrollments')
-        .select('lead_id')
-        .eq('org_id', orgId)
-        .in('lead_id', leadIds);
-      if (filters.cadenceIds.length > 0) enrollmentQuery = enrollmentQuery.in('cadence_id', filters.cadenceIds);
-      if (filters.userIds.length > 0) enrollmentQuery = enrollmentQuery.in('enrolled_by', filters.userIds);
-      const { data: enrollments } = (await enrollmentQuery) as { data: Array<{ lead_id: string }> | null };
-      const enrolledIds = new Set((enrollments ?? []).map((e) => e.lead_id));
+      const enrollments = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) => {
+        let q = from(supabase, 'cadence_enrollments')
+          .select('lead_id')
+          .eq('org_id', orgId)
+          .in('lead_id', chunk);
+        if (filters.cadenceIds.length > 0) q = q.in('cadence_id', filters.cadenceIds);
+        if (filters.userIds.length > 0) q = q.in('enrolled_by', filters.userIds);
+        return q as unknown as PromiseLike<{ data: Array<{ lead_id: string }> | null; error: unknown }>;
+      });
+      const enrolledIds = new Set(enrollments.map((e) => e.lead_id));
       filteredLeads = filteredLeads.filter((l) => enrolledIds.has(l.id));
     }
   }

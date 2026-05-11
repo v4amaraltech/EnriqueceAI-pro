@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -109,13 +110,16 @@ export async function fetchLeadsFinishedRanking(
 
   // Get lead assigned_to for attribution
   const leadIds = [...new Set(rows.map((r) => r.lead_id))];
-  const { data: leadData } = (await from(supabase, 'leads')
-    .select('id, assigned_to')
-    .in('id', leadIds)
-    .is('deleted_at', null)) as {
-    data: Array<{ id: string; assigned_to: string | null }> | null;
-  };
-  const leadAssignedTo = new Map((leadData ?? []).map((l) => [l.id, l.assigned_to]));
+  const leadData = await chunkedIn<{ id: string; assigned_to: string | null }>(leadIds, (chunk) =>
+    from(supabase, 'leads')
+      .select('id, assigned_to')
+      .in('id', chunk)
+      .is('deleted_at', null) as unknown as PromiseLike<{
+      data: Array<{ id: string; assigned_to: string | null }> | null;
+      error: unknown;
+    }>,
+  );
+  const leadAssignedTo = new Map(leadData.map((l) => [l.id, l.assigned_to]));
 
   // Group by SDR (use lead's assigned_to, fallback to enrolled_by only if SDR)
   const sdrMap = new Map<string, { finished: number; prospecting: number }>();
@@ -279,13 +283,16 @@ export async function fetchConversionRanking(
   let filteredLeadIds: Set<string> | null = null;
   if (filters.cadenceIds.length > 0) {
     const leadIds = leadRows.map((l) => l.id);
-    const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
-      .select('lead_id')
-      .in('lead_id', leadIds)
-      .in('cadence_id', filters.cadenceIds)) as {
-      data: Array<{ lead_id: string }> | null;
-    };
-    filteredLeadIds = new Set((enrollments ?? []).map((e) => e.lead_id));
+    const enrollments = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+      from(supabase, 'cadence_enrollments')
+        .select('lead_id')
+        .in('lead_id', chunk)
+        .in('cadence_id', filters.cadenceIds) as unknown as PromiseLike<{
+        data: Array<{ lead_id: string }> | null;
+        error: unknown;
+      }>,
+    );
+    filteredLeadIds = new Set(enrollments.map((e) => e.lead_id));
   }
 
   // Build set of won lead IDs in the period for quick lookup

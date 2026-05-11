@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import type { CadenceStepAnalyticsData, CadenceStepMetrics } from '../types/step-analytics';
@@ -41,18 +42,15 @@ export async function fetchStepAnalyticsData(
   }
 
   // Build interactions query
-  let intQuery = from(supabase, 'interactions')
-    .select('step_id, type, lead_id')
-    .eq('org_id', orgId)
-    .eq('cadence_id', cadenceId)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .not('step_id', 'is', null)
-    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled']);
-
-  if (leadIdFilter) {
-    intQuery = intQuery.in('lead_id', leadIdFilter);
-  }
+  const buildIntQuery = () =>
+    from(supabase, 'interactions')
+      .select('step_id, type, lead_id')
+      .eq('org_id', orgId)
+      .eq('cadence_id', cadenceId)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .not('step_id', 'is', null)
+      .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled']);
 
   // Steps structure (always all steps for zero-fill)
   const stepsQuery = from(supabase, 'cadence_steps')
@@ -60,12 +58,22 @@ export async function fetchStepAnalyticsData(
     .eq('cadence_id', cadenceId)
     .order('step_order', { ascending: true });
 
-  const [{ data: rawInteractions }, { data: rawSteps }] = await Promise.all([
-    intQuery.limit(10000) as unknown as Promise<{ data: StepInteractionRow[] | null }>,
+  const interactionsPromise: Promise<StepInteractionRow[]> =
+    leadIdFilter && leadIdFilter.length > 0
+      ? chunkedIn<StepInteractionRow>(leadIdFilter, (chunk) =>
+          buildIntQuery()
+            .in('lead_id', chunk)
+            .limit(10000) as unknown as PromiseLike<{ data: StepInteractionRow[] | null; error: unknown }>,
+        )
+      : (buildIntQuery().limit(10000) as unknown as Promise<{ data: StepInteractionRow[] | null }>).then(
+          (r) => r.data ?? [],
+        );
+
+  const [interactions, { data: rawSteps }] = await Promise.all([
+    interactionsPromise,
     stepsQuery as unknown as Promise<{ data: CadenceStepRow[] | null }>,
   ]);
 
-  const interactions = rawInteractions ?? [];
   const steps = rawSteps ?? [];
 
   return buildStepAnalytics(cadenceId, steps, interactions);

@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 export interface DailyProgress {
@@ -42,14 +43,21 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   let pendingEnrollments: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null = null;
 
   if (myLeadIds.length > 0) {
-    const { data } = (await from(supabase, 'cadence_enrollments')
-      .select('id, cadence_id, lead_id, current_step')
-      .eq('status', 'active')
-      .in('lead_id', myLeadIds)
-      .not('next_step_due', 'is', null)
-      .lte('next_step_due', new Date().toISOString())
-      .limit(500)) as { data: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null };
-    pendingEnrollments = data;
+    const nowIso = new Date().toISOString();
+    pendingEnrollments = await chunkedIn<{ id: string; cadence_id: string; lead_id: string; current_step: number }>(
+      myLeadIds,
+      (chunk) =>
+        from(supabase, 'cadence_enrollments')
+          .select('id, cadence_id, lead_id, current_step')
+          .eq('status', 'active')
+          .in('lead_id', chunk)
+          .not('next_step_due', 'is', null)
+          .lte('next_step_due', nowIso)
+          .limit(500) as unknown as PromiseLike<{
+          data: Array<{ id: string; cadence_id: string; lead_id: string; current_step: number }> | null;
+          error: unknown;
+        }>,
+    );
   }
 
   let pending: number | null = 0;
@@ -79,14 +87,21 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
       const stepIds = [...new Set(candidates.map((c) => c.stepId))];
       const leadIds = [...new Set(candidates.map((c) => c.leadId))];
 
-      const { data: existingInteractions } = (await from(supabase, 'interactions')
-        .select('cadence_id, step_id, lead_id')
-        .in('cadence_id', cadenceIds)
-        .in('step_id', stepIds)
-        .in('lead_id', leadIds)) as { data: Array<{ cadence_id: string; step_id: string; lead_id: string }> | null };
+      const existingInteractions = await chunkedIn<{ cadence_id: string; step_id: string; lead_id: string }>(
+        leadIds,
+        (chunk) =>
+          from(supabase, 'interactions')
+            .select('cadence_id, step_id, lead_id')
+            .in('cadence_id', cadenceIds)
+            .in('step_id', stepIds)
+            .in('lead_id', chunk) as unknown as PromiseLike<{
+            data: Array<{ cadence_id: string; step_id: string; lead_id: string }> | null;
+            error: unknown;
+          }>,
+      );
 
       const executedSet = new Set(
-        (existingInteractions ?? []).map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
+        existingInteractions.map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
       );
 
       pending = candidates.filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`)).length;

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 import { formatDateLabel } from '@/lib/utils/format';
 import { INTERACTION_TYPE_COLORS } from '@/shared/constants/chart-colors';
@@ -42,22 +43,28 @@ export async function fetchEmailAnalyticsData(
     }
   }
 
-  let query = from(supabase, 'interactions')
-    .select('type, lead_id, cadence_id, created_at')
-    .eq('org_id', orgId)
-    .eq('channel', 'email')
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
+  const buildBaseQuery = () => {
+    let q = from(supabase, 'interactions')
+      .select('type, lead_id, cadence_id, created_at')
+      .eq('org_id', orgId)
+      .eq('channel', 'email')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+    if (cadenceId) q = q.eq('cadence_id', cadenceId);
+    return q;
+  };
 
-  if (cadenceId) {
-    query = query.eq('cadence_id', cadenceId);
+  let interactions: InteractionQueryRow[];
+  if (leadIdFilter && leadIdFilter.length > 0) {
+    interactions = await chunkedIn<InteractionQueryRow>(leadIdFilter, (chunk) =>
+      buildBaseQuery()
+        .in('lead_id', chunk)
+        .limit(10000) as unknown as PromiseLike<{ data: InteractionQueryRow[] | null; error: unknown }>,
+    );
+  } else {
+    const { data } = (await buildBaseQuery().limit(10000)) as { data: InteractionQueryRow[] | null };
+    interactions = data ?? [];
   }
-  if (leadIdFilter) {
-    query = query.in('lead_id', leadIdFilter);
-  }
-
-  const { data: rawInteractions } = (await query.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
 
   if (interactions.length === 0) {
     return emptyData();

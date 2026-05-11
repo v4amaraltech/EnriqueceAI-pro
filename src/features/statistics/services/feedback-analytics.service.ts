@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 import { safeRate } from '../types/shared';
 import type {
@@ -58,12 +59,28 @@ export async function fetchFeedbackAnalyticsData(
   const leadIds = [...new Set(feedbacks.map((f) => f.lead_id))];
   let leadMap = new Map<string, string>();
   if (leadIds.length > 0) {
-    const { data: leads } = (await from(supabase, 'leads')
-      .select('id, nome_fantasia, razao_social, first_name, last_name')
-      .in('id', leadIds)
-      .limit(10000)) as { data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null; first_name: string | null; last_name: string | null }> | null };
+    const leads = await chunkedIn<{
+      id: string;
+      nome_fantasia: string | null;
+      razao_social: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>(leadIds, (chunk) =>
+      from(supabase, 'leads')
+        .select('id, nome_fantasia, razao_social, first_name, last_name')
+        .in('id', chunk) as unknown as PromiseLike<{
+        data: Array<{
+          id: string;
+          nome_fantasia: string | null;
+          razao_social: string | null;
+          first_name: string | null;
+          last_name: string | null;
+        }> | null;
+        error: unknown;
+      }>,
+    );
     leadMap = new Map(
-      (leads ?? []).map((l) => [
+      leads.map((l) => [
         l.id,
         l.nome_fantasia ?? l.razao_social ?? [l.first_name, l.last_name].filter(Boolean).join(' ') ?? 'Lead',
       ]),

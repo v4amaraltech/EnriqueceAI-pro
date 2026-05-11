@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 export interface DialerQueuePhone {
@@ -172,15 +173,19 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   if (leadIds.length > 0) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const todayStartIso = todayStart.toISOString();
 
-    const { data: todayCalls } = (await from(supabase, 'calls')
-      .select('lead_id')
-      .in('lead_id', leadIds)
-      .gte('started_at', todayStart.toISOString())) as {
-      data: Array<{ lead_id: string }> | null;
-    };
+    const todayCalls = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+      from(supabase, 'calls')
+        .select('lead_id')
+        .in('lead_id', chunk)
+        .gte('started_at', todayStartIso) as unknown as PromiseLike<{
+        data: Array<{ lead_id: string }> | null;
+        error: unknown;
+      }>,
+    );
 
-    for (const c of todayCalls ?? []) {
+    for (const c of todayCalls) {
       callsPerLead.set(c.lead_id, (callsPerLead.get(c.lead_id) ?? 0) + 1);
     }
   }
