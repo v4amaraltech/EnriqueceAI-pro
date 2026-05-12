@@ -66,7 +66,8 @@ export async function sendWhatsAppInvite(
     return { success: false, error: result.error ?? 'Erro ao enviar WhatsApp', code: 'SEND_FAILED' };
   }
 
-  // Register interaction
+  // Register interaction. external_id goes in the top-level column (used by
+  // reply matching and dedup); metadata holds the descriptive system_event.
   await from(supabase, 'interactions')
     .insert({
       org_id: orgId,
@@ -74,9 +75,9 @@ export async function sendWhatsAppInvite(
       type: 'sent',
       channel: 'whatsapp',
       message_content: input.message,
+      external_id: result.messageId,
       metadata: {
         system_event: 'meeting_invite_sent',
-        external_id: result.messageId,
       },
       performed_by: userId,
     } as Record<string, unknown>);
