@@ -11,6 +11,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { pushLeadToCrm } from '../services/crm-push.service';
+import { resyncCrmDealFields } from '../services/crm-resync.service';
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
   CrmConnectionRow,
@@ -233,6 +234,68 @@ export async function fetchKommoUsers(): Promise<ActionResult<KommoUser[]>> {
     console.error('[fetchKommoUsers] Error:', error);
     return { success: false, error: 'Erro ao buscar usuários do Kommo' };
   }
+}
+
+/**
+ * Re-apply the current Kommo field_mapping to an existing deal. Used when the
+ * user edits the integration mapping after a lead has already been pushed.
+ */
+export async function resyncLeadToCrm(
+  leadId: string,
+): Promise<ActionResult<{ dealId: number | null; fieldsTotal: number; succeeded: number; failed: number; failedKeys: string[] }>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId } = auth.data;
+
+  // Confirm the lead belongs to the caller's org before resync (the service uses
+  // service role and would otherwise honor any leadId).
+  const { data: leadOrg } = (await from(auth.data.supabase, 'leads')
+    .select('org_id')
+    .eq('id', leadId)
+    .single()) as { data: { org_id: string } | null };
+  if (!leadOrg || leadOrg.org_id !== orgId) {
+    return { success: false, error: 'Lead não encontrado' };
+  }
+
+  const result = await resyncCrmDealFields(leadId);
+
+  if (result.errorCode) {
+    const msg = result.errorCode === 'no_kommo_connection'
+      ? 'Nenhuma conexão Kommo conectada para esta organização'
+      : result.errorCode === 'no_synced_contact'
+        ? 'Lead ainda não foi sincronizado com o Kommo. Marque como ganho primeiro.'
+        : result.errorCode === 'no_deal'
+          ? 'Nenhum deal encontrado no Kommo para este lead'
+          : result.errorCode === 'no_subdomain'
+            ? 'Configuração Kommo incompleta — subdomain ausente'
+            : 'Lead não encontrado';
+    return { success: false, error: msg };
+  }
+
+  logAudit({
+    orgId,
+    userId: auth.data.userId,
+    action: 'lead.crm_resynced',
+    resourceType: 'lead',
+    resourceId: leadId,
+    metadata: {
+      crm_provider: 'kommo',
+      deal_id: result.dealId,
+      fields_total: result.fieldsTotal,
+      fields_failed: result.failed.length,
+    },
+  });
+
+  return {
+    success: true,
+    data: {
+      dealId: result.dealId,
+      fieldsTotal: result.fieldsTotal,
+      succeeded: result.succeeded.length,
+      failed: result.failed.length,
+      failedKeys: result.failed,
+    },
+  };
 }
 
 export async function markLeadAsWon(

@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Phone,
   RefreshCw,
+  RotateCw,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -27,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
+import { resyncLeadToCrm } from '../actions/lead-crm';
 import { updateLead } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 
@@ -63,6 +65,27 @@ export function LeadDetailHeader({
 }: LeadDetailHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isResyncing, startResyncTransition] = useTransition();
+
+  const handleResyncKommo = useCallback(() => {
+    startResyncTransition(async () => {
+      const result = await resyncLeadToCrm(lead.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      const { fieldsTotal, succeeded, failed, failedKeys } = result.data;
+      if (failed > 0) {
+        toast.warning(
+          `Resincronizado: ${succeeded}/${fieldsTotal} campos. ${failed} falharam (${failedKeys.slice(0, 3).join(', ')}${failedKeys.length > 3 ? '…' : ''}).`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`Lead resincronizado com Kommo (${fieldsTotal} campos enviados).`);
+      }
+      router.refresh();
+    });
+  }, [lead.id, router]);
 
   const contactName = lead.first_name ? `${lead.first_name} ${lead.last_name ?? ''}`.trim() : null;
   const personName = contactName ?? lead.socios?.[0]?.nome ?? null;
@@ -202,6 +225,15 @@ export function LeadDetailHeader({
                 <Globe className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
                 {isEnriching ? 'Enriquecendo...' : 'Enriquecer com Apollo'}
               </DropdownMenuItem>
+            )}
+            {isWon && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleResyncKommo} disabled={isResyncing}>
+                  <RotateCw className={`mr-2 h-3.5 w-3.5 ${isResyncing ? 'animate-spin' : ''}`} />
+                  {isResyncing ? 'Resincronizando...' : 'Resincronizar com Kommo'}
+                </DropdownMenuItem>
+              </>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShowArchive} className="text-red-600">
