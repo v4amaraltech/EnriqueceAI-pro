@@ -155,6 +155,52 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }]
       : null;
 
+    // Pre-INSERT dedup by email when CNPJ is missing. The DB has a unique
+    // constraint on (org_id, cnpj), so CNPJ-keyed rows are caught by the
+    // duplicate path below. Rows without CNPJ have no DB-level constraint —
+    // CSVs that repeat the same email across rows (or runs) would otherwise
+    // produce duplicates. Inbound API already dedups by email (case-insensitive)
+    // since 2026-05-06 — bringing CSV import to the same standard.
+    if (!row.cnpj && row.email) {
+      const { data: existingByEmail } = (await from(supabase, 'leads')
+        .select('id, deleted_at')
+        .eq('org_id', orgId)
+        .ilike('email', row.email)
+        .limit(1)
+        .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
+
+      if (existingByEmail) {
+        if (existingByEmail.deleted_at) {
+          // Restore soft-deleted lead — same conservative attribution policy
+          // as the CNPJ-restore branch below.
+          const restoreFields: Record<string, unknown> = {
+            deleted_at: null,
+            import_id: importId,
+          };
+          if (row.razao_social) restoreFields.razao_social = row.razao_social;
+          if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
+          const restoreSource = leadSource ?? row.lead_source;
+          if (restoreSource) {
+            const normRestore = normalizeOriginFields(restoreSource, null);
+            restoreFields.lead_source = normRestore.lead_source;
+            if (normRestore.canal) restoreFields.canal = normRestore.canal;
+          }
+
+          const { error: restoreError } = await from(supabase, 'leads')
+            .update(restoreFields)
+            .eq('id', existingByEmail.id);
+
+          if (!restoreError) {
+            successCount++;
+            continue;
+          }
+        }
+
+        duplicateCount++;
+        continue;
+      }
+    }
+
     const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
       .insert({
         org_id: orgId,
