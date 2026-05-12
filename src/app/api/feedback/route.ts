@@ -120,6 +120,37 @@ export async function POST(request: Request) {
           })
           .catch((err) => console.error('[api/feedback] CRM push error:', err)),
       );
+    } else if (result === 'no_show' || result === 'rescheduled') {
+      // Closer signaled the meeting didn't happen — reopen the lead.
+      // SDR's "Ganho" click had marked it 'won', but closer's reality wins:
+      // status reverts to 'qualified' so SDR sees Ganho/Perdido buttons again
+      // and the lead leaves the "won" metric. Keeps closer_id, qualified_at,
+      // meeting_scheduled_at intact (audit + SDR can edit meeting if needed).
+      await from(supabase, 'leads')
+        .update({
+          status: 'qualified',
+          won_at: null,
+          meeting_held_at: null,
+        } as Record<string, unknown>)
+        .eq('id', feedbackReq.lead_id)
+        .eq('org_id', feedbackReq.org_id)
+        .eq('status', 'won');
+
+      // Audit trail in the lead timeline
+      await from(supabase, 'interactions').insert({
+        org_id: feedbackReq.org_id,
+        lead_id: feedbackReq.lead_id,
+        channel: 'system',
+        type: 'sent',
+        message_content: result === 'no_show'
+          ? 'Closer marcou como não compareceu — lead reaberto'
+          : 'Closer marcou como remarcada — lead reaberto',
+        metadata: {
+          system_event: result === 'no_show' ? 'meeting_unconfirmed' : 'meeting_rescheduled_by_closer',
+          result,
+          closer_id: feedbackReq.closer_id,
+        },
+      } as Record<string, unknown>);
     }
 
     // Notify SDR in background after response is sent
@@ -166,14 +197,29 @@ async function notifySdr(
   const leadName = lead.nome_fantasia ?? lead.razao_social ?? 'Lead';
   const resultLabel = RESULT_LABELS[result] ?? result;
 
+  // Title and body vary by result — no_show/rescheduled reopen the lead and
+  // need a stronger CTA so the SDR knows what to do next.
+  let notifTitle: string;
+  let notifBody: string;
+  if (result === 'no_show') {
+    notifTitle = `⚠️ ${leadName} reaberto — não compareceu`;
+    notifBody = `${closerName} marcou que o lead não compareceu à reunião. Lead reaberto — retome o contato${comment ? `. Observação: ${comment}` : '.'}`;
+  } else if (result === 'rescheduled') {
+    notifTitle = `📅 ${leadName} reaberto — reunião remarcada`;
+    notifBody = `${closerName} marcou que a reunião foi remarcada. Lead reaberto — combine nova data${comment ? `. Observação: ${comment}` : '.'}`;
+  } else {
+    notifTitle = `${closerName} respondeu o feedback`;
+    notifBody = `${leadName} — ${resultLabel} (${rating}/5)${comment ? `: ${comment}` : ''}`;
+  }
+
   // Create in-app notification for the SDR (triggers Realtime)
   try {
     await createNotification({
       org_id: feedbackReq.org_id,
       user_id: sdrUserId,
       type: 'closer_feedback',
-      title: `${closerName} respondeu o feedback`,
-      body: `${leadName} — ${resultLabel} (${rating}/5)${comment ? `: ${comment}` : ''}`,
+      title: notifTitle,
+      body: notifBody,
       resource_type: 'lead',
       resource_id: feedbackReq.lead_id,
       metadata: { closer_name: closerName, result, rating, comment },
@@ -181,8 +227,18 @@ async function notifySdr(
   } catch (err) {
     console.error('[api/feedback] Failed to create notification:', err);
   }
-  const ratingLabel = RATING_LABELS[rating] ?? `${rating}/5`;
-  const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  // Rating is only required for meeting_done; no_show/rescheduled responses
+  // have rating=null. Guard the star renderer so we don't crash.
+  const safeRating = typeof rating === 'number' && rating >= 1 && rating <= 5 ? rating : 0;
+  const ratingLabel = safeRating > 0 ? (RATING_LABELS[safeRating] ?? `${safeRating}/5`) : '—';
+  const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
+  const isReopen = result === 'no_show' || result === 'rescheduled';
+  const ctaLine = result === 'no_show'
+    ? 'Lead reaberto. Retome o contato com o lead.'
+    : result === 'rescheduled'
+      ? 'Lead reaberto. Combine nova data da reunião.'
+      : '';
+  const subjectPrefix = isReopen ? 'Lead reaberto' : 'Feedback da reunião';
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -217,13 +273,15 @@ async function notifySdr(
                     <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
                   </td>
                 </tr>
+                ${safeRating > 0 ? `
                 <tr>
                   <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
                     <span style="color: #6b7280; font-size: 13px;">Qualidade do lead</span><br>
                     <span style="color: #E53935; font-size: 20px; letter-spacing: 2px;">${stars}</span>
-                    <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${ratingLabel} (${rating}/5)</span>
+                    <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${ratingLabel} (${safeRating}/5)</span>
                   </td>
                 </tr>
+                ` : ''}
                 ${comment ? `
                 <tr>
                   <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
@@ -233,6 +291,12 @@ async function notifySdr(
                 </tr>
                 ` : ''}
               </table>
+
+              ${ctaLine ? `
+              <p style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.5;">
+                <strong>Próximo passo:</strong> ${ctaLine}
+              </p>
+              ` : ''}
 
               <p style="color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.5;">
                 Acesse a plataforma para ver mais detalhes sobre este lead.
@@ -260,7 +324,7 @@ async function notifySdr(
 
   await sendPlatformEmail({
     to: sdrEmail,
-    subject: `Feedback da reunião: ${leadName} — ${resultLabel}`,
+    subject: `${subjectPrefix}: ${leadName} — ${resultLabel}`,
     html: htmlBody,
   });
 }
