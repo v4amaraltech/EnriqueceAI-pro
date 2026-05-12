@@ -5,7 +5,7 @@ import { checkEmailReplies } from '@/features/cadences/actions/check-email-repli
 
 export const maxDuration = 300;
 
-export async function GET(request: Request) {
+async function handle(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -18,3 +18,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ ok: true, data: result.data });
 }
+
+// pg_cron uses net.http_post → POST is the canonical entry. GET is preserved
+// so the endpoint can be invoked manually from a browser/curl for debugging
+// without rewriting the auth header logic.
+export const POST = handle;
+export const GET = handle;
