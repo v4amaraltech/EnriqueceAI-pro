@@ -3,7 +3,7 @@ import { NextResponse, after } from 'next/server';
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-import { createNotification } from '@/features/notifications/services/notification.service';
+import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -159,6 +159,22 @@ export async function POST(request: Request) {
         console.error('[api/feedback] SDR notification error:', err),
       ),
     );
+
+    // Notify managers only when there's an actionable signal — keeps their inbox
+    // clean on healthy feedbacks (meeting_done with good rating) while ensuring
+    // they hear about: no-show, reschedule, or low rating.
+    const isActionable =
+      result === 'no_show'
+      || result === 'rescheduled'
+      || (typeof rating === 'number' && rating >= 1 && rating <= 2);
+
+    if (isActionable) {
+      after(() =>
+        notifyManagers(supabase, feedbackReq, result, rating, comment).catch((err) =>
+          console.error('[api/feedback] Manager notification error:', err),
+        ),
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
@@ -327,4 +343,153 @@ async function notifySdr(
     subject: `${subjectPrefix}: ${leadName} — ${resultLabel}`,
     html: htmlBody,
   });
+}
+
+/**
+ * Notify managers when a feedback signals something actionable:
+ * no_show, rescheduled, or low rating (<= 2). Healthy feedbacks
+ * (meeting_done with rating >= 3) are intentionally silent for managers
+ * to avoid inbox noise.
+ */
+async function notifyManagers(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  feedbackReq: FeedbackRequestFull,
+  result: string,
+  rating: number,
+  comment: string | null,
+) {
+  // Pull lead, closer, sdr names for context
+  const { data: lead } = (await from(supabase, 'leads')
+    .select('nome_fantasia, razao_social, won_by, assigned_to')
+    .eq('id', feedbackReq.lead_id)
+    .is('deleted_at', null)
+    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null } | null };
+
+  if (!lead) return;
+
+  const { data: closer } = (await from(supabase, 'closers')
+    .select('name')
+    .eq('id', feedbackReq.closer_id)
+    .single()) as { data: { name: string } | null };
+
+  const closerName = closer?.name ?? 'Closer';
+  const leadName = lead.nome_fantasia ?? lead.razao_social ?? 'Lead';
+  const resultLabel = RESULT_LABELS[result] ?? result;
+  const sdrUserId = lead.won_by ?? lead.assigned_to;
+
+  // Resolve SDR name (best-effort)
+  let sdrName = 'Pré-vendedor';
+  if (sdrUserId) {
+    const { data: authData } = await supabase.auth.admin.getUserById(sdrUserId);
+    sdrName = authData?.user?.user_metadata?.name as string
+      ?? authData?.user?.email
+      ?? sdrName;
+  }
+
+  // Build the reason line — what made this feedback actionable
+  const reasons: string[] = [];
+  if (result === 'no_show') reasons.push('reunião não aconteceu (no-show)');
+  if (result === 'rescheduled') reasons.push('closer remarcou a reunião');
+  if (typeof rating === 'number' && rating >= 1 && rating <= 2) {
+    reasons.push(`closer avaliou o lead com nota baixa (${rating}/5)`);
+  }
+  const reasonLine = reasons.join(' • ');
+
+  // List active managers in the org
+  const { data: managers } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', feedbackReq.org_id)
+    .eq('role', 'manager')
+    .eq('status', 'active')) as { data: Array<{ user_id: string }> | null };
+
+  if (!managers?.length) return;
+
+  // In-app notification (Realtime) for each manager
+  await createNotificationsForOrgMembers({
+    orgId: feedbackReq.org_id,
+    type: 'closer_feedback',
+    title: `⚠️ Feedback exige atenção — ${leadName}`,
+    body: `${closerName} → ${resultLabel}. ${reasonLine}${comment ? `. "${comment}"` : ''}`,
+    resourceType: 'lead',
+    resourceId: feedbackReq.lead_id,
+    metadata: { closer_name: closerName, result, rating, comment, actionable: true },
+    roleFilter: 'manager',
+  }).catch((err) => console.error('[api/feedback/notifyManagers] in-app failed:', err));
+
+  // Email each manager — same template style as the SDR mail
+  const safeRating = typeof rating === 'number' && rating >= 1 && rating <= 5 ? rating : 0;
+  const ratingLabel = safeRating > 0 ? (RATING_LABELS[safeRating] ?? `${safeRating}/5`) : '—';
+  const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <tr><td style="background: #1a1a1a; padding: 24px 32px;">
+          <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
+          <p style="color: #9ca3af; margin: 4px 0 0; font-size: 13px;">Alerta para o gestor</p>
+        </td></tr>
+        <tr><td style="padding: 32px;">
+          <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">Feedback que exige atenção</h2>
+          <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px;">
+            <strong>${closerName}</strong> respondeu o feedback da reunião com <strong>${leadName}</strong> (Pré-vendedor: ${sdrName}).
+          </p>
+          <p style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.5;">
+            <strong>Motivo do alerta:</strong> ${reasonLine}
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+            <tr><td style="padding: 8px 0;">
+              <span style="color: #6b7280; font-size: 13px;">Resultado da reunião</span><br>
+              <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
+            </td></tr>
+            ${safeRating > 0 ? `
+            <tr><td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
+              <span style="color: #6b7280; font-size: 13px;">Qualidade do lead</span><br>
+              <span style="color: #E53935; font-size: 20px; letter-spacing: 2px;">${stars}</span>
+              <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${ratingLabel} (${safeRating}/5)</span>
+            </td></tr>
+            ` : ''}
+            ${comment ? `
+            <tr><td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
+              <span style="color: #6b7280; font-size: 13px;">Observações do closer</span><br>
+              <span style="color: #1a1a1a; font-size: 14px;">${comment}</span>
+            </td></tr>
+            ` : ''}
+          </table>
+          <p style="color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.5;">
+            Acesse a plataforma para ver detalhes e acompanhar o lead.
+          </p>
+        </td></tr>
+        <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+            Você recebe este email porque é manager da organização. Gestores são notificados apenas em casos acionáveis (no-show, reagendamento ou avaliação baixa).
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  // Send to each manager in parallel
+  await Promise.all(
+    managers.map(async (m) => {
+      const { data: authData } = await supabase.auth.admin.getUserById(m.user_id);
+      const email = authData?.user?.email;
+      if (!email) return;
+      try {
+        await sendPlatformEmail({
+          to: email,
+          subject: `[Gestor] ${leadName} — ${resultLabel}`,
+          html: htmlBody,
+        });
+      } catch (err) {
+        console.error('[api/feedback/notifyManagers] email failed for', email, err);
+      }
+    }),
+  );
 }
