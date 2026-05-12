@@ -78,7 +78,12 @@ async function sendFeedbackReminders() {
     return { reminders: 0, errors: 0, skipped: 0 };
   }
 
-  // Pull meeting start_time for each lead (latest meeting_scheduled interaction)
+  // Pull meeting start_time for each lead — first try the meeting_scheduled
+  // interaction's metadata; for leads that lack that interaction (or have it
+  // without start_time), fall back to leads.meeting_scheduled_at. Audit on
+  // 2026-05-12 showed 62% of Q4-latency feedbacks (closers responding >5d
+  // late) had no start_time in the interaction, so the cron silently skipped
+  // every reminder for them.
   const leadIds = [...new Set(candidates.map((c) => c.lead_id))];
   const { data: meetingsRaw } = (await from(supabase, 'interactions')
     .select('lead_id, metadata, created_at')
@@ -94,6 +99,21 @@ async function sendFeedbackReminders() {
     const startTime = (m.metadata?.start_time as string | undefined) ?? null;
     if (startTime) {
       meetingMap.set(m.lead_id, { lead_id: m.lead_id, start_time: startTime });
+    }
+  }
+
+  // Fallback for leads still without a start_time: read leads.meeting_scheduled_at.
+  const leadsMissingMeeting = leadIds.filter((id) => !meetingMap.has(id));
+  if (leadsMissingMeeting.length > 0) {
+    const { data: leadsRaw } = (await from(supabase, 'leads')
+      .select('id, meeting_scheduled_at')
+      .in('id', leadsMissingMeeting)) as {
+      data: Array<{ id: string; meeting_scheduled_at: string | null }> | null;
+    };
+    for (const l of leadsRaw ?? []) {
+      if (l.meeting_scheduled_at) {
+        meetingMap.set(l.id, { lead_id: l.id, start_time: l.meeting_scheduled_at });
+      }
     }
   }
 
