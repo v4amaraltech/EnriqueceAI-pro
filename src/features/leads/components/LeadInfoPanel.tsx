@@ -54,6 +54,31 @@ import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
 import { GenerateSpicedDialog } from './GenerateSpicedDialog';
 
+/**
+ * Build a clickable Instagram URL from stored value.
+ * Accepts: "https://instagram.com/foo", "instagram.com/foo", "@foo", "foo".
+ * Legacy leads stored "@username" — keep them clickable while new ones save full URL.
+ */
+function normalizeInstagramUrl(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^(www\.)?instagram\.com\//i.test(trimmed)) return `https://${trimmed.replace(/^www\./i, '')}`;
+  const handle = trimmed.replace(/^@/, '').replace(/\s+/g, '');
+  if (!handle) return undefined;
+  return `https://instagram.com/${handle}`;
+}
+
+/** Prefix bare hostnames with https:// so href stays clickable. */
+function normalizeUrlMaybe(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
@@ -933,7 +958,7 @@ export function LeadInfoPanel({
                         value={editFields.instagram}
                         onChange={(e) => setEditFields({ ...editFields, instagram: e.target.value })}
                         className="h-8 text-sm"
-                        placeholder="@usuario"
+                        placeholder="https://instagram.com/usuario"
                       />
                     </div>
                   )}
@@ -962,9 +987,9 @@ export function LeadInfoPanel({
                 </>
               ) : (
                 <>
-                  {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram || undefined} />}
-                  {isFieldVisible('linkedin') && <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />}
-                  {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />}
+                  {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={normalizeInstagramUrl(data.instagram)} />}
+                  {isFieldVisible('linkedin') && <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={normalizeUrlMaybe(data.linkedin)} />}
+                  {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={normalizeUrlMaybe(data.website)} />}
                 </>
               )}
             </CollapsibleSection>
