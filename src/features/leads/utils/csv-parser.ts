@@ -1,6 +1,10 @@
 /**
  * CSV parser for lead import.
- * Detects the CNPJ column automatically and extracts valid rows.
+ *
+ * CNPJ is no longer required — a row is accepted as long as it carries some
+ * identifying information (CNPJ, email, razao_social, or telefone). Rows with
+ * a CNPJ still validate the checksum; rows without CNPJ rely on the import
+ * action's composite dedup (CNPJ → email → razao_social+telefone).
  */
 
 import { isValidCnpj, stripCnpj } from './cnpj';
@@ -13,7 +17,8 @@ export interface CsvParseResult {
 
 export interface ParsedRow {
   rowNumber: number;
-  cnpj: string;
+  /** Normalized 14-digit CNPJ, or null when the row didn't supply one. */
+  cnpj: string | null;
   razao_social?: string;
   nome_fantasia?: string;
   lead_source?: string;
@@ -44,12 +49,11 @@ const MAX_ROWS = 1000;
 const CNPJ_COLUMN_NAMES = ['cnpj', 'cnpj_cpf', 'documento', 'document', 'cpf_cnpj'];
 
 /**
- * Parses a CSV string and extracts rows with valid CNPJs.
+ * Parses a CSV string and extracts rows with at least one identifying field.
  */
 export function parseCsv(content: string): CsvParseResult {
   // Strip UTF-8 BOM (﻿) — Excel and Google Sheets export it on the first
-  // byte, which would otherwise contaminate the first header (e.g. "﻿cnpj")
-  // and make the column-name match silently fail with "Coluna CNPJ não encontrada".
+  // byte, which would otherwise contaminate the first header.
   const lines = content.replace(/^﻿/, '').trim().split(/\r?\n/);
   if (lines.length < 2) {
     return { rows: [], errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Arquivo vazio ou sem dados' }], totalRows: 0 };
@@ -58,25 +62,17 @@ export function parseCsv(content: string): CsvParseResult {
   const headerLine = lines[0]!;
   const headers = parseRow(headerLine).map((h) => h.toLowerCase().trim());
 
-  // Detect CNPJ column
-  const cnpjIndex = headers.findIndex((h) => CNPJ_COLUMN_NAMES.includes(h));
+  // Detect CNPJ column by header name first.
+  let cnpjIndex = headers.findIndex((h) => CNPJ_COLUMN_NAMES.includes(h));
+
+  // Fallback: detect by content (first column with 14-digit values) — only
+  // when the header didn't already give us one.
   if (cnpjIndex === -1) {
-    // Try to find column by content (first column with 14-digit values)
     const firstDataRow = lines[1] ? parseRow(lines[1]) : [];
-    const detectedIndex = firstDataRow.findIndex((cell) => {
+    cnpjIndex = firstDataRow.findIndex((cell) => {
       const stripped = stripCnpj(cell);
       return stripped.length === 14 && /^\d+$/.test(stripped);
     });
-
-    if (detectedIndex === -1) {
-      return {
-        rows: [],
-        errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Coluna CNPJ não encontrada. Use o cabeçalho "CNPJ".' }],
-        totalRows: 0,
-      };
-    }
-
-    return processRows(lines, detectedIndex, headers);
   }
 
   return processRows(lines, cnpjIndex, headers);
@@ -94,9 +90,6 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     };
   }
 
-  const rows: ParsedRow[] = [];
-  const errors: ParseError[] = [];
-
   // Detect optional columns
   const razaoIndex = headers.findIndex((h) => ['razao_social', 'razao social', 'razão social', 'empresa', 'company'].includes(h));
   const fantasiaIndex = headers.findIndex((h) => ['nome_fantasia', 'nome fantasia', 'fantasia', 'trade_name'].includes(h));
@@ -109,38 +102,66 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
   const instagramIndex = headers.findIndex((h) => ['instagram', 'ig'].includes(h));
   const linkedinIndex = headers.findIndex((h) => ['linkedin', 'linked_in', 'linked in'].includes(h));
 
+  // File-level guard: reject when none of the identifying columns exist AND
+  // we couldn't detect a CNPJ. Otherwise every row would fail with "linha
+  // sem identificação" and the user gets no actionable feedback.
+  const hasAnyIdColumn =
+    cnpjIndex !== -1 || razaoIndex !== -1 || emailIndex !== -1 || telefoneIndex !== -1;
+
+  if (!hasAnyIdColumn) {
+    return {
+      rows: [],
+      errors: [{
+        rowNumber: 0,
+        cnpj: null,
+        errorMessage: 'Nenhuma coluna identificável encontrada. Use ao menos uma de: cnpj, razao_social, email, telefone.',
+      }],
+      totalRows,
+    };
+  }
+
+  const rows: ParsedRow[] = [];
+  const errors: ParseError[] = [];
+
   for (let i = 0; i < dataLines.length; i++) {
     const line = dataLines[i]!;
     const rowNumber = i + 2; // 1-indexed, +1 for header
-    // Skip blank lines (Excel often leaves a trailing empty row that would
-    // otherwise show up as "CNPJ vazio" in the import report).
+    // Skip blank lines (Excel often leaves a trailing empty row).
     if (!line.trim()) continue;
     const cells = parseRow(line);
 
-    const rawCnpj = cells[cnpjIndex]?.trim() ?? '';
-    if (!rawCnpj) {
-      errors.push({ rowNumber, cnpj: null, errorMessage: 'CNPJ vazio' });
-      continue;
-    }
-
-    const cnpj = stripCnpj(rawCnpj);
-    if (!isValidCnpj(cnpj)) {
-      errors.push({ rowNumber, cnpj: rawCnpj, errorMessage: 'CNPJ inválido' });
-      continue;
-    }
-
     const cellAt = (idx: number): string | undefined =>
       idx >= 0 ? cells[idx]?.trim() || undefined : undefined;
+
+    // CNPJ extraction: present + valid → keep; present + invalid → row-level
+    // error; absent → null (the row can still be valid if it has email/razao).
+    const rawCnpj = cnpjIndex >= 0 ? (cells[cnpjIndex]?.trim() ?? '') : '';
+    let cnpj: string | null = null;
+    if (rawCnpj) {
+      const stripped = stripCnpj(rawCnpj);
+      if (!isValidCnpj(stripped)) {
+        errors.push({ rowNumber, cnpj: rawCnpj, errorMessage: 'CNPJ inválido' });
+        continue;
+      }
+      cnpj = stripped;
+    }
 
     const telefone = cellAt(telefoneIndex);
     const email = cellAt(emailIndex);
     const decisor = cellAt(decisorIndex);
     const jobTitle = cellAt(jobTitleIndex);
+    const razaoSocial = cellAt(razaoIndex);
+
+    // At least one identifier is required so the row is dedupable downstream.
+    if (!cnpj && !email && !razaoSocial && !telefone) {
+      errors.push({ rowNumber, cnpj: null, errorMessage: 'Linha sem identificação (CNPJ, email, razão social ou telefone)' });
+      continue;
+    }
 
     rows.push({
       rowNumber,
       cnpj,
-      razao_social: cellAt(razaoIndex),
+      razao_social: razaoSocial,
       nome_fantasia: cellAt(fantasiaIndex),
       lead_source: cellAt(sourceIndex),
       telefone,

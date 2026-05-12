@@ -50,13 +50,27 @@ describe('csv-parser', () => {
       expect(result.errors[0]?.rowNumber).toBe(3);
     });
 
-    it('should report empty CNPJs as errors', () => {
-      const csv = 'cnpj,nome\n11222333000181,ok\n,vazio';
+    it('should accept rows with empty CNPJ when another identifier is present', () => {
+      // After CNPJ became optional, an empty CNPJ no longer rejects the row —
+      // dedup falls back to email or razao_social+telefone. The row only fails
+      // when nothing identifies it.
+      const csv = 'cnpj,razao_social\n11222333000181,ok\n,Empresa Sem CNPJ';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.errors).toHaveLength(0);
+      expect(result.rows[0]?.cnpj).toBe('11222333000181');
+      expect(result.rows[1]?.cnpj).toBeNull();
+      expect(result.rows[1]?.razao_social).toBe('Empresa Sem CNPJ');
+    });
+
+    it('should reject rows with no identifying field at all', () => {
+      const csv = 'cnpj,razao_social,email,telefone\n11222333000181,ok,,\n,,,';
       const result = parseCsv(csv);
 
       expect(result.rows).toHaveLength(1);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.errorMessage).toBe('CNPJ vazio');
+      expect(result.errors[0]?.errorMessage).toContain('sem identificação');
     });
 
     it('should return error for empty file', () => {
@@ -72,13 +86,25 @@ describe('csv-parser', () => {
       expect(result.errors).toHaveLength(1);
     });
 
-    it('should return error when CNPJ column not found', () => {
-      const csv = 'nome,email\nTest,test@test.com';
+    it('should accept files without CNPJ column when email is present', () => {
+      // 'nome' is not one of the recognized identifying columns, so razao_social
+      // mapping needs an explicit header; here we rely on email instead.
+      const csv = 'razao_social,email\nTest,test@test.com';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]?.cnpj).toBeNull();
+      expect(result.rows[0]?.email).toBe('test@test.com');
+      expect(result.rows[0]?.razao_social).toBe('Test');
+    });
+
+    it('should return error when no identifying column exists', () => {
+      const csv = 'nome,observacao\nTest,nota qualquer';
       const result = parseCsv(csv);
 
       expect(result.rows).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.errorMessage).toContain('CNPJ não encontrada');
+      expect(result.errors[0]?.errorMessage).toContain('Nenhuma coluna identificável');
     });
 
     it('should reject files with more than 1000 rows', () => {

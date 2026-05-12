@@ -21,6 +21,7 @@ interface CsvPreviewProps {
 
 export function CsvPreview({ rows, errorCount, totalRows }: CsvPreviewProps) {
   const previewRows = rows.slice(0, 10);
+  const withoutCnpj = rows.filter((r) => !r.cnpj).length;
 
   return (
     <div className="space-y-3">
@@ -38,6 +39,12 @@ export function CsvPreview({ rows, errorCount, totalRows }: CsvPreviewProps) {
         )}
       </div>
 
+      {withoutCnpj > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <strong>{withoutCnpj}</strong> {withoutCnpj === 1 ? 'lead' : 'leads'} sem CNPJ. Vão ser importados normalmente, mas sem enriquecimento automático (Lemit). Dedup nesses casos usa e-mail e razão social + telefone.
+        </div>
+      )}
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -52,7 +59,7 @@ export function CsvPreview({ rows, errorCount, totalRows }: CsvPreviewProps) {
             {previewRows.map((row) => (
               <TableRow key={row.rowNumber}>
                 <TableCell className="text-muted-foreground">{row.rowNumber}</TableCell>
-                <TableCell className="font-mono text-sm">{formatCnpj(row.cnpj)}</TableCell>
+                <TableCell className="font-mono text-sm">{row.cnpj ? formatCnpj(row.cnpj) : <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>{row.razao_social ?? '-'}</TableCell>
                 <TableCell>{row.nome_fantasia ?? '-'}</TableCell>
               </TableRow>

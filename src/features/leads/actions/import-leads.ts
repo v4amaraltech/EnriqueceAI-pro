@@ -155,22 +155,44 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }]
       : null;
 
-    // Pre-INSERT dedup by email when CNPJ is missing. The DB has a unique
-    // constraint on (org_id, cnpj), so CNPJ-keyed rows are caught by the
-    // duplicate path below. Rows without CNPJ have no DB-level constraint —
-    // CSVs that repeat the same email across rows (or runs) would otherwise
-    // produce duplicates. Inbound API already dedups by email (case-insensitive)
-    // since 2026-05-06 — bringing CSV import to the same standard.
-    if (!row.cnpj && row.email) {
-      const { data: existingByEmail } = (await from(supabase, 'leads')
-        .select('id, deleted_at')
-        .eq('org_id', orgId)
-        .ilike('email', row.email)
-        .limit(1)
-        .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
+    // Pre-INSERT dedup for rows without CNPJ. The DB has a unique constraint
+    // on (org_id, cnpj), so CNPJ-keyed rows are caught by the duplicate path
+    // below. Rows without CNPJ have no DB-level constraint — without an
+    // app-level check, CSVs that repeat the same lead would create duplicates.
+    //
+    // Match order (first hit wins): email, then razao_social + telefone.
+    // Email is the strongest non-CNPJ identifier; razao+telefone covers CSVs
+    // from sources that have no email at all (LinkedIn lists, event sheets).
+    if (!row.cnpj) {
+      let existing: { id: string; deleted_at: string | null } | null = null;
 
-      if (existingByEmail) {
-        if (existingByEmail.deleted_at) {
+      if (row.email) {
+        const { data } = (await from(supabase, 'leads')
+          .select('id, deleted_at')
+          .eq('org_id', orgId)
+          .ilike('email', row.email)
+          .limit(1)
+          .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
+        existing = data;
+      }
+
+      // Fallback: company name + phone. Both must be non-empty for the match
+      // to be useful — matching by razao alone would over-dedup (multiple
+      // branches of the same company); matching by phone alone collides on
+      // reception/main switchboard numbers.
+      if (!existing && row.razao_social && row.telefone) {
+        const { data } = (await from(supabase, 'leads')
+          .select('id, deleted_at')
+          .eq('org_id', orgId)
+          .ilike('razao_social', row.razao_social)
+          .eq('telefone', row.telefone)
+          .limit(1)
+          .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
+        existing = data;
+      }
+
+      if (existing) {
+        if (existing.deleted_at) {
           // Restore soft-deleted lead — same conservative attribution policy
           // as the CNPJ-restore branch below.
           const restoreFields: Record<string, unknown> = {
@@ -188,7 +210,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
           const { error: restoreError } = await from(supabase, 'leads')
             .update(restoreFields)
-            .eq('id', existingByEmail.id);
+            .eq('id', existing.id);
 
           if (!restoreError) {
             successCount++;

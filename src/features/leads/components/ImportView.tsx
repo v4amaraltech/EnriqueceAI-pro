@@ -17,11 +17,15 @@ import { ImportReport } from './ImportReport';
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'report';
 
-const TEMPLATE_HEADERS = 'cnpj;razao_social;nome_fantasia;origem';
-const TEMPLATE_EXAMPLE = '12345678000190;Empresa Exemplo LTDA;Empresa Exemplo;Outbound';
+const TEMPLATE_HEADERS = 'cnpj;razao_social;nome_fantasia;email;telefone;decisor;cargo;origem';
+const TEMPLATE_EXAMPLES = [
+  '12345678000190;Empresa Exemplo LTDA;Empresa Exemplo;contato@exemplo.com.br;(11) 99999-0000;João Silva;CEO;Outbound',
+  // Row without CNPJ — relies on email for dedup.
+  ';Outra Empresa SA;OutraSA;maria@outra.com.br;(21) 98888-7777;Maria Souza;Diretora;Outbound',
+];
 
 function downloadTemplate() {
-  const content = `${TEMPLATE_HEADERS}\n${TEMPLATE_EXAMPLE}`;
+  const content = [TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLES].join('\n');
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -91,7 +95,7 @@ export function ImportView() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">Importar Leads</h1>
-          <p className="text-muted-foreground">Importe leads em massa via arquivo CSV com CNPJs.</p>
+          <p className="text-muted-foreground">Importe leads em massa via CSV. CNPJ, razão social, e-mail ou telefone — basta uma dessas colunas.</p>
         </div>
         <Button variant="outline" size="sm" onClick={downloadTemplate}>
           <Download className="mr-1.5 h-3.5 w-3.5" />
