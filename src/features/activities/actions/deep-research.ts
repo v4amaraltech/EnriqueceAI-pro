@@ -58,30 +58,45 @@ export async function deepResearchLead(
     // Unwrap array
     const result = Array.isArray(data) ? data[0] : data;
 
-    // Try known field names first
+    // Plain string at top level — use it directly.
+    if (typeof result === 'string') {
+      if (result.trim().length > 50) {
+        return { success: true, data: { dossie: cleanDossie(result) } };
+      }
+      return { success: false, error: 'A pesquisa retornou uma resposta vazia. Tente novamente em instantes.' };
+    }
+
     if (typeof result === 'object' && result !== null) {
       const obj = result as Record<string, unknown>;
       const knownFields = ['dossie', 'output', 'text', 'result', 'response', 'content', 'message', 'data', 'answer'];
+
+      // 1. Try known field names first.
       for (const key of knownFields) {
         if (typeof obj[key] === 'string' && obj[key].length > 50) {
           return { success: true, data: { dossie: cleanDossie(obj[key] as string) } };
         }
       }
-      // Fallback: use the first long string field found
+
+      // 2. Detect explicit null on the primary field — that means the n8n flow
+      // produced no content (OpenAI failure, empty prompt, etc.). Surface as a
+      // user-friendly error instead of dumping the JSON envelope into the notes.
+      if ('dossie' in obj && obj.dossie === null) {
+        console.error('[deep-research] n8n returned dossie:null. Payload:', JSON.stringify(obj).slice(0, 300));
+        return { success: false, error: 'A IA não conseguiu gerar a pesquisa para esta empresa. Verifique o fluxo n8n e tente novamente.' };
+      }
+
+      // 3. Fallback: first long string field in any other key.
       for (const val of Object.values(obj)) {
         if (typeof val === 'string' && val.length > 50) {
           return { success: true, data: { dossie: cleanDossie(val) } };
         }
       }
+
       console.error('[deep-research] No usable field. Keys:', Object.keys(obj), 'Preview:', JSON.stringify(obj).slice(0, 300));
     }
 
-    // Last resort: stringify
-    const fallback = typeof result === 'string' ? result : JSON.stringify(result);
-    if (fallback.length > 50) {
-      return { success: true, data: { dossie: cleanDossie(fallback) } };
-    }
-
+    // Reaching here means the response had no usable dossie payload. Do NOT
+    // stringify the envelope — that's how raw JSON ended up saved as a note.
     return { success: false, error: 'Nenhum resultado encontrado para esta empresa.' };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
