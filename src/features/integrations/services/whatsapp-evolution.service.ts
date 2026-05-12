@@ -124,10 +124,15 @@ export class EvolutionWhatsAppService {
             return null;
           };
           // Evolution returns { jid, exists: false, number } when the destination
-          // is not a registered WhatsApp account. Surface that as a clean user
-          // message instead of the raw JSON.
-          const respMsg = errorBody?.response?.message;
-          if (respMsg && typeof respMsg === 'object' && 'exists' in respMsg && (respMsg as { exists?: unknown }).exists === false) {
+          // is not a registered WhatsApp account. The payload arrives sometimes
+          // as response.message and sometimes as the top-level message — check
+          // both before falling back to the generic pickString chain.
+          const isNotRegistered = (v: unknown): boolean => (
+            !!v && typeof v === 'object' && 'exists' in v
+              && (v as { exists?: unknown }).exists === false
+          );
+
+          if (isNotRegistered(errorBody?.response?.message) || isNotRegistered(errorBody?.message)) {
             errorMsg = 'Esse número não está cadastrado no WhatsApp';
           } else {
             errorMsg =
