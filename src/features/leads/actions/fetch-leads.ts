@@ -88,15 +88,24 @@ export async function fetchLeads(
     query = query.in('id', enrolledIds);
   }
 
-  // Full-text search — split by space so "Empresa teste" matches leads with "empresa" OR "teste"
+  // Full-text search — every term in the query string must appear in some
+  // searchable field (AND between terms, OR between fields for each term).
+  //
+  // Before: OR across every (term, field) pair, which made short stopwords
+  // dominate the result set ("Saude da Mente" matched any lead containing
+  // "da" — "Dasneves nutrição animal", "FARIA DE SOUZA", etc.).
+  //
+  // Stopwords with <3 chars are dropped so "da", "de", "do" don't force
+  // exact-substring matches that miss legitimate hits.
   if (filters.search) {
     const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
-    const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
-    if (terms.length > 0) {
-      const clauses = terms.flatMap((term) =>
-        searchFields.map((field) => `${field}.ilike.%${term}%`),
-      );
-      query = query.or(clauses.join(','));
+    const allTerms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
+    const terms = allTerms.filter((t) => t.length >= 3);
+    // If the entire query is short (e.g. "AI"), use what we have rather than searching everything.
+    const effectiveTerms = terms.length > 0 ? terms : allTerms;
+    for (const term of effectiveTerms) {
+      const fieldClauses = searchFields.map((field) => `${field}.ilike.%${term}%`).join(',');
+      query = query.or(fieldClauses);
     }
   }
 
