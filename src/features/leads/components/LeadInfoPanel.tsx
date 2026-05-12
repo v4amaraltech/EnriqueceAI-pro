@@ -786,8 +786,9 @@ export function LeadInfoPanel({
             <>
             <hr className="border-t-2 border-[var(--border)]" />
 
-            {/* TELEFONE(S) — with type descriptor */}
-            <CollapsibleSection title="E-mail(s)">
+            <CollapsibleSection title="Contatos" defaultOpen={false}>
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail(s)</p>
               {isEditing ? (
                 <div className="space-y-2">
                   {emailEntries.map((entry, index) => (
@@ -862,9 +863,10 @@ export function LeadInfoPanel({
                   </div>
                 ))
               )}
-            </CollapsibleSection>
+              </div>
 
-            <CollapsibleSection title="Telefone(s)">
+              <div className="space-y-2 pt-3 border-t border-[var(--border)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone(s)</p>
               {isEditing ? (
                 <div className="space-y-2">
                   {phoneEntries.map((entry, index) => (
@@ -940,6 +942,7 @@ export function LeadInfoPanel({
                   </div>
                 ))
               )}
+              </div>
             </CollapsibleSection>
             </>
             )}
