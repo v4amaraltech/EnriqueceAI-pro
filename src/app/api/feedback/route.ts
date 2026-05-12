@@ -91,21 +91,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este feedback já foi enviado' }, { status: 409 });
     }
 
-    // Stamp won_at + meeting_held_at on the lead when closer confirms the meeting
-    // actually happened. This is when the lead becomes a real Opportunity / SAL,
-    // separate from the qualified_at timestamp that fired at scheduling time.
+    // Stamp meeting_held_at when closer confirms the meeting actually happened.
+    // This tracks SAL quality (held-rate, closer rejection rate) but does NOT
+    // change lead status — the lead is already 'won' from markLeadAsWon (SDR's
+    // click). Feedback is a parallel quality signal, not a status gate.
+    //
+    // CRM push is also no longer needed here: markLeadAsWon already pushed
+    // when the SDR clicked Ganho. Keeping a defensive pushLeadToCrmWithDefaults
+    // covers the edge case where the SDR never clicked Ganho but the closer
+    // somehow received and answered the feedback link (legacy data).
     if (result === 'meeting_done') {
       const heldAt = new Date().toISOString();
       await from(supabase, 'leads')
-        .update({ won_at: heldAt, meeting_held_at: heldAt } as Record<string, unknown>)
+        .update({ meeting_held_at: heldAt } as Record<string, unknown>)
         .eq('id', feedbackReq.lead_id)
         .eq('org_id', feedbackReq.org_id)
-        .is('won_at', null);
+        .is('meeting_held_at', null);
 
-      // Push to CRM using org defaults — this path used to leak 30% of won
-      // leads (the ones that reached 'won' via the DB trigger rather than the
-      // UI's markLeadAsWon, which is the path that previously owned the CRM
-      // push). Fire-and-forget: feedback must not fail if Kommo is flaky.
+      // Defensive CRM push — covers legacy leads that never went through
+      // markLeadAsWon. pushLeadToCrmWithDefaults is idempotent (dedupes on
+      // crm_deal_created), so it's a no-op for leads already synced.
       after(() =>
         pushLeadToCrmWithDefaults(feedbackReq.org_id, feedbackReq.lead_id)
           .then((res) => {

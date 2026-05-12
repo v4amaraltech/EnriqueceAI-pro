@@ -244,19 +244,28 @@ export async function markLeadAsWon(
     if (!auth.success) return auth;
     const { orgId, userId, supabase } = auth.data;
 
-    // 1. Update lead status to qualified + record SDR who pushed it forward.
-    // qualified_at marks the SDR's qualification step; won_at is reserved for the
-    // moment the closer confirms the meeting actually happened (result=meeting_done
-    // in /api/feedback). Stamping won_at here would conflate scheduling with realization.
+    // 1. Update lead to won — SDR's production is "fazer a reunião acontecer +
+    // enviar pro CRM". Closer feedback later registers SAL quality (rating,
+    // meeting_done/no_show) but does NOT control lead status. This restores
+    // the Meetime-style flow that existed before 2026-05-08, when commits
+    // 49d6f88/8555502 introduced the qualified→won split via DB trigger.
+    const nowIso = new Date().toISOString();
     const { error: leadError } = await from(supabase, 'leads')
-      .update({ status: 'qualified', won_by: userId, qualified_at: new Date().toISOString() } as Record<string, unknown>)
+      .update({
+        status: 'won',
+        won_by: userId,
+        won_at: nowIso,
+        meeting_held_at: nowIso,
+        qualified_at: nowIso,
+      } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
 
     const qErr = handleQueryError(leadError, 'Erro ao marcar lead como ganho', 'lead-crm');
     if (qErr) return qErr;
 
-    // Dispatch lead.qualified webhook
+    // Dispatch lead.qualified webhook (event name kept stable for subscriber
+    // compatibility — semantically the same "SDR pushed lead forward").
     dispatchWebhookEvent(supabase, orgId, 'lead.qualified', {
       lead_id: leadId,
       crm_provider: crmOptions?.provider ?? null,
