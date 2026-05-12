@@ -348,11 +348,14 @@ async function recordReply(
       metadata: { detected_by: 'gmail_thread_poll', sent_interaction_id: sentInteraction.id },
     } as Record<string, unknown>);
 
-  // Update active enrollment to replied
+  // Mark ALL active enrollments of this lead as replied — when a lead engages
+  // (responds an email), continuing to fire parallel cadences feels insistent
+  // and burns reputation. Industry standard (Outreach, Salesloft, Meetime):
+  // any reply stops all cadences for that lead. SDR can manually re-enroll
+  // if desired.
   await from(supabase, 'cadence_enrollments')
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
-    .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
 
   dispatchWebhookEvent(supabase, lead.org_id, 'email.replied', {

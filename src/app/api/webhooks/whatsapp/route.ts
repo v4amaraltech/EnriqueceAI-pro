@@ -244,10 +244,12 @@ async function processIncomingMessage(
     metadata: { from: phone, message_type: message.type },
   } as Record<string, unknown>);
 
-  // Mark enrollment as replied
+  // Mark ALL active enrollments of this lead as replied — any reply stops
+  // parallel cadences to avoid looking insistent after engagement.
   await from(supabase, 'cadence_enrollments')
     .update({ status: 'replied' } as Record<string, unknown>)
-    .eq('id', enrollment.id);
+    .eq('lead_id', lead.id)
+    .eq('status', 'active');
 
   // Dispatch whatsapp.replied webhook
   dispatchWebhookEvent(supabase, lead.org_id, 'whatsapp.replied', {
