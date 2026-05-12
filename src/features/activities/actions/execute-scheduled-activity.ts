@@ -79,14 +79,14 @@ export async function executeScheduledActivity(
       .limit(1)
       .maybeSingle()) as { data: { id: string } | null };
 
-    if (hasMetaConnection) {
-      const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
-      if (!creditResult.allowed) {
-        await from(supabase, 'interactions')
-          .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
-          .eq('id', interaction.id);
-        return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
-      }
+    // Deduct WhatsApp credit regardless of provider (Meta or Evolution).
+    // Originally gated on hasMetaConnection — see note in execute-activity.ts.
+    const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
+    if (!creditResult.allowed) {
+      await from(supabase, 'interactions')
+        .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
+        .eq('id', interaction.id);
+      return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
     }
 
     let waResult: { success: boolean; messageId?: string; error?: string };

@@ -119,14 +119,17 @@ export async function executeActivity(
       .limit(1)
       .maybeSingle()) as { data: { id: string } | null };
 
-    if (hasMetaConnection) {
-      const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
-      if (!creditResult.allowed) {
-        await from(supabase, 'interactions')
-          .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
-          .eq('id', interaction.id);
-        return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
-      }
+    // Deduct WhatsApp credit regardless of provider (Meta or Evolution).
+    // Originally this was gated on `hasMetaConnection`, leaving Evolution sends
+    // uncounted — orgs on limited plans could send unlimited WhatsApp for free
+    // and the billing dashboard reported used_credits=0 even with hundreds of
+    // sends. The credit row tracks plan-level usage, not provider-specific.
+    const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
+    if (!creditResult.allowed) {
+      await from(supabase, 'interactions')
+        .update({ type: 'failed', metadata: { error: creditResult.error ?? 'no_credits' } } as Record<string, unknown>)
+        .eq('id', interaction.id);
+      return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
     }
 
     // Try Meta WhatsApp API first, then Evolution API
