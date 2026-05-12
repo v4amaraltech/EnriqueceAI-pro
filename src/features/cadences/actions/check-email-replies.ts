@@ -354,7 +354,7 @@ async function recordReply(
   // any reply stops all cadences for that lead. SDR can manually re-enroll
   // if desired.
   await from(supabase, 'cadence_enrollments')
-    .update({ status: 'replied' } as Record<string, unknown>)
+    .update({ status: 'replied', completed_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('lead_id', sentInteraction.lead_id)
     .eq('status', 'active');
 

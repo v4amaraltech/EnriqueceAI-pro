@@ -348,7 +348,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
       if (replyInteraction) {
         const { error: replyErr } = await from(supabase, 'cadence_enrollments')
-          .update({ status: 'replied' } as Record<string, unknown>)
+          .update({ status: 'replied', completed_at: new Date().toISOString() } as Record<string, unknown>)
           .eq('id', enrollment.id);
         if (replyErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as replied:`, replyErr);
         result.skipped++;

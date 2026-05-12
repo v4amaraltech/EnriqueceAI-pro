@@ -247,7 +247,7 @@ async function processIncomingMessage(
   // Mark ALL active enrollments of this lead as replied — any reply stops
   // parallel cadences to avoid looking insistent after engagement.
   await from(supabase, 'cadence_enrollments')
-    .update({ status: 'replied' } as Record<string, unknown>)
+    .update({ status: 'replied', completed_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('lead_id', lead.id)
     .eq('status', 'active');
 
