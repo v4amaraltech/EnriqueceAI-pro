@@ -10,21 +10,23 @@ export const maxDuration = 300;
 
 const DEFAULT_WINDOW_HOURS = 1.5;
 const MAX_WINDOW_HOURS = 24;
+const PAGE_SIZE = 200;
+const MAX_PAGES = 50; // 50 * 200 = 10k calls per org per window
 
+// API4COM REST schema (confirmed via dry-run 2026-05-13). Snake_case fields
+// and `call_type` instead of `direction`.
 interface Api4ComCall {
   id?: string;
-  // Field names below are best-guess based on the webhook payload — the
-  // API4COM REST schema isn't fully documented publicly. The dry-run path
-  // returns the raw response so the operator can confirm/adjust before we
-  // commit to mappings.
-  caller?: string;
-  called?: string;
-  startedAt?: string;
-  duration?: number | string;
-  status?: string;
-  hangupCause?: string;
-  recordUrl?: string;
-  direction?: string;
+  call_type?: string;
+  started_at?: string;
+  ended_at?: string;
+  from?: string;
+  to?: string;
+  duration?: number;
+  hangup_cause?: string;
+  record_url?: string | null;
+  email?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface ConnRow {
@@ -39,11 +41,11 @@ interface ConnRow {
 
 interface OrgResult {
   org_id: string;
-  user_id: string;
-  ramal: string;
+  ramals_mapped: number;
   fetched: number;
-  upserted: number;
-  skipped: number;
+  upserted_existing: number;
+  inserted_new: number;
+  skipped_unmapped: number;
   errors: string[];
   sample?: Api4ComCall[];
 }
@@ -55,9 +57,10 @@ interface OrgResult {
  * upserts into the `calls` table. Closes the gap left by the webhook-only
  * model: dropped webhooks, retroactive calls, status corrections.
  *
- * POST /api/workers/reconcile-api4com-calls
- * Body: { orgId?: string, dryRun?: boolean, windowHours?: number }
- * Auth: Bearer SUPABASE_SERVICE_ROLE_KEY (or cron secret)
+ * Pull strategy: ONE request per org (the API4COM /calls endpoint returns
+ * every call in the domain regardless of which ramal's API key is used).
+ * The `from` field on each call is mapped to user_id via the dictionary
+ * built from all api4com_connections rows for the org.
  */
 export async function POST(request: Request) {
   if (!verifyServiceRole(request) && !verifyCronSecret(request)) {
@@ -93,19 +96,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'No connected API4COM accounts', orgs: [] });
   }
 
+  // Group connections by org so we pull once per org, not once per ramal.
+  const byOrg = new Map<string, ConnRow[]>();
+  for (const c of conns) {
+    const list = byOrg.get(c.org_id) ?? [];
+    list.push(c);
+    byOrg.set(c.org_id, list);
+  }
+
   const results: OrgResult[] = [];
 
-  for (const conn of conns) {
+  for (const [orgId, orgConns] of byOrg) {
+    const ramalToUserId = new Map<string, string>();
+    for (const c of orgConns) {
+      if (c.ramal) ramalToUserId.set(c.ramal, c.user_id);
+    }
+
     const orgResult: OrgResult = {
-      org_id: conn.org_id,
-      user_id: conn.user_id,
-      ramal: conn.ramal,
+      org_id: orgId,
+      ramals_mapped: ramalToUserId.size,
       fetched: 0,
-      upserted: 0,
-      skipped: 0,
+      upserted_existing: 0,
+      inserted_new: 0,
+      skipped_unmapped: 0,
       errors: [],
     };
 
+    // Use the first connection's API key for the pull. Any key from the org
+    // works because /calls returns the whole domain.
+    const conn = orgConns[0]!;
     let apiKey: string;
     try {
       apiKey = decrypt(conn.api_key_encrypted);
@@ -116,18 +135,12 @@ export async function POST(request: Request) {
     }
 
     const baseUrl = conn.base_url.replace(/\/+$/, '');
-    // API4COM requires the `page` query param explicitly — the first dry-run
-    // returned MissingParameter / "page is required". Loop until the page
-    // comes back empty or we hit a safety cap.
-    const PAGE_SIZE = 200;
-    const MAX_PAGES = 20; // hard cap → 4000 calls per org per window
-    let calls: Api4ComCall[] = [];
-    let fetchError: string | null = null;
+    const calls: Api4ComCall[] = [];
 
     for (let page = 1; page <= MAX_PAGES; page++) {
       const url = new URL(`${baseUrl}/calls`);
-      url.searchParams.set('startedAt[gte]', since.toISOString());
-      url.searchParams.set('startedAt[lte]', now.toISOString());
+      url.searchParams.set('started_at[gte]', since.toISOString());
+      url.searchParams.set('started_at[lte]', now.toISOString());
       url.searchParams.set('page', String(page));
       url.searchParams.set('pageSize', String(PAGE_SIZE));
 
@@ -143,28 +156,22 @@ export async function POST(request: Request) {
 
         if (!res.ok) {
           const text = await res.text();
-          fetchError = `http_${res.status} page=${page}: ${text.slice(0, 200)}`;
+          orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
           break;
         }
 
         const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
         const pageCalls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
 
-        calls = calls.concat(pageCalls);
+        calls.push(...pageCalls);
 
-        // Last page when the response is shorter than the requested page size
         if (pageCalls.length < PAGE_SIZE) {
           break;
         }
       } catch (err) {
-        fetchError = `fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`;
+        orgResult.errors.push(`fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`);
         break;
       }
-    }
-
-    if (fetchError) {
-      orgResult.errors.push(fetchError);
-      // Still process whatever pages we got before the failure
     }
 
     orgResult.fetched = calls.length;
@@ -178,15 +185,23 @@ export async function POST(request: Request) {
     for (const c of calls) {
       const api4comId = c.id;
       if (!api4comId) {
-        orgResult.skipped++;
+        orgResult.skipped_unmapped++;
+        continue;
+      }
+
+      const userId = c.from ? ramalToUserId.get(c.from) : undefined;
+      if (!userId) {
+        // The org has connections for some ramals but this call came from a
+        // ramal that's not mapped to a user in Enriquece. Skip — we don't
+        // know who to attribute it to.
+        orgResult.skipped_unmapped++;
         continue;
       }
 
       try {
-        // Match by api4com_call_id stored in metadata
         const { data: existing } = (await from(supabase, 'calls')
           .select('id, status, duration_seconds, recording_url, started_at')
-          .eq('org_id', conn.org_id)
+          .eq('org_id', orgId)
           .filter('metadata->>api4com_call_id', 'eq', api4comId)
           .limit(1)
           .maybeSingle()) as {
@@ -194,45 +209,42 @@ export async function POST(request: Request) {
         };
 
         const duration = Number(c.duration) || 0;
-        const isOutbound = c.direction !== 'inbound';
-        // Same status rule the webhook uses
+        const isOutbound = c.call_type !== 'inbound';
+        // Same rule used by the webhook: 50s = connected & significant.
         const derivedStatus = duration >= 50 ? 'significant' : 'no_contact';
 
         if (existing) {
-          // Only update fields the webhook may have missed/diverged on.
-          // Never downgrade a status the webhook already promoted to
-          // 'significant'.
+          // Top up fields the webhook may have missed/diverged on. Never
+          // downgrade a status the webhook already promoted to 'significant'.
           const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-          if (!existing.recording_url && c.recordUrl) updates.recording_url = c.recordUrl;
+          if (!existing.recording_url && c.record_url) updates.recording_url = c.record_url;
           if (existing.duration_seconds === 0 && duration > 0) updates.duration_seconds = duration;
-          if (!existing.started_at && c.startedAt) updates.started_at = c.startedAt;
+          if (!existing.started_at && c.started_at) updates.started_at = c.started_at;
           if (existing.status === 'not_connected' && duration > 0) updates.status = derivedStatus;
 
           if (Object.keys(updates).length > 1) {
             await from(supabase, 'calls').update(updates).eq('id', existing.id);
-            orgResult.upserted++;
-          } else {
-            orgResult.skipped++;
+            orgResult.upserted_existing++;
           }
         } else {
-          // Insert missing call (webhook never arrived)
+          // Insert missing call (webhook never arrived).
           await from(supabase, 'calls').insert({
-            org_id: conn.org_id,
-            user_id: conn.user_id,
-            origin: c.caller ?? conn.ramal,
-            destination: c.called ?? '',
-            started_at: c.startedAt ?? new Date().toISOString(),
+            org_id: orgId,
+            user_id: userId,
+            origin: c.from ?? '',
+            destination: c.to ?? '',
+            started_at: c.started_at ?? new Date().toISOString(),
             duration_seconds: duration,
             status: duration > 0 ? derivedStatus : 'not_connected',
             type: isOutbound ? 'outbound' : 'inbound',
-            recording_url: c.recordUrl ?? null,
+            recording_url: c.record_url ?? null,
             metadata: {
               api4com_call_id: api4comId,
               source: 'reconcile_api4com',
-              hangup_cause: c.hangupCause ?? null,
+              hangup_cause: c.hangup_cause ?? null,
             },
           } as Record<string, unknown>);
-          orgResult.upserted++;
+          orgResult.inserted_new++;
         }
       } catch (err) {
         orgResult.errors.push(`call_${api4comId}: ${err instanceof Error ? err.message : 'unknown'}`);
