@@ -8,6 +8,7 @@ import { getAppUrl } from '@/lib/utils/app-url';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
+import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 
 export const maxDuration = 60;
 
@@ -186,8 +187,19 @@ async function sendFeedbackReminders() {
         continue;
       }
 
-      // WhatsApp parallel channel
+      // WhatsApp parallel channel — best-effort credit deduction. The
+      // reminder still goes out even if the org ran out of credits (the
+      // closer can't be left without the prod, but we log so the manager
+      // sees the overage in the credit dashboard).
       if (closer.phone && validateBrazilianPhone(closer.phone)) {
+        WhatsAppCreditService.checkAndDeductCredit(fb.org_id, supabase)
+          .then((creditResult: { allowed: boolean; error?: string }) => {
+            if (!creditResult.allowed) {
+              console.warn(`[feedback-reminders] Sending without credit deduction for org=${fb.org_id}: ${creditResult.error ?? 'no_credits'}`);
+            }
+          })
+          .catch((err: unknown) => console.error('[feedback-reminders] credit deduction error:', err));
+
         WhatsAppService.sendMessage(fb.org_id, {
           to: closer.phone,
           body: buildWhatsAppBody(closer.name, leadName, feedbackUrl, newCount),

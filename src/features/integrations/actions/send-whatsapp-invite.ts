@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { WhatsAppCreditService } from '../services/whatsapp-credit.service';
 
 import { EvolutionWhatsAppService } from '../services/whatsapp-evolution.service';
 
@@ -52,6 +53,15 @@ export async function sendWhatsAppInvite(
 
   if (!phone) {
     return { success: false, error: 'Lead não possui telefone cadastrado', code: 'NO_PHONE' };
+  }
+
+  // Same plan-level quota that execute-activity / execute-scheduled-activity
+  // enforce. Until 2026-05-13 this path was uncounted, letting V4 Amaral
+  // (and any other org with active meeting flow) burn ~360 invites/month
+  // off the books while the credit row showed used=0.
+  const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
+  if (!creditResult.allowed) {
+    return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp', code: 'NO_CREDITS' };
   }
 
   // Send via Evolution API
