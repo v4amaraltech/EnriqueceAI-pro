@@ -212,5 +212,43 @@ describe('csv-parser', () => {
       expect(result.rows[0]?.telefone).toBe('(11) 99999-9999');
       expect(result.rows[0]?.decisor).toBe('Maria');
     });
+
+    it('should accept descriptive header variants via substring match', () => {
+      // Rafael Alécio's lista-FUNERÁRIA.csv case: headers like "Nome do Decisor",
+      // "E-mail Comercial", "Telefone 1" were silently ignored by exact-match,
+      // so decisor/email/telefone landed as NULL on every imported lead.
+      const csv =
+        'cnpj,nome do decisor,e-mail comercial,telefone 1,cargo do decisor\n' +
+        '11222333000181,Carlos Souza,carlos@empresa.com,(11) 98765-4321,Diretor Comercial';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.decisor).toBe('Carlos Souza');
+      expect(result.rows[0]?.email).toBe('carlos@empresa.com');
+      expect(result.rows[0]?.telefone).toBe('(11) 98765-4321');
+      expect(result.rows[0]?.job_title).toBe('Diretor Comercial');
+    });
+
+    it('should combine first name + last name into decisor (Apollo export style)', () => {
+      const csv =
+        'cnpj,first name,last name,email,title,phone\n' +
+        '11222333000181,Maria,Silva Santos,maria@x.com,CEO,(11) 91234-5678';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.decisor).toBe('Maria Silva Santos');
+      expect(result.rows[0]?.email).toBe('maria@x.com');
+      expect(result.rows[0]?.job_title).toBe('CEO');
+    });
+
+    it('should not let "Nome Fantasia" steal the decisor slot', () => {
+      // The decisor pattern includes "nome", so without the priority-ordered
+      // detection "Nome Fantasia" would match decisor and leave fantasia empty.
+      const csv =
+        'cnpj,nome fantasia,nome do decisor\n' +
+        '11222333000181,EmpFantasia,João Pessoa';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.nome_fantasia).toBe('EmpFantasia');
+      expect(result.rows[0]?.decisor).toBe('João Pessoa');
+    });
   });
 });

@@ -90,17 +90,88 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     };
   }
 
-  // Detect optional columns
-  const razaoIndex = headers.findIndex((h) => ['razao_social', 'razao social', 'razão social', 'empresa', 'company'].includes(h));
-  const fantasiaIndex = headers.findIndex((h) => ['nome_fantasia', 'nome fantasia', 'fantasia', 'trade_name'].includes(h));
-  const sourceIndex = headers.findIndex((h) => ['lead_source', 'origem', 'fonte', 'source'].includes(h));
-  const telefoneIndex = headers.findIndex((h) => ['telefone', 'phone', 'celular', 'fone', 'whatsapp', 'tel'].includes(h));
-  const emailIndex = headers.findIndex((h) => ['email', 'e-mail', 'mail'].includes(h));
-  const decisorIndex = headers.findIndex((h) => ['decisor', 'contato', 'responsavel', 'responsável', 'contact_name', 'contact name', 'nome'].includes(h));
-  const jobTitleIndex = headers.findIndex((h) => ['cargo', 'job_title', 'job title', 'posição', 'posicao', 'role'].includes(h));
-  const websiteIndex = headers.findIndex((h) => ['website', 'site', 'url'].includes(h));
-  const instagramIndex = headers.findIndex((h) => ['instagram', 'ig'].includes(h));
-  const linkedinIndex = headers.findIndex((h) => ['linkedin', 'linked_in', 'linked in'].includes(h));
+  // Column detection: header names from data brokers, CRMs, and SDR-built
+  // spreadsheets vary wildly ("Nome do Decisor", "E-mail Comercial",
+  // "Telefone 1", "First Name", etc). Exact match misses all of these.
+  //
+  // Strategy: try exact match first (fast + unambiguous), then substring
+  // match against `loose`. Detection order is intentional — fantasia and
+  // razao_social are detected before decisor so "Nome Fantasia" doesn't
+  // get stolen by the decisor's "nome" pattern. Each `usedIndexes` set
+  // prevents the same column being claimed twice.
+  const usedIndexes = new Set<number>();
+
+  function detectColumn(exact: string[], loose: string[]): number {
+    for (let i = 0; i < headers.length; i++) {
+      if (usedIndexes.has(i)) continue;
+      if (exact.includes(headers[i]!)) {
+        usedIndexes.add(i);
+        return i;
+      }
+    }
+    for (let i = 0; i < headers.length; i++) {
+      if (usedIndexes.has(i)) continue;
+      const h = headers[i]!;
+      if (loose.some((p) => h.includes(p))) {
+        usedIndexes.add(i);
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  // Order matters — most specific labels first so they don't get hijacked.
+  const cnpjIdx = cnpjIndex; if (cnpjIdx >= 0) usedIndexes.add(cnpjIdx);
+  const fantasiaIndex = detectColumn(
+    ['nome_fantasia', 'nome fantasia', 'fantasia', 'trade_name'],
+    ['fantasia', 'trade_name', 'trade name'],
+  );
+  const razaoIndex = detectColumn(
+    ['razao_social', 'razao social', 'razão social', 'empresa', 'company'],
+    ['razao social', 'razão social', 'razao_social', 'company', 'empresa'],
+  );
+  const jobTitleIndex = detectColumn(
+    ['cargo', 'job_title', 'job title', 'posição', 'posicao', 'role', 'function', 'função'],
+    ['cargo', 'function', 'função', 'posição', 'posicao', 'job title', 'job_title', 'position', 'role', 'title'],
+  );
+  const sourceIndex = detectColumn(
+    ['lead_source', 'origem', 'fonte', 'source'],
+    ['lead_source', 'origem', 'fonte', 'source'],
+  );
+  // Apollo / Lemit exports split decisor across first_name + last_name. When
+  // both exist we combine them; the per-row read picks up whichever is set.
+  const firstNameIndex = detectColumn(
+    ['first_name', 'first name', 'nome', 'primeiro nome', 'primeiro_nome'],
+    ['first name', 'first_name', 'primeiro nome', 'primeiro_nome'],
+  );
+  const lastNameIndex = detectColumn(
+    ['last_name', 'last name', 'sobrenome', 'ultimo nome', 'último nome'],
+    ['last name', 'last_name', 'sobrenome', 'ultimo nome', 'último nome'],
+  );
+  const decisorIndex = detectColumn(
+    ['decisor', 'contato', 'responsavel', 'responsável', 'contact_name', 'contact name', 'nome completo', 'full_name', 'full name'],
+    ['decisor', 'responsável', 'responsavel', 'contato', 'contact', 'nome completo', 'full name', 'full_name'],
+  );
+  const telefoneIndex = detectColumn(
+    ['telefone', 'phone', 'celular', 'fone', 'whatsapp', 'tel'],
+    ['telefone', 'celular', 'whatsapp', 'fone', 'phone', 'mobile'],
+  );
+  const emailIndex = detectColumn(
+    ['email', 'e-mail', 'mail'],
+    ['email', 'e-mail', 'e_mail'],
+  );
+  const websiteIndex = detectColumn(
+    ['website', 'site', 'url'],
+    ['website', 'site', 'url'],
+  );
+  const instagramIndex = detectColumn(
+    ['instagram', 'ig'],
+    ['instagram'],
+  );
+  const linkedinIndex = detectColumn(
+    ['linkedin', 'linked_in', 'linked in'],
+    ['linkedin'],
+  );
 
   // File-level guard: reject when none of the identifying columns exist AND
   // we couldn't detect a CNPJ. Otherwise every row would fail with "linha
@@ -148,9 +219,19 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
 
     const telefone = cellAt(telefoneIndex);
     const email = cellAt(emailIndex);
-    const decisor = cellAt(decisorIndex);
     const jobTitle = cellAt(jobTitleIndex);
     const razaoSocial = cellAt(razaoIndex);
+
+    // Decisor resolution: a single "Decisor"/"Nome Completo" column wins. When
+    // the CSV splits the name (Apollo: First Name + Last Name), join them so
+    // import-leads can run its usual first/last_name split. The fallback keeps
+    // legacy single-column CSVs working unchanged.
+    const rawDecisor = cellAt(decisorIndex);
+    const rawFirst = cellAt(firstNameIndex);
+    const rawLast = cellAt(lastNameIndex);
+    const decisor =
+      rawDecisor ??
+      ([rawFirst, rawLast].filter(Boolean).join(' ').trim() || undefined);
 
     // At least one identifier is required so the row is dedupable downstream.
     if (!cnpj && !email && !razaoSocial && !telefone) {
