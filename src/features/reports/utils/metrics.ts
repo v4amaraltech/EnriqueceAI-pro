@@ -26,10 +26,14 @@ export function calculateCadenceMetrics(
     );
 
     const sent = cadenceInteractions.filter((i) => i.type === 'sent').length;
-    const delivered = cadenceInteractions.filter((i) => i.type === 'delivered').length;
     const opened = cadenceInteractions.filter((i) => i.type === 'opened').length;
     const replied = cadenceInteractions.filter((i) => i.type === 'replied').length;
     const bounced = cadenceInteractions.filter((i) => i.type === 'bounced').length;
+    // Gmail doesn't emit delivery receipts, so the 'delivered' interaction
+    // type is never actually written. Estimate it as sent - bounced (same
+    // approach the email-analytics dashboard uses); without this the CSV
+    // report always shipped a "Entregues" column of 0.
+    const delivered = Math.max(0, sent - bounced);
     const meetings = cadenceInteractions.filter(
       (i) => i.type === 'meeting_scheduled',
     ).length;
