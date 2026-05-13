@@ -43,7 +43,6 @@ import { Switch } from '@/shared/components/ui/switch';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
-import type { CallStatus } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
@@ -58,17 +57,6 @@ import { formatDuration } from '@/lib/utils/format';
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
-
-// Map dialer UI status to calls table status (same as complete-dialer-call.ts)
-const uiStatusToCallStatus: Record<string, CallStatus> = {
-  connected: 'significant',
-  gatekeeper: 'significant',
-  meeting_scheduled: 'significant',
-  voicemail: 'not_connected',
-  no_answer: 'no_contact',
-  busy: 'busy',
-  wrong_number: 'not_connected',
-};
 
 interface ActivityPhonePanelProps {
   leadName: string;
@@ -201,12 +189,11 @@ export function ActivityPhonePanel({
   function handleRetryAttempt() {
     const attempt = buildCurrentAttempt();
 
-    // Update the call record status for this attempt before retrying
-    if (callId && callStatus) {
-      const mappedStatus = uiStatusToCallStatus[callStatus] ?? 'not_connected';
+    // Persist notes + duration. Call status (significant/not_connected/etc)
+    // is owned by the API4COM webhook now — we don't pass it here.
+    if (callId) {
       classifyWebphoneCall({
         callId,
-        status: mappedStatus,
         clientDurationSeconds: callDuration,
         notes: notes || undefined,
         leadId,
@@ -236,12 +223,11 @@ export function ActivityPhonePanel({
     const allAttempts = [...attempts, buildCurrentAttempt()];
     const aggregatedNotes = formatAggregatedNotes(allAttempts);
 
-    // Update the call record status in the calls table
-    if (callId && callStatus) {
-      const mappedStatus = uiStatusToCallStatus[callStatus] ?? 'not_connected';
+    // Persist notes + duration. Call status (significant/not_connected/etc)
+    // is owned by the API4COM webhook now — we don't pass it here.
+    if (callId) {
       classifyWebphoneCall({
         callId,
-        status: mappedStatus,
         clientDurationSeconds: callDuration,
         notes: notes || undefined,
         leadId,

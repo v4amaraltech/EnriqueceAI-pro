@@ -16,21 +16,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { formatDurationMs } from '@/lib/utils/format';
 
-import type { CallStatus } from '../types';
 import { classifyWebphoneCall } from '../actions/classify-webphone-call';
-
-interface ClassificationOption {
-  status: CallStatus;
-  label: string;
-}
-
-const CLASSIFICATION_OPTIONS: ClassificationOption[] = [
-  { status: 'significant', label: 'Significativa' },
-  { status: 'not_significant', label: 'Não Significativa' },
-  { status: 'no_contact', label: 'Sem Contato' },
-  { status: 'busy', label: 'Ocupado' },
-  { status: 'not_connected', label: 'Não Conectada' },
-];
 
 interface PostCallClassificationDialogProps {
   open: boolean;
@@ -44,6 +30,13 @@ interface PostCallClassificationDialogProps {
   onClose: () => void;
 }
 
+/**
+ * Post-call dialog — used to be a 5-option classifier ("Significativa",
+ * "Não Significativa", etc), which let SDRs overwrite the call status that
+ * the API4COM webhook had already set. That created the BI divergence
+ * resolved in May/2026: API4COM is now the single source of truth for
+ * call status, and this dialog only collects an optional textual note.
+ */
 export function PostCallClassificationDialog({
   open,
   phone,
@@ -52,14 +45,13 @@ export function PostCallClassificationDialog({
   leadId,
   onClose,
 }: PostCallClassificationDialogProps) {
-  const [selectedStatus, setSelectedStatus] = useState<CallStatus | null>(null);
   const [notes, setNotes] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const clientDurationSeconds = Math.max(0, Math.floor(durationMs / 1000));
 
   const handleSubmit = useCallback(() => {
-    if (!selectedStatus || !callRecordId) {
+    if (!callRecordId) {
       onClose();
       return;
     }
@@ -67,26 +59,23 @@ export function PostCallClassificationDialog({
     startTransition(async () => {
       const result = await classifyWebphoneCall({
         callId: callRecordId,
-        status: selectedStatus,
         clientDurationSeconds,
-        notes: notes || undefined,
+        notes: notes.trim() || undefined,
         leadId: leadId || undefined,
       });
 
       if (result.success) {
-        toast.success('Ligação classificada');
+        toast.success(notes.trim() ? 'Anotação salva' : 'Ligação registrada');
       } else {
         toast.error(result.error);
       }
 
-      setSelectedStatus(null);
       setNotes('');
       onClose();
     });
-  }, [selectedStatus, callRecordId, clientDurationSeconds, notes, leadId, onClose]);
+  }, [callRecordId, clientDurationSeconds, notes, leadId, onClose]);
 
   const handleDismiss = useCallback(() => {
-    setSelectedStatus(null);
     setNotes('');
     onClose();
   }, [onClose]);
@@ -97,7 +86,7 @@ export function PostCallClassificationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Phone className="h-4 w-4" />
-            Classificar Ligação
+            Anotações da ligação
           </DialogTitle>
         </DialogHeader>
 
@@ -110,35 +99,18 @@ export function PostCallClassificationDialog({
             </span>
           </div>
 
-          {/* Status buttons */}
-          <div className="space-y-1.5">
-            {CLASSIFICATION_OPTIONS.map((option) => (
-              <button
-                key={option.status}
-                type="button"
-                onClick={() => setSelectedStatus(option.status)}
-                className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                  selectedStatus === option.status
-                    ? 'border-primary bg-primary/10 text-primary font-medium'
-                    : 'border-[var(--border)] hover:bg-[var(--accent)]'
-                }`}
-              >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    selectedStatus === option.status ? 'bg-primary' : 'bg-[var(--muted-foreground)]/30'
-                  }`}
-                />
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            O status da ligação (atendida, ocupado, não conectada) é definido automaticamente pela API4COM.
+            Use este espaço apenas para anotações qualitativas.
+          </p>
 
           {/* Notes */}
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Anotações (opcional)..."
-            className="min-h-[60px] resize-y"
+            className="min-h-[80px] resize-y"
+            autoFocus
           />
         </div>
 
@@ -146,7 +118,7 @@ export function PostCallClassificationDialog({
           <Button variant="outline" onClick={handleDismiss} disabled={isPending}>
             Pular
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !selectedStatus}>
+          <Button onClick={handleSubmit} disabled={isPending}>
             {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

@@ -8,7 +8,6 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import type { CallStatus } from '@/features/calls/types';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 const completeDialerCallSchema = z.object({
@@ -24,16 +23,10 @@ const completeDialerCallSchema = z.object({
 
 export type CompleteDialerCallInput = z.infer<typeof completeDialerCallSchema>;
 
-// Map dialer UI status to calls table status
-const statusMap: Record<string, CallStatus> = {
-  connected: 'significant',
-  gatekeeper: 'significant',
-  meeting_scheduled: 'significant',
-  voicemail: 'not_connected',
-  no_answer: 'no_contact',
-  busy: 'busy',
-  wrong_number: 'not_connected',
-};
+// The dialer UI tag (connected/gatekeeper/voicemail/etc) is preserved in
+// the notes prefix for human inspection but no longer mapped to calls.status.
+// Status is owned by the API4COM webhook (handles 'not_connected' default
+// → real status when the call ends).
 
 export async function completeDialerCall(
   input: CompleteDialerCallInput,
@@ -47,7 +40,9 @@ export async function completeDialerCall(
 
   const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = parsed.data;
 
-  // 1. Create call record
+  // 1. Create call record. `status` omitted on purpose — the calls schema
+  // defaults it to 'not_connected' and the API4COM webhook upgrades it to
+  // significant / no_contact / etc when the provider reports back.
   const { data: call, error: callError } = (await from(supabase, 'calls')
     .insert({
       org_id: orgId,
@@ -56,7 +51,6 @@ export async function completeDialerCall(
       origin: 'power_dialer',
       destination: phone,
       duration_seconds: durationSeconds ?? 0,
-      status: statusMap[callStatus] ?? 'not_connected',
       type: 'outbound',
       notes: notes ? `[${callStatus}] ${notes}` : `[${callStatus}]`,
     })

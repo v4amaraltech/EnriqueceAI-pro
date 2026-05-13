@@ -8,9 +8,17 @@ import { from } from '@/lib/supabase/from';
 
 import { callStatusSchema } from '../schemas/call.schemas';
 
+// `status` is accepted for backwards compatibility with existing callers
+// (PostCallClassificationDialog, ActivityPhonePanel, Api4ComWebphone) but is
+// no longer written to the calls table. Single source of truth for call
+// status is the API4COM webhook (/api/webhooks/api4com), which classifies
+// significant / no_contact / not_connected from hangup_cause + duration.
+// The manual SDR input was overwriting the objective measurement with a
+// subjective one, producing the divergence the BI team complained about
+// in May/2026.
 const classifyInputSchema = z.object({
   callId: z.string().uuid(),
-  status: callStatusSchema,
+  status: callStatusSchema.optional(), // accepted, no longer applied
   clientDurationSeconds: z.number().int().min(0),
   notes: z.string().optional(),
   leadId: z.string().uuid().optional(),
@@ -28,7 +36,7 @@ export async function classifyWebphoneCall(
     return { success: false, error: 'Dados inválidos' };
   }
 
-  const { callId, status, clientDurationSeconds, notes, leadId } = parsed.data;
+  const { callId, clientDurationSeconds, notes, leadId } = parsed.data;
 
   // Fetch current call to check ownership and current state
   const { data: call } = (await from(supabase, 'calls')
@@ -41,9 +49,8 @@ export async function classifyWebphoneCall(
     return { success: false, error: 'Ligação não encontrada' };
   }
 
-  // Build update: status + notes, use client duration as fallback
+  // Status DELIBERATELY omitted — let the API4COM webhook own it.
   const updates: Record<string, unknown> = {
-    status,
     updated_at: new Date().toISOString(),
   };
 
@@ -56,9 +63,15 @@ export async function classifyWebphoneCall(
     updates.duration_seconds = clientDurationSeconds;
   }
 
-  await from(supabase, 'calls').update(updates).eq('id', callId).eq('org_id', orgId);
+  // Only write if we have a meaningful change (notes or duration); otherwise
+  // skip — there's no point flipping updated_at for an empty submission.
+  if (Object.keys(updates).length > 1) {
+    await from(supabase, 'calls').update(updates).eq('id', callId).eq('org_id', orgId);
+  }
 
-  // Create interaction record so the call appears in prospecting stats
+  // Create interaction record so the call appears in prospecting stats.
+  // The interaction metadata no longer carries callStatus — that lives on
+  // calls.status, populated by the webhook.
   const effectiveLeadId = leadId ?? call.lead_id;
   if (effectiveLeadId) {
     await from(supabase, 'interactions')
@@ -68,7 +81,7 @@ export async function classifyWebphoneCall(
         channel: 'phone',
         type: 'sent',
         message_content: notes || null,
-        metadata: { callId, callStatus: status, source: 'webphone' },
+        metadata: { callId, source: 'webphone' },
         performed_by: userId,
       } as Record<string, unknown>);
   }
