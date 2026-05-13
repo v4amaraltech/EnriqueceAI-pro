@@ -116,37 +116,55 @@ export async function POST(request: Request) {
     }
 
     const baseUrl = conn.base_url.replace(/\/+$/, '');
-    // Best-guess REST endpoint. If the response is 404 we surface it so the
-    // operator can correct the path before we wire the cron.
-    const url = new URL(`${baseUrl}/calls`);
-    url.searchParams.set('startedAt[gte]', since.toISOString());
-    url.searchParams.set('startedAt[lte]', now.toISOString());
-    url.searchParams.set('limit', '500');
-
+    // API4COM requires the `page` query param explicitly — the first dry-run
+    // returned MissingParameter / "page is required". Loop until the page
+    // comes back empty or we hit a safety cap.
+    const PAGE_SIZE = 200;
+    const MAX_PAGES = 20; // hard cap → 4000 calls per org per window
     let calls: Api4ComCall[] = [];
-    try {
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: apiKey,
-        },
-        signal: AbortSignal.timeout(30_000),
-      });
+    let fetchError: string | null = null;
 
-      if (!res.ok) {
-        const text = await res.text();
-        orgResult.errors.push(`http_${res.status}: ${text.slice(0, 200)}`);
-        results.push(orgResult);
-        continue;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const url = new URL(`${baseUrl}/calls`);
+      url.searchParams.set('startedAt[gte]', since.toISOString());
+      url.searchParams.set('startedAt[lte]', now.toISOString());
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('pageSize', String(PAGE_SIZE));
+
+      try {
+        const res = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: apiKey,
+          },
+          signal: AbortSignal.timeout(30_000),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          fetchError = `http_${res.status} page=${page}: ${text.slice(0, 200)}`;
+          break;
+        }
+
+        const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
+        const pageCalls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
+
+        calls = calls.concat(pageCalls);
+
+        // Last page when the response is shorter than the requested page size
+        if (pageCalls.length < PAGE_SIZE) {
+          break;
+        }
+      } catch (err) {
+        fetchError = `fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`;
+        break;
       }
+    }
 
-      const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
-      calls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
-    } catch (err) {
-      orgResult.errors.push(`fetch_failed: ${err instanceof Error ? err.message : 'unknown'}`);
-      results.push(orgResult);
-      continue;
+    if (fetchError) {
+      orgResult.errors.push(fetchError);
+      // Still process whatever pages we got before the failure
     }
 
     orgResult.fetched = calls.length;
