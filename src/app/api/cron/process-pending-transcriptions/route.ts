@@ -24,16 +24,36 @@ export async function POST(request: Request) {
 
   const supabase = createServiceRoleClient();
 
-  // Find calls eligible for transcription that haven't been processed yet
-  const { data: pending } = (await from(supabase, 'calls')
-    .select('id')
-    .not('recording_url', 'is', null)
-    .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
-    .or('transcription_status.is.null,transcription_status.eq.pending')
-    .order('created_at', { ascending: true })
-    .limit(BATCH_LIMIT)) as { data: { id: string }[] | null };
+  // Find calls eligible for transcription that haven't been processed yet.
+  //
+  // PostgREST's `.or('transcription_status.is.null,transcription_status.eq.pending')`
+  // form silently dropped the IS NULL branch in production — for 3 V4 Amaral
+  // calls stuck pending for 20+ hours the cron kept reporting
+  // "No pending transcriptions". Split into two queries and merge so each
+  // operator (`.is` vs `.eq`) runs through its proper code path.
+  const results = await Promise.all([
+    from(supabase, 'calls')
+      .select('id, created_at')
+      .not('recording_url', 'is', null)
+      .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
+      .eq('transcription_status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(BATCH_LIMIT),
+    from(supabase, 'calls')
+      .select('id, created_at')
+      .not('recording_url', 'is', null)
+      .gte('duration_seconds', TRANSCRIPTION_MIN_DURATION_SECONDS)
+      .is('transcription_status', null)
+      .order('created_at', { ascending: true })
+      .limit(BATCH_LIMIT),
+  ]);
 
-  const calls = pending ?? [];
+  const pendingExplicit = (results[0] as { data: Array<{ id: string; created_at: string }> | null }).data ?? [];
+  const pendingNull = (results[1] as { data: Array<{ id: string; created_at: string }> | null }).data ?? [];
+
+  const calls = [...pendingExplicit, ...pendingNull]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .slice(0, BATCH_LIMIT);
 
   if (calls.length === 0) {
     return NextResponse.json({ message: 'No pending transcriptions', processed: 0 });
