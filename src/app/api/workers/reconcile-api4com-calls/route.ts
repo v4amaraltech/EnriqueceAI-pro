@@ -10,8 +10,10 @@ export const maxDuration = 300;
 
 const DEFAULT_WINDOW_HOURS = 1.5;
 const MAX_WINDOW_HOURS = 24;
-const PAGE_SIZE = 200;
-const MAX_PAGES = 50; // 50 * 200 = 10k calls per org per window
+// API4COM ignores client-side pageSize and returns 100 per page by default.
+// Use 100 as the expected size so the pagination loop knows when to stop.
+const EXPECTED_PAGE_SIZE = 100;
+const MAX_PAGES = 100; // 100 * 100 = 10k calls per org per window
 
 // API4COM REST schema (confirmed via dry-run 2026-05-13). Snake_case fields
 // and `call_type` instead of `direction`.
@@ -142,7 +144,6 @@ export async function POST(request: Request) {
       url.searchParams.set('started_at[gte]', since.toISOString());
       url.searchParams.set('started_at[lte]', now.toISOString());
       url.searchParams.set('page', String(page));
-      url.searchParams.set('pageSize', String(PAGE_SIZE));
 
       try {
         const res = await fetch(url.toString(), {
@@ -165,7 +166,9 @@ export async function POST(request: Request) {
 
         calls.push(...pageCalls);
 
-        if (pageCalls.length < PAGE_SIZE) {
+        // Stop only on an empty page or one smaller than the API's default.
+        // Equal to EXPECTED_PAGE_SIZE means there's likely more.
+        if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE) {
           break;
         }
       } catch (err) {
