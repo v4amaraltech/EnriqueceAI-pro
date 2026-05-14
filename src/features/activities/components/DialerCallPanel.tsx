@@ -298,29 +298,11 @@ export function DialerCallPanel({
         )}
       </div>
 
-      {/* Post-call: status + notes + actions — only after call ends */}
+      {/* Post-call: notes + actions — only after call ends. The "Status da
+          Ligação" select used to live here too but it was the source of
+          divergence between Enriquece and BI (API4COM is the truth now). */}
       {callState === 'ended' && (
         <>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Status da Ligacao
-            </Label>
-            <Select value={callStatus} onValueChange={setCallStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o resultado..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
-                <SelectItem value="gatekeeper">Conectou — falou com intermediario</SelectItem>
-                <SelectItem value="voicemail">Caixa postal</SelectItem>
-                <SelectItem value="no_answer">Nao atendeu</SelectItem>
-                <SelectItem value="busy">Ocupado</SelectItem>
-                <SelectItem value="wrong_number">Numero errado</SelectItem>
-                <SelectItem value="meeting_scheduled">Reuniao agendada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="mt-4 flex-1 space-y-1.5">
             <div className="flex items-center gap-1.5">
               <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />

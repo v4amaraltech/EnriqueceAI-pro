@@ -478,26 +478,8 @@ export function ActivityPhonePanel({
               </div>
             </div>
 
-            {/* Call status */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Status da Ligação
-              </Label>
-              <Select value={callStatus} onValueChange={setCallStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o resultado..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
-                  <SelectItem value="gatekeeper">Conectou — falou com intermediário</SelectItem>
-                  <SelectItem value="voicemail">Caixa postal</SelectItem>
-                  <SelectItem value="no_answer">Não atendeu</SelectItem>
-                  <SelectItem value="busy">Ocupado</SelectItem>
-                  <SelectItem value="wrong_number">Número errado</SelectItem>
-                  <SelectItem value="meeting_scheduled">Reunião agendada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Call status is owned by the API4COM webhook + reconcile cron;
+                the manual classifier here was the source of the BI divergence. */}
 
             {/* Notes */}
             <div className="space-y-1.5">

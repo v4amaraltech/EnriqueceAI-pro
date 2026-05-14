@@ -10,23 +10,23 @@ import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
+// callStatus is accepted for backwards compatibility (older UI versions in
+// the wild may still send it) but no longer used. Notes go in plain, and
+// the outbound webhook is always 'call.completed' — the consumer can read
+// the final state off calls.status (populated by the API4COM webhook /
+// reconcile cron) instead of relying on the SDR's tag.
 const completeDialerCallSchema = z.object({
   enrollmentId: z.string().uuid(),
   cadenceId: z.string().uuid(),
   stepId: z.string().uuid(),
   leadId: z.string().uuid(),
   phone: z.string().min(8),
-  callStatus: z.string().min(1),
+  callStatus: z.string().optional(),
   notes: z.string(),
   durationSeconds: z.number().int().nonnegative().optional(),
 });
 
 export type CompleteDialerCallInput = z.infer<typeof completeDialerCallSchema>;
-
-// The dialer UI tag (connected/gatekeeper/voicemail/etc) is preserved in
-// the notes prefix for human inspection but no longer mapped to calls.status.
-// Status is owned by the API4COM webhook (handles 'not_connected' default
-// → real status when the call ends).
 
 export async function completeDialerCall(
   input: CompleteDialerCallInput,
@@ -38,11 +38,11 @@ export async function completeDialerCall(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { enrollmentId, cadenceId, stepId, leadId, phone, callStatus, notes, durationSeconds } = parsed.data;
+  const { enrollmentId, cadenceId, stepId, leadId, phone, notes, durationSeconds } = parsed.data;
 
   // 1. Create call record. `status` omitted on purpose — the calls schema
-  // defaults it to 'not_connected' and the API4COM webhook upgrades it to
-  // significant / no_contact / etc when the provider reports back.
+  // defaults it to 'not_connected' and the API4COM webhook / reconcile cron
+  // upgrade it to significant / no_contact / etc when the provider reports.
   const { data: call, error: callError } = (await from(supabase, 'calls')
     .insert({
       org_id: orgId,
@@ -52,7 +52,7 @@ export async function completeDialerCall(
       destination: phone,
       duration_seconds: durationSeconds ?? 0,
       type: 'outbound',
-      notes: notes ? `[${callStatus}] ${notes}` : `[${callStatus}]`,
+      notes: notes || null,
     })
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -60,13 +60,12 @@ export async function completeDialerCall(
   const qErr = handleQueryError(callError, 'Erro ao registrar ligação', 'power-dialer');
   if (qErr || !call) return qErr ?? { success: false, error: 'Erro ao registrar ligação' };
 
-  // Dispatch call.completed or call.missed webhook
-  const missedStatuses = ['no_answer', 'busy', 'wrong_number'];
-  const callWebhookEvent = missedStatuses.includes(callStatus) ? 'call.missed' : 'call.completed';
-  dispatchWebhookEvent(supabase, orgId, callWebhookEvent, {
+  // Always emit call.completed — the granular missed/answered split can be
+  // derived downstream from calls.status. Kept the dispatch so existing
+  // webhook subscribers stay wired.
+  dispatchWebhookEvent(supabase, orgId, 'call.completed', {
     lead_id: leadId,
     call_id: call.id,
-    call_status: callStatus,
     duration_seconds: durationSeconds ?? 0,
   }).catch((err) => console.error('[webhook] call dispatch failed:', err));
 
@@ -80,7 +79,7 @@ export async function completeDialerCall(
       channel: 'phone',
       type: 'sent',
       message_content: notes || null,
-      metadata: { callStatus, callId: call.id, source: 'power_dialer' },
+      metadata: { callId: call.id, source: 'power_dialer' },
     } as Record<string, unknown>);
 
   // 3. Advance cadence: find next step
