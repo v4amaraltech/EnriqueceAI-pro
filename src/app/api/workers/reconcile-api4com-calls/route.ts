@@ -9,7 +9,11 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 export const maxDuration = 300;
 
 const DEFAULT_WINDOW_HOURS = 1.5;
-const MAX_WINDOW_HOURS = 24;
+// Cron uses the default 1.5h. The cap is meant to keep backfills from
+// stretching the rate-limit budget too far: 60 days is enough to cover
+// the original "API4COM webhook was leaking ~40% of calls" problem
+// without anyone accidentally requesting "last 5 years".
+const MAX_WINDOW_HOURS = 1440;
 // API4COM ignores client-side pageSize and returns 100 per page by default.
 // Use 100 as the expected size so the pagination loop knows when to stop.
 const EXPECTED_PAGE_SIZE = 100;
