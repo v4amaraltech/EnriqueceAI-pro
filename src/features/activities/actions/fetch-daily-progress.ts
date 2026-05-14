@@ -22,10 +22,20 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
 
+  // Filter to channels the SDR actually performs. `system` covers automated
+  // events (csv_import bulk-logs, soft-deletes, etc) that all carry the
+  // SDR's user id in performed_by but aren't real activities — Rafael saw
+  // 102 "atividades" today when 46 came from a single CSV import at 12:55
+  // and 50 more were system events; only 6 were real (phone, whatsapp,
+  // research). Keep only the user-driven channels so the daily target
+  // reflects what the SDR actually did.
+  const SDR_CHANNELS = ['email', 'whatsapp', 'phone', 'linkedin', 'research'];
+
   const { count: completed } = (await from(supabase, 'interactions')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', orgId)
     .eq('performed_by', userId)
+    .in('channel', SDR_CHANNELS)
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
   // Count pending activities for THIS SDR only:
