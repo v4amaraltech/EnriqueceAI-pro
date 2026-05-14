@@ -255,53 +255,79 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     if (insertError) {
       const isDuplicate = insertError.message?.includes('unique') || insertError.message?.includes('duplicate');
 
-      // If duplicate, check if the existing lead is soft-deleted and restore it
+      // If duplicate, check if the existing lead can be restored. Three
+      // states qualify: soft-deleted (deleted_at IS NOT NULL), archived,
+      // or unqualified — all terminal states where the lead is out of the
+      // active pipeline. Anything still in flight (new/contacted/qualified/
+      // won) gets rejected so re-imports don't silently overwrite the
+      // SDR's in-progress work.
+      let alreadyExistsStatus: string | null = null;
       if (isDuplicate) {
         const { data: existingLead } = (await from(supabase, 'leads')
-          .select('id, deleted_at')
+          .select('id, deleted_at, status')
           .eq('org_id', orgId)
           .eq('cnpj', row.cnpj)
-          .single()) as { data: { id: string; deleted_at: string | null } | null };
+          .limit(1)
+          .maybeSingle()) as { data: { id: string; deleted_at: string | null; status: string } | null };
 
-        if (existingLead?.deleted_at) {
-          // Restore soft-deleted lead — preserve existing enriched data
-          const restoreFields: Record<string, unknown> = {
-            deleted_at: null,
-            import_id: importId,
-          };
-          // Only overwrite fields if the CSV actually provides them
-          if (row.razao_social) restoreFields.razao_social = row.razao_social;
-          if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
-          // Restore: same resolution order as the insert path. Only overwrite
-          // attribution when the operator picked a source OR the CSV row
-          // carries one — never silently re-tag a soft-deleted lead with the
-          // Outbound/Prospecção Ativa default.
-          const restoreSource = leadSource ?? row.lead_source;
-          if (restoreSource) {
-            const normRestore = normalizeOriginFields(restoreSource, null);
-            restoreFields.lead_source = normRestore.lead_source;
-            if (normRestore.canal) restoreFields.canal = normRestore.canal;
-          }
+        if (existingLead) {
+          alreadyExistsStatus = existingLead.status;
+          const isRestorable =
+            !!existingLead.deleted_at ||
+            existingLead.status === 'archived' ||
+            existingLead.status === 'unqualified';
 
-          const { error: restoreError } = await from(supabase, 'leads')
-            .update(restoreFields)
-            .eq('id', existingLead.id);
+          if (isRestorable) {
+            const restoreFields: Record<string, unknown> = {
+              deleted_at: null,
+              status: 'new',
+              import_id: importId,
+            };
+            // Only overwrite fields if the CSV actually provides them
+            if (row.razao_social) restoreFields.razao_social = row.razao_social;
+            if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
+            // Carry the CSV contact data into the restored row so e-mail and
+            // telefone get repopulated even if the prior lead had them blank.
+            if (row.telefone) restoreFields.telefone = row.telefone;
+            if (row.phones) restoreFields.phones = row.phones;
+            if (row.email) restoreFields.email = row.email;
+            if (row.emails) restoreFields.emails = row.emails;
+            if (row.decisor) {
+              restoreFields.first_name = row.decisor.split(' ')[0] ?? null;
+              restoreFields.last_name = row.decisor.split(' ').slice(1).join(' ') || null;
+              if (row.job_title) restoreFields.job_title = row.job_title;
+            }
+            // Same attribution resolution as the insert path.
+            const restoreSource = leadSource ?? row.lead_source;
+            if (restoreSource) {
+              const normRestore = normalizeOriginFields(restoreSource, null);
+              restoreFields.lead_source = normRestore.lead_source;
+              if (normRestore.canal) restoreFields.canal = normRestore.canal;
+            }
 
-          if (!restoreError) {
-            successCount++;
-            continue;
+            const { error: restoreError } = await from(supabase, 'leads')
+              .update(restoreFields)
+              .eq('id', existingLead.id);
+
+            if (!restoreError) {
+              successCount++;
+              continue;
+            }
           }
         }
 
         duplicateCount++;
       }
 
+      const dupReason = alreadyExistsStatus
+        ? `CNPJ duplicado (lead já existe, status=${alreadyExistsStatus})`
+        : 'CNPJ duplicado nesta organização';
       const errorEntry = {
         id: '',
         import_id: importId,
         row_number: row.rowNumber,
         cnpj: row.cnpj,
-        error_message: isDuplicate ? 'CNPJ duplicado nesta organização' : (insertError.message ?? 'Erro ao inserir'),
+        error_message: isDuplicate ? dupReason : (insertError.message ?? 'Erro ao inserir'),
         created_at: new Date().toISOString(),
       };
 
