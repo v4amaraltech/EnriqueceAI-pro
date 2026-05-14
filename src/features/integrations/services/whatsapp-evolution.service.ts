@@ -132,7 +132,16 @@ export class EvolutionWhatsAppService {
               && (v as { exists?: unknown }).exists === false
           );
 
-          if (isNotRegistered(errorBody?.response?.message) || isNotRegistered(errorBody?.message)) {
+          // Evolution sometimes returns the {jid, exists:false, number}
+          // payload at the top level of the response body, not nested under
+          // .response.message or .message — production logs showed 14 such
+          // failures on 2026-05-12/13 that the previous check missed.
+          // Check top-level first.
+          if (
+            isNotRegistered(errorBody) ||
+            isNotRegistered(errorBody?.response?.message) ||
+            isNotRegistered(errorBody?.message)
+          ) {
             errorMsg = 'Esse número não está cadastrado no WhatsApp';
           } else {
             errorMsg =
