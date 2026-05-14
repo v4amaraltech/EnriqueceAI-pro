@@ -55,6 +55,7 @@ interface OrgResult {
   upserted_existing: number;
   inserted_new: number;
   skipped_unmapped: number;
+  unmapped_ramals?: Record<string, number>; // ramal → call count
   errors: string[];
   sample?: Api4ComCall[];
 }
@@ -130,6 +131,7 @@ export async function POST(request: Request) {
       skipped_unmapped: 0,
       errors: [],
     };
+    const unmappedRamalCounts: Record<string, number> = {};
 
     // Use the first connection's API key for the pull. Any key from the org
     // works because /calls returns the whole domain.
@@ -230,6 +232,17 @@ export async function POST(request: Request) {
 
     if (dryRun) {
       orgResult.sample = calls.slice(0, 3);
+      // Still tally unmapped ramals for diagnostics, just don't write.
+      for (const c of calls) {
+        if (!c.from || !ramalToUserId.has(c.from)) {
+          orgResult.skipped_unmapped++;
+          const ramalKey = c.from ?? '<no-from>';
+          unmappedRamalCounts[ramalKey] = (unmappedRamalCounts[ramalKey] ?? 0) + 1;
+        }
+      }
+      if (Object.keys(unmappedRamalCounts).length > 0) {
+        orgResult.unmapped_ramals = unmappedRamalCounts;
+      }
       results.push(orgResult);
       continue;
     }
@@ -245,8 +258,11 @@ export async function POST(request: Request) {
       if (!userId) {
         // The org has connections for some ramals but this call came from a
         // ramal that's not mapped to a user in Enriquece. Skip — we don't
-        // know who to attribute it to.
+        // know who to attribute it to. Track the unmapped ramal so the
+        // operator can decide whether to wire it up.
         orgResult.skipped_unmapped++;
+        const ramalKey = c.from ?? '<no-from>';
+        unmappedRamalCounts[ramalKey] = (unmappedRamalCounts[ramalKey] ?? 0) + 1;
         continue;
       }
 
@@ -301,6 +317,10 @@ export async function POST(request: Request) {
       } catch (err) {
         orgResult.errors.push(`call_${api4comId}: ${err instanceof Error ? err.message : 'unknown'}`);
       }
+    }
+
+    if (Object.keys(unmappedRamalCounts).length > 0) {
+      orgResult.unmapped_ramals = unmappedRamalCounts;
     }
 
     results.push(orgResult);
