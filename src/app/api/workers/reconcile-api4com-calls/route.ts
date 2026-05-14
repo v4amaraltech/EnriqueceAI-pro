@@ -52,10 +52,11 @@ interface OrgResult {
   org_id: string;
   ramals_mapped: number;
   fetched: number;
+  in_scope: number; // = fetched - skipped_unmapped (calls that belong to Enriquece SDRs)
   upserted_existing: number;
   inserted_new: number;
   skipped_unmapped: number;
-  unmapped_ramals?: Record<string, number>; // ramal → call count
+  unmapped_ramals?: Record<string, number>; // dry-run only — diagnostic for the operator
   errors: string[];
   sample?: Api4ComCall[];
 }
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
       org_id: orgId,
       ramals_mapped: ramalToUserId.size,
       fetched: 0,
+      in_scope: 0,
       upserted_existing: 0,
       inserted_new: 0,
       skipped_unmapped: 0,
@@ -240,6 +242,7 @@ export async function POST(request: Request) {
           unmappedRamalCounts[ramalKey] = (unmappedRamalCounts[ramalKey] ?? 0) + 1;
         }
       }
+      orgResult.in_scope = Math.max(0, orgResult.fetched - orgResult.skipped_unmapped);
       if (Object.keys(unmappedRamalCounts).length > 0) {
         orgResult.unmapped_ramals = unmappedRamalCounts;
       }
@@ -319,7 +322,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (Object.keys(unmappedRamalCounts).length > 0) {
+    orgResult.in_scope = Math.max(0, orgResult.fetched - orgResult.skipped_unmapped);
+
+    // unmapped_ramals is a diagnostic for the operator running dry-runs;
+    // surfacing it in cron logs hourly would just create noise.
+    if (dryRun && Object.keys(unmappedRamalCounts).length > 0) {
       orgResult.unmapped_ramals = unmappedRamalCounts;
     }
 
