@@ -8,7 +8,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 
 export const maxDuration = 300;
 
+const JOB_NAME = 'reconcile-api4com-calls';
 const DEFAULT_WINDOW_HOURS = 1.5;
+const ADAPTIVE_OVERLAP_HOURS = 0.5;
 // Cron uses the default 1.5h. The cap is meant to keep backfills from
 // stretching the rate-limit budget too far: 60 days is enough to cover
 // the original "API4COM webhook was leaking ~40% of calls" problem
@@ -89,11 +91,35 @@ export async function POST(request: Request) {
   };
 
   const dryRun = body.dryRun === true;
-  const windowHours = Math.min(Math.max(body.windowHours ?? DEFAULT_WINDOW_HOURS, 0.25), MAX_WINDOW_HOURS);
   const now = new Date();
-  const since = new Date(now.getTime() - windowHours * 3600 * 1000);
-
   const supabase = createServiceRoleClient();
+
+  // Adaptive windowing: when the caller doesn't pin windowHours (typical for
+  // the cron), compute it from the last successful run + an overlap. This
+  // way if Vercel paused or pg_cron missed a few cycles, the next run
+  // catches everything the gap dropped — instead of permanently leaking the
+  // hours between (last_success + 1.5h) and now.
+  let windowHours: number;
+  if (body.windowHours != null) {
+    windowHours = Math.min(Math.max(body.windowHours, 0.25), MAX_WINDOW_HOURS);
+  } else {
+    const { data: lastRun } = (await from(supabase, 'worker_run_state' as never)
+      .select('last_success_at')
+      .eq('job_name', JOB_NAME)
+      .maybeSingle()) as { data: { last_success_at: string | null } | null };
+
+    if (lastRun?.last_success_at) {
+      const hoursSinceLastSuccess = (now.getTime() - new Date(lastRun.last_success_at).getTime()) / 3_600_000;
+      windowHours = Math.min(
+        Math.max(hoursSinceLastSuccess + ADAPTIVE_OVERLAP_HOURS, DEFAULT_WINDOW_HOURS),
+        MAX_WINDOW_HOURS,
+      );
+    } else {
+      windowHours = DEFAULT_WINDOW_HOURS;
+    }
+  }
+
+  const since = new Date(now.getTime() - windowHours * 3600 * 1000);
 
   let connsQuery = from(supabase, 'api4com_connections' as never)
     .select('id, org_id, user_id, ramal, base_url, api_key_encrypted, status')
@@ -187,6 +213,16 @@ export async function POST(request: Request) {
           if (!res.ok) {
             const text = await res.text();
             orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
+
+            // Auth failure: mark the connection broken so the manager gets a
+            // visible signal in the integrations UI. Without this an expired
+            // API key just makes the reconcile silently log errors forever.
+            if (res.status === 401 || res.status === 403) {
+              await from(supabase, 'api4com_connections' as never)
+                .update({ status: 'error' } as Record<string, unknown>)
+                .eq('id', conn.id);
+            }
+
             break pageLoop;
           }
 
@@ -335,6 +371,36 @@ export async function POST(request: Request) {
     }
 
     results.push(orgResult);
+  }
+
+  // Persist run state so the next invocation can compute an adaptive window
+  // and the health-check cron can spot a silently-paused worker. Only write
+  // when this isn't a dry-run — dry-runs are inspection tools, they don't
+  // count as "the worker has caught up to now".
+  if (!dryRun) {
+    const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+    const totalFetched = results.reduce((sum, r) => sum + r.fetched, 0);
+    const status: string = totalErrors === 0 ? 'success' : (totalFetched > 0 ? 'partial' : 'error');
+
+    const updates: Record<string, unknown> = {
+      job_name: JOB_NAME,
+      last_run_at: now.toISOString(),
+      last_status: status,
+      metadata: {
+        windowHours,
+        orgs: results.map((r) => ({ org_id: r.org_id, fetched: r.fetched, errors: r.errors.length })),
+      },
+    };
+    // Only bump last_success_at when no errors at all — a partial run leaves
+    // the previous success timestamp in place so adaptive windowing keeps
+    // trying to cover the gap on the next invocation.
+    if (status === 'success') {
+      updates.last_success_at = now.toISOString();
+    }
+
+    await from(supabase, 'worker_run_state' as never)
+      .upsert(updates, { onConflict: 'job_name' } as never)
+      .catch((err: unknown) => console.error('[reconcile-api4com] failed to write run state:', err));
   }
 
   return NextResponse.json({
