@@ -14,6 +14,13 @@ const MAX_WINDOW_HOURS = 24;
 // Use 100 as the expected size so the pagination loop knows when to stop.
 const EXPECTED_PAGE_SIZE = 100;
 const MAX_PAGES = 100; // 100 * 100 = 10k calls per org per window
+const PAGE_DELAY_MS = 250; // ~4 req/sec — API4COM throttles per minute
+const RATE_LIMIT_RETRY_MS = 6_000;
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // API4COM REST schema (confirmed via dry-run 2026-05-13). Snake_case fields
 // and `call_type` instead of `direction`.
@@ -139,42 +146,64 @@ export async function POST(request: Request) {
     const baseUrl = conn.base_url.replace(/\/+$/, '');
     const calls: Api4ComCall[] = [];
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    pageLoop: for (let page = 1; page <= MAX_PAGES; page++) {
       const url = new URL(`${baseUrl}/calls`);
       url.searchParams.set('started_at[gte]', since.toISOString());
       url.searchParams.set('started_at[lte]', now.toISOString());
       url.searchParams.set('page', String(page));
 
-      try {
-        const res = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: apiKey,
-          },
-          signal: AbortSignal.timeout(30_000),
-        });
+      let pageCalls: Api4ComCall[] = [];
+      let succeeded = false;
 
-        if (!res.ok) {
-          const text = await res.text();
-          orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
+      // Retry on 429 with backoff. Surfaces final failure after the cap.
+      for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+        try {
+          const res = await fetch(url.toString(), {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: apiKey,
+            },
+            signal: AbortSignal.timeout(30_000),
+          });
+
+          if (res.status === 429) {
+            if (attempt === MAX_RATE_LIMIT_RETRIES) {
+              orgResult.errors.push(`http_429 page=${page}: rate limit persisted after ${MAX_RATE_LIMIT_RETRIES} retries`);
+              break pageLoop;
+            }
+            await sleep(RATE_LIMIT_RETRY_MS * (attempt + 1));
+            continue;
+          }
+
+          if (!res.ok) {
+            const text = await res.text();
+            orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
+            break pageLoop;
+          }
+
+          const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
+          pageCalls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
+          succeeded = true;
           break;
+        } catch (err) {
+          orgResult.errors.push(`fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`);
+          break pageLoop;
         }
+      }
 
-        const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
-        const pageCalls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
+      if (!succeeded) break;
 
-        calls.push(...pageCalls);
+      calls.push(...pageCalls);
 
-        // Stop only on an empty page or one smaller than the API's default.
-        // Equal to EXPECTED_PAGE_SIZE means there's likely more.
-        if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE) {
-          break;
-        }
-      } catch (err) {
-        orgResult.errors.push(`fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`);
+      // Stop only on an empty page or one smaller than the API's default.
+      if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE) {
         break;
       }
+
+      // Throttle: stay under the per-minute call cap. Worst case 100 pages
+      // * 250ms = 25s pause total — still well within maxDuration=300s.
+      await sleep(PAGE_DELAY_MS);
     }
 
     orgResult.fetched = calls.length;
