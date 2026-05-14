@@ -590,7 +590,7 @@ export function LeadInfoPanel({
           <div className="space-y-4">
 
             {/* GERAL — contact principal */}
-            <CollapsibleSection title="Geral">
+            <CollapsibleSection title="Geral" defaultOpen={false}>
               {isEditing ? (
                 <>
                   {isFieldVisible('first_name') && (
@@ -951,7 +951,7 @@ export function LeadInfoPanel({
             {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website')) && (
             <>
             <hr className="border-t-2 border-[var(--border)]" />
-            <CollapsibleSection title="Social">
+            <CollapsibleSection title="Social" defaultOpen={false}>
               {isEditing ? (
                 <>
                   {isFieldVisible('instagram') && (
@@ -1003,7 +1003,7 @@ export function LeadInfoPanel({
             {customFieldDefs && customFieldDefs.length > 0 && (
               <>
                 <hr className="border-t-2 border-[var(--border)]" />
-                <CollapsibleSection title="Campos personalizados">
+                <CollapsibleSection title="Campos personalizados" defaultOpen={false}>
                   {hasSpicedFields && !isEditing && (
                     <Button
                       type="button"
