@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server';
 
-import { verifyServiceRole } from '@/lib/auth/verify-service-role';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 export const maxDuration = 60;
 
 /**
  * Proxy audio recordings from API4COM to bypass CORS.
- * Only allows URLs from known recording domains.
+ * Only allows URLs from known recording domains and only for calls
+ * belonging to the authenticated user's org.
  */
 export async function GET(request: Request) {
-  // Require authenticated user (session cookie)
+  let orgId: string;
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    ({ orgId } = await getAuthOrgId());
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -35,6 +33,21 @@ export async function GET(request: Request) {
     }
   } catch {
     return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+  }
+
+  // Verify URL belongs to a call of the authenticated user's org —
+  // previously any logged-in user could fetch any recording from any
+  // org if they had the URL (sales calls of other companies leak).
+  const supabase = createServiceRoleClient();
+  const { data: call } = (await from(supabase, 'calls')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('recording_url', url)
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+
+  if (!call) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Fetch audio from API4COM
