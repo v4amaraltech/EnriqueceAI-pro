@@ -324,12 +324,12 @@ export function DialerCallPanel({
               Pular
             </Button>
             {canRetry && (
-              <Button variant="secondary" onClick={handleRetry} disabled={!callStatus}>
+              <Button variant="secondary" onClick={handleRetry}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Tentar novamente
               </Button>
             )}
-            <Button onClick={handleComplete} disabled={isSending || !callStatus}>
+            <Button onClick={handleComplete} disabled={isSending}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

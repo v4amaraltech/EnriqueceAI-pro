@@ -496,9 +496,11 @@ export function ActivityPhonePanel({
                 className="min-h-[100px] resize-y"
               />
             </div>
-            {/* Schedule return toggle — visible for connected statuses */}
-            {(callStatus === 'connected' || callStatus === 'gatekeeper') && (
-              <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+            {/* Schedule return toggle. Used to gate on callStatus ===
+                'connected' | 'gatekeeper', but the manual status select was
+                removed (API4COM owns the truth now). SDR decides each call
+                whether a return needs to be scheduled. */}
+            <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">Agendar retorno</Label>
                   <Switch checked={scheduleReturn} onCheckedChange={setScheduleReturn} />
@@ -555,7 +557,6 @@ export function ActivityPhonePanel({
                   </div>
                 )}
               </div>
-            )}
           </div>
 
           <DialogFooter className="flex flex-wrap gap-2">
@@ -563,7 +564,7 @@ export function ActivityPhonePanel({
               Cancelar
             </Button>
             {canRetry && (
-              <Button variant="secondary" onClick={handleRetryAttempt} disabled={!callStatus}>
+              <Button variant="secondary" onClick={handleRetryAttempt}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Tentar novamente
               </Button>
@@ -581,18 +582,19 @@ export function ActivityPhonePanel({
                 Perdido
               </Button>
             )}
-            {(callStatus === 'connected' || callStatus === 'meeting_scheduled') && (
-              <Button
-                variant="default"
-                onClick={() => setScheduleMeetingOpen(true)}
-                disabled={isSending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <CalendarPlus className="mr-2 h-4 w-4" />
-                Agendar Reunião
-              </Button>
-            )}
-            <Button onClick={handleSubmitResult} disabled={isSending || !callStatus}>
+            {/* Agendar Reunião — always visible now. The previous gate on
+                callStatus 'connected' | 'meeting_scheduled' depended on the
+                manual select that's gone; SDR decides per call. */}
+            <Button
+              variant="default"
+              onClick={() => setScheduleMeetingOpen(true)}
+              disabled={isSending}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <CalendarPlus className="mr-2 h-4 w-4" />
+              Agendar Reunião
+            </Button>
+            <Button onClick={handleSubmitResult} disabled={isSending}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
