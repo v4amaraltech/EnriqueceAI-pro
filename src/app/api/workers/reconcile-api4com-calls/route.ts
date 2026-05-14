@@ -194,15 +194,35 @@ export async function POST(request: Request) {
 
       if (!succeeded) break;
 
-      calls.push(...pageCalls);
+      // API4COM returns calls in reverse chronological order and silently
+      // ignores started_at[gte] in production (dry-run on 2026-05-13 with
+      // windowHours=1.5 returned calls from 7+ hours earlier). Filter
+      // client-side and stop paginating once we see anything older than
+      // `since` — every subsequent page is older still.
+      const sinceMs = since.getTime();
+      const untilMs = now.getTime();
+      let sawOlderThanWindow = false;
 
-      // Stop only on an empty page or one smaller than the API's default.
-      if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE) {
+      for (const c of pageCalls) {
+        const tsStr = c.started_at;
+        if (!tsStr) continue;
+        const ts = new Date(tsStr).getTime();
+        if (Number.isNaN(ts)) continue;
+        if (ts < sinceMs) {
+          sawOlderThanWindow = true;
+          continue;
+        }
+        if (ts > untilMs) continue; // unlikely but defensive
+        calls.push(c);
+      }
+
+      // Stop on empty page, short page (true end of data), or when we've
+      // crossed past the window's lower bound.
+      if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE || sawOlderThanWindow) {
         break;
       }
 
-      // Throttle: stay under the per-minute call cap. Worst case 100 pages
-      // * 250ms = 25s pause total — still well within maxDuration=300s.
+      // Throttle: stay under the per-minute call cap.
       await sleep(PAGE_DELAY_MS);
     }
 
