@@ -14,9 +14,9 @@ const MAX_WINDOW_HOURS = 24;
 // Use 100 as the expected size so the pagination loop knows when to stop.
 const EXPECTED_PAGE_SIZE = 100;
 const MAX_PAGES = 100; // 100 * 100 = 10k calls per org per window
-const PAGE_DELAY_MS = 250; // ~4 req/sec — API4COM throttles per minute
-const RATE_LIMIT_RETRY_MS = 6_000;
-const MAX_RATE_LIMIT_RETRIES = 3;
+const PAGE_DELAY_MS = 800; // be conservative — API4COM throttles per minute
+const RATE_LIMIT_RETRY_MS = 12_000; // single retry covers a short hiccup
+const MAX_RATE_LIMIT_RETRIES = 1;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
