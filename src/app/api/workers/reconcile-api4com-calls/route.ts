@@ -99,23 +99,29 @@ export async function POST(request: Request) {
   // way if Vercel paused or pg_cron missed a few cycles, the next run
   // catches everything the gap dropped — instead of permanently leaking the
   // hours between (last_success + 1.5h) and now.
-  let windowHours: number;
+  let windowHours: number = DEFAULT_WINDOW_HOURS;
   if (body.windowHours != null) {
     windowHours = Math.min(Math.max(body.windowHours, 0.25), MAX_WINDOW_HOURS);
   } else {
-    const { data: lastRun } = (await from(supabase, 'worker_run_state' as never)
-      .select('last_success_at')
-      .eq('job_name', JOB_NAME)
-      .maybeSingle()) as { data: { last_success_at: string | null } | null };
+    // Adaptive lookup — never let it break the cron. The 2026-05-14 cron
+    // hit a 500 here ("(0 , E.from)(...)") even though the table existed;
+    // suspect a PostgREST schema-cache miss on the newly created table.
+    // Falls back to the static default if anything goes wrong.
+    try {
+      const { data: lastRun } = (await from(supabase, 'worker_run_state' as never)
+        .select('last_success_at')
+        .eq('job_name', JOB_NAME)
+        .maybeSingle()) as { data: { last_success_at: string | null } | null };
 
-    if (lastRun?.last_success_at) {
-      const hoursSinceLastSuccess = (now.getTime() - new Date(lastRun.last_success_at).getTime()) / 3_600_000;
-      windowHours = Math.min(
-        Math.max(hoursSinceLastSuccess + ADAPTIVE_OVERLAP_HOURS, DEFAULT_WINDOW_HOURS),
-        MAX_WINDOW_HOURS,
-      );
-    } else {
-      windowHours = DEFAULT_WINDOW_HOURS;
+      if (lastRun?.last_success_at) {
+        const hoursSinceLastSuccess = (now.getTime() - new Date(lastRun.last_success_at).getTime()) / 3_600_000;
+        windowHours = Math.min(
+          Math.max(hoursSinceLastSuccess + ADAPTIVE_OVERLAP_HOURS, DEFAULT_WINDOW_HOURS),
+          MAX_WINDOW_HOURS,
+        );
+      }
+    } catch (err) {
+      console.warn('[reconcile-api4com] adaptive window lookup failed, using default:', err);
     }
   }
 
@@ -398,9 +404,12 @@ export async function POST(request: Request) {
       updates.last_success_at = now.toISOString();
     }
 
-    await from(supabase, 'worker_run_state' as never)
-      .upsert(updates, { onConflict: 'job_name' } as never)
-      .catch((err: unknown) => console.error('[reconcile-api4com] failed to write run state:', err));
+    try {
+      await from(supabase, 'worker_run_state' as never)
+        .upsert(updates, { onConflict: 'job_name' } as never);
+    } catch (err) {
+      console.warn('[reconcile-api4com] failed to write run state:', err);
+    }
   }
 
   return NextResponse.json({
