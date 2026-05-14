@@ -846,7 +846,7 @@ export function LeadInfoPanel({
               ) : (
                 allEmails.map((em, i) => (
                   <div key={`email-${i}`} className="flex gap-2">
-                    <div className="w-20 shrink-0 space-y-1">
+                    <div className="w-28 shrink-0 space-y-1">
                       <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
                       <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
                         {em.tipo}
@@ -925,7 +925,7 @@ export function LeadInfoPanel({
               ) : (
                 allPhones.map((phone, i) => (
                   <div key={`phone-${i}`} className="flex gap-2">
-                    <div className="w-20 shrink-0 space-y-1">
+                    <div className="w-28 shrink-0 space-y-1">
                       <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
                       <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
                         {phone.tipo}
