@@ -142,19 +142,28 @@ export async function createMeetingWhatsAppGroup(
     }
 
     // 5. Set group profile picture (V4 logo)
+    //
+    // Evolution API spec (doc.evolution-api.com): POST, groupJid is a query
+    // parameter, only `image` goes in the JSON body. The previous version
+    // used PUT, put groupJid in the body, and ignored response.ok — so every
+    // call returned (probably 404/405) without ever applying the picture and
+    // without logging anything, since fetch only throws on network errors.
     try {
       const appUrl = getAppUrl();
-      await fetch(
-        `${baseUrl}/group/updateGroupPicture/${sdrInstance.instance_name}`,
+      const picRes = await fetch(
+        `${baseUrl}/group/updateGroupPicture/${sdrInstance.instance_name}?groupJid=${encodeURIComponent(groupId)}`,
         {
-          method: 'PUT',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey: apiKey },
           body: JSON.stringify({
-            groupJid: groupId,
             image: `${appUrl}/logos/v4-group-cover.jpeg`,
           }),
         },
       );
+      if (!picRes.ok) {
+        const errText = await picRes.text().catch(() => '');
+        console.warn(`[whatsapp-group] updateGroupPicture failed: ${picRes.status} ${errText.slice(0, 200)}`);
+      }
     } catch (picErr) {
       console.warn('[whatsapp-group] Failed to set group picture:', picErr);
     }
