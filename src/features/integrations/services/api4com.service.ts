@@ -100,6 +100,13 @@ export async function originateCall(
     metadata: metadata ?? {},
   });
 
+  // Diagnostic log to confirm response shape. Webhook payload.id never matches
+  // the .id stored in calls.metadata.api4com_call_id — suspect /dialer returns
+  // a request_id but webhook fires with channel_id. Logging the full response
+  // so we can see if API4COM returns an additional channelId/callId field we
+  // are currently ignoring via the narrow Api4ComOriginateResponse type.
+  console.warn('[api4com][originate-response]', JSON.stringify(data));
+
   return { data, ramal: creds.ramal };
 }
 
