@@ -293,9 +293,47 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
   // Most robust: find the first { and last } in the entire response
   const firstBrace = text.indexOf('{');
   const lastBrace = text.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace <= firstBrace) {
+
+  if (firstBrace === -1) {
     throw new Error(`claude_response_no_json: ${text.substring(0, 200)}`);
   }
+
+  // Claude sometimes hits max_tokens mid-response, so the closing brace never
+  // arrives. Recover by closing any unterminated string and matching open
+  // braces with synthetic close braces from where the truncation happened.
+  if (lastBrace <= firstBrace) {
+    const head = text.substring(firstBrace);
+    let inString = false;
+    let escape = false;
+    let depth = 0;
+    for (const ch of head) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+    }
+    if (depth <= 0) {
+      throw new Error(`claude_response_no_json: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
+    }
+    const repaired = head + (inString ? '"' : '') + '}'.repeat(depth);
+    try {
+      return JSON.parse(repaired) as Record<string, string>;
+    } catch {
+      // fall through to the regular escape-then-parse path below
+      // using the repaired buffer
+      const escaped = repaired.replace(/"([^"]*?)"/g, (_match, value: string) =>
+        `"${value.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`,
+      );
+      try {
+        return JSON.parse(escaped) as Record<string, string>;
+      } catch {
+        throw new Error(`claude_response_parse_failed_truncated: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
+      }
+    }
+  }
+
   let cleaned = text.substring(firstBrace, lastBrace + 1);
 
   try {
@@ -310,7 +348,7 @@ async function callClaudeForSpiced(prompt: string): Promise<Record<string, strin
     try {
       return JSON.parse(cleaned) as Record<string, string>;
     } catch {
-      throw new Error(`claude_response_parse_failed: ${text.substring(0, 200)}`);
+      throw new Error(`claude_response_parse_failed: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
     }
   }
 }
