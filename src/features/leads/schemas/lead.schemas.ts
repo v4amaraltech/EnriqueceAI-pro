@@ -40,6 +40,7 @@ export const CANAL_OPTIONS = [
   'Indicação',
   'Recomendação',
   'Reativação',
+  'Recovery',
   'Recuperação',
   'Prospecção Fria',
   'Facebook',
