@@ -13,6 +13,7 @@ import {
 } from '@/lib/webhooks';
 
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import type { CallStatus } from '@/features/calls/types';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
 import { computeCallCostBrl } from '@/features/calls/services/call-cost';
@@ -61,7 +62,18 @@ async function findMatchingCall(
 
   if (call) return call;
 
-  // Fallback: try matching by caller (ramal) + called (phone) within last 2 hours
+  // Fallback: match by caller (ramal) + called (phone) within last 2 hours.
+  //
+  // Important: only candidates that have NOT already been linked to a
+  // previous webhook event. Without this filter, every retry to the
+  // same number within 2h collapses onto the first row in the DB —
+  // the channel_id gets overwritten on each event and subsequent
+  // dialer-created rows for that number stay forever unmatched
+  // (we lost 12 calls on 2026-05-14 V4 Amaral this way).
+  //
+  // Order ASC so the oldest unlinked dialer row wins (first-come,
+  // first-served). The webhook_linked marker is set inside the same
+  // update below so concurrent webhooks fight over different rows.
   const calledNormalized = body.called.replace(/\D/g, '');
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: fallbackCall } = (await from(supabase, 'calls')
@@ -69,15 +81,23 @@ async function findMatchingCall(
     .eq('origin', body.caller)
     .like('destination', `%${calledNormalized.slice(-8)}`)
     .gte('created_at', twoHoursAgo)
-    .order('created_at', { ascending: false })
+    .is('metadata->>webhook_linked', null)
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()) as { data: MatchedCall | null };
 
-  // Persist api4com_call_id so future events match by ID
+  // Persist api4com_call_id + webhook_linked so future events match
+  // by ID and so concurrent retries pick the next available row.
   if (fallbackCall) {
     const existingMeta = (fallbackCall.metadata ?? {}) as Record<string, unknown>;
     await from(supabase, 'calls')
-      .update({ metadata: { ...existingMeta, api4com_call_id: body.id } })
+      .update({
+        metadata: {
+          ...existingMeta,
+          api4com_call_id: body.id,
+          webhook_linked: true,
+        },
+      })
       .eq('id', fallbackCall.id);
     logger.info('Saved api4com_call_id via fallback match', { callId: fallbackCall.id, api4comId: body.id });
   }
@@ -119,13 +139,13 @@ async function createCallFromWebhook(
       lead_id: leadId,
       origin: body.caller,
       destination: body.called,
-      started_at: body.startedAt || new Date().toISOString(),
+      started_at: parseApi4ComTimestamp(body.startedAt)?.toISOString() ?? new Date().toISOString(),
       duration_seconds: initialDuration,
       cost: computeCallCostBrl(initialDuration, body.called),
       status: 'not_connected',
       type: isOutbound ? 'outbound' : 'inbound',
       recording_url: body.recordUrl || null,
-      metadata: { api4com_call_id: body.id, source: 'external_api4com' },
+      metadata: { api4com_call_id: body.id, source: 'external_api4com', webhook_linked: true },
     })
     .select('id')
     .single()) as { data: { id: string } | null };
@@ -192,8 +212,9 @@ async function processApi4ComEvent(
     if (body.recordUrl && !call.recording_url) {
       updates.recording_url = body.recordUrl;
     }
-    if (body.startedAt) {
-      updates.started_at = body.startedAt;
+    const startedIso = parseApi4ComTimestamp(body.startedAt)?.toISOString();
+    if (startedIso) {
+      updates.started_at = startedIso;
     }
     if (Object.keys(updates).length > 0) {
       await from(supabase, 'calls').update(updates).eq('id', call.id);
@@ -319,9 +340,11 @@ async function updateCallFromWebhook(
     updates.recording_url = payload.recordUrl;
   }
 
-  // Set started_at from webhook if available
-  if (payload.startedAt) {
-    updates.started_at = payload.startedAt;
+  // Set started_at from webhook if available — parseApi4ComTimestamp
+  // converts the BRT-without-timezone shape to real UTC.
+  const startedAtUtc = parseApi4ComTimestamp(payload.startedAt)?.toISOString();
+  if (startedAtUtc) {
+    updates.started_at = startedAtUtc;
   }
 
   // Status decision tree — only override if SDR hasn't manually set it
