@@ -40,10 +40,27 @@ export async function findLeadByPhone(
 
   let leadId: string | null = directMatch?.id ?? null;
 
+  const phoneSuffix = normalized.slice(-8);
+
+  // Search leads.phones JSONB (where Apollo/Lemit enrichment stores extra
+  // numbers). external-call.service already searches this — find-lead-by-phone
+  // was the user-facing dialer path and was ignoring it, so calls placed to
+  // any number that only lived in phones got registered without a lead_id.
+  if (!leadId) {
+    const { data: phonesMatch } = (await from(supabase, 'leads')
+      .select('id')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .like('phones::text' as never, `%${phoneSuffix}%` as never)
+      .limit(1)
+      .maybeSingle()) as { data: { id: string } | null };
+
+    leadId = phonesMatch?.id ?? null;
+  }
+
   // If no direct match, search in socios JSONB celulares using text cast
   // socios is JSONB array with celulares sub-array containing {ddd, numero, ...}
   if (!leadId) {
-    const phoneSuffix = normalized.slice(-8);
     const { data: socioMatch } = (await from(supabase, 'leads')
       .select('id')
       .eq('org_id', orgId)
