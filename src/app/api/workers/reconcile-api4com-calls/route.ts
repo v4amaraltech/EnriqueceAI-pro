@@ -320,14 +320,42 @@ export async function POST(request: Request) {
       }
 
       try {
-        const { data: existing } = (await from(supabase, 'calls')
-          .select('id, status, duration_seconds, recording_url, started_at')
+        // 1) Try exact id match
+        let { data: existing } = (await from(supabase, 'calls')
+          .select('id, status, duration_seconds, recording_url, started_at, metadata')
           .eq('org_id', orgId)
           .filter('metadata->>api4com_call_id', 'eq', api4comId)
           .limit(1)
           .maybeSingle()) as {
-          data: { id: string; status: string; duration_seconds: number; recording_url: string | null; started_at: string | null } | null;
+          data: { id: string; status: string; duration_seconds: number; recording_url: string | null; started_at: string | null; metadata: Record<string, unknown> | null } | null;
         };
+
+        // 2) Fallback: origin (ramal) + destination suffix + started_at ±5min.
+        // POST /dialer returns one id and GET /calls returns another, so
+        // calls placed via the in-app dialer never match by id. Without this
+        // fallback, every dialer-created call gets a duplicate inserted on
+        // every reconcile run (saw 38 duplicates for Rafael's ramal 1040
+        // alone today before fixing).
+        if (!existing && c.from && c.to && c.started_at) {
+          const destDigits = c.to.replace(/\D/g, '');
+          const suffix = destDigits.slice(-8);
+          const startedMs = Date.parse(c.started_at);
+          const lo = new Date(startedMs - 5 * 60 * 1000).toISOString();
+          const hi = new Date(startedMs + 5 * 60 * 1000).toISOString();
+          const { data: fallback } = (await from(supabase, 'calls')
+            .select('id, status, duration_seconds, recording_url, started_at, metadata')
+            .eq('org_id', orgId)
+            .eq('origin', c.from)
+            .like('destination', `%${suffix}`)
+            .gte('started_at', lo)
+            .lte('started_at', hi)
+            .order('started_at', { ascending: true })
+            .limit(1)
+            .maybeSingle()) as {
+            data: { id: string; status: string; duration_seconds: number; recording_url: string | null; started_at: string | null; metadata: Record<string, unknown> | null } | null;
+          };
+          existing = fallback;
+        }
 
         const duration = Number(c.duration) || 0;
         const isOutbound = c.call_type !== 'inbound';
@@ -342,6 +370,15 @@ export async function POST(request: Request) {
           if (existing.duration_seconds === 0 && duration > 0) updates.duration_seconds = duration;
           if (!existing.started_at && c.started_at) updates.started_at = c.started_at;
           if (existing.status === 'not_connected' && duration > 0) updates.status = derivedStatus;
+
+          // When we got here via the fallback path the row still carries the
+          // dialer's request_id in api4com_call_id. Overwrite it with the
+          // channel_id so future id-keyed lookups (recording recovery, the
+          // next reconcile run) hit immediately.
+          const existingMeta = (existing.metadata ?? {}) as Record<string, unknown>;
+          if (existingMeta.api4com_call_id !== api4comId) {
+            updates.metadata = { ...existingMeta, api4com_call_id: api4comId, webhook_linked: true };
+          }
 
           if (Object.keys(updates).length > 1) {
             await from(supabase, 'calls').update(updates).eq('id', existing.id);
