@@ -5,6 +5,7 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 300;
 
@@ -253,27 +254,19 @@ export async function POST(request: Request) {
       const untilMs = now.getTime();
       let sawOlderThanWindow = false;
 
-      // API4COM stamps started_at in São Paulo local time but suffixes the
-      // ISO string with `Z`, so JS parses it as UTC and the value lands 3h
-      // earlier than reality. Compensate before windowing. Discovered while
-      // diagnosing why the cron's metadata.fetched was always 0 — every row
-      // looked "older than the window" because of this 3h drift.
-      const TZ_OFFSET_MS = 3 * 60 * 60 * 1000;
-
       for (const c of pageCalls) {
-        const tsStr = c.started_at;
-        if (!tsStr) continue;
-        const tsRaw = new Date(tsStr).getTime();
-        if (Number.isNaN(tsRaw)) continue;
-        const ts = tsRaw + TZ_OFFSET_MS;
+        // parseApi4ComTimestamp handles API4COM's BRT-disguised-as-Z stamps.
+        const realDate = parseApi4ComTimestamp(c.started_at);
+        if (!realDate) continue;
+        const ts = realDate.getTime();
         if (ts < sinceMs) {
           sawOlderThanWindow = true;
           continue;
         }
-        if (ts > untilMs) continue; // unlikely but defensive
+        if (ts > untilMs) continue;
         // Normalize started_at to the real UTC representation before any
         // downstream comparison/insert.
-        c.started_at = new Date(ts).toISOString();
+        c.started_at = realDate.toISOString();
         calls.push(c);
       }
 

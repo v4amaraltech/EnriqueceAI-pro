@@ -4,6 +4,7 @@ import { from } from '@/lib/supabase/from';
 import { decrypt } from '@/lib/security/encryption';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 interface CallForRecovery {
   id: string;
@@ -87,7 +88,8 @@ export async function lookupRecordingFromApi4Com(
         const phoneMatch = phoneKey === destKey || (originKey.length >= 3 && fromKey.endsWith(originKey));
 
         if (phoneMatch) {
-          const remoteTime = new Date(record.started_at).getTime();
+          const remoteDate = parseApi4ComTimestamp(record.started_at);
+          const remoteTime = remoteDate ? remoteDate.getTime() : NaN;
           const timeDiff = Math.abs(remoteTime - localTime);
           const durationMatch = record.duration > 0 && call.duration_seconds > 0
             ? Math.abs(record.duration - call.duration_seconds) / Math.max(record.duration, call.duration_seconds) < 0.3

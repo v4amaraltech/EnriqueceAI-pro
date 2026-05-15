@@ -4,6 +4,7 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 300;
 
@@ -131,11 +132,12 @@ async function handle(request: Request) {
     if (alreadyLinked) continue;
 
     // Match window: started_at ±5 min, origin=caller, destination ends
-    // with last 8 digits of called
+    // with last 8 digits of called. parseApi4ComTimestamp handles the
+    // BRT-without-timezone shape API4COM puts in webhook payloads.
     const calledDigits = p.called.replace(/\D/g, '');
     const suffix = calledDigits.slice(-8);
-    const startedAt = new Date(p.startedAt);
-    if (Number.isNaN(startedAt.getTime())) {
+    const startedAt = parseApi4ComTimestamp(p.startedAt);
+    if (!startedAt) {
       totalUnmatched++;
       continue;
     }

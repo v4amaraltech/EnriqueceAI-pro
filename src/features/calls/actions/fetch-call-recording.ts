@@ -9,6 +9,7 @@ import { decrypt } from '@/lib/security/encryption';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const callIdSchema = z.string().uuid('ID inválido');
@@ -121,7 +122,8 @@ export async function fetchCallRecording(
         const phoneMatch = phoneKey === destKey || (originKey.length >= 3 && fromKey.endsWith(originKey));
 
         if (phoneMatch) {
-          const remoteTime = new Date(record.started_at).getTime();
+          const remoteDate = parseApi4ComTimestamp(record.started_at);
+          const remoteTime = remoteDate ? remoteDate.getTime() : NaN;
           const localTime = new Date(call.started_at ?? call.created_at).getTime();
           const timeDiff = Math.abs(remoteTime - localTime);
           // Duration must be within 30% tolerance to avoid mismatches
