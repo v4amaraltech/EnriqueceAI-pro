@@ -163,25 +163,56 @@ export async function listCalls(
   return api4comFetch<Api4ComCallListResponse>(creds, 'GET', `/calls?${params.toString()}`);
 }
 
+interface Api4ComIntegration {
+  id: number;
+  gateway: string;
+  webhook: boolean;
+  webhookConstraint: unknown;
+  metadata: Record<string, unknown> | null;
+}
+
 /**
- * Register a webhook URL on API4COM to receive call events.
+ * Enable the webhook on the user's existing API4COM integration.
+ *
+ * API4COM creates one integration per credential at signup, tied to a
+ * gateway that depends on the CRM the customer integrates with (we
+ * observed `amocrm`, `salesforce`, `sippulse`, `enriqueceai`). The old
+ * code tried to create a brand-new integration with `gateway:
+ * flux-{orgId}` — that gateway does not exist, the API returned 500,
+ * and the webhook config never landed. Net effect: any ramal we
+ * connected after 2026-04 had zero channel-hangup events delivered.
+ *
+ * Fix: GET /integrations to learn the actual integration id + gateway,
+ * then PATCH that record with `id` set (the API requires the id;
+ * without it returns 422 "User integration already exists").
+ *
+ * The `gateway` parameter is kept in the signature for backwards
+ * compatibility but no longer used — the real gateway comes from the
+ * GET response so we don't fight whatever the customer's CRM picked.
  */
 export async function registerWebhook(
   userId: string,
   webhookUrl: string,
-  gateway: string,
+  _gateway: string,
 ): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
+  const integrations = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
+  if (!Array.isArray(integrations) || integrations.length === 0) {
+    throw new Error('Integração API4COM não encontrada para este usuário');
+  }
+  const integration = integrations[0]!;
+
   await api4comFetch(creds, 'PATCH', '/integrations', {
-    gateway,
+    id: integration.id,
     webhook: true,
-    webhookConstraint: { gateway },
+    webhookConstraint: { metadata: { gateway: integration.gateway } },
     metadata: {
+      ...(integration.metadata ?? {}),
       webhookUrl,
-      webhookVersion: '1.8',
-      webhookTypes: ['channel-hangup'],
+      webhookVersion: 'v1.4',
+      webhookTypes: ['channel-hangup', 'channel-answer'],
     },
   });
 }

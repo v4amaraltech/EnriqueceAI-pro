@@ -33,20 +33,40 @@ export async function POST(request: Request) {
   // Parallelize webhook registration across all connections
   const results = await Promise.all(
     connections.map(async (conn) => {
-      const gateway = `flux-${conn.org_id}`;
       try {
         const apiKey = decrypt(conn.api_key_encrypted);
+        const reqUrl = `${conn.base_url.replace(/\/+$/, '')}/integrations`;
+
+        // 1. GET existing integration to learn id + actual gateway
+        const getRes = await fetch(reqUrl, {
+          headers: { Authorization: apiKey },
+        });
+        if (!getRes.ok) {
+          const text = await getRes.text();
+          return { userId: conn.user_id, success: false, error: `GET ${getRes.status}: ${text}` };
+        }
+        const integrations = (await getRes.json()) as Array<{
+          id: number;
+          gateway: string;
+          metadata: Record<string, unknown> | null;
+        }>;
+        if (!Array.isArray(integrations) || integrations.length === 0) {
+          return { userId: conn.user_id, success: false, error: 'no integration found' };
+        }
+        const integration = integrations[0]!;
+
+        // 2. PATCH with id + preserve existing metadata + enable webhook
         const reqBody = {
-          gateway,
+          id: integration.id,
           webhook: true,
-          webhookConstraint: { gateway },
+          webhookConstraint: { metadata: { gateway: integration.gateway } },
           metadata: {
+            ...(integration.metadata ?? {}),
             webhookUrl,
-            webhookVersion: '1.8',
-            webhookTypes: ['channel-hangup'],
+            webhookVersion: 'v1.4',
+            webhookTypes: ['channel-hangup', 'channel-answer'],
           },
         };
-        const reqUrl = `${conn.base_url.replace(/\/+$/, '')}/integrations`;
         const response = await fetch(reqUrl, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: apiKey },
@@ -55,7 +75,7 @@ export async function POST(request: Request) {
 
         if (!response.ok) {
           const text = await response.text();
-          return { userId: conn.user_id, success: false, error: `${response.status}: ${text}` };
+          return { userId: conn.user_id, success: false, error: `PATCH ${response.status}: ${text}` };
         }
         return { userId: conn.user_id, success: true };
       } catch (err) {
