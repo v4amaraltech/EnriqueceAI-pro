@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
+import { useCallback, useRef, useState, useTransition } from 'react';
 
 import { Pause, Phone, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,6 +40,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   const [isActive, setIsActive] = useState(false);
   const [itemStatuses, setItemStatuses] = useState<Map<string, DialerItemStatus>>(new Map());
   const [isPending, startTransition] = useTransition();
+  // Synchronous guard against double-clicks (see ActivityPhonePanel.tsx).
+  const inFlightRef = useRef(false);
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
@@ -112,6 +114,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   function handleInitiateCall(phone?: string) {
     const phoneToCall = phone ?? currentItem?.phone;
     if (!phoneToCall) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
     startTransition(async () => {
       setCallState('calling');
@@ -129,12 +133,14 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           toast.error(result.error);
         }
         setCallState('idle');
+        inFlightRef.current = false;
         return;
       }
 
       setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
+      inFlightRef.current = false;
     });
   }
 

@@ -106,6 +106,12 @@ export function ActivityPhonePanel({
   const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Synchronous guard against double-clicks. useTransition's isPending only
+  // flips on the next render, so two clicks fired before React reconciles
+  // (~16ms apart) both pass disabled={isPending}=false. Rafael's ramal alone
+  // produced 45 phantom duplicates this way in 7 days — calls separated by
+  // <5s with both supposedly answered, which is physically impossible.
+  const inFlightRef = useRef(false);
   const [attempts, setAttempts] = useState<CallAttempt[]>([]);
   const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
 
@@ -126,6 +132,8 @@ export function ActivityPhonePanel({
 
   function handleInitiateCall() {
     if (!selectedPhone) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
     setElapsed(0);
     startTransition(async () => {
@@ -143,12 +151,14 @@ export function ActivityPhonePanel({
         console.error('[ActivityPhonePanel] initiateCall failed:', result.error);
         toast.error(errorMsg, { duration: 8000 });
         setCallState('idle');
+        inFlightRef.current = false;
         return;
       }
 
       setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
+      inFlightRef.current = false;
 
       // Notify the webphone about the call context for classification
       window.dispatchEvent(

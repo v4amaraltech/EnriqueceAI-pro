@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -86,6 +86,10 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  // Synchronous guard: setIsCalling only flips on next render, so a fast
+  // double-click slips both calls through and the API4COM ends up with two
+  // identical originate requests in <5s.
+  const inFlightRef = useRef(false);
 
 
   // Won dialog state
@@ -144,6 +148,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       toast.error('Lead não possui telefone cadastrado');
       return;
     }
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsCalling(true);
     try {
       const providerResult = await getDialerProvider();
@@ -165,6 +171,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       toast.error('Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
     } finally {
       setIsCalling(false);
+      inFlightRef.current = false;
     }
   }, [lead.id, lead.telefone, lead.phones]);
 
