@@ -156,8 +156,8 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
       {hasHtml ? (
         <>
           <div
-            className={`mt-1 overflow-hidden text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-all ${
-              expanded ? 'max-h-[800px]' : 'max-h-28'
+            className={`mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] transition-all ${
+              expanded ? '' : 'max-h-28 overflow-hidden'
             }`}
           >
             <div
