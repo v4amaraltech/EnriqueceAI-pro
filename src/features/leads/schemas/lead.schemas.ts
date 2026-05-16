@@ -33,29 +33,13 @@ export const leadAddressSchema = z.object({
   cep: z.string().optional(),
 });
 
-// Sub-origem options — what specific channel/method the lead came from
-export const CANAL_OPTIONS = [
-  'Apollo',
-  'LDR Autonomo IA',
-  'Indicação',
-  'Recomendação',
-  'Reativação',
-  'Recovery',
-  'Recuperação',
-  'Prospecção Fria',
-  'Facebook',
-  'Google',
-  'Instagram',
-  'Orgânico',
-  'TikTok',
-  'LinkedIn',
-  'Bing',
-  'Landing Page Indicação',
-  'Closer',
-  'Lavras',
-  'Planning',
-  'Torres',
-] as const;
+// Sub-origem (canal) options now live as a single source of truth in
+// STANDARD_FIELDS (features/settings-prospecting/constants/standard-fields.ts)
+// and are resolved per-org via getCanalOptions (features/leads/utils/canal-options.ts).
+// The previous CANAL_OPTIONS hardcoded list drifted out of sync with both
+// the seed defaults and per-org standard_field_settings.options, so the
+// CreateLeadDialog and LeadInfoPanel showed different lists to the same
+// user. Removed 2026-05-16.
 
 // Origem options — high-level lead source category (only 3 real origins)
 export const LEAD_SOURCE_OPTIONS = [

@@ -19,7 +19,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
-import { CANAL_OPTIONS } from '@/features/leads/schemas/lead.schemas';
+import { getCanalOptions } from '@/features/leads/utils/canal-options';
+
+// Filter dropdown for the chart — uses the seed defaults to keep the
+// dashboard a single-fetch client component. Customizations made by the
+// org in Settings → Campos still show in the data itself; the filter
+// just doesn't surface org-specific values yet. If/when a manager asks
+// for that, pass standardFieldSettings down from DashboardView.
+const CANAL_FILTER_OPTIONS = getCanalOptions(null);
 
 import { getInsightsData } from '../actions/get-insights-data';
 import type { ConversionByOriginEntry, DashboardFilters } from '../types';
@@ -133,7 +140,7 @@ export function ConversionByOriginChart({ data: initialData, filters }: Conversi
             Limpar seleção
           </button>
           <div className="my-1 border-t border-[var(--border)]" />
-          {CANAL_OPTIONS.map((canal) => (
+          {CANAL_FILTER_OPTIONS.map((canal) => (
             <label key={canal} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--accent)]">
               <input
                 type="checkbox"

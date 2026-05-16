@@ -39,7 +39,8 @@ import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
+import { LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
+import { getCanalOptions } from '../utils/canal-options';
 import type { LeadPhone, LeadEmail } from '../types';
 import { updateLead } from '../actions/update-lead';
 
@@ -683,7 +684,7 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          {(standardFieldSettings?.find((s) => s.field_key === 'canal')?.options ?? CANAL_OPTIONS).map((c) => (
+                          {getCanalOptions(standardFieldSettings).map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>

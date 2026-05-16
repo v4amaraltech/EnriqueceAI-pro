@@ -28,7 +28,8 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { CANAL_OPTIONS, LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { getCanalOptions } from '../utils/canal-options';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
@@ -71,7 +72,11 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   // Data loading states
   const [members, setMembers] = useState<OrgMemberOption[]>([]);
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
-  const [canalOptions, setCanalOptions] = useState<string[]>([...CANAL_OPTIONS]);
+  // Seed with STANDARD_FIELDS defaults (via the shared helper); the async
+  // load below replaces this with the org's standard_field_settings.options
+  // when those exist. Both code paths flow through getCanalOptions so the
+  // CreateLeadDialog and LeadInfoPanel can never drift apart again.
+  const [canalOptions, setCanalOptions] = useState<string[]>(() => getCanalOptions(null));
   const [jobTitleOptions, setJobTitleOptions] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [cadenceSearch, setCadenceSearch] = useState('');
@@ -94,10 +99,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
         if (membersResult.success) setMembers(membersResult.data);
         if (cadencesResult.success) setCadences(cadencesResult.data);
         if (settingsResult.success) {
-          const canalSetting = settingsResult.data.find((s) => s.field_key === 'canal');
-          if (canalSetting?.options?.length) {
-            setCanalOptions(canalSetting.options);
-          }
+          setCanalOptions(getCanalOptions(settingsResult.data));
         }
         setJobTitleOptions(jobTitlesResult.map((o) => o.value));
         setLoaded(true);
