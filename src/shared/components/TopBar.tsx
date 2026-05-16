@@ -87,7 +87,6 @@ export const navSections: NavSection[] = [
       { label: 'Prospecção', href: '/statistics/prospecting', icon: TrendingUp },
       { label: 'Conversão', href: '/statistics/conversion', icon: TrendingUp },
       { label: 'Feedback de Oportunidade', href: '/statistics/feedback', icon: MessageSquare },
-      { label: 'Equipe', href: '/statistics/team', icon: Users },
     ],
   },
 ];

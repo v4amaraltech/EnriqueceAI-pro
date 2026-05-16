@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Activity, ArrowRight, BarChart3, Phone, Users } from 'lucide-react';
+import { Activity, ArrowRight, BarChart3, Phone } from 'lucide-react';
 
 import { fetchStatisticsData } from '@/features/reports/actions/fetch-statistics';
 import { StatisticsView } from '@/features/reports/components/StatisticsView';
@@ -32,12 +32,6 @@ const statisticsPages = [
     description: 'Feedbacks dos closers sobre oportunidades enviadas.',
     href: '/statistics/feedback',
     icon: BarChart3,
-  },
-  {
-    title: 'Equipe',
-    description: 'Comparativo de performance e metas dos SDRs.',
-    href: '/statistics/team',
-    icon: Users,
   },
 ];
 
