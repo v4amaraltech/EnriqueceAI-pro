@@ -117,7 +117,6 @@ export function ActivityPhonePanel({
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
-  const hasMultiplePhones = phones.length > 1;
   const hasAnyPhone = selectedPhone !== '';
 
   // Timer for call duration

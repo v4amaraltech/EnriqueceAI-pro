@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle } from 'lucide-react';
@@ -16,6 +16,7 @@ export default function AppError({
   reset: () => void;
 }) {
   const [isReloading, setIsReloading] = useState(false);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     const isChunkError = CHUNK_ERROR_PATTERN.test(error.message);
@@ -24,13 +25,13 @@ export default function AppError({
       // prevents a reload loop if the second attempt still can't find the
       // chunk (network down, CDN failing, etc).
       sessionStorage.setItem(RELOAD_FLAG_KEY, '1');
-      setIsReloading(true);
+      startTransition(() => setIsReloading(true));
       const id = window.setTimeout(() => window.location.reload(), 1200);
       return () => window.clearTimeout(id);
     }
     Sentry.captureException(error);
     return undefined;
-  }, [error]);
+  }, [error, startTransition]);
 
   if (isReloading) {
     return (

@@ -27,11 +27,6 @@ interface SentInteraction {
   performed_by: string | null;
 }
 
-interface CadenceCreator {
-  id: string;
-  created_by: string;
-}
-
 /**
  * Checks Gmail threads for replies to sent email interactions.
  * Runs via cron — uses service role (no cookies).

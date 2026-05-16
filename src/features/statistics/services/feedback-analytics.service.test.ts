@@ -31,8 +31,6 @@ function createMockSupabase(feedbacks: unknown[] = [], closers: unknown[] = [], 
   return { client: { from } as unknown as Parameters<typeof fetchFeedbackAnalyticsData>[0], from, chains };
 }
 
-const NOW = new Date('2026-04-23T12:00:00Z');
-
 describe('fetchFeedbackAnalyticsData', () => {
   it('returns empty data when no feedbacks', async () => {
     const { client } = createMockSupabase();

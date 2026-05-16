@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { CheckCircle2, Info, Rocket, Trophy } from 'lucide-react';
+import { CheckCircle2, Info, Trophy } from 'lucide-react';
 
 import { StartProspectingDialog } from './StartProspectingDialog';
 

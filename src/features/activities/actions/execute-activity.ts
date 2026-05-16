@@ -60,7 +60,7 @@ export async function executeActivity(
     stepId,
     leadId,
     orgId,
-    cadenceCreatedBy,
+    cadenceCreatedBy: _cadenceCreatedBy,
     channel,
     to,
     subject,

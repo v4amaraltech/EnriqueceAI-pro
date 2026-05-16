@@ -104,7 +104,7 @@ export function ScheduleMeetingModal({
   editData,
   inline = false,
   defaultTitle,
-  defaultDescription,
+  defaultDescription: _defaultDescription,
   onScheduled,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();

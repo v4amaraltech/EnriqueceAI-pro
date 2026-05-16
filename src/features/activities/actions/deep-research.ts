@@ -42,7 +42,6 @@ export async function deepResearchLead(
     }
 
     const raw = await response.text();
-    console.log('[deep-research] Raw response (first 500 chars):', raw.slice(0, 500));
 
     let data: unknown;
     try {

@@ -24,8 +24,6 @@ export async function buildMemberInfoMap(
 
   if (!rawMembers?.length) return new Map();
 
-  const memberIdSet = new Set(rawMembers.map((m) => m.user_id));
-
   // Resolve each member individually via auth.admin.getUserById
   // (listUsers fails with "Database error finding users" on this project)
   try {

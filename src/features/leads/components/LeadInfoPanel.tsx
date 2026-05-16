@@ -410,7 +410,7 @@ export function LeadInfoPanel({
         toast.error(result.error);
       }
     });
-  }, [data.id, editFields, editCustomFieldValues, phoneEntries, emailEntries]);
+  }, [data.id, data.emails, editFields, editCustomFieldValues, phoneEntries, emailEntries]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({

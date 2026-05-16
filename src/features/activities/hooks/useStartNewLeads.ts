@@ -93,12 +93,14 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
       });
     }
     if (!open) {
-      setLoaded(false);
-      setCadences([]);
-      setSelectedIds(new Set());
-      setQuantity(10);
-      setTotalAvailable(0);
-      setAvailableLeadIds([]);
+      startTransition(() => {
+        setLoaded(false);
+        setCadences([]);
+        setSelectedIds(new Set());
+        setQuantity(10);
+        setTotalAvailable(0);
+        setAvailableLeadIds([]);
+      });
     }
   }, [open, loaded]);
 

@@ -175,7 +175,7 @@ async function ensureValidToken(connection: CalendarConnectionTokens): Promise<s
                 status: 'connected',
               } as Record<string, unknown>)
               .eq('id', connection.id);
-            console.log('[gcal] Recovered token via gmail_connections sync');
+            console.warn('[gcal] Recovered token via gmail_connections sync');
             return recoveredTokens.access_token;
           }
         } catch (e) {
