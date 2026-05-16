@@ -78,9 +78,27 @@ export async function fetchConversionAnalyticsData(
     touchedLeads = rawTouched ?? [];
   }
 
+  // Status-transition leads: ganhos/perdidos/reuniões realizadas no período.
+  // Sem este passo perdemos leads que o closer fecha sem nenhum 'sent' nem
+  // criação no período (ex.: fechamento via WhatsApp fora do app).
+  const transitionLeads: LeadQueryRow[] = [];
+  const transitionDateCols = ['won_at', 'lost_at', 'meeting_held_at'] as const;
+  for (const col of transitionDateCols) {
+    let q = from(supabase, 'leads')
+      .select('id, status, created_at, created_by')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .gte(col, periodStart)
+      .lte(col, periodEnd);
+    if (userIds && userIds.length > 0) q = q.in('created_by', userIds);
+    const { data } = (await q.limit(5000)) as { data: LeadQueryRow[] | null };
+    if (data) transitionLeads.push(...data);
+  }
+
   const leadsMap = new Map<string, LeadQueryRow>();
   for (const l of periodLeads) leadsMap.set(l.id, l);
   for (const l of touchedLeads) leadsMap.set(l.id, l);
+  for (const l of transitionLeads) leadsMap.set(l.id, l);
   const leads = Array.from(leadsMap.values());
 
   // Drop interactions whose leads were filtered out (SDR filter, deleted, etc.)
@@ -135,29 +153,23 @@ export async function fetchConversionAnalyticsData(
 }
 
 function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRow[]): FunnelStage[] {
-  // `leads` already holds the activity universe (created-in-period ∪ touched-in-period).
+  // `leads` already holds the activity universe (created-in-period ∪
+  // touched-in-period ∪ transition-in-period). Each stage is a subset of the
+  // universe — not a strict nested subset of the previous stage, because some
+  // wins happen outside the app (closer registers won_at without a logged
+  // 'sent' interaction). Visual bar is clamped at 100% as guard.
   const totalLeads = leads.length;
-  const leadById = new Map(leads.map((l) => [l.id, l]));
 
-  // Contactados ⊆ universe. Sub-stages are strict subsets of Contactados so the
-  // funnel is monotonic: a lead cannot be "Reunião"/"Qualificados" in this
-  // period without an outbound touch in this period.
   const contactedSet = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
   );
   const meetingSet = new Set(
-    interactions
-      .filter((i) => i.type === 'meeting_scheduled' && contactedSet.has(i.lead_id))
-      .map((i) => i.lead_id),
+    interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
   );
-  const qualifiedSet = new Set<string>();
-  const salSet = new Set<string>();
-  for (const id of contactedSet) {
-    const lead = leadById.get(id);
-    if (!lead) continue;
-    if (lead.status === 'qualified' || lead.status === 'won') qualifiedSet.add(id);
-    if (lead.status === 'won') salSet.add(id);
-  }
+  const qualifiedSet = new Set(
+    leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
+  );
+  const salSet = new Set(leads.filter((l) => l.status === 'won').map((l) => l.id));
 
   return [
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
