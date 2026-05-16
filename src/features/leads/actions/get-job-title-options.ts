@@ -3,24 +3,18 @@
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { STANDARD_FIELDS } from '@/features/settings-prospecting/constants/standard-fields';
+
 export type JobTitleOption = { value: string; label: string };
 
-const DEFAULT_OPTIONS: JobTitleOption[] = [
-  { value: 'Proprietário', label: 'Proprietário' },
-  { value: 'Sócio', label: 'Sócio' },
-  { value: 'CEO/Diretor Executivo', label: 'CEO/Diretor Executivo' },
-  { value: 'Diretor', label: 'Diretor' },
-  { value: 'Gerente', label: 'Gerente' },
-  { value: 'Supervisor', label: 'Supervisor' },
-  { value: 'Coordenador', label: 'Coordenador' },
-  { value: 'Analista', label: 'Analista' },
-  { value: 'Assistente/Funcionário', label: 'Assistente/Funcionário' },
-  { value: 'Decisor', label: 'Decisor' },
-];
+function defaultOptions(): JobTitleOption[] {
+  const def = STANDARD_FIELDS.find((f) => f.key === 'job_title');
+  return (def?.defaultOptions ?? []).map((label) => ({ value: label, label }));
+}
 
 export async function getJobTitleOptions(): Promise<JobTitleOption[]> {
   const auth = await getAuthOrgIdResult();
-  if (!auth.success) return DEFAULT_OPTIONS;
+  if (!auth.success) return defaultOptions();
 
   const { orgId, supabase } = auth.data;
 
@@ -30,9 +24,6 @@ export async function getJobTitleOptions(): Promise<JobTitleOption[]> {
     .eq('field_key', 'job_title')
     .single()) as { data: { options: string[] | null } | null; error: unknown };
 
-  if (!data?.options || data.options.length === 0) {
-    return DEFAULT_OPTIONS;
-  }
-
+  if (!data?.options || data.options.length === 0) return defaultOptions();
   return data.options.map((label) => ({ value: label, label }));
 }

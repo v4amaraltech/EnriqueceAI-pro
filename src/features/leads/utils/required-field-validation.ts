@@ -7,7 +7,7 @@ import type { LeadRow } from '../types';
 export interface MissingRequiredField {
   key: string;
   label: string;
-  fieldType: 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select' | 'url';
+  fieldType: 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select' | 'combobox' | 'url';
   options?: string[];
   isCustom: boolean;
 }

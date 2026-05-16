@@ -1,7 +1,7 @@
 export interface StandardFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select';
+  type: 'text' | 'textarea' | 'number' | 'currency' | 'date' | 'datetime' | 'select' | 'combobox';
   defaultOptions?: string[];
   /** When true, options are loaded dynamically (e.g. org members) and cannot be edited here. */
   dynamicOptions?: boolean;
@@ -12,7 +12,23 @@ export const STANDARD_FIELDS: StandardFieldDef[] = [
   { key: 'last_name', label: 'Sobrenome', type: 'text' },
   { key: 'email', label: 'E-mail', type: 'text' },
   { key: 'telefone', label: 'Telefone', type: 'text' },
-  { key: 'job_title', label: 'Cargo', type: 'text' },
+  {
+    key: 'job_title',
+    label: 'Cargo',
+    type: 'combobox',
+    defaultOptions: [
+      'Proprietário',
+      'Sócio',
+      'CEO/Diretor Executivo',
+      'Diretor',
+      'Gerente',
+      'Supervisor',
+      'Coordenador',
+      'Analista',
+      'Assistente/Funcionário',
+      'Decisor',
+    ],
+  },
   { key: 'cnpj', label: 'CNPJ', type: 'text' },
   { key: 'nome_fantasia', label: 'Empresa', type: 'text' },
   {

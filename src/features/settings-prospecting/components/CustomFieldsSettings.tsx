@@ -53,6 +53,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   date: 'Data',
   datetime: 'Data e Hora',
   select: 'Seleção',
+  combobox: 'Sugestões (digitação livre)',
   url: 'URL',
 };
 
@@ -397,8 +398,8 @@ export function CustomFieldsSettings({ initial, standardSettings }: CustomFields
             {/* Rows */}
             {STANDARD_FIELDS.map((field) => {
               const setting = getStdSetting(field.key);
-              const isSelect = field.type === 'select';
-              const isEditable = isSelect && !field.dynamicOptions;
+              const hasOptions = field.type === 'select' || field.type === 'combobox';
+              const isEditable = hasOptions && !field.dynamicOptions;
               const fieldOptions = isEditable ? getStdFieldOptions(field.key) : [];
               return (
                 <div key={field.key} className="flex items-center border-b border-border py-5">
