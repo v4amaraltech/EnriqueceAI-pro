@@ -46,6 +46,7 @@ const NOT_CONNECTED_CAUSES = new Set([
   'ORIGINATOR_CANCEL',
   'NORMAL_TEMPORARY_FAILURE',
   'RECOVERY_ON_TIMER_EXPIRE',
+  'NUMBER_CHANGED',
 ]);
 
 const HANGUP_CAUSE_TO_STATUS: Record<string, CallStatus> = {
@@ -58,6 +59,9 @@ const HANGUP_CAUSE_TO_STATUS: Record<string, CallStatus> = {
   ORIGINATOR_CANCEL: 'not_connected',
   NORMAL_TEMPORARY_FAILURE: 'not_connected',
   RECOVERY_ON_TIMER_EXPIRE: 'not_connected',
+  // NUMBER_CHANGED é a 2ª causa mais comum em V4 Amaral (690 em mai/2026)
+  // — caía no default 'no_contact' antes deste mapeamento explícito.
+  NUMBER_CHANGED: 'not_connected',
 };
 
 export interface ClassifyInput {

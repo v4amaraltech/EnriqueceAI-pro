@@ -470,6 +470,10 @@ export async function POST(request: Request) {
               api4com_call_id: api4comId,
               source: 'reconcile_api4com',
               hangup_cause: c.hangup_cause ?? null,
+              // Captured so future gap-analysis can filter API4COM call_type
+              // (internal/transfer/etc.) post-hoc — see briefing
+              // docs/briefings/2026-05-17-gap-enriquece-api4com.md.
+              call_type: c.call_type ?? null,
             },
           } as Record<string, unknown>);
           return { kind: 'inserted_new' };
