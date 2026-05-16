@@ -21,6 +21,7 @@ const STAGE_LABEL_MAP: Record<string, string> = {
   Contactados: 'contacted',
   Qualificados: 'qualified,won',
   SAL: 'won',
+  // Reunião removed — see calculateFunnel; Qualificados now means meeting_scheduled in period.
 };
 
 function BigKpiCard({ value, label, icon: Icon, color }: { value: string; label: string; icon: typeof Users; color?: string }) {

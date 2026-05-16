@@ -31,7 +31,7 @@ export async function fetchConversionAnalyticsData(
   // in the period. Without this, "Contactados" could count interactions on
   // leads from previous periods, producing >100% conversion ratios.
   let periodLeadsQuery = from(supabase, 'leads')
-    .select('id, status, created_at, created_by')
+    .select('id, status, created_at, created_by, won_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .gte('created_at', periodStart)
@@ -65,7 +65,7 @@ export async function fetchConversionAnalyticsData(
   let touchedLeads: LeadQueryRow[] = [];
   if (touchedOnlyIds.length > 0) {
     let touchedQuery = from(supabase, 'leads')
-      .select('id, status, created_at, created_by')
+      .select('id, status, created_at, created_by, won_at')
       .eq('org_id', orgId)
       .is('deleted_at', null)
       .in('id', touchedOnlyIds);
@@ -85,7 +85,7 @@ export async function fetchConversionAnalyticsData(
   const transitionDateCols = ['won_at', 'lost_at', 'meeting_held_at'] as const;
   for (const col of transitionDateCols) {
     let q = from(supabase, 'leads')
-      .select('id, status, created_at, created_by')
+      .select('id, status, created_at, created_by, won_at')
       .eq('org_id', orgId)
       .is('deleted_at', null)
       .gte(col, periodStart)
@@ -149,7 +149,7 @@ export async function fetchConversionAnalyticsData(
     }
   }
 
-  const funnel = calculateFunnel(leads, interactions);
+  const funnel = calculateFunnel(leads, interactions, periodStart, periodEnd);
   const stageConversions = calculateStageConversions(funnel);
   const velocity = calculateVelocity(enrollments, leads);
   const cadenceConversion = calculateCadenceConversion(cadences, memberships, interactions, leads);
@@ -158,30 +158,32 @@ export async function fetchConversionAnalyticsData(
   return { funnel, stageConversions, velocity, cadenceConversion, conversionByOrigin };
 }
 
-function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRow[]): FunnelStage[] {
-  // `leads` already holds the activity universe (created-in-period ∪
-  // touched-in-period ∪ transition-in-period). Each stage is a subset of the
-  // universe — not a strict nested subset of the previous stage, because some
-  // wins happen outside the app (closer registers won_at without a logged
-  // 'sent' interaction). Visual bar is clamped at 100% as guard.
+function calculateFunnel(
+  leads: LeadQueryRow[],
+  interactions: InteractionQueryRow[],
+  periodStart: string,
+  periodEnd: string,
+): FunnelStage[] {
+  // All stages count events that occurred in the period (not current status),
+  // so the funnel reads consistently as "what happened in this period?".
   const totalLeads = leads.length;
 
   const contactedSet = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
   );
-  const meetingSet = new Set(
+  const qualifiedSet = new Set(
     interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
   );
-  const qualifiedSet = new Set(
-    leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
+  const salSet = new Set(
+    leads
+      .filter((l) => l.won_at && l.won_at >= periodStart && l.won_at <= periodEnd)
+      .map((l) => l.id),
   );
-  const salSet = new Set(leads.filter((l) => l.status === 'won').map((l) => l.id));
 
   return [
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
     { label: 'Contactados', count: contactedSet.size, percentage: safeRate(contactedSet.size, totalLeads), color: CONVERSION_COLORS.contacted },
     { label: 'Qualificados', count: qualifiedSet.size, percentage: safeRate(qualifiedSet.size, totalLeads), color: CONVERSION_COLORS.qualified },
-    { label: 'Reunião', count: meetingSet.size, percentage: safeRate(meetingSet.size, totalLeads), color: CONVERSION_COLORS.meeting },
     { label: 'SAL', count: salSet.size, percentage: safeRate(salSet.size, totalLeads), color: CONVERSION_COLORS.sal },
   ];
 }
