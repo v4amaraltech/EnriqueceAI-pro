@@ -27,8 +27,10 @@ export async function fetchConversionAnalyticsData(
   userIds?: string[],
   cadenceId?: string,
 ): Promise<ConversionAnalyticsData> {
-  // Fetch leads
-  let leadsQuery = from(supabase, 'leads')
+  // Universe = leads created in the period ∪ leads touched by any interaction
+  // in the period. Without this, "Contactados" could count interactions on
+  // leads from previous periods, producing >100% conversion ratios.
+  let periodLeadsQuery = from(supabase, 'leads')
     .select('id, status, created_at, created_by')
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -36,13 +38,12 @@ export async function fetchConversionAnalyticsData(
     .lte('created_at', periodEnd);
 
   if (userIds && userIds.length > 0) {
-    leadsQuery = leadsQuery.in('created_by', userIds);
+    periodLeadsQuery = periodLeadsQuery.in('created_by', userIds);
   }
 
-  const { data: rawLeads } = (await leadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
-  const leads = rawLeads ?? [];
+  const { data: rawPeriodLeads } = (await periodLeadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
+  const periodLeads = rawPeriodLeads ?? [];
 
-  // Fetch interactions
   let intQuery = from(supabase, 'interactions')
     .select('type, lead_id, cadence_id, created_at')
     .eq('org_id', orgId)
@@ -54,7 +55,37 @@ export async function fetchConversionAnalyticsData(
   }
 
   const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
+  const allInteractions = rawInteractions ?? [];
+
+  const periodLeadIds = new Set(periodLeads.map((l) => l.id));
+  const touchedOnlyIds = Array.from(
+    new Set(allInteractions.map((i) => i.lead_id).filter((id) => !periodLeadIds.has(id))),
+  );
+
+  let touchedLeads: LeadQueryRow[] = [];
+  if (touchedOnlyIds.length > 0) {
+    let touchedQuery = from(supabase, 'leads')
+      .select('id, status, created_at, created_by')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .in('id', touchedOnlyIds);
+
+    if (userIds && userIds.length > 0) {
+      touchedQuery = touchedQuery.in('created_by', userIds);
+    }
+
+    const { data: rawTouched } = (await touchedQuery.limit(10000)) as { data: LeadQueryRow[] | null };
+    touchedLeads = rawTouched ?? [];
+  }
+
+  const leadsMap = new Map<string, LeadQueryRow>();
+  for (const l of periodLeads) leadsMap.set(l.id, l);
+  for (const l of touchedLeads) leadsMap.set(l.id, l);
+  const leads = Array.from(leadsMap.values());
+
+  // Drop interactions whose leads were filtered out (SDR filter, deleted, etc.)
+  const universeIds = new Set(leads.map((l) => l.id));
+  const interactions = allInteractions.filter((i) => universeIds.has(i.lead_id));
 
   // Fetch cadences first (for org isolation of enrollments)
   const { data: rawCadences } = (await from(supabase, 'cadences')
@@ -88,25 +119,40 @@ export async function fetchConversionAnalyticsData(
 }
 
 function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRow[]): FunnelStage[] {
+  // `leads` already holds the activity universe (created-in-period ∪ touched-in-period).
   const totalLeads = leads.length;
-  const contactedLeads = new Set(
+  const leadById = new Map(leads.map((l) => [l.id, l]));
+
+  // Contactados ⊆ universe. Sub-stages are strict subsets of Contactados so the
+  // funnel is monotonic: a lead cannot be "Respondidos"/"Reunião"/"Qualificados"
+  // in this period without an outbound touch in this period.
+  const contactedSet = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
   );
-  const repliedLeads = new Set(
-    interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
+  const repliedSet = new Set(
+    interactions
+      .filter((i) => i.type === 'replied' && contactedSet.has(i.lead_id))
+      .map((i) => i.lead_id),
   );
-  const meetingLeads = new Set(
-    interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
+  const meetingSet = new Set(
+    interactions
+      .filter((i) => i.type === 'meeting_scheduled' && contactedSet.has(i.lead_id))
+      .map((i) => i.lead_id),
   );
-  // 'won' is a downstream stage of 'qualified' — both count as qualified in the funnel.
-  const qualifiedLeads = leads.filter((l) => l.status === 'qualified' || l.status === 'won').length;
+  const qualifiedSet = new Set<string>();
+  for (const id of contactedSet) {
+    const lead = leadById.get(id);
+    if (lead && (lead.status === 'qualified' || lead.status === 'won')) {
+      qualifiedSet.add(id);
+    }
+  }
 
   return [
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
-    { label: 'Contactados', count: contactedLeads.size, percentage: safeRate(contactedLeads.size, totalLeads), color: CONVERSION_COLORS.contacted },
-    { label: 'Respondidos', count: repliedLeads.size, percentage: safeRate(repliedLeads.size, totalLeads), color: CONVERSION_COLORS.replied },
-    { label: 'Qualificados', count: qualifiedLeads, percentage: safeRate(qualifiedLeads, totalLeads), color: CONVERSION_COLORS.qualified },
-    { label: 'Reunião', count: meetingLeads.size, percentage: safeRate(meetingLeads.size, totalLeads), color: CONVERSION_COLORS.meeting },
+    { label: 'Contactados', count: contactedSet.size, percentage: safeRate(contactedSet.size, totalLeads), color: CONVERSION_COLORS.contacted },
+    { label: 'Respondidos', count: repliedSet.size, percentage: safeRate(repliedSet.size, totalLeads), color: CONVERSION_COLORS.replied },
+    { label: 'Qualificados', count: qualifiedSet.size, percentage: safeRate(qualifiedSet.size, totalLeads), color: CONVERSION_COLORS.qualified },
+    { label: 'Reunião', count: meetingSet.size, percentage: safeRate(meetingSet.size, totalLeads), color: CONVERSION_COLORS.meeting },
   ];
 }
 

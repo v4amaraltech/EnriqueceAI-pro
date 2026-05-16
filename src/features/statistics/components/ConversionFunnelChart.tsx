@@ -56,5 +56,5 @@ export function ConversionFunnelChart({ stages, onStageClick }: ConversionFunnel
 
 function safeWidth(count: number, max: number): number {
   if (max === 0) return 0;
-  return Math.round((count / max) * 100);
+  return Math.min(Math.round((count / max) * 100), 100);
 }
