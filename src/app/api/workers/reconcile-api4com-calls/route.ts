@@ -11,7 +11,7 @@ import {
 } from '@/features/calls/services/api4com-classification';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const JOB_NAME = 'reconcile-api4com-calls';
 const DEFAULT_WINDOW_HOURS = 1.5;
@@ -22,7 +22,16 @@ const ADAPTIVE_OVERLAP_HOURS = 0.5;
 // without anyone accidentally requesting "last 5 years".
 const MAX_WINDOW_HOURS = 1440;
 const MAX_PAGES = 100; // 100 pages × ~100 calls = 10k calls per org per window
-const PAGE_DELAY_MS = 800; // be conservative — API4COM throttles per minute
+// 200ms throttle stays well under API4COM's per-minute cap (~300 req/min
+// observed). The original 800ms was over-conservative — at 4k+ calls per
+// reingest the throttle alone added ~30s of pure idle time. Empirically
+// the 60d reingest of mai/2026 ran fine at this rate without hitting 429s.
+const PAGE_DELAY_MS = 200;
+// Batch size for parallel upserts within one fetched page. The Supabase
+// pooler comfortably handles 10 concurrent queries; bigger batches don't
+// proportionally speed up since each upsert is dominated by a single round
+// trip to PostgREST.
+const UPSERT_CONCURRENCY = 10;
 const RATE_LIMIT_RETRY_MS = 12_000; // single retry covers a short hiccup
 const MAX_RATE_LIMIT_RETRIES = 1;
 
@@ -333,23 +342,26 @@ export async function POST(request: Request) {
       continue;
     }
 
-    for (const c of calls) {
+    // Process calls in concurrent batches. Sequential processing was the
+    // single biggest contributor to the 504 timeouts on long reingests: at
+    // ~150ms per call (1-2 round trips to PostgREST + an upsert), 4k+ calls
+    // serially run over 600s. Promise.all across batches of UPSERT_CONCURRENCY
+    // cuts that to ~60s on the same dataset.
+    type CallOutcome =
+      | { kind: 'inserted_new' }
+      | { kind: 'upserted_existing' }
+      | { kind: 'matched_no_update' }
+      | { kind: 'skipped_no_id' }
+      | { kind: 'skipped_unmapped'; ramal: string }
+      | { kind: 'error'; api4comId: string; message: string };
+
+    async function processOneCall(c: Api4ComCall): Promise<CallOutcome> {
       const api4comId = c.id;
-      if (!api4comId) {
-        orgResult.skipped_unmapped++;
-        continue;
-      }
+      if (!api4comId) return { kind: 'skipped_no_id' };
 
       const userId = c.from ? ramalToUserId.get(c.from) : undefined;
       if (!userId) {
-        // The org has connections for some ramals but this call came from a
-        // ramal that's not mapped to a user in Enriquece. Skip — we don't
-        // know who to attribute it to. Track the unmapped ramal so the
-        // operator can decide whether to wire it up.
-        orgResult.skipped_unmapped++;
-        const ramalKey = c.from ?? '<no-from>';
-        unmappedRamalCounts[ramalKey] = (unmappedRamalCounts[ramalKey] ?? 0) + 1;
-        continue;
+        return { kind: 'skipped_unmapped', ramal: c.from ?? '<no-from>' };
       }
 
       try {
@@ -434,8 +446,9 @@ export async function POST(request: Request) {
 
           if (Object.keys(updates).length > 1) {
             await from(supabase, 'calls').update(updates).eq('id', existing.id);
-            orgResult.upserted_existing++;
+            return { kind: 'upserted_existing' };
           }
+          return { kind: 'matched_no_update' };
         } else {
           // Insert missing call (webhook never arrived).
           await from(supabase, 'calls').insert({
@@ -456,10 +469,44 @@ export async function POST(request: Request) {
               hangup_cause: c.hangup_cause ?? null,
             },
           } as Record<string, unknown>);
-          orgResult.inserted_new++;
+          return { kind: 'inserted_new' };
         }
       } catch (err) {
-        orgResult.errors.push(`call_${api4comId}: ${err instanceof Error ? err.message : 'unknown'}`);
+        return {
+          kind: 'error',
+          api4comId,
+          message: err instanceof Error ? err.message : 'unknown',
+        };
+      }
+    }
+
+    // Drive the parallel processing in batches, accumulating into orgResult.
+    for (let i = 0; i < calls.length; i += UPSERT_CONCURRENCY) {
+      const batch = calls.slice(i, i + UPSERT_CONCURRENCY);
+      const outcomes = await Promise.all(batch.map(processOneCall));
+      for (const outcome of outcomes) {
+        switch (outcome.kind) {
+          case 'inserted_new':
+            orgResult.inserted_new++;
+            break;
+          case 'upserted_existing':
+            orgResult.upserted_existing++;
+            break;
+          case 'matched_no_update':
+            // Row found but already up-to-date; not counted as upsert to
+            // preserve the pre-refactor metric semantics.
+            break;
+          case 'skipped_no_id':
+            orgResult.skipped_unmapped++;
+            break;
+          case 'skipped_unmapped':
+            orgResult.skipped_unmapped++;
+            unmappedRamalCounts[outcome.ramal] = (unmappedRamalCounts[outcome.ramal] ?? 0) + 1;
+            break;
+          case 'error':
+            orgResult.errors.push(`call_${outcome.api4comId}: ${outcome.message}`);
+            break;
+        }
       }
     }
 
