@@ -13,6 +13,7 @@ export interface StandardFieldSettingRow {
   is_visible: boolean;
   is_required_won: boolean;
   is_required_lost: boolean;
+  is_required_meeting: boolean;
   options: string[] | null;
 }
 
@@ -48,7 +49,7 @@ export async function listStandardFieldSettingsForMember(): Promise<ActionResult
 
 export async function upsertStandardFieldSetting(
   fieldKey: string,
-  settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean; options?: string[] | null },
+  settings: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean; is_required_meeting?: boolean; options?: string[] | null },
 ): Promise<ActionResult<StandardFieldSettingRow>> {
   let orgId: string;
   let supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>;
@@ -64,6 +65,7 @@ export async function upsertStandardFieldSetting(
     is_visible: settings.is_visible ?? true,
     is_required_won: settings.is_required_won ?? false,
     is_required_lost: settings.is_required_lost ?? false,
+    is_required_meeting: settings.is_required_meeting ?? false,
   };
   if (settings.options !== undefined) {
     payload.options = settings.options;

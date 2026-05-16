@@ -11,6 +11,8 @@ import { Label } from '@/shared/components/ui/label';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected, getLeadFaturamento } from '@/features/integrations/actions/schedule-meeting';
+import { getMissingMeetingFields } from '../actions/get-missing-meeting-fields';
+import type { MissingRequiredField } from '../utils/required-field-validation';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 
 function parseFaturamentoInput(input: string): number | null {
@@ -52,6 +54,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [sdrEmail, setSdrEmail] = useState('');
   const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
   const [faturamentoStr, setFaturamentoStr] = useState('');
+  const [missingFields, setMissingFields] = useState<MissingRequiredField[]>([]);
 
   // Build attendee list from available emails
   function buildAttendees(closerEmail?: string, currentSdrEmail?: string) {
@@ -70,7 +73,8 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       getLoggedUserEmail(),
       checkCalendarConnected(),
       getLeadFaturamento(leadId),
-    ]).then(([closersResult, emailResult, calResult, faturamentoResult]) => {
+      getMissingMeetingFields(leadId),
+    ]).then(([closersResult, emailResult, calResult, faturamentoResult, missingResult]) => {
       if (closersResult.success) setClosers(closersResult.data);
       setClosersLoaded(true);
       const userEmail = emailResult.success ? emailResult.data : '';
@@ -80,6 +84,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       if (faturamentoResult.success && faturamentoResult.data !== null) {
         setFaturamentoStr(formatFaturamentoForInput(faturamentoResult.data));
       }
+      if (missingResult.success) setMissingFields(missingResult.data);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
@@ -216,9 +221,20 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
         Gerar link do Google Meet
       </label>
 
+      {missingFields.length > 0 && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+          <p className="font-semibold text-amber-700 dark:text-amber-300">
+            ⚠️ Preencha estes campos antes de agendar (vão para o briefing do closer):
+          </p>
+          <ul className="mt-1.5 ml-4 list-disc text-amber-700 dark:text-amber-300">
+            {missingFields.map((f) => <li key={f.key}>{f.label}</li>)}
+          </ul>
+        </div>
+      )}
+
       <Button
         className="w-full"
-        disabled={!meetingDate || !meetingTime || isMeetingPending || parseFaturamentoInput(faturamentoStr) === null}
+        disabled={!meetingDate || !meetingTime || isMeetingPending || parseFaturamentoInput(faturamentoStr) === null || missingFields.length > 0}
         onClick={() => {
           // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
           const startIso = `${meetingDate}T${meetingTime}:00`;

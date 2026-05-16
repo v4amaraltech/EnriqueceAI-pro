@@ -8,5 +8,6 @@ export interface CustomFieldRow {
   is_visible: boolean;
   is_required_won: boolean;
   is_required_lost: boolean;
+  is_required_meeting: boolean;
   created_at: string;
 }

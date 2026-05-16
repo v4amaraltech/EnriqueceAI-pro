@@ -35,6 +35,33 @@ export async function scheduleMeeting(
     return { success: false, error: 'Informe o faturamento estimado do lead (valor em R$ maior que zero) antes de agendar a reunião.' };
   }
 
+  // Defensive check: client surfaces (LeadScheduleTab, ScheduleMeetingModal)
+  // also block on missing required-for-meeting fields, but the server must
+  // not trust them — repeat the gate here so a direct API call can't
+  // bypass briefing requirements.
+  {
+    const { data: leadRow } = (await from(supabase, 'leads')
+      .select('*')
+      .eq('id', leadId)
+      .eq('org_id', orgId)
+      .single()) as { data: import('@/features/leads/types').LeadRow | null };
+    if (leadRow) {
+      const [{ getMissingRequiredFields }, { data: cfs }, { data: settings }] = await Promise.all([
+        import('@/features/leads/utils/required-field-validation'),
+        from(supabase, 'custom_fields').select('*').eq('org_id', orgId) as unknown as Promise<{ data: import('@/features/settings-prospecting/types/custom-field').CustomFieldRow[] | null }>,
+        from(supabase, 'standard_field_settings').select('*').eq('org_id', orgId) as unknown as Promise<{ data: import('@/features/settings-prospecting/actions/standard-field-settings').StandardFieldSettingRow[] | null }>,
+      ]);
+      const missing = getMissingRequiredFields(leadRow, cfs ?? [], settings ?? [], 'meeting');
+      if (missing.length > 0) {
+        return {
+          success: false,
+          error: `Preencha os campos obrigatórios antes de agendar: ${missing.map((m) => m.label).join(', ')}`,
+          code: 'MISSING_REQUIRED_FIELDS',
+        };
+      }
+    }
+  }
+
   const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
     return { success: false, error: 'Google Calendar não conectado. Conecte em Configurações > Integrações.' };

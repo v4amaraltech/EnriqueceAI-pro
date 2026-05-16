@@ -21,6 +21,8 @@ import { listClosers, type CloserRow } from '@/features/settings-prospecting/act
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
 import { scheduleMeeting, updateMeeting, getLoggedUserEmail, getLeadFaturamento } from '../actions/schedule-meeting';
+import { getMissingMeetingFields } from '@/features/leads/actions/get-missing-meeting-fields';
+import type { MissingRequiredField } from '@/features/leads/utils/required-field-validation';
 import { WhatsAppInviteModal } from './WhatsAppInviteModal';
 import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 
@@ -125,6 +127,7 @@ export function ScheduleMeetingModal({
 
   // Faturamento estimado (obrigatório ao agendar, ignorado ao editar)
   const [faturamentoStr, setFaturamentoStr] = useState('');
+  const [missingFields, setMissingFields] = useState<MissingRequiredField[]>([]);
 
   // WhatsApp invite modal
   const [whatsAppInviteOpen, setWhatsAppInviteOpen] = useState(false);
@@ -147,6 +150,17 @@ export function ScheduleMeetingModal({
       });
     }
   }, [open, closersLoaded]);
+
+  // Carregar campos faltantes para o briefing assim que o modal abre.
+  useEffect(() => {
+    if (open && !editData) {
+      getMissingMeetingFields(leadId).then((r) => {
+        if (r.success) setMissingFields(r.data);
+      });
+    } else if (!open) {
+      setMissingFields([]);
+    }
+  }, [open, editData, leadId]);
 
   // Pré-popular faturamento ao abrir (só no modo agendar — não é editado em update)
   useEffect(() => {
@@ -315,6 +329,21 @@ export function ScheduleMeetingModal({
             </select>
           </div>
 
+          {/* Aviso de campos obrigatórios faltantes (briefing do closer) */}
+          {!isEditing && missingFields.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p className="font-semibold text-amber-700 dark:text-amber-300">
+                ⚠️ Preencha estes campos antes de agendar:
+              </p>
+              <ul className="mt-1.5 ml-4 list-disc text-amber-700 dark:text-amber-300">
+                {missingFields.map((f) => <li key={f.key}>{f.label}</li>)}
+              </ul>
+              <p className="mt-2 text-xs text-amber-700/80 dark:text-amber-300/80">
+                Esses dados são enviados no briefing do closer.
+              </p>
+            </div>
+          )}
+
           {/* Faturamento estimado — obrigatório no agendamento */}
           {!isEditing && (
             <div>
@@ -456,7 +485,7 @@ export function ScheduleMeetingModal({
       )}
       <Button
         onClick={handleSubmit}
-        disabled={isPending || !dateString || !selectedTime || (!editData && parsedFaturamento === null)}
+        disabled={isPending || !dateString || !selectedTime || (!editData && (parsedFaturamento === null || missingFields.length > 0))}
         className="bg-primary hover:bg-primary-700 text-white"
       >
         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -509,7 +538,7 @@ export function ScheduleMeetingModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
-            disabled={isPending || !dateString || !selectedTime || (!editData && parsedFaturamento === null)}
+            disabled={isPending || !dateString || !selectedTime || (!editData && (parsedFaturamento === null || missingFields.length > 0))}
             className="bg-primary hover:bg-primary-700 text-white"
           >
             <CalendarIcon className="mr-2 h-4 w-4" />

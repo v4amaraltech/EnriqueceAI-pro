@@ -12,7 +12,7 @@ export interface MissingRequiredField {
   isCustom: boolean;
 }
 
-type Trigger = 'won' | 'lost';
+type Trigger = 'won' | 'lost' | 'meeting';
 
 function isEmptyValue(value: unknown): boolean {
   if (value === null || value === undefined) return true;
@@ -27,7 +27,10 @@ export function getMissingRequiredFields(
   trigger: Trigger,
 ): MissingRequiredField[] {
   const missing: MissingRequiredField[] = [];
-  const requiredKey = trigger === 'won' ? 'is_required_won' : 'is_required_lost';
+  const requiredKey =
+    trigger === 'won' ? 'is_required_won'
+    : trigger === 'lost' ? 'is_required_lost'
+    : 'is_required_meeting';
 
   // Standard fields
   for (const setting of standardFieldSettings) {

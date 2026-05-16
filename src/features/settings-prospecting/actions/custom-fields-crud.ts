@@ -17,6 +17,7 @@ const customFieldSettingsSchema = z.object({
   is_visible: z.boolean().optional(),
   is_required_won: z.boolean().optional(),
   is_required_lost: z.boolean().optional(),
+  is_required_meeting: z.boolean().optional(),
 });
 
 const addCustomFieldSchema = z.object({
@@ -53,7 +54,7 @@ export async function addCustomField(
   fieldName: string,
   fieldType: CustomFieldRow['field_type'],
   options?: string[],
-  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
+  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean; is_required_meeting?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
   const parsed = addCustomFieldSchema.safeParse({ fieldName, fieldType, options, settings });
   if (!parsed.success) {
@@ -93,6 +94,7 @@ export async function addCustomField(
       is_visible: settings?.is_visible ?? true,
       is_required_won: settings?.is_required_won ?? false,
       is_required_lost: settings?.is_required_lost ?? false,
+      is_required_meeting: settings?.is_required_meeting ?? false,
     })
     .select()
     .single()) as { data: CustomFieldRow | null; error: unknown };
@@ -107,7 +109,7 @@ export async function updateCustomField(
   fieldName: string,
   fieldType: CustomFieldRow['field_type'],
   options?: string[],
-  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean },
+  settings?: { is_visible?: boolean; is_required_won?: boolean; is_required_lost?: boolean; is_required_meeting?: boolean },
 ): Promise<ActionResult<CustomFieldRow>> {
   const idParsed = uuidSchema.safeParse(id);
   if (!idParsed.success) return { success: false, error: 'ID inválido' };
@@ -140,6 +142,7 @@ export async function updateCustomField(
         is_visible: settings.is_visible,
         is_required_won: settings.is_required_won,
         is_required_lost: settings.is_required_lost,
+        is_required_meeting: settings.is_required_meeting,
       }),
     })
     .eq('id', id)

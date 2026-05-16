@@ -27,6 +27,7 @@ const makeField = (overrides: Partial<CustomFieldRow> = {}): CustomFieldRow => (
   is_visible: true,
   is_required_won: false,
   is_required_lost: false,
+  is_required_meeting: false,
   created_at: '2026-01-01',
   ...overrides,
 });
