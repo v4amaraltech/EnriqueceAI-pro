@@ -72,6 +72,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   const [members, setMembers] = useState<OrgMemberOption[]>([]);
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
   const [canalOptions, setCanalOptions] = useState<string[]>([...CANAL_OPTIONS]);
+  const [jobTitleOptions, setJobTitleOptions] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [cadenceSearch, setCadenceSearch] = useState('');
 
@@ -86,8 +87,9 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
       fetchOrgMembersAuth(),
       fetchActiveCadences(),
       import('@/features/settings-prospecting/actions/standard-field-settings').then((m) => m.listStandardFieldSettingsForMember()),
+      import('@/features/leads/actions/get-job-title-options').then((m) => m.getJobTitleOptions()),
     ]).then(
-      ([membersResult, cadencesResult, settingsResult]) => {
+      ([membersResult, cadencesResult, settingsResult, jobTitlesResult]) => {
         if (cancelled) return;
         if (membersResult.success) setMembers(membersResult.data);
         if (cadencesResult.success) setCadences(cadencesResult.data);
@@ -97,6 +99,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
             setCanalOptions(canalSetting.options);
           }
         }
+        setJobTitleOptions(jobTitlesResult.map((o) => o.value));
         setLoaded(true);
       },
     );
@@ -427,12 +430,19 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                   </Label>
                   <Input
                     id="create-job-title"
+                    list="create-job-title-options"
                     value={form.job_title}
                     onChange={(e) => setForm({ ...form, job_title: e.target.value })}
                     onBlur={() => markTouched('job_title')}
                     aria-invalid={!!fieldError('job_title')}
                     className={fieldError('job_title') ? 'border-red-500' : ''}
+                    placeholder="Ex.: Decisor, Sócio, CEO/Diretor Executivo"
                   />
+                  <datalist id="create-job-title-options">
+                    {jobTitleOptions.map((opt) => (
+                      <option key={opt} value={opt} />
+                    ))}
+                  </datalist>
                   {fieldError('job_title') && <p className="text-xs text-red-500">{fieldError('job_title')}</p>}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
