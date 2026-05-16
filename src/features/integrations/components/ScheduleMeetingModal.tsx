@@ -75,7 +75,7 @@ function generateTimeSlots(): string[] {
 
 const TIME_SLOTS = generateTimeSlots();
 
-/** Parse "1.500.000,50" / "1500000" / "R$ 1.500" → 1500000.5 / 1500000 / 1500. Returns null se inválido. */
+/** Parse "R$ 1.500.000,50" / "1500000" / "R$ 1.500" → 1500000.5 / 1500000 / 1500. Returns null se inválido. */
 function parseFaturamentoInput(input: string): number | null {
   const cleaned = input.replace(/[^\d,]/g, '').replace(',', '.');
   if (!cleaned) return null;
@@ -84,7 +84,12 @@ function parseFaturamentoInput(input: string): number | null {
 }
 
 function formatFaturamentoForInput(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export function ScheduleMeetingModal({
@@ -319,8 +324,12 @@ export function ScheduleMeetingModal({
               <Input
                 value={faturamentoStr}
                 onChange={(e) => setFaturamentoStr(e.target.value)}
-                placeholder="Ex.: 1.500.000"
-                inputMode="numeric"
+                onBlur={() => {
+                  const n = parseFaturamentoInput(faturamentoStr);
+                  if (n !== null) setFaturamentoStr(formatFaturamentoForInput(n));
+                }}
+                placeholder="R$ 0,00"
+                inputMode="decimal"
                 className="mt-1"
               />
               <p className="mt-1 text-xs text-[var(--muted-foreground)]">

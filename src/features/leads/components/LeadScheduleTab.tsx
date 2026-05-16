@@ -21,7 +21,12 @@ function parseFaturamentoInput(input: string): number | null {
 }
 
 function formatFaturamentoForInput(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 interface LeadScheduleTabProps {
@@ -187,8 +192,12 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
         <Input
           value={faturamentoStr}
           onChange={(e) => setFaturamentoStr(e.target.value)}
-          placeholder="Ex.: 1.500.000"
-          inputMode="numeric"
+          onBlur={() => {
+            const n = parseFaturamentoInput(faturamentoStr);
+            if (n !== null) setFaturamentoStr(formatFaturamentoForInput(n));
+          }}
+          placeholder="R$ 0,00"
+          inputMode="decimal"
           className="mt-1"
         />
         <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
