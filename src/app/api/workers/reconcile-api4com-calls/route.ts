@@ -22,18 +22,21 @@ const ADAPTIVE_OVERLAP_HOURS = 0.5;
 // without anyone accidentally requesting "last 5 years".
 const MAX_WINDOW_HOURS = 1440;
 const MAX_PAGES = 100; // 100 pages × ~100 calls = 10k calls per org per window
-// 200ms throttle stays well under API4COM's per-minute cap (~300 req/min
-// observed). The original 800ms was over-conservative — at 4k+ calls per
-// reingest the throttle alone added ~30s of pure idle time. Empirically
-// the 60d reingest of mai/2026 ran fine at this rate without hitting 429s.
-const PAGE_DELAY_MS = 200;
+// 500ms throttle = 120 req/min, comfortably under API4COM's per-minute cap.
+// The previous 200ms hit 429 on page 16 of a 60-day reingest. 800ms (the
+// original) was over-conservative — at 4k+ calls per reingest the throttle
+// alone added ~30s of pure idle time. 500ms is the empirical sweet spot.
+const PAGE_DELAY_MS = 500;
 // Batch size for parallel upserts within one fetched page. The Supabase
 // pooler comfortably handles 10 concurrent queries; bigger batches don't
 // proportionally speed up since each upsert is dominated by a single round
 // trip to PostgREST.
 const UPSERT_CONCURRENCY = 10;
-const RATE_LIMIT_RETRY_MS = 12_000; // single retry covers a short hiccup
-const MAX_RATE_LIMIT_RETRIES = 1;
+const RATE_LIMIT_RETRY_MS = 12_000; // exponential-ish backoff per retry
+// 3 retries covers transient rate-limit spikes during long backfills; with
+// 1 retry the worker bailed after a single 429 burst on page 16 of a 60d
+// reingest, leaking the trailing 30+ pages.
+const MAX_RATE_LIMIT_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
