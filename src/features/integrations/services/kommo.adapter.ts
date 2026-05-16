@@ -133,11 +133,11 @@ function extractSubdomain(referer: string): string {
 export class KommoAdapter implements CRMAdapter {
   readonly provider: CrmProvider = 'kommo';
 
-  getAuthUrl(redirectUri: string): string {
+  getAuthUrl(redirectUri: string, state?: string): string {
     const params = new URLSearchParams({
       client_id: KOMMO_CLIENT_ID,
       redirect_uri: redirectUri,
-      state: crypto.randomUUID(),
+      state: state ?? crypto.randomUUID(),
     });
 
     return `${KOMMO_AUTH_URL}?${params.toString()}`;

@@ -164,7 +164,7 @@ export interface CRMAdapter {
   readonly provider: CrmProvider;
 
   // OAuth flow
-  getAuthUrl(redirectUri: string): string;
+  getAuthUrl(redirectUri: string, state?: string): string;
   exchangeCode(code: string, redirectUri: string): Promise<CrmCredentials>;
   refreshToken(credentials: CrmCredentials): Promise<CrmCredentials>;
 

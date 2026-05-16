@@ -6,6 +6,7 @@ import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult, getManagerOrgId } from '@/lib/auth/get-org-id';
 
 import { encryptJson } from '@/lib/security/encryption';
+import { issueOAuthState } from '@/lib/security/oauth-state';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -45,7 +46,11 @@ export async function getCrmAuthUrl(
 
     const adapter = CRMRegistry.getAdapter(provider);
     const redirectUri = getCrmRedirectUri(provider);
-    const url = adapter.getAuthUrl(redirectUri);
+    // Issue a one-shot HttpOnly state cookie before redirecting. The callback
+    // compares this against the `state` returned by the provider so a
+    // malicious link can't link some attacker's CRM into a victim's session.
+    const state = await issueOAuthState(provider);
+    const url = adapter.getAuthUrl(redirectUri, state);
 
     return { success: true, data: { url } };
   } catch (error) {
