@@ -94,7 +94,9 @@ export async function fetchConversionAnalyticsData(
     .is('deleted_at', null)) as { data: CadenceRow[] | null };
   const cadences = rawCadences ?? [];
 
-  // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column)
+  // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column).
+  // Period-filtered: used by velocity calculation, which needs enrolled_at/updated_at
+  // duration on enrollments started in the period.
   const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
@@ -109,10 +111,24 @@ export async function fetchConversionAnalyticsData(
   const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
+  // Cadence membership for every universe lead, regardless of when they enrolled.
+  // Without this, leads enrolled before the period but qualified/won inside it
+  // wouldn't be attributed to their cadence in the "Conversão por Cadência" table.
+  const universeLeadIdsList = Array.from(universeIds);
+  let memberships: Array<{ cadence_id: string; lead_id: string }> = [];
+  if (universeLeadIdsList.length > 0 && cadenceIds.length > 0) {
+    const { data: rawMembership } = (await from(supabase, 'cadence_enrollments')
+      .select('cadence_id, lead_id')
+      .in('cadence_id', cadenceIds)
+      .in('lead_id', universeLeadIdsList)
+      .limit(20000)) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
+    memberships = rawMembership ?? [];
+  }
+
   const funnel = calculateFunnel(leads, interactions);
   const stageConversions = calculateStageConversions(funnel);
   const velocity = calculateVelocity(enrollments, leads);
-  const cadenceConversion = calculateCadenceConversion(cadences, enrollments, interactions, leads);
+  const cadenceConversion = calculateCadenceConversion(cadences, memberships, interactions, leads);
   const conversionByOrigin = calculateConversionByOrigin(leads);
 
   return { funnel, stageConversions, velocity, cadenceConversion, conversionByOrigin };
@@ -201,14 +217,14 @@ function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRo
 
 function calculateCadenceConversion(
   cadences: CadenceRow[],
-  enrollments: EnrollmentQueryRow[],
+  memberships: Array<{ cadence_id: string; lead_id: string }>,
   interactions: InteractionQueryRow[],
   leads: LeadQueryRow[],
 ): CadenceConversionRow[] {
-  // Funnel buckets are cumulative — a lead that reached a stage is counted
-  // there even if it has since moved further along (so won leads still show
-  // up as contacted and qualified). Keeps the invariant
-  // Inscritos ≥ Em Contato ≥ Qualificado ≥ Ganho.
+  // All counts are attributed by universe ∩ cadence membership (at any time),
+  // so a lead enrolled before the period that became qualified/won during it
+  // is still credited to the right cadence. Cumulative buckets keep the
+  // invariant Inscritos ≥ Em Contato ≥ Qualificado ≥ Ganho.
   const contactedLeadIds = new Set(
     leads.filter((l) => ['contacted', 'qualified', 'won'].includes(l.status)).map((l) => l.id),
   );
@@ -226,13 +242,14 @@ function calculateCadenceConversion(
     interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
   );
 
-  const enrollmentsByCadence = groupBy(enrollments, (e) => e.cadence_id);
+  const membershipsByCadence = groupBy(memberships, (m) => m.cadence_id);
 
   return cadences
     .map((cadence) => {
-      const cadenceEnrollments = enrollmentsByCadence.get(cadence.id) ?? [];
-      const cadenceLeadIds = new Set(cadenceEnrollments.map((e) => e.lead_id));
+      const cadenceMembers = membershipsByCadence.get(cadence.id) ?? [];
+      const cadenceLeadIds = new Set(cadenceMembers.map((m) => m.lead_id));
 
+      const inscritos = cadenceLeadIds.size;
       const contacted = [...cadenceLeadIds].filter((id) => contactedLeadIds.has(id)).length;
       const qualified = [...cadenceLeadIds].filter((id) => qualifiedLeadIds.has(id)).length;
       const won = [...cadenceLeadIds].filter((id) => wonLeadIds.has(id)).length;
@@ -242,13 +259,13 @@ function calculateCadenceConversion(
       return {
         cadenceId: cadence.id,
         cadenceName: cadence.name,
-        enrollments: cadenceEnrollments.length,
+        enrollments: inscritos,
         contacted,
         qualified,
         won,
         replies,
         meetings,
-        conversionRate: safeRate(won, cadenceEnrollments.length),
+        conversionRate: safeRate(won, inscritos),
       };
     })
     .filter((c) => c.enrollments > 0)
