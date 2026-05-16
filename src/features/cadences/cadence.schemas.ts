@@ -110,11 +110,9 @@ export const AVAILABLE_TEMPLATE_VARIABLES = [
   'nome_completo',
   'empresa',
   'nome_fantasia',
-  'razao_social',
   'cargo',
   'email',
   'telefone',
-  'cnpj',
   'instagram',
   'linkedin',
   'website',
@@ -122,9 +120,7 @@ export const AVAILABLE_TEMPLATE_VARIABLES = [
   'sub_origem',
   'estado',
   'cidade',
-  'porte',
   'faturamento',
-  'cadencia',
   'etapa',
 ] as const;
 
