@@ -151,11 +151,12 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
       .map((i) => i.lead_id),
   );
   const qualifiedSet = new Set<string>();
+  const salSet = new Set<string>();
   for (const id of contactedSet) {
     const lead = leadById.get(id);
-    if (lead && (lead.status === 'qualified' || lead.status === 'won')) {
-      qualifiedSet.add(id);
-    }
+    if (!lead) continue;
+    if (lead.status === 'qualified' || lead.status === 'won') qualifiedSet.add(id);
+    if (lead.status === 'won') salSet.add(id);
   }
 
   return [
@@ -163,6 +164,7 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
     { label: 'Contactados', count: contactedSet.size, percentage: safeRate(contactedSet.size, totalLeads), color: CONVERSION_COLORS.contacted },
     { label: 'Qualificados', count: qualifiedSet.size, percentage: safeRate(qualifiedSet.size, totalLeads), color: CONVERSION_COLORS.qualified },
     { label: 'Reunião', count: meetingSet.size, percentage: safeRate(meetingSet.size, totalLeads), color: CONVERSION_COLORS.meeting },
+    { label: 'SAL', count: salSet.size, percentage: safeRate(salSet.size, totalLeads), color: CONVERSION_COLORS.sal },
   ];
 }
 

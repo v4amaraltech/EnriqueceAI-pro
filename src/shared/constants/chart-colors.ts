@@ -84,6 +84,7 @@ export const CONVERSION_COLORS = {
   replied: '#8b5cf6',
   meeting: '#f59e0b',
   qualified: '#22c55e',
+  sal: '#ef4444',
 } as const;
 
 /** Semantic single-use chart colors */

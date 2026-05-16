@@ -20,6 +20,7 @@ import { ConversionFunnelChart } from './ConversionFunnelChart';
 const STAGE_LABEL_MAP: Record<string, string> = {
   Contactados: 'contacted',
   Qualificados: 'qualified,won',
+  SAL: 'won',
 };
 
 function BigKpiCard({ value, label, icon: Icon, color }: { value: string; label: string; icon: typeof Users; color?: string }) {
