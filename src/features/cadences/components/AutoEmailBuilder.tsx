@@ -215,7 +215,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-4">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/cadences?type=auto_email')}>
@@ -245,7 +245,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
         </CardHeader>
         {!generalCollapsed && <CardContent className="space-y-0 divide-y">
           {/* Nome */}
-          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4 first:pt-0">
+          <div className="grid grid-cols-[160px_1fr] items-center gap-4 py-2.5 first:pt-1">
             <Label htmlFor="cadence-name" className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nome:</Label>
             <Input
               id="cadence-name"
@@ -257,20 +257,20 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           </div>
 
           {/* Descrição */}
-          <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-4">
+          <div className="grid grid-cols-[160px_1fr] items-start gap-4 py-2.5">
             <Label htmlFor="cadence-desc" className="pt-2 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</Label>
             <Textarea
               id="cadence-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descreva o objetivo desta cadência..."
-              rows={3}
+              rows={2}
               disabled={!isEditable}
             />
           </div>
 
           {/* Foco / Origem */}
-          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
+          <div className="grid grid-cols-[160px_1fr] items-center gap-4 py-2.5">
             <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Foco:</Label>
             <div className="flex flex-wrap gap-1">
               {([
@@ -297,7 +297,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           </div>
 
           {/* Prioridade */}
-          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
+          <div className="grid grid-cols-[160px_1fr] items-center gap-4 py-2.5">
             <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Prioridade:</Label>
             <Select value={priority} onValueChange={(v) => setPriority(v as CadencePriority)} disabled={!isEditable}>
               <SelectTrigger className="w-[200px]">
@@ -312,8 +312,8 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           </div>
 
           {/* Perda Automática por Inatividade */}
-          <div className="py-4">
-            <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+          <div className="py-2.5">
+            <div className="grid grid-cols-[160px_1fr] items-center gap-4">
               <Label className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Perda automática por inatividade
               </Label>
@@ -334,8 +334,8 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
               </div>
             </div>
             {autoLossEnabled && (
-              <div className="mt-4 space-y-4 pl-[196px]">
-                <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+              <div className="mt-3 space-y-2.5 pl-[176px]">
+                <div className="grid grid-cols-[160px_1fr] items-center gap-4">
                   <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Dias de inatividade:</Label>
                   <Input
                     type="number"
@@ -347,7 +347,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
                     className="w-[200px]"
                   />
                 </div>
-                <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+                <div className="grid grid-cols-[160px_1fr] items-center gap-4">
                   <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Motivo de perda:</Label>
                   <Select value={autoLossReasonId} onValueChange={setAutoLossReasonId} disabled={!isEditable}>
                     <SelectTrigger className="w-[300px]">
@@ -366,7 +366,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
 
           {/* Metrics inline (edit mode only) */}
           {metrics && (
-            <div className="flex items-center gap-6 py-4 text-sm">
+            <div className="flex items-center gap-6 py-2.5 text-sm">
               <div>
                 <span className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Inscritos</span>
                 <p className="text-lg font-semibold">{metrics.total_enrolled}</p>

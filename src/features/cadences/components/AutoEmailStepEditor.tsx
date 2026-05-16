@@ -111,7 +111,7 @@ export function AutoEmailStepEditor({
     onFocus: () => setFocusedField('body'),
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none min-h-[120px] p-3 focus:outline-none [&_p]:my-1',
+        class: 'prose prose-sm max-w-none min-h-[80px] max-h-[300px] overflow-y-auto p-2 focus:outline-none [&_p]:my-0.5',
       },
     },
   });
@@ -137,7 +137,7 @@ export function AutoEmailStepEditor({
     onFocus: () => setFocusedField('body'),
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none min-h-[120px] p-3 focus:outline-none [&_p]:my-1',
+        class: 'prose prose-sm max-w-none min-h-[80px] max-h-[300px] overflow-y-auto p-2 focus:outline-none [&_p]:my-0.5',
       },
     },
   });
@@ -201,7 +201,7 @@ export function AutoEmailStepEditor({
   return (
     <div className="rounded-lg border">
       {/* Header */}
-      <div className="flex items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5">
+      <div className="flex items-center gap-2 rounded-t-lg bg-[var(--muted)] px-3 py-1.5">
         <button type="button" onClick={() => setCollapsed(!collapsed)}>
           {collapsed ? (
             <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
@@ -261,7 +261,7 @@ export function AutoEmailStepEditor({
       {!collapsed && (
         <div className={`grid ${showPreview ? 'grid-cols-2 gap-4' : 'grid-cols-1'}`}>
           {/* Editor column */}
-          <div className="space-y-4 p-4 border-r">
+          <div className="space-y-3 p-3 border-r">
             {/* Delay (hidden for first step or when managed externally) */}
             {!isFirst && !hideDelay && (
               <div className="flex items-center gap-4">
