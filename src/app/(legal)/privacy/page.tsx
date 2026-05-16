@@ -9,7 +9,7 @@ export default function PrivacyPage() {
     <article className="max-w-none space-y-4 text-sm leading-relaxed [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-8 [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-4 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_a]:underline">
       <h1>Politica de Privacidade</h1>
       <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-        Ultima atualizacao: 21 de marco de 2026
+        Ultima atualizacao: 16 de maio de 2026
       </p>
 
       <p>
@@ -37,7 +37,7 @@ export default function PrivacyPage() {
       <h3>1.3 Dados de Integracoes</h3>
       <ul>
         <li>Tokens OAuth de Gmail, Google Calendar e CRMs (criptografados com AES-256-GCM)</li>
-        <li>Dados sincronizados de CRMs conectados (HubSpot, Pipedrive, RD Station)</li>
+        <li>Dados sincronizados de CRMs conectados (HubSpot, Pipedrive, RD Station, Kommo)</li>
       </ul>
 
       <h3>1.4 Dados de Pagamento</h3>
@@ -87,6 +87,14 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Anthropic (Claude)</strong> — geracao de mensagens por IA (dados anonimizados)
+        </li>
+        <li>
+          <strong>Kommo CRM</strong> — sincronizacao de leads, contatos e atividades (apenas quando voce
+          conecta sua conta voluntariamente via OAuth)
+        </li>
+        <li>
+          <strong>API4COM</strong> — telefonia VoIP para registro e gravacao de ligacoes (apenas quando voce
+          conecta sua conta voluntariamente)
         </li>
         <li>
           <strong>Sentry</strong> — monitoramento de erros (sem dados pessoais)

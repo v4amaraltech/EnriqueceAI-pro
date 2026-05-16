@@ -9,7 +9,7 @@ export default function TermsPage() {
     <article className="max-w-none space-y-4 text-sm leading-relaxed [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-8 [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-4 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_a]:underline">
       <h1>Termos de Uso</h1>
       <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-        Ultima atualizacao: 21 de marco de 2026
+        Ultima atualizacao: 16 de maio de 2026
       </p>
 
       <p>
@@ -54,7 +54,8 @@ export default function TermsPage() {
         <li>Cadencias de outreach multicanal (email e WhatsApp)</li>
         <li>Geracao de mensagens personalizadas com inteligencia artificial</li>
         <li>Fila de atividades para SDRs</li>
-        <li>Integracoes com CRMs (HubSpot, Pipedrive, RD Station)</li>
+        <li>Integracoes com CRMs (HubSpot, Pipedrive, RD Station, Kommo)</li>
+        <li>Integracao com telefonia VoIP (API4COM) para registro de ligacoes</li>
         <li>Relatorios e analiticos de desempenho</li>
       </ul>
 
