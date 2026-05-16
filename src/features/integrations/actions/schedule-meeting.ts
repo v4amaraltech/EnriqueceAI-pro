@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -92,21 +93,33 @@ export async function scheduleMeeting(
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
 
-    // Send meeting briefing email to closer (fire-and-forget)
-    if (input.closerId) {
-      sendMeetingBriefingEmail(supabase, {
-        leadId,
-        orgId,
-        closerId: input.closerId,
-        sdrUserId: userId,
-        meetingTitle: input.title,
-        meetingStart: event.startTime,
-        meetingEnd: event.endTime,
-        meetLink: event.meetLink,
-      }).catch((err) => console.error('[scheduleMeeting] Briefing email error:', err));
-    }
+    // Run the post-schedule side-effects via `after()` so the Server Action
+    // can return immediately without the Vercel runtime killing pending
+    // promises. Without after(), bare .catch() fire-and-forget calls were
+    // cancelled mid-flight: V4 Amaral lost the closer briefing email for the
+    // Rodobem lead on 2026-05-15 because Resend hadn't responded yet when the
+    // action returned.
+    const briefingClosed = input.closerId;
+    after(async () => {
+      if (briefingClosed) {
+        try {
+          await sendMeetingBriefingEmail(supabase, {
+            leadId,
+            orgId,
+            closerId: briefingClosed,
+            sdrUserId: userId,
+            meetingTitle: input.title,
+            meetingStart: event.startTime,
+            meetingEnd: event.endTime,
+            meetLink: event.meetLink,
+          });
+        } catch (err) {
+          console.error('[scheduleMeeting] Briefing email error:', err);
+        }
+      }
+    });
 
-    // Create WhatsApp group for the meeting (fire-and-forget)
+    // WhatsApp group creation — also moved under after() for the same reason.
     if (input.closerId) {
       const { data: leadData } = (await from(supabase, 'leads')
         .select('telefone, nome_fantasia, razao_social')
@@ -115,32 +128,46 @@ export async function scheduleMeeting(
 
       if (leadData?.telefone) {
         const startDate = new Date(event.startTime);
-        createMeetingWhatsAppGroup(supabase, {
+        const groupCloserId = input.closerId;
+        const groupParams = {
           orgId,
           sdrUserId: userId,
-          closerId: input.closerId,
+          closerId: groupCloserId,
           leadPhone: leadData.telefone,
           leadCompanyName: leadData.nome_fantasia ?? leadData.razao_social ?? 'Lead',
           meetingTitle: input.title,
           meetingDate: startDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long' }),
           meetingTime: `${startDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })} (60 min)`,
           meetLink: event.meetLink ?? null,
-        }).catch((err) => console.error('[scheduleMeeting] WhatsApp group error:', err));
+        };
+        after(async () => {
+          try {
+            await createMeetingWhatsAppGroup(supabase, groupParams);
+          } catch (err) {
+            console.error('[scheduleMeeting] WhatsApp group error:', err);
+          }
+        });
       }
     }
 
     revalidatePath('/atividades');
     revalidatePath(`/leads/${leadId}`);
 
-    // Dispatch call.scheduled webhook
-    dispatchWebhookEvent(supabase, orgId, 'call.scheduled', {
-      lead_id: leadId,
-      calendar_event_id: event.id,
-      title: input.title,
-      start_time: event.startTime,
-      end_time: event.endTime,
-      meet_link: event.meetLink ?? null,
-    }).catch((err) => console.error('[webhook] meeting.scheduled dispatch failed:', err));
+    // Dispatch call.scheduled webhook — same after() pattern.
+    after(async () => {
+      try {
+        await dispatchWebhookEvent(supabase, orgId, 'call.scheduled', {
+          lead_id: leadId,
+          calendar_event_id: event.id,
+          title: input.title,
+          start_time: event.startTime,
+          end_time: event.endTime,
+          meet_link: event.meetLink ?? null,
+        });
+      } catch (err) {
+        console.error('[webhook] meeting.scheduled dispatch failed:', err);
+      }
+    });
 
     return { success: true, data: event };
   } catch (err) {
