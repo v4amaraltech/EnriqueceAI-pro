@@ -4,10 +4,14 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 
 export const maxDuration = 60;
 
 const REMINDER_WINDOW_MINUTES = 30;
+// SDR has 2h grace from scheduled_at before the "atrasado" WhatsApp fires.
+// Matches the tolerance discussed with operations 16/05/2026.
+const OVERDUE_THRESHOLD_HOURS = 2;
 
 const CHANNEL_LABELS: Record<string, string> = {
   phone: 'Ligação',
@@ -28,6 +32,8 @@ export async function POST(request: Request) {
 
   let activityReminders = 0;
   let meetingReminders = 0;
+  let overdueWhatsAppsSent = 0;
+  let overdueWhatsAppsSkipped = 0;
 
   try {
     // ── Scheduled Activity Reminders ──────────────────────────
@@ -172,6 +178,153 @@ export async function POST(request: Request) {
         meetingReminders++;
       }
     }
+
+    // ── Overdue Returns → WhatsApp DM to SDR ─────────────────
+    // When a scheduled return crosses past its scheduled_at by more than
+    // OVERDUE_THRESHOLD_HOURS without being completed, ping the SDR's
+    // personal WhatsApp once. Idempotency is enforced by
+    // overdue_reminder_sent_at — claimed via atomic UPDATE before the
+    // outbound message so a crash mid-send doesn't double-notify on the
+    // next 5min cron tick.
+    const overdueThreshold = new Date(now.getTime() - OVERDUE_THRESHOLD_HOURS * 60 * 60 * 1000);
+    const { data: overdueActivities } = (await from(supabase, 'scheduled_activities' as never)
+      .select('id, org_id, user_id, lead_id, channel, scheduled_at, notes')
+      .eq('status', 'pending')
+      .is('overdue_reminder_sent_at', null)
+      .lt('scheduled_at', overdueThreshold.toISOString())) as {
+      data: Array<{
+        id: string;
+        org_id: string;
+        user_id: string;
+        lead_id: string;
+        channel: string;
+        scheduled_at: string;
+        notes: string | null;
+      }> | null;
+    };
+
+    if (overdueActivities?.length) {
+      // Group by SDR so we can fetch their WhatsApp instance once and
+      // batch one message per SDR containing every overdue return — way
+      // less noise than one DM per activity if the SDR is sitting on a
+      // pile of late returns after vacation.
+      const byUser = new Map<string, typeof overdueActivities>();
+      for (const a of overdueActivities) {
+        const list = byUser.get(a.user_id) ?? [];
+        list.push(a);
+        byUser.set(a.user_id, list);
+      }
+
+      // Preload lead names for the message body.
+      const leadIds = [...new Set(overdueActivities.map((a) => a.lead_id))];
+      const { data: overdueLeads } = (await from(supabase, 'leads')
+        .select('id, nome_fantasia, razao_social')
+        .in('id', leadIds)) as { data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null };
+      const overdueLeadNameMap = new Map(
+        (overdueLeads ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']),
+      );
+
+      for (const [userId, activities] of byUser) {
+        // Resolve SDR's personal WhatsApp from their connected instance.
+        // We use whatsapp_instances.phone (the number tied to the SDR's
+        // Evolution session) as the destination, and send via the org's
+        // default instance. If the SDR has no connected instance we skip
+        // — there's no other reliable place to store their personal
+        // number today.
+        const { data: instance } = (await from(supabase, 'whatsapp_instances' as never)
+          .select('phone')
+          .eq('user_id', userId)
+          .eq('status', 'connected')
+          .not('phone', 'is', null)
+          .maybeSingle()) as { data: { phone: string } | null };
+
+        if (!instance?.phone) {
+          overdueWhatsAppsSkipped += activities.length;
+          // Still claim so we don't keep retrying every 5min for a SDR
+          // we'll never be able to reach via WhatsApp.
+          for (const a of activities) {
+            await from(supabase, 'scheduled_activities' as never)
+              .update({ overdue_reminder_sent_at: now.toISOString() } as Record<string, unknown>)
+              .eq('id', a.id)
+              .is('overdue_reminder_sent_at', null);
+          }
+          continue;
+        }
+
+        // Atomic claim batch — only keep activities that successfully
+        // flipped overdue_reminder_sent_at. Concurrent cron ticks racing
+        // for the same row won't double-message.
+        const claimedActivities: typeof activities = [];
+        for (const a of activities) {
+          const { data: claimed } = (await from(supabase, 'scheduled_activities' as never)
+            .update({ overdue_reminder_sent_at: now.toISOString() } as Record<string, unknown>)
+            .eq('id', a.id)
+            .is('overdue_reminder_sent_at', null)
+            .select('id')) as { data: Array<{ id: string }> | null };
+          if (claimed?.length) claimedActivities.push(a);
+        }
+
+        if (claimedActivities.length === 0) continue;
+
+        // Compose digest message. Newest-first feels more relevant than
+        // chronological for the SDR (most-recently-late at the top).
+        const lines = claimedActivities
+          .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+          .map((a) => {
+            const leadName = overdueLeadNameMap.get(a.lead_id) ?? 'Lead';
+            const channelLabel = CHANNEL_LABELS[a.channel] ?? a.channel;
+            const when = new Date(a.scheduled_at).toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            return `• ${channelLabel} para *${leadName}* (agendado ${when})`;
+          });
+
+        const heading = claimedActivities.length === 1
+          ? '⚠️ Você tem 1 retorno atrasado:'
+          : `⚠️ Você tem ${claimedActivities.length} retornos atrasados:`;
+
+        const body = [
+          heading,
+          '',
+          ...lines,
+          '',
+          '👉 Acesse: https://app.enriqueceai.com.br/atividades',
+        ].join('\n');
+
+        // Send via Evolution — the org's default instance picks itself
+        // when no userId is passed (we want a system sender, not the
+        // SDR's own instance messaging itself).
+        const result = await EvolutionWhatsAppService.sendMessage(
+          claimedActivities[0]!.org_id,
+          { to: instance.phone, body },
+          supabase,
+        );
+
+        if (result.success) {
+          overdueWhatsAppsSent++;
+        } else {
+          // Rollback the claim so the next cron tick gets another chance.
+          // Without this a transient Evolution outage permanently silences
+          // every overdue return that happened to fall in this batch.
+          for (const a of claimedActivities) {
+            await from(supabase, 'scheduled_activities' as never)
+              .update({ overdue_reminder_sent_at: null } as Record<string, unknown>)
+              .eq('id', a.id);
+          }
+          console.warn('[activity-reminders] Overdue WhatsApp failed', {
+            userId,
+            phone: instance.phone,
+            error: result.error,
+            activityCount: claimedActivities.length,
+          });
+          overdueWhatsAppsSkipped += claimedActivities.length;
+        }
+      }
+    }
   } catch (err) {
     console.error('[activity-reminders] Error:', err);
     return NextResponse.json(
@@ -184,5 +337,7 @@ export async function POST(request: Request) {
     success: true,
     activityReminders,
     meetingReminders,
+    overdueWhatsAppsSent,
+    overdueWhatsAppsSkipped,
   });
 }
