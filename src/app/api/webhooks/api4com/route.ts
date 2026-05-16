@@ -16,6 +16,10 @@ import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4co
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import type { CallStatus } from '@/features/calls/types';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import {
+  classifyApi4ComCall,
+  getSignificantThreshold,
+} from '@/features/calls/services/api4com-classification';
 import { computeCallCostBrl } from '@/features/calls/services/call-cost';
 import {
   findLeadByPhoneService,
@@ -27,22 +31,9 @@ export const maxDuration = 60;
 
 const logger = createWebhookLogger('api4com');
 
-// Map FreeSWITCH hangup causes to our CallStatus
-const hangupCauseToStatus: Record<string, CallStatus> = {
-  NO_ANSWER: 'no_contact',
-  NO_USER_RESPONSE: 'no_contact',
-  USER_BUSY: 'busy',
-  CALL_REJECTED: 'not_connected',
-  UNALLOCATED_NUMBER: 'not_connected',
-  INVALID_NUMBER_FORMAT: 'not_connected',
-  ORIGINATOR_CANCEL: 'not_connected',
-  NORMAL_TEMPORARY_FAILURE: 'not_connected',
-  RECOVERY_ON_TIMER_EXPIRE: 'not_connected',
-  // NORMAL_CLEARING handled separately below (depends on answeredAt)
-};
-
 interface MatchedCall {
   id: string;
+  org_id: string;
   status: CallStatus;
   recording_url: string | null;
   metadata: Record<string, unknown> | null;
@@ -56,7 +47,7 @@ async function findMatchingCall(
 ): Promise<MatchedCall | null> {
   // Try by api4com_call_id first
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, status, recording_url, metadata')
+    .select('id, org_id, status, recording_url, metadata')
     .eq('metadata->>api4com_call_id', body.id)
     .maybeSingle()) as { data: MatchedCall | null };
 
@@ -77,7 +68,7 @@ async function findMatchingCall(
   const calledNormalized = body.called.replace(/\D/g, '');
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: fallbackCall } = (await from(supabase, 'calls')
-    .select('id, status, recording_url, metadata')
+    .select('id, org_id, status, recording_url, metadata')
     .eq('origin', body.caller)
     .like('destination', `%${calledNormalized.slice(-8)}`)
     .gte('created_at', twoHoursAgo)
@@ -132,6 +123,19 @@ async function createCallFromWebhook(
   }
 
   const initialDuration = Number(body.duration) || 0;
+  // Apply the same classifier used by updateCallFromWebhook so an auto-created
+  // call is created already with the right connected/status — otherwise we'd
+  // insert with status='not_connected' and rely on a follow-up update to fix
+  // it, which is racy.
+  const threshold = await getSignificantThreshold(supabase, conn.org_id);
+  const classification = classifyApi4ComCall({
+    answeredAt: body.answeredAt,
+    hangupCause: body.hangupCause ?? null,
+    durationSeconds: initialDuration,
+    significantThresholdSeconds: threshold,
+  });
+  const answeredAtIso = parseApi4ComTimestamp(body.answeredAt)?.toISOString() ?? null;
+
   const { data: newCall } = (await from(supabase, 'calls')
     .insert({
       org_id: conn.org_id,
@@ -140,9 +144,12 @@ async function createCallFromWebhook(
       origin: body.caller,
       destination: body.called,
       started_at: parseApi4ComTimestamp(body.startedAt)?.toISOString() ?? new Date().toISOString(),
+      answered_at: answeredAtIso,
       duration_seconds: initialDuration,
       cost: computeCallCostBrl(initialDuration, body.called),
-      status: 'not_connected',
+      status: classification.status,
+      connected: classification.connected,
+      hangup_cause: body.hangupCause ?? null,
       type: isOutbound ? 'outbound' : 'inbound',
       recording_url: body.recordUrl || null,
       metadata: { api4com_call_id: body.id, source: 'external_api4com', webhook_linked: true },
@@ -166,12 +173,24 @@ async function processApi4ComEvent(
       const result = await createCallFromWebhook(supabase, body);
       if (result?.call) {
         logger.info('Auto-created external call', { callId: result.call.id, api4comId: body.id, leadId: result.leadId });
-        await updateCallFromWebhook(supabase, result.call.id, 'not_connected', body);
+        // createCallFromWebhook already applied the classifier — no need to
+        // re-run updateCallFromWebhook (was a stale "fix up after default
+        // insert" left over from the old not_connected default).
 
         // Create interaction + advance cadence for outbound calls with matched lead
         if (result.leadId && body.direction !== 'inbound') {
           const duration = Number(body.duration) || 0;
-          const status = duration >= 50 ? 'significant' : 'no_contact';
+          // Use the same authoritative classification used when inserting the
+          // call row — interaction status was previously a hardcoded
+          // duration>=50 heuristic that diverged from the call row.
+          const threshold = await getSignificantThreshold(supabase, result.orgId);
+          const interactionClass = classifyApi4ComCall({
+            answeredAt: body.answeredAt,
+            hangupCause: body.hangupCause ?? null,
+            durationSeconds: duration,
+            significantThresholdSeconds: threshold,
+          });
+          const status = interactionClass.connected ? 'significant' : 'no_contact';
 
           await createExternalCallInteraction(supabase, {
             orgId: result.orgId,
@@ -207,8 +226,14 @@ async function processApi4ComEvent(
   }
 
   if (body.eventType === 'channel-answer') {
-    // channel-answer: save recordUrl early if available
-    const updates: Record<string, unknown> = {};
+    // channel-answer: this event itself proves the call was answered, so we
+    // can flip connected=true and answered_at immediately — before
+    // channel-hangup arrives. The dashboard SH stops underreporting even if
+    // hangup never fires (lost webhook, killed process, etc).
+    const updates: Record<string, unknown> = { connected: true };
+    if (body.answeredAt) {
+      updates.answered_at = parseApi4ComTimestamp(body.answeredAt)?.toISOString() ?? null;
+    }
     if (body.recordUrl && !call.recording_url) {
       updates.recording_url = body.recordUrl;
     }
@@ -216,19 +241,17 @@ async function processApi4ComEvent(
     if (startedIso) {
       updates.started_at = startedIso;
     }
-    if (Object.keys(updates).length > 0) {
-      await from(supabase, 'calls').update(updates).eq('id', call.id);
-      logger.info('Call updated from channel-answer', {
-        callId: call.id,
-        api4comId: body.id,
-        hasRecording: !!body.recordUrl,
-      });
-    }
+    await from(supabase, 'calls').update(updates).eq('id', call.id);
+    logger.info('Call updated from channel-answer', {
+      callId: call.id,
+      api4comId: body.id,
+      hasRecording: !!body.recordUrl,
+    });
     return;
   }
 
   // channel-hangup: full update
-  await updateCallFromWebhook(supabase, call.id, call.status, body);
+  await updateCallFromWebhook(supabase, call.id, call.status, body, call.org_id);
   logger.info('Call updated', { callId: call.id, api4comId: body.id });
 }
 
@@ -329,10 +352,12 @@ async function updateCallFromWebhook(
   callId: string,
   currentStatus: CallStatus,
   payload: Api4ComWebhookPayload,
+  orgId: string,
 ) {
   const updates: Record<string, unknown> = {
     duration_seconds: payload.duration,
     cost: computeCallCostBrl(payload.duration, payload.called),
+    hangup_cause: payload.hangupCause ?? null,
   };
 
   // Only update recording_url if webhook provides one (don't overwrite with null)
@@ -347,19 +372,24 @@ async function updateCallFromWebhook(
     updates.started_at = startedAtUtc;
   }
 
-  // Status decision tree — only override if SDR hasn't manually set it
+  const answeredAtUtc = parseApi4ComTimestamp(payload.answeredAt)?.toISOString() ?? null;
+  if (answeredAtUtc) {
+    updates.answered_at = answeredAtUtc;
+  }
+
+  // Only override status/connected if SDR hasn't manually classified yet.
+  // Once a manager/SDR moved the call out of 'not_connected', their judgment
+  // wins — webhook retries arriving days later won't downgrade it.
   if (currentStatus === 'not_connected') {
-    if (payload.duration >= 50) {
-      // Long call = connected and significant
-      updates.status = 'significant';
-    } else if (payload.hangupCause === 'NORMAL_CLEARING' && !payload.answeredAt) {
-      // Rang but not answered
-      updates.status = 'no_contact';
-    } else {
-      // Check hangup cause mapping, fallback to no_contact
-      const mappedStatus = hangupCauseToStatus[payload.hangupCause];
-      updates.status = mappedStatus ?? 'no_contact';
-    }
+    const threshold = await getSignificantThreshold(supabase, orgId);
+    const classification = classifyApi4ComCall({
+      answeredAt: payload.answeredAt,
+      hangupCause: payload.hangupCause ?? null,
+      durationSeconds: payload.duration,
+      significantThresholdSeconds: threshold,
+    });
+    updates.status = classification.status;
+    updates.connected = classification.connected;
   }
 
   await from(supabase, 'calls')

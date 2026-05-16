@@ -353,10 +353,13 @@ export type Database = {
       }
       calls: {
         Row: {
+          answered_at: string | null
+          connected: boolean
           cost: number | null
           created_at: string
           destination: string
           duration_seconds: number
+          hangup_cause: string | null
           id: string
           is_important: boolean
           lead_id: string | null
@@ -371,10 +374,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          answered_at?: string | null
+          connected?: boolean
           cost?: number | null
           created_at?: string
           destination: string
           duration_seconds?: number
+          hangup_cause?: string | null
           id?: string
           is_important?: boolean
           lead_id?: string | null
@@ -389,10 +395,13 @@ export type Database = {
           user_id: string
         }
         Update: {
+          answered_at?: string | null
+          connected?: boolean
           cost?: number | null
           created_at?: string
           destination?: string
           duration_seconds?: number
+          hangup_cause?: string | null
           id?: string
           is_important?: boolean
           lead_id?: string | null

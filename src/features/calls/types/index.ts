@@ -12,8 +12,11 @@ export interface CallRow {
   origin: string;
   destination: string;
   started_at: string;
+  answered_at: string | null;
   duration_seconds: number;
   status: CallStatus;
+  connected: boolean;
+  hangup_cause: string | null;
   type: CallType;
   cost: number | null;
   recording_url: string | null;

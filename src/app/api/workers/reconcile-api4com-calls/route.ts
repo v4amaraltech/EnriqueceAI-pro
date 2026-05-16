@@ -5,6 +5,10 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import {
+  classifyApi4ComCall,
+  getSignificantThreshold,
+} from '@/features/calls/services/api4com-classification';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 300;
@@ -17,10 +21,7 @@ const ADAPTIVE_OVERLAP_HOURS = 0.5;
 // the original "API4COM webhook was leaking ~40% of calls" problem
 // without anyone accidentally requesting "last 5 years".
 const MAX_WINDOW_HOURS = 1440;
-// API4COM ignores client-side pageSize and returns 100 per page by default.
-// Use 100 as the expected size so the pagination loop knows when to stop.
-const EXPECTED_PAGE_SIZE = 100;
-const MAX_PAGES = 100; // 100 * 100 = 10k calls per org per window
+const MAX_PAGES = 100; // 100 pages × ~100 calls = 10k calls per org per window
 const PAGE_DELAY_MS = 800; // be conservative — API4COM throttles per minute
 const RATE_LIMIT_RETRY_MS = 12_000; // single retry covers a short hiccup
 const MAX_RATE_LIMIT_RETRIES = 1;
@@ -187,6 +188,16 @@ export async function POST(request: Request) {
     const baseUrl = conn.base_url.replace(/\/+$/, '');
     const calls: Api4ComCall[] = [];
 
+    // Fetch once per org — we'll thread the org's threshold into the
+    // classifier instead of running the old hardcoded 50s gate.
+    const significantThresholdSeconds = await getSignificantThreshold(supabase, orgId);
+
+    // Set by API4COM's paginated response metadata. Used as the definitive
+    // stop condition; remains null only if the API never returns metadata
+    // (legacy/raw-array responses) — in that case we fall back to the
+    // window/empty-page heuristics.
+    let totalPageCount: number | null = null;
+
     pageLoop: for (let page = 1; page <= MAX_PAGES; page++) {
       const url = new URL(`${baseUrl}/calls`);
       url.searchParams.set('started_at[gte]', since.toISOString());
@@ -233,8 +244,22 @@ export async function POST(request: Request) {
             break pageLoop;
           }
 
-          const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; calls?: Api4ComCall[] };
-          pageCalls = Array.isArray(json) ? json : (json.data ?? json.calls ?? []);
+          const json = (await res.json()) as
+            | Api4ComCall[]
+            | { data?: Api4ComCall[]; calls?: Api4ComCall[]; metadata?: { totalPageCount?: number; currentPage?: number; nextPage?: number | null } };
+          if (Array.isArray(json)) {
+            pageCalls = json;
+          } else {
+            pageCalls = json.data ?? json.calls ?? [];
+            if (json.metadata?.totalPageCount != null) {
+              totalPageCount = json.metadata.totalPageCount;
+            }
+            if (json.metadata?.nextPage === null) {
+              // Last page reached — same effect as totalPageCount === page,
+              // but explicit signal from API. Used as definitive stop.
+              totalPageCount = page;
+            }
+          }
           succeeded = true;
           break;
         } catch (err) {
@@ -270,11 +295,19 @@ export async function POST(request: Request) {
         calls.push(c);
       }
 
-      // Stop on empty page, short page (true end of data), or when we've
-      // crossed past the window's lower bound.
-      if (pageCalls.length === 0 || pageCalls.length < EXPECTED_PAGE_SIZE || sawOlderThanWindow) {
-        break;
-      }
+      // Stop conditions, in order of authority:
+      //   1. Window crossed (calls older than `since`) — every subsequent
+      //      page is older still by the API's reverse-chrono ordering.
+      //   2. totalPageCount from API metadata — definitive end of dataset.
+      //   3. Empty page — no more results, regardless of metadata.
+      //
+      // We DON'T use `pageCalls.length < EXPECTED_PAGE_SIZE` as a stop
+      // condition anymore (was causing ~19% gap in mai/2026): if API4COM
+      // returned a momentarily short page mid-pull (e.g. race with new
+      // calls), we'd bail out before reaching real end-of-data.
+      if (sawOlderThanWindow) break;
+      if (totalPageCount !== null && page >= totalPageCount) break;
+      if (pageCalls.length === 0) break;
 
       // Throttle: stay under the per-minute call cap.
       await sleep(PAGE_DELAY_MS);
@@ -322,12 +355,12 @@ export async function POST(request: Request) {
       try {
         // 1) Try exact id match
         let { data: existing } = (await from(supabase, 'calls')
-          .select('id, status, duration_seconds, recording_url, started_at, metadata')
+          .select('id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata')
           .eq('org_id', orgId)
           .filter('metadata->>api4com_call_id', 'eq', api4comId)
           .limit(1)
           .maybeSingle()) as {
-          data: { id: string; status: string; duration_seconds: number; recording_url: string | null; started_at: string | null; metadata: Record<string, unknown> | null } | null;
+          data: { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null } | null;
         };
 
         // 2) Fallback: origin (ramal) + destination suffix + started_at ±5min.
@@ -343,7 +376,7 @@ export async function POST(request: Request) {
           const lo = new Date(startedMs - 5 * 60 * 1000).toISOString();
           const hi = new Date(startedMs + 5 * 60 * 1000).toISOString();
           const { data: fallback } = (await from(supabase, 'calls')
-            .select('id, status, duration_seconds, recording_url, started_at, metadata')
+            .select('id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata')
             .eq('org_id', orgId)
             .eq('origin', c.from)
             .like('destination', `%${suffix}`)
@@ -352,15 +385,21 @@ export async function POST(request: Request) {
             .order('started_at', { ascending: true })
             .limit(1)
             .maybeSingle()) as {
-            data: { id: string; status: string; duration_seconds: number; recording_url: string | null; started_at: string | null; metadata: Record<string, unknown> | null } | null;
+            data: { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null } | null;
           };
           existing = fallback;
         }
 
         const duration = Number(c.duration) || 0;
         const isOutbound = c.call_type !== 'inbound';
-        // Same rule used by the webhook: 50s = connected & significant.
-        const derivedStatus = duration >= 50 ? 'significant' : 'no_contact';
+        // REST doesn't expose answered_at — let the classifier derive
+        // connected from hangup_cause + duration.
+        const classification = classifyApi4ComCall({
+          answeredAt: null,
+          hangupCause: c.hangup_cause ?? null,
+          durationSeconds: duration,
+          significantThresholdSeconds,
+        });
 
         if (existing) {
           // Top up fields the webhook may have missed/diverged on. Never
@@ -369,7 +408,20 @@ export async function POST(request: Request) {
           if (!existing.recording_url && c.record_url) updates.recording_url = c.record_url;
           if (existing.duration_seconds === 0 && duration > 0) updates.duration_seconds = duration;
           if (!existing.started_at && c.started_at) updates.started_at = c.started_at;
-          if (existing.status === 'not_connected' && duration > 0) updates.status = derivedStatus;
+          if (!existing.hangup_cause && c.hangup_cause) updates.hangup_cause = c.hangup_cause;
+
+          // Status: only override the default 'not_connected'. Manual SDR
+          // classifications and webhook-promoted statuses are preserved.
+          if (existing.status === 'not_connected' && duration > 0) {
+            updates.status = classification.status;
+          }
+
+          // connected: NEVER downgrade. The webhook (which has answered_at)
+          // is more authoritative than the REST/reconcile proxy. If existing
+          // says true, leave it. Only upgrade false→true via classifier.
+          if (!existing.connected && classification.connected) {
+            updates.connected = true;
+          }
 
           // When we got here via the fallback path the row still carries the
           // dialer's request_id in api4com_call_id. Overwrite it with the
@@ -393,7 +445,9 @@ export async function POST(request: Request) {
             destination: c.to ?? '',
             started_at: c.started_at ?? new Date().toISOString(),
             duration_seconds: duration,
-            status: duration > 0 ? derivedStatus : 'not_connected',
+            status: duration > 0 ? classification.status : 'not_connected',
+            connected: classification.connected,
+            hangup_cause: c.hangup_cause ?? null,
             type: isOutbound ? 'outbound' : 'inbound',
             recording_url: c.record_url ?? null,
             metadata: {
