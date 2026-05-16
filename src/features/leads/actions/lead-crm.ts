@@ -313,6 +313,39 @@ export async function markLeadAsWon(
     // the Meetime-style flow that existed before 2026-05-08, when commits
     // 49d6f88/8555502 introduced the qualified→won split via DB trigger.
     const nowIso = new Date().toISOString();
+
+    // Auto-fill the org's "meeting held" custom field with today's date when
+    // marking the lead as won. Looked up by system_key='meeting_held_at' so
+    // we don't hardcode V4 Amaral's UUID — any org that creates a date field
+    // with that system_key opts in automatically. Only writes when the
+    // current value is empty so a manually-entered date (re-scheduled
+    // meeting, etc.) wins over the automatic fill.
+    const { data: mhCustomField } = (await from(supabase, 'custom_fields')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('system_key', 'meeting_held_at')
+      .maybeSingle()) as { data: { id: string } | null };
+
+    let customFieldUpdate: Record<string, unknown> | null = null;
+    if (mhCustomField) {
+      const { data: existingLead } = (await from(supabase, 'leads')
+        .select('custom_field_values')
+        .eq('id', leadId)
+        .eq('org_id', orgId)
+        .single()) as { data: { custom_field_values: Record<string, unknown> | null } | null };
+
+      const currentValues = (existingLead?.custom_field_values ?? {}) as Record<string, unknown>;
+      const existingValue = currentValues[mhCustomField.id];
+      if (existingValue === undefined || existingValue === null || existingValue === '') {
+        // Custom field is type='date' — store as YYYY-MM-DD in the org's
+        // local timezone (BRT), matching what the SDR would type in the UI.
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        customFieldUpdate = {
+          custom_field_values: { ...currentValues, [mhCustomField.id]: today },
+        };
+      }
+    }
+
     const { error: leadError } = await from(supabase, 'leads')
       .update({
         status: 'won',
@@ -320,6 +353,7 @@ export async function markLeadAsWon(
         won_at: nowIso,
         meeting_held_at: nowIso,
         qualified_at: nowIso,
+        ...(customFieldUpdate ?? {}),
       } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
