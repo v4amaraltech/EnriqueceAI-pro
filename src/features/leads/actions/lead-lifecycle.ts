@@ -29,24 +29,27 @@ export async function archiveLead(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
+  // The "Archive lead" button was silently broken: it tried to set
+  // status='archived' but lead_status enum only has new/contacted/qualified/won/
+  // unqualified. The UPDATE returned a 22P02 every time, the button always
+  // failed. Unify with bulkDeleteLeads: archive == soft-delete via deleted_at.
   const { error } = await from(supabase, 'leads')
-    .update({ status: 'archived', archived_at: new Date().toISOString() } as Record<string, unknown>)
+    .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
 
   const qErr = handleQueryError(error, 'Erro ao arquivar lead', 'lead-lifecycle');
   if (qErr) return qErr;
 
-  // Complete active cadence enrollments
   await completeEnrollmentsForLead(leadId);
 
   logLeadEvent(supabase, {
     orgId,
     leadId,
     userId: auth.data.userId,
-    event: 'status_changed',
+    event: 'lead_archived',
     message: 'Lead arquivado',
-    metadata: { new_status: 'archived' },
+    metadata: { system_event: 'lead_archived' },
   });
 
   revalidatePath('/leads');

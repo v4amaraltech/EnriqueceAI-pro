@@ -7,6 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { logLeadEvent } from './log-lead-event';
 
 export async function bulkDeleteLeads(
   leadIds: string[],
@@ -20,7 +21,7 @@ export async function bulkDeleteLeads(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'leads')
     .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
@@ -37,6 +38,20 @@ export async function bulkDeleteLeads(
     .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
     .in('lead_id', leadIds)
     .in('status', ['active', 'paused']);
+
+  // Timeline event per deleted lead — was missing, so 225 V4 Amaral
+  // soft-deletes ended up with no history entry. Fire-and-forget so a
+  // single failure doesn't roll back the whole bulk operation.
+  for (const leadId of leadIds) {
+    logLeadEvent(supabase, {
+      orgId,
+      leadId,
+      userId,
+      event: 'lead_archived',
+      message: 'Lead arquivado (exclusão em massa)',
+      metadata: { system_event: 'lead_archived' },
+    });
+  }
 
   revalidatePath('/leads');
   revalidatePath('/atividades');
