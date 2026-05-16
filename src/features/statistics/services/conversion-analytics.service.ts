@@ -132,15 +132,21 @@ export async function fetchConversionAnalyticsData(
   // Cadence membership for every universe lead, regardless of when they enrolled.
   // Without this, leads enrolled before the period but qualified/won inside it
   // wouldn't be attributed to their cadence in the "Conversão por Cadência" table.
+  // Chunked because PostgREST URL caps at ~32kb and 2000+ UUIDs in a single
+  // `.in()` blows past that, silently returning 0 rows.
   const universeLeadIdsList = Array.from(universeIds);
-  let memberships: Array<{ cadence_id: string; lead_id: string }> = [];
+  const memberships: Array<{ cadence_id: string; lead_id: string }> = [];
+  const MEMBERSHIP_CHUNK = 300;
   if (universeLeadIdsList.length > 0 && cadenceIds.length > 0) {
-    const { data: rawMembership } = (await from(supabase, 'cadence_enrollments')
-      .select('cadence_id, lead_id')
-      .in('cadence_id', cadenceIds)
-      .in('lead_id', universeLeadIdsList)
-      .limit(20000)) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
-    memberships = rawMembership ?? [];
+    for (let i = 0; i < universeLeadIdsList.length; i += MEMBERSHIP_CHUNK) {
+      const chunk = universeLeadIdsList.slice(i, i + MEMBERSHIP_CHUNK);
+      const { data: rawMembership } = (await from(supabase, 'cadence_enrollments')
+        .select('cadence_id, lead_id')
+        .in('cadence_id', cadenceIds)
+        .in('lead_id', chunk)
+        .limit(20000)) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
+      if (rawMembership) memberships.push(...rawMembership);
+    }
   }
 
   const funnel = calculateFunnel(leads, interactions);
