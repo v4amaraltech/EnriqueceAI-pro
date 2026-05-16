@@ -138,7 +138,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
           />
         ) : (
-          <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+          <p className="mt-1 whitespace-pre-line break-words text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
             {entry.message_content}
           </p>
         )}
@@ -183,7 +183,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
           </button>
         </>
       ) : (
-        <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+        <p className="mt-1 whitespace-pre-line break-words text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {entry.message_content}
         </p>
       )}

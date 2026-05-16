@@ -116,7 +116,7 @@ export function AIMessageGenerator({
           </DialogTitle>
         </DialogHeader>
 
-        <div className={isGenerated ? 'grid min-h-0 grid-cols-[340px_1fr] gap-6' : 'space-y-4'}>
+        <div className={isGenerated ? 'grid min-h-0 grid-cols-[340px_1fr] gap-6 overflow-y-auto' : 'space-y-4 overflow-y-auto'}>
           {/* Left column: config */}
           <div className="space-y-3">
             {/* Config row */}

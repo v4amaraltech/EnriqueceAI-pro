@@ -411,7 +411,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         </div>
       )}
 
-      <div className="flex gap-6">
+      <div className="flex gap-6 min-w-0">
         <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} jobTitleOptions={jobTitleOptions} standardFieldSettings={standardFieldSettings} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>

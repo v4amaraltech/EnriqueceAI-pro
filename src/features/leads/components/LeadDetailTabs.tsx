@@ -124,7 +124,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
   return (
     <>
-      <Tabs defaultValue="historico" className="flex-1">
+      <Tabs defaultValue="historico" className="flex-1 min-w-0">
         <TabsList variant="line">
           <TabsTrigger value="historico">Histórico</TabsTrigger>
           <TabsTrigger value="atividade">Agendar atividade</TabsTrigger>
