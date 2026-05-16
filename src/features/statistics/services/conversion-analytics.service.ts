@@ -124,15 +124,10 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
   const leadById = new Map(leads.map((l) => [l.id, l]));
 
   // Contactados ⊆ universe. Sub-stages are strict subsets of Contactados so the
-  // funnel is monotonic: a lead cannot be "Respondidos"/"Reunião"/"Qualificados"
-  // in this period without an outbound touch in this period.
+  // funnel is monotonic: a lead cannot be "Reunião"/"Qualificados" in this
+  // period without an outbound touch in this period.
   const contactedSet = new Set(
     interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
-  );
-  const repliedSet = new Set(
-    interactions
-      .filter((i) => i.type === 'replied' && contactedSet.has(i.lead_id))
-      .map((i) => i.lead_id),
   );
   const meetingSet = new Set(
     interactions
@@ -150,7 +145,6 @@ function calculateFunnel(leads: LeadQueryRow[], interactions: InteractionQueryRo
   return [
     { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
     { label: 'Contactados', count: contactedSet.size, percentage: safeRate(contactedSet.size, totalLeads), color: CONVERSION_COLORS.contacted },
-    { label: 'Respondidos', count: repliedSet.size, percentage: safeRate(repliedSet.size, totalLeads), color: CONVERSION_COLORS.replied },
     { label: 'Qualificados', count: qualifiedSet.size, percentage: safeRate(qualifiedSet.size, totalLeads), color: CONVERSION_COLORS.qualified },
     { label: 'Reunião', count: meetingSet.size, percentage: safeRate(meetingSet.size, totalLeads), color: CONVERSION_COLORS.meeting },
   ];
