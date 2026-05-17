@@ -109,21 +109,85 @@ Os ramais `unmapped` (1026/1030/1031/1035/1038/1041) representam 804 calls que p
 - Calls inbound recebidas pelo ramal 1028 (REST do reconciler filtra `c.call_type !== 'inbound' → outbound`)
 - Calls de outro ramal atribuídas ao Matheus por algum mapeamento interno
 
-## Próximos passos (não-Enriquece)
+## Diff row-by-row contra CSV do dashboard (17/05 21:32 BRT)
 
-Pra fechar o gap definitivamente:
+CSV do dashboard exportado (`/Users/mercante/Desktop/export.csv`, 2174 calls mai/2026) confrontado contra o `enriquece.calls` (2378 calls).
 
-1. **Contatar API4COM** — pedir documentação dos filtros aplicados no dashboard "Chamadas por Ramal" mai/2026. Especificamente: como filtra `gateway` (flux vs natural), `call_type` (outbound vs internal vs transfer), `is_billable`, `duration`/`hangup_cause` combinações.
+### Sets por `api4com_call_id` (exato match):
 
-2. **Exportar CSV do dashboard API4COM** pra um ramal específico (sugiro 1028 Matheus pra resolver o "-8") e diff row-by-row contra:
-   ```sql
-   SELECT metadata->>'api4com_call_id' AS aid, started_at, status, duration_seconds
-   FROM calls
-   WHERE org_id = 'c2727473-1df8-4faa-9264-a9fc1759fe3b' AND origin = '1028'
-     AND started_at >= '2026-05-01' AND started_at < '2026-06-01';
-   ```
+| Conjunto | Count | Significado |
+|---|---:|---|
+| Match exato (mesmo ramal + mesmo api4com_call_id) | 2036 | Sincronizado |
+| DB-only (no Enriquece, NÃO no CSV) | 337 | Excedentes |
+| CSV-only (no dashboard, NÃO no Enriquece) | 138 | Faltantes |
 
-3. **(Opcional) Filtrar ghost calls** no dashboard interno do Enriquece adicionando WHERE clause `metadata->>'gateway' NOT LIKE 'flux-%'` em `RPC get_sdr_team_stats` — alinharia parte do excesso com dashboard API4COM, mas exclui calls reais do dialer (decisão de produto).
+### Após match flexível por `ramal + destino (últimos 10 dígitos) + ±60s`:
+
+| Categoria | Count | Significado |
+|---|---:|---|
+| CSV-only com gêmea no DB | 119 | **Mesma call, double-ID API4COM** (REST devolveu ID X, dashboard mostra ID Y) |
+| CSV-only sem gêmea no DB | **18** | **Truly missing — Enriquece nunca recebeu** |
+| DB-only com gêmea no CSV | 271 | Mesma call gravada 2x no DB (webhook + reconciler com IDs diferentes) |
+| DB-only sem gêmea no CSV | 60 | Excesso real (provavelmente ghost calls do flux que dashboard filtra) |
+
+### As 18 truly missing por ramal:
+
+| Ramal | SDR | Missing | Por causa |
+|---|---|---:|---|
+| **1028** | Matheus | **7** | 6 caixa postal, 1 atendida — explica o **-8** do briefing |
+| 1024 | Ismael | 6 | 3 caixa postal, 1 atendida, 2 outros |
+| 1033 | Guilherme | 3 | 1 caixa postal, 1 atendida, 1 cancelada |
+| 1042 | Giovani | 2 | 1 caixa postal, 1 outros |
+| 1040 | Rafael | 0 | — |
+
+**59 das 138 CSV-only são "caixa postal"** (voicemail). Hipótese forte: **API4COM REST `/calls` omite voicemail calls** que o dashboard inclui. Esse seria o filtro server-side que estávamos procurando.
+
+## Bugs estruturais identificados
+
+### Bug 1 — API4COM gera 2 IDs para a mesma call
+Dashboard mostra um `api4com_call_id`, REST `/calls` retorna outro. Reconciler tenta fallback (origin + dest + ±5min) e às vezes sobrescreve, às vezes não. Causa **119 calls aparecendo "missing"** mesmo estando no DB.
+
+**Solução:** quando reconciler insere via fallback, fazer UPSERT lookup também pelo (origin, dest, started_at ±2min) e MERGE metadata.alt_api4com_ids[].
+
+### Bug 2 — Reconciler+webhook duplicam quando IDs divergem
+Webhook insere com ID A (request_id do dialer). Reconciler vê ID B (channel_id) e o fallback ±5min falha por algum motivo (timezone? typing?), inserindo um row novo com ID B. Resultado: 2 rows pra mesma call. **271 das 337 DB-only** caem aqui.
+
+**Solução:** o fallback de 5min é insuficiente quando há jitter. Aumentar para ±10min OU adicionar fallback secundário por `(origin, last_10_dest, ±15min, duration ±5%)`.
+
+### Bug 3 — Voicemail não chega ao Enriquece via REST
+~60% das 138 CSV-only são "Caixa postal". Hipótese: API4COM REST omite voicemail (provavelmente classifica como evento de tipo diferente).
+
+**Solução:** verificar se há endpoint API4COM diferente pra voicemails OU pedir documentação.
+
+## Plano de remediação
+
+### Fase 1 — Limpar duplicatas históricas (Bug 2)
+Identificar e merge das 271 calls duplicadas (mesma call, 2 rows com api4com_call_ids distintos). Script de dedupe que:
+1. Encontra pares com mesmo (origin, last_10_dest, ±60s)
+2. Mantém o row mais completo (com `recording_url`, `transcript`, `lead_id`, etc.)
+3. Migra `metadata.api4com_call_id` perdido pra `metadata.alt_api4com_ids[]`
+4. Deleta o duplicado
+
+Impacto esperado: gap +30/+55/+30/+117/+10 cai para algo próximo de zero (já que esses são compostos majoritariamente das duplicatas).
+
+### Fase 2 — Reforçar fallback do reconciler+webhook (Bug 1 + 2)
+Code change em `reconcile-api4com-calls/route.ts` e `webhooks/api4com/route.ts`:
+- Aumentar janela do fallback de 5min → 10min
+- Adicionar match secundário por `duration` similar (tolerância ±5%)
+- Persistir todos os api4com_call_ids vistos em `metadata.alt_api4com_ids[]`
+
+### Fase 3 — Voicemail (Bug 3)
+Conversar com API4COM sobre endpoint dedicado a voicemails ou flag pra incluir voicemails no `/calls`.
+
+## Status
+
+- [x] Investigação concluída
+- [x] Reingest 17d executado (confirma 0 calls missing via REST além das 18)
+- [x] Diff row-by-row vs CSV dashboard
+- [x] Code fixes colaterais aplicados (`NUMBER_CHANGED`, `call_type` capture)
+- [ ] Fase 1: dedupe histórico (217 dupes)
+- [ ] Fase 2: reforçar fallback (code change)
+- [ ] Fase 3: voicemail (escalar pra API4COM)
 
 ### Passo 3 — Validar com query de aceitação (do briefing original)
 
