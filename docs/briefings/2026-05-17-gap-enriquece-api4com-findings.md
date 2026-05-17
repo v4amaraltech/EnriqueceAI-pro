@@ -229,7 +229,14 @@ Após expandir o match para incluir UUIDs do `record_url` E fallback por (origin
 - Fase 1: 60 dupes (`calls_dedupe_backup_20260517`)
 - Ghost-Filter: 57 ghost calls (`calls_ghost_backup_20260517`)
 - Fase 1b: 87 double-ID dupes (`calls_refined_backup_20260517`)
-- **Total: 204 rows deletados, backup completo preservado**
+- Fase 1c (Guilherme): 8 flux ghosts variantes (`calls_guilherme_extra_backup_20260517`)
+- **Total: 212 rows deletados, backup completo preservado**
+
+### Gap residual do Guilherme (+8): reuniões reais sem API4COM
+
+Após Fase 1c, restam 3 calls sem `api4com_call_id` (NO_AID) com durations 236s/1474s/553s — **TODAS com gravação + transcrição + SPICED + lead_id**. São reuniões reais conduzidas via webphone/path alternativo que não passou pelo API4COM PBX. **Decidi MANTER** porque deletar perderia transcrições + análises SPICED valiosas. Os outros +5 residuais são casos similares onde o match fuzzy (±90s) não pegou.
+
+Decisão de produto: aceitar gap +8 reuniões reais não-registradas-no-API4COM ao invés de perder dados de leads.
 
 ## Resultado Fase 2 (executada em 17/05 22:20 BRT)
 
