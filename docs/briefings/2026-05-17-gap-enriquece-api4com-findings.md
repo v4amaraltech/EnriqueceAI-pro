@@ -187,7 +187,35 @@ Conversar com API4COM sobre endpoint dedicado a voicemails ou flag pra incluir v
 - [x] Code fixes colaterais aplicados (`NUMBER_CHANGED`, `call_type` capture)
 - [x] **Fase 1: dedupe histórico executada — 60 pares de dupes deletados**
 - [x] **Fase 2: reforçar fallback (code change, commit `3826ff9`)**
-- [ ] Fase 3: voicemail (escalar pra API4COM)
+- [x] **Fase 3: sondagem API4COM concluída — escalação preparada**
+
+## Resultado Fase 3 (executada em 17/05 22:35 BRT)
+
+Criei endpoint de diagnóstico `POST /api/admin/probe-api4com-voicemail` e sondei 14 variações de endpoint/query da API4COM com a API key de produção do V4 Amaral.
+
+**Conclusão**: Não há endpoint REST nem query param funcional para voicemails na API4COM.
+
+| Tipo de tentativa | Resultado |
+|---|---|
+| `/voicemails`, `/messages`, `/recordings`, `/calls/voicemails` | 404 — não existem |
+| `/calls?<param>=voicemail` (8 variações) | 200 mas query **silenciosamente ignorada** (devolve `/calls` puro) |
+
+Documento de escalação pra API4COM preparado em `docs/briefings/2026-05-17-escalacao-api4com.md` — pronto pra enviar pelo canal de suporte.
+
+## Status final
+
+| SDR | Antes briefing | Após Fase 1+2 | Dashboard | Gap final |
+|---|---:|---:|---:|---:|
+| 1024 (Ismael) | +30 | +16 | 733 | +16 |
+| 1028 (Matheus) | -8 | -11 | 545 | -11 (todos do voicemail) |
+| 1033 (Guilherme) | +55 | +49 | 453 | +49 |
+| 1040 (Rafael) | +117 | +91 | 354 | +91 |
+| 1042 (Giovani) | +10 | **-1 ✅** | 89 | -1 |
+
+**Compliance atingido pra 1 dos 5 SDRs**. Os restantes dependem de:
+- Resolução do bug do voicemail no lado API4COM (Fase 3, externa)
+- Análise extra de 60 "true excess" no DB (ghost flux calls do dialer interno que dashboard filtra)
+- Próximas iterações do reconciler com filtro de `metadata.gateway` para ghost calls (decisão de produto)
 
 ## Resultado Fase 2 (executada em 17/05 22:20 BRT)
 
