@@ -186,8 +186,18 @@ Conversar com API4COM sobre endpoint dedicado a voicemails ou flag pra incluir v
 - [x] Diff row-by-row vs CSV dashboard
 - [x] Code fixes colaterais aplicados (`NUMBER_CHANGED`, `call_type` capture)
 - [x] **Fase 1: dedupe histórico executada — 60 pares de dupes deletados**
-- [ ] Fase 2: reforçar fallback (code change)
+- [x] **Fase 2: reforçar fallback (code change, commit `3826ff9`)**
 - [ ] Fase 3: voicemail (escalar pra API4COM)
+
+## Resultado Fase 2 (executada em 17/05 22:20 BRT)
+
+3 mudanças em `reconcile-api4com-calls/route.ts` + `webhooks/api4com/route.ts`:
+
+1. **Lookup secundário** via `metadata.alt_api4com_ids[]` — quando evento chega com id B mas row já tem id A como primário, captura no array.
+2. **Janela fallback 5min → 10min** — Phase 1 encontrou dupes onde started_at drifted 6-9min entre dialer row e REST row.
+3. **Não sobrescreve mais primary** — append novos ids em alt_api4com_ids ao invés de trocar o primary. Mantém o id que o dashboard reconhece estável.
+
+Impacto: novos dupes do tipo "mesma call, dois IDs" deixam de ser criados a partir do próximo evento. Backfill histórico continua coberto pela Fase 1.
 
 ## Resultado Fase 1 (executada em 17/05 22:00 BRT)
 
