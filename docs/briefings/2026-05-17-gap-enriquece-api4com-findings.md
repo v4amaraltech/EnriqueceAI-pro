@@ -204,18 +204,32 @@ Documento de escalação pra API4COM preparado em `docs/briefings/2026-05-17-esc
 
 ## Status final
 
-| SDR | Antes briefing | Após Fase 1+2 | Dashboard | Gap final |
-|---|---:|---:|---:|---:|
-| 1024 (Ismael) | +30 | +16 | 733 | +16 |
-| 1028 (Matheus) | -8 | -11 | 545 | -11 (todos do voicemail) |
-| 1033 (Guilherme) | +55 | +49 | 453 | +49 |
-| 1040 (Rafael) | +117 | +91 | 354 | +91 |
-| 1042 (Giovani) | +10 | **-1 ✅** | 89 | -1 |
+| SDR | Antes briefing | Pós Fase 1+2 | Pós Ghost-Filter | Pós Refino (1b) | Dashboard | Gap |
+|---|---:|---:|---:|---:|---:|---:|
+| 1024 (Ismael) | +30 | +16 | +9 | **731** | 733 | **-2** ✅ |
+| 1028 (Matheus) | -8 | -11 | -11 | 534 | 545 | -11 (voicemail) |
+| 1033 (Guilherme) | +55 | +49 | +32 | **469** | 453 | **+16** |
+| 1040 (Rafael) | +117 | +91 | +64 | **358** | 354 | **+4** ✅ |
+| 1042 (Giovani) | +10 | -1 ✅ | -7 | 82 | 89 | -7 (voicemail) |
 
-**Compliance atingido pra 1 dos 5 SDRs**. Os restantes dependem de:
-- Resolução do bug do voicemail no lado API4COM (Fase 3, externa)
-- Análise extra de 60 "true excess" no DB (ghost flux calls do dialer interno que dashboard filtra)
-- Próximas iterações do reconciler com filtro de `metadata.gateway` para ghost calls (decisão de produto)
+**3 de 5 SDRs em compliance ≤5 absoluto.** Os 2 negativos (Matheus, Giovani) são voicemail puro — depende da API4COM.
+
+### Descoberta-chave da Fase 1b (refino)
+
+API4COM dashboard usa **2 UUIDs distintos** por call:
+- "ID da call" exibido na coluna ID do CSV
+- "UUID da gravação" embutido no `record_url` (`listener.api4com.com/files/listen/<uuid>.mp3`)
+
+A REST `/calls` retorna o **UUID da gravação** como `id`, que cai no nosso `api4com_call_id`. Match por id-só perdia muitas correspondências porque o dashboard CSV referenciava o outro UUID.
+
+Após expandir o match para incluir UUIDs do `record_url` E fallback por (origin + dest10 + ±90s), identifiquei 87 dupes adicionais reais. Backups: `calls_refined_backup_20260517`.
+
+### Total deletado nas fases internas
+
+- Fase 1: 60 dupes (`calls_dedupe_backup_20260517`)
+- Ghost-Filter: 57 ghost calls (`calls_ghost_backup_20260517`)
+- Fase 1b: 87 double-ID dupes (`calls_refined_backup_20260517`)
+- **Total: 204 rows deletados, backup completo preservado**
 
 ## Resultado Fase 2 (executada em 17/05 22:20 BRT)
 
