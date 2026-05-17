@@ -39,13 +39,14 @@ interface MatchedCall {
   metadata: Record<string, unknown> | null;
 }
 
-/** Find a matching call record by api4com_call_id or caller+phone fallback.
- *  When matched via fallback, persists the api4com_call_id for future lookups. */
+/** Find a matching call record by api4com_call_id, alt_api4com_ids[], or
+ *  caller+phone fallback. When matched via fallback or alt match, persists
+ *  the new id in alt_api4com_ids[] so future lookups by either id hit. */
 async function findMatchingCall(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
 ): Promise<MatchedCall | null> {
-  // Try by api4com_call_id first
+  // 1a) Primary id match
   const { data: call } = (await from(supabase, 'calls')
     .select('id, org_id, status, recording_url, metadata')
     .eq('metadata->>api4com_call_id', body.id)
@@ -53,7 +54,18 @@ async function findMatchingCall(
 
   if (call) return call;
 
-  // Fallback: match by caller (ramal) + called (phone) within last 2 hours.
+  // 1b) Secondary id match — API4COM emits 2 different ids for the same
+  // call (channel_id vs request_id from /dialer). When the primary holds
+  // id A and this event carries id B, the row's metadata.alt_api4com_ids
+  // remembers B so future events on either id hit the same row.
+  const { data: altMatchCall } = (await from(supabase, 'calls')
+    .select('id, org_id, status, recording_url, metadata')
+    .contains('metadata', { alt_api4com_ids: [body.id] })
+    .maybeSingle()) as { data: MatchedCall | null };
+
+  if (altMatchCall) return altMatchCall;
+
+  // 2) Fallback: caller (ramal) + called (phone) within last 2 hours.
   //
   // Important: only candidates that have NOT already been linked to a
   // previous webhook event. Without this filter, every retry to the
@@ -77,20 +89,35 @@ async function findMatchingCall(
     .limit(1)
     .maybeSingle()) as { data: MatchedCall | null };
 
-  // Persist api4com_call_id + webhook_linked so future events match
-  // by ID and so concurrent retries pick the next available row.
+  // Persist via alt_api4com_ids (don't overwrite primary id). Keeps the
+  // primary stable so the dashboard CSV's id (when that's what landed
+  // first) remains the authoritative one.
   if (fallbackCall) {
     const existingMeta = (fallbackCall.metadata ?? {}) as Record<string, unknown>;
-    await from(supabase, 'calls')
-      .update({
-        metadata: {
-          ...existingMeta,
-          api4com_call_id: body.id,
-          webhook_linked: true,
-        },
-      })
-      .eq('id', fallbackCall.id);
-    logger.info('Saved api4com_call_id via fallback match', { callId: fallbackCall.id, api4comId: body.id });
+    const primaryId = existingMeta.api4com_call_id;
+    if (primaryId !== body.id) {
+      const altIds = Array.isArray(existingMeta.alt_api4com_ids) ? existingMeta.alt_api4com_ids as string[] : [];
+      if (!altIds.includes(body.id)) {
+        await from(supabase, 'calls')
+          .update({
+            metadata: {
+              ...existingMeta,
+              alt_api4com_ids: [...altIds, body.id],
+              webhook_linked: true,
+            },
+          })
+          .eq('id', fallbackCall.id);
+        logger.info('Saved alt api4com_call_id via fallback match', { callId: fallbackCall.id, api4comId: body.id });
+      }
+    } else {
+      // Same primary id (rare with this path — only happens if metadata
+      // was wiped). Just flip webhook_linked.
+      await from(supabase, 'calls')
+        .update({
+          metadata: { ...existingMeta, webhook_linked: true },
+        })
+        .eq('id', fallbackCall.id);
+    }
   }
 
   return fallbackCall;

@@ -368,30 +368,46 @@ export async function POST(request: Request) {
       }
 
       try {
-        // 1) Try exact id match
+        type CallLookupRow = { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null };
+        const SELECT_COLS = 'id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata';
+
+        // 1a) Primary id match
         let { data: existing } = (await from(supabase, 'calls')
-          .select('id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata')
+          .select(SELECT_COLS)
           .eq('org_id', orgId)
           .filter('metadata->>api4com_call_id', 'eq', api4comId)
           .limit(1)
-          .maybeSingle()) as {
-          data: { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null } | null;
-        };
+          .maybeSingle()) as { data: CallLookupRow | null };
 
-        // 2) Fallback: origin (ramal) + destination suffix + started_at ±5min.
-        // POST /dialer returns one id and GET /calls returns another, so
-        // calls placed via the in-app dialer never match by id. Without this
-        // fallback, every dialer-created call gets a duplicate inserted on
-        // every reconcile run (saw 38 duplicates for Rafael's ramal 1040
-        // alone today before fixing).
+        // 1b) Secondary id match — API4COM emits 2 different ids for the
+        // same call (channel_id vs request_id from /dialer). When the
+        // primary already holds id A and we receive id B, the row's
+        // metadata.alt_api4com_ids array remembers B so future events
+        // arriving with either id land on the same row.
+        if (!existing) {
+          const { data: altMatch } = (await from(supabase, 'calls')
+            .select(SELECT_COLS)
+            .eq('org_id', orgId)
+            .contains('metadata', { alt_api4com_ids: [api4comId] })
+            .limit(1)
+            .maybeSingle()) as { data: CallLookupRow | null };
+          existing = altMatch;
+        }
+
+        // 2) Fallback: origin (ramal) + destination suffix + started_at ±10min.
+        // Bumped from 5min after Phase 1 dedupe found 60 historical dupes whose
+        // started_at on the dialer-inserted row drifted past the 5min window
+        // (the /dialer initiated row's started_at is the request time, while
+        // REST's started_at is the channel-actually-rang time — can differ by
+        // 6-9min on long-rang scenarios).
         if (!existing && c.from && c.to && c.started_at) {
           const destDigits = c.to.replace(/\D/g, '');
           const suffix = destDigits.slice(-8);
           const startedMs = Date.parse(c.started_at);
-          const lo = new Date(startedMs - 5 * 60 * 1000).toISOString();
-          const hi = new Date(startedMs + 5 * 60 * 1000).toISOString();
+          const lo = new Date(startedMs - 10 * 60 * 1000).toISOString();
+          const hi = new Date(startedMs + 10 * 60 * 1000).toISOString();
           const { data: fallback } = (await from(supabase, 'calls')
-            .select('id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata')
+            .select(SELECT_COLS)
             .eq('org_id', orgId)
             .eq('origin', c.from)
             .like('destination', `%${suffix}`)
@@ -399,9 +415,7 @@ export async function POST(request: Request) {
             .lte('started_at', hi)
             .order('started_at', { ascending: true })
             .limit(1)
-            .maybeSingle()) as {
-            data: { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null } | null;
-          };
+            .maybeSingle()) as { data: CallLookupRow | null };
           existing = fallback;
         }
 
@@ -438,13 +452,20 @@ export async function POST(request: Request) {
             updates.connected = true;
           }
 
-          // When we got here via the fallback path the row still carries the
-          // dialer's request_id in api4com_call_id. Overwrite it with the
-          // channel_id so future id-keyed lookups (recording recovery, the
-          // next reconcile run) hit immediately.
+          // When matched via fallback the row may already carry a different
+          // api4com_call_id (dialer's request_id vs REST's channel_id).
+          // Keep the existing primary stable and append the new id to
+          // alt_api4com_ids[] so future events on either id land here.
           const existingMeta = (existing.metadata ?? {}) as Record<string, unknown>;
           if (existingMeta.api4com_call_id !== api4comId) {
-            updates.metadata = { ...existingMeta, api4com_call_id: api4comId, webhook_linked: true };
+            const altIds = Array.isArray(existingMeta.alt_api4com_ids) ? existingMeta.alt_api4com_ids as string[] : [];
+            if (!altIds.includes(api4comId)) {
+              updates.metadata = {
+                ...existingMeta,
+                alt_api4com_ids: [...altIds, api4comId],
+                webhook_linked: true,
+              };
+            }
           }
 
           if (Object.keys(updates).length > 1) {
