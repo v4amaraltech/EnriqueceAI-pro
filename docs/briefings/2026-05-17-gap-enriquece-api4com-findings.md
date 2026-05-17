@@ -185,9 +185,27 @@ Conversar com API4COM sobre endpoint dedicado a voicemails ou flag pra incluir v
 - [x] Reingest 17d executado (confirma 0 calls missing via REST além das 18)
 - [x] Diff row-by-row vs CSV dashboard
 - [x] Code fixes colaterais aplicados (`NUMBER_CHANGED`, `call_type` capture)
-- [ ] Fase 1: dedupe histórico (217 dupes)
+- [x] **Fase 1: dedupe histórico executada — 60 pares de dupes deletados**
 - [ ] Fase 2: reforçar fallback (code change)
 - [ ] Fase 3: voicemail (escalar pra API4COM)
+
+## Resultado Fase 1 (executada em 17/05 22:00 BRT)
+
+Critério conservador: pares onde **um** `api4com_call_id` está no CSV do dashboard e o outro NÃO, mesmo ramal + dest últimos 10 dígitos + ±60s no `started_at`. Garante que keepamos a versão que o dashboard reconhece.
+
+Para cada par: backup da row drop em `calls_dedupe_backup_20260517`, append `drop_aid` em `metadata.alt_api4com_ids[]` da row keep, DELETE da drop.
+
+| Ramal | Pré-dedupe | Pós-dedupe | Dashboard | Gap pré → pós |
+|---|---:|---:|---:|---:|
+| 1024 (Ismael) | 763 | 749 | 733 | +30 → +16 |
+| 1028 (Matheus) | 537 | 534 | 545 | -8 → -11 |
+| 1033 (Guilherme) | 508 | 502 | 453 | +55 → +49 |
+| 1040 (Rafael) | 471 | 445 | 354 | +117 → +91 |
+| 1042 (Giovani) | 99 | 88 | 89 | +10 → **-1 ✅ compliance** |
+
+Backup: `calls_dedupe_backup_20260517` (60 rows, preservada indefinidamente até validação).
+
+Pra reverter (se necessário): `INSERT INTO calls SELECT * FROM calls_dedupe_backup_20260517;` + reverter o `alt_api4com_ids` append nos 60 keeps.
 
 ### Passo 3 — Validar com query de aceitação (do briefing original)
 
