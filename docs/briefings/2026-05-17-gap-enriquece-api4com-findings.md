@@ -72,23 +72,58 @@ Impacto: forward-looking. Permite que a equipe verifique post-hoc se há `call_t
 
 ---
 
-## O que falta pra fechar gap
+## Reingest executado (17/05 21:17 BRT)
 
-A análise via SQL no Enriquece não consegue distinguir calls "extras" das "esperadas" sem cross-check contra o que API4COM dashboard mostra. Os próximos passos exigem ferramentas do lado API4COM:
+Rodado dry-run + live com `windowHours=408` (17d, cobre 30/abr → 17/mai) via `/api/workers/reconcile-api4com-calls`:
 
-### Passo 1 — Exportar dashboard API4COM por SDR
-Pegar o CSV/export do API4COM para os 5 ramais (mai/1–16) — total + lista de `call_id`. Trazer pra mim e comparo row-by-row.
+```json
+{
+  "fetched": 3250,
+  "in_scope": 2446,
+  "upserted_existing": 173,
+  "inserted_new": 0,
+  "skipped_unmapped": 804
+}
+```
 
-### Passo 2 — Backfill via `/api/admin/reingest-api4com-calls`
-Com `windowHours=1440` (60d), `dryRun=true` primeiro. Auth: prod `SUPABASE_SERVICE_ROLE_KEY` (DevOps). Vai retornar:
-- `fetched`: total que API4COM REST devolveu
-- `in_scope`: depois do filtro de ramal
-- `inserted_new`: missing no Enriquece
-- `upserted_existing`: já existia mas precisava atualizar
+**Zero novas inserções** — toda call que API4COM REST devolve já estava no Enriquece. Os 173 updates foram correções de classificação (hangup_cause, status, recording_url top-up).
 
-Se `fetched` (API4COM) bater com dashboard, o gap é só na nossa ingestão histórica. Reingest com `dryRun=false` resolve.
+Estado pós-reingest = **idêntico** ao pré-reingest:
 
-Se `fetched` ≠ dashboard, o problema é semântico (filtro do dashboard vs filtro do API4COM REST).
+| Ramal | Enriquece | API4COM Dashboard | Gap |
+|---:|---:|---:|---:|
+| 1024 | 763 | 733 | +30 |
+| 1028 | 537 | 545 | −8 |
+| 1033 | 508 | 453 | +55 |
+| 1040 | 471 | 354 | +117 |
+| 1042 | 99 | 89 | +10 |
+
+## Diagnóstico final
+
+**O fetch do Enriquece está completo** — REST `/calls` da API4COM devolve TODAS as calls que o dashboard exclui (`gateway: flux-*` ghost calls, calls com `NUMBER_CHANGED` + `duration=0`, etc). O **dashboard tem um filtro server-side** que o endpoint REST não expõe.
+
+Os ramais `unmapped` (1026/1030/1031/1035/1038/1041) representam 804 calls que pertencem a usuários da org `v4amaral` mas não estão mapeados em `api4com_connections` do Enriquece — fora do escopo dos 5 SDRs do briefing.
+
+**−8 Matheus**: mistério resta. API4COM REST devolveu todas as 537 calls do ramal 1028, mas dashboard mostra 545. Existem 8 calls "fantasmas no dashboard" que o REST não retorna. Hipóteses:
+- Voicemail/transfer calls que dashboard atribui ao ramal de origem mas REST omite
+- Calls inbound recebidas pelo ramal 1028 (REST do reconciler filtra `c.call_type !== 'inbound' → outbound`)
+- Calls de outro ramal atribuídas ao Matheus por algum mapeamento interno
+
+## Próximos passos (não-Enriquece)
+
+Pra fechar o gap definitivamente:
+
+1. **Contatar API4COM** — pedir documentação dos filtros aplicados no dashboard "Chamadas por Ramal" mai/2026. Especificamente: como filtra `gateway` (flux vs natural), `call_type` (outbound vs internal vs transfer), `is_billable`, `duration`/`hangup_cause` combinações.
+
+2. **Exportar CSV do dashboard API4COM** pra um ramal específico (sugiro 1028 Matheus pra resolver o "-8") e diff row-by-row contra:
+   ```sql
+   SELECT metadata->>'api4com_call_id' AS aid, started_at, status, duration_seconds
+   FROM calls
+   WHERE org_id = 'c2727473-1df8-4faa-9264-a9fc1759fe3b' AND origin = '1028'
+     AND started_at >= '2026-05-01' AND started_at < '2026-06-01';
+   ```
+
+3. **(Opcional) Filtrar ghost calls** no dashboard interno do Enriquece adicionando WHERE clause `metadata->>'gateway' NOT LIKE 'flux-%'` em `RPC get_sdr_team_stats` — alinharia parte do excesso com dashboard API4COM, mas exclui calls reais do dialer (decisão de produto).
 
 ### Passo 3 — Validar com query de aceitação (do briefing original)
 
