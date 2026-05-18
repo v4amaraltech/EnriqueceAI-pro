@@ -81,13 +81,7 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
           setCadences(result.data.cadences);
           setTotalAvailable(result.data.totalAvailable);
           setAvailableLeadIds(result.data.availableLeadIds);
-          // Select all cadences with available leads by default
-          const ids = new Set(
-            result.data.cadences
-              .filter(() => result.data.totalAvailable > 0)
-              .map((c) => c.id),
-          );
-          setSelectedIds(ids);
+          setSelectedIds(new Set());
         }
         setLoaded(true);
       });
