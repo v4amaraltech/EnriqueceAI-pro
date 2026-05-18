@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Image from 'next/image';
 import { Check, Copy, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -108,6 +109,19 @@ export function WhatsAppInviteModal({
         </DialogHeader>
 
         <div className="mt-4 space-y-3">
+          <div className="overflow-hidden rounded-md border border-[var(--border)] bg-[var(--muted)]">
+            <Image
+              src="/whatsapp/encontro-v4-banner.png"
+              alt="Banner — Tudo pronto para o nosso encontro?"
+              width={944}
+              height={944}
+              className="h-auto w-full"
+              priority={false}
+            />
+            <p className="px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              Esta imagem é enviada junto com a mensagem.
+            </p>
+          </div>
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}

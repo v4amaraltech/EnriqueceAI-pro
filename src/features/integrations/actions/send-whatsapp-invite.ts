@@ -3,9 +3,15 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { getAppUrl } from '@/lib/utils/app-url';
 import { WhatsAppCreditService } from '../services/whatsapp-credit.service';
 
 import { EvolutionWhatsAppService } from '../services/whatsapp-evolution.service';
+
+// Banner image attached to the meeting invite. Public asset served by Next.js
+// from /public/whatsapp/. Sent as the WhatsApp media with the invite text as
+// caption so it lands as a single message in the lead's inbox.
+const INVITE_BANNER_PATH = '/whatsapp/encontro-v4-banner.png';
 
 interface SendWhatsAppInviteInput {
   leadId: string;
@@ -64,10 +70,19 @@ export async function sendWhatsAppInvite(
     return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp', code: 'NO_CREDITS' };
   }
 
-  // Send via Evolution API
-  const result = await EvolutionWhatsAppService.sendMessage(
+  // Send via Evolution API as image + caption so the V4 banner and the
+  // invite text land as a single WhatsApp message.
+  const mediaUrl = `${getAppUrl()}${INVITE_BANNER_PATH}`;
+  const result = await EvolutionWhatsAppService.sendMedia(
     orgId,
-    { to: phone, body: input.message },
+    {
+      to: phone,
+      mediaUrl,
+      mediatype: 'image',
+      mimetype: 'image/png',
+      fileName: 'encontro-v4.png',
+      caption: input.message,
+    },
     supabase,
     userId,
   );

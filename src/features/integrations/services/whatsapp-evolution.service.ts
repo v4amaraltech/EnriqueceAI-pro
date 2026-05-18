@@ -186,6 +186,111 @@ export class EvolutionWhatsAppService {
   }
 
   /**
+   * Sends a media message (image/video/document) with optional caption via
+   * Evolution API. Mirrors sendMessage's instance resolution, session
+   * detection, and error handling.
+   */
+  static async sendMedia(
+    orgId: string,
+    params: {
+      to: string;
+      mediaUrl: string;
+      mediatype: 'image' | 'video' | 'document';
+      mimetype: string;
+      fileName?: string;
+      caption?: string;
+    },
+    supabase: SupabaseClient,
+    userId?: string,
+  ): Promise<EvolutionSendResult> {
+    const env = getEnv();
+    const apiUrl = env.EVOLUTION_API_URL;
+    const apiKey = env.EVOLUTION_API_KEY;
+
+    if (!apiUrl || !apiKey) {
+      return { success: false, error: 'Evolution API não configurada no servidor' };
+    }
+
+    const instance = await this.resolveInstance(supabase, orgId, userId);
+    if (!instance) {
+      return { success: false, error: 'Nenhuma instância WhatsApp Evolution encontrada' };
+    }
+    if (instance.status !== 'connected') {
+      const owner = instance.user_id ? 'Sua instância WhatsApp' : 'WhatsApp Evolution da organização';
+      return { success: false, error: `${owner} não está conectado. Reconecte via QR Code.` };
+    }
+
+    const formattedPhone = validateBrazilianPhone(params.to);
+    if (!formattedPhone) {
+      return { success: false, error: 'Número de telefone inválido' };
+    }
+
+    try {
+      const response = await fetch(
+        `${apiUrl.replace(/\/+$/, '')}/message/sendMedia/${instance.instance_name}`,
+        {
+          method: 'POST',
+          signal: AbortSignal.timeout(30_000),
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: apiKey,
+          },
+          body: JSON.stringify({
+            number: formattedPhone,
+            mediatype: params.mediatype,
+            mimetype: params.mimetype,
+            media: params.mediaUrl,
+            fileName: params.fileName ?? 'arquivo',
+            caption: params.caption ?? '',
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const rawError = await response.text().catch(() => '');
+        let errorMsg = `Evolution API error: ${response.status}`;
+        try {
+          const errorBody = JSON.parse(rawError) as { message?: unknown; response?: { message?: unknown } };
+          const pick = (v: unknown): string | null => {
+            if (typeof v === 'string' && v.length > 0) return v;
+            if (v && typeof v === 'object') {
+              try { return JSON.stringify(v); } catch { return null; }
+            }
+            return null;
+          };
+          errorMsg = pick(errorBody?.response?.message) ?? pick(errorBody?.message) ?? errorMsg;
+        } catch {
+          if (rawError) errorMsg = rawError;
+        }
+        console.error('[evolution] sendMedia failed:', response.status, errorMsg, 'instance:', instance.instance_name);
+
+        if (isSessionDeadError(errorMsg)) {
+          await this.markInstanceDisconnected(supabase, instance.id);
+          return { success: false, error: RECONNECT_HINT };
+        }
+        return { success: false, error: errorMsg };
+      }
+
+      const result = (await response.json()) as {
+        key?: { id?: string };
+        message?: { key?: { id?: string } };
+      };
+      const messageId = result?.key?.id ?? result?.message?.key?.id;
+      if (!messageId) {
+        return { success: false, error: 'Evolution API não retornou ID da mensagem' };
+      }
+      return { success: true, messageId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao conectar com Evolution API';
+      if (isSessionDeadError(message)) {
+        await this.markInstanceDisconnected(supabase, instance.id);
+        return { success: false, error: RECONNECT_HINT };
+      }
+      return { success: false, error: message };
+    }
+  }
+
+  /**
    * Marks an Evolution instance as disconnected so the UI prompts the user to
    * reconnect via QR Code. Failures are swallowed: surfacing a clear error to
    * the caller is more important than the bookkeeping update.
