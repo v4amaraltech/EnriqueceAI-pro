@@ -57,23 +57,59 @@ export async function POST(request: Request) {
   const baseUrl = conn.base_url.replace(/\/+$/, '');
   const headers = { 'Content-Type': 'application/json', Authorization: apiKey };
 
-  // Candidate paths/queries to probe. None of these are documented to us —
-  // the point is to learn from API4COM's response shape what's exposed.
+  // Candidate paths/queries to probe. After 2026-05-18 escalation response,
+  // API4COM support confirmed the REST endpoint uses Loopback-style filter:
+  //   ?filter={"where":{...}}  (URL-encoded JSON)
+  // Goal of these probes: confirm whether voicemails (hangup_cause=NUMBER_CHANGED)
+  // are returned when we explicitly filter for them — they're likely missing
+  // from the default /calls because the support email called the classifier
+  // "different from normal voicemail" suggesting a separate event path.
+  const buildFilter = (where: Record<string, unknown>): string =>
+    `filter=${encodeURIComponent(JSON.stringify({ where }))}`;
+  // V4 Amaral target window: Mai/2026 (01-17) — same window as gap analysis.
+  const sinceIso = '2026-05-01T00:00:00.000Z';
+  const untilIso = '2026-05-17T23:59:59.000Z';
+
   const candidates = [
-    { name: '/voicemails', path: '/voicemails' },
-    { name: '/messages', path: '/messages' },
-    { name: '/recordings', path: '/recordings' },
-    { name: '/calls/voicemails', path: '/calls/voicemails' },
-    { name: '/calls?include_voicemail=true', path: '/calls?include_voicemail=true&page=1' },
-    { name: '/calls?has_voicemail=true', path: '/calls?has_voicemail=true&page=1' },
-    { name: '/calls?status=voicemail', path: '/calls?status=voicemail&page=1' },
-    { name: '/calls?type=voicemail', path: '/calls?type=voicemail&page=1' },
-    { name: '/calls?call_type=voicemail', path: '/calls?call_type=voicemail&page=1' },
-    { name: '/calls?direction=voicemail', path: '/calls?direction=voicemail&page=1' },
-    { name: '/calls?is_voicemail=true', path: '/calls?is_voicemail=true&page=1' },
-    { name: '/calls?include_all=true', path: '/calls?include_all=true&page=1' },
-    { name: '/calls?show_inactive=true', path: '/calls?show_inactive=true&page=1' },
-    { name: '/calls?with_metadata=true', path: '/calls?with_metadata=true&page=1' },
+    // 1. Baseline: explicit NUMBER_CHANGED filter, no window. Will it return ANY rows?
+    {
+      name: 'filter:hangup_cause=NUMBER_CHANGED (no window)',
+      path: `/calls?${buildFilter({ hangup_cause: 'NUMBER_CHANGED' })}&page=1`,
+    },
+    // 2. NUMBER_CHANGED + Mai/2026 window via Loopback date filter
+    {
+      name: 'filter:NUMBER_CHANGED + mai/2026 (loopback gte/lte)',
+      path: `/calls?${buildFilter({
+        hangup_cause: 'NUMBER_CHANGED',
+        started_at: { gte: sinceIso, lte: untilIso },
+      })}&page=1`,
+    },
+    // 3. Window only (no hangup_cause) — does loopback date filter work?
+    {
+      name: 'filter:mai/2026 window only (no hangup_cause)',
+      path: `/calls?${buildFilter({
+        started_at: { gte: sinceIso, lte: untilIso },
+      })}&page=1`,
+    },
+    // 4. NORMAL_CLEARING in mai/2026 — sanity check, this should return our 41 missing "Atendidas"
+    {
+      name: 'filter:NORMAL_CLEARING + mai/2026',
+      path: `/calls?${buildFilter({
+        hangup_cause: 'NORMAL_CLEARING',
+        started_at: { gte: sinceIso, lte: untilIso },
+      })}&page=1`,
+    },
+    // 5. Baseline: no filter at all, page 1 — what does API4COM consider the
+    // default dataset? Should match what our reconciler currently sees.
+    {
+      name: '/calls?page=1 (baseline, no filter)',
+      path: '/calls?page=1',
+    },
+    // 6. Empty where — does {"where":{}} behave like no filter, or expose more?
+    {
+      name: 'filter:where={} (empty filter)',
+      path: `/calls?${buildFilter({})}&page=1`,
+    },
   ];
 
   const results = await Promise.all(
