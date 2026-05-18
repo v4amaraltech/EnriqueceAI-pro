@@ -110,6 +110,29 @@ export async function POST(request: Request) {
       name: 'filter:where={} (empty filter)',
       path: `/calls?${buildFilter({})}&page=1`,
     },
+    // 7-11. Per-SDR NUMBER_CHANGED counts in mai/2026 — confirms whether
+    // gap is real (reconciler missed rows for these specific ramals) or
+    // attribution to non-SDR ramals.
+    {
+      name: 'filter:NUMBER_CHANGED + 1024 (Ismael) + mai/2026',
+      path: `/calls?${buildFilter({ from: '1024', hangup_cause: 'NUMBER_CHANGED', started_at: { gte: sinceIso, lte: untilIso } })}&page=1`,
+    },
+    {
+      name: 'filter:NUMBER_CHANGED + 1028 (Matheus) + mai/2026',
+      path: `/calls?${buildFilter({ from: '1028', hangup_cause: 'NUMBER_CHANGED', started_at: { gte: sinceIso, lte: untilIso } })}&page=1`,
+    },
+    {
+      name: 'filter:NUMBER_CHANGED + 1033 (Guilherme) + mai/2026',
+      path: `/calls?${buildFilter({ from: '1033', hangup_cause: 'NUMBER_CHANGED', started_at: { gte: sinceIso, lte: untilIso } })}&page=1`,
+    },
+    {
+      name: 'filter:NUMBER_CHANGED + 1040 (Rafael) + mai/2026',
+      path: `/calls?${buildFilter({ from: '1040', hangup_cause: 'NUMBER_CHANGED', started_at: { gte: sinceIso, lte: untilIso } })}&page=1`,
+    },
+    {
+      name: 'filter:NUMBER_CHANGED + 1042 (Giovani) + mai/2026',
+      path: `/calls?${buildFilter({ from: '1042', hangup_cause: 'NUMBER_CHANGED', started_at: { gte: sinceIso, lte: untilIso } })}&page=1`,
+    },
   ];
 
   const results = await Promise.all(
