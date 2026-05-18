@@ -210,10 +210,25 @@ export async function POST(request: Request) {
     // window/empty-page heuristics.
     let totalPageCount: number | null = null;
 
+    // API4COM REST uses Loopback-style filtering, confirmed by support on
+    // 2026-05-18 after the gap investigation: `?filter={"where":{...}}`
+    // URL-encoded JSON. The prior `?started_at[gte]=...` syntax was silently
+    // ignored — that's why mai/2026 V4 Amaral had 155 voicemails (and other
+    // missing causes) hiding past the MAX_PAGES horizon. With the filter
+    // honoured by the server, paginação enumera SÓ a janela e não a domain
+    // inteira em reverse-chrono.
+    const filterPayload = JSON.stringify({
+      where: {
+        started_at: {
+          gte: since.toISOString(),
+          lte: now.toISOString(),
+        },
+      },
+    });
+
     pageLoop: for (let page = 1; page <= MAX_PAGES; page++) {
       const url = new URL(`${baseUrl}/calls`);
-      url.searchParams.set('started_at[gte]', since.toISOString());
-      url.searchParams.set('started_at[lte]', now.toISOString());
+      url.searchParams.set('filter', filterPayload);
       url.searchParams.set('page', String(page));
 
       let pageCalls: Api4ComCall[] = [];
@@ -256,17 +271,22 @@ export async function POST(request: Request) {
             break pageLoop;
           }
 
+          type ApiMeta = { totalPageCount?: number; currentPage?: number; nextPage?: number | null };
           const json = (await res.json()) as
             | Api4ComCall[]
-            | { data?: Api4ComCall[]; calls?: Api4ComCall[]; metadata?: { totalPageCount?: number; currentPage?: number; nextPage?: number | null } };
+            | { data?: Api4ComCall[]; calls?: Api4ComCall[]; meta?: ApiMeta; metadata?: ApiMeta };
           if (Array.isArray(json)) {
             pageCalls = json;
           } else {
             pageCalls = json.data ?? json.calls ?? [];
-            if (json.metadata?.totalPageCount != null) {
-              totalPageCount = json.metadata.totalPageCount;
+            // API4COM returns the pagination object as `meta` (confirmed via
+            // probe 2026-05-18). Older docs called it `metadata` — keep both
+            // paths so legacy responses still parse.
+            const meta = json.meta ?? json.metadata;
+            if (meta?.totalPageCount != null) {
+              totalPageCount = meta.totalPageCount;
             }
-            if (json.metadata?.nextPage === null) {
+            if (meta?.nextPage === null) {
               // Last page reached — same effect as totalPageCount === page,
               // but explicit signal from API. Used as definitive stop.
               totalPageCount = page;
@@ -282,11 +302,11 @@ export async function POST(request: Request) {
 
       if (!succeeded) break;
 
-      // API4COM returns calls in reverse chronological order and silently
-      // ignores started_at[gte] in production (dry-run on 2026-05-13 with
-      // windowHours=1.5 returned calls from 7+ hours earlier). Filter
-      // client-side and stop paginating once we see anything older than
-      // `since` — every subsequent page is older still.
+      // Defense-in-depth: server filter (Loopback `where.started_at`) is
+      // authoritative since 2026-05-18, but keep the client-side window
+      // check so a malformed/loosened filter doesn't silently re-introduce
+      // out-of-window rows. parseApi4ComTimestamp also normalises the
+      // BRT-disguised-as-Z stamps API4COM emits.
       const sinceMs = since.getTime();
       const untilMs = now.getTime();
       let sawOlderThanWindow = false;
