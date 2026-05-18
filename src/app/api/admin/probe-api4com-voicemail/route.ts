@@ -133,7 +133,8 @@ export async function POST(request: Request) {
               preview = {
                 kind: 'object',
                 top_keys: Object.keys(j).slice(0, 10),
-                metadata: j.metadata ?? null,
+                meta: j.meta ?? j.metadata ?? null,
+                data_length: dataArr ? (dataArr as unknown[]).length : 0,
                 sample: dataArr ? (dataArr as unknown[]).slice(0, 1) : j,
               };
             } else {
