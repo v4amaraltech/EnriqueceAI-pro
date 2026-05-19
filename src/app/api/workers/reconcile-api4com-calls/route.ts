@@ -479,7 +479,15 @@ export async function POST(request: Request) {
           if (!existing.recording_url && c.record_url) updates.recording_url = c.record_url;
           if (existing.duration_seconds === 0 && duration > 0) updates.duration_seconds = duration;
           if (!existing.started_at && c.started_at) updates.started_at = c.started_at;
-          if (!existing.hangup_cause && c.hangup_cause) updates.hangup_cause = c.hangup_cause;
+          // Trust the API as source of truth for hangup_cause. Older rows had
+          // wrong classifications from early-webhook ingestion (e.g. voicemails
+          // stored as NORMAL_CLEARING). Override whenever the API explicitly
+          // names a different cause — the REST endpoint reflects API4COM's
+          // post-hoc classification, which is more authoritative than the
+          // webhook's mid-call snapshot. Only keep existing when API omits.
+          if (c.hangup_cause && existing.hangup_cause !== c.hangup_cause) {
+            updates.hangup_cause = c.hangup_cause;
+          }
 
           // Status: only override the default 'not_connected'. Manual SDR
           // classifications and webhook-promoted statuses are preserved.
