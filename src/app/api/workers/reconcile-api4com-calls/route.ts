@@ -399,11 +399,28 @@ export async function POST(request: Request) {
           .limit(1)
           .maybeSingle()) as { data: CallLookupRow | null };
 
+        // Secondary lookups (alt-id, time fallback) must respect
+        // hangup_cause: a voicemail (NUMBER_CHANGED) and a connected call
+        // (NORMAL_CLEARING) to the same destination minutes apart are
+        // DIFFERENT events, even though Phase 2 introduced these heuristics
+        // to merge double-UUID dupes of the SAME call. Loopback filter
+        // (commit 6784c70) now enumerates voicemails exhaustively — without
+        // this gate the reconciler silently absorbed them into nearby
+        // NORMAL_CLEARING rows and the dashboard counted 155 fewer
+        // NUMBER_CHANGED than reality for V4 Amaral mai/2026.
+        const hangupCompatible = (existingHc: string | null): boolean => {
+          // Allow if either side is null (dialer row pending webhook, or
+          // legacy row without hangup) OR if both match.
+          if (existingHc === null || c.hangup_cause === null || c.hangup_cause === undefined) return true;
+          return existingHc === c.hangup_cause;
+        };
+
         // 1b) Secondary id match — API4COM emits 2 different ids for the
         // same call (channel_id vs request_id from /dialer). When the
         // primary already holds id A and we receive id B, the row's
         // metadata.alt_api4com_ids array remembers B so future events
-        // arriving with either id land on the same row.
+        // arriving with either id land on the same row. Only honour the
+        // match when hangup_cause is compatible.
         if (!existing) {
           const { data: altMatch } = (await from(supabase, 'calls')
             .select(SELECT_COLS)
@@ -411,7 +428,9 @@ export async function POST(request: Request) {
             .contains('metadata', { alt_api4com_ids: [api4comId] })
             .limit(1)
             .maybeSingle()) as { data: CallLookupRow | null };
-          existing = altMatch;
+          if (altMatch && hangupCompatible(altMatch.hangup_cause)) {
+            existing = altMatch;
+          }
         }
 
         // 2) Fallback: origin (ramal) + destination suffix + started_at ±10min.
@@ -419,7 +438,8 @@ export async function POST(request: Request) {
         // started_at on the dialer-inserted row drifted past the 5min window
         // (the /dialer initiated row's started_at is the request time, while
         // REST's started_at is the channel-actually-rang time — can differ by
-        // 6-9min on long-rang scenarios).
+        // 6-9min on long-rang scenarios). Hangup_cause gate prevents
+        // collapsing distinct voicemail vs connected-call events into one.
         if (!existing && c.from && c.to && c.started_at) {
           const destDigits = c.to.replace(/\D/g, '');
           const suffix = destDigits.slice(-8);
@@ -436,7 +456,9 @@ export async function POST(request: Request) {
             .order('started_at', { ascending: true })
             .limit(1)
             .maybeSingle()) as { data: CallLookupRow | null };
-          existing = fallback;
+          if (fallback && hangupCompatible(fallback.hangup_cause)) {
+            existing = fallback;
+          }
         }
 
         const duration = Number(c.duration) || 0;
