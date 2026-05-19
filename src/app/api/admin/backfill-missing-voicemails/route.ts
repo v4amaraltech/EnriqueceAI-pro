@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   const baseUrl = conn.base_url.replace(/\/+$/, '');
   const significantThresholdSeconds = await getSignificantThreshold(supabase, body.orgId);
 
-  const perRamalResult: Array<{ ramal: string; fetched: number; inserted: number; matched: number; errors: number }> = [];
+  const perRamalResult: Array<{ ramal: string; fetched: number; inserted: number; reclassified: number; matched: number; errors: number }> = [];
 
   for (const ramal of body.ramals) {
     const userId = ramalToUserId.get(ramal);
@@ -107,6 +107,7 @@ export async function POST(request: Request) {
     let fetched = 0;
     let inserted = 0;
     let matched = 0;
+    let reclassified = 0;
     let errors = 0;
     let totalPageCount: number | null = null;
 
@@ -148,28 +149,41 @@ export async function POST(request: Request) {
         if (!realDate) continue;
         c.started_at = realDate.toISOString();
 
-        // Primary id lookup
+        // Primary id lookup — reclassify hangup_cause if DB diverges from API.
         const { data: primary } = (await from(supabase, 'calls')
-          .select('id')
+          .select('id, hangup_cause')
           .eq('org_id', body.orgId)
           .filter('metadata->>api4com_call_id', 'eq', c.id)
           .limit(1)
-          .maybeSingle()) as { data: { id: string } | null };
+          .maybeSingle()) as { data: { id: string; hangup_cause: string | null } | null };
         if (primary) {
-          matched++;
+          if (c.hangup_cause && primary.hangup_cause !== c.hangup_cause) {
+            await from(supabase, 'calls')
+              .update({ hangup_cause: c.hangup_cause, updated_at: new Date().toISOString() } as Record<string, unknown>)
+              .eq('id', primary.id);
+            reclassified++;
+          } else {
+            matched++;
+          }
           continue;
         }
 
-        // Alt-id lookup
+        // Alt-id lookup — same reclassify logic.
         const { data: alt } = (await from(supabase, 'calls')
           .select('id, hangup_cause')
           .eq('org_id', body.orgId)
           .contains('metadata', { alt_api4com_ids: [c.id] })
           .limit(1)
           .maybeSingle()) as { data: { id: string; hangup_cause: string | null } | null };
-        if (alt && (alt.hangup_cause === null || alt.hangup_cause === c.hangup_cause)) {
-          matched++;
-          continue;
+        if (alt) {
+          if (alt.hangup_cause === null || alt.hangup_cause === c.hangup_cause) {
+            matched++;
+            continue;
+          }
+          // Alt-id row has divergent hangup. Phase 5 gate would reject this
+          // as a match — so we should INSERT a new row, not reclassify the
+          // (probably unrelated) row whose alt_ids happens to include this id.
+          // Fall through to insert.
         }
 
         // INSERT
@@ -213,7 +227,7 @@ export async function POST(request: Request) {
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
-    perRamalResult.push({ ramal, fetched, inserted, matched, errors });
+    perRamalResult.push({ ramal, fetched, inserted, reclassified, matched, errors });
   }
 
   return NextResponse.json({
