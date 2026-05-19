@@ -591,7 +591,7 @@ export function LeadInfoPanel({
           <div className="space-y-4">
 
             {/* GERAL — contact principal */}
-            <CollapsibleSection title="Geral" defaultOpen={false}>
+            <CollapsibleSection title="Geral">
               {isEditing ? (
                 <>
                   {isFieldVisible('first_name') && (
@@ -777,7 +777,7 @@ export function LeadInfoPanel({
             <>
             <hr className="border-t-2 border-[var(--border)]" />
 
-            <CollapsibleSection title="Contatos" defaultOpen={false}>
+            <CollapsibleSection title="Contatos">
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail(s)</p>
               {isEditing ? (
@@ -942,7 +942,7 @@ export function LeadInfoPanel({
             {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website')) && (
             <>
             <hr className="border-t-2 border-[var(--border)]" />
-            <CollapsibleSection title="Social" defaultOpen={false}>
+            <CollapsibleSection title="Social">
               {isEditing ? (
                 <>
                   {isFieldVisible('instagram') && (
@@ -994,7 +994,7 @@ export function LeadInfoPanel({
             {customFieldDefs && customFieldDefs.length > 0 && (
               <>
                 <hr className="border-t-2 border-[var(--border)]" />
-                <CollapsibleSection title="Campos personalizados" defaultOpen={false}>
+                <CollapsibleSection title="Campos personalizados">
                   {hasSpicedFields && !isEditing && (
                     <Button
                       type="button"
