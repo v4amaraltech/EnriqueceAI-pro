@@ -17,12 +17,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // CSRF origin check for non-GET requests (defense-in-depth)
+  // CSRF origin check for non-GET requests (defense-in-depth).
+  // Also accept the request's own host (covers Vercel preview deployments
+  // during DNS outages: app.enriqueceai.com.br was unreachable on 2026-05-19,
+  // team logged in via the *.vercel.app preview URL — same deploy, same
+  // origin POSTing to itself, just a different hostname).
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const origin = request.headers.get('origin');
     if (origin) {
       const allowedOrigin = new URL(getAppUrl()).origin;
-      if (origin !== allowedOrigin) {
+      const requestOrigin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+      const isVercelPreview = /^https:\/\/enriqueceai-[a-z0-9]+-v4company-amaral\.vercel\.app$/.test(origin);
+      if (origin !== allowedOrigin && origin !== requestOrigin && !isVercelPreview) {
         return NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 });
       }
     }
