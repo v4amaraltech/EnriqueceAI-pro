@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   for (const ramal of body.ramals) {
     const userId = ramalToUserId.get(ramal);
     if (!userId) {
-      perRamalResult.push({ ramal, fetched: 0, inserted: 0, matched: 0, errors: 1 });
+      perRamalResult.push({ ramal, fetched: 0, inserted: 0, reclassified: 0, matched: 0, errors: 1 });
       continue;
     }
 
