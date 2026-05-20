@@ -411,9 +411,9 @@ export async function markLeadAsWon(
 
     if (leadForFeedback?.closer_id) {
       const { data: closer } = (await from(supabase, 'closers')
-        .select('id, name, email')
+        .select('id, name, email, phone')
         .eq('id', leadForFeedback.closer_id)
-        .single()) as { data: { id: string; name: string; email: string } | null };
+        .single()) as { data: { id: string; name: string; email: string; phone: string | null } | null };
 
       if (closer) {
         const leadName = leadForFeedback.nome_fantasia ?? leadForFeedback.razao_social ?? 'Lead';
@@ -423,6 +423,7 @@ export async function markLeadAsWon(
           closerId: closer.id,
           closerName: closer.name,
           closerEmail: closer.email,
+          closerPhone: closer.phone,
           leadName,
           senderUserId: auth.data.userId,
         }).catch((err) => console.error('[markLeadAsWon] Feedback email error:', err));

@@ -47,6 +47,7 @@ import { archiveLead } from '../actions/lead-lifecycle';
 import { fetchCrmPipelines, fetchKommoUsers, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
+import { resendCloserFeedback } from '../actions/resend-closer-feedback';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
 
@@ -110,6 +111,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
 
   // Closer feedback
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
+  const [isResendingFeedback, setIsResendingFeedback] = useState(false);
 
   useEffect(() => {
     if (lead.status === 'qualified' || lead.status === 'won') {
@@ -118,6 +120,34 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       });
     }
   }, [lead.id, lead.status]);
+
+  const handleResendFeedback = useCallback(() => {
+    setIsResendingFeedback(true);
+    resendCloserFeedback({ leadId: lead.id })
+      .then((res) => {
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
+        const { email, whatsapp, whatsappError, whatsappSkipReason } = res.data;
+        const parts: string[] = [];
+        parts.push(email === 'sent' ? 'Email enviado' : 'Email falhou');
+        if (whatsapp === 'sent') parts.push('WhatsApp enviado');
+        else if (whatsapp === 'failed') parts.push(`WhatsApp falhou${whatsappError ? ` (${whatsappError})` : ''}`);
+        else if (whatsappSkipReason === 'no_phone') parts.push('WhatsApp pulado (closer sem telefone)');
+        else if (whatsappSkipReason === 'invalid_phone') parts.push('WhatsApp pulado (telefone inválido)');
+        const message = parts.join(' · ');
+        if (email === 'sent' && whatsapp !== 'failed') {
+          toast.success(message);
+        } else {
+          toast.warning(message);
+        }
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Erro ao reenviar feedback');
+      })
+      .finally(() => setIsResendingFeedback(false));
+  }, [lead.id]);
 
   // Won dialog — closer info & selection
   const [_wonCloserName, setWonCloserName] = useState<string | null>(null);
@@ -404,10 +434,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         </div>
       )}
       {closerFeedback && !closerFeedback.responded_at && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3">
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3 flex items-center justify-between gap-3">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong>
           </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleResendFeedback}
+            disabled={isResendingFeedback}
+          >
+            {isResendingFeedback ? 'Reenviando…' : 'Reenviar feedback'}
+          </Button>
         </div>
       )}
 

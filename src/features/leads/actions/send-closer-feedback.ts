@@ -4,6 +4,8 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
+import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
 interface SendFeedbackParams {
   leadId: string;
@@ -11,18 +13,30 @@ interface SendFeedbackParams {
   closerId: string;
   closerName: string;
   closerEmail: string;
+  closerPhone: string | null;
   leadName: string;
   senderUserId: string;
 }
 
+export interface SendFeedbackChannelResult {
+  email: 'sent' | 'failed';
+  whatsapp: 'sent' | 'skipped' | 'failed';
+  emailError?: string;
+  whatsappError?: string;
+  whatsappSkipReason?: 'no_phone' | 'invalid_phone';
+}
+
 /**
- * Creates a feedback request and sends email to the closer via platform email (Resend).
- * Called fire-and-forget after markLeadAsWon — errors are logged but don't block the flow.
+ * Creates a feedback request and notifies the closer via email (Resend) and,
+ * when a phone is available, WhatsApp through the sender's Evolution instance.
+ * Called fire-and-forget from markLeadAsWon and synchronously by the
+ * `resendCloserFeedback` action.
  */
-export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promise<void> {
-  const { leadId, orgId, closerId, closerName, closerEmail, leadName } = params;
+export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promise<SendFeedbackChannelResult> {
+  const { leadId, orgId, closerId, closerName, closerEmail, closerPhone, leadName, senderUserId } = params;
   const supabase = createServiceRoleClient();
   const appUrl = getAppUrl();
+  const channels: SendFeedbackChannelResult = { email: 'failed', whatsapp: 'skipped' };
 
   try {
     // Check if a pending feedback request already exists (e.g. created by meeting briefing)
@@ -62,7 +76,8 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
             leadId,
             startTimeRaw,
           );
-          return;
+          channels.emailError = 'meeting_in_future';
+          return channels;
         }
       }
 
@@ -78,7 +93,8 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
 
       if (insertError || !request) {
         console.error('[closer-feedback] Failed to create feedback request:', insertError?.message);
-        return;
+        channels.emailError = insertError?.message ?? 'feedback_request_insert_failed';
+        return channels;
       }
       feedbackToken = request.token;
     }
@@ -87,18 +103,54 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
     const html = buildFeedbackEmailHtml(closerName, leadName, feedbackUrl, appUrl);
 
     // Send via platform email (Resend) — no Gmail dependency
-    const result = await sendPlatformEmail({
+    const emailResult = await sendPlatformEmail({
       to: closerEmail,
       subject: `Feedback da reunião: ${leadName}`,
       html,
     });
 
-    if (!result.success) {
-      console.error('[closer-feedback] Failed to send email:', result.error);
+    if (emailResult.success) {
+      channels.email = 'sent';
+    } else {
+      channels.emailError = emailResult.error ?? 'unknown_email_error';
+      console.error('[closer-feedback] Failed to send email:', emailResult.error);
+    }
+
+    // WhatsApp via Evolution using the sender's per-user instance. Fire after
+    // the email so the closer always has the canonical record in their inbox
+    // even if WhatsApp delivery is delayed or the instance is offline.
+    if (!closerPhone) {
+      channels.whatsappSkipReason = 'no_phone';
+    } else if (!validateBrazilianPhone(closerPhone)) {
+      channels.whatsappSkipReason = 'invalid_phone';
+      console.warn('[closer-feedback] Skipping WhatsApp — invalid phone:', closerPhone);
+    } else {
+      const wppBody = buildFeedbackWhatsAppBody(closerName, leadName, feedbackUrl);
+      const wppResult = await EvolutionWhatsAppService.sendMessage(
+        orgId,
+        { to: closerPhone, body: wppBody },
+        supabase,
+        senderUserId,
+      );
+      if (wppResult.success) {
+        channels.whatsapp = 'sent';
+      } else {
+        channels.whatsapp = 'failed';
+        channels.whatsappError = wppResult.error ?? 'unknown_whatsapp_error';
+        console.error('[closer-feedback] WhatsApp delivery failed:', wppResult.error);
+      }
     }
   } catch (err) {
     console.error('[closer-feedback] Unexpected error:', err);
+    if (channels.email !== 'sent' && !channels.emailError) {
+      channels.emailError = err instanceof Error ? err.message : String(err);
+    }
   }
+  return channels;
+}
+
+function buildFeedbackWhatsAppBody(closerName: string, leadName: string, feedbackUrl: string): string {
+  return `Olá ${closerName}! 👋\n\nUma reunião com *${leadName}* foi marcada como ganha pelo pré-vendas.\n\nPodemos contar com seu feedback sobre a reunião?\n\n📋 Responder: ${feedbackUrl}\n\n_Leva menos de 1 minuto._`;
 }
 
 function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUrl: string, appUrl: string): string {
