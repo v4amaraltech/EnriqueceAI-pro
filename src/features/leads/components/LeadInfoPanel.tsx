@@ -740,7 +740,10 @@ export function LeadInfoPanel({
                       label="Empresa"
                       value={data.nome_fantasia}
                       placeholder="Adicionar empresa"
-                      onSaved={(v) => setData((prev) => ({ ...prev, nome_fantasia: v || null }))}
+                      onSaved={(v) => {
+                        setData((prev) => ({ ...prev, nome_fantasia: v || null }));
+                        setEditFields((prev) => ({ ...prev, nome_fantasia: v ?? '' }));
+                      }}
                     />
                   )}
                   {isFieldVisible('job_title') && (
@@ -750,7 +753,10 @@ export function LeadInfoPanel({
                       label="Cargo"
                       value={data.job_title}
                       placeholder="Adicionar cargo"
-                      onSaved={(v) => setData((prev) => ({ ...prev, job_title: v || null }))}
+                      onSaved={(v) => {
+                        setData((prev) => ({ ...prev, job_title: v || null }));
+                        setEditFields((prev) => ({ ...prev, job_title: v ?? '' }));
+                      }}
                     />
                   )}
                   {isFieldVisible('lead_source') && (
