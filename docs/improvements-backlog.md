@@ -73,3 +73,18 @@ Fila de melhorias técnicas (não-bloqueantes) identificadas em varreduras / ses
 ### `markEventReceived` race condition no WhatsApp webhook
 - **Identificado:** sessões anteriores (mencionado em memory).
 - **Ação proposta:** ainda não investigado — manter na fila pra rodada futura.
+
+---
+
+## Closer Feedback
+
+### Suportar canal WhatsApp em `/api/admin/resend-closer-feedback`
+- **Identificado:** 2026-05-20. Vinicius pediu disparo manual via WhatsApp dos 4 feedbacks pendentes (Pedro Neves 1, Jhonata Banqueri 3); precisei rodar script one-off chamando Evolution direto porque o endpoint atual só faz email.
+- **Estado atual:** `POST /api/admin/resend-closer-feedback` aceita `feedbackRequestIds[]` e dispara via `sendPlatformEmail` (Resend) — único canal.
+- **Ação proposta:** estender body para aceitar `channel: 'email' | 'whatsapp' | 'both'` (default `email` p/ não quebrar callers). No caminho whatsapp:
+  - Resolver instância via `EvolutionWhatsAppService.sendMessage(orgId, ..., userId)` passando o `userId` de quem disparou (usa a instância do próprio gestor).
+  - Validar `closers.phone` antes (já é nullable; pular com `status: 'skipped', reason: 'no_phone'`).
+  - Template curto: nome do closer + nome do lead + link `/feedback/{token}`.
+  - Fallback opcional: se WhatsApp falhar (`session dead`, número inválido), tentar email.
+- **Bonus:** UI em `settings/prospecting/closer-feedbacks` para selecionar canal antes de reenviar.
+- **Risco:** baixo. Não toca no fluxo automático (que continua email via cron). É só ampliar o reenvio manual.
