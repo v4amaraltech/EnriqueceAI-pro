@@ -145,7 +145,7 @@ async function createCallFromWebhook(
   let leadId: string | null = null;
 
   if (isOutbound && body.called) {
-    const leadMatch = await findLeadByPhoneService(supabase, conn.org_id, body.called);
+    const leadMatch = await findLeadByPhoneService(supabase, conn.org_id, body.called, conn.user_id);
     leadId = leadMatch?.leadId ?? null;
   }
 
@@ -230,7 +230,7 @@ async function processApi4ComEvent(
           });
 
           // Advance cadence if current step is phone
-          const leadMatch = await findLeadByPhoneService(supabase, result.orgId, body.called);
+          const leadMatch = await findLeadByPhoneService(supabase, result.orgId, body.called, result.userId);
           if (leadMatch?.enrollmentId && leadMatch.stepChannel === 'phone') {
             await advanceExternalCallCadence(supabase, {
               enrollmentId: leadMatch.enrollmentId,

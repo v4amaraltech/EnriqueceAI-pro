@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 import { normalizePhone } from '@/lib/utils/phone';
-import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 export interface LeadMatch {
   leadId: string;
@@ -13,67 +12,33 @@ export interface LeadMatch {
 }
 
 /**
- * Find a lead by phone number within an org, checking:
- *  1. leads.telefone (direct text)
- *  2. leads.phones JSONB (array of {tipo, numero})
- *  3. leads.socios JSONB (celulares sub-array)
+ * Find a lead by phone within an org. Delegates to the
+ * `find_lead_id_by_phone` SQL function which:
+ *  - normalizes `telefone`/`phones`/`socios` via regexp_replace before
+ *    matching (so '(16) 99986-7577' matches a webhook called '16999867577')
+ *  - prefers leads assigned to `sdrUserId` when provided (disambiguates
+ *    duplicates — caller's lead wins over a stranger's lead with the same
+ *    number).
  *
- * If found, also checks for an active cadence enrollment.
- * Uses service-role client (no auth context needed — called from webhook).
+ * Service-role only — the RPC is GRANTed to service_role.
  */
 export async function findLeadByPhoneService(
   supabase: SupabaseClient,
   orgId: string,
   phone: string,
+  sdrUserId?: string | null,
 ): Promise<LeadMatch | null> {
   const normalized = normalizePhone(phone);
   if (!normalized || normalized.length < 8) return null;
 
-  const phoneSuffix = sanitizeFilterValue(normalized.slice(-8));
-
-  // 1. Search leads.telefone
-  const { data: directMatch } = (await from(supabase, 'leads')
-    .select('id')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .like('telefone', `%${phoneSuffix}`)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()) as { data: { id: string } | null };
-
-  let leadId: string | null = directMatch?.id ?? null;
-
-  // 2. Search leads.phones JSONB (cast to text and search)
-  if (!leadId) {
-    const { data: phonesMatch } = (await from(supabase, 'leads')
-      .select('id')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .like('phones::text' as never, `%${phoneSuffix}%` as never)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string } | null };
-
-    leadId = phonesMatch?.id ?? null;
-  }
-
-  // 3. Search leads.socios JSONB celulares
-  if (!leadId) {
-    const { data: socioMatch } = (await from(supabase, 'leads')
-      .select('id')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .like('socios::text' as never, `%${phoneSuffix}%` as never)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string } | null };
-
-    leadId = socioMatch?.id ?? null;
-  }
+  const { data: leadId } = (await supabase.rpc('find_lead_id_by_phone', {
+    p_org_id: orgId,
+    p_phone_digits: normalized,
+    p_sdr_user_id: sdrUserId ?? null,
+  })) as { data: string | null };
 
   if (!leadId) return null;
 
-  // Check for active cadence enrollment
   const enrollment = await findActiveEnrollment(supabase, leadId);
 
   return {
