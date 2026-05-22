@@ -74,6 +74,36 @@ export async function initiateApi4ComCall(
     const qErr = handleQueryError(callError, 'Erro ao registrar chamada', 'api4com');
     if (qErr || !call) return qErr ?? { success: false, error: 'Erro ao registrar chamada' };
 
+    // Mirror the call into `interactions` so it shows up in the lead timeline.
+    // Webhook-driven external calls already get this via `createExternalCallInteraction`;
+    // calls initiated from the "Ligar" button skipped it, so they ended up
+    // invisible in the timeline (the manager could only see them in /calls).
+    // Linking via `metadata.callId` lets fetch-interactions enrich the row with
+    // recording_url/transcription/duration once the webhook updates the call.
+    if (input.leadId) {
+      const interactionInsert = await from(supabase, 'interactions')
+        .insert({
+          org_id: orgId,
+          lead_id: input.leadId,
+          type: 'sent',
+          channel: 'phone',
+          message_content: `Ligação iniciada pela plataforma para ${normalizedPhone}`,
+          performed_by: userId,
+          metadata: {
+            source: 'internal_api4com',
+            callId: call.id,
+            api4com_id: api4comResponse.id,
+            ramal,
+          },
+        } as Record<string, unknown>);
+      if ((interactionInsert as { error?: { message: string } }).error) {
+        console.error(
+          '[api4com] Failed to log call interaction:',
+          (interactionInsert as { error: { message: string } }).error.message,
+        );
+      }
+    }
+
     return {
       success: true,
       data: { callId: call.id, api4comId: api4comResponse.id },
