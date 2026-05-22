@@ -148,9 +148,21 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       operatorPickedSource || row.lead_source ? null : DEFAULT_CANAL;
     const normalized = normalizeOriginFields(resolvedSource, resolvedCanal);
 
-    // Detect whether the CSV row carries any contact data — when it does, the
-    // lead is treated as already enriched (Rafael's "_enriquecido_" CSV use case).
-    const hasContactData = !!(row.telefone || row.email || row.decisor || row.website);
+    // Enrichment status reflects whether the CSV brought the decisor (contact
+    // human) — that's the signal we actually need for cadences. Earlier this
+    // flag fired on telefone/email/website alone, which marked CNPJ-only
+    // lists as "enriched" even with empty socios/first_name (Giovanni's
+    // "Clínica de estética_enriquecido" CSV on 2026-05-12 hit this: 44 leads
+    // stayed forever without decisor because the status said "done").
+    //   - decisor present              → 'enriched'  (CSV brought a contact)
+    //   - decisor absent + cnpj present → 'pending'   (queue for external enrichment)
+    //   - decisor absent + cnpj absent  → 'not_found' (nothing to enrich from)
+    const enrichmentStatus: 'enriched' | 'pending' | 'not_found' = row.decisor
+      ? 'enriched'
+      : row.cnpj
+        ? 'pending'
+        : 'not_found';
+    const isEnriched = enrichmentStatus === 'enriched';
     const socios = row.decisor
       ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }]
       : null;
@@ -228,8 +240,8 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         org_id: orgId,
         cnpj: row.cnpj,
         status: 'new',
-        enrichment_status: hasContactData ? 'enriched' : 'not_found',
-        enriched_at: hasContactData ? new Date().toISOString() : null,
+        enrichment_status: enrichmentStatus,
+        enriched_at: isEnriched ? new Date().toISOString() : null,
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
         telefone: row.telefone ?? null,
