@@ -109,13 +109,15 @@ export async function fetchLeadsFinishedRanking(
     return buildRankingCardData([], 0, goal?.opportunity_target ?? 0, filters.month);
   }
 
-  // Get lead assigned_to for attribution
+  // Get lead assigned_to for attribution. Archived leads are skipped — they
+  // were discarded and shouldn't count as "finalizados" or "prospectando".
   const leadIds = [...new Set(rows.map((r) => r.lead_id))];
   const leadData = await chunkedIn<{ id: string; assigned_to: string | null }>(leadIds, (chunk) =>
     from(supabase, 'leads')
       .select('id, assigned_to')
       .in('id', chunk)
-      .is('deleted_at', null) as unknown as PromiseLike<{
+      .is('deleted_at', null)
+      .neq('status', 'archived') as unknown as PromiseLike<{
       data: Array<{ id: string; assigned_to: string | null }> | null;
       error: unknown;
     }>,

@@ -191,11 +191,13 @@ export async function fetchConversionByOrigin(
       const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.converted++;
       sourceStats.set(groupKey, stats);
-    } else if (lead.status === 'unqualified' || lead.status === 'archived') {
+    } else if (lead.status === 'unqualified') {
       const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.lost++;
       sourceStats.set(groupKey, stats);
     }
+    // status='archived' intentionally not counted — archived leads are
+    // discarded prospects and shouldn't pollute conversion-by-origin.
   }
 
   const entries: ConversionByOriginEntry[] = [];

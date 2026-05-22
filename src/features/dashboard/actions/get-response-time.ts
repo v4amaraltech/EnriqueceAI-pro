@@ -48,11 +48,14 @@ export async function getResponseTimeData(
     ? `${dateRange.to}T23:59:59-03:00`
     : now.toISOString();
 
-  // Fetch leads created in period
+  // Fetch leads created in period. Archived leads excluded — they were
+  // discarded by the SDR/manager and shouldn't drag the response-time
+  // denominator down.
   const { data: leads } = (await from(supabase, 'leads')
     .select('id, created_at, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
+    .neq('status', 'archived')
     .gte('created_at', monthStart)
     .lte('created_at', monthEnd)) as { data: LeadQueryRow[] | null };
 
