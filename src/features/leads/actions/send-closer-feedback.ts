@@ -116,6 +116,17 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
       console.error('[closer-feedback] Failed to send email:', emailResult.error);
     }
 
+    await logFeedbackInteraction(supabase, {
+      orgId,
+      leadId,
+      senderUserId,
+      channel: 'email',
+      success: emailResult.success,
+      closerName,
+      recipient: closerEmail,
+      error: emailResult.success ? undefined : channels.emailError,
+    });
+
     // WhatsApp via Evolution using the sender's per-user instance. Fire after
     // the email so the closer always has the canonical record in their inbox
     // even if WhatsApp delivery is delayed or the instance is offline.
@@ -139,6 +150,18 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
         channels.whatsappError = wppResult.error ?? 'unknown_whatsapp_error';
         console.error('[closer-feedback] WhatsApp delivery failed:', wppResult.error);
       }
+
+      await logFeedbackInteraction(supabase, {
+        orgId,
+        leadId,
+        senderUserId,
+        channel: 'whatsapp',
+        success: wppResult.success,
+        closerName,
+        recipient: closerPhone,
+        messageId: wppResult.messageId,
+        error: wppResult.success ? undefined : channels.whatsappError,
+      });
     }
   } catch (err) {
     console.error('[closer-feedback] Unexpected error:', err);
@@ -147,6 +170,52 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
     }
   }
   return channels;
+}
+
+/**
+ * Persist a row in `interactions` per channel attempt so the lead timeline
+ * shows whether the closer feedback request actually went out (and via which
+ * number/email). Without this the WhatsApp leg was fire-and-forget and the
+ * only way to confirm delivery was looking at the SDR's phone — meaning
+ * disconnected Evolution instances (e.g. Matheus on 2026-05-14) silently
+ * dropped feedback notifications with no signal in the platform.
+ */
+async function logFeedbackInteraction(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  params: {
+    orgId: string;
+    leadId: string;
+    senderUserId: string;
+    channel: 'email' | 'whatsapp';
+    success: boolean;
+    closerName: string;
+    recipient: string;
+    messageId?: string;
+    error?: string;
+  },
+): Promise<void> {
+  try {
+    const verb = params.channel === 'email' ? 'Email' : 'WhatsApp';
+    const status = params.success ? 'enviado' : 'falhou';
+    const message = `${verb} de solicitação de feedback ${status} para ${params.closerName}`;
+    await from(supabase, 'interactions').insert({
+      org_id: params.orgId,
+      lead_id: params.leadId,
+      type: params.success ? 'sent' : 'failed',
+      channel: params.channel,
+      message_content: message,
+      performed_by: params.senderUserId,
+      metadata: {
+        source: 'closer_feedback',
+        recipient_kind: 'closer',
+        recipient: params.recipient,
+        message_id: params.messageId ?? null,
+        error: params.error ?? null,
+      },
+    } as Record<string, unknown>);
+  } catch (err) {
+    console.error('[closer-feedback] Failed to log interaction:', err);
+  }
 }
 
 function buildFeedbackWhatsAppBody(closerName: string, leadName: string, feedbackUrl: string): string {
