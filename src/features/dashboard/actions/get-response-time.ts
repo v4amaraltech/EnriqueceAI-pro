@@ -117,16 +117,25 @@ export async function getResponseTimeData(
 
   const leadIds = filteredLeads.map((l) => l.id);
 
-  // Fetch first interaction per lead (sent or delivered). Chunked via the
-  // chunkedIn helper to avoid PostgREST's ~4-8KB URL ceiling — without
-  // chunking a single .in() with 1300+ UUIDs silently returned no rows and
-  // the whole "em até 30 min" column collapsed to 0% (production bug).
+  // Fetch first HUMAN interaction per lead (channels phone/whatsapp/email/
+  // linkedin/research, types sent/delivered).
+  //
+  // Excluding channel='system'/'calendar'/'crm' is critical: when a lead is
+  // created (CSV import, inbound API, manual) the system inserts a
+  // {channel:'system', type:'sent'} log row in the same instant. Without the
+  // channel filter that row was treated as "first contact" and the
+  // AUTOMATION_GRACE_SECONDS heuristic then dropped 95% of leads (1,690 of
+  // 1,782 in V4 Amaral May/2026 audit) from the denominator — the card
+  // collapsed onto the ~5% residual and showed an inflated ~99% within-30min.
+  //
+  // Chunked via chunkedIn to avoid PostgREST's ~4-8KB URL ceiling.
   const interactions = await chunkedIn<InteractionQueryRow>(leadIds, (chunk) =>
     from(supabase, 'interactions')
       .select('lead_id, created_at')
       .eq('org_id', orgId)
       .in('lead_id', chunk)
       .in('type', ['sent', 'delivered'])
+      .in('channel', ['phone', 'whatsapp', 'email', 'linkedin', 'research'])
       .order('created_at', { ascending: true }) as unknown as PromiseLike<{
       data: InteractionQueryRow[] | null;
       error: unknown;
@@ -154,10 +163,12 @@ export async function getResponseTimeData(
   //  1) Leads with NO first interaction are excluded from the denominator —
   //     they're "not yet contacted", not "contacted slowly". Otherwise SDRs
   //     who got assigned a lot of fresh leads look slow.
-  //  2) Interactions registered <5s after the lead row was created come from
-  //     inbound automations (Apollo webhooks, CSV imports that pre-create an
-  //     interaction, etc.) and don't reflect human response time. Excluding
-  //     them stops a non-human signal from inflating "em até 30 min" to 100%.
+  //  2) Defense-in-depth: interactions registered <5s after the lead row was
+  //     created are dropped even after the channel filter, in case some new
+  //     automation surfaces on a human-looking channel (e.g. CRM mirroring
+  //     a webhook into channel='email' synchronously). Without the channel
+  //     filter alone this guard was masking the actual response time — see
+  //     audit 2026-05-22.
   const AUTOMATION_GRACE_SECONDS = 5;
   const userMap = new Map<string, { total: number; within: number }>();
   let overallWithin = 0;
