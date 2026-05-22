@@ -70,6 +70,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [leadsFinishedTarget, setLeadsFinishedTarget] = useState(0);
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
+  const [leadsOpenedTarget, setLeadsOpenedTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
   const [visibleUserIds, setVisibleUserIds] = useState<Set<string>>(new Set());
 
@@ -89,6 +90,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         setLeadsFinishedTarget(result.data.leadsFinishedTarget);
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
+        setLeadsOpenedTarget(result.data.leadsOpenedTarget);
         setUserGoals(result.data.userGoals);
 
         // Show SDRs that already have goals or had goals last month; fallback to all
@@ -128,6 +130,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         leadsFinishedTarget,
         activitiesTarget,
         conversionTarget,
+        leadsOpenedTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
           opportunityTarget: ug.opportunityTarget,
@@ -215,6 +218,29 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     value={leadsFinishedTarget}
                     onChange={(e) => setLeadsFinishedTarget(Number(e.target.value) || 0)}
                     aria-label="Meta de Leads Finalizados"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Meta de Leads Abertos */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Leads Abertos</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Total de leads que o time vai abrir no mês (primeiro contato humano por email, WhatsApp, telefone, LinkedIn ou pesquisa)
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="leads-opened-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={leadsOpenedTarget}
+                    onChange={(e) => setLeadsOpenedTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Leads Abertos"
                   />
                 </div>
               </div>

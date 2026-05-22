@@ -142,9 +142,21 @@ function OpportunityChart({ chartData, daysInMonth, monthAbbr, yMax, height, gra
 interface OpportunityKpiCardProps {
   kpi: OpportunityKpiData;
   month: string;
+  /** Plural label used in header + legend. Defaults to "Oportunidades". */
+  label?: string;
+  /** Tooltip shown next to the number. Optional. */
+  labelTooltip?: string;
+  /** Color for the line/area (defaults to emerald). */
+  seriesColor?: 'emerald' | 'sky';
 }
 
-export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
+export function OpportunityKpiCard({
+  kpi,
+  month,
+  label = 'Oportunidades',
+  labelTooltip = 'Leads convertidos em oportunidades no mês',
+  seriesColor: _seriesColor = 'emerald',
+}: OpportunityKpiCardProps) {
   const [expanded, setExpanded] = useState(false);
   const monthName = getMonthName(month);
   const monthNameLower = monthName.toLowerCase();
@@ -175,8 +187,8 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
           <div className="flex w-full shrink-0 flex-col justify-center lg:w-[400px] lg:pl-14">
             <p className="text-6xl font-bold tracking-tight text-foreground">{kpi.totalOpportunities}</p>
             <p className="mt-1.5 flex items-center gap-1.5 text-sm text-foreground/70">
-              Oportunidades em {monthName}
-              <span title="Leads convertidos em oportunidades no mês">
+              {label} em {monthName}
+              <span title={labelTooltip}>
                 <HelpCircle className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
               </span>
             </p>
@@ -187,7 +199,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
                   <CalendarDays className="h-4 w-4 text-emerald-500" />
                 </div>
                 <p className="text-sm leading-relaxed">
-                  Meta de oportunidades para {monthNameLower}:{' '}
+                  Meta de {label.toLowerCase()} para {monthNameLower}:{' '}
                   <span className="font-semibold text-emerald-600">{kpi.monthTarget}</span>
                 </p>
               </div>
@@ -254,7 +266,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
           <div className="flex items-center justify-center gap-6 border-t border-border px-6 py-3">
             <div className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-muted-foreground">Oportunidades</span>
+              <span className="text-xs text-muted-foreground">{label}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block h-px w-4 border-t border-dashed border-muted-foreground/40" />
@@ -267,7 +279,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="max-w-[90vw]">
           <DialogHeader>
-            <DialogTitle>Oportunidades em {monthName}</DialogTitle>
+            <DialogTitle>{label} em {monthName}</DialogTitle>
           </DialogHeader>
           <div className="min-h-[500px]">
             <OpportunityChart
@@ -282,7 +294,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
           <div className="flex items-center justify-center gap-6 py-2">
             <div className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-muted-foreground">Oportunidades</span>
+              <span className="text-xs text-muted-foreground">{label}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block h-px w-4 border-t border-dashed border-muted-foreground/40" />

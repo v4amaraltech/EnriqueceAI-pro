@@ -4,11 +4,11 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { CheckCircle2, TrendingUp, Users } from 'lucide-react';
+import { CheckCircle2, DoorOpen, TrendingUp, Users } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, RankingData } from '../types';
+import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData } from '../types';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
 import { GoalsModal } from './GoalsModal';
@@ -80,9 +80,47 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
       {/* KPI + Chart (unified card) */}
       <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
 
+      {/* Leads Abertos — number + daily cumulative chart vs target */}
+      {ranking?.leadsOpened?.dailyData && (
+        <OpportunityKpiCard
+          kpi={{
+            totalOpportunities: ranking.leadsOpened.total,
+            monthTarget: ranking.leadsOpened.monthTarget,
+            conversionTarget: 0,
+            percentOfTarget: ranking.leadsOpened.percentOfTarget,
+            currentDay: (() => {
+              const now = new Date();
+              const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
+              const days = new Date(yr, mo, 0).getDate();
+              const isCurrent = now.getFullYear() === yr && now.getMonth() + 1 === mo;
+              return isCurrent ? now.getDate() : days;
+            })(),
+            daysInMonth: ranking.leadsOpened.dailyData.length,
+            dailyData: ranking.leadsOpened.dailyData,
+          } satisfies OpportunityKpiData}
+          month={filters.month}
+          label="Leads abertos"
+          labelTooltip="Leads com primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa) realizado por um SDR no período."
+        />
+      )}
+
       {/* Ranking Cards (Story 3.3) — equal height via grid stretch */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards">
+          <RankingCard
+            title="Leads Abertos"
+            titleTooltip={
+              'Quantos leads cada SDR abriu no período. "Abrir" = primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa).\n\n' +
+              'Cada lead conta uma vez para o SDR que fez o primeiro contato. Gerentes não aparecem no ranking.'
+            }
+            icon={DoorOpen}
+            iconColor="bg-sky-500/10"
+            iconTextColor="text-sky-500"
+            data={ranking.leadsOpened}
+            primaryColumnLabel="abertos"
+            averageLabel="média leads abertos/vendedor"
+            onSdrClick={handleSdrClick}
+          />
           <RankingCard
             title="Leads Finalizados"
             titleTooltip={

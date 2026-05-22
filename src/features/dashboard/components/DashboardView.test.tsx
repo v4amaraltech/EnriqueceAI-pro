@@ -216,6 +216,13 @@ describe('DashboardView', () => {
         averagePerSdr: 30,
         sdrBreakdown: [],
       },
+      leadsOpened: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
     };
     const { container } = render(
       <DashboardView

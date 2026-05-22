@@ -19,7 +19,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { month, opportunityTarget, leadsFinishedTarget, activitiesTarget, conversionTarget, userGoals } = parsed.data;
+  const { month, opportunityTarget, leadsFinishedTarget, activitiesTarget, conversionTarget, leadsOpenedTarget, userGoals } = parsed.data;
   const monthDate = `${month}-01`;
 
   // Get user's org
@@ -43,6 +43,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
         leads_finished_target: leadsFinishedTarget,
         activities_target: activitiesTarget,
         conversion_target: conversionTarget,
+        leads_opened_target: leadsOpenedTarget,
         created_by: user.id,
       },
       { onConflict: 'org_id,month' },

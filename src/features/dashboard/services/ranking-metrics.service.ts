@@ -4,6 +4,7 @@ import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import type {
+  DailyDataPoint,
   DashboardFilters,
   RankingCardData,
   RankingData,
@@ -367,18 +368,127 @@ export async function fetchConversionRanking(
 }
 
 /**
- * Fetch all 3 ranking cards in parallel
+ * Card 4: Leads Abertos — first human-channel touch per lead, attributed to
+ * the SDR who did it. Includes a daily cumulative breakdown for the chart.
+ */
+export async function fetchLeadsOpenedRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const { start, end } = getDateRange(filters);
+  const days = getDaysInMonth(filters.month);
+
+  // Get list of SDRs (exclude managers)
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
+  // RPC returns one row per SDR with count of leads whose FIRST human-channel
+  // interaction falls in [start, end). See migration
+  // 20260522091423_goals_leads_opened_target_and_rpc.sql.
+  const { data: rows } = await (supabase.rpc as any)('count_leads_opened_by_sdr', {
+    p_org_id: orgId,
+    p_start: start,
+    p_end: end,
+    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
+  }) as { data: Array<{ performer_id: string; cnt: number }> | null };
+
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('leads_opened_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as { data: { leads_opened_target: number } | null };
+  const monthTarget = goal?.leads_opened_target ?? 0;
+
+  const entries: SdrRankingEntry[] = [];
+  let totalOpened = 0;
+  for (const row of rows ?? []) {
+    if (!sdrIds.has(row.performer_id)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
+    totalOpened += row.cnt;
+    entries.push({ userId: row.performer_id, userName: '', value: row.cnt });
+  }
+
+  // Daily cumulative chart: pull the same first-touch rows but bucket by day.
+  // Reuses the RPC's filter contract via a direct SQL select on the same
+  // interactions slice. We do it client-side because the RPC already aggregates.
+  const dailyData = await fetchLeadsOpenedDaily(supabase, orgId, filters, sdrIds, monthTarget);
+
+  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month);
+  return { ...card, dailyData };
+
+  void days; // unused — buildRankingCardData computes its own days inside
+}
+
+/**
+ * Per-day cumulative count of leads opened (first human touch). Mirrors the
+ * RPC's window filter so the chart matches the ranking total exactly.
+ */
+async function fetchLeadsOpenedDaily(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  sdrIds: Set<string>,
+  target: number,
+): Promise<DailyDataPoint[]> {
+  const { start, end } = getDateRange(filters);
+  const days = getDaysInMonth(filters.month);
+  const [year, mon] = filters.month.split('-').map(Number) as [number, number];
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const isCurrentMonth = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
+  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+
+  // chunked here would only kick in for huge cadenceIds; for the daily series
+  // we just pull leads opened in the window and bucket in memory.
+  const { data: rpcRows } = await (supabase.rpc as any)('count_leads_opened_by_sdr_daily', {
+    p_org_id: orgId,
+    p_start: start,
+    p_end: end,
+    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
+  }) as { data: Array<{ performer_id: string; opened_at: string }> | null };
+
+  const countByDay = new Map<number, number>();
+  for (const row of rpcRows ?? []) {
+    if (!sdrIds.has(row.performer_id)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
+    const brt = new Date(new Date(row.opened_at).getTime() - 3 * 60 * 60 * 1000);
+    const day = brt.getUTCDate();
+    countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
+  }
+
+  const result: DailyDataPoint[] = [];
+  let cumulative = 0;
+  for (let day = 1; day <= days; day++) {
+    cumulative += countByDay.get(day) ?? 0;
+    result.push({
+      date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      day,
+      actual: day <= maxDay ? cumulative : 0,
+      target: target > 0 ? Math.round((target / days) * day) : 0,
+    });
+  }
+  return result;
+}
+
+/**
+ * Fetch all 4 ranking cards in parallel
  */
 export async function fetchRankingData(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingData> {
-  const [leadsFinished, activitiesDone, conversionRate] = await Promise.all([
+  const [leadsFinished, activitiesDone, conversionRate, leadsOpened] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchActivitiesRanking(supabase, orgId, filters),
     fetchConversionRanking(supabase, orgId, filters),
+    fetchLeadsOpenedRanking(supabase, orgId, filters),
   ]);
 
-  return { leadsFinished, activitiesDone, conversionRate };
+  return { leadsFinished, activitiesDone, conversionRate, leadsOpened };
 }

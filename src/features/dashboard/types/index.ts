@@ -52,12 +52,15 @@ export interface RankingCardData {
   percentOfTarget: number; // positive = above, negative = below
   averagePerSdr: number;
   sdrBreakdown: SdrRankingEntry[];
+  /** Daily cumulative actual vs target — populated for cards that want a chart. */
+  dailyData?: DailyDataPoint[];
 }
 
 export interface RankingData {
   leadsFinished: RankingCardData;
   activitiesDone: RankingCardData;
   conversionRate: RankingCardData; // total is a percentage (0-100)
+  leadsOpened: RankingCardData;
 }
 
 // Story 3.4: Insights Charts
@@ -95,6 +98,7 @@ export interface GoalsData {
   leadsFinishedTarget: number;
   activitiesTarget: number;
   conversionTarget: number;
+  leadsOpenedTarget: number;
   userGoals: UserGoalRow[];
 }
 
