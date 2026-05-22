@@ -38,6 +38,8 @@ import type { StandardFieldSettingRow } from '@/features/settings-prospecting/ac
 import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
+import { formatDateOnly, formatDateTimeBR } from '@/lib/utils/format';
+
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
 import { getCanalOptions } from '../utils/canal-options';
@@ -1070,15 +1072,21 @@ export function LeadInfoPanel({
                   ) : (
                     customFieldDefs.map((cf) => {
                       const rawVal = data.custom_field_values?.[cf.id];
+                      let display: string;
+                      if (cf.field_type === 'currency') {
+                        display = formatBRL(rawVal);
+                      } else if (cf.field_type === 'date') {
+                        display = rawVal ? formatDateOnly(rawVal) : '—';
+                      } else if (cf.field_type === 'datetime') {
+                        display = rawVal ? formatDateTimeBR(rawVal) : '—';
+                      } else {
+                        display = rawVal || '—';
+                      }
                       return (
                         <MeetimeFieldRow
                           key={cf.id}
                           label={cf.field_name}
-                          value={
-                            cf.field_type === 'currency'
-                              ? formatBRL(rawVal)
-                              : rawVal || '—'
-                          }
+                          value={display}
                           href={cf.field_type === 'url' && rawVal ? (rawVal.startsWith('http://') || rawVal.startsWith('https://') ? rawVal : `https://${rawVal}`) : undefined}
                         />
                       );

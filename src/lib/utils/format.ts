@@ -29,6 +29,39 @@ export function formatDateTime(dateStr: string): string {
   });
 }
 
+/**
+ * "YYYY-MM-DD" → "DD/MM/YYYY" with no timezone shift.
+ * Use this for date-only fields (e.g. custom_field `type: 'date'`,
+ * `meeting_held_at`, won/lost dates without time). `new Date('2026-05-22')`
+ * interprets the input as UTC midnight, so toLocaleDateString in BRT
+ * silently turns 2026-05-22 into "21/05/2026". This helper avoids that.
+ * Accepts full ISO timestamps too (strips the time portion).
+ */
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return '—';
+  const datePart = value.length >= 10 ? value.slice(0, 10) : value;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  if (!match) return value;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+/**
+ * "YYYY-MM-DDTHH:mm" (datetime-local) or full ISO → "DD/MM/YYYY HH:mm".
+ * Falls back to `formatDateTime` for full ISO timestamps that carry a
+ * timezone. For naive datetime-local strings (no Z / offset) parses the
+ * pieces directly so the value the user typed in their datetime input is
+ * what they see back.
+ */
+export function formatDateTimeBR(value: string | null | undefined): string {
+  if (!value) return '—';
+  const naive = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (naive) {
+    const [, y, m, d, hh, mm] = naive;
+    return `${d}/${m}/${y} ${hh}:${mm}`;
+  }
+  return formatDateTime(value);
+}
+
 /** DD/MM (for chart axis labels) */
 export function formatDateLabel(dateStr: string): string {
   const [, month, day] = dateStr.split('-');
