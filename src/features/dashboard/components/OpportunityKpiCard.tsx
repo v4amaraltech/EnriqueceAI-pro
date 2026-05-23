@@ -218,10 +218,11 @@ export function OpportunityKpiCard({
                     ) : (
                       <TrendingDown className="inline h-3.5 w-3.5" />
                     )}
-                    {absPercent}% {isAbove ? 'acima' : 'abaixo'} do previsto até hoje ({expectedByNow})
+                    {absPercent}% {isAbove ? 'acima' : 'abaixo'} do ritmo
+                  </span>{' '}
+                  <span className="text-foreground/60">
+                    para bater a meta no mês — esperado até hoje: <span className="font-medium text-foreground">{expectedByNow}</span>
                   </span>
-                  {' '}
-                  <span className="text-foreground/60">para alcançar a meta mensal</span>
                 </p>
               </div>
             )}
