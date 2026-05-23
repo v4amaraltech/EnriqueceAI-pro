@@ -19,7 +19,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { month, opportunityTarget, leadsFinishedTarget, activitiesTarget, conversionTarget, leadsOpenedTarget, meetingsScheduledTarget, meetingsHeldTarget, userGoals } = parsed.data;
+  const { month, leadsFinishedTarget, activitiesTarget, conversionTarget, leadsOpenedTarget, meetingsScheduledTarget, meetingsHeldTarget, userGoals } = parsed.data;
   const monthDate = `${month}-01`;
 
   // Get user's org
@@ -39,7 +39,10 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
       {
         org_id: member.org_id,
         month: monthDate,
-        opportunity_target: opportunityTarget,
+        // opportunity_target ficou como coluna legacy — espelha
+        // meetings_held_target pra manter compat com leitores antigos
+        // que ainda apontem pra ela.
+        opportunity_target: meetingsHeldTarget,
         leads_finished_target: leadsFinishedTarget,
         activities_target: activitiesTarget,
         conversion_target: conversionTarget,

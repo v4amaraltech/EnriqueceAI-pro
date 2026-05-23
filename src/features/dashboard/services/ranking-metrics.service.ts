@@ -638,10 +638,21 @@ export async function fetchHitRateRanking(
 
   const overallRate = totalOpened > 0 ? Math.round((totalHeld / totalOpened) * 100) : 0;
   const sdrCount = entries.length || 1;
+
+  // Meta derivada das metas dos outros dois cards: se a empresa espera
+  // abrir N leads e realizar M reuniões, a hit rate alvo é M/N. Evita o
+  // usuário definir um número solto que não casa com os outros dois.
+  const derivedTarget = opened.monthTarget > 0 && held.monthTarget > 0
+    ? Math.round((held.monthTarget / opened.monthTarget) * 100)
+    : 0;
+  const percentOfTarget = derivedTarget > 0
+    ? Math.round(((overallRate - derivedTarget) / derivedTarget) * 100)
+    : 0;
+
   return {
     total: overallRate,
-    monthTarget: 0,
-    percentOfTarget: 0,
+    monthTarget: derivedTarget,
+    percentOfTarget,
     averagePerSdr: Math.round((entries.reduce((s, e) => s + e.value, 0) / sdrCount) * 10) / 10,
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
   };

@@ -126,14 +126,16 @@ export async function fetchOpportunityKpi(
   // Query goal for the month
   const monthStart = `${filters.month}-01`;
   const { data: goal } = (await from(supabase, 'goals')
-    .select('opportunity_target, conversion_target')
+    .select('opportunity_target, meetings_held_target, conversion_target')
     .eq('org_id', orgId)
     .eq('month', monthStart)
     .maybeSingle()) as {
-    data: { opportunity_target: number; conversion_target: number } | null;
+    data: { opportunity_target: number; meetings_held_target: number | null; conversion_target: number } | null;
   };
 
-  const monthTarget = goal?.opportunity_target ?? 0;
+  // meetings_held_target é o nome canônico; opportunity_target é legacy
+  // mantido como fallback pra metas históricas antes da consolidação.
+  const monthTarget = goal?.meetings_held_target || goal?.opportunity_target || 0;
   const conversionTarget = goal?.conversion_target ?? 0;
 
   // Calculate % of target based on linear projection (BRT)

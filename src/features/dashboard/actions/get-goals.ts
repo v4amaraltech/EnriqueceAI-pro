@@ -24,7 +24,11 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     .select('opportunity_target, leads_finished_target, activities_target, conversion_target, leads_opened_target, meetings_scheduled_target, meetings_held_target')
     .eq('org_id', orgId)
     .eq('month', monthDate)
-    .maybeSingle()) as { data: { opportunity_target: number; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null; meetings_scheduled_target: number | null; meetings_held_target: number | null } | null };
+    .maybeSingle()) as { data: { opportunity_target: number | null; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null; meetings_scheduled_target: number | null; meetings_held_target: number | null } | null };
+
+  // meetings_held_target é canônico; fallback no opportunity_target (legacy)
+  // pra metas históricas que ainda não foram resalvas pela UI nova.
+  const meetingsHeldTargetMerged = orgGoal?.meetings_held_target ?? orgGoal?.opportunity_target ?? 0;
 
   // Fetch active SDRs in the org (no join with auth.users — not accessible via PostgREST)
   const { data: sdrs } = (await from(supabase, 'organization_members')
@@ -37,13 +41,12 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
       success: true,
       data: {
         month,
-        opportunityTarget: orgGoal?.opportunity_target ?? 0,
         leadsFinishedTarget: orgGoal?.leads_finished_target ?? 0,
         activitiesTarget: orgGoal?.activities_target ?? 0,
         conversionTarget: orgGoal?.conversion_target ?? 0,
         leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
         meetingsScheduledTarget: orgGoal?.meetings_scheduled_target ?? 0,
-        meetingsHeldTarget: orgGoal?.meetings_held_target ?? 0,
+        meetingsHeldTarget: meetingsHeldTargetMerged,
         userGoals: [],
       },
     };
@@ -90,13 +93,12 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     success: true,
     data: {
       month,
-      opportunityTarget: orgGoal?.opportunity_target ?? 0,
       leadsFinishedTarget: orgGoal?.leads_finished_target ?? 0,
       activitiesTarget: orgGoal?.activities_target ?? 0,
       conversionTarget: orgGoal?.conversion_target ?? 0,
       leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
       meetingsScheduledTarget: orgGoal?.meetings_scheduled_target ?? 0,
-      meetingsHeldTarget: orgGoal?.meetings_held_target ?? 0,
+      meetingsHeldTarget: meetingsHeldTargetMerged,
       userGoals: sdrs.map((sdr) => {
         const info = userInfoMap.get(sdr.user_id);
         return {

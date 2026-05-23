@@ -5,9 +5,12 @@ import { saveGoalsSchema } from './goals.schema';
 describe('saveGoalsSchema', () => {
   const validInput = {
     month: '2026-02',
-    opportunityTarget: 50,
+    leadsFinishedTarget: 100,
     activitiesTarget: 200,
     conversionTarget: 25,
+    leadsOpenedTarget: 150,
+    meetingsScheduledTarget: 100,
+    meetingsHeldTarget: 80,
     userGoals: [{ userId: '00000000-0000-0000-0000-000000000001', opportunityTarget: 10 }],
   };
 
@@ -20,8 +23,8 @@ describe('saveGoalsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects negative opportunity target', () => {
-    const result = saveGoalsSchema.safeParse({ ...validInput, opportunityTarget: -1 });
+  it('rejects negative meetings held target', () => {
+    const result = saveGoalsSchema.safeParse({ ...validInput, meetingsHeldTarget: -1 });
     expect(result.success).toBe(false);
   });
 
@@ -51,7 +54,7 @@ describe('saveGoalsSchema', () => {
   it('accepts zero values', () => {
     const result = saveGoalsSchema.safeParse({
       ...validInput,
-      opportunityTarget: 0,
+      meetingsHeldTarget: 0,
       conversionTarget: 0,
     });
     expect(result.success).toBe(true);

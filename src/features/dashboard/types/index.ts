@@ -98,7 +98,6 @@ export interface UserGoalRow {
 
 export interface GoalsData {
   month: string; // YYYY-MM
-  opportunityTarget: number;
   leadsFinishedTarget: number;
   activitiesTarget: number;
   conversionTarget: number;

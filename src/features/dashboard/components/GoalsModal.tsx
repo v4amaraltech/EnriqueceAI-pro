@@ -49,12 +49,12 @@ function getPreviousMonthName(month: string) {
 }
 
 function computeEstimate(
-  opportunityTarget: number,
+  meetingsHeldTarget: number,
   conversionTarget: number,
   numSdrs: number,
 ) {
   if (conversionTarget <= 0 || numSdrs <= 0) return null;
-  const leadsNeeded = Math.ceil(opportunityTarget / (conversionTarget / 100));
+  const leadsNeeded = Math.ceil(meetingsHeldTarget / (conversionTarget / 100));
   const avgActivitiesPerLead = 8;
   const businessDays = 22;
   const activitiesPerDay = Math.ceil(
@@ -66,7 +66,6 @@ function computeEstimate(
 export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
-  const [opportunityTarget, setOpportunityTarget] = useState(0);
   const [leadsFinishedTarget, setLeadsFinishedTarget] = useState(0);
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
@@ -88,7 +87,6 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
     getGoals(month).then((result) => {
       if (cancelled) return;
       if (result.success) {
-        setOpportunityTarget(result.data.opportunityTarget);
         setLeadsFinishedTarget(result.data.leadsFinishedTarget);
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
@@ -130,7 +128,6 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
     startTransition(async () => {
       const result = await saveGoals({
         month,
-        opportunityTarget,
         leadsFinishedTarget,
         activitiesTarget,
         conversionTarget,
@@ -152,7 +149,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
     });
   }
 
-  const estimate = computeEstimate(opportunityTarget, conversionTarget, userGoals.length);
+  const estimate = computeEstimate(meetingsHeldTarget, conversionTarget, userGoals.length);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -182,29 +179,6 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
             <p className="text-xs text-[var(--foreground)] opacity-50">
               Estas metas mensais são exibidas nos cards do Dashboard. Para metas diárias individuais, acesse Configurações &gt; Prospecção.
             </p>
-
-            {/* Meta de Oportunidades */}
-            <div className="rounded-lg border bg-[var(--card)] p-5">
-              <div className="flex items-center justify-between gap-6">
-                <div>
-                  <p className="font-semibold text-[var(--foreground)]">Meta de Oportunidades</p>
-                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
-                    Número total de oportunidades para o mês
-                  </p>
-                </div>
-                <div className="relative w-24 shrink-0">
-                  <Input
-                    id="opportunity-target"
-                    type="number"
-                    min={0}
-                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    value={opportunityTarget}
-                    onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
-                    aria-label="Meta de Oportunidades"
-                  />
-                </div>
-              </div>
-            </div>
 
             {/* Meta de Leads Finalizados */}
             <div className="rounded-lg border bg-[var(--card)] p-5">
