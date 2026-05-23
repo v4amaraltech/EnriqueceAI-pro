@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Percent, TrendingUp, Users } from 'lucide-react';
+import { CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, TrendingUp, Users } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -35,6 +35,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
   const handleActivitySdrClick = useCallback((userId: string) => {
     router.push(`/leads?assigned_to=${userId}`);
+  }, [router]);
+
+  const handleLeadsToOpenSdrClick = useCallback((userId: string) => {
+    router.push(`/leads?assigned_to=${userId}&status=new`);
   }, [router]);
 
   // Calculate business days in the filter period for daily average (BRT-aware)
@@ -200,7 +204,23 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
       {/* Operational ranking — cadence execution + conversion */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+          <RankingCard
+            title="Leads para Abrir"
+            titleTooltip={
+              'Snapshot agora: quantos leads novos cada SDR tem na fila para colocar em cadência.\n\n' +
+              '• Leads com status "Novo" atribuídos ao SDR\n' +
+              '• Que ainda NÃO têm cadência ativa\n\n' +
+              'Filtro de período não afeta este card — é a fila atual.'
+            }
+            icon={Inbox}
+            iconColor="bg-sky-500/10"
+            iconTextColor="text-sky-500"
+            data={ranking.leadsToOpen}
+            primaryColumnLabel="na fila"
+            averageLabel="média na fila/vendedor"
+            onSdrClick={handleLeadsToOpenSdrClick}
+          />
           <RankingCard
             title="Leads Finalizados"
             titleTooltip={

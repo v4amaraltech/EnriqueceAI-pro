@@ -64,6 +64,7 @@ export interface RankingData {
   meetingsScheduled: RankingCardData;
   meetingsHeld: RankingCardData;
   hitRate: RankingCardData; // total is a percentage (0-100)
+  leadsToOpen: RankingCardData; // snapshot atual — leads novos sem cadência ativa por SDR
 }
 
 // Story 3.4: Insights Charts
