@@ -58,9 +58,10 @@ interface ChartProps {
   yMax: number;
   height: number;
   gradientId: string;
+  seriesLabel: string;
 }
 
-function OpportunityChart({ chartData, daysInMonth, monthAbbr, yMax, height, gradientId }: ChartProps) {
+function OpportunityChart({ chartData, daysInMonth, monthAbbr, yMax, height, gradientId, seriesLabel }: ChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -15 }}>
@@ -126,7 +127,7 @@ function OpportunityChart({ chartData, daysInMonth, monthAbbr, yMax, height, gra
         <Line
           type="monotone"
           dataKey="actual"
-          name="Oportunidades"
+          name={seriesLabel}
           stroke="#22c55e"
           strokeWidth={2.5}
           dot={{ r: 3, fill: '#22c55e', stroke: '#22c55e', strokeWidth: 1 }}
@@ -252,6 +253,7 @@ export function OpportunityKpiCard({
                 yMax={yMax}
                 height={320}
                 gradientId="gradientArea"
+                seriesLabel={label}
               />
             ) : (
               <div className="flex h-[280px] w-full items-center justify-center">
@@ -289,6 +291,7 @@ export function OpportunityKpiCard({
               yMax={yMax}
               height={500}
               gradientId="gradientAreaExpanded"
+              seriesLabel={label}
             />
           </div>
           <div className="flex items-center justify-center gap-6 py-2">
