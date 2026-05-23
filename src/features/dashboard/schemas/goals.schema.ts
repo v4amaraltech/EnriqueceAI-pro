@@ -15,6 +15,7 @@ export const saveGoalsSchema = z.object({
     .min(0, 'Taxa deve ser >= 0')
     .max(100, 'Taxa deve ser <= 100'),
   leadsOpenedTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
+  meetingsHeldTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
   userGoals: z.array(userGoalSchema).min(1, 'Pelo menos 1 vendedor'),
 });
 

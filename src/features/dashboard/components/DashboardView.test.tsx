@@ -223,6 +223,27 @@ describe('DashboardView', () => {
         averagePerSdr: 0,
         sdrBreakdown: [],
       },
+      meetingsScheduled: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
+      meetingsHeld: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
+      hitRate: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
     };
     const { container } = render(
       <DashboardView

@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { CheckCircle2, DoorOpen, TrendingUp, Users } from 'lucide-react';
+import { CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Percent, TrendingUp, Users } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -77,10 +77,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
 
-      {/* KPI + Chart (unified card) */}
-      <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
-
-      {/* Leads Abertos — number + daily cumulative chart vs target */}
+      {/* Leads Abertos — primeiro do funil */}
       {ranking?.leadsOpened?.dailyData && (
         <OpportunityKpiCard
           kpi={{
@@ -104,7 +101,15 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
         />
       )}
 
-      {/* Ranking Cards (Story 3.3) — equal height via grid stretch */}
+      {/* Reuniões realizadas — bottom do funil (era "Oportunidades") */}
+      <OpportunityKpiCard
+        kpi={data.kpi}
+        month={filters.month}
+        label="Reuniões realizadas"
+        labelTooltip="Reuniões realizadas no mês — leads marcados como ganho (status='won')."
+      />
+
+      {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → Hit Rate */}
       {ranking && (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards">
           <RankingCard
@@ -121,6 +126,57 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             averageLabel="média leads abertos/vendedor"
             onSdrClick={handleSdrClick}
           />
+          <RankingCard
+            title="Reuniões Marcadas"
+            titleTooltip={
+              'Quantas reuniões cada SDR marcou no período (campo meeting_scheduled_at do lead).\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={CalendarCheck2}
+            iconColor="bg-indigo-500/10"
+            iconTextColor="text-indigo-500"
+            data={ranking.meetingsScheduled}
+            primaryColumnLabel="marcadas"
+            averageLabel="média reuniões marcadas/vendedor"
+            onSdrClick={handleSdrClick}
+          />
+          <RankingCard
+            title="Reuniões Realizadas"
+            titleTooltip={
+              'Quantas reuniões realizadas (oportunidades) cada SDR teve no período. Conta leads marcados como ganhos.\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={Handshake}
+            iconColor="bg-emerald-500/10"
+            iconTextColor="text-emerald-500"
+            data={ranking.meetingsHeld}
+            primaryColumnLabel="realizadas"
+            averageLabel="média reuniões realizadas/vendedor"
+            onSdrClick={handleSdrClick}
+          />
+          <RankingCard
+            title="Hit Rate"
+            titleTooltip={
+              'Taxa de conversão de Lead Aberto para Reunião Realizada no período.\n\n' +
+              '• Numerador: reuniões realizadas (leads ganhos)\n' +
+              '• Denominador: leads abertos (primeiro contato humano)\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={Percent}
+            iconColor="bg-rose-500/10"
+            iconTextColor="text-rose-500"
+            unit="%"
+            data={ranking.hitRate}
+            primaryColumnLabel="realizadas"
+            averageLabel="média hit rate/vendedor"
+            onSdrClick={handleSdrClick}
+          />
+        </div>
+      )}
+
+      {/* Operational ranking — cadence execution + conversion */}
+      {ranking && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
           <RankingCard
             title="Leads Finalizados"
             titleTooltip={

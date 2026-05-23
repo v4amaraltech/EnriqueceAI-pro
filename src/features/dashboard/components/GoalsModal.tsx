@@ -71,6 +71,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [leadsOpenedTarget, setLeadsOpenedTarget] = useState(0);
+  const [meetingsHeldTarget, setMeetingsHeldTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
   const [visibleUserIds, setVisibleUserIds] = useState<Set<string>>(new Set());
 
@@ -91,6 +92,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
         setLeadsOpenedTarget(result.data.leadsOpenedTarget);
+        setMeetingsHeldTarget(result.data.meetingsHeldTarget);
         setUserGoals(result.data.userGoals);
 
         // Show SDRs that already have goals or had goals last month; fallback to all
@@ -131,6 +133,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         activitiesTarget,
         conversionTarget,
         leadsOpenedTarget,
+        meetingsHeldTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
           opportunityTarget: ug.opportunityTarget,
@@ -241,6 +244,29 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     value={leadsOpenedTarget}
                     onChange={(e) => setLeadsOpenedTarget(Number(e.target.value) || 0)}
                     aria-label="Meta de Leads Abertos"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Meta de Reuniões Realizadas */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Reuniões Realizadas</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Total de reuniões realizadas no mês (leads marcados como ganhos)
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="meetings-held-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={meetingsHeldTarget}
+                    onChange={(e) => setMeetingsHeldTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Reuniões Realizadas"
                   />
                 </div>
               </div>

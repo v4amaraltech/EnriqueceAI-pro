@@ -61,6 +61,9 @@ export interface RankingData {
   activitiesDone: RankingCardData;
   conversionRate: RankingCardData; // total is a percentage (0-100)
   leadsOpened: RankingCardData;
+  meetingsScheduled: RankingCardData;
+  meetingsHeld: RankingCardData;
+  hitRate: RankingCardData; // total is a percentage (0-100)
 }
 
 // Story 3.4: Insights Charts
@@ -99,6 +102,7 @@ export interface GoalsData {
   activitiesTarget: number;
   conversionTarget: number;
   leadsOpenedTarget: number;
+  meetingsHeldTarget: number;
   userGoals: UserGoalRow[];
 }
 

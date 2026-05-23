@@ -21,10 +21,10 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
 
   // Fetch org-level goal for the selected month
   const { data: orgGoal } = (await from(supabase, 'goals')
-    .select('opportunity_target, leads_finished_target, activities_target, conversion_target, leads_opened_target')
+    .select('opportunity_target, leads_finished_target, activities_target, conversion_target, leads_opened_target, meetings_held_target')
     .eq('org_id', orgId)
     .eq('month', monthDate)
-    .maybeSingle()) as { data: { opportunity_target: number; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null } | null };
+    .maybeSingle()) as { data: { opportunity_target: number; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null; meetings_held_target: number | null } | null };
 
   // Fetch active SDRs in the org (no join with auth.users — not accessible via PostgREST)
   const { data: sdrs } = (await from(supabase, 'organization_members')
@@ -42,6 +42,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
         activitiesTarget: orgGoal?.activities_target ?? 0,
         conversionTarget: orgGoal?.conversion_target ?? 0,
         leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
+        meetingsHeldTarget: orgGoal?.meetings_held_target ?? 0,
         userGoals: [],
       },
     };
@@ -93,6 +94,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
       activitiesTarget: orgGoal?.activities_target ?? 0,
       conversionTarget: orgGoal?.conversion_target ?? 0,
       leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
+      meetingsHeldTarget: orgGoal?.meetings_held_target ?? 0,
       userGoals: sdrs.map((sdr) => {
         const info = userInfoMap.get(sdr.user_id);
         return {

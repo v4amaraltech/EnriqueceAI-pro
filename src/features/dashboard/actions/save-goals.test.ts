@@ -32,6 +32,7 @@ const validInput = {
   activitiesTarget: 200,
   conversionTarget: 25,
   leadsOpenedTarget: 150,
+  meetingsHeldTarget: 80,
   userGoals: [
     { userId: '00000000-0000-0000-0000-000000000001', opportunityTarget: 20 },
   ],

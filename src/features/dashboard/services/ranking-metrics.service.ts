@@ -58,7 +58,7 @@ function buildRankingCardData(
     total,
     monthTarget,
     percentOfTarget: computePercentOfTarget(total, monthTarget, days, month),
-    averagePerSdr: Math.round((total / sdrCount) * 10) / 10,
+    averagePerSdr: Math.round(total / sdrCount),
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
   };
 }
@@ -364,7 +364,7 @@ export async function fetchConversionRanking(
     total: overallRate,
     monthTarget: target,
     percentOfTarget: target > 0 ? Math.round(((overallRate - target) / target) * 100) : 0,
-    averagePerSdr: Math.round((entries.reduce((sum, e) => sum + e.value, 0) / sdrCount) * 10) / 10,
+    averagePerSdr: Math.round(entries.reduce((sum, e) => sum + e.value, 0) / sdrCount),
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
   };
 }
@@ -478,19 +478,163 @@ async function fetchLeadsOpenedDaily(
 }
 
 /**
- * Fetch all 4 ranking cards in parallel
+ * Card 5: Reuniões Marcadas — leads cujo meeting_scheduled_at caiu no período,
+ * atribuídos pelo SDR responsável (leads.assigned_to). Arquivados excluídos.
+ */
+export async function fetchMeetingsScheduledRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const { start, end } = getDateRange(filters);
+
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
+  const { data: rows } = (await from(supabase, 'leads')
+    .select('id, assigned_to')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .neq('status', 'archived')
+    .not('meeting_scheduled_at', 'is', null)
+    .gte('meeting_scheduled_at', start)
+    .lt('meeting_scheduled_at', end)
+    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
+
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const lead of rows ?? []) {
+    const sdr = lead.assigned_to;
+    if (!sdr || !sdrIds.has(sdr)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
+    counts.set(sdr, (counts.get(sdr) ?? 0) + 1);
+    total++;
+  }
+
+  const entries: SdrRankingEntry[] = [];
+  for (const [userId, value] of counts) {
+    entries.push({ userId, userName: '', value });
+  }
+  return buildRankingCardData(entries, total, 0, filters.month);
+}
+
+/**
+ * Card 6: Reuniões Realizadas — leads que viraram won no período (status='won'
+ * e won_at ∈ período). Atribuição via leads.assigned_to (SDR responsável).
+ */
+export async function fetchMeetingsHeldRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const { start, end } = getDateRange(filters);
+
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
+  const { data: rows } = (await from(supabase, 'leads')
+    .select('id, assigned_to')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .eq('status', 'won')
+    .not('won_at', 'is', null)
+    .gte('won_at', start)
+    .lt('won_at', end)
+    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
+
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const lead of rows ?? []) {
+    const sdr = lead.assigned_to;
+    if (!sdr || !sdrIds.has(sdr)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
+    counts.set(sdr, (counts.get(sdr) ?? 0) + 1);
+    total++;
+  }
+
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('meetings_held_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as { data: { meetings_held_target: number } | null };
+
+  const entries: SdrRankingEntry[] = [];
+  for (const [userId, value] of counts) {
+    entries.push({ userId, userName: '', value });
+  }
+  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month);
+}
+
+/**
+ * Card 7: Hit Rate (Aberto → Realizada). Numerador = reuniões realizadas;
+ * denominador = leads abertos no período (primeira interaction humana),
+ * ambos atribuídos via leads.assigned_to.
+ */
+export async function fetchHitRateRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  opened: RankingCardData,
+  held: RankingCardData,
+): Promise<RankingCardData> {
+  const openedByUser = new Map<string, number>();
+  for (const e of opened.sdrBreakdown) openedByUser.set(e.userId, e.value);
+  const heldByUser = new Map<string, number>();
+  for (const e of held.sdrBreakdown) heldByUser.set(e.userId, e.value);
+
+  const allUserIds = new Set<string>([...openedByUser.keys(), ...heldByUser.keys()]);
+  const entries: SdrRankingEntry[] = [];
+  let totalOpened = 0;
+  let totalHeld = 0;
+  for (const userId of allUserIds) {
+    const op = openedByUser.get(userId) ?? 0;
+    const hd = heldByUser.get(userId) ?? 0;
+    totalOpened += op;
+    totalHeld += hd;
+    const rate = op > 0 ? Math.round((hd / op) * 100) : 0;
+    entries.push({ userId, userName: '', value: rate, secondaryValue: hd });
+  }
+
+  const overallRate = totalOpened > 0 ? Math.round((totalHeld / totalOpened) * 100) : 0;
+  const sdrCount = entries.length || 1;
+  return {
+    total: overallRate,
+    monthTarget: 0,
+    percentOfTarget: 0,
+    averagePerSdr: Math.round((entries.reduce((s, e) => s + e.value, 0) / sdrCount) * 10) / 10,
+    sdrBreakdown: entries.sort((a, b) => b.value - a.value),
+  };
+
+  void supabase; void orgId; void filters;
+}
+
+/**
+ * Fetch all 7 ranking cards in parallel
  */
 export async function fetchRankingData(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingData> {
-  const [leadsFinished, activitiesDone, conversionRate, leadsOpened] = await Promise.all([
+  const [leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchActivitiesRanking(supabase, orgId, filters),
     fetchConversionRanking(supabase, orgId, filters),
     fetchLeadsOpenedRanking(supabase, orgId, filters),
+    fetchMeetingsScheduledRanking(supabase, orgId, filters),
+    fetchMeetingsHeldRanking(supabase, orgId, filters),
   ]);
 
-  return { leadsFinished, activitiesDone, conversionRate, leadsOpened };
+  const hitRate = await fetchHitRateRanking(supabase, orgId, filters, leadsOpened, meetingsHeld);
+
+  return { leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate };
 }
