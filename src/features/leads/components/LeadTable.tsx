@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, UserCheck, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -24,7 +24,7 @@ import {
 } from '@/shared/components/ui/table';
 
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
-import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkReopenLeads, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -303,6 +303,24 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     });
   }, [selected, router]);
 
+  const handleBulkReopen = useCallback(() => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const result = await bulkReopenLeads(ids);
+      if (result.success) {
+        const { count, skipped } = result.data;
+        const main = `${count} lead${count > 1 ? 's' : ''} reaberto${count > 1 ? 's' : ''}`;
+        toast.success(skipped > 0 ? `${main} (${skipped} ignorado${skipped > 1 ? 's' : ''})` : main);
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [selected, router]);
+
+  const hasUnqualifiedSelected = leads.some((l) => selected.has(l.id) && l.status === 'unqualified');
+
   const navigateToLead = useCallback(
     (id: string) => {
       router.push(`/leads/${id}`);
@@ -393,6 +411,17 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
               <UserCheck className="mr-1 h-3.5 w-3.5" />
               Atribuir
             </Button>
+            {hasUnqualifiedSelected && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkReopen}
+                disabled={isPending}
+              >
+                <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                Reabrir
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
