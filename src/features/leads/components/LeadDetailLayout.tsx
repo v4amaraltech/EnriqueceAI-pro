@@ -57,6 +57,7 @@ const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   rescheduled: 'Remarcou',
 };
 import type { LeadRow } from '../types';
+import { CadenceProgramCard } from './CadenceProgramCard';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
 import { LeadDetailHeader } from './LeadDetailHeader';
@@ -406,6 +407,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           ))}
         </div>
       )}
+
+      {/* Cadence program — Meetime-style step-by-step view with D+N labels */}
+      <CadenceProgramCard leadId={lead.id} />
 
       {/* Closer feedback card */}
       {closerFeedback && closerFeedback.responded_at && (
