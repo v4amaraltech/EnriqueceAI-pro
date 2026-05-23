@@ -32,7 +32,7 @@ interface CadenceProgramCardProps {
 export function CadenceProgramCard({ leadId }: CadenceProgramCardProps) {
   const [programs, setPrograms] = useState<CadenceProgram[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- fetch-on-mount pattern */
   useEffect(() => {
