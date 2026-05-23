@@ -31,9 +31,10 @@ interface PendingRequestRow {
 }
 
 /**
- * Re-trigger a closer feedback notification (email + WhatsApp via sender's
- * Evolution instance). Reuses any pending request for the lead/closer pair so
- * the closer keeps the original link; only creates a new row if none exists.
+ * Re-trigger a closer feedback notification (email + WhatsApp via the org
+ * manager's Evolution instance). Reuses any pending request for the lead/closer
+ * pair so the closer keeps the original link; only creates a new row if none
+ * exists.
  */
 export async function resendCloserFeedback(
   input: z.infer<typeof inputSchema>,

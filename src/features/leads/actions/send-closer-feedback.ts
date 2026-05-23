@@ -6,6 +6,7 @@ import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { getAppUrl } from '@/lib/utils/app-url';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
+import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
 
 interface SendFeedbackParams {
   leadId: string;
@@ -23,12 +24,14 @@ export interface SendFeedbackChannelResult {
   whatsapp: 'sent' | 'skipped' | 'failed';
   emailError?: string;
   whatsappError?: string;
-  whatsappSkipReason?: 'no_phone' | 'invalid_phone';
+  whatsappSkipReason?: 'no_phone' | 'invalid_phone' | 'no_manager_evolution';
 }
 
 /**
  * Creates a feedback request and notifies the closer via email (Resend) and,
- * when a phone is available, WhatsApp through the sender's Evolution instance.
+ * when a phone is available, WhatsApp through the org manager's Evolution
+ * instance. The manager's number — not the SDR's — is the canonical sender so
+ * the closer always receives feedback prompts from the same WhatsApp identity.
  * Called fire-and-forget from markLeadAsWon and synchronously by the
  * `resendCloserFeedback` action.
  */
@@ -127,41 +130,49 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
       error: emailResult.success ? undefined : channels.emailError,
     });
 
-    // WhatsApp via Evolution using the sender's per-user instance. Fire after
-    // the email so the closer always has the canonical record in their inbox
-    // even if WhatsApp delivery is delayed or the instance is offline.
+    // WhatsApp via Evolution. The message goes out from the org manager's
+    // instance, not the SDR who closed the lead — closers should see a single
+    // canonical sender regardless of who marked the meeting as won. If no
+    // manager has an Evolution instance connected, skip silently: the email
+    // already serves as the primary, durable channel.
     if (!closerPhone) {
       channels.whatsappSkipReason = 'no_phone';
     } else if (!validateBrazilianPhone(closerPhone)) {
       channels.whatsappSkipReason = 'invalid_phone';
       console.warn('[closer-feedback] Skipping WhatsApp — invalid phone:', closerPhone);
     } else {
-      const wppBody = buildFeedbackWhatsAppBody(closerName, leadName, feedbackUrl);
-      const wppResult = await EvolutionWhatsAppService.sendMessage(
-        orgId,
-        { to: closerPhone, body: wppBody },
-        supabase,
-        senderUserId,
-      );
-      if (wppResult.success) {
-        channels.whatsapp = 'sent';
+      const messengerUserId = await getFeedbackMessengerUserId(supabase, orgId);
+      if (!messengerUserId) {
+        channels.whatsappSkipReason = 'no_manager_evolution';
+        console.warn('[closer-feedback] Skipping WhatsApp — no manager with connected Evolution for org=%s', orgId);
       } else {
-        channels.whatsapp = 'failed';
-        channels.whatsappError = wppResult.error ?? 'unknown_whatsapp_error';
-        console.error('[closer-feedback] WhatsApp delivery failed:', wppResult.error);
-      }
+        const wppBody = buildFeedbackWhatsAppBody(closerName, leadName, feedbackUrl);
+        const wppResult = await EvolutionWhatsAppService.sendMessage(
+          orgId,
+          { to: closerPhone, body: wppBody },
+          supabase,
+          messengerUserId,
+        );
+        if (wppResult.success) {
+          channels.whatsapp = 'sent';
+        } else {
+          channels.whatsapp = 'failed';
+          channels.whatsappError = wppResult.error ?? 'unknown_whatsapp_error';
+          console.error('[closer-feedback] WhatsApp delivery failed:', wppResult.error);
+        }
 
-      await logFeedbackInteraction(supabase, {
-        orgId,
-        leadId,
-        senderUserId,
-        channel: 'whatsapp',
-        success: wppResult.success,
-        closerName,
-        recipient: closerPhone,
-        messageId: wppResult.messageId,
-        error: wppResult.success ? undefined : channels.whatsappError,
-      });
+        await logFeedbackInteraction(supabase, {
+          orgId,
+          leadId,
+          senderUserId,
+          channel: 'whatsapp',
+          success: wppResult.success,
+          closerName,
+          recipient: closerPhone,
+          messageId: wppResult.messageId,
+          error: wppResult.success ? undefined : channels.whatsappError,
+        });
+      }
     }
   } catch (err) {
     console.error('[closer-feedback] Unexpected error:', err);

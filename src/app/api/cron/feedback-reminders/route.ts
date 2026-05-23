@@ -7,8 +7,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
-import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
-import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
+import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
+import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
+import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
 
 export const maxDuration = 60;
 
@@ -56,7 +57,8 @@ interface MeetingTiming {
  *  - Or: reminder_sent_at + 24h <= now (next reminder is 24h after the previous)
  *
  * Side effects per delivery:
- *  - Email via Resend + WhatsApp via Evolution
+ *  - Email via Resend + WhatsApp via the org manager's Evolution instance
+ *    (the same canonical sender used by the first-send and manual-resend paths)
  *  - reminder_count++ and reminder_sent_at = now()
  *  - When new reminder_count >= 2, notify managers
  */
@@ -187,23 +189,26 @@ async function sendFeedbackReminders() {
         continue;
       }
 
-      // WhatsApp parallel channel — best-effort credit deduction. The
-      // reminder still goes out even if the org ran out of credits (the
-      // closer can't be left without the prod, but we log so the manager
-      // sees the overage in the credit dashboard).
+      // WhatsApp parallel channel via the org manager's Evolution instance
+      // (same sender as the first-send and manual-resend paths). Looked up
+      // per-reminder so a manager rotation or instance reconnect is picked up
+      // without restarting the cron. If no manager has an instance connected,
+      // skip silently — the email reminder already went out.
       if (closer.phone && validateBrazilianPhone(closer.phone)) {
-        WhatsAppCreditService.checkAndDeductCredit(fb.org_id, supabase)
-          .then((creditResult: { allowed: boolean; error?: string }) => {
-            if (!creditResult.allowed) {
-              console.warn(`[feedback-reminders] Sending without credit deduction for org=${fb.org_id}: ${creditResult.error ?? 'no_credits'}`);
+        getFeedbackMessengerUserId(supabase, fb.org_id)
+          .then((messengerUserId) => {
+            if (!messengerUserId) {
+              console.warn('[feedback-reminders] Skipping WhatsApp — no manager Evolution for org=%s', fb.org_id);
+              return;
             }
+            return EvolutionWhatsAppService.sendMessage(
+              fb.org_id,
+              { to: closer.phone as string, body: buildWhatsAppBody(closer.name, leadName, feedbackUrl, newCount) },
+              supabase,
+              messengerUserId,
+            );
           })
-          .catch((err: unknown) => console.error('[feedback-reminders] credit deduction error:', err));
-
-        WhatsAppService.sendMessage(fb.org_id, {
-          to: closer.phone,
-          body: buildWhatsAppBody(closer.name, leadName, feedbackUrl, newCount),
-        }, supabase).catch((err) => console.error('[feedback-reminders] WhatsApp error:', err));
+          .catch((err) => console.error('[feedback-reminders] WhatsApp error:', err));
       }
 
       // Manager escalation: trigger when reminder count crosses the escalation threshold
