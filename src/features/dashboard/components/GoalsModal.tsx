@@ -71,6 +71,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [activitiesTarget, setActivitiesTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [leadsOpenedTarget, setLeadsOpenedTarget] = useState(0);
+  const [meetingsScheduledTarget, setMeetingsScheduledTarget] = useState(0);
   const [meetingsHeldTarget, setMeetingsHeldTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
   const [visibleUserIds, setVisibleUserIds] = useState<Set<string>>(new Set());
@@ -92,6 +93,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         setActivitiesTarget(result.data.activitiesTarget);
         setConversionTarget(result.data.conversionTarget);
         setLeadsOpenedTarget(result.data.leadsOpenedTarget);
+        setMeetingsScheduledTarget(result.data.meetingsScheduledTarget);
         setMeetingsHeldTarget(result.data.meetingsHeldTarget);
         setUserGoals(result.data.userGoals);
 
@@ -133,6 +135,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         activitiesTarget,
         conversionTarget,
         leadsOpenedTarget,
+        meetingsScheduledTarget,
         meetingsHeldTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
@@ -244,6 +247,29 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     value={leadsOpenedTarget}
                     onChange={(e) => setLeadsOpenedTarget(Number(e.target.value) || 0)}
                     aria-label="Meta de Leads Abertos"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Meta de Reuniões Marcadas */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Reuniões Marcadas</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Total de reuniões agendadas no mês (campo meeting_scheduled_at do lead)
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="meetings-scheduled-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={meetingsScheduledTarget}
+                    onChange={(e) => setMeetingsScheduledTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Reuniões Marcadas"
                   />
                 </div>
               </div>

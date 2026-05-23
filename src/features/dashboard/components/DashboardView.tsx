@@ -101,6 +101,30 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
         />
       )}
 
+      {/* Reuniões marcadas — meio do funil */}
+      {ranking?.meetingsScheduled?.dailyData && (
+        <OpportunityKpiCard
+          kpi={{
+            totalOpportunities: ranking.meetingsScheduled.total,
+            monthTarget: ranking.meetingsScheduled.monthTarget,
+            conversionTarget: 0,
+            percentOfTarget: ranking.meetingsScheduled.percentOfTarget,
+            currentDay: (() => {
+              const now = new Date();
+              const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
+              const days = new Date(yr, mo, 0).getDate();
+              const isCurrent = now.getFullYear() === yr && now.getMonth() + 1 === mo;
+              return isCurrent ? now.getDate() : days;
+            })(),
+            daysInMonth: ranking.meetingsScheduled.dailyData.length,
+            dailyData: ranking.meetingsScheduled.dailyData,
+          } satisfies OpportunityKpiData}
+          month={filters.month}
+          label="Reuniões marcadas"
+          labelTooltip="Leads com meeting_scheduled_at preenchido no período (reunião agendada)."
+        />
+      )}
+
       {/* Reuniões realizadas — bottom do funil (era "Oportunidades") */}
       <OpportunityKpiCard
         kpi={data.kpi}

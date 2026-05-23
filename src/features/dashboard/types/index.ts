@@ -102,6 +102,7 @@ export interface GoalsData {
   activitiesTarget: number;
   conversionTarget: number;
   leadsOpenedTarget: number;
+  meetingsScheduledTarget: number;
   meetingsHeldTarget: number;
   userGoals: UserGoalRow[];
 }

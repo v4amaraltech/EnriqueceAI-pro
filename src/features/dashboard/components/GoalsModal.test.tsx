@@ -28,6 +28,7 @@ const goalsData: GoalsData = {
   activitiesTarget: 200,
   conversionTarget: 25,
   leadsOpenedTarget: 150,
+  meetingsScheduledTarget: 100,
   meetingsHeldTarget: 80,
   userGoals: [
     { userId: 'u1', userName: 'alice', opportunityTarget: 20, previousTarget: 15 },

@@ -480,6 +480,7 @@ async function fetchLeadsOpenedDaily(
 /**
  * Card 5: Reuniões Marcadas — leads cujo meeting_scheduled_at caiu no período,
  * atribuídos pelo SDR responsável (leads.assigned_to). Arquivados excluídos.
+ * Retorna também dailyData pra alimentar o KPI card no topo do dashboard.
  */
 export async function fetchMeetingsScheduledRanking(
   supabase: SupabaseClient,
@@ -487,6 +488,7 @@ export async function fetchMeetingsScheduledRanking(
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
+  const days = getDaysInMonth(filters.month);
 
   const { data: sdrs } = (await from(supabase, 'organization_members')
     .select('user_id')
@@ -496,16 +498,17 @@ export async function fetchMeetingsScheduledRanking(
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   const { data: rows } = (await from(supabase, 'leads')
-    .select('id, assigned_to')
+    .select('id, assigned_to, meeting_scheduled_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .neq('status', 'archived')
     .not('meeting_scheduled_at', 'is', null)
     .gte('meeting_scheduled_at', start)
     .lt('meeting_scheduled_at', end)
-    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
+    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null; meeting_scheduled_at: string }> | null };
 
   const counts = new Map<string, number>();
+  const countByDay = new Map<number, number>();
   let total = 0;
   for (const lead of rows ?? []) {
     const sdr = lead.assigned_to;
@@ -513,13 +516,42 @@ export async function fetchMeetingsScheduledRanking(
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
     counts.set(sdr, (counts.get(sdr) ?? 0) + 1);
     total++;
+    const brt = new Date(new Date(lead.meeting_scheduled_at).getTime() - 3 * 60 * 60 * 1000);
+    const day = brt.getUTCDate();
+    countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
   }
+
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('meetings_scheduled_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as { data: { meetings_scheduled_target: number | null } | null };
+  const monthTarget = goal?.meetings_scheduled_target ?? 0;
 
   const entries: SdrRankingEntry[] = [];
   for (const [userId, value] of counts) {
     entries.push({ userId, userName: '', value });
   }
-  return buildRankingCardData(entries, total, 0, filters.month);
+  const card = buildRankingCardData(entries, total, monthTarget, filters.month);
+
+  // Daily cumulative for the KPI chart
+  const [year, mon] = filters.month.split('-').map(Number) as [number, number];
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const isCurrent = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
+  const maxDay = isCurrent ? nowBrt.getUTCDate() : days;
+  const dailyData = [] as Array<{ date: string; day: number; actual: number; target: number }>;
+  let cumulative = 0;
+  for (let d = 1; d <= days; d++) {
+    cumulative += countByDay.get(d) ?? 0;
+    dailyData.push({
+      date: `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      day: d,
+      actual: d <= maxDay ? cumulative : 0,
+      target: monthTarget > 0 ? Math.round((monthTarget / days) * d) : 0,
+    });
+  }
+  return { ...card, dailyData };
 }
 
 /**
