@@ -28,7 +28,7 @@ const statisticsPages = [
     icon: BarChart3,
   },
   {
-    title: 'Feedback de Oportunidade',
+    title: 'Feedbacks',
     description: 'Feedbacks dos closers sobre oportunidades enviadas.',
     href: '/statistics/feedback',
     icon: BarChart3,

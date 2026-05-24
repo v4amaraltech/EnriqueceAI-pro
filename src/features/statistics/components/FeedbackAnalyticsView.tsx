@@ -103,8 +103,8 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-[var(--muted-foreground)]">Estatísticas &gt; Feedback de Oportunidade</p>
-          <h1 className="text-2xl font-bold">Feedback de Oportunidade</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">Estatísticas &gt; Feedbacks</p>
+          <h1 className="text-2xl font-bold">Feedbacks</h1>
           <p className="text-sm text-[var(--muted-foreground)]">Análise dos feedbacks dos closers sobre oportunidades enviadas.</p>
         </div>
         <div className="flex items-center gap-2">

@@ -49,7 +49,7 @@ const pathLabels: Record<string, string> = {
   statistics: 'Estatísticas',
   activities: 'Atividades',
   conversion: 'Conversão',
-  feedback: 'Feedback de Oportunidade',
+  feedback: 'Feedbacks',
   team: 'Equipe',
   performance: 'Desempenho',
   emails: 'E-mails',

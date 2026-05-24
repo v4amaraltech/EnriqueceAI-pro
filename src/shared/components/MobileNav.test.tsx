@@ -77,7 +77,7 @@ describe('MobileNav', () => {
     expect(await screen.findByText('Ligação')).toBeInTheDocument();
     // "Prospecção" appears twice: as top-level section and as Estatísticas sub-item
     expect(screen.getAllByText('Prospecção').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Feedback de Oportunidade')).toBeInTheDocument();
+    expect(screen.getByText('Feedbacks')).toBeInTheDocument();
     expect(screen.getByText('Equipe')).toBeInTheDocument();
   });
 
