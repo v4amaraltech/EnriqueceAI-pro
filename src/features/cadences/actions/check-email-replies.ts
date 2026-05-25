@@ -56,28 +56,48 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     return { success: true, data: { found: 0 } };
   }
 
-  // 2. Filter out interactions that already have a 'replied' or 'bounced' counterpart (batch query)
-  const cadenceLeadPairs = sentInteractions.map((i) => `${i.cadence_id}:${i.lead_id}`);
-  const _uniquePairs = [...new Set(cadenceLeadPairs)];
-
-  const alreadyProcessedMap = new Set<string>();
-
-  const uniqueCadenceIds = [...new Set(sentInteractions.map((i) => i.cadence_id))];
-  const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
-
-  const { data: processedInteractions } = (await from(supabase, 'interactions')
-    .select('cadence_id, lead_id')
-    .in('cadence_id', uniqueCadenceIds)
-    .in('lead_id', uniqueLeadIds)
-    .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
-
-  for (const pi of processedInteractions ?? []) {
-    alreadyProcessedMap.add(`${pi.cadence_id}:${pi.lead_id}`);
+  // 2a. Primary guard — drop interactions whose lead is already flagged
+  // bounced. Without this, V4 Amaral hit a loop where the same 4 archived
+  // leads (japescuma, mhbgrejao, fhytfhjii, dogaah) generated 12 bounce
+  // notifications per hour: the existing dedup below was failing silently
+  // (PostgREST `.in()` with a NULL inside the array short-circuits the
+  // whole filter), so every cron run re-recorded the bounce. Stopping at
+  // the lead level is cheaper and authoritative — a bounced email doesn't
+  // un-bounce.
+  const sentLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
+  const { data: bouncedLeads } = (await from(supabase, 'leads')
+    .select('id')
+    .in('id', sentLeadIds)
+    .not('email_bounced_at', 'is', null)) as { data: Array<{ id: string }> | null };
+  const bouncedLeadIds = new Set((bouncedLeads ?? []).map((l) => l.id));
+  if (bouncedLeadIds.size > 0) {
+    console.warn(`[reply-check] Skipping ${bouncedLeadIds.size} leads with email_bounced_at already set`);
   }
 
-  const toCheck = sentInteractions.filter(
-    (i) => !alreadyProcessedMap.has(`${i.cadence_id}:${i.lead_id}`),
-  );
+  // 2b. Secondary guard — filter interactions whose (cadence_id, lead_id)
+  // pair already has a 'replied' or 'bounced' counterpart. Strip nulls from
+  // the .in() arrays so a single sent row with cadence_id=NULL doesn't
+  // poison the whole filter at the PostgREST layer.
+  const alreadyProcessedMap = new Set<string>();
+  const uniqueCadenceIds = [...new Set(sentInteractions.map((i) => i.cadence_id).filter((v): v is string => v != null))];
+  const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id).filter((v): v is string => v != null))];
+
+  if (uniqueCadenceIds.length > 0 && uniqueLeadIds.length > 0) {
+    const { data: processedInteractions } = (await from(supabase, 'interactions')
+      .select('cadence_id, lead_id')
+      .in('cadence_id', uniqueCadenceIds)
+      .in('lead_id', uniqueLeadIds)
+      .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
+
+    for (const pi of processedInteractions ?? []) {
+      alreadyProcessedMap.add(`${pi.cadence_id}:${pi.lead_id}`);
+    }
+  }
+
+  const toCheck = sentInteractions.filter((i) => {
+    if (bouncedLeadIds.has(i.lead_id)) return false;
+    return !alreadyProcessedMap.has(`${i.cadence_id}:${i.lead_id}`);
+  });
 
   if (!toCheck.length) {
     console.warn(`[reply-check] All ${sentInteractions.length} interactions already processed`);
