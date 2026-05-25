@@ -148,13 +148,21 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     ['last_name', 'last name', 'sobrenome', 'ultimo nome', 'último nome'],
     ['last name', 'last_name', 'sobrenome', 'ultimo nome', 'último nome'],
   );
+  // Phone columns get scored, not picked first-match. V4-enriched CSVs ship
+  // four phone columns (Telefone Decisor, Telefone Fixo, Celular, Tel 2);
+  // the old single-column detection grabbed "Celular" because it was an exact
+  // match, leaving "Telefone Decisor" — the actually useful contact — behind.
+  //
+  // Detection has to run BEFORE decisor: the decisor's loose match ('decisor')
+  // would otherwise hijack headers like "Telefone Decisor" or "WhatsApp do
+  // Decisor" and leave the phone column hunt with only the leftovers.
+  const phoneColumns = collectPhoneColumns(headers, usedIndexes);
+  // Compatibility shim for the diagnostic flag below: we only care whether
+  // *any* phone column was found, not which one.
+  const telefoneIndex = phoneColumns.length > 0 ? phoneColumns[0]!.index : -1;
   const decisorIndex = detectColumn(
     ['decisor', 'contato', 'responsavel', 'responsável', 'contact_name', 'contact name', 'nome completo', 'full_name', 'full name'],
     ['decisor', 'responsável', 'responsavel', 'contato', 'contact', 'nome completo', 'full name', 'full_name'],
-  );
-  const telefoneIndex = detectColumn(
-    ['telefone', 'phone', 'celular', 'fone', 'whatsapp', 'tel'],
-    ['telefone', 'celular', 'whatsapp', 'fone', 'phone', 'mobile'],
   );
   const emailIndex = detectColumn(
     ['email', 'e-mail', 'mail'],
@@ -217,7 +225,29 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
       cnpj = stripped;
     }
 
-    const telefone = cellAt(telefoneIndex);
+    // Walk phone columns in score order; first non-empty cell wins as the
+    // primary `telefone`. Falling back to lower-scored columns when the top
+    // one is blank means a row with empty "Telefone Decisor" but a filled
+    // "Celular" still ships a usable phone to the lead.
+    const phoneCandidates: Array<{ col: PhoneColumn; value: string }> = [];
+    for (const col of phoneColumns) {
+      const v = cellAt(col.index);
+      if (v) phoneCandidates.push({ col, value: v });
+    }
+    const telefone = phoneCandidates[0]?.value;
+    // phones[] keeps every non-empty number in the row (de-duped on digits) so
+    // the SDR sees the full contact set on the lead, not just the primary.
+    const seenPhoneDigits = new Set<string>();
+    const phonesArr: Array<{ tipo: 'celular' | 'fixo' | 'whatsapp'; numero: string }> = [];
+    for (const candidate of phoneCandidates) {
+      const digits = candidate.value.replace(/\D/g, '');
+      if (!digits || seenPhoneDigits.has(digits)) continue;
+      seenPhoneDigits.add(digits);
+      phonesArr.push({
+        tipo: candidate.col.tipoHint ?? detectPhoneTipo(candidate.value),
+        numero: candidate.value,
+      });
+    }
     const email = cellAt(emailIndex);
     const jobTitle = cellAt(jobTitleIndex);
     const razaoSocial = cellAt(razaoIndex);
@@ -246,7 +276,7 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
       nome_fantasia: cellAt(fantasiaIndex),
       lead_source: cellAt(sourceIndex),
       telefone,
-      phones: telefone ? [{ tipo: detectPhoneTipo(telefone), numero: telefone }] : undefined,
+      phones: phonesArr.length > 0 ? phonesArr : undefined,
       email,
       emails: email ? [{ tipo: detectEmailTipo(email), email }] : undefined,
       decisor,
@@ -292,6 +322,66 @@ function parseRow(line: string): string[] {
   }
   cells.push(current);
   return cells;
+}
+
+interface PhoneColumn {
+  index: number;
+  header: string;
+  score: number;
+  /** Forced `tipo` when the header itself names the channel (Celular, Fixo, WhatsApp); null for ambiguous headers like "Telefone Decisor". */
+  tipoHint: 'celular' | 'fixo' | 'whatsapp' | null;
+}
+
+/**
+ * Header keywords that mark a column as a phone column. `\b` boundaries keep
+ * "telefonema"/"celularidade" out; `^tel\b|tel\s|tel\d` covers short forms
+ * like "Tel", "Tel 2", "Tel2".
+ */
+const PHONE_HEADER_RE = /\b(telefone|celular|whatsapp|mobile|fone|phone)\b|^tel(\s|\d|$)/;
+
+/**
+ * Picks every phone-shaped column and ranks them. Higher score = more likely
+ * to be the decision-maker's mobile.
+ *
+ *   +10 "decisor" / "contato" / "responsável" / "pessoal" / "principal"
+ *   +8  "whatsapp"
+ *   +5  "celular" / "mobile"
+ *   -3  "fixo" / "landline"
+ *   -5  "empresa" / "comercial" / "empresarial" / "recepção"
+ *   -8  "tel 2", "tel2", "2", "secundário", "alternativo", "outro"
+ *
+ * Ties resolve by column order (left wins). Columns are marked as used so
+ * downstream detectColumn calls can't reclaim them.
+ */
+function collectPhoneColumns(headers: string[], usedIndexes: Set<number>): PhoneColumn[] {
+  const cols: PhoneColumn[] = [];
+  for (let i = 0; i < headers.length; i++) {
+    if (usedIndexes.has(i)) continue;
+    const h = headers[i]!;
+    if (!PHONE_HEADER_RE.test(h)) continue;
+    cols.push({ index: i, header: h, score: scorePhoneHeader(h), tipoHint: tipoHintFromHeader(h) });
+    usedIndexes.add(i);
+  }
+  cols.sort((a, b) => b.score - a.score || a.index - b.index);
+  return cols;
+}
+
+function scorePhoneHeader(h: string): number {
+  let score = 0;
+  if (/(decisor|contato|respons|pessoal|principal)/.test(h)) score += 10;
+  if (/whatsapp/.test(h)) score += 8;
+  if (/(celular|mobile)/.test(h)) score += 5;
+  if (/(empresa|comercial|empresarial|recep)/.test(h)) score -= 5;
+  if (/\bfixo\b|landline/.test(h)) score -= 3;
+  if (/\btel\s*\d\b|\b(2|3)\b|(secund|alternativ|outro)/.test(h)) score -= 8;
+  return score;
+}
+
+function tipoHintFromHeader(h: string): 'celular' | 'fixo' | 'whatsapp' | null {
+  if (/whatsapp/.test(h)) return 'whatsapp';
+  if (/(celular|mobile)/.test(h)) return 'celular';
+  if (/\bfixo\b|landline/.test(h)) return 'fixo';
+  return null;
 }
 
 function detectPhoneTipo(raw: string): 'celular' | 'fixo' | 'whatsapp' {

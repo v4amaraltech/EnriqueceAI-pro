@@ -239,6 +239,67 @@ describe('csv-parser', () => {
       expect(result.rows[0]?.job_title).toBe('CEO');
     });
 
+    it('should prefer "Telefone Decisor" over "Celular" / "Telefone Fixo" / "Tel 2"', () => {
+      // V4-enriched export (Giovanni's lista-Estética 2026-05-25): four phone
+      // columns side-by-side. Before scoring, "Celular" (exact match in the
+      // legacy detector) hijacked the slot — every imported lead lost the
+      // decisor's number. Decision-maker scores +10, beats Celular (+5),
+      // Fixo (-3) and Tel 2 (-8).
+      const csv =
+        'cnpj,Telefone Decisor,Telefone Fixo,Celular,Tel 2\n' +
+        '11222333000181,11995307857,1132283036,11999348601,11987654321';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.telefone).toBe('11995307857');
+      // phones[] keeps every non-empty number, de-duped on digits, sorted by
+      // score (best first) so the SDR sees the strongest contact at the top.
+      // Decisor (+10) > Celular (+5) > Fixo (-3) > Tel 2 (-8).
+      expect(result.rows[0]?.phones?.map((p) => p.numero)).toEqual([
+        '11995307857',
+        '11999348601',
+        '1132283036',
+        '11987654321',
+      ]);
+      // Header-driven tipo: "Celular" → 'celular', "Telefone Fixo" → 'fixo'.
+      expect(result.rows[0]?.phones?.[1]?.tipo).toBe('celular');
+      expect(result.rows[0]?.phones?.[2]?.tipo).toBe('fixo');
+    });
+
+    it('should fall back to a lower-scored column when the decisor column is empty', () => {
+      // Decisor column blank + Celular filled → use Celular instead of dropping
+      // the phone entirely.
+      const csv =
+        'cnpj,Telefone Decisor,Celular\n' +
+        '11222333000181,,11999998888';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.telefone).toBe('11999998888');
+      expect(result.rows[0]?.phones).toEqual([{ tipo: 'celular', numero: '11999998888' }]);
+    });
+
+    it('should de-dup repeated phone numbers across columns', () => {
+      // Some exporters copy the decisor's number into "Celular" too. Without
+      // dedup the lead ends up with the same number twice.
+      const csv =
+        'cnpj,Telefone Decisor,Celular\n' +
+        '11222333000181,(11) 99999-9999,11999999999';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.phones).toHaveLength(1);
+      expect(result.rows[0]?.phones?.[0]?.numero).toBe('(11) 99999-9999');
+    });
+
+    it('should mark WhatsApp-header columns as tipo "whatsapp"', () => {
+      const csv =
+        'cnpj,WhatsApp do Decisor,Telefone Fixo\n' +
+        '11222333000181,11988887777,1133334444';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.telefone).toBe('11988887777');
+      expect(result.rows[0]?.phones?.[0]?.tipo).toBe('whatsapp');
+      expect(result.rows[0]?.phones?.[1]?.tipo).toBe('fixo');
+    });
+
     it('should not let "Nome Fantasia" steal the decisor slot', () => {
       // The decisor pattern includes "nome", so without the priority-ordered
       // detection "Nome Fantasia" would match decisor and leave fantasia empty.
