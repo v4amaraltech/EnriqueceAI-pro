@@ -187,7 +187,7 @@ export function LeadInfoPanel({
   const [editFields, setEditFields] = useState({
     first_name: data.first_name ?? primarySocio?.nome?.split(' ')[0] ?? '',
     last_name: data.last_name ?? (primarySocio?.nome?.split(' ').slice(1).join(' ') ?? ''),
-    nome_fantasia: data.nome_fantasia ?? '',
+    nome_fantasia: data.nome_fantasia ?? data.razao_social ?? '',
     email: primaryEmail,
     job_title: data.job_title ?? primarySocio?.qualificacao ?? '',
     lead_source: data.lead_source ?? '',
@@ -212,7 +212,7 @@ export function LeadInfoPanel({
     setEditFields({
       first_name: data.first_name ?? socio?.nome?.split(' ')[0] ?? '',
       last_name: data.last_name ?? (socio?.nome?.split(' ').slice(1).join(' ') ?? ''),
-      nome_fantasia: data.nome_fantasia ?? '',
+      nome_fantasia: data.nome_fantasia ?? data.razao_social ?? '',
       email,
       job_title: data.job_title ?? socio?.qualificacao ?? '',
       lead_source: data.lead_source ?? '',
@@ -740,7 +740,7 @@ export function LeadInfoPanel({
                       leadId={data.id}
                       fieldKey="nome_fantasia"
                       label="Empresa"
-                      value={data.nome_fantasia}
+                      value={data.nome_fantasia ?? data.razao_social}
                       placeholder="Adicionar empresa"
                       onSaved={(v) => {
                         setData((prev) => ({ ...prev, nome_fantasia: v || null }));
