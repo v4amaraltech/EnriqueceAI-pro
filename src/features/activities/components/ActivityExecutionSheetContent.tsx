@@ -30,6 +30,7 @@ interface ActivityExecutionSheetContentProps {
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
   onLeadLost?: () => void;
+  onReportWhatsAppInvalid?: () => void;
   dialerProvider?: DialerProvider;
 }
 
@@ -40,6 +41,7 @@ export function ActivityExecutionSheetContent({
   onSkip,
   onMarkDone,
   onLeadLost,
+  onReportWhatsAppInvalid,
   dialerProvider,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -251,6 +253,7 @@ export function ActivityExecutionSheetContent({
         onTemplateChange={handleTemplateChange}
         onSend={() => onSend('', renderedPreview, aiPersonalized, to)}
         onSkip={onSkip}
+        onReportInvalid={onReportWhatsAppInvalid ?? (() => undefined)}
       />
       </>
     );

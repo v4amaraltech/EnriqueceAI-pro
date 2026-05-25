@@ -59,7 +59,7 @@ export async function updateLead(
   const { orgId, supabase } = auth.data;
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'emails', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'segmento', 'cnpj', 'is_inbound', 'email_bounced_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at', 'meeting_held_at'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'emails', 'telefone', 'phones', 'status', 'notes', 'socios', 'instagram', 'linkedin', 'website', 'first_name', 'last_name', 'job_title', 'lead_source', 'canal', 'segmento', 'cnpj', 'is_inbound', 'email_bounced_at', 'whatsapp_invalid_at', 'custom_field_values', 'closer_id', 'assigned_to', 'faturamento_estimado', 'won_at', 'meeting_held_at'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {
@@ -122,6 +122,14 @@ export async function updateLead(
   const emailChanged = newEmail !== undefined && newEmail !== (currentLead?.email as string | null) && newEmail;
   if (emailChanged && currentLead?.email_bounced_at) {
     safeUpdates.email_bounced_at = null;
+  }
+
+  // If phone/phones is being updated and it changed, clear whatsapp_invalid flag
+  const phoneFieldChanged =
+    ('telefone' in safeUpdates && safeUpdates.telefone !== currentLead?.telefone) ||
+    ('phones' in safeUpdates && JSON.stringify(safeUpdates.phones) !== JSON.stringify(currentLead?.phones));
+  if (phoneFieldChanged && currentLead?.whatsapp_invalid_at) {
+    safeUpdates.whatsapp_invalid_at = null;
   }
 
   const { error } = await from(supabase, 'leads')

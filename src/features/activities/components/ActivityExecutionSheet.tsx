@@ -16,6 +16,7 @@ import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import { executeActivity } from '../actions/execute-activity';
 import { executeScheduledActivity } from '../actions/execute-scheduled-activity';
+import { reportWhatsAppInvalid } from '../actions/report-whatsapp-invalid';
 import { skipActivity } from '../actions/skip-activity';
 import type { PendingActivity } from '../types';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
@@ -207,6 +208,31 @@ export function ActivityExecutionSheet({
     });
   };
 
+  const handleReportWhatsAppInvalid = () => {
+    if (!activity) return;
+    if (isScheduled) {
+      toast.error('Atividades agendadas não suportam essa ação ainda');
+      return;
+    }
+
+    startSendTransition(async () => {
+      const result = await reportWhatsAppInvalid({
+        enrollmentId: activity.enrollmentId,
+        cadenceId: activity.cadenceId,
+        stepId: activity.stepId,
+        leadId: activity.lead.id,
+        orgId: activity.lead.org_id,
+      });
+
+      if (result.success) {
+        toast.success('Lead marcado como sem WhatsApp', { icon: '🚫' });
+        advanceOrClose(activity.enrollmentId, activity.stepId);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  };
+
   const handleSkip = () => {
     if (!activity) return;
 
@@ -334,6 +360,7 @@ export function ActivityExecutionSheet({
                 onSkip={handleSkip}
                 onMarkDone={handleMarkDone}
                 onLeadLost={onLeadLost ? () => onLeadLost(activity) : undefined}
+                onReportWhatsAppInvalid={handleReportWhatsAppInvalid}
                 dialerProvider={dialerProvider}
               />
             </div>

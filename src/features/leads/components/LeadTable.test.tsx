@@ -61,6 +61,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     assigned_to: null,
     custom_field_values: null,
     email_bounced_at: null,
+    whatsapp_invalid_at: null,
     closer_id: null,
     won_by: null,
     contacted_at: null,

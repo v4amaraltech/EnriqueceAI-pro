@@ -30,6 +30,7 @@ const FIELD_LABELS: Record<string, string> = {
   phones: 'Telefones',
   socios: 'Sócios',
   email_bounced_at: 'Email Bounce',
+  whatsapp_invalid_at: 'WhatsApp Inválido',
 };
 
 const STATUS_LABELS: Record<string, string> = {

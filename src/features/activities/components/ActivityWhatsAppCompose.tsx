@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 
-import { Clock, Eye, Loader2, Send, Sparkles } from 'lucide-react';
+import { Clock, Eye, Loader2, Send, Sparkles, XCircle } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -37,6 +37,7 @@ interface ActivityWhatsAppComposeProps {
   onTemplateChange: (templateId: string) => void;
   onSend: () => void;
   onSkip: () => void;
+  onReportInvalid: () => void;
 }
 
 export function ActivityWhatsAppCompose({
@@ -54,6 +55,7 @@ export function ActivityWhatsAppCompose({
   onTemplateChange,
   onSend,
   onSkip,
+  onReportInvalid,
 }: ActivityWhatsAppComposeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const canSend = !isSending && !isLoading && to && body.trim();
@@ -176,19 +178,31 @@ export function ActivityWhatsAppCompose({
           </div>
 
           {/* Actions */}
-          <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-            <Button variant="outline" onClick={onSkip} disabled={isSending}>
-              <Clock className="mr-2 h-4 w-4" />
-              Pular
+          <div className="mt-4 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-4">
+            <Button
+              variant="ghost"
+              onClick={onReportInvalid}
+              disabled={isSending}
+              className="text-[var(--muted-foreground)] hover:text-red-600"
+              title="Marca o lead como sem WhatsApp e pula as próximas atividades de WA"
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Não é WhatsApp
             </Button>
-            <Button onClick={onSend} disabled={!canSend} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              {isSending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              Enviar WhatsApp
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={onSkip} disabled={isSending}>
+                <Clock className="mr-2 h-4 w-4" />
+                Pular
+              </Button>
+              <Button onClick={onSend} disabled={!canSend} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {isSending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Enviar WhatsApp
+              </Button>
+            </div>
           </div>
         </>
       )}

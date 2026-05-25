@@ -43,6 +43,7 @@ interface RawLead {
   segmento: string | null;
   assigned_to: string | null;
   custom_field_values: Record<string, string> | null;
+  whatsapp_invalid_at: string | null;
 }
 
 interface EnrollmentRow {
@@ -158,6 +159,10 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
       // Stop if cumulative delay exceeds 24h
       if (cumulativeHours > 24) break;
+
+      // Suppress WhatsApp steps when the lead's number was flagged as not WhatsApp
+      // (SDR feedback via "Não é WhatsApp" button)
+      if (step.channel === 'whatsapp' && enrollment.lead.whatsapp_invalid_at) continue;
 
       const isCurrentStep = step.step_order === currentStepOrder;
       const template = step.template_id ? templateMap.get(step.template_id) : null;
