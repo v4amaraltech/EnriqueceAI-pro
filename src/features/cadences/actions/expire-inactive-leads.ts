@@ -104,32 +104,62 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
 
   // Mark each unique lead 'unqualified'. lost_at is filled by the
   // set_qualified_at trigger.
+  //
+  // Order matters: insert the lead_lost interaction *before* the lead UPDATE.
+  // If the function times out mid-loop or the UPDATE fails for whatever
+  // reason, at least the timeline carries the audit trail — the SDR can see
+  // *why* the lead left the cadence even when the status didn't transition.
+  // (The 12/05/2026 V4 Amaral run lost 51 leads to this exact failure mode:
+  // the enrollment-stamp loop completed, the lead-update loop hit timeout,
+  // and those 51 leads sat as "contacted + sem cadência + timeline limpa"
+  // until Guilherme reported it.)
+  //
+  // Idempotency: skip the interaction insert if one already exists for this
+  // (lead, cadence, reason) tuple. This makes the job safe to re-run and
+  // lets future runs heal earlier partial failures.
   for (const [leadId, row] of leadFirstHit) {
+    const { data: existing } = (await from(supabase, 'interactions')
+      .select('id')
+      .eq('lead_id', leadId)
+      .eq('cadence_id', row.cadence_id)
+      .eq('channel', 'system')
+      .filter('metadata->>reason', 'eq', 'auto_loss_inactivity')
+      .limit(1)
+      .maybeSingle()) as { data: { id: string } | null };
+
+    if (!existing) {
+      const { error: interactionError } = await from(supabase, 'interactions').insert({
+        org_id: row.org_id,
+        lead_id: leadId,
+        cadence_id: row.cadence_id,
+        channel: 'system',
+        type: 'sent',
+        message_content: `Lead marcado como perdido por inatividade (${row.inactive_days} dias sem atividade)`,
+        metadata: {
+          system_event: 'lead_lost',
+          reason: 'auto_loss_inactivity',
+          loss_reason_id: row.auto_loss_reason_id,
+          inactive_days: row.inactive_days,
+        },
+      } as Record<string, unknown>);
+      if (interactionError) {
+        console.error(`[expire-inactive] lead=${leadId} interaction insert failed:`, interactionError.message);
+        // Don't continue — we still try to flip the lead status. A missing
+        // interaction is recoverable on the next run; a missing status flip
+        // would keep the lead in the SDR's funnel as still-active.
+      }
+    }
+
     const { error: leadError } = await from(supabase, 'leads')
       .update({ status: 'unqualified' } as Record<string, unknown>)
       .eq('id', leadId)
-      .eq('org_id', row.org_id);
+      .eq('org_id', row.org_id)
+      .not('status', 'in', '("won","unqualified","archived")');
     if (leadError) {
       console.error(`[expire-inactive] lead=${leadId} update failed:`, leadError.message);
       continue;
     }
     leadsLost++;
-
-    // Audit trail in lead timeline
-    await from(supabase, 'interactions').insert({
-      org_id: row.org_id,
-      lead_id: leadId,
-      cadence_id: row.cadence_id,
-      channel: 'system',
-      type: 'sent',
-      message_content: `Lead marcado como perdido por inatividade (${row.inactive_days} dias sem atividade)`,
-      metadata: {
-        system_event: 'lead_lost',
-        reason: 'auto_loss_inactivity',
-        loss_reason_id: row.auto_loss_reason_id,
-        inactive_days: row.inactive_days,
-      },
-    } as Record<string, unknown>);
   }
 
   console.warn(
