@@ -139,6 +139,24 @@ export async function updateLead(
 
   if (error) {
     console.error('[updateLead] Error:', error.message, 'Fields:', Object.keys(safeUpdates));
+
+    const pgCode = (error as { code?: string }).code;
+    if (pgCode === '23505' && 'cnpj' in safeUpdates && typeof safeUpdates.cnpj === 'string') {
+      const attemptedCnpj = safeUpdates.cnpj;
+      const { data: conflict } = (await from(supabase, 'leads')
+        .select('id, nome_fantasia, razao_social, assigned_to')
+        .eq('org_id', orgId)
+        .eq('cnpj', attemptedCnpj)
+        .is('deleted_at', null)
+        .neq('id', leadId)
+        .maybeSingle()) as { data: { id: string; nome_fantasia: string | null; razao_social: string | null; assigned_to: string | null } | null };
+      const conflictName = conflict?.nome_fantasia ?? conflict?.razao_social ?? 'outro lead';
+      return {
+        success: false,
+        error: `Já existe um lead com esse CNPJ na sua organização: "${conflictName}". Edite ou arquive o lead existente antes de reutilizar este CNPJ.`,
+      };
+    }
+
     return { success: false, error: 'Erro ao atualizar lead. Tente novamente.' };
   }
 
