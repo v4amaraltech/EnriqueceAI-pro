@@ -104,12 +104,14 @@ export const batchEnrollmentSchema = z.object({
 // Template variable extraction regex
 export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 
-// Available template variables — lead data
+// Available template variables — lead data.
+// "nome_fantasia" foi removido em 26/05/2026 (Vinicius): a UI tem só um
+// campo "Empresa" exibido como nome_fantasia ?? razao_social, então
+// expor as duas variantes confunde quem monta o template.
 export const AVAILABLE_TEMPLATE_VARIABLES = [
   'primeiro_nome',
   'nome_completo',
   'empresa',
-  'nome_fantasia',
   'cargo',
   'email',
   'telefone',
