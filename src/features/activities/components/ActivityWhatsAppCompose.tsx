@@ -180,10 +180,10 @@ export function ActivityWhatsAppCompose({
           {/* Actions */}
           <div className="mt-4 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-4">
             <Button
-              variant="ghost"
+              variant="destructive"
               onClick={onReportInvalid}
               disabled={isSending}
-              className="text-[var(--muted-foreground)] hover:text-red-600"
+              className="bg-red-600 hover:bg-red-700 text-white"
               title="Marca o lead como sem WhatsApp e pula as próximas atividades de WA"
             >
               <XCircle className="mr-2 h-4 w-4" />
