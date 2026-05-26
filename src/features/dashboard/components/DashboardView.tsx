@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, TrendingUp, Users } from 'lucide-react';
+import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, TrendingUp } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -211,7 +211,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
       {/* Operational ranking — cadence execution + conversion */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
           <RankingCard
             title="Leads para Abrir"
             titleTooltip={
@@ -227,23 +227,6 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             primaryColumnLabel="na fila"
             averageLabel="média na fila/vendedor"
             onSdrClick={handleLeadsToOpenSdrClick}
-          />
-          <RankingCard
-            title="Leads Finalizados"
-            titleTooltip={
-              'Quantos leads cada SDR colocou em cadência no período.\n\n' +
-              '• Finalizados: leads cuja cadência foi concluída ou que responderam\n' +
-              '• Prospectando: leads ainda em cadência ativa\n\n' +
-              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
-            }
-            icon={Users}
-            iconColor="bg-blue-500/10"
-            iconTextColor="text-blue-500"
-            data={ranking.leadsFinished}
-            primaryColumnLabel="finalizados"
-            secondaryColumnLabel="prospectando"
-            averageLabel="média finalizados/vendedor"
-            onSdrClick={handleSdrClick}
           />
           <RankingCard
             title="Atividades Realizadas"
