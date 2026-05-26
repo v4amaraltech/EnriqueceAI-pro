@@ -207,6 +207,27 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // Show all activities (current + future within 24h window) grouped by lead
   const visibleActivities = useMemo(() => activities, [activities]);
 
+  // Quick mode reorders the navigation so the SDR stays on the same channel
+  // across leads (batch mode). Without this, the sheet would navigate
+  // [lead A: phone, lead A: whatsapp, lead B: phone, ...] — exactly the
+  // opposite of what the "Modo rápido" label promises. We sort by channel
+  // first, then preserve the original lead order inside each channel.
+  const sheetActivities = useMemo(() => {
+    if (!quickMode) return visibleActivities;
+    // Map each activity to its position in visibleActivities to preserve
+    // the secondary ordering (urgency/lead) inside each channel bucket.
+    const originalIndex = new Map<string, number>();
+    visibleActivities.forEach((a, idx) => {
+      originalIndex.set(`${a.enrollmentId}:${a.stepId}`, idx);
+    });
+    return [...visibleActivities].sort((a, b) => {
+      if (a.channel !== b.channel) return a.channel.localeCompare(b.channel);
+      const ai = originalIndex.get(`${a.enrollmentId}:${a.stepId}`) ?? 0;
+      const bi = originalIndex.get(`${b.enrollmentId}:${b.stepId}`) ?? 0;
+      return ai - bi;
+    });
+  }, [quickMode, visibleActivities]);
+
   // Unique leads being prospected
   const prospectingLeadsCount = useMemo(() => new Set(activities.map((a) => a.lead.id)).size, [activities]);
 
@@ -223,12 +244,22 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // Filtered activities (cadence only — retornos are always shown separately)
   const filtered = useMemo(() => applyFilters(cadenceActivities, filters), [cadenceActivities, filters]);
 
-  // Auto-open first activity when quick mode is activated
+  // Auto-open first activity when quick mode is activated. Resolves the
+  // first activity from the channel-sorted list so the sheet opens on the
+  // top of the first channel bucket (typically email or linkedin given
+  // alphabetical order), keeping the "batch by channel" promise consistent
+  // from the very first card.
   const handleToggleQuickMode = useCallback(() => {
     const newMode = !quickMode;
     setQuickMode(newMode);
-    if (newMode && filtered.length > 0 && selectedKey === null) {
-      const first = filtered[0];
+    if (newMode && selectedKey === null) {
+      // sheetActivities is recomputed when quickMode flips, but here we
+      // re-derive synchronously from filtered to avoid a stale ref.
+      const fallback = filtered.find((a) => !a.enrollmentId.startsWith('scheduled:'));
+      const byChannel = [...filtered]
+        .filter((a) => !a.enrollmentId.startsWith('scheduled:'))
+        .sort((a, b) => a.channel.localeCompare(b.channel));
+      const first = byChannel[0] ?? fallback;
       if (first) setSelectedKey(`${first.enrollmentId}:${first.stepId}`);
     }
   }, [quickMode, filtered, selectedKey]);
@@ -492,7 +523,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
           {/* Execution Sheet */}
           <ActivityExecutionSheet
-            activities={visibleActivities}
+            activities={sheetActivities}
             selectedKey={selectedKey}
             onClose={handleClose}
             onNavigate={handleNavigate}
