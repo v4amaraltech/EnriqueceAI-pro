@@ -15,7 +15,7 @@ import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { PendingActivity } from '../types';
-import { OVERDUE_THRESHOLD_HOURS } from '../utils/overdue';
+import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
 
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
 
@@ -60,14 +60,12 @@ const DEFAULT_PER_PAGE = 25;
 
 function applyFilters(activities: PendingActivity[], filters: ActivityFilterValues): PendingActivity[] {
   return activities.filter((a) => {
-    // Status filter
+    // Status filter — usa hoursOverdue (clamp pro horário comercial BRT)
     if (filters.status === 'overdue') {
-      const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
-      if (diffH < OVERDUE_THRESHOLD_HOURS) return false;
+      if (hoursOverdue(a.nextStepDue) < OVERDUE_THRESHOLD_HOURS) return false;
     }
     if (filters.status === 'due') {
-      const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
-      if (diffH >= OVERDUE_THRESHOLD_HOURS) return false;
+      if (hoursOverdue(a.nextStepDue) >= OVERDUE_THRESHOLD_HOURS) return false;
     }
 
     // Channel

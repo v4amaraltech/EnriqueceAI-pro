@@ -754,15 +754,27 @@ export async function fetchOverdueActivitiesRanking(
 
   const cutoffIso = new Date(Date.now() - OVERDUE_THRESHOLD_MS).toISOString();
 
-  // Pull enrollments active whose next step is overdue beyond the threshold.
-  // Join leads so we can attribute to assigned_to AND filter out terminal
-  // leads (won/unqualified/archived) — those shouldn't count as "pending work"
-  // for the SDR even though the enrollment hasn't been closed yet.
+  // Pull enrollments active whose next step is overdue beyond the threshold,
+  // already clamping next_step_due via effective_due_brt RPC so the cutoff
+  // reflects business hours (sex 18h+ não conta como atrasada na seg 9h).
+  // The RPC returns IDs of enrollments matching the business-hours window;
+  // we then re-fetch with the lead join to filter terminal statuses.
+  const { data: enrollmentIds } = (await (supabase.rpc as never as (fn: string, args: object) => Promise<{
+    data: Array<{ id: string }> | null;
+    error: { message: string } | null;
+  }>)('list_overdue_enrollments_brt', {
+    p_org_id: orgId,
+    p_cutoff: cutoffIso,
+  }));
+
+  const idList = (enrollmentIds ?? []).map((r) => r.id);
+  if (idList.length === 0) {
+    return buildRankingCardData([], 0, 0, filters.month);
+  }
+
   const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id, lead:leads!inner(assigned_to, status, deleted_at, org_id)')
-    .eq('org_id', orgId)
-    .eq('status', 'active')
-    .lt('next_step_due', cutoffIso)
+    .in('id', idList)
     .limit(20000)) as {
       data: Array<{
         lead_id: string;
