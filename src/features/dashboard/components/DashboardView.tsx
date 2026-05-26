@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, TrendingUp, Users } from 'lucide-react';
+import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, TrendingUp, Users } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -39,6 +39,13 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
   const handleLeadsToOpenSdrClick = useCallback((userId: string) => {
     router.push(`/leads?assigned_to=${userId}&status=new`);
+  }, [router]);
+
+  const handleOverdueSdrClick = useCallback((userId: string) => {
+    // Não temos filtro "overdue" na lista de leads ainda — abre o pipe do SDR
+    // e deixa o gestor inspecionar manualmente. Pode evoluir pra
+    // /atividades?assigned_to=X&status=overdue quando a queue aceitar param.
+    router.push(`/leads?assigned_to=${userId}`);
   }, [router]);
 
   // Calculate business days in the filter period for daily average (BRT-aware)
@@ -204,7 +211,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
 
       {/* Operational ranking — cadence execution + conversion */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
           <RankingCard
             title="Leads para Abrir"
             titleTooltip={
@@ -270,6 +277,23 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             primaryColumnLabel="oportunidades"
             averageLabel="média conversão/vendedor"
             onSdrClick={handleActivitySdrClick}
+          />
+          <RankingCard
+            title="Atividades Atrasadas"
+            titleTooltip={
+              'Snapshot agora: quantas atividades de cadência cada SDR tem com vencimento há mais de 1 hora.\n\n' +
+              '• Mesma definição que a Execução usa pro badge vermelho na fila\n' +
+              '• Trigger de fim de semana já está aplicado: sex 18h não vira atrasada na seg 8h\n' +
+              '• Não conta atividades de leads ganhos, perdidos ou arquivados\n\n' +
+              'Filtro de período não afeta este card — é a fila atual.'
+            }
+            icon={AlarmClock}
+            iconColor="bg-red-500/10"
+            iconTextColor="text-red-500"
+            data={ranking.overdueActivities}
+            primaryColumnLabel="atrasadas"
+            averageLabel="média atrasadas/vendedor"
+            onSdrClick={handleOverdueSdrClick}
           />
         </div>
       )}

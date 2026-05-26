@@ -729,14 +729,80 @@ export async function fetchLeadsToOpenRanking(
 }
 
 /**
- * Fetch all 8 ranking cards in parallel
+ * Snapshot: enrollments active com `next_step_due < now() - 1h`, agrupados
+ * pelo SDR responsável (leads.assigned_to). É a mesma definição de "atrasada"
+ * que a fila de Execução (/atividades) usa pro badge vermelho — consistência
+ * com o que o SDR já vê. Não tem meta (snapshot atual).
+ *
+ * Trigger `skip_weekend_brt` no `calculate_next_step_due` empurra sáb/dom
+ * pra segunda 9h BRT, então sex 18h não vira atrasada na seg 8h.
+ */
+export async function fetchOverdueActivitiesRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
+  const oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  // Pull enrollments active whose next step is overdue >1h. Join leads so we
+  // can attribute to assigned_to AND filter out terminal leads (won/unqualified/
+  // archived) — those shouldn't count as "pending work" for the SDR even though
+  // the enrollment hasn't been closed yet.
+  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
+    .select('lead_id, lead:leads!inner(assigned_to, status, deleted_at, org_id)')
+    .eq('org_id', orgId)
+    .eq('status', 'active')
+    .lt('next_step_due', oneHourAgoIso)
+    .limit(20000)) as {
+      data: Array<{
+        lead_id: string;
+        lead: { assigned_to: string | null; status: string; deleted_at: string | null; org_id: string };
+      }> | null;
+    };
+
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const e of enrollments ?? []) {
+    const lead = e.lead;
+    if (!lead || lead.deleted_at) continue;
+    if (lead.status === 'won' || lead.status === 'unqualified' || lead.status === 'archived') continue;
+    if (!lead.assigned_to || !sdrIds.has(lead.assigned_to)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(lead.assigned_to)) continue;
+    counts.set(lead.assigned_to, (counts.get(lead.assigned_to) ?? 0) + 1);
+    total++;
+  }
+
+  const entries: SdrRankingEntry[] = [];
+  for (const [userId, value] of counts) {
+    entries.push({ userId, userName: '', value });
+  }
+
+  const sdrCount = entries.length || 1;
+  return {
+    total,
+    monthTarget: 0,
+    percentOfTarget: 0,
+    averagePerSdr: Math.round(total / sdrCount),
+    sdrBreakdown: entries.sort((a, b) => b.value - a.value),
+  };
+}
+
+/**
+ * Fetch all 9 ranking cards in parallel
  */
 export async function fetchRankingData(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingData> {
-  const [leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, leadsToOpen] = await Promise.all([
+  const [leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, leadsToOpen, overdueActivities] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchActivitiesRanking(supabase, orgId, filters),
     fetchConversionRanking(supabase, orgId, filters),
@@ -744,9 +810,10 @@ export async function fetchRankingData(
     fetchMeetingsScheduledRanking(supabase, orgId, filters),
     fetchMeetingsHeldRanking(supabase, orgId, filters),
     fetchLeadsToOpenRanking(supabase, orgId, filters),
+    fetchOverdueActivitiesRanking(supabase, orgId, filters),
   ]);
 
   const hitRate = await fetchHitRateRanking(supabase, orgId, filters, leadsOpened, meetingsHeld);
 
-  return { leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen };
+  return { leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen, overdueActivities };
 }
