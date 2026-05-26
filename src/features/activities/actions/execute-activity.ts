@@ -193,17 +193,71 @@ export async function executeActivity(
   // Mark lead as contacted on first activity
   markLeadContacted(supabase, leadId).catch(() => {});
 
-  // Advance step or mark enrollment completed
+  // Advance step or mark enrollment completed.
+  //
+  // Bug 26/05/2026 (lead Chopp Brahma): SDR executava o step do meio
+  // de um lote D+0 e os steps anteriores sumiam da fila SEM rastro —
+  // o cursor pulava direto pra depois do executado. Ismael fez WhatsApp,
+  // o phone do mesmo dia virou inacessível e nem aparecia na timeline.
+  //
+  // Fix: antes de avançar, computar quais step_orders ficaram pulados
+  // (entre o current_step antigo e o executado, exclusive do executado)
+  // e registrar uma interaction `step_skipped` por cada um. Mantém o
+  // comportamento de UX (fila avança pra frente, SDR não fica refazendo)
+  // e ganha auditoria completa na timeline do lead.
+  const { data: executedStep } = (await from(supabase, 'cadence_steps')
+    .select('step_order')
+    .eq('id', stepId)
+    .single()) as { data: { step_order: number } | null };
+  const executedStepOrder = executedStep?.step_order ?? 0;
+
+  const { data: currentEnrollment } = (await from(supabase, 'cadence_enrollments')
+    .select('current_step')
+    .eq('id', enrollmentId)
+    .single()) as { data: { current_step: number } | null };
+  const oldCurrentStep = currentEnrollment?.current_step ?? executedStepOrder;
+
   const { data: nextStep } = (await from(supabase, 'cadence_steps')
     .select('step_order')
     .eq('cadence_id', cadenceId)
-    .gt('step_order', (await from(supabase, 'cadence_steps')
-      .select('step_order')
-      .eq('id', stepId)
-      .single()).data?.step_order ?? 0)
+    .gt('step_order', executedStepOrder)
     .order('step_order', { ascending: true })
     .limit(1)
     .maybeSingle()) as { data: { step_order: number } | null };
+
+  // Log skipped steps in the timeline. The executed step itself doesn't
+  // count as skipped — we look strictly at the gap [oldCurrentStep, executedStepOrder).
+  if (executedStepOrder > oldCurrentStep) {
+    const { data: skipped } = (await from(supabase, 'cadence_steps')
+      .select('id, step_order, channel')
+      .eq('cadence_id', cadenceId)
+      .gte('step_order', oldCurrentStep)
+      .lt('step_order', executedStepOrder)
+      .order('step_order', { ascending: true })) as {
+        data: Array<{ id: string; step_order: number; channel: string }> | null;
+      };
+    if (skipped && skipped.length > 0) {
+      const skippedInteractions = skipped.map((s) => ({
+        org_id: input.orgId,
+        lead_id: leadId,
+        cadence_id: cadenceId,
+        step_id: s.id,
+        channel: 'system',
+        type: 'sent',
+        message_content: `Step ${s.step_order} (${s.channel}) pulado — SDR executou o step ${executedStepOrder} (${input.channel}) primeiro.`,
+        performed_by: userId,
+        metadata: {
+          system_event: 'step_skipped',
+          reason: 'advanced_past',
+          skipped_step_order: s.step_order,
+          skipped_channel: s.channel,
+          executed_step_order: executedStepOrder,
+          executed_channel: input.channel,
+        },
+      }));
+      await from(supabase, 'interactions').insert(skippedInteractions as unknown as Record<string, unknown>);
+    }
+  }
 
   if (nextStep) {
     await from(supabase, 'cadence_enrollments')
