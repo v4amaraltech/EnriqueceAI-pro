@@ -9,6 +9,7 @@ import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/typ
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
 import type { PendingActivity } from '../types';
+import { OVERDUE_THRESHOLD_HOURS } from '../utils/overdue';
 
 interface RawLead {
   id: string;
@@ -146,11 +147,11 @@ export async function fetchActivityLog(
     // Channel filter
     if (channel && channel !== 'all' && currentStep.channel !== channel) continue;
 
-    // Status filter (overdue = > 1h, due = <= 1h)
+    // Status filter (overdue = >= threshold, due = < threshold)
     if (status) {
       const diffH = (Date.now() - new Date(enrollment.next_step_due).getTime()) / 3600000;
-      if (status === 'overdue' && diffH < 1) continue;
-      if (status === 'due' && diffH >= 1) continue;
+      if (status === 'overdue' && diffH < OVERDUE_THRESHOLD_HOURS) continue;
+      if (status === 'due' && diffH >= OVERDUE_THRESHOLD_HOURS) continue;
     }
 
     const template = currentStep.template_id ? templateMap.get(currentStep.template_id) : null;

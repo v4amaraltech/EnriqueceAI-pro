@@ -37,6 +37,7 @@ import {
 import { EngagementScoreBadge } from '@/features/leads/components/EngagementScoreBadge';
 
 import type { PendingActivity } from '../types';
+import { OVERDUE_THRESHOLD_HOURS } from '../utils/overdue';
 
 interface ActivityRowProps {
   activity: PendingActivity;
@@ -55,8 +56,8 @@ export function formatRelativeTime(dateStr: string): { text: string; isUrgent: b
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  // Urgent if overdue > 1 hour (AC 7)
-  const isUrgent = diffHours >= 1;
+  // Urgent if overdue beyond the shared threshold (default 4h).
+  const isUrgent = diffHours >= OVERDUE_THRESHOLD_HOURS;
 
   if (diffMinutes < 1) return { text: 'Agora', isUrgent: false };
   if (diffMinutes < 60) return { text: `Há ${diffMinutes}min`, isUrgent };

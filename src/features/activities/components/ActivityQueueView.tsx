@@ -15,6 +15,7 @@ import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { PendingActivity } from '../types';
+import { OVERDUE_THRESHOLD_HOURS } from '../utils/overdue';
 
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
 
@@ -62,11 +63,11 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
     // Status filter
     if (filters.status === 'overdue') {
       const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
-      if (diffH < 1) return false;
+      if (diffH < OVERDUE_THRESHOLD_HOURS) return false;
     }
     if (filters.status === 'due') {
       const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
-      if (diffH >= 1) return false;
+      if (diffH >= OVERDUE_THRESHOLD_HOURS) return false;
     }
 
     // Channel

@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
+import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
+
 import type {
   DailyDataPoint,
   DashboardFilters,
@@ -729,10 +731,11 @@ export async function fetchLeadsToOpenRanking(
 }
 
 /**
- * Snapshot: enrollments active com `next_step_due < now() - 1h`, agrupados
- * pelo SDR responsável (leads.assigned_to). É a mesma definição de "atrasada"
- * que a fila de Execução (/atividades) usa pro badge vermelho — consistência
- * com o que o SDR já vê. Não tem meta (snapshot atual).
+ * Snapshot: enrollments active cujo `next_step_due` venceu há mais que o
+ * threshold compartilhado (OVERDUE_THRESHOLD_HOURS — atualmente 4h),
+ * agrupados pelo SDR responsável (leads.assigned_to). É a mesma definição
+ * de "atrasada" que a fila de Execução (/atividades) usa pro badge vermelho
+ * — fonte única de verdade. Não tem meta (snapshot atual).
  *
  * Trigger `skip_weekend_brt` no `calculate_next_step_due` empurra sáb/dom
  * pra segunda 9h BRT, então sex 18h não vira atrasada na seg 8h.
@@ -749,17 +752,17 @@ export async function fetchOverdueActivitiesRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  const oneHourAgoIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const cutoffIso = new Date(Date.now() - OVERDUE_THRESHOLD_MS).toISOString();
 
-  // Pull enrollments active whose next step is overdue >1h. Join leads so we
-  // can attribute to assigned_to AND filter out terminal leads (won/unqualified/
-  // archived) — those shouldn't count as "pending work" for the SDR even though
-  // the enrollment hasn't been closed yet.
+  // Pull enrollments active whose next step is overdue beyond the threshold.
+  // Join leads so we can attribute to assigned_to AND filter out terminal
+  // leads (won/unqualified/archived) — those shouldn't count as "pending work"
+  // for the SDR even though the enrollment hasn't been closed yet.
   const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
     .select('lead_id, lead:leads!inner(assigned_to, status, deleted_at, org_id)')
     .eq('org_id', orgId)
     .eq('status', 'active')
-    .lt('next_step_due', oneHourAgoIso)
+    .lt('next_step_due', cutoffIso)
     .limit(20000)) as {
       data: Array<{
         lead_id: string;
