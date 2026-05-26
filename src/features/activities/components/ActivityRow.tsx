@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import {
   ChevronDown,
   Eye,
@@ -16,6 +18,14 @@ import {
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +98,8 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
   const Icon = channelIcon[activity.channel] ?? Mail;
   const label = channelLabel[activity.channel] ?? activity.channel;
   const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+  const [confirmEndCadence, setConfirmEndCadence] = useState(false);
+  const leadName = activity.lead.nome_fantasia || activity.lead.razao_social || 'este lead';
 
   return (
     <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50`}>
@@ -160,9 +172,9 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onIgnore}>
+            <DropdownMenuItem onClick={() => setConfirmEndCadence(true)}>
               <X className="mr-2 h-3.5 w-3.5" />
-              Ignorar atividade
+              Encerrar cadência
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onViewLead}>
@@ -180,6 +192,36 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={confirmEndCadence} onOpenChange={setConfirmEndCadence}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Encerrar cadência?</DialogTitle>
+            <DialogDescription>
+              <strong>{leadName}</strong> vai sair da cadência <strong>{activity.cadenceName}</strong> e
+              todas as próximas atividades programadas para esse lead serão removidas. O lead permanece no funil
+              com o status atual — você ainda pode contatá-lo manualmente.
+              <br />
+              <br />
+              Para apenas adiar esta atividade, use <strong>Pular</strong> em vez disso.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmEndCadence(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmEndCadence(false);
+                onIgnore();
+              }}
+            >
+              Encerrar cadência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
