@@ -108,10 +108,15 @@ export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 // "nome_fantasia" foi removido em 26/05/2026 (Vinicius): a UI tem só um
 // campo "Empresa" exibido como nome_fantasia ?? razao_social, então
 // expor as duas variantes confunde quem monta o template.
+//
+// "referencia" resolve no caller a partir do custom field marcado com
+// system_key='referencia' na org (V4 Amaral: "Qual Cliente Indicou").
+// Útil pra templates de Recomendação onde a indicação é o gancho.
 export const AVAILABLE_TEMPLATE_VARIABLES = [
   'primeiro_nome',
   'nome_completo',
   'empresa',
+  'referencia',
   'cargo',
   'email',
   'telefone',
@@ -125,6 +130,17 @@ export const AVAILABLE_TEMPLATE_VARIABLES = [
   'faturamento',
   'etapa',
 ] as const;
+
+// Variables shown inline on the insert bar by default. The rest live behind
+// a "Mais variáveis" expander to keep the bar uncluttered. Baseado no uso
+// real dos templates da V4 Amaral: primeiro_nome (9 usos), empresa (5),
+// nome_vendedor (4), referencia (3). Outras 12 variáveis: 0 usos.
+export const PRIMARY_TEMPLATE_VARIABLES = [
+  'primeiro_nome',
+  'empresa',
+  'referencia',
+] as const;
+export const PRIMARY_VENDOR_VARIABLES = ['nome_vendedor'] as const;
 
 // Vendor/sender variables
 export const VENDOR_TEMPLATE_VARIABLES = [

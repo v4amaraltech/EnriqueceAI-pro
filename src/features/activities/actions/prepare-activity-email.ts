@@ -3,6 +3,8 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { from } from '@/lib/supabase/from';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -18,6 +20,36 @@ interface PrepareInput {
   templateBody: string | null;
   aiPersonalization: boolean;
   channel: 'email' | 'whatsapp';
+}
+
+/**
+ * Resolves the {{referencia}} variable from the org's custom field marked
+ * with system_key='referencia'. V4 Amaral uses the "Qual Cliente Indicou"
+ * field for the Recomendação channel — value is the name of the customer
+ * who referred the lead.
+ *
+ * Returns null when the org has no system_key='referencia' field configured
+ * or when this lead's custom_field_values doesn't carry it. renderTemplate
+ * keeps {{referencia}} as-is in that case (matches the existing behavior for
+ * unresolved variables, but avoids the bug of sending the literal token
+ * to the recipient — the template author can spot it in preview).
+ */
+async function resolveReferenciaVariable(lead: ActivityLead): Promise<string | null> {
+  if (!lead.custom_field_values) return null;
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: field } = (await from(supabase, 'custom_fields')
+      .select('id')
+      .eq('org_id', lead.org_id)
+      .eq('system_key', 'referencia')
+      .limit(1)
+      .maybeSingle()) as { data: { id: string } | null };
+    if (!field) return null;
+    const value = lead.custom_field_values[field.id];
+    return value && typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 async function resolveVendorVariables(userId: string): Promise<{ nome_vendedor: string | null; email_vendedor: string | null }> {
@@ -65,11 +97,15 @@ export async function prepareActivityEmail(
     };
   }
 
-  const vendorVars = await resolveVendorVariables(userId);
+  const [vendorVars, referencia] = await Promise.all([
+    resolveVendorVariables(userId),
+    resolveReferenciaVariable(lead),
+  ]);
   const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
     ...buildLeadTemplateVariables(lead, socioNome),
     ...vendorVars,
+    referencia,
   };
 
   let body = renderTemplate(templateBody, variables);
@@ -133,11 +169,15 @@ export async function prepareActivityWhatsApp(
     };
   }
 
-  const vendorVars = await resolveVendorVariables(userId2);
+  const [vendorVars, referencia] = await Promise.all([
+    resolveVendorVariables(userId2),
+    resolveReferenciaVariable(lead),
+  ]);
   const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
     ...buildLeadTemplateVariables(lead, socioNome),
     ...vendorVars,
+    referencia,
   };
 
   let body = renderTemplate(templateBody, variables);
