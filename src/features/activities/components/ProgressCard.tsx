@@ -13,8 +13,14 @@ interface ProgressCardProps {
   availableLeadIds?: string[];
 }
 
-export function ProgressCard({ completed, total, target, availableLeadIds = [] }: ProgressCardProps) {
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+export function ProgressCard({ completed, total: _total, target, availableLeadIds = [] }: ProgressCardProps) {
+  // Denominador é a meta diária — não a fila expandida (steps em janela 24h).
+  // O `total` antigo (completed + activitiesCount) flutuava de jeito não-óbvio:
+  // ao executar 1 step, o enrollment podia sair da janela e levar 4-5 candidates
+  // junto, fazendo o SDR enxergar "1 / 596" depois de "0 / 601" e pensar que
+  // contou múltiplas atividades. Meta é estável e bate com "Objetivo diário".
+  const denominator = target > 0 ? target : Math.max(completed, 1);
+  const percentage = Math.round((completed / denominator) * 100);
   const isAchieved = target > 0 && completed >= target;
   const remaining = Math.max(0, target - completed);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -24,7 +30,7 @@ export function ProgressCard({ completed, total, target, availableLeadIds = [] }
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <h3 className="text-sm font-semibold">Meu progresso hoje</h3>
-        <span title="O progresso mostra atividades finalizadas vs pendentes do dia">
+        <span title="Atividades finalizadas hoje em relação à sua meta diária">
           <Info className="h-4 w-4 text-[var(--muted-foreground)] cursor-help" />
         </span>
       </div>
@@ -35,7 +41,7 @@ export function ProgressCard({ completed, total, target, availableLeadIds = [] }
           {/* KPI */}
           <div className="flex items-baseline gap-2 mb-4">
             <span className="text-4xl font-bold text-emerald-600">{completed}</span>
-            <span className="text-base text-[var(--muted-foreground)]">/ {total} atividades</span>
+            <span className="text-base text-[var(--muted-foreground)]">/ {denominator} atividades</span>
           </div>
 
           {/* Progress bar */}
@@ -54,7 +60,7 @@ export function ProgressCard({ completed, total, target, availableLeadIds = [] }
             </div>
             <div className="flex items-center gap-1.5 text-[var(--muted-foreground)]">
               <div className="h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
-              <span>Pendente</span>
+              <span>Meta diária</span>
             </div>
           </div>
         </div>
