@@ -84,26 +84,64 @@ export async function executeActivity(
     return { success: false, error: 'Esta atividade já foi executada', code: ERR_ALREADY_EXECUTED };
   }
 
-  // Record interaction
-  const { data: interaction } = (await from(supabase, 'interactions')
-    .insert({
-      org_id: orgId,
-      lead_id: leadId,
-      cadence_id: cadenceId,
-      step_id: stepId,
-      channel: channel || 'email',
-      type: 'sent',
-      message_content: body ? toPlainText(body) : null,
-      metadata: {
-        ...(subject ? { subject } : {}),
-        ...(body ? { html_body: body } : {}),
-      },
-      ai_generated: aiGenerated,
-      original_template_id: templateId,
-      performed_by: userId,
-    } as Record<string, unknown>)
-    .select('id')
-    .single()) as { data: Pick<InteractionRow, 'id'> | null };
+  // Para channel=phone, reaproveita a interaction `internal_api4com` que
+  // initiateApi4ComCall já gravou nos últimos 30min (mesmo lead + SDR) —
+  // anexando cadence_id/step_id. Antes, executeActivity sempre criava
+  // uma row nova, fazendo 1 ligação real virar 3 interactions (initiate +
+  // classify + execute). V4 Amaral acumulou 257 phone fantasmas hoje
+  // (27/05/2026); Matheus reportou contador subindo +3 por ligação.
+  let reusedInteractionId: string | null = null;
+  if (channel === 'phone') {
+    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data: candidate } = (await from(supabase, 'interactions')
+      .select('id, cadence_id, step_id, metadata')
+      .eq('lead_id', leadId)
+      .eq('performed_by', userId)
+      .eq('channel', 'phone')
+      .is('cadence_id', null)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()) as { data: { id: string; cadence_id: string | null; step_id: string | null; metadata: Record<string, unknown> | null } | null };
+    if (candidate) reusedInteractionId = candidate.id;
+  }
+
+  let interaction: Pick<InteractionRow, 'id'> | null;
+  if (reusedInteractionId) {
+    const { data: updated } = (await from(supabase, 'interactions')
+      .update({
+        cadence_id: cadenceId,
+        step_id: stepId,
+        ai_generated: aiGenerated,
+        original_template_id: templateId,
+        ...(body ? { message_content: toPlainText(body) } : {}),
+      } as Record<string, unknown>)
+      .eq('id', reusedInteractionId)
+      .select('id')
+      .single()) as { data: Pick<InteractionRow, 'id'> | null };
+    interaction = updated;
+  } else {
+    const { data: inserted } = (await from(supabase, 'interactions')
+      .insert({
+        org_id: orgId,
+        lead_id: leadId,
+        cadence_id: cadenceId,
+        step_id: stepId,
+        channel: channel || 'email',
+        type: 'sent',
+        message_content: body ? toPlainText(body) : null,
+        metadata: {
+          ...(subject ? { subject } : {}),
+          ...(body ? { html_body: body } : {}),
+        },
+        ai_generated: aiGenerated,
+        original_template_id: templateId,
+        performed_by: userId,
+      } as Record<string, unknown>)
+      .select('id')
+      .single()) as { data: Pick<InteractionRow, 'id'> | null };
+    interaction = inserted;
+  }
 
   if (!interaction) {
     return { success: false, error: 'Falha ao registrar interação' };

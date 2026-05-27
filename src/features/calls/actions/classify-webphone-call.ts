@@ -69,21 +69,49 @@ export async function classifyWebphoneCall(
     await from(supabase, 'calls').update(updates).eq('id', callId).eq('org_id', orgId);
   }
 
-  // Create interaction record so the call appears in prospecting stats.
-  // The interaction metadata no longer carries callStatus — that lives on
-  // calls.status, populated by the webhook.
+  // Atualiza a interaction `internal_api4com` que initiateApi4ComCall já
+  // criou pra esta ligação — em vez de inserir uma nova. Antes, classify
+  // sempre criava uma row separada com `source=webphone`, fazendo 1 ligação
+  // virar 2 (e até 3, somando o INSERT da execução de cadência) no contador
+  // de "atividades realizadas". Hoje (27/05/2026) a V4 Amaral acumulou
+  // 257 phone interactions fantasmas em 302 ligações reais.
+  //
+  // Mantém o INSERT como fallback se o internal_api4com ainda não estiver
+  // gravado (legacy ou casos raros onde initiate não inseriu).
   const effectiveLeadId = leadId ?? call.lead_id;
   if (effectiveLeadId) {
-    await from(supabase, 'interactions')
-      .insert({
-        org_id: orgId,
-        lead_id: effectiveLeadId,
-        channel: 'phone',
-        type: 'sent',
-        message_content: notes || null,
-        metadata: { callId, source: 'webphone' },
-        performed_by: userId,
-      } as Record<string, unknown>);
+    const { data: existing } = (await from(supabase, 'interactions')
+      .select('id, metadata, message_content')
+      .eq('lead_id', effectiveLeadId)
+      .eq('channel', 'phone')
+      .contains('metadata', { callId })
+      .limit(1)
+      .maybeSingle()) as { data: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null };
+
+    if (existing) {
+      const mergedMeta = {
+        ...(existing.metadata ?? {}),
+        classified_via: 'webphone',
+        ...(notes ? { webphone_notes: notes } : {}),
+      };
+      await from(supabase, 'interactions')
+        .update({
+          ...(notes && !existing.message_content ? { message_content: notes } : {}),
+          metadata: mergedMeta,
+        } as Record<string, unknown>)
+        .eq('id', existing.id);
+    } else {
+      await from(supabase, 'interactions')
+        .insert({
+          org_id: orgId,
+          lead_id: effectiveLeadId,
+          channel: 'phone',
+          type: 'sent',
+          message_content: notes || null,
+          metadata: { callId, source: 'webphone' },
+          performed_by: userId,
+        } as Record<string, unknown>);
+    }
   }
 
   return { success: true, data: { callId } };
