@@ -9,6 +9,8 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+
 const enrollmentIdSchema = z.string().uuid('ID inválido');
 
 export async function skipActivity(
@@ -19,15 +21,15 @@ export async function skipActivity(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   // Look up the current step's configured delay so a skip respects the
   // cadence design. A 2h floor keeps the snooze useful even for delay=0
   // steps (otherwise the same activity would reappear immediately).
   const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
-    .select('cadence_id, current_step')
+    .select('cadence_id, current_step, lead_id')
     .eq('id', enrollmentId)
-    .single()) as { data: { cadence_id: string; current_step: number } | null };
+    .single()) as { data: { cadence_id: string; current_step: number; lead_id: string } | null };
 
   let stepDelayMs = 0;
   if (enrollment) {
@@ -51,6 +53,18 @@ export async function skipActivity(
 
   const qErr = handleQueryError(error, 'Erro ao pular atividade', 'activities');
   if (qErr) return qErr;
+
+  if (enrollment?.lead_id) {
+    const hours = Math.round(pushMs / (60 * 60 * 1000));
+    await logLeadEvent(supabase, {
+      orgId,
+      leadId: enrollment.lead_id,
+      userId,
+      event: 'activity_skipped',
+      message: `Atividade adiada em ${hours}h pelo botão Pular`,
+      metadata: { cadence_id: enrollment.cadence_id, next_step_due: nextStepDue },
+    });
+  }
 
   revalidatePath('/atividades');
 

@@ -7,6 +7,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEventBulk } from './log-lead-event';
+
 export async function bulkPauseEnrollments(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
@@ -19,7 +21,7 @@ export async function bulkPauseEnrollments(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   // Get active enrollments for these leads in org cadences
   const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
@@ -27,7 +29,7 @@ export async function bulkPauseEnrollments(
     .in('lead_id', leadIds)
     .eq('status', 'active')
     .eq('cadences.org_id', orgId)) as {
-    data: Array<{ id: string }> | null;
+    data: Array<{ id: string; lead_id: string }> | null;
   };
 
   if (!enrollments || enrollments.length === 0) {
@@ -42,6 +44,15 @@ export async function bulkPauseEnrollments(
   if (error) {
     return { success: false, error: 'Erro ao pausar inscrições' };
   }
+
+  const affectedLeadIds = [...new Set(enrollments.map((e) => e.lead_id))];
+  await logLeadEventBulk(supabase, {
+    orgId,
+    leadIds: affectedLeadIds,
+    userId,
+    event: 'enrollment_status_changed',
+    message: 'Cadência pausada',
+  });
 
   revalidatePath('/leads');
   return { success: true, data: { count: enrollmentIds.length } };

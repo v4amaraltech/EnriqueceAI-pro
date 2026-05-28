@@ -9,6 +9,8 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+
 const schema = z.object({
   scheduledActivityId: z.string().uuid(),
   action: z.enum(['completed', 'cancelled']),
@@ -23,7 +25,12 @@ export async function completeScheduledActivity(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
+
+  const { data: scheduled } = (await from(supabase, 'scheduled_activities' as never)
+    .select('lead_id, channel')
+    .eq('id', scheduledActivityId)
+    .maybeSingle()) as { data: { lead_id: string; channel: string } | null };
 
   const { error } = await from(supabase, 'scheduled_activities' as never)
     .update({
@@ -34,6 +41,18 @@ export async function completeScheduledActivity(
 
   const qErr = handleQueryError(error, 'Erro ao atualizar atividade agendada', 'activities');
   if (qErr) return qErr;
+
+  if (scheduled?.lead_id) {
+    await logLeadEvent(supabase, {
+      orgId,
+      leadId: scheduled.lead_id,
+      userId,
+      event: action === 'cancelled' ? 'scheduled_activity_cancelled' : 'scheduled_activity_completed',
+      message: action === 'cancelled'
+        ? `Atividade agendada (${scheduled.channel}) cancelada`
+        : `Atividade agendada (${scheduled.channel}) concluída`,
+    });
+  }
 
   revalidatePath('/atividades');
 
@@ -48,9 +67,14 @@ export async function postponeScheduledActivity(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   const newTime = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+  const { data: scheduled } = (await from(supabase, 'scheduled_activities' as never)
+    .select('lead_id, channel')
+    .eq('id', scheduledActivityId)
+    .maybeSingle()) as { data: { lead_id: string; channel: string } | null };
 
   const { error } = await from(supabase, 'scheduled_activities' as never)
     .update({ scheduled_at: newTime } as Record<string, unknown>)
@@ -58,6 +82,17 @@ export async function postponeScheduledActivity(
 
   const qErr = handleQueryError(error, 'Erro ao adiar atividade', 'activities');
   if (qErr) return qErr;
+
+  if (scheduled?.lead_id) {
+    await logLeadEvent(supabase, {
+      orgId,
+      leadId: scheduled.lead_id,
+      userId,
+      event: 'activity_postponed',
+      message: `Atividade agendada (${scheduled.channel}) adiada em 2h`,
+      metadata: { scheduled_at: newTime },
+    });
+  }
 
   revalidatePath('/atividades');
 

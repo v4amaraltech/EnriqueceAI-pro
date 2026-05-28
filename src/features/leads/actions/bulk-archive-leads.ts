@@ -8,6 +8,8 @@ import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { logLeadEventBulk } from './log-lead-event';
+
 export async function bulkArchiveLeads(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
@@ -20,7 +22,7 @@ export async function bulkArchiveLeads(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   const archivedAt = new Date().toISOString();
   const { error } = await from(supabase, 'leads')
@@ -40,6 +42,14 @@ export async function bulkArchiveLeads(
     .update({ status: 'completed', completed_at: archivedAt } as Record<string, unknown>)
     .in('lead_id', leadIds)
     .in('status', ['active', 'paused']);
+
+  await logLeadEventBulk(supabase, {
+    orgId,
+    leadIds,
+    userId,
+    event: 'lead_archived',
+    message: 'Lead arquivado',
+  });
 
   revalidatePath('/leads');
   revalidatePath('/atividades');

@@ -7,7 +7,7 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+import { logLeadEvent, logLeadEventBulk } from '@/features/leads/actions/log-lead-event';
 
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
@@ -380,18 +380,29 @@ export async function switchLeadsCadence(
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, userId, supabase } = auth.data;
 
   // Verify target cadence is active
   const { data: cadence } = (await from(supabase, 'cadences')
-    .select('id, status')
+    .select('id, status, name')
     .eq('id', targetCadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .single()) as { data: { id: string; status: string } | null };
+    .single()) as { data: { id: string; status: string; name: string } | null };
 
   if (!cadence) return { success: false, error: 'Cadência não encontrada' };
   if (cadence.status !== 'active') return { success: false, error: 'Cadência precisa estar ativa' };
+
+  // Capture which leads currently have active/paused enrollments BEFORE closing
+  // them, so the switch-out leaves a timeline trace. Without this, the lead's
+  // exit from its prior cadence(s) was invisible (enrollLeads only logs the
+  // new enrollment).
+  const { data: priorEnrollments } = (await from(supabase, 'cadence_enrollments')
+    .select('lead_id')
+    .in('lead_id', leadIds)
+    .eq('org_id', orgId)
+    .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
+  const switchedLeadIds = [...new Set((priorEnrollments ?? []).map((e) => e.lead_id))];
 
   // Complete ALL active/paused enrollments for these leads (any cadence)
   for (const leadId of leadIds) {
@@ -403,6 +414,17 @@ export async function switchLeadsCadence(
       .eq('lead_id', leadId)
       .eq('org_id', orgId)
       .in('status', ['active', 'paused']);
+  }
+
+  if (switchedLeadIds.length > 0) {
+    await logLeadEventBulk(supabase, {
+      orgId,
+      leadIds: switchedLeadIds,
+      userId,
+      event: 'cadence_switched',
+      message: `Cadência anterior encerrada — lead movido para "${cadence.name}"`,
+      metadata: { cadence_id: targetCadenceId },
+    });
   }
 
   // Now enroll in the target cadence

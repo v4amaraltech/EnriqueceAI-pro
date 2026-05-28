@@ -255,9 +255,39 @@ export class CrmSyncService {
       // Update existing lead (last-write-wins)
       const updateData = { ...leadData };
       delete updateData.cnpj; // Don't update CNPJ
+
+      // Diff against current values so the timeline records only real changes —
+      // a CRM pull runs on a schedule and re-sends identical data every cycle,
+      // so logging unconditionally would flood the lead history with noise.
+      const fieldKeys = Object.keys(updateData);
+      let changedFields: string[] = [];
+      if (fieldKeys.length > 0) {
+        const { data: current } = (await from(supabase, 'leads')
+          .select(fieldKeys.join(','))
+          .eq('id', existingId)
+          .maybeSingle()) as { data: Record<string, unknown> | null };
+        if (current) {
+          changedFields = fieldKeys.filter((k) => (current[k] ?? null) !== (updateData[k] ?? null));
+        }
+      }
+
       await from(supabase, 'leads')
         .update(updateData as Record<string, unknown>)
         .eq('id', existingId);
+
+      if (changedFields.length > 0) {
+        // CRM-driven change has no user actor — insert the system event directly
+        // (logLeadEvent requires a userId; performed_by stays null here).
+        await from(supabase, 'interactions').insert({
+          org_id: orgId,
+          lead_id: existingId,
+          channel: 'system',
+          type: 'sent',
+          message_content: `Campos atualizados via CRM: ${changedFields.join(', ')}`,
+          metadata: { system_event: 'fields_updated', source: 'crm_pull', changed_fields: changedFields },
+          performed_by: null,
+        } as Record<string, unknown>);
+      }
     }
     // We don't auto-create leads from CRM pull — only update existing ones
   }

@@ -198,11 +198,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   // Pre-step: activate scheduled prospections whose date has arrived
   const { data: scheduledEnrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('id, lead_id')
+    .select('id, lead_id, cadence_id, lead:leads!inner(org_id)')
     .eq('status', 'paused')
     .not('scheduled_start_at', 'is', null)
     .lte('scheduled_start_at', new Date().toISOString())
-    .limit(50)) as { data: Array<{ id: string; lead_id: string }> | null };
+    .limit(50)) as { data: Array<{ id: string; lead_id: string; cadence_id: string; lead: { org_id: string } }> | null };
 
   for (const scheduled of scheduledEnrollments ?? []) {
     // Reactivate lead if still unqualified
@@ -217,6 +217,22 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       .update({ status: 'active', scheduled_start_at: null } as Record<string, unknown>)
       .eq('id', scheduled.id);
     if (activateErr) console.error(`[cadence-engine] Failed to activate enrollment=${scheduled.id}:`, activateErr);
+
+    // Timeline trace: this is a cron-driven reactivation (no user), so insert a
+    // system interaction directly. Without it, a previously-lost lead silently
+    // reappears as `new` in active cadence with no explanation for the SDR.
+    if (scheduled.lead?.org_id) {
+      await from(supabase, 'interactions').insert({
+        org_id: scheduled.lead.org_id,
+        lead_id: scheduled.lead_id,
+        cadence_id: scheduled.cadence_id,
+        channel: 'system',
+        type: 'sent',
+        message_content: 'Prospecção agendada reativada — lead voltou automaticamente para a cadência',
+        metadata: { system_event: 'prospection_reactivated', cadence_id: scheduled.cadence_id },
+        performed_by: null,
+      } as Record<string, unknown>);
+    }
 
     console.warn(`[cadence-engine] scheduled enrollment=${scheduled.id} activated, lead=${scheduled.lead_id} reactivated`);
   }

@@ -34,6 +34,22 @@ export async function createCall(
     return { success: false, error: 'Erro ao registrar ligação' };
   }
 
+  // Mirror manually-logged calls onto the lead timeline as a phone interaction.
+  // The lead timeline reads only from `interactions`; without this, a call
+  // logged on the /calls page never appears in the lead's history. Linking via
+  // metadata.callId lets fetchLeadTimeline enrich it with recording/duration.
+  if (parsed.data.lead_id) {
+    await from(supabase, 'interactions').insert({
+      org_id: orgId,
+      lead_id: parsed.data.lead_id,
+      channel: 'phone',
+      type: 'sent',
+      message_content: parsed.data.notes ?? null,
+      metadata: { callId: data.id, source: 'manual_call' },
+      performed_by: userId,
+    } as Record<string, unknown>);
+  }
+
   revalidatePath('/calls');
   return { success: true, data };
 }

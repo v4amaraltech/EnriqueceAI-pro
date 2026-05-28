@@ -221,5 +221,15 @@ export async function scheduleNewProspection(
     .update({ next_step_due: startDate } as Record<string, unknown>)
     .eq('id', enrollment.id);
 
+  const scheduledLabel = new Date(startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+  await logLeadEvent(supabase, {
+    orgId,
+    leadId,
+    userId,
+    event: 'prospection_scheduled',
+    message: `Nova prospecção agendada para ${scheduledLabel}`,
+    metadata: { cadence_id: cadenceId, scheduled_start_at: startDate },
+  });
+
   return { success: true, data: undefined };
 }

@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
 import { createMeetingWhatsAppGroup } from '../services/whatsapp-group.service';
 
@@ -244,7 +245,7 @@ export async function deleteMeeting(
 
   // Fetch interaction and validate org ownership
   const { data: interaction, error: fetchError } = await from(supabase, 'interactions')
-    .select('id, metadata')
+    .select('id, metadata, lead_id')
     .eq('id', interactionId)
     .eq('org_id', orgId)
     .maybeSingle();
@@ -268,6 +269,33 @@ export async function deleteMeeting(
     }
   }
 
+  const leadId = interaction.lead_id as string | null;
+
+  // Leave a cancellation trace BEFORE deleting the meeting_scheduled row.
+  // Otherwise cancelling a meeting erases the only record it ever existed,
+  // and the lead stays `qualified` with `meeting_scheduled_at` set forever.
+  if (leadId) {
+    const startTime = meta?.start_time as string | undefined;
+    const whenLabel = startTime
+      ? new Date(startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : null;
+    await logLeadEvent(supabase, {
+      orgId,
+      leadId,
+      userId,
+      event: 'meeting_cancelled',
+      message: whenLabel ? `Reunião cancelada (estava marcada para ${whenLabel})` : 'Reunião cancelada',
+    });
+
+    // Clear the now-stale meeting flag so the lead no longer counts as having
+    // an upcoming meeting. Status is intentionally left untouched to avoid an
+    // unintended downgrade of a lead that may be qualified for other reasons.
+    await from(supabase, 'leads')
+      .update({ meeting_scheduled_at: null } as Record<string, unknown>)
+      .eq('id', leadId)
+      .eq('org_id', orgId);
+  }
+
   // Delete the interaction record
   const { error: deleteError } = await from(supabase, 'interactions')
     .delete()
@@ -276,6 +304,10 @@ export async function deleteMeeting(
 
   if (deleteError) {
     return { success: false, error: 'Erro ao excluir reunião' };
+  }
+
+  if (leadId) {
+    revalidatePath(`/leads/${leadId}`);
   }
 
   return { success: true, data: undefined };
@@ -303,6 +335,7 @@ export async function updateMeeting(
 
   const meta = interaction.metadata as Record<string, unknown> | null;
   const calendarEventId = meta?.calendar_event_id as string | undefined;
+  const previousStartTime = meta?.start_time as string | undefined;
 
   const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
@@ -348,6 +381,20 @@ export async function updateMeeting(
         .update({ closer_id: input.closerId } as Record<string, unknown>)
         .eq('id', leadId)
         .eq('org_id', orgId);
+    }
+
+    // Reschedule trace: the meeting_scheduled row is mutated in place, so
+    // without this the original time is overwritten with no record it moved.
+    if (previousStartTime && previousStartTime !== input.startTime) {
+      const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      await logLeadEvent(supabase, {
+        orgId,
+        leadId,
+        userId,
+        event: 'meeting_rescheduled',
+        message: `Reunião remarcada de ${fmt(previousStartTime)} para ${fmt(input.startTime)}`,
+      });
+      revalidatePath(`/leads/${leadId}`);
     }
 
     return { success: true, data: event };
