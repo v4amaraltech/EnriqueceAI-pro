@@ -245,23 +245,6 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             onSdrClick={handleActivitySdrClick}
           />
           <RankingCard
-            title="Taxa de Conversão"
-            titleTooltip={
-              'Quantos leads viraram oportunidade entre os que foram trabalhados no período.\n\n' +
-              '• Numerador: leads marcados como ganhos no período\n' +
-              '• Denominador: leads que entraram em cadência no período\n\n' +
-              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
-            }
-            icon={TrendingUp}
-            iconColor="bg-emerald-500/10"
-            iconTextColor="text-emerald-500"
-            unit="%"
-            data={ranking.conversionRate}
-            primaryColumnLabel="oportunidades"
-            averageLabel="média conversão/vendedor"
-            onSdrClick={handleActivitySdrClick}
-          />
-          <RankingCard
             title="Atividades Atrasadas"
             titleTooltip={
               'Snapshot agora: quantas atividades de cadência cada SDR tem com vencimento há mais de 4 horas.\n\n' +
@@ -277,6 +260,23 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             primaryColumnLabel="atrasadas"
             averageLabel="média atrasadas/vendedor"
             onSdrClick={handleOverdueSdrClick}
+          />
+          <RankingCard
+            title="Taxa de Conversão"
+            titleTooltip={
+              'Quantos leads viraram oportunidade entre os que foram trabalhados no período.\n\n' +
+              '• Numerador: leads marcados como ganhos no período\n' +
+              '• Denominador: leads que entraram em cadência no período\n\n' +
+              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={TrendingUp}
+            iconColor="bg-emerald-500/10"
+            iconTextColor="text-emerald-500"
+            unit="%"
+            data={ranking.conversionRate}
+            primaryColumnLabel="oportunidades"
+            averageLabel="média conversão/vendedor"
+            onSdrClick={handleActivitySdrClick}
           />
         </div>
       )}
