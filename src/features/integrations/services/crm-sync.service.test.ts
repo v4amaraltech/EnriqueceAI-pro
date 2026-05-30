@@ -124,6 +124,7 @@ function buildSupabaseMock(opts: MockOptions = {}) {
           const chain: Record<string, unknown> = {
             eq: vi.fn().mockImplementation(() => buildChain()),
             is: vi.fn().mockImplementation(() => buildChain()),
+            ilike: vi.fn().mockImplementation(() => buildChain()),
             limit: vi.fn().mockImplementation(() => buildChain()),
             gte: vi.fn().mockImplementation(() => buildChain()),
             maybeSingle: vi.fn().mockResolvedValue({ data: leadLookupData }),
@@ -142,28 +143,47 @@ function buildSupabaseMock(opts: MockOptions = {}) {
 
       if (table === 'interactions') {
         // Unified chain that supports all interaction query patterns:
-        //   - .select().eq().eq().maybeSingle() (crm_synced lookup — pushLeads and pushActivities)
+        //   - .select().in('lead_id', ids).eq('type','crm_synced') (batch crm_synced
+        //     lookup — pushLeads and pushActivities, thenable → array)
         //   - .select().eq().eq().is().limit().gte() (sent interactions list, thenable)
         //   - .insert() (new crm_synced record)
         //   - .update().eq() (mark interaction as synced)
-        // Use maybeSingle counter to differentiate: odd calls → crmSyncedData, even calls → activitiesCrmSyncData
+        // The crm_synced batch lookup is identified by use of `.in()`. The first
+        // batch lookup (pushLeads) uses crmSyncedData; the second (pushActivities)
+        // uses activitiesCrmSyncData — mirroring the previous odd/even semantics.
         const resolvedSent = { data: sentInteractionsData };
-        const buildInteractionChain = (): Record<string, unknown> => ({
-          eq: vi.fn().mockImplementation(() => buildInteractionChain()),
-          is: vi.fn().mockImplementation(() => buildInteractionChain()),
-          limit: vi.fn().mockImplementation(() => buildInteractionChain()),
-          gte: vi.fn().mockImplementation(() => buildInteractionChain()),
+        const buildInteractionChain = (state: { isBatchSync: boolean; leadIds: string[] }): Record<string, unknown> => ({
+          eq: vi.fn().mockImplementation(() => buildInteractionChain(state)),
+          is: vi.fn().mockImplementation(() => buildInteractionChain(state)),
+          limit: vi.fn().mockImplementation(() => buildInteractionChain(state)),
+          gte: vi.fn().mockImplementation(() => buildInteractionChain(state)),
+          in: vi.fn().mockImplementation((_col: string, ids: string[]) => {
+            state.isBatchSync = true;
+            state.leadIds = ids;
+            return buildInteractionChain(state);
+          }),
           maybeSingle: vi.fn().mockImplementation(() => {
             interactionsMaybeSingleCount++;
-            // Odd calls are from pushLeads, even from pushActivities
             const data = interactionsMaybeSingleCount % 2 === 1 ? crmSyncedData : activitiesCrmSyncData;
             return Promise.resolve({ data });
           }),
-          then: (resolve: (v: unknown) => void) => Promise.resolve(resolvedSent).then(resolve),
+          then: (resolve: (v: unknown) => void) => {
+            if (state.isBatchSync) {
+              interactionsMaybeSingleCount++;
+              // First batch lookup → pushLeads (crmSyncedData), second → pushActivities
+              const syncSource = interactionsMaybeSingleCount % 2 === 1 ? crmSyncedData : activitiesCrmSyncData;
+              const rows =
+                syncSource && syncSource.external_id
+                  ? state.leadIds.map((leadId) => ({ lead_id: leadId, external_id: syncSource.external_id }))
+                  : [];
+              return Promise.resolve({ data: rows }).then(resolve);
+            }
+            return Promise.resolve(resolvedSent).then(resolve);
+          },
         });
 
         return {
-          select: vi.fn().mockImplementation(() => buildInteractionChain()),
+          select: vi.fn().mockImplementation(() => buildInteractionChain({ isBatchSync: false, leadIds: [] })),
           insert: vi.fn().mockResolvedValue({ data: null }),
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ data: null }),

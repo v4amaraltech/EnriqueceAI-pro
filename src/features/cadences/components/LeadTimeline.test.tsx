@@ -54,9 +54,11 @@ describe('LeadTimeline', () => {
     expect(screen.getByText('Olá, tudo bem?')).toBeInTheDocument();
   });
 
-  it('should show "Nenhuma anotação" when no content', () => {
+  it('should show context-aware fallback when no content', () => {
+    // Empty-content fallback is now channel-aware: an email with no body
+    // renders the email-specific message instead of the generic "Nenhuma anotação".
     render(<LeadTimeline entries={[createEntry({ message_content: null })]} />);
-    expect(screen.getByText('Nenhuma anotação')).toBeInTheDocument();
+    expect(screen.getByText('E-mail enviado (sem corpo registrado)')).toBeInTheDocument();
   });
 
   it('should show subject when available', () => {

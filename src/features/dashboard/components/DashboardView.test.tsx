@@ -89,17 +89,17 @@ describe('DashboardView', () => {
   it('should render KPI card with total opportunities', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
     expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByText(/Oportunidades em Fevereiro/)).toBeInTheDocument();
+    expect(screen.getByText(/Reuniões realizadas em Fevereiro/)).toBeInTheDocument();
   });
 
   it('should render target info when target > 0', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText(/Meta de oportunidades/)).toBeInTheDocument();
+    expect(screen.getByText(/Meta de reuniões realizadas/)).toBeInTheDocument();
   });
 
   it('should render percent below indicator', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByText(/20% abaixo do previsto até hoje/)).toBeInTheDocument();
+    expect(screen.getByText(/20% abaixo do ritmo/)).toBeInTheDocument();
   });
 
   it('should render percent above indicator when positive', () => {
@@ -110,7 +110,7 @@ describe('DashboardView', () => {
       },
     });
     render(<DashboardView data={data} filters={defaultFilters} />);
-    expect(screen.getByText(/15% acima do previsto até hoje/)).toBeInTheDocument();
+    expect(screen.getByText(/15% acima do ritmo/)).toBeInTheDocument();
   });
 
   it('should render no target message when monthTarget is 0', () => {
@@ -269,7 +269,8 @@ describe('DashboardView', () => {
     expect(
       container.querySelector('[data-slot="ranking-cards"]'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Leads Finalizados')).toBeInTheDocument();
+    expect(screen.getByText('Leads Abertos')).toBeInTheDocument();
+    expect(screen.getByText('Reuniões Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Atividades Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Taxa de Conversão')).toBeInTheDocument();
   });

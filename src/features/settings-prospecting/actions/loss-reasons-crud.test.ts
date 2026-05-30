@@ -128,34 +128,38 @@ describe('loss-reasons-crud', () => {
   });
 
   describe('updateLossReason', () => {
+    const validId = '00000000-0000-0000-0000-000000000001';
+
     it('should return error for empty name', async () => {
-      const result = await updateLossReason('r-1', '');
+      const result = await updateLossReason(validId, '');
       expect(result.success).toBe(false);
       if (!result.success) expect(result.error).toBe('Nome é obrigatório');
     });
 
     it('should update name successfully', async () => {
       (lossReasonsChain.single as ReturnType<typeof vi.fn>).mockReturnValue({
-        data: { id: 'r-1', org_id: 'org-1', name: 'Updated', is_system: false, sort_order: 1, created_at: '2026-01-01' },
+        data: { id: validId, org_id: 'org-1', name: 'Updated', is_system: false, sort_order: 1, created_at: '2026-01-01' },
         error: null,
       });
-      const result = await updateLossReason('r-1', 'Updated');
+      const result = await updateLossReason(validId, 'Updated');
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.name).toBe('Updated');
     });
   });
 
   describe('deleteLossReason', () => {
+    const validId = '00000000-0000-0000-0000-000000000001';
+
     it('should return error when org not found', async () => {
       (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: null });
-      const result = await deleteLossReason('r-1');
+      const result = await deleteLossReason(validId);
       expect(result.success).toBe(false);
       if (!result.success) expect(result.error).toBe('Organização não encontrada');
     });
 
     it('should block deletion of system reasons', async () => {
       (lossReasonsChain.single as ReturnType<typeof vi.fn>).mockReturnValue({ data: { is_system: true } });
-      const result = await deleteLossReason('r-1');
+      const result = await deleteLossReason(validId);
       expect(result.success).toBe(false);
       if (!result.success) expect(result.error).toBe('Motivos padrão não podem ser removidos');
     });
@@ -167,7 +171,7 @@ describe('loss-reasons-crud', () => {
       const deleteChain = createChainMock();
       Object.assign(deleteChain, { error: null });
       (lossReasonsChain.delete as ReturnType<typeof vi.fn>).mockReturnValue(deleteChain);
-      const result = await deleteLossReason('r-1');
+      const result = await deleteLossReason(validId);
       expect(result.success).toBe(true);
     });
   });

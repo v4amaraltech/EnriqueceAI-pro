@@ -16,7 +16,26 @@ function createChainMock(resolvedValue: unknown = { data: null, error: null }) {
   return chain;
 }
 
+// getAuthOrgIdResult -> fetchOrgId: organization_members.select('org_id').eq().eq().single()
+function makeOrgIdChain(orgId: string | null = 'org-1') {
+  const singleMock = vi.fn().mockResolvedValue({ data: orgId ? { org_id: orgId } : null });
+  const eq2 = vi.fn().mockReturnValue({ single: singleMock });
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+  const selectMock = vi.fn().mockReturnValue({ eq: eq1 });
+  return { select: selectMock };
+}
+
 const mockFrom = vi.fn();
+
+// Route org-id lookup vs. the feedback insert by table name. Tests set
+// `feedbackChain` to control the call_feedback result.
+let feedbackChain: ReturnType<typeof createChainMock>;
+function installFromRouter() {
+  mockFrom.mockImplementation((table: string) => {
+    if (table === 'organization_members') return makeOrgIdChain('org-1');
+    return feedbackChain;
+  });
+}
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn().mockResolvedValue({
@@ -27,10 +46,12 @@ vi.mock('@/lib/supabase/server', () => ({
 describe('addCallFeedback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    feedbackChain = createChainMock();
+    installFromRouter();
   });
 
   it('should add feedback successfully', async () => {
-    const chain = createChainMock({
+    feedbackChain = createChainMock({
       data: {
         id: 'fb-1',
         call_id: '550e8400-e29b-41d4-a716-446655440000',
@@ -40,7 +61,6 @@ describe('addCallFeedback', () => {
       },
       error: null,
     });
-    mockFrom.mockReturnValue(chain);
 
     const result = await addCallFeedback({
       call_id: '550e8400-e29b-41d4-a716-446655440000',
@@ -72,8 +92,7 @@ describe('addCallFeedback', () => {
   });
 
   it('should return error on db failure', async () => {
-    const chain = createChainMock({ data: null, error: { message: 'DB error' } });
-    mockFrom.mockReturnValue(chain);
+    feedbackChain = createChainMock({ data: null, error: { message: 'DB error' } });
 
     const result = await addCallFeedback({
       call_id: '550e8400-e29b-41d4-a716-446655440000',

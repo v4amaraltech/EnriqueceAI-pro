@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockSupabase, mockSupabaseFrom } from '@tests/mocks/supabase';
+const mockFrom = mockSupabaseFrom as ReturnType<typeof vi.fn>;
+
 vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
+}));
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -80,6 +87,16 @@ const mockLead: ActivityLead = {
 describe('prepareActivityEmail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // getAuthOrgIdResult() queries organization_members; return a valid org so
+    // the action proceeds past the auth/org guard.
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {};
+      const chainable = ['select', 'eq', 'limit'];
+      for (const m of chainable) chain[m] = vi.fn().mockReturnValue(chain);
+      chain.single = vi.fn(() => Promise.resolve({ data: { org_id: 'org-1' }, error: null }));
+      chain.maybeSingle = vi.fn(() => Promise.resolve({ data: null, error: null }));
+      return chain;
+    });
   });
 
   it('should return success with empty to when lead has no email', async () => {

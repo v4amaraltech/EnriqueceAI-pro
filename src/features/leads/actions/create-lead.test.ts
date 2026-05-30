@@ -22,8 +22,10 @@ vi.mock('@/lib/supabase/service', () => ({
 }));
 
 const mockCreateNotifications = vi.fn().mockResolvedValue(undefined);
+const mockCreateNotification = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/features/notifications/services/notification.service', () => ({
   createNotificationsForOrgMembers: (...args: unknown[]) => mockCreateNotifications(...args),
+  createNotification: (...args: unknown[]) => mockCreateNotification(...args),
 }));
 
 const mockEnrollLeads = vi.fn();
@@ -93,8 +95,17 @@ function makeLeadCountChain(count: number) {
 function makeDuplicateCheckChain(existing: { id: string; first_name: string; last_name: string | null } | null) {
   const maybeSingleMock = vi.fn().mockResolvedValue({ data: existing });
   const isMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
-  const eqEmailMock = vi.fn().mockReturnValue({ is: isMock });
-  const eqOrgMock = vi.fn().mockReturnValue({ eq: eqEmailMock });
+  const ilikeEmailMock = vi.fn().mockReturnValue({ is: isMock });
+  const eqOrgMock = vi.fn().mockReturnValue({ ilike: ilikeEmailMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
+  return { select: selectMock };
+}
+
+// Phone duplicate check: select → eq(org_id) → is(deleted_at) → like(telefone) (awaited array)
+function makePhoneCheckChain(existing: Array<{ id: string; telefone: string | null; first_name: string | null; last_name: string | null }> = []) {
+  const likeMock = vi.fn().mockResolvedValue({ data: existing });
+  const isMock = vi.fn().mockReturnValue({ like: likeMock });
+  const eqOrgMock = vi.fn().mockReturnValue({ is: isMock });
   const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
   return { select: selectMock };
 }
@@ -129,6 +140,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null); // skip limit check
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -139,7 +151,8 @@ describe('createLead', () => {
       expect(result.data.id).toBe('new-lead-id');
     }
     expect(revalidatePath).toHaveBeenCalledWith('/leads');
-    expect(mockEnrichLeadAction).toHaveBeenCalledWith('new-lead-id');
+    // Enrichment via CNPJ is only triggered for CSV imports, not manual creation
+    expect(mockEnrichLeadAction).not.toHaveBeenCalled();
     expect(mockEnrollLeads).not.toHaveBeenCalled();
   });
 
@@ -151,6 +164,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -179,8 +193,9 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
-      if (callCount === 5) return makeInsertChain('new-lead-id');
-      // 6th call: update enrollment next_step_due
+      if (callCount === 5) return makePhoneCheckChain();
+      if (callCount === 6) return makeInsertChain('new-lead-id');
+      // 7th call: update enrollment next_step_due
       return { update: updateMock };
     });
 
@@ -262,6 +277,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -283,6 +299,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -299,6 +316,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain(null, { message: 'Insert failed' });
     });
 
@@ -339,6 +357,7 @@ describe('createLead', () => {
       if (callCount === 4) return makeLeadCountChain(50); // under limit
       if (callCount === 5) return makeAssigneeChain(true);
       if (callCount === 6) return makeDuplicateCheckChain(null);
+      if (callCount === 7) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -355,6 +374,7 @@ describe('createLead', () => {
       if (callCount === 2) return makeSubscriptionChain(null);
       if (callCount === 3) return makeAssigneeChain(true);
       if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
       return makeInsertChain('new-lead-id');
     });
 
@@ -387,6 +407,7 @@ describe('createLead', () => {
         if (callCount === 4) return makeLeadCountChain(79);
         if (callCount === 5) return makeAssigneeChain(true);
         if (callCount === 6) return makeDuplicateCheckChain(null);
+        if (callCount === 7) return makePhoneCheckChain();
         return makeInsertChain('new-lead-id');
       });
 
@@ -419,6 +440,7 @@ describe('createLead', () => {
         if (callCount === 4) return makeLeadCountChain(50);
         if (callCount === 5) return makeAssigneeChain(true);
         if (callCount === 6) return makeDuplicateCheckChain(null);
+        if (callCount === 7) return makePhoneCheckChain();
         return makeInsertChain('new-lead-id');
       });
 
@@ -439,6 +461,7 @@ describe('createLead', () => {
         if (callCount === 4) return makeLeadCountChain(85);
         if (callCount === 5) return makeAssigneeChain(true);
         if (callCount === 6) return makeDuplicateCheckChain(null);
+        if (callCount === 7) return makePhoneCheckChain();
         return makeInsertChain('new-lead-id');
       });
 
@@ -459,6 +482,7 @@ describe('createLead', () => {
         if (callCount === 4) return makeLeadCountChain(79);
         if (callCount === 5) return makeAssigneeChain(true);
         if (callCount === 6) return makeDuplicateCheckChain(null);
+        if (callCount === 7) return makePhoneCheckChain();
         return makeInsertChain('new-lead-id');
       });
 
@@ -482,6 +506,7 @@ describe('createLead', () => {
         if (callCount === 2) return makeSubscriptionChain(null);
         if (callCount === 3) return makeAssigneeChain(true);
         if (callCount === 4) return makeDuplicateCheckChain(null);
+        if (callCount === 5) return makePhoneCheckChain();
         return makeInsertChain('new-lead-id');
       });
 

@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AnalyticsFilters } from '../AnalyticsFilters';
 
@@ -9,6 +10,14 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(),
 }));
+
+// Radix Select uses pointer capture + scrollIntoView which jsdom lacks.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 const mockMembers = [
   { userId: 'u1', email: 'alice@test.com' },
@@ -20,29 +29,43 @@ const mockCadences = [
   { id: 'c2', name: 'Inbound' },
 ];
 
+/** Radix Select trigger renders the selected value as text but exposes no
+ *  computed accessible name in jsdom, so locate it by its visible text. */
+function getComboboxByText(text: string): HTMLElement {
+  const trigger = screen
+    .getAllByRole('combobox')
+    .find((el) => el.textContent?.includes(text));
+  if (!trigger) throw new Error(`No combobox found containing text "${text}"`);
+  return trigger;
+}
+
 describe('AnalyticsFilters', () => {
-  it('renders SDR select with all members', () => {
+  it('renders SDR select with all members', async () => {
+    const user = userEvent.setup();
     render(<AnalyticsFilters basePath="/reports" members={mockMembers} />);
 
-    const sdrSelect = screen.getByDisplayValue('Todos os vendedores');
-    expect(sdrSelect).toBeInTheDocument();
+    const sdrSelect = getComboboxByText('Todos os vendedores');
 
-    const options = sdrSelect.querySelectorAll('option');
+    await user.click(sdrSelect);
+    const listbox = await screen.findByRole('listbox');
+    const options = within(listbox).getAllByRole('option');
     // "Todos os vendedores" + 2 members
     expect(options).toHaveLength(3);
     expect(options[1]!.textContent).toBe('alice');
     expect(options[2]!.textContent).toBe('bob');
   });
 
-  it('renders cadence select when cadences provided', () => {
+  it('renders cadence select when cadences provided', async () => {
+    const user = userEvent.setup();
     render(
       <AnalyticsFilters basePath="/reports" members={mockMembers} cadences={mockCadences} />,
     );
 
-    const cadenceSelect = screen.getByDisplayValue('Todas as cadências');
-    expect(cadenceSelect).toBeInTheDocument();
+    const cadenceSelect = getComboboxByText('Todas as cadências');
 
-    const options = cadenceSelect.querySelectorAll('option');
+    await user.click(cadenceSelect);
+    const listbox = await screen.findByRole('listbox');
+    const options = within(listbox).getAllByRole('option');
     expect(options).toHaveLength(3);
     expect(options[1]!.textContent).toBe('Outbound Q1');
   });
@@ -50,25 +73,31 @@ describe('AnalyticsFilters', () => {
   it('does not render cadence select when cadences not provided', () => {
     render(<AnalyticsFilters basePath="/reports" members={mockMembers} />);
 
-    expect(screen.queryByDisplayValue('Todas as cadências')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Todas as cadências'),
+    ).not.toBeInTheDocument();
   });
 
-  it('updates URL with sdr param on SDR selection', () => {
+  it('updates URL with sdr param on SDR selection', async () => {
+    const user = userEvent.setup();
     render(<AnalyticsFilters basePath="/reports" members={mockMembers} />);
 
-    const sdrSelect = screen.getByDisplayValue('Todos os vendedores');
-    fireEvent.change(sdrSelect, { target: { value: 'u1' } });
+    await user.click(getComboboxByText('Todos os vendedores'));
+    const listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByRole('option', { name: 'alice' }));
 
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('sdr=u1'));
   });
 
-  it('updates URL with cadence param on cadence selection', () => {
+  it('updates URL with cadence param on cadence selection', async () => {
+    const user = userEvent.setup();
     render(
       <AnalyticsFilters basePath="/reports" members={mockMembers} cadences={mockCadences} />,
     );
 
-    const cadenceSelect = screen.getByDisplayValue('Todas as cadências');
-    fireEvent.change(cadenceSelect, { target: { value: 'c1' } });
+    await user.click(getComboboxByText('Todas as cadências'));
+    const listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByRole('option', { name: 'Outbound Q1' }));
 
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('cadence=c1'));
   });

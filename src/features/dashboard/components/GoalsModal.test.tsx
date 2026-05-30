@@ -56,8 +56,8 @@ describe('GoalsModal', () => {
 
   it('displays org-level goal fields after loading', async () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
-    const oppInput = await screen.findByLabelText('Meta de Oportunidades');
-    expect(oppInput).toHaveValue(50);
+    const leadsFinishedInput = await screen.findByLabelText('Meta de Leads Finalizados');
+    expect(leadsFinishedInput).toHaveValue(100);
     const convInput = screen.getByLabelText('Taxa de Conversão');
     expect(convInput).toHaveValue(25);
   });
@@ -90,9 +90,12 @@ describe('GoalsModal', () => {
     await waitFor(() => {
       expect(mockSaveGoals).toHaveBeenCalledWith({
         month: '2026-02',
-        opportunityTarget: 50,
+        leadsFinishedTarget: 100,
         activitiesTarget: 200,
         conversionTarget: 25,
+        leadsOpenedTarget: 150,
+        meetingsScheduledTarget: 100,
+        meetingsHeldTarget: 80,
         userGoals: [
           { userId: 'u1', opportunityTarget: 20 },
           { userId: 'u2', opportunityTarget: 30 },

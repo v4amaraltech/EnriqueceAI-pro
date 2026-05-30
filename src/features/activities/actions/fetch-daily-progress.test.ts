@@ -9,6 +9,7 @@ function createChainMock() {
   chain.select = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
   chain.neq = vi.fn().mockReturnValue(chain);
+  chain.in = vi.fn().mockReturnValue(chain);
   chain.not = vi.fn().mockReturnValue(chain);
   chain.gte = vi.fn().mockReturnValue(chain);
   chain.lte = vi.fn().mockReturnValue(chain);
@@ -20,6 +21,7 @@ function createChainMock() {
 
 let orgMemberChain: ReturnType<typeof createChainMock>;
 let interactionsChain: ReturnType<typeof createChainMock>;
+let leadsChain: ReturnType<typeof createChainMock>;
 let enrollmentsChain: ReturnType<typeof createChainMock>;
 let goalsChain: ReturnType<typeof createChainMock>;
 
@@ -29,6 +31,7 @@ vi.mock('@/lib/supabase/server', () => ({
       from: (table: string) => {
         if (table === 'organization_members') return orgMemberChain;
         if (table === 'interactions') return interactionsChain;
+        if (table === 'leads') return leadsChain;
         if (table === 'cadence_enrollments') return enrollmentsChain;
         if (table === 'daily_activity_goals') return goalsChain;
         return createChainMock();
@@ -44,8 +47,11 @@ describe('fetchDailyProgress', () => {
     vi.clearAllMocks();
     orgMemberChain = createChainMock();
     interactionsChain = createChainMock();
+    leadsChain = createChainMock();
     enrollmentsChain = createChainMock();
     goalsChain = createChainMock();
+    // No assigned leads → pending path short-circuits to 0 (chunkedIn returns []).
+    (leadsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
   });
 
   it('should return error when user has no org', async () => {

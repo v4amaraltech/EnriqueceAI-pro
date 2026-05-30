@@ -8,6 +8,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
+    // Heavy tests (jspdf export, large component renders) exceed the 5s default
+    // under full-suite parallel CPU contention; they pass comfortably in
+    // isolation. Bumped to avoid flaky timeouts.
+    testTimeout: 15000,
     include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',

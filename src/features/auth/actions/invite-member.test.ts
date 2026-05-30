@@ -17,24 +17,37 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const mockInviteUserByEmail = vi.fn();
-const mockListUsers = vi.fn().mockResolvedValue({ data: { users: [] } });
+// Existing-org members the admin client iterates over to find an existing user
+// by email. Each entry's user_id is resolved via getUserById.
+let adminExistingMembers: Array<{ user_id: string }> = [];
+const mockGetUserById = vi.fn();
 const mockAdminInsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminUpsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminDelete = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
-const mockAdminSelect = vi.fn().mockReturnValue({
-  eq: vi.fn().mockReturnValue({
-    eq: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } }),
-      }),
-    }),
-  }),
-});
+
+// Admin select on organization_members serves two flows:
+//  - existing-user lookup: select('user_id').eq('status','active')  (awaited array)
+//  - auto-org lookup:       select('org_id').eq().eq().eq().single()
+function makeAdminMembersSelect() {
+  return vi.fn().mockImplementation((cols: string) => {
+    if (cols === 'org_id') {
+      const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } });
+      const eq3 = vi.fn().mockReturnValue({ single: singleMock });
+      const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+      return { eq: eq1 };
+    }
+    // existing-user lookup: .eq('status','active') resolves to the members array
+    const eqMock = vi.fn().mockResolvedValue({ data: adminExistingMembers });
+    return { eq: eqMock };
+  });
+}
+
 const mockAdminFrom = vi.fn().mockImplementation((table: string) => {
   if (table === 'organizations') {
     return { delete: mockAdminDelete };
   }
-  return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: mockAdminSelect };
+  return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: makeAdminMembersSelect() };
 });
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -42,7 +55,7 @@ vi.mock('@/lib/supabase/admin', () => ({
     auth: {
       admin: {
         inviteUserByEmail: mockInviteUserByEmail,
-        listUsers: mockListUsers,
+        getUserById: mockGetUserById,
       },
     },
     from: mockAdminFrom,
@@ -68,44 +81,50 @@ function setupManagerWithOrg() {
     data: { user: { id: 'user-123' } },
   });
 
-  let fromCallCount = 0;
-  mockSupabase.from.mockImplementation(() => {
-    fromCallCount++;
-
-    if (fromCallCount === 1) {
-      // requireManager: organization_members -> role check
-      const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
-      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
-      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
-      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+  // Dispatch by table + select columns, since checkMemberLimit runs three
+  // server-client queries in parallel (non-deterministic call order).
+  mockSupabase.from.mockImplementation((table: string) => {
+    if (table === 'organization_members') {
+      // The select column disambiguates the three uses of this table.
+      const selectMock = vi.fn().mockImplementation((cols: string) => {
+        if (cols === 'role') {
+          // requireManager role check -> eq -> eq -> single
+          const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
+          const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+          const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+          return { eq: eqMock1 };
+        }
+        if (cols === 'org_id') {
+          // current user's org -> eq -> eq -> single
+          const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'org-abc' } });
+          const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+          const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+          return { eq: eqMock1 };
+        }
+        // checkMemberLimit count -> select('*', {...}) -> eq -> in
+        const inMock = vi.fn().mockResolvedValue({ count: 2 });
+        const eqMock = vi.fn().mockReturnValue({ in: inMock });
+        return { eq: eqMock };
+      });
       return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
     }
 
-    if (fromCallCount === 2) {
-      // Get current user's org
-      const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'org-abc' } });
-      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
-      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
-      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
-    }
-
-    if (fromCallCount === 3) {
+    if (table === 'subscriptions') {
       // checkMemberLimit: subscriptions -> select().eq().single()
       const singleMock = vi.fn().mockResolvedValue({
         data: { plan_id: 'plan-1', plans: { included_users: 5 } },
       });
       const eqMock = vi.fn().mockReturnValue({ single: singleMock });
       const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
-      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+      return { select: selectMock };
     }
 
-    if (fromCallCount === 4) {
-      // checkMemberLimit: count -> select().eq().in()
-      const inMock = vi.fn().mockResolvedValue({ count: 2 });
-      const eqMock = vi.fn().mockReturnValue({ in: inMock });
+    if (table === 'organizations') {
+      // checkMemberLimit: organizations -> select().eq().single()
+      const singleMock = vi.fn().mockResolvedValue({ data: { member_limit_override: null } });
+      const eqMock = vi.fn().mockReturnValue({ single: singleMock });
       const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
-      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+      return { select: selectMock };
     }
 
     return { select: vi.fn().mockReturnThis(), update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn().mockReturnThis(), single: vi.fn() };
@@ -116,7 +135,8 @@ describe('inviteMember', () => {
   beforeEach(() => {
     resetMocks();
     mockInviteUserByEmail.mockReset();
-    mockListUsers.mockReset().mockResolvedValue({ data: { users: [] } });
+    adminExistingMembers = [];
+    mockGetUserById.mockReset().mockResolvedValue({ data: { user: null } });
     mockAdminInsert.mockReset().mockResolvedValue({ error: null });
     mockAdminUpsert.mockReset().mockResolvedValue({ error: null });
     mockAdminDelete.mockReset().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
@@ -124,7 +144,7 @@ describe('inviteMember', () => {
       if (table === 'organizations') {
         return { delete: mockAdminDelete };
       }
-      return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: mockAdminSelect };
+      return { insert: mockAdminInsert, upsert: mockAdminUpsert, select: makeAdminMembersSelect() };
     });
   });
 
@@ -199,8 +219,9 @@ describe('inviteMember', () => {
 
   it('should add existing user to org with active status', async () => {
     setupManagerWithOrg();
-    mockListUsers.mockResolvedValue({
-      data: { users: [{ id: 'existing-user-id', email: 'existing@email.com' }] },
+    adminExistingMembers = [{ user_id: 'existing-user-id' }];
+    mockGetUserById.mockResolvedValue({
+      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
     });
 
     const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));

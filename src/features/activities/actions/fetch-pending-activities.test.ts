@@ -105,6 +105,26 @@ function createChainMock(finalResult: unknown) {
   return chain;
 }
 
+// Org-member chain consumed first by getAuthOrgIdResult(). Returns a valid org
+// so the action proceeds to the real queries under test.
+function orgMemberChain() {
+  return createChainMock({ data: { org_id: 'org-1' }, error: null });
+}
+
+/**
+ * Route `from()` calls by table name. The action queries (in order):
+ *   organization_members → cadence_enrollments → cadence_steps →
+ *   message_templates → scheduled_activities. The executed-steps filter uses
+ *   supabase.rpc (already stubbed on mockSupabase to resolve { data: null }).
+ */
+function wireByTable(map: Record<string, unknown>) {
+  mockFrom.mockImplementation((table: string) => {
+    if (table === 'organization_members') return orgMemberChain();
+    const result = map[table] ?? { data: [], error: null };
+    return createChainMock(result);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -115,9 +135,7 @@ describe('fetchPendingActivities', () => {
   });
 
   it('should return empty array when no enrollments are due', async () => {
-    const enrollmentsChain = createChainMock({ data: [], error: null });
-
-    mockFrom.mockImplementation(() => enrollmentsChain);
+    wireByTable({ cadence_enrollments: { data: [], error: null } });
 
     const result = await fetchPendingActivities();
 
@@ -128,12 +146,9 @@ describe('fetchPendingActivities', () => {
   });
 
   it('should return error when enrollment query fails', async () => {
-    const enrollmentsChain = createChainMock({
-      data: null,
-      error: { message: 'connection refused' },
+    wireByTable({
+      cadence_enrollments: { data: null, error: { message: 'connection refused' } },
     });
-
-    mockFrom.mockImplementation(() => enrollmentsChain);
 
     const result = await fetchPendingActivities();
 
@@ -144,21 +159,11 @@ describe('fetchPendingActivities', () => {
   });
 
   it('should return mapped PendingActivity when enrollments exist', async () => {
-    const enrollmentsChain = createChainMock({
-      data: [mockEnrollment],
-      error: null,
-    });
-
-    const stepsChain = createChainMock({ data: [mockStep] });
-    const templatesChain = createChainMock({ data: [mockTemplate] });
-
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return enrollmentsChain;
-      if (callIndex === 2) return stepsChain;
-      if (callIndex === 3) return templatesChain;
-      return createChainMock({ data: null });
+    wireByTable({
+      cadence_enrollments: { data: [mockEnrollment], error: null },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: { data: [], error: null },
     });
 
     const result = await fetchPendingActivities();
@@ -181,7 +186,14 @@ describe('fetchPendingActivities', () => {
     expect(activity.templateSubject).toBe('Olá {{nome_fantasia}}');
     expect(activity.templateBody).toBe('Prezada {{nome_fantasia}}, como vai?');
     expect(activity.aiPersonalization).toBe(false);
-    expect(activity.lead).toEqual({ ...mockLead, primeiro_nome: null });
+    // The action derives municipio/uf from lead.endereco (null here) and
+    // primeiro_nome from first_name/socios (both absent → null).
+    expect(activity.lead).toEqual({
+      ...mockLead,
+      municipio: null,
+      uf: null,
+      primeiro_nome: null,
+    });
   });
 
   it('should skip enrollments without matching step', async () => {
@@ -190,19 +202,9 @@ describe('fetchPendingActivities', () => {
       current_step: 99, // step doesn't exist
     };
 
-    const enrollmentsChain = createChainMock({
-      data: [enrollmentNoStep],
-      error: null,
-    });
-
-    const stepsChain = createChainMock({ data: [mockStep] }); // step_order=1, not 99
-
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return enrollmentsChain;
-      if (callIndex === 2) return stepsChain;
-      return createChainMock({ data: [] });
+    wireByTable({
+      cadence_enrollments: { data: [enrollmentNoStep], error: null },
+      cadence_steps: { data: [mockStep] }, // step_order=1, not 99
     });
 
     const result = await fetchPendingActivities();
@@ -216,18 +218,10 @@ describe('fetchPendingActivities', () => {
   it('should handle steps without templates', async () => {
     const stepNoTemplate = { ...mockStep, template_id: null };
 
-    const enrollmentsChain = createChainMock({
-      data: [mockEnrollment],
-      error: null,
-    });
-    const stepsChain = createChainMock({ data: [stepNoTemplate] });
-
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return enrollmentsChain;
-      if (callIndex === 2) return stepsChain;
-      return createChainMock({ data: [] });
+    wireByTable({
+      cadence_enrollments: { data: [mockEnrollment], error: null },
+      cadence_steps: { data: [stepNoTemplate] },
+      scheduled_activities: { data: [], error: null },
     });
 
     const result = await fetchPendingActivities();
@@ -248,20 +242,10 @@ describe('fetchPendingActivities', () => {
       lead: null,
     };
 
-    const enrollmentsChain = createChainMock({
-      data: [enrollmentNoLead],
-      error: null,
-    });
-    const stepsChain = createChainMock({ data: [mockStep] });
-    const templatesChain = createChainMock({ data: [mockTemplate] });
-
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return enrollmentsChain;
-      if (callIndex === 2) return stepsChain;
-      if (callIndex === 3) return templatesChain;
-      return createChainMock({ data: null });
+    wireByTable({
+      cadence_enrollments: { data: [enrollmentNoLead], error: null },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
     });
 
     const result = await fetchPendingActivities();
@@ -285,20 +269,11 @@ describe('fetchPendingActivities', () => {
     };
     const step2 = { ...mockStep, id: 'step-2', cadence_id: 'cad-2' };
 
-    const enrollmentsChain = createChainMock({
-      data: [mockEnrollment, enrollment2],
-      error: null,
-    });
-    const stepsChain = createChainMock({ data: [mockStep, step2] });
-    const templatesChain = createChainMock({ data: [mockTemplate] });
-
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return enrollmentsChain;
-      if (callIndex === 2) return stepsChain;
-      if (callIndex === 3) return templatesChain;
-      return createChainMock({ data: null });
+    wireByTable({
+      cadence_enrollments: { data: [mockEnrollment, enrollment2], error: null },
+      cadence_steps: { data: [mockStep, step2] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: { data: [], error: null },
     });
 
     const result = await fetchPendingActivities();
@@ -307,7 +282,7 @@ describe('fetchPendingActivities', () => {
     if (!result.success) return;
 
     expect(result.data).toHaveLength(2);
-    expect(result.data[0]!.cadenceName).toBe('Outbound V1');
-    expect(result.data[1]!.cadenceName).toBe('Follow Up');
+    const names = result.data.map((a) => a.cadenceName).sort();
+    expect(names).toEqual(['Follow Up', 'Outbound V1']);
   });
 });

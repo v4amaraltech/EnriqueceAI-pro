@@ -11,7 +11,7 @@ function createChainMock(finalResult: unknown = { data: null }) {
     Promise.resolve(finalResult).then(resolve);
 
   // Chainable methods
-  for (const method of ['select', 'eq', 'is', 'in', 'gte', 'lt', 'order']) {
+  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
     chain[method] = vi.fn(() => chain);
   }
 
@@ -50,11 +50,11 @@ describe('fetchOpportunityKpi', () => {
     expect(result.dailyData).toHaveLength(31); // January has 31 days
   });
 
-  it('should count qualified leads as opportunities', async () => {
+  it('should count won leads as opportunities', async () => {
     const leads = [
-      { id: 'l1', updated_at: '2026-01-05T10:00:00Z' },
-      { id: 'l2', updated_at: '2026-01-10T10:00:00Z' },
-      { id: 'l3', updated_at: '2026-01-10T14:00:00Z' },
+      { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l2', won_at: '2026-01-10T10:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l3', won_at: '2026-01-10T14:00:00Z', assigned_to: null, won_by: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -76,9 +76,9 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute cumulative daily data correctly', async () => {
     const leads = [
-      { id: 'l1', updated_at: '2026-02-01T10:00:00Z' },
-      { id: 'l2', updated_at: '2026-02-01T14:00:00Z' },
-      { id: 'l3', updated_at: '2026-02-03T10:00:00Z' },
+      { id: 'l1', won_at: '2026-02-01T10:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l2', won_at: '2026-02-01T14:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l3', won_at: '2026-02-03T10:00:00Z', assigned_to: null, won_by: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -106,11 +106,11 @@ describe('fetchOpportunityKpi', () => {
     expect(result.dailyData[1]?.target).toBe(2); // round(28/28 * 2) = 2
   });
 
-  it('should return early with zero data when cadence filter yields no enrollments', async () => {
-    const enrollmentChain = createChainMock({ data: [] });
+  it('should return zero data when no won leads exist under cadence filter', async () => {
+    const leadsChain = createChainMock({ data: [] });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
       return createChainMock();
     });
 
@@ -121,18 +121,20 @@ describe('fetchOpportunityKpi', () => {
     expect(result.monthTarget).toBe(0);
   });
 
-  it('should filter leads by cadence enrollment lead_ids', async () => {
-    const enrollmentChain = createChainMock({
-      data: [{ lead_id: 'l1' }, { lead_id: 'l2' }],
-    });
+  it('should narrow won leads to those enrolled in the filtered cadence', async () => {
+    // Two won leads; only l1 is enrolled in the filtered cadence.
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', updated_at: '2026-01-05T10:00:00Z' }],
+      data: [
+        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null },
+        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: null, won_by: null },
+      ],
     });
+    const enrollmentChain = createChainMock({ data: [{ lead_id: 'l1' }] });
     const goalsChain = createChainMock({ data: null });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'leads') return leadsChain;
+      if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'goals') return goalsChain;
       return createChainMock();
     });
@@ -141,32 +143,9 @@ describe('fetchOpportunityKpi', () => {
     const result = await fetchOpportunityKpi(supabase as never, ORG_ID, filters);
 
     expect(result.totalOpportunities).toBe(1);
-    // Verify leads chain was called with .in for filtered IDs
-    expect(leadsChain.in).toHaveBeenCalledWith('id', ['l1', 'l2']);
-  });
-
-  it('should deduplicate lead_ids from enrollments', async () => {
-    const enrollmentChain = createChainMock({
-      data: [
-        { lead_id: 'l1' },
-        { lead_id: 'l1' }, // duplicate
-        { lead_id: 'l2' },
-      ],
-    });
-    const leadsChain = createChainMock({ data: [] });
-    const goalsChain = createChainMock({ data: null });
-
-    const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
-      if (table === 'leads') return leadsChain;
-      if (table === 'goals') return goalsChain;
-      return createChainMock();
-    });
-
-    const filters = { ...baseFilters, cadenceIds: ['cad-1'] };
-    await fetchOpportunityKpi(supabase as never, ORG_ID, filters);
-
-    expect(leadsChain.in).toHaveBeenCalledWith('id', ['l1', 'l2']);
+    // Enrollment query filters by the won lead_ids and the cadence filter
+    expect(enrollmentChain.in).toHaveBeenCalledWith('lead_id', ['l1', 'l2']);
+    expect(enrollmentChain.in).toHaveBeenCalledWith('cadence_id', ['cad-1']);
   });
 
   it('should handle February with 28 days', async () => {
@@ -188,7 +167,7 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute percentOfTarget as 0 when no target set', async () => {
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', updated_at: '2026-01-05T10:00:00Z' }],
+      data: [{ id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null }],
     });
     const goalsChain = createChainMock({ data: null });
 

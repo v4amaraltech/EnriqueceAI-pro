@@ -376,9 +376,9 @@ describe('TEMPLATE_VARIABLE_REGEX', () => {
 describe('AVAILABLE_TEMPLATE_VARIABLES', () => {
   it('should contain expected lead field variables', () => {
     expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('primeiro_nome');
+    expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('nome_completo');
     expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('empresa');
-    expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('nome_fantasia');
-    expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('razao_social');
+    expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('cargo');
     expect(AVAILABLE_TEMPLATE_VARIABLES).toContain('telefone');
   });
 });

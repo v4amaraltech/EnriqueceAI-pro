@@ -16,7 +16,26 @@ function createChainMock(resolvedValue: unknown = { data: null, error: null }) {
   return chain;
 }
 
+// getAuthOrgIdResult -> fetchOrgId: organization_members.select('org_id').eq().eq().single()
+function makeOrgIdChain(orgId: string | null = 'org-1') {
+  const singleMock = vi.fn().mockResolvedValue({ data: orgId ? { org_id: orgId } : null });
+  const eq2 = vi.fn().mockReturnValue({ single: singleMock });
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+  const selectMock = vi.fn().mockReturnValue({ eq: eq1 });
+  return { select: selectMock };
+}
+
 const mockFrom = vi.fn();
+
+// Route the org-id lookup vs. the calls update by table name. Tests set
+// `callsChain` to control the calls update result.
+let callsChain: ReturnType<typeof createChainMock>;
+function installFromRouter() {
+  mockFrom.mockImplementation((table: string) => {
+    if (table === 'organization_members') return makeOrgIdChain('org-1');
+    return callsChain;
+  });
+}
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn().mockResolvedValue({
@@ -27,11 +46,12 @@ vi.mock('@/lib/supabase/server', () => ({
 describe('updateCallStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    callsChain = createChainMock({ error: null });
+    installFromRouter();
   });
 
   it('should update status successfully', async () => {
-    const chain = createChainMock({ error: null });
-    mockFrom.mockReturnValue(chain);
+    callsChain = createChainMock({ error: null });
 
     const result = await updateCallStatus({
       id: '550e8400-e29b-41d4-a716-446655440000',
@@ -54,8 +74,7 @@ describe('updateCallStatus', () => {
   });
 
   it('should return error on db failure', async () => {
-    const chain = createChainMock({ error: { message: 'DB error' } });
-    mockFrom.mockReturnValue(chain);
+    callsChain = createChainMock({ error: { message: 'DB error' } });
 
     const result = await updateCallStatus({
       id: '550e8400-e29b-41d4-a716-446655440000',

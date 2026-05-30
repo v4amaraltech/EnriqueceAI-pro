@@ -12,6 +12,16 @@ function createChainMock() {
   chain.lte = vi.fn().mockReturnValue(chain);
   chain.order = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockReturnValue(chain);
+  chain.single = vi.fn().mockResolvedValue({ data: null, error: null });
+  chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+  return chain;
+}
+
+// getAuthOrgIdResult() queries organization_members first; return a valid org
+// so the action proceeds to the queries under test.
+function orgMemberChain() {
+  const chain = createChainMock();
+  chain.single = vi.fn().mockResolvedValue({ data: { org_id: 'org-1' }, error: null });
   return chain;
 }
 
@@ -22,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn().mockImplementation(() => {
     return Promise.resolve({
       from: (table: string) => {
+        if (table === 'organization_members') return orgMemberChain();
         if (table === 'cadence_enrollments') return enrollmentsChain;
         if (table === 'cadence_steps') return stepsChain;
         return createChainMock();

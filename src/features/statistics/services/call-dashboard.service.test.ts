@@ -14,7 +14,8 @@ function createMockSupabase(calls: Record<string, unknown>[], members: Record<st
     gte: () => callsChain,
     lte: () => callsChain,
     in: () => callsChain,
-    order: () => Promise.resolve({ data: calls }),
+    order: () => callsChain,
+    limit: () => callsChain,
     then: (resolve: (v: { data: unknown[] }) => void) => resolve({ data: calls }),
   };
 
@@ -73,7 +74,7 @@ describe('call-dashboard.service', () => {
     expect(result.kpis.totalCalls).toBe(3);
     expect(result.kpis.avgDurationSeconds).toBe(60); // (120+0+60)/3
     expect(result.kpis.connectionRate).toBe(66.7); // 2/3 connected
-    expect(result.kpis.significantRate).toBe(33.3); // 1/3 significant
+    expect(result.kpis.significantRate).toBe(66.7); // 2/3 — significant == connected (duration >= 50s)
   });
 
   it('calculates outcomes distribution', async () => {
@@ -96,7 +97,7 @@ describe('call-dashboard.service', () => {
     expect(result.outcomes.find((o) => o.status === 'no_contact')?.count).toBe(1);
   });
 
-  it('returns hourly distribution with 24 entries', async () => {
+  it('returns hourly distribution for business hours (8h–20h)', async () => {
     const supabase = createMockSupabase([], []);
     const result = await fetchCallDashboardData(
       supabase,
@@ -105,9 +106,9 @@ describe('call-dashboard.service', () => {
       '2024-12-31T23:59:59Z',
     );
 
-    expect(result.hourlyDistribution).toHaveLength(24);
-    expect(result.hourlyDistribution[0]?.label).toBe('00h');
-    expect(result.hourlyDistribution[23]?.label).toBe('23h');
+    expect(result.hourlyDistribution).toHaveLength(13);
+    expect(result.hourlyDistribution[0]?.label).toBe('08h');
+    expect(result.hourlyDistribution[12]?.label).toBe('20h');
   });
 
   it('limits recent calls to 10', async () => {

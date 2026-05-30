@@ -13,16 +13,23 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
 
-const mockListUsers = vi.fn();
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminSupabaseClient: vi.fn(() => ({
+const mockGetUserById = vi.fn();
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(() => ({
     auth: {
       admin: {
-        listUsers: mockListUsers,
+        getUserById: mockGetUserById,
       },
     },
   })),
 }));
+
+// Map of user_id → auth user record used by the getUserById mock.
+const USERS: Record<string, { id: string; email: string; user_metadata: { full_name: string } }> = {
+  'user-1': { id: 'user-1', email: 'alice@company.com', user_metadata: { full_name: 'Alice Silva' } },
+  'user-2': { id: 'user-2', email: 'bob@company.com', user_metadata: { full_name: 'Bob Santos' } },
+  'user-3': { id: 'user-3', email: 'charlie@other.com', user_metadata: { full_name: 'Charlie Lima' } },
+};
 
 import { fetchOrgMembersAuth } from './fetch-org-members';
 
@@ -44,14 +51,10 @@ function makeMembersListChain(members: Array<{ user_id: string }> | null) {
 describe('fetchOrgMembersAuth', () => {
   beforeEach(() => {
     resetMocks();
-    mockListUsers.mockResolvedValue({
-      data: {
-        users: [
-          { id: 'user-1', email: 'alice@company.com', user_metadata: { full_name: 'Alice Silva' } },
-          { id: 'user-2', email: 'bob@company.com', user_metadata: { full_name: 'Bob Santos' } },
-          { id: 'user-3', email: 'charlie@other.com', user_metadata: { full_name: 'Charlie Lima' } },
-        ],
-      },
+    mockGetUserById.mockImplementation((userId: string) => {
+      const user = USERS[userId];
+      if (!user) return Promise.resolve({ data: null, error: { message: 'not found' } });
+      return Promise.resolve({ data: { user }, error: null });
     });
   });
 
@@ -101,7 +104,7 @@ describe('fetchOrgMembersAuth', () => {
   });
 
   it('should fallback to truncated user_id when admin client fails', async () => {
-    mockListUsers.mockRejectedValue(new Error('Admin client unavailable'));
+    mockGetUserById.mockRejectedValue(new Error('Admin client unavailable'));
 
     let callCount = 0;
     mockFrom.mockImplementation(() => {

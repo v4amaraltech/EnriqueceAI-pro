@@ -117,6 +117,6 @@ describe('TopBar', () => {
     expect(navSections[2]?.label).toBe('Ligações');
     expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');
-    expect(navSections[3]?.items).toHaveLength(5);
+    expect(navSections[3]?.items).toHaveLength(4);
   });
 });

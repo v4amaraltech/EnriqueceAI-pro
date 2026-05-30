@@ -120,8 +120,14 @@ describe('call-settings-crud', () => {
   describe('deletePhoneBlacklist', () => {
     it('should delete phone pattern', async () => {
       Object.assign(blacklistChain, { error: null });
-      const result = await deletePhoneBlacklist('b-1');
+      const result = await deletePhoneBlacklist('550e8400-e29b-41d4-a716-446655440000');
       expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid id', async () => {
+      const result = await deletePhoneBlacklist('b-1');
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toBe('ID inválido');
     });
   });
 });

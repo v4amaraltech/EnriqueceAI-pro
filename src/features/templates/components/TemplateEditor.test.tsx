@@ -73,9 +73,9 @@ describe('TemplateEditor', () => {
 
   it('should show available variables', () => {
     render(<TemplateEditor />);
-    expect(screen.getByText('Variáveis do Lead')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '{{primeiro_nome}}' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '{{empresa}}' })).toBeInTheDocument();
+    expect(screen.getByText('Campos dinâmicos')).toBeInTheDocument();
+    expect(screen.getByText('Primeiro Nome')).toBeInTheDocument();
+    expect(screen.getByText('Empresa')).toBeInTheDocument();
   });
 
   it('should show preview button', () => {

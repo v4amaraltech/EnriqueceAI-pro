@@ -6,6 +6,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: () => mockSupabase,
+}));
+
 const mockRequireAuthWithMember = vi.fn();
 vi.mock('@/lib/auth/require-auth-with-member', () => ({
   requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
@@ -84,7 +88,7 @@ describe('getInsightsData', () => {
     expect(mockFetchInsights).toHaveBeenCalledWith(
       mockSupabase,
       'org-42',
-      validFilters,
+      { ...validFilters, subOrigins: [] },
     );
   });
 });

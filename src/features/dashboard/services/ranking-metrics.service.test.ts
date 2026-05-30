@@ -14,7 +14,7 @@ function createChainMock(finalResult: unknown = { data: null }) {
   chain.then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve(finalResult).then(resolve);
 
-  for (const method of ['select', 'eq', 'is', 'in', 'gte', 'lt', 'order']) {
+  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
     chain[method] = vi.fn(() => chain);
   }
 
@@ -24,8 +24,11 @@ function createChainMock(finalResult: unknown = { data: null }) {
   return chain;
 }
 
-function createMockSupabase(fromImpl: (table: string) => Record<string, unknown>) {
-  return { from: vi.fn(fromImpl) } as unknown;
+function createMockSupabase(
+  fromImpl: (table: string) => Record<string, unknown>,
+  rpcImpl: (fn: string) => Promise<unknown> = () => Promise.resolve({ data: [] }),
+) {
+  return { from: vi.fn(fromImpl), rpc: vi.fn(rpcImpl) } as unknown;
 }
 
 const ORG = 'org-1';
@@ -49,19 +52,31 @@ describe('fetchLeadsFinishedRanking', () => {
   });
 
   it('should count completed and replied as finished', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
     const enrollmentChain = createChainMock({
       data: [
-        { enrolled_by: 'u1', status: 'completed' },
-        { enrolled_by: 'u1', status: 'replied' },
-        { enrolled_by: 'u1', status: 'active' },
-        { enrolled_by: 'u2', status: 'completed' },
-        { enrolled_by: 'u2', status: 'bounced' },
+        { lead_id: 'l1', enrolled_by: 'u1', status: 'completed' },
+        { lead_id: 'l2', enrolled_by: 'u1', status: 'replied' },
+        { lead_id: 'l3', enrolled_by: 'u1', status: 'active' },
+        { lead_id: 'l4', enrolled_by: 'u2', status: 'completed' },
+        { lead_id: 'l5', enrolled_by: 'u2', status: 'bounced' },
       ],
     });
-    const goalsChain = createChainMock({ data: { opportunity_target: 10 } });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u1' },
+        { id: 'l4', assigned_to: 'u2' },
+        { id: 'l5', assigned_to: 'u2' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { leads_finished_target: 10 } });
 
     const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
       if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'goals') return goalsChain;
       return createChainMock();
     });
@@ -78,17 +93,27 @@ describe('fetchLeadsFinishedRanking', () => {
   });
 
   it('should sort breakdown by value descending', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
     const enrollmentChain = createChainMock({
       data: [
-        { enrolled_by: 'u1', status: 'completed' },
-        { enrolled_by: 'u2', status: 'completed' },
-        { enrolled_by: 'u2', status: 'completed' },
+        { lead_id: 'l1', enrolled_by: 'u1', status: 'completed' },
+        { lead_id: 'l2', enrolled_by: 'u2', status: 'completed' },
+        { lead_id: 'l3', enrolled_by: 'u2', status: 'completed' },
+      ],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u2' },
+        { id: 'l3', assigned_to: 'u2' },
       ],
     });
     const goalsChain = createChainMock({ data: null });
 
     const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
       if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'goals') return goalsChain;
       return createChainMock();
     });
@@ -102,14 +127,17 @@ describe('fetchLeadsFinishedRanking', () => {
 
 describe('fetchActivitiesRanking', () => {
   it('should return 0 when no interactions', async () => {
-    const interactionsChain = createChainMock({ data: [] });
+    const sdrsChain = createChainMock({ data: [] });
     const goalsChain = createChainMock({ data: null });
 
-    const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
-      if (table === 'goals') return goalsChain;
-      return createChainMock();
-    });
+    const supabase = createMockSupabase(
+      (table) => {
+        if (table === 'organization_members') return sdrsChain;
+        if (table === 'goals') return goalsChain;
+        return createChainMock();
+      },
+      () => Promise.resolve({ data: [] }),
+    );
 
     const result = await fetchActivitiesRanking(supabase as never, ORG, baseFilters);
 
@@ -117,28 +145,28 @@ describe('fetchActivitiesRanking', () => {
     expect(result.sdrBreakdown).toHaveLength(0);
   });
 
-  it('should count interactions per SDR via enrollment lookup', async () => {
-    const interactionsChain = createChainMock({
-      data: [
-        { lead_id: 'l1', type: 'sent' },
-        { lead_id: 'l1', type: 'opened' },
-        { lead_id: 'l2', type: 'sent' },
-      ],
-    });
-    const enrollmentChain = createChainMock({
-      data: [
-        { lead_id: 'l1', enrolled_by: 'u1' },
-        { lead_id: 'l2', enrolled_by: 'u2' },
-      ],
-    });
+  it('should count activities per SDR from RPC performer counts', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
     const goalsChain = createChainMock({ data: { activities_target: 100 } });
 
-    const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
-      if (table === 'cadence_enrollments') return enrollmentChain;
-      if (table === 'goals') return goalsChain;
-      return createChainMock();
-    });
+    const supabase = createMockSupabase(
+      (table) => {
+        if (table === 'organization_members') return sdrsChain;
+        if (table === 'goals') return goalsChain;
+        return createChainMock();
+      },
+      (fn) => {
+        if (fn === 'count_activities_by_performer') {
+          return Promise.resolve({
+            data: [
+              { performer_id: 'u1', cnt: 2 },
+              { performer_id: 'u2', cnt: 1 },
+            ],
+          });
+        }
+        return Promise.resolve({ data: [] });
+      },
+    );
 
     const result = await fetchActivitiesRanking(supabase as never, ORG, baseFilters);
 
@@ -147,20 +175,23 @@ describe('fetchActivitiesRanking', () => {
     expect(result.sdrBreakdown).toHaveLength(2);
 
     const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
-    expect(u1?.value).toBe(2); // l1 has 2 interactions
+    expect(u1?.value).toBe(2);
   });
 });
 
 describe('fetchConversionRanking', () => {
   it('should return 0% when no leads', async () => {
-    const leadsChain = createChainMock({ data: [] });
+    const sdrsChain = createChainMock({ data: [] });
     const goalsChain = createChainMock({ data: null });
 
-    const supabase = createMockSupabase((table) => {
-      if (table === 'leads') return leadsChain;
-      if (table === 'goals') return goalsChain;
-      return createChainMock();
-    });
+    const supabase = createMockSupabase(
+      (table) => {
+        if (table === 'organization_members') return sdrsChain;
+        if (table === 'goals') return goalsChain;
+        return createChainMock();
+      },
+      () => Promise.resolve({ data: [] }),
+    );
 
     const result = await fetchConversionRanking(supabase as never, ORG, baseFilters);
 
@@ -168,34 +199,35 @@ describe('fetchConversionRanking', () => {
   });
 
   it('should compute conversion rate per SDR', async () => {
-    const leadsChain = createChainMock({
-      data: [
-        { id: 'l1', status: 'qualified' },
-        { id: 'l2', status: 'contacted' },
-        { id: 'l3', status: 'qualified' },
-        { id: 'l4', status: 'new' },
-      ],
-    });
-    const enrollmentChain = createChainMock({
-      data: [
-        { lead_id: 'l1', enrolled_by: 'u1' },
-        { lead_id: 'l2', enrolled_by: 'u1' },
-        { lead_id: 'l3', enrolled_by: 'u2' },
-        { lead_id: 'l4', enrolled_by: 'u2' },
-      ],
-    });
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
     const goalsChain = createChainMock({ data: { conversion_target: 30 } });
 
-    const supabase = createMockSupabase((table) => {
-      if (table === 'leads') return leadsChain;
-      if (table === 'cadence_enrollments') return enrollmentChain;
-      if (table === 'goals') return goalsChain;
-      return createChainMock();
-    });
+    // Qualified = won_in_period, attributed to assigned_to (fallback won_by).
+    // u1: l1 won, l2 not → 1/2 = 50%. u2: l3 won, l4 not → 1/2 = 50%.
+    const supabase = createMockSupabase(
+      (table) => {
+        if (table === 'organization_members') return sdrsChain;
+        if (table === 'goals') return goalsChain;
+        return createChainMock();
+      },
+      (fn) => {
+        if (fn === 'fetch_conversion_ranking_data') {
+          return Promise.resolve({
+            data: [
+              { lead_id: 'l1', status: 'qualified', assigned_to: 'u1', won_by: 'u1', won_in_period: true },
+              { lead_id: 'l2', status: 'contacted', assigned_to: 'u1', won_by: null, won_in_period: false },
+              { lead_id: 'l3', status: 'qualified', assigned_to: 'u2', won_by: 'u2', won_in_period: true },
+              { lead_id: 'l4', status: 'new', assigned_to: 'u2', won_by: null, won_in_period: false },
+            ],
+          });
+        }
+        return Promise.resolve({ data: [] });
+      },
+    );
 
     const result = await fetchConversionRanking(supabase as never, ORG, baseFilters);
 
-    // Overall: 2 qualified / 4 total = 50%
+    // Overall: 2 won / 4 total = 50%
     expect(result.total).toBe(50);
     expect(result.monthTarget).toBe(30);
     expect(result.sdrBreakdown).toHaveLength(2);

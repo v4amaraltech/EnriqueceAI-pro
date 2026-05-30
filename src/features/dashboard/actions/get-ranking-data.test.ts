@@ -6,6 +6,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: () => mockSupabase,
+}));
+
 const mockRequireAuthWithMember = vi.fn();
 vi.mock('@/lib/auth/require-auth-with-member', () => ({
   requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
@@ -44,12 +48,25 @@ describe('getRankingData', () => {
     userIds: [] as string[],
   };
 
+  const fullRanking = (overrides: Record<string, unknown> = {}) => ({
+    leadsFinished: { ...emptyCard },
+    activitiesDone: { ...emptyCard },
+    conversionRate: { ...emptyCard },
+    leadsOpened: { ...emptyCard },
+    meetingsScheduled: { ...emptyCard },
+    meetingsHeld: { ...emptyCard },
+    hitRate: { ...emptyCard },
+    leadsToOpen: { ...emptyCard },
+    overdueActivities: { ...emptyCard },
+    ...overrides,
+  });
+
   it('should return success with ranking data', async () => {
-    const rankingData = {
+    const rankingData = fullRanking({
       leadsFinished: { ...emptyCard, total: 15 },
       activitiesDone: { ...emptyCard, total: 200 },
       conversionRate: { ...emptyCard, total: 42 },
-    };
+    });
     mockFetchRanking.mockResolvedValue(rankingData);
 
     const result = await getRankingData(validFilters);
@@ -87,11 +104,7 @@ describe('getRankingData', () => {
   it('should pass org_id and filters to service', async () => {
     mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-42', role: 'manager' });
 
-    mockFetchRanking.mockResolvedValue({
-      leadsFinished: emptyCard,
-      activitiesDone: emptyCard,
-      conversionRate: emptyCard,
-    });
+    mockFetchRanking.mockResolvedValue(fullRanking());
 
     await getRankingData(validFilters);
 

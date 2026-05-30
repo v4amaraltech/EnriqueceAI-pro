@@ -33,18 +33,18 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
+const USERS_BY_ID: Record<string, { id: string; email: string }> = {
+  'user-1': { id: 'user-1', email: 'alice@test.com' },
+  'user-2': { id: 'user-2', email: 'bob@test.com' },
+};
+
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminSupabaseClient: vi.fn().mockReturnValue({
     auth: {
       admin: {
-        listUsers: vi.fn().mockResolvedValue({
-          data: {
-            users: [
-              { id: 'user-1', email: 'alice@test.com' },
-              { id: 'user-2', email: 'bob@test.com' },
-            ],
-          },
-        }),
+        getUserById: vi.fn().mockImplementation((id: string) =>
+          Promise.resolve({ data: { user: USERS_BY_ID[id] ?? null } }),
+        ),
       },
     },
   }),

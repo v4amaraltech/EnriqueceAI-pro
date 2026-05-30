@@ -3,6 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PendingActivity } from '../types';
 
+// next/navigation — ScheduleMeetingModal (rendered by the phone panel) calls useRouter
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
+  usePathname: () => '/atividades',
+}));
+
+// WhatsApp connection check runs in an effect for the whatsapp channel; mock it
+// so it doesn't hit the server action (which reaches for request-scoped cookies).
+vi.mock('../actions/check-whatsapp-status', () => ({
+  checkWhatsAppConnected: vi.fn().mockResolvedValue(false),
+}));
+
 // Mock prepare actions
 vi.mock('../actions/prepare-activity-email', () => ({
   prepareActivityEmail: vi.fn().mockResolvedValue({
@@ -159,7 +172,8 @@ describe('ActivityExecutionSheetContent', () => {
     );
 
     expect(screen.getByText(/Pesquisa — Acme Corp/)).toBeInTheDocument();
-    expect(screen.getByText('Checklist de Pesquisa')).toBeInTheDocument();
+    expect(screen.getByText('Deep Research com IA')).toBeInTheDocument();
+    expect(screen.getByText('Anotações da Pesquisa')).toBeInTheDocument();
   });
 
   it('should render phone panel for phone channel', () => {

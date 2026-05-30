@@ -89,18 +89,20 @@ describe('custom-fields-crud', () => {
     });
 
     it('should update field', async () => {
+      const validId = '00000000-0000-0000-0000-000000000001';
       (customFieldsChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({
-        data: { id: 'f-1', org_id: 'org-1', field_name: 'Segmento', field_type: 'select', options: ['A', 'B'], sort_order: 1, created_at: '2026-01-01' },
+        data: { id: validId, org_id: 'org-1', field_name: 'Segmento', field_type: 'select', options: ['A', 'B'], sort_order: 1, created_at: '2026-01-01' },
       });
-      const result = await updateCustomField('f-1', 'Segmento', 'select', ['A', 'B']);
+      const result = await updateCustomField(validId, 'Segmento', 'select', ['A', 'B']);
       expect(result.success).toBe(true);
     });
   });
 
   describe('deleteCustomField', () => {
     it('should delete field', async () => {
+      const validId = '00000000-0000-0000-0000-000000000001';
       Object.assign(customFieldsChain, { error: null });
-      const result = await deleteCustomField('f-1');
+      const result = await deleteCustomField(validId);
       expect(result.success).toBe(true);
     });
   });

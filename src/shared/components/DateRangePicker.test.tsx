@@ -40,9 +40,9 @@ describe('DateRangePicker', () => {
     await user.click(screen.getByRole('button'));
 
     expect(screen.getByText('Hoje')).toBeInTheDocument();
-    expect(screen.getByText('7 dias')).toBeInTheDocument();
-    expect(screen.getByText('30 dias')).toBeInTheDocument();
-    expect(screen.getByText('90 dias')).toBeInTheDocument();
+    expect(screen.getByText('Últimos 7 dias')).toBeInTheDocument();
+    expect(screen.getByText('Últimos 30 dias')).toBeInTheDocument();
+    expect(screen.getByText('Esse mês')).toBeInTheDocument();
   });
 
   it('calls onChange with preset range when preset clicked', async () => {
@@ -52,7 +52,7 @@ describe('DateRangePicker', () => {
     );
 
     await user.click(screen.getByRole('button'));
-    await user.click(screen.getByText('7 dias'));
+    await user.click(screen.getByText('Últimos 7 dias'));
 
     expect(mockOnChange).toHaveBeenCalledTimes(1);
     const [fromArg, toArg] = mockOnChange.mock.calls[0] as [string, string];

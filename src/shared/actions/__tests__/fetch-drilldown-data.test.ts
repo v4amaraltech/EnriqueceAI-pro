@@ -107,10 +107,16 @@ describe('fetchDrilldownData', () => {
     const { getAuthOrgIdResult } = await import('@/lib/auth/get-org-id');
     const { from } = await import('@/lib/supabase/from');
 
-    // First two calls return lead_ids, third returns leads
+    // overall_leads makes 4 queries in order:
+    // 1) interactions (lead_ids) — resolves on .lte
+    // 2) cadences (ids) — resolves on .is
+    // 3) cadence_enrollments (lead_ids) — resolves on .lte
+    // 4) leads (paginated) — resolves on .range
     const interactionChain = createChainableMock({ data: [{ lead_id: 'l1' }], count: null });
-    // Override range to just resolve directly for the select-only queries
     interactionChain.lte = vi.fn(() => Promise.resolve({ data: [{ lead_id: 'l1' }] }));
+
+    const cadencesChain = createChainableMock({ data: [{ id: 'c1' }], count: null });
+    cadencesChain.is = vi.fn(() => Promise.resolve({ data: [{ id: 'c1' }] }));
 
     const enrollmentChain = createChainableMock({ data: [{ lead_id: 'l2' }], count: null });
     enrollmentChain.lte = vi.fn(() => Promise.resolve({ data: [{ lead_id: 'l2' }] }));
@@ -127,7 +133,8 @@ describe('fetchDrilldownData', () => {
     vi.mocked(from).mockImplementation(() => {
       callCount++;
       if (callCount === 1) return interactionChain;
-      if (callCount === 2) return enrollmentChain;
+      if (callCount === 2) return cadencesChain;
+      if (callCount === 3) return enrollmentChain;
       return leadsChain;
     });
 

@@ -48,6 +48,8 @@ export async function updateOrganization(
     revalidatePath('/settings');
     return { success: true, data: data! };
   } catch (error) {
+    // Re-throw Next.js redirects (e.g. requireManager() redirecting non-managers)
+    if (error instanceof Error && error.message?.includes('NEXT_REDIRECT')) throw error;
     console.error('[updateOrganization] Unhandled error:', error);
     return { success: false, error: 'Erro ao atualizar organização.' };
   }

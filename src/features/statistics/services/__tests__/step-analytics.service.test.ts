@@ -13,6 +13,7 @@ function createMockSupabase(
     lte: () => interactionsChain,
     in: () => interactionsChain,
     not: () => interactionsChain,
+    limit: () => interactionsChain,
     then: (resolve: (v: { data: unknown[] }) => void) => resolve({ data: interactions }),
   };
 

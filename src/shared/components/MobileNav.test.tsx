@@ -78,7 +78,7 @@ describe('MobileNav', () => {
     // "Prospecção" appears twice: as top-level section and as Estatísticas sub-item
     expect(screen.getAllByText('Prospecção').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Feedbacks')).toBeInTheDocument();
-    expect(screen.getByText('Equipe')).toBeInTheDocument();
+    expect(screen.getByText('Conversão')).toBeInTheDocument();
   });
 
 });

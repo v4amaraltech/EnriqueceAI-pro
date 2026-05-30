@@ -20,7 +20,9 @@ describe('formatRelativeTime', () => {
     const date = new Date(Date.now() - 3 * 3600000); // 3 hours ago
     const result = formatRelativeTime(date.toISOString());
     expect(result.text).toBe('Há 3h');
-    expect(result.isUrgent).toBe(true);
+    // 3h overdue is below the 4h business-hours threshold (business-hours
+    // clamp can only reduce overdue, never increase it) → not urgent.
+    expect(result.isUrgent).toBe(false);
   });
 
   it('should return days for >= 24h', () => {
@@ -30,10 +32,11 @@ describe('formatRelativeTime', () => {
     expect(result.isUrgent).toBe(true);
   });
 
-  it('should mark urgent at exactly 1 hour (AC 7)', () => {
-    const date = new Date(Date.now() - 60 * 60000); // exactly 1h ago
+  it('should not mark urgent below the 4h threshold (1h overdue)', () => {
+    // Threshold raised from 1h → 4h on 26/05/2026 (OVERDUE_THRESHOLD_HOURS).
+    const date = new Date(Date.now() - 60 * 60000); // 1h ago
     const result = formatRelativeTime(date.toISOString());
-    expect(result.isUrgent).toBe(true);
+    expect(result.isUrgent).toBe(false);
   });
 
   it('should not mark urgent at 59 min', () => {

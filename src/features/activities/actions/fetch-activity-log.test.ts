@@ -27,6 +27,23 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
+// getAuthOrgIdResult() queries organization_members first; this chain returns a
+// valid org so the action proceeds to the query under test.
+function orgMemberChain() {
+  return createChainMock({ data: { org_id: 'org-1' }, error: null });
+}
+
+/**
+ * Route the enrollment chain by table, prepending the organization_members
+ * lookup consumed by getAuthOrgIdResult().
+ */
+function routeEnrollment(enrollmentChain: ReturnType<typeof createChainMock>) {
+  mockFrom.mockImplementation((table: string) => {
+    if (table === 'organization_members') return orgMemberChain();
+    return enrollmentChain;
+  });
+}
+
 describe('fetchActivityLog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,7 +51,7 @@ describe('fetchActivityLog', () => {
 
   it('should return empty array when no enrollments found', async () => {
     const enrollmentChain = createChainMock({ data: [], count: 0, error: null });
-    mockFrom.mockReturnValue(enrollmentChain);
+    routeEnrollment(enrollmentChain);
 
     const result = await fetchActivityLog({});
 
@@ -47,7 +64,7 @@ describe('fetchActivityLog', () => {
 
   it('should return error when query fails', async () => {
     const enrollmentChain = createChainMock({ data: null, count: null, error: { message: 'DB error' } });
-    mockFrom.mockReturnValue(enrollmentChain);
+    routeEnrollment(enrollmentChain);
 
     const result = await fetchActivityLog({});
 
@@ -59,7 +76,7 @@ describe('fetchActivityLog', () => {
 
   it('should fetch enrollments without next_step_due filter (shows all)', async () => {
     const enrollmentChain = createChainMock({ data: [], count: 0, error: null });
-    mockFrom.mockReturnValue(enrollmentChain);
+    routeEnrollment(enrollmentChain);
 
     await fetchActivityLog({});
 
@@ -115,6 +132,7 @@ describe('fetchActivityLog', () => {
     });
 
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return orgMemberChain();
       if (table === 'cadence_enrollments') return enrollmentChain;
       if (table === 'cadence_steps') return stepsChain;
       return createChainMock();
