@@ -13,7 +13,7 @@ function createChainMock(finalResult: unknown = { data: null }) {
   chain.then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve(finalResult).then(resolve);
 
-  for (const method of ['select', 'eq', 'is', 'in', 'not', 'gte', 'lt', 'order']) {
+  for (const method of ['select', 'eq', 'is', 'in', 'not', 'gte', 'lt', 'order', 'filter']) {
     chain[method] = vi.fn(() => chain);
   }
 
@@ -124,24 +124,25 @@ describe('fetchConversionByOrigin', () => {
   });
 
   it('should group by lead_source and count qualified vs lost', async () => {
-    const enrollmentChain = createChainMock({
+    // The function fires two separate leads queries: wonQuery (status='won')
+    // then lostQuery (status='unqualified'). Model them distinctly — returning
+    // the same rows for both would double-count.
+    const wonChain = createChainMock({
       data: [
-        { lead_id: 'l1', cadence_id: 'c1' },
-        { lead_id: 'l2', cadence_id: 'c1' },
-        { lead_id: 'l3', cadence_id: 'c2' },
+        { id: 'l1', status: 'won', lead_source: 'outbound', canal: null },
+        { id: 'l3', status: 'won', lead_source: 'indicacao', canal: null },
       ],
     });
-    const leadsChain = createChainMock({
-      data: [
-        { id: 'l1', status: 'qualified', lead_source: 'outbound' },
-        { id: 'l2', status: 'unqualified', lead_source: 'outbound' },
-        { id: 'l3', status: 'qualified', lead_source: 'indicacao' },
-      ],
+    const lostChain = createChainMock({
+      data: [{ id: 'l2', status: 'unqualified', lead_source: 'outbound', canal: null }],
     });
+    let leadsCall = 0;
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
-      if (table === 'leads') return leadsChain;
+      if (table === 'leads') {
+        leadsCall += 1;
+        return leadsCall === 1 ? wonChain : lostChain;
+      }
       return createChainMock();
     });
 
@@ -230,6 +231,35 @@ describe('fetchConversionByOrigin', () => {
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
     expect(result[0]?.origin).toBe('unknown');
+  });
+
+  it('should exclude leads auto-lost by inactivity from the lost count', async () => {
+    // The lostQuery returns two unqualified outbound leads; l2 carries an
+    // auto_loss_inactivity interaction, so only l3 should count as lost.
+    const wonChain = createChainMock({ data: [] });
+    const lostChain = createChainMock({
+      data: [
+        { id: 'l2', status: 'unqualified', lead_source: 'outbound', canal: null },
+        { id: 'l3', status: 'unqualified', lead_source: 'outbound', canal: null },
+      ],
+    });
+    let leadsCall = 0;
+    const interactionsChain = createChainMock({ data: [{ lead_id: 'l2' }] });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') {
+        // First leads query is wonQuery, second is lostQuery.
+        leadsCall += 1;
+        return leadsCall === 1 ? wonChain : lostChain;
+      }
+      if (table === 'interactions') return interactionsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    const outbound = result.find((e) => e.origin === 'Outbound');
+    expect(outbound?.lost).toBe(1); // l3 only — l2 excluded as auto-loss
   });
 });
 

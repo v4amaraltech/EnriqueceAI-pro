@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 // ──────────────────────────────────────────────────────────────
@@ -137,11 +138,36 @@ export async function fetchConversionByOrigin(
 
   if (!leads || leads.length === 0) return [];
 
+  // Exclude leads auto-lost by inactivity (cadence queue timeouts): discarded
+  // by a system timeout, not a real qualification verdict, so they shouldn't
+  // drag the origin's conversion rate down. Per-lead marker is an interactions
+  // row with metadata.reason='auto_loss_inactivity' (stamped by expireInactiveLeads).
+  const lostIds = leads
+    .filter((l) => l.status === 'unqualified' || l.status === 'archived')
+    .map((l) => l.id);
+  const autoLostIds = new Set<string>();
+  if (lostIds.length > 0) {
+    const autoRows = await chunkedIn<{ lead_id: string }>(
+      lostIds,
+      (chunk) =>
+        from(supabase, 'interactions')
+          .select('lead_id')
+          .eq('org_id', orgId)
+          .in('lead_id', chunk)
+          .filter('metadata->>reason', 'eq', 'auto_loss_inactivity') as unknown as PromiseLike<{
+          data: Array<{ lead_id: string }> | null;
+          error: unknown;
+        }>,
+    );
+    for (const r of autoRows) autoLostIds.add(r.lead_id);
+  }
+
   // Group by created_by as "origin" (user who created)
   // For now, origin = created_by user ID (we label it in the UI)
   const originMap = new Map<string, { qualified: number; unqualified: number }>();
 
   for (const lead of leads) {
+    if (autoLostIds.has(lead.id)) continue; // skip auto-loss-by-inactivity artifacts
     const origin = lead.created_by ?? 'unknown';
     const current = originMap.get(origin) ?? { qualified: 0, unqualified: 0 };
 

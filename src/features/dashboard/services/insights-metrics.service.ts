@@ -158,7 +158,32 @@ export async function fetchConversionByOrigin(
     data: Array<{ id: string; status: string; lead_source: string | null; canal: string | null }> | null;
   };
 
-  const allLeads = [...(wonLeads ?? []), ...(lostLeads ?? [])];
+  // Exclude leads auto-lost by inactivity (cadence queue timeouts). Same
+  // rationale as the 'archived' exclusion below: a lead expired by a system
+  // timeout was discarded without a real qualification verdict — counting it
+  // as "não convertido" buries the origin's true conversion signal (on V4
+  // Amaral, 59% of Outbound's losses are auto-expiry). Per-lead marker is an
+  // interactions row with metadata.reason='auto_loss_inactivity' (stamped by
+  // expireInactiveLeads).
+  const lostRaw = lostLeads ?? [];
+  const autoLostIds = new Set<string>();
+  if (lostRaw.length > 0) {
+    const autoRows = await chunkedIn<{ lead_id: string }>(
+      lostRaw.map((l) => l.id),
+      (chunk) =>
+        from(supabase, 'interactions')
+          .select('lead_id')
+          .eq('org_id', orgId)
+          .in('lead_id', chunk)
+          .filter('metadata->>reason', 'eq', 'auto_loss_inactivity') as unknown as PromiseLike<{
+          data: Array<{ lead_id: string }> | null;
+          error: unknown;
+        }>,
+    );
+    for (const r of autoRows) autoLostIds.add(r.lead_id);
+  }
+
+  const allLeads = [...(wonLeads ?? []), ...lostRaw.filter((l) => !autoLostIds.has(l.id))];
   // Apply cadence/user filters if needed — build a mutable set of lead IDs
   let filteredLeads = allLeads;
 
