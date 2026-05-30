@@ -79,13 +79,16 @@ Fila de melhorias técnicas (não-bloqueantes) identificadas em varreduras / ses
 
 ## Governança de schema (ALTO — novo 2026-05-30)
 
-### Drift de migrations local ↔ produção
-- **Identificado:** 2026-05-30 cruzando `list_migrations` (remoto) com `supabase/migrations/` (local).
-- **Sintomas:**
-  1. **4 migrations existem só no DB remoto, não commitadas no repo:** `20260527172645_fix_rls_backup_tables`, `20260527172653_fix_anon_execute_calls_function`, `20260527172751_fix_indicacoes_ranking_anon_bypass`, `20260527172833_fix_calls_function_revoke_public`. Pelos nomes, são hotfixes de findings de advisor aplicados direto em prod.
-  2. **Mesmas migrations lógicas com timestamps diferentes** local vs remoto (ex.: avatars storage policy local `20260522004255` vs remoto `20260522034236`; goals/dashboard de 22-26/05).
-- **Impacto:** ALTO. `supabase db reset` local não reproduz o estado de produção — schema parcialmente fora de controle de versão.
-- **Ação proposta (precisa @devops/@data-engineer, NÃO mexe no DB):** baixar os 4 SQLs de 27/05 do remoto e commitar no repo; reconciliar timestamps divergentes (`supabase migration repair` ou alinhar manualmente). Nenhuma execução contra o banco — só sincronizar o histórico versionado.
+### Drift de migrations local ↔ produção — MAIOR do que parecia
+- **Identificado:** 2026-05-30. Diff bidirecional por nome entre `supabase_migrations.schema_migrations` (registro remoto, 230 nomes únicos) e `supabase/migrations/` (repo local, 197).
+- **Dimensão real (não é só "4 faltando"):**
+  1. **~62 migrations só no REMOTO** (no banco, ausentes do repo) — todo o bloco LDR/decisor/v4sales/RPCs de mar–abr (`create_rpc_buscar_proximo_decisor`, `create_get_leads_for_v4sales`, `get_sdr_monthly_metrics_*`, `update_dashboard_view_*`, etc.).
+  2. **24 migrations só no LOCAL** (no repo, ausentes do registro) — incl. `add_lost_at_to_leads`, `add_qualified_at_to_leads`, `add_meeting_held_at`, `scheduled_activities`, `security_hardening`, `enable_rls_ldr_tables`.
+  3. **Timestamps divergentes** (offset BRT→UTC, ~3h) nas migrations que coincidem por nome (ex.: avatars storage policy local `20260522004255` vs remoto `20260522034236`).
+- **Causa raiz provável:** os históricos bifurcaram (squash/rebaseline de um lado, `db push`/`apply_migration` com renome do outro). **Os efeitos do DDL estão TODOS em produção** — verificado: colunas `leads.lost_at/qualified_at/meeting_held_at` e tabela `scheduled_activities` existem em prod, embora seus nomes de migration não estejam no registro. Ou seja: a app funciona; o que está fora de sincronia é o *histórico versionado*, não o schema efetivo.
+- **Impacto:** ALTO para reprodutibilidade. `supabase db reset`/`db push` a partir do repo NÃO reproduz prod e pode tentar re-aplicar/recriar objetos. Zero impacto no runtime atual.
+- **Progresso (2026-05-30):** as 4 migrations mais recentes que faltavam (hotfixes de 27/05: `fix_rls_backup_tables`, `fix_anon_execute_calls_function`, `fix_indicacoes_ranking_anon_bypass`, `fix_calls_function_revoke_public`) foram trazidas do registro remoto para o repo com timestamp idêntico e nota de reconciliação. Reduz o gap remoto-only de ~62 para ~58.
+- **Ação proposta (PROJETO dedicado — @data-engineer/@devops, decisão estratégica antes de tocar):** adotar **produção como fonte da verdade** e regenerar o histórico local a partir dela (dump do schema + baseline), OU `supabase migration repair` para alinhar o registro. NÃO reconciliar por rename manual de 86 arquivos — risco alto. Nenhuma execução contra o banco sem plano aprovado.
 
 ### 4 tabelas `calls_*_backup_20260517` órfãs em produção
 - **Identificado:** 2026-05-30 via security + performance advisors.
