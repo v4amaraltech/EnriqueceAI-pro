@@ -68,7 +68,7 @@ export async function fetchLossReasonStats(
 
   // Get enrollments with loss_reason_id in period
   let query = from(supabase, 'cadence_enrollments')
-    .select('loss_reason_id, enrolled_by, cadence_id')
+    .select('loss_reason_id, enrolled_by, cadence_id, loss_notes')
     .not('loss_reason_id', 'is', null)
     .not('completed_at', 'is', null)
     .gte('completed_at', filters.periodStart)
@@ -79,15 +79,25 @@ export async function fetchLossReasonStats(
   }
 
   const { data: enrollments } = await query as {
-    data: { loss_reason_id: string; enrolled_by: string | null; cadence_id: string }[] | null;
+    data: { loss_reason_id: string; enrolled_by: string | null; cadence_id: string; loss_notes: string | null }[] | null;
   };
 
   if (!enrollments || enrollments.length === 0) return [];
 
-  const total = enrollments.length;
+  // Exclude auto-loss-by-inactivity expirations (cadence queue timeouts), not
+  // SDR-chosen loss reasons. Marker = loss_notes prefix stamped by
+  // expireInactiveLeads(). Total is recomputed from qualified-only rows so the
+  // percentages reflect real qualified loss.
+  const qualified = enrollments.filter(
+    (e) => !(e.loss_notes ?? '').startsWith('Auto-perda por inatividade'),
+  );
+
+  if (qualified.length === 0) return [];
+
+  const total = qualified.length;
   const countMap = new Map<string, number>();
 
-  for (const e of enrollments) {
+  for (const e of qualified) {
     countMap.set(e.loss_reason_id, (countMap.get(e.loss_reason_id) ?? 0) + 1);
   }
 

@@ -42,7 +42,7 @@ export async function fetchLossReasons(
 
   // Get enrollments with loss reasons — filter by completed_at (when lost), not enrolled_at
   let query = from(supabase, 'cadence_enrollments')
-    .select('loss_reason_id, cadence_id, enrolled_by')
+    .select('loss_reason_id, cadence_id, enrolled_by, loss_notes')
     .eq('org_id', orgId)
     .not('loss_reason_id', 'is', null)
     .gte('completed_at', start)
@@ -56,10 +56,16 @@ export async function fetchLossReasons(
   }
 
   const { data: enrollments } = (await query) as {
-    data: Array<{ loss_reason_id: string }> | null;
+    data: Array<{ loss_reason_id: string; loss_notes: string | null }> | null;
   };
 
-  const rows = enrollments ?? [];
+  // Exclude auto-loss-by-inactivity expirations (cadence queue timeouts). These
+  // are not a loss reason the SDR chose to qualify — counting them buries the
+  // real loss signal (Sem interesse, Não ICP, etc.) under hundreds of
+  // auto-expirations. Marker = loss_notes prefix stamped by expireInactiveLeads().
+  const rows = (enrollments ?? []).filter(
+    (e) => !(e.loss_notes ?? '').startsWith('Auto-perda por inatividade'),
+  );
 
   if (rows.length === 0) return [];
 
