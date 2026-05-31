@@ -108,9 +108,7 @@ function RankingContent({
               Meta mês: <span className="font-semibold text-foreground">{data.monthTarget}{unit}</span>
             </span>
           </div>
-        ) : (
-          <p className="mt-3 text-xs text-muted-foreground">Sem meta definida</p>
-        )}
+        ) : null}
       </div>
 
       {/* SDR Breakdown */}

@@ -64,7 +64,7 @@ describe('RankingCard', () => {
     expect(screen.getByText(/15% do previsto/)).toBeInTheDocument();
   });
 
-  it('should show "Sem meta" when no target', () => {
+  it('should not render the meta subtitle when no target', () => {
     render(
       <RankingCard
         title="Test"
@@ -72,7 +72,8 @@ describe('RankingCard', () => {
         data={createCardData({ monthTarget: 0 })}
       />,
     );
-    expect(screen.getByText('Sem meta definida')).toBeInTheDocument();
+    expect(screen.queryByText('Sem meta definida')).not.toBeInTheDocument();
+    expect(screen.queryByText(/do previsto/)).not.toBeInTheDocument();
   });
 
   it('should render SDR breakdown with avatars', () => {
