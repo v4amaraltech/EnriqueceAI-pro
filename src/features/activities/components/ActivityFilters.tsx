@@ -18,12 +18,22 @@ export interface ActivityFilterValues {
   cadence: string;
   step: string;
   search: string;
+  sdr: string;
+}
+
+export interface SdrFilterOption {
+  id: string;
+  name: string;
+  overdueCount: number;
 }
 
 interface ActivityFiltersProps {
   filters: ActivityFilterValues;
   onFiltersChange: (filters: ActivityFilterValues) => void;
   cadenceOptions: string[];
+  /** SDR options for the per-SDR filter. Only provided to managers; when empty
+   *  the SDR dropdown is hidden (SDRs only ever see their own activities). */
+  sdrOptions?: SdrFilterOption[];
 }
 
 export const defaultFilters: ActivityFilterValues = {
@@ -32,9 +42,10 @@ export const defaultFilters: ActivityFilterValues = {
   cadence: 'all',
   step: 'all',
   search: '',
+  sdr: 'all',
 };
 
-export function ActivityFilters({ filters, onFiltersChange, cadenceOptions }: ActivityFiltersProps) {
+export function ActivityFilters({ filters, onFiltersChange, cadenceOptions, sdrOptions = [] }: ActivityFiltersProps) {
   function update(key: keyof ActivityFilterValues, value: string) {
     onFiltersChange({ ...filters, [key]: value });
   }
@@ -55,6 +66,23 @@ export function ActivityFilters({ filters, onFiltersChange, cadenceOptions }: Ac
           onChange={(e) => update('search', e.target.value)}
         />
       </div>
+
+      {/* SDR (manager-only) */}
+      {sdrOptions.length > 0 && (
+        <Select value={filters.sdr} onValueChange={(v) => update('sdr', v)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="SDR" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos SDRs</SelectItem>
+            {sdrOptions.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}{s.overdueCount > 0 ? ` (${s.overdueCount} atrasadas)` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Status */}
       <Select value={filters.status} onValueChange={(v) => update('status', v)}>

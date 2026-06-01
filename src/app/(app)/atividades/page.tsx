@@ -1,8 +1,12 @@
 import { AlertTriangle } from 'lucide-react';
 
+import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { isManager } from '@/lib/auth/require-manager';
 
 import { EmptyState } from '@/shared/components/EmptyState';
+
+import { fetchOrgMembersAuth, type OrgMemberOption } from '@/features/leads/actions/fetch-org-members';
 
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { fetchAvailableLeadsCount } from '@/features/activities/actions/fetch-available-leads-count';
@@ -17,8 +21,9 @@ import { fetchActiveCadenceNames } from '@/features/cadences/actions/fetch-caden
 
 export default async function AtividadesPage() {
   await requireAuth();
+  const managerFlag = await isManager();
 
-  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult] = await Promise.all([
+  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
     fetchPendingCalls(),
@@ -28,6 +33,9 @@ export default async function AtividadesPage() {
     fetchDialerPreferences(),
     getDialerProvider(),
     fetchActiveCadenceNames(),
+    // Only managers need the org-wide member list (for the per-SDR filter);
+    // skip the getUserById fan-out for SDRs.
+    managerFlag ? fetchOrgMembersAuth() : Promise.resolve<ActionResult<OrgMemberOption[]>>({ success: true, data: [] }),
   ]);
 
   if (!activitiesResult.success) {
@@ -65,6 +73,9 @@ export default async function AtividadesPage() {
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
   const dialerProvider = providerResult.success ? providerResult.data.provider : null;
   const cadenceNames = cadenceNamesResult.success ? cadenceNamesResult.data : [];
+  const members = managerFlag && membersResult.success
+    ? membersResult.data.map((m) => ({ userId: m.userId, name: m.name }))
+    : [];
 
   return (
     <div>
@@ -80,6 +91,8 @@ export default async function AtividadesPage() {
         availableLeadsCount={availableLeads.count}
         availableLeadIds={availableLeads.leadIds}
         allCadenceNames={cadenceNames}
+        isManager={managerFlag}
+        members={members}
       />
     </div>
   );

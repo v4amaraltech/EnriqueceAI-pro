@@ -25,6 +25,7 @@ import {
   ActivityFilters,
   defaultFilters,
   type ActivityFilterValues,
+  type SdrFilterOption,
 } from './ActivityFilters';
 import { ActivityPagination } from './ActivityPagination';
 import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
@@ -46,6 +47,10 @@ interface ActivityQueueViewProps {
   availableLeadsCount?: number;
   availableLeadIds?: string[];
   allCadenceNames?: string[];
+  /** Manager view: enables the per-SDR filter over the (org-wide) queue. */
+  isManager?: boolean;
+  /** userId → display name, for labeling the SDR filter. */
+  members?: Array<{ userId: string; name: string }>;
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -77,6 +82,9 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
     // Step
     if (filters.step !== 'all' && String(a.stepOrder) !== filters.step) return false;
 
+    // SDR (lead owner) — manager filter
+    if (filters.sdr !== 'all' && a.lead.assigned_to !== filters.sdr) return false;
+
     // Search
     if (filters.search) {
       const q = filters.search.toLowerCase();
@@ -92,7 +100,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
@@ -238,6 +246,26 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     () => visibleActivities.filter((a) => !a.enrollmentId.startsWith('scheduled:')),
     [visibleActivities],
   );
+
+  // Per-SDR filter options (managers only): which lead owners appear in the
+  // queue, with their overdue count so the manager can spot who to chase first.
+  const memberNameMap = useMemo(() => new Map(members.map((m) => [m.userId, m.name])), [members]);
+  const sdrOptions = useMemo<SdrFilterOption[]>(() => {
+    if (!isManager) return [];
+    const overdueById = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const a of cadenceActivities) {
+      const id = a.lead.assigned_to;
+      if (!id) continue;
+      seen.add(id);
+      if (hoursOverdue(a.nextStepDue) >= OVERDUE_THRESHOLD_HOURS) {
+        overdueById.set(id, (overdueById.get(id) ?? 0) + 1);
+      }
+    }
+    return [...seen]
+      .map((id) => ({ id, name: memberNameMap.get(id) ?? id.slice(0, 8), overdueCount: overdueById.get(id) ?? 0 }))
+      .sort((a, b) => b.overdueCount - a.overdueCount || a.name.localeCompare(b.name, 'pt-BR'));
+  }, [isManager, cadenceActivities, memberNameMap]);
 
   // Filtered activities (cadence only — retornos are always shown separately)
   const filtered = useMemo(() => applyFilters(cadenceActivities, filters), [cadenceActivities, filters]);
@@ -424,6 +452,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
               filters={filters}
               onFiltersChange={setFilters}
               cadenceOptions={cadenceOptions}
+              sdrOptions={sdrOptions}
             />
             <Button
               variant={quickMode ? 'default' : 'outline'}
