@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { isManager } from '@/lib/auth/require-manager';
 
 import { fetchLeadTimeline } from '@/features/cadences/actions/fetch-interactions';
 import { fetchLead } from '@/features/leads/actions/fetch-lead';
@@ -19,7 +20,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   await requireAuth();
 
   const { id } = await params;
-  const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions, jobTitleOptions, stdFieldsResult] = await Promise.all([
+  const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions, jobTitleOptions, stdFieldsResult, managerFlag] = await Promise.all([
     fetchLead(id),
     fetchLeadTimeline(id),
     fetchLeadEnrollment(id),
@@ -27,6 +28,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     getLeadSourceOptions(),
     getJobTitleOptions(),
     listStandardFieldSettingsForMember(),
+    isManager(),
   ]);
 
   if (!leadResult.success) {
@@ -49,6 +51,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       leadSourceOptions={leadSourceOptions}
       jobTitleOptions={jobTitleOptions}
       standardFieldSettings={standardFieldSettings}
+      isManager={managerFlag}
     />
   );
 }
