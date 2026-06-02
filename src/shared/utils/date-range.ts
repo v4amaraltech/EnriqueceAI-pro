@@ -1,9 +1,15 @@
-import { format, subDays } from 'date-fns';
+import { format, startOfMonth, subDays } from 'date-fns';
 
 const DEFAULT_DAYS = 30;
 
 export function todayStr(): string {
   return format(new Date(), 'yyyy-MM-dd');
+}
+
+/** Current month so far: 1st of the month → today (mirrors the picker's "Esse mês" preset). */
+export function currentMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  return { from: format(startOfMonth(now), 'yyyy-MM-dd'), to: format(now, 'yyyy-MM-dd') };
 }
 
 export function defaultFrom(): string {

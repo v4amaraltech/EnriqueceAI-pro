@@ -108,7 +108,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           } satisfies OpportunityKpiData}
           month={filters.month}
           label="Leads abertos"
-          labelTooltip="Leads com primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa) realizado por um SDR no período."
+          labelTooltip="Conta cada lead pelo seu primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa), atribuído ao SDR responsável pelo lead — uma única vez, no mês em que esse primeiro contato aconteceu. É recalculado em tempo real: sobe ao longo do dia conforme novos leads recebem o 1º contato e pode recuar se um lead for arquivado, reatribuído, ou se um contato mais antigo do mesmo lead entrar no sistema depois (reclassificando-o para o mês correto)."
         />
       )}
 
@@ -151,7 +151,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             title="Leads Abertos"
             titleTooltip={
               'Quantos leads cada SDR abriu no período. "Abrir" = primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa).\n\n' +
-              'Cada lead conta uma vez para o SDR que fez o primeiro contato. Gerentes não aparecem no ranking.'
+              'Cada lead conta uma única vez, no mês do 1º contato, para o SDR responsável por ele (não para quem fez a interação). O número é recalculado em tempo real e pode oscilar ao longo do dia. Gerentes não aparecem no ranking.'
             }
             icon={DoorOpen}
             iconColor="bg-sky-500/10"
