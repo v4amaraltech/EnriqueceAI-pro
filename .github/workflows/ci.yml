@@ -1,0 +1,60 @@
+name: CI
+
+# Quality gate for every PR to main (and pushes to main): lint, typecheck,
+# tests and a production build. Mirrors the local gates the team already runs.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The app is anchored to BRT (date math, business-day clamps). Run CI in the
+    # same timezone so date-sensitive tests match the team's local environment
+    # instead of the UTC runner default.
+    env:
+      TZ: America/Sao_Paulo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test:run
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Placeholders only — satisfy the Zod env schema (src/config/env.ts).
+          # No real services are contacted during build (routes are dynamic).
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          CRON_SECRET: ci-placeholder-cron-secret-0123456789
