@@ -2,7 +2,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 
 import { fetchFeedbackAnalytics } from '@/features/statistics/actions/fetch-feedback-analytics';
 import { FeedbackAnalyticsView } from '@/features/statistics/components/FeedbackAnalyticsView';
-import { parseDateRangeParams } from '@/shared/utils/date-range';
+import { currentMonthRange, parseDateRangeParams } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; period?: string; closer?: string }>;
@@ -11,7 +11,10 @@ interface PageProps {
 export default async function FeedbackAnalyticsPage({ searchParams }: PageProps) {
   await requireManager();
   const params = await searchParams;
-  const { from, to } = parseDateRangeParams(params);
+  // Default to the current month (mês vigente) when the user hasn't picked a
+  // range explicitly; honor explicit from/to or period from the URL otherwise.
+  const hasExplicitRange = Boolean((params.from && params.to) || params.period);
+  const { from, to } = hasExplicitRange ? parseDateRangeParams(params) : currentMonthRange();
   const dateRange = { from, to };
 
   const result = await fetchFeedbackAnalytics('30d', params.closer, dateRange);
