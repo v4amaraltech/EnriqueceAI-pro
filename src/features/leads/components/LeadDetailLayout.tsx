@@ -48,6 +48,8 @@ import { fetchCrmPipelines, fetchKommoUsers, fetchPipelineStages, markLeadAsWon,
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
 import { resendCloserFeedback } from '../actions/resend-closer-feedback';
+import { reassignCloser } from '../actions/reassign-closer';
+import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
 
@@ -74,9 +76,10 @@ interface LeadDetailLayoutProps {
   leadSourceOptions?: LeadSourceOption[];
   jobTitleOptions?: { value: string; label: string }[];
   standardFieldSettings?: StandardFieldSettingRow[];
+  isManager?: boolean;
 }
 
-export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings }: LeadDetailLayoutProps) {
+export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings, isManager = false }: LeadDetailLayoutProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -114,6 +117,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
   const [isResendingFeedback, setIsResendingFeedback] = useState(false);
 
+  // Manager-only closer reassignment
+  const [editorClosers, setEditorClosers] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedCloserId, setSelectedCloserId] = useState<string>(lead.closer_id ?? '');
+  const [isReassigning, setIsReassigning] = useState(false);
+
   useEffect(() => {
     if (lead.status === 'qualified' || lead.status === 'won') {
       fetchCloserFeedback(lead.id).then((result) => {
@@ -121,6 +129,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       });
     }
   }, [lead.id, lead.status]);
+
+  useEffect(() => {
+    if (!isManager) return;
+    listClosers().then((result) => {
+      if (result.success) setEditorClosers(result.data.map((c) => ({ id: c.id, name: c.name })));
+    });
+  }, [isManager]);
+
+  // Keep the selector in sync after a reassignment refreshes the lead.
+  useEffect(() => {
+    setSelectedCloserId(lead.closer_id ?? '');
+  }, [lead.closer_id]);
 
   const handleResendFeedback = useCallback(() => {
     setIsResendingFeedback(true);
@@ -149,6 +169,59 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       })
       .finally(() => setIsResendingFeedback(false));
   }, [lead.id]);
+
+  // Manager action: reassign closer (if changed) then notify the right person —
+  // resend feedback (if a request was pending) and/or briefing (if meeting upcoming).
+  const handleCloserAction = useCallback(() => {
+    if (!selectedCloserId) return;
+    setIsReassigning(true);
+    (async () => {
+      try {
+        // Same closer → just resend the pending feedback.
+        if (selectedCloserId === lead.closer_id) {
+          const fb = await resendCloserFeedback({ leadId: lead.id });
+          if (!fb.success) {
+            toast.error(fb.error);
+            return;
+          }
+          toast.success(
+            fb.data.whatsapp === 'sent'
+              ? 'Feedback reenviado por email e WhatsApp.'
+              : 'Feedback reenviado por email.',
+          );
+          return;
+        }
+
+        const r = await reassignCloser({ leadId: lead.id, newCloserId: selectedCloserId });
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+
+        const parts: string[] = [`Closer atualizado para ${r.data.closerName}.`];
+        if (r.data.feedbackReassigned) {
+          const fb = await resendCloserFeedback({ leadId: lead.id });
+          parts.push(
+            fb.success
+              ? fb.data.whatsapp === 'sent'
+                ? 'Feedback reenviado por email e WhatsApp.'
+                : 'Feedback reenviado por email.'
+              : `Falha ao reenviar feedback: ${fb.error}`,
+          );
+        }
+        if (r.data.meetingInFuture) {
+          const br = await resendMeetingBriefing({ leadId: lead.id });
+          parts.push(br.success ? 'Briefing reenviado.' : `Falha ao reenviar briefing: ${br.error}`);
+        }
+        toast.success(parts.join(' '));
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Erro ao atualizar closer');
+      } finally {
+        setIsReassigning(false);
+      }
+    })();
+  }, [selectedCloserId, lead.id, lead.closer_id, router]);
 
   // Won dialog — closer info & selection
   const [_wonCloserName, setWonCloserName] = useState<string | null>(null);
@@ -437,7 +510,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           )}
         </div>
       )}
-      {closerFeedback && !closerFeedback.responded_at && (
+      {!isManager && closerFeedback && !closerFeedback.responded_at && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3 flex items-center justify-between gap-3">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong>
@@ -450,6 +523,66 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           >
             {isResendingFeedback ? 'Reenviando…' : 'Reenviar feedback'}
           </Button>
+        </div>
+      )}
+
+      {/* Manager-only: reassign the closer and resend feedback/briefing to the
+          right person — for when the closer who booked/won the meeting isn't
+          the one who actually ran it. */}
+      {isManager && lead.closer_id && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Closer responsável</p>
+              {closerFeedback && !closerFeedback.responded_at ? (
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  Aguardando feedback de <strong>{closerFeedback.closer_name}</strong>
+                </p>
+              ) : closerFeedback?.responded_at ? (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Feedback já respondido por {closerFeedback.closer_name}
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Trocar o closer reenvia feedback/briefing para o novo responsável.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {editorClosers.length > 0 ? (
+                <Select value={selectedCloserId || undefined} onValueChange={setSelectedCloserId}>
+                  <SelectTrigger className="h-9 w-[200px]">
+                    <SelectValue placeholder="Selecione um closer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editorClosers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs text-[var(--muted-foreground)]">Nenhum closer cadastrado</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCloserAction}
+                disabled={
+                  isReassigning ||
+                  !selectedCloserId ||
+                  (selectedCloserId === lead.closer_id && !(closerFeedback && !closerFeedback.responded_at))
+                }
+              >
+                {isReassigning
+                  ? 'Enviando…'
+                  : selectedCloserId !== lead.closer_id
+                    ? 'Trocar e reenviar'
+                    : 'Reenviar feedback'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
