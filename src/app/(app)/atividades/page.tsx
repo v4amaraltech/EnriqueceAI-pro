@@ -15,7 +15,6 @@ import { fetchDialerPreferences } from '@/features/activities/actions/fetch-dial
 import { fetchDialerQueue } from '@/features/activities/actions/fetch-dialer-queue';
 import { fetchDialerStats } from '@/features/activities/actions/fetch-dialer-stats';
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
-import { fetchPendingCalls } from '@/features/activities/actions/fetch-pending-calls';
 import { ActivityQueueView } from '@/features/activities';
 import { fetchActiveCadenceNames } from '@/features/cadences/actions/fetch-cadence-names';
 
@@ -23,10 +22,9 @@ export default async function AtividadesPage() {
   await requireAuth();
   const managerFlag = await isManager();
 
-  const [activitiesResult, progressResult, callsResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
+  const [activitiesResult, progressResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
-    fetchPendingCalls(),
     fetchDialerQueue(),
     fetchAvailableLeadsCount(),
     fetchDialerStats(),
@@ -64,7 +62,6 @@ export default async function AtividadesPage() {
     total: progressRaw.completed + activitiesCount,
   };
 
-  const pendingCalls = callsResult.success ? callsResult.data : [];
   const dialerQueue = dialerResult.success ? dialerResult.data : [];
   const availableLeads = availableResult.success
     ? availableResult.data
@@ -83,7 +80,6 @@ export default async function AtividadesPage() {
       <ActivityQueueView
         initialActivities={activitiesResult.data}
         progress={progress}
-        pendingCalls={pendingCalls}
         dialerQueue={dialerQueue}
         dialerStats={dialerStats}
         dialerPreferences={dialerPreferences}

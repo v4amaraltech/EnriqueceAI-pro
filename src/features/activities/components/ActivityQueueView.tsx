@@ -10,7 +10,6 @@ import { Button } from '@/shared/components/ui/button';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
-import type { PendingCallLead } from '../actions/fetch-pending-calls';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
@@ -29,7 +28,6 @@ import {
 } from './ActivityFilters';
 import { ActivityPagination } from './ActivityPagination';
 import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
-import { PendingCallsSection } from './PendingCallsSection';
 import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
 import { ReturnsTab } from './ReturnsTab';
@@ -38,7 +36,6 @@ import { StartNewLeadsModal } from './StartNewLeadsModal';
 interface ActivityQueueViewProps {
   initialActivities: PendingActivity[];
   progress: DailyProgress;
-  pendingCalls: PendingCallLead[];
   dialerQueue?: DialerQueueItem[];
   dialerStats?: DialerStats;
   dialerPreferences?: DialerPreferences;
@@ -100,7 +97,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
@@ -443,9 +440,6 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
         />
       ) : (
         <>
-          {/* Pending calls section */}
-          <PendingCallsSection leads={pendingCalls} />
-
           {/* Filters + Quick mode toggle */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <ActivityFilters
