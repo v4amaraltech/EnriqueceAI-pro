@@ -97,7 +97,8 @@ Fila de melhorias técnicas (não-bloqueantes) identificadas em varreduras / ses
 - **Impacto:** baixo (default-deny), mas é lixo de schema que polui advisors.
 - **Ação proposta:** confirmar que os dados já foram reconciliados e `DROP TABLE` (operação em prod — requer aprovação).
 
-### Convenção de `supabase/rollbacks/` abandonada
+### ~~Convenção de `supabase/rollbacks/` abandonada~~ — RESOLVIDO (descontinuada 2026-06-05)
+- **Resolução:** convenção **descontinuada** por decisão do time. Removidos os 10 scripts de `supabase/rollbacks/` (diretório deletado) e a menção no `.claude/CLAUDE.md` (agora "forward-only migrations"). Comentários `-- ROLLBACK: See supabase/rollbacks/...` no topo de `20260221001500_calls_module.sql` e `20260222120000_call_settings.sql` ficam obsoletos, mas não se edita migration aplicada.
 - **Identificado:** 2026-06-01 ao avaliar pedido de "deletar rollback antigo".
 - **Estado:** existem 10 scripts em `supabase/rollbacks/`, **todos pareados** com migrations reais de fev–mar (nenhum órfão — os 3 que pareciam órfãos eram só diferença de formato de timestamp: `20260221_000004` ↔ `20260221000400`). Porém a convenção **parou**: das ~200 migrations no repo, só as ~10 primeiras (até `20260329000400`) têm rollback; as ~190 seguintes não têm.
 - **Impacto:** baixo no runtime; **falsa sensação de segurança** (parece haver estratégia de rollback, mas cobre <5% das migrations) e contradiz a menção em `CLAUDE.md` ("Rollbacks in `supabase/rollbacks/`"). Agravado pelo drift de migrations acima.

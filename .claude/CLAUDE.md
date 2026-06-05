@@ -165,7 +165,7 @@ Additional vars used via `process.env` (not in Zod schema):
 
 ## Database
 
-Migrations in `supabase/migrations/`. Rollbacks in `supabase/rollbacks/`. Edge functions in `supabase/functions/` (Deno runtime — excluded from TypeScript compilation).
+Migrations in `supabase/migrations/`. Edge functions in `supabase/functions/` (Deno runtime — excluded from TypeScript compilation). There is no rollback-script convention — forward-only migrations.
 
 Key tables: `organizations`, `organization_members`, `leads`, `cadences`, `cadence_steps`, `cadence_enrollments`, `interactions`, `message_templates`, `subscriptions`, `plans`, `ai_usage`, `whatsapp_credits`, `notifications`.
 
