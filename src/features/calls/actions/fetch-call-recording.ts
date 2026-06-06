@@ -8,7 +8,7 @@ import { from } from '@/lib/supabase/from';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
-import { resolveApi4ComRecordingUrl } from '../services/recording-storage.service';
+import { lookupRecordingFromApi4Com } from '../services/recover-recording.service';
 
 const callIdSchema = z.string().uuid('ID inválido');
 
@@ -54,7 +54,7 @@ export async function fetchCallRecording(
   }
 
   // 2. Resolve a durable URL from the API4COM API
-  const recordingUrl = await resolveApi4ComRecordingUrl(supabase, call);
+  const recordingUrl = await lookupRecordingFromApi4Com(supabase, call);
 
   // 3. Update local call if we found a recording
   if (recordingUrl) {

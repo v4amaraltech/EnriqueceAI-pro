@@ -10,6 +10,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/persist-pending-recordings",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/check-google-connections",
       "schedule": "0 11 * * *"
     },
