@@ -1,113 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
-import { decrypt } from '@/lib/security/encryption';
 
-import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
-import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import { lookupRecordingFromApi4Com } from './recover-recording.service';
 
 export const CALL_RECORDINGS_BUCKET = 'call-recordings';
 
 /** Storage object path for a call's recording: `{org_id}/{call_id}.mp3`. */
 export function callRecordingStoragePath(orgId: string, callId: string): string {
   return `${orgId}/${callId}.mp3`;
-}
-
-interface CallForRecording {
-  id: string;
-  org_id: string;
-  metadata: Record<string, string> | null;
-  destination: string;
-  started_at: string | null;
-  created_at: string;
-  user_id: string;
-  origin: string | null;
-  duration_seconds: number;
-}
-
-/**
- * Resolve a *durable* recording URL from the API4COM `/calls` API.
- *
- * The webhook stores an ephemeral `listener.api4com.com/files/listen/...` link
- * that expires within hours. The API returns the durable `fs*.api4com.com`
- * file URL (`record_url`), which we use both to re-play and to persist to our
- * own Storage. Matches by api4com_call_id, falling back to phone + timestamp.
- *
- * Service-role client expected (reads encrypted api4com_connections).
- */
-export async function resolveApi4ComRecordingUrl(
-  supabase: SupabaseClient,
-  call: CallForRecording,
-): Promise<string | null> {
-  // Credentials: prefer the call's user, fall back to any connected org conn.
-  let conn: { api_key_encrypted: string; base_url: string } | null = null;
-
-  const { data: userConn } = (await from(supabase, 'api4com_connections' as never)
-    .select('api_key_encrypted, base_url')
-    .eq('user_id', call.user_id)
-    .eq('status', 'connected')
-    .maybeSingle()) as { data: { api_key_encrypted: string; base_url: string } | null };
-  conn = userConn;
-
-  if (!conn?.api_key_encrypted) {
-    const { data: orgConn } = (await from(supabase, 'api4com_connections' as never)
-      .select('api_key_encrypted, base_url')
-      .eq('org_id', call.org_id)
-      .eq('status', 'connected')
-      .limit(1)
-      .maybeSingle()) as { data: { api_key_encrypted: string; base_url: string } | null };
-    conn = orgConn;
-  }
-
-  if (!conn?.api_key_encrypted) return null;
-
-  const apiKey = decrypt(conn.api_key_encrypted);
-  const baseUrl = conn.base_url.replace(/\/$/, '');
-  const api4comCallId = call.metadata?.api4com_call_id;
-
-  for (let page = 1; page <= 10; page++) {
-    const response = await fetch(`${baseUrl}/calls?page=${page}`, {
-      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
-    });
-    if (!response.ok) break;
-
-    const data = (await response.json()) as Api4ComCallListResponse;
-    const records = data.data ?? [];
-
-    for (const record of records) {
-      // Match by api4com_call_id (authoritative)
-      if (api4comCallId && record.id === api4comCallId && record.record_url) {
-        return record.record_url;
-      }
-
-      // Fallback: phone + timestamp + duration tolerance
-      if (record.record_url) {
-        const phoneKey = (record.to ?? '').replace(/\D/g, '').slice(-8);
-        const fromKey = (record.from ?? '').replace(/\D/g, '').slice(-8);
-        const destKey = call.destination.replace(/\D/g, '').slice(-8);
-        const originKey = (call.origin ?? '').replace(/\D/g, '').slice(-4);
-        const phoneMatch = phoneKey === destKey || (originKey.length >= 3 && fromKey.endsWith(originKey));
-
-        if (phoneMatch) {
-          const remoteDate = parseApi4ComTimestamp(record.started_at);
-          const remoteTime = remoteDate ? remoteDate.getTime() : NaN;
-          const localTime = new Date(call.started_at ?? call.created_at).getTime();
-          const timeDiff = Math.abs(remoteTime - localTime);
-          const durationMatch = record.duration > 0 && call.duration_seconds > 0
-            ? Math.abs(record.duration - call.duration_seconds) /
-                Math.max(record.duration, call.duration_seconds) < 0.3
-            : true;
-          if (timeDiff < 10 * 60 * 1000 && durationMatch) {
-            return record.record_url;
-          }
-        }
-      }
-    }
-
-    if (!data.metadata?.nextPage) break;
-  }
-
-  return null;
 }
 
 async function tryDownloadAudio(url: string): Promise<Buffer | null> {
@@ -151,7 +52,19 @@ export async function persistCallRecording(
     .eq('id', callId)
     .single()) as {
     data:
-      | (CallForRecording & { recording_url: string | null; recording_storage_path: string | null })
+      | {
+          id: string;
+          org_id: string;
+          recording_url: string | null;
+          recording_storage_path: string | null;
+          metadata: Record<string, string> | null;
+          destination: string;
+          started_at: string | null;
+          created_at: string;
+          user_id: string;
+          origin: string | null;
+          duration_seconds: number;
+        }
       | null;
   };
 
@@ -164,7 +77,7 @@ export async function persistCallRecording(
   let buffer: Buffer | null = call.recording_url ? await tryDownloadAudio(call.recording_url) : null;
 
   if (!buffer) {
-    const durable = await resolveApi4ComRecordingUrl(supabase, call);
+    const durable = await lookupRecordingFromApi4Com(supabase, call);
     if (durable) {
       buffer = await tryDownloadAudio(durable);
       if (buffer && durable !== call.recording_url) {
