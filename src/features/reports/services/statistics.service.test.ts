@@ -102,13 +102,14 @@ describe('fetchLossReasonStats', () => {
               ],
             });
         } else {
+          // lead_lost interactions (authoritative loss-reason source)
           chain.then = (resolve: (v: unknown) => void) =>
             resolve({
               data: [
-                { loss_reason_id: 'lr-1', enrolled_by: 'u1', cadence_id: 'c1' },
-                { loss_reason_id: 'lr-1', enrolled_by: 'u1', cadence_id: 'c1' },
-                { loss_reason_id: 'lr-1', enrolled_by: 'u2', cadence_id: 'c2' },
-                { loss_reason_id: 'lr-2', enrolled_by: 'u1', cadence_id: 'c1' },
+                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-2' } },
               ],
             });
         }
