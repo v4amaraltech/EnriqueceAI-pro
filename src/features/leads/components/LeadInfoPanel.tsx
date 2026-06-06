@@ -632,21 +632,27 @@ export function LeadInfoPanel({
                   {isFieldVisible('job_title') && (
                     <div className="space-y-1">
                       <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
-                      {/* Combobox: sugestões da org via getJobTitleOptions, mas aceita texto livre. */}
-                      <Input
-                        list="lead-job-title-options"
-                        value={editFields.job_title}
-                        onChange={(e) => setEditFields({ ...editFields, job_title: e.target.value })}
-                        className="h-8 text-sm"
-                        placeholder="Cargo (Decisor, Sócio, CEO…)"
-                      />
-                      {cargoOptions.length > 0 && (
-                        <datalist id="lead-job-title-options">
-                          {cargoOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value} />
+                      {/* Dropdown da lista gerenciada (Ajustes > Prospecção). Se o lead já
+                          tiver um cargo fora da lista, ele é incluído para não ser perdido. */}
+                      <Select
+                        value={editFields.job_title || 'none'}
+                        onValueChange={(value) => {
+                          setEditFields((prev) => ({ ...prev, job_title: value === 'none' ? '' : value }));
+                        }}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Selecione o cargo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {(editFields.job_title && !cargoOptions.some((o) => o.value === editFields.job_title)
+                            ? [{ value: editFields.job_title, label: editFields.job_title }, ...cargoOptions]
+                            : cargoOptions
+                          ).map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                           ))}
-                        </datalist>
-                      )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                   {isFieldVisible('lead_source') && (

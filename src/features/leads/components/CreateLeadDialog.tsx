@@ -430,21 +430,23 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     <Briefcase className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
                     Cargo <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    id="create-job-title"
-                    list="create-job-title-options"
-                    value={form.job_title}
-                    onChange={(e) => setForm({ ...form, job_title: e.target.value })}
-                    onBlur={() => markTouched('job_title')}
-                    aria-invalid={!!fieldError('job_title')}
-                    className={fieldError('job_title') ? 'border-red-500' : ''}
-                    placeholder="Ex.: Decisor, Sócio, CEO/Diretor Executivo"
-                  />
-                  <datalist id="create-job-title-options">
-                    {jobTitleOptions.map((opt) => (
-                      <option key={opt} value={opt} />
-                    ))}
-                  </datalist>
+                  <Select
+                    value={form.job_title || undefined}
+                    onValueChange={(v) => { setForm({ ...form, job_title: v }); markTouched('job_title'); }}
+                  >
+                    <SelectTrigger
+                      id="create-job-title"
+                      aria-invalid={!!fieldError('job_title')}
+                      className={fieldError('job_title') ? 'w-full border-red-500' : 'w-full'}
+                    >
+                      <SelectValue placeholder="Selecione o cargo" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[250px] overflow-y-auto">
+                      {jobTitleOptions.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {fieldError('job_title') && <p className="text-xs text-red-500">{fieldError('job_title')}</p>}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
