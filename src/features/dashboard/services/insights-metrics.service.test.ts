@@ -28,7 +28,7 @@ const ORG = 'org-1';
 const baseFilters = { month: '2026-01', cadenceIds: [] as string[], userIds: [] as string[] };
 
 describe('fetchLossReasons', () => {
-  it('should return empty array when no lead_lost interactions', async () => {
+  it('should return empty array when no lost leads with a reason', async () => {
     const supabase = createMockSupabase(() => createChainMock({ data: [] }));
 
     const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
@@ -36,12 +36,12 @@ describe('fetchLossReasons', () => {
     expect(result).toEqual([]);
   });
 
-  it('should group and count by loss reason (from interaction metadata)', async () => {
-    const interactionsChain = createChainMock({
+  it('should group and count by loss reason (from leads.loss_reason_id)', async () => {
+    const leadsChain = createChainMock({
       data: [
-        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-2' } },
+        { loss_reason_id: 'lr-1', loss_notes: null },
+        { loss_reason_id: 'lr-1', loss_notes: null },
+        { loss_reason_id: 'lr-2', loss_notes: null },
       ],
     });
     const reasonsChain = createChainMock({
@@ -52,7 +52,7 @@ describe('fetchLossReasons', () => {
     });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
@@ -64,17 +64,17 @@ describe('fetchLossReasons', () => {
     expect(result[1]).toEqual({ reason: 'Sem interesse', count: 1, percent: 33 });
   });
 
-  it('should exclude auto-loss-by-inactivity interactions', async () => {
-    const interactionsChain = createChainMock({
+  it('should exclude auto-loss-by-inactivity leads (loss_notes marker)', async () => {
+    const leadsChain = createChainMock({
       data: [
-        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-auto', reason: 'auto_loss_inactivity' } },
+        { loss_reason_id: 'lr-1', loss_notes: null },
+        { loss_reason_id: 'lr-auto', loss_notes: 'Auto-perda por inatividade (10d sem atividade)' },
       ],
     });
     const reasonsChain = createChainMock({ data: [{ id: 'lr-1', name: 'Sem interesse' }] });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
@@ -85,12 +85,12 @@ describe('fetchLossReasons', () => {
   });
 
   it('should sort by count descending', async () => {
-    const interactionsChain = createChainMock({
+    const leadsChain = createChainMock({
       data: [
-        { metadata: { loss_reason_id: 'lr-a' } },
-        { metadata: { loss_reason_id: 'lr-b' } },
-        { metadata: { loss_reason_id: 'lr-b' } },
-        { metadata: { loss_reason_id: 'lr-b' } },
+        { loss_reason_id: 'lr-a', loss_notes: null },
+        { loss_reason_id: 'lr-b', loss_notes: null },
+        { loss_reason_id: 'lr-b', loss_notes: null },
+        { loss_reason_id: 'lr-b', loss_notes: null },
       ],
     });
     const reasonsChain = createChainMock({
@@ -101,7 +101,7 @@ describe('fetchLossReasons', () => {
     });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
@@ -113,13 +113,13 @@ describe('fetchLossReasons', () => {
   });
 
   it('should use "Desconhecido" for unknown reason ids', async () => {
-    const interactionsChain = createChainMock({
-      data: [{ metadata: { loss_reason_id: 'lr-unknown' } }],
+    const leadsChain = createChainMock({
+      data: [{ loss_reason_id: 'lr-unknown', loss_notes: null }],
     });
     const reasonsChain = createChainMock({ data: [] });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'interactions') return interactionsChain;
+      if (table === 'leads') return leadsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
