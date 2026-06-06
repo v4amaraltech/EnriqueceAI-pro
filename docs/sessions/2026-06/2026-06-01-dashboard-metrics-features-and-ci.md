@@ -80,8 +80,19 @@ em enrollment `active`/`paused` — leads perdidos sem cadência ativa (a maiori
 nunca recebem o motivo lá (V4 Amaral junho: 157 perdas, 0 no gráfico). Fix:
 `fetchLossReasons` (dashboard) e `fetchLossReasonStats` (relatório) passam a ler
 de `interactions` (`system_event='lead_lost'` + `metadata.loss_reason_id`),
-mantendo a exclusão de auto-perda. Retroativo, sem backfill. Débito subjacente
-(coluna do enrollment segue incompleta) registrado no backlog (seção DB).
+mantendo a exclusão de auto-perda. Retroativo, sem backfill. **Substituído pelo
+#10 abaixo** (fonte canônica em `leads`).
+
+## 8. Motivo de perda canônico em `leads.loss_reason_id` (PR #10, `63515d6`, 06-06)
+Resolve a raiz do #9: o motivo é do LEAD, não da cadência. Migration
+`20260606120000` (aplicada em prod) adicionou `leads.loss_reason_id` (FK) +
+`leads.loss_notes` + backfill da última interação `lead_lost` por lead (~1072).
+`markLeadLost` e `expireInactiveLeads` gravam o motivo no lead; dashboard
+(`fetchLossReasons`) e relatório (`fetchLossReasonStats`) passam a ler de `leads`
+(fonte única: `lost_at` no período, exclui auto-perda por `loss_notes`,
+atribuição por `assigned_to`). `cadence_enrollments.loss_reason_id` segue escrito
+mas não é mais fonte de leitura (depreciável). Débito do backlog (seção DB)
+marcado RESOLVIDO.
 
 ## Concluído nesta sessão (commits diretos na main)
 - `d0c20ff` handoff inicial · `352a3e3` débito rollback no backlog · `480b265`

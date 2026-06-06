@@ -16,11 +16,10 @@ Fila de melhorias técnicas (não-bloqueantes) identificadas em varreduras / ses
 - **Impacto:** zero (todas queries filtram `deleted_at IS NULL`).
 - **Ação proposta:** mass UPDATE pra normalizar `status` pra um valor padrão (`new` ou `unqualified`), ou aceitar como histórico.
 
-### `cadence_enrollments.loss_reason_id` gravado de forma incompleta
+### ~~`cadence_enrollments.loss_reason_id` gravado de forma incompleta~~ — RESOLVIDO (2026-06-06)
+- **Resolução (PR #10, `63515d6`):** adotada a Opção B — `leads.loss_reason_id` (+ `loss_notes`) virou a **fonte canônica**. Migration `20260606120000` adicionou as colunas + backfill da última interação `lead_lost` por lead (~1072). `markLeadLost` e `expireInactiveLeads` passam a gravar o motivo no lead; dashboard e relatório leem de `leads` (não mais de interactions/enrollments). A coluna `cadence_enrollments.loss_reason_id` segue sendo escrita (denormalizada) mas **não é mais fonte de leitura** — candidata a depreciação futura, sem urgência.
 - **Identificado:** 2026-06-06 investigando o gráfico de Motivos de Perda vazio.
-- **Causa:** `markLeadLost` (`lead-lifecycle.ts`) só grava `loss_reason_id`/`loss_notes` em enrollments `active`/`paused` (`.in('status', ['active','paused'])`). Lead perdido sem cadência nesse estado (a maioria) não recebe o motivo na coluna. Medido: V4 Amaral junho = 157 perdas, **0** com `loss_reason_id` no enrollment.
-- **Impacto:** a **exibição** já foi corrigida (dashboard + relatório passam a ler de `interactions.metadata.loss_reason_id`, PR #9 / `8880c96`). Mas a coluna `cadence_enrollments.loss_reason_id` segue **incompleta/enganosa** para quem consultar direto (BI, SQL ad-hoc, futuras queries).
-- **Ação proposta:** decidir — (a) parar de depender da coluna (fonte = interactions) e documentar/depreciar; ou (b) gravar o motivo de forma confiável no lead/enrollment (ex.: também no enrollment mais recente quando não há ativo, ou numa coluna `leads.loss_reason_id`) + backfill via interactions. NÃO bloqueante (exibição já correta).
+- **Causa original:** `markLeadLost` só gravava `loss_reason_id` em enrollments `active`/`paused`; lead perdido sem cadência nesse estado (a maioria) não recebia o motivo. V4 Amaral junho = 157 perdas, 0 com motivo no enrollment.
 
 ---
 
