@@ -72,6 +72,17 @@ Prospecção), igual a segmento/canal. Convertido para `<Select>` em `LeadInfoPa
 e `CreateLeadDialog`; no editar, o cargo atual fora da lista é preservado como
 opção. Primeiro PR a passar pelo gate de CI required.
 
+## 7. Fix motivos de perda — fonte autoritativa (PR #9, `8880c96`, 06-06)
+Gráfico de Motivos de Perda (dashboard) e card de Estatísticas apareciam vazios
+("Sem dados de motivos de perda") apesar de muitas perdas reais. Causa: ambos
+liam de `cadence_enrollments.loss_reason_id`, mas `markLeadLost` só grava o motivo
+em enrollment `active`/`paused` — leads perdidos sem cadência ativa (a maioria)
+nunca recebem o motivo lá (V4 Amaral junho: 157 perdas, 0 no gráfico). Fix:
+`fetchLossReasons` (dashboard) e `fetchLossReasonStats` (relatório) passam a ler
+de `interactions` (`system_event='lead_lost'` + `metadata.loss_reason_id`),
+mantendo a exclusão de auto-perda. Retroativo, sem backfill. Débito subjacente
+(coluna do enrollment segue incompleta) registrado no backlog (seção DB).
+
 ## Concluído nesta sessão (commits diretos na main)
 - `d0c20ff` handoff inicial · `352a3e3` débito rollback no backlog · `480b265`
   descontinuação de rollbacks · `3e5e68b` handoff atualizado · (este handoff).
