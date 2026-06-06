@@ -1,4 +1,4 @@
-# Handoff — 2026-06-01 a 06-05: Métrica de leads abertos, features de Execução/Closer/Feedbacks, CI e housekeeping
+# Handoff — 2026-06-01 a 06-06: Métrica de leads abertos, features de Execução/Closer/Feedbacks, CI, housekeeping e Cargo dropdown
 
 ## Contexto
 Sessão longa (V4 Company Amaral, org `c2727473-1df8-4faa-9264-a9fc1759fe3b`).
@@ -57,10 +57,21 @@ fora do BRT. Suíte completa: 1335 ✓ em BRT.
   em 2 migrations aplicadas ficam obsoletos (não se edita migration aplicada).
 - **Débito registrado** no `docs/improvements-backlog.md`: ver "Governança de
   schema".
+- **CI virou required check** (06-06): branch protection na `main` exige o check
+  `Lint · Typecheck · Test · Build` para mergear (strict=false, enforce_admins=false,
+  sem required reviews; force-push/deleção da `main` bloqueados).
+
+## 6. Fix do Cargo — dropdown (PR #7, `409afdd`, 06-06)
+Campo "Cargo" (`job_title`) estava como combobox de texto livre (`<input list>` +
+`<datalist>`) no editar e no criar lead, destoando dos outros dropdowns.
+`job_title` é vocabulário gerenciado (`standard_field_settings`, Ajustes >
+Prospecção), igual a segmento/canal. Convertido para `<Select>` em `LeadInfoPanel`
+e `CreateLeadDialog`; no editar, o cargo atual fora da lista é preservado como
+opção. Primeiro PR a passar pelo gate de CI required.
 
 ## Concluído nesta sessão (commits diretos na main)
 - `d0c20ff` handoff inicial · `352a3e3` débito rollback no backlog · `480b265`
-  descontinuação de rollbacks · (este handoff atualizado).
+  descontinuação de rollbacks · `3e5e68b` handoff atualizado · (este handoff).
 
 ## Follow-ups que sobraram (não-bloqueantes)
 - **CI usa Node 20** nas actions (`checkout@v4`, `setup-node@v4`,
@@ -68,8 +79,6 @@ fora do BRT. Suíte completa: 1335 ✓ em BRT.
   saírem versões novas.
 - **Drift de migrations** (repo ≠ prod) segue aberto no backlog — projeto
   dedicado @data-engineer/@devops, não tocar sem plano.
-- **CI não é required check** ainda (sem branch protection) — opcional configurar
-  pra travar merge em vermelho.
 
 ## Notas técnicas
 - `isManager()` (sem redirect) novo em `require-manager.ts` para UI condicional.
