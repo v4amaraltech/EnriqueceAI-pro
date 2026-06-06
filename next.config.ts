@@ -33,6 +33,10 @@ const nextConfig: NextConfig = {
             "script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.sentry.io https://vercel.live https://*.vercel.app https://api.api4com.com",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
+            // Call recordings: served same-origin via /api/proxy/recording, but
+            // also allow the API4COM hosts and blob: so the <audio> player isn't
+            // blocked by the default-src fallback (media has no own directive).
+            "media-src 'self' blob: data: https://*.api4com.com",
             "font-src 'self' data:",
             "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.apollo.io https://*.sentry.io https://*.stripe.com https://vercel.live https://*.vercel.app https://*.api4com.com wss://*.api4com.com",
             "frame-src 'self' https://js.stripe.com https://vercel.live",
