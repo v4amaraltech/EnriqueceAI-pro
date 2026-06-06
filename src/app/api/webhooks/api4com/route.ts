@@ -200,6 +200,9 @@ async function processApi4ComEvent(
       const result = await createCallFromWebhook(supabase, body);
       if (result?.call) {
         logger.info('Auto-created external call', { callId: result.call.id, api4comId: body.id, leadId: result.leadId });
+
+        // Persist the recording to our Storage while the listener link is alive.
+        if (body.recordUrl) triggerPersistRecording(result.call.id);
         // createCallFromWebhook already applied the classifier — no need to
         // re-run updateCallFromWebhook (was a stale "fix up after default
         // insert" left over from the old not_connected default).
@@ -227,6 +230,7 @@ async function processApi4ComEvent(
             api4comId: body.id,
             status,
             recordingUrl: body.recordUrl,
+            callId: result.call.id,
           });
 
           // Advance cadence if current step is phone
@@ -269,6 +273,7 @@ async function processApi4ComEvent(
       updates.started_at = startedIso;
     }
     await from(supabase, 'calls').update(updates).eq('id', call.id);
+    if (body.recordUrl) triggerPersistRecording(call.id);
     logger.info('Call updated from channel-answer', {
       callId: call.id,
       api4comId: body.id,
@@ -423,10 +428,33 @@ async function updateCallFromWebhook(
     .update(updates)
     .eq('id', callId);
 
+  // Persist the recording to our Storage (any duration) before the listener
+  // link expires — independent of the transcription minimum below.
+  if (payload.recordUrl) {
+    triggerPersistRecording(callId);
+  }
+
   // Trigger automatic transcription + SPICED analysis if recording available
   if (payload.recordUrl && payload.duration >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
     triggerTranscription(callId);
   }
+}
+
+/** Fire-and-forget: download + persist the recording to our Storage bucket so
+ *  it stays playable after API4COM's listener link expires. Idempotent. */
+function triggerPersistRecording(callId: string): void {
+  const appUrl = getAppUrl();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!appUrl || !serviceRoleKey) return;
+
+  fetch(`${appUrl}/api/workers/persist-recording`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ callId }),
+  }).catch((err) => logger.warn('Persist-recording trigger error', { callId, error: String(err) }));
 }
 
 async function triggerTranscription(callId: string, retries = 2): Promise<void> {

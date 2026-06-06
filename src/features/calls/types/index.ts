@@ -20,6 +20,7 @@ export interface CallRow {
   type: CallType;
   cost: number | null;
   recording_url: string | null;
+  recording_storage_path: string | null;
   notes: string | null;
   is_important: boolean;
   metadata: Record<string, unknown> | null;

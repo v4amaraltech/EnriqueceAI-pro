@@ -190,7 +190,7 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
                   </div>
                   <audio
                     controls
-                    src={`/api/proxy/recording?url=${encodeURIComponent(fetchedRecordingUrl ?? activeCall.recording_url!)}`}
+                    src={`/api/proxy/recording?callId=${activeCall.id}`}
                     className="w-full h-10"
                     preload="metadata"
                   />

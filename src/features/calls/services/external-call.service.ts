@@ -110,6 +110,7 @@ export async function createExternalCallInteraction(
     api4comId: string;
     status: string;
     recordingUrl?: string | null;
+    callId?: string | null;
   },
 ): Promise<void> {
   const durationFormatted = opts.duration > 0
@@ -129,6 +130,11 @@ export async function createExternalCallInteraction(
         duration: opts.duration,
         status: opts.status,
         recording_url: opts.recordingUrl ?? null,
+        // Link to the calls row so the lead timeline can enrich the
+        // recording/transcription via metadata.callId (same path used by
+        // manual/internal calls). The recording_url above is a snapshot at
+        // hangup time; the calls row stays authoritative as it gets updated.
+        callId: opts.callId ?? null,
       },
       performed_by: opts.userId,
     } as Record<string, unknown>);
