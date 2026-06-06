@@ -60,6 +60,9 @@ fora do BRT. Suíte completa: 1335 ✓ em BRT.
 - **CI virou required check** (06-06): branch protection na `main` exige o check
   `Lint · Typecheck · Test · Build` para mergear (strict=false, enforce_admins=false,
   sem required reviews; force-push/deleção da `main` bloqueados).
+- **Actions do CI bumpadas para v6 / Node 24** (PR #8, `87184bf`):
+  `checkout@v6`, `setup-node@v6`, `pnpm/action-setup@v6` — resolve a deprecação
+  do Node 20. `node-version` do projeto segue **22** (engines).
 
 ## 6. Fix do Cargo — dropdown (PR #7, `409afdd`, 06-06)
 Campo "Cargo" (`job_title`) estava como combobox de texto livre (`<input list>` +
@@ -74,9 +77,6 @@ opção. Primeiro PR a passar pelo gate de CI required.
   descontinuação de rollbacks · `3e5e68b` handoff atualizado · (este handoff).
 
 ## Follow-ups que sobraram (não-bloqueantes)
-- **CI usa Node 20** nas actions (`checkout@v4`, `setup-node@v4`,
-  `pnpm/action-setup@v4`) — GitHub aposenta Node 20 em jun/2026; bumpar quando
-  saírem versões novas.
 - **Drift de migrations** (repo ≠ prod) segue aberto no backlog — projeto
   dedicado @data-engineer/@devops, não tocar sem plano.
 
