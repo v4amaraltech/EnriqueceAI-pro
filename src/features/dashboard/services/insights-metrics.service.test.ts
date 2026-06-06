@@ -28,22 +28,20 @@ const ORG = 'org-1';
 const baseFilters = { month: '2026-01', cadenceIds: [] as string[], userIds: [] as string[] };
 
 describe('fetchLossReasons', () => {
-  it('should return empty array when no enrollments with loss reasons', async () => {
-    const enrollmentChain = createChainMock({ data: [] });
-
-    const supabase = createMockSupabase(() => enrollmentChain);
+  it('should return empty array when no lead_lost interactions', async () => {
+    const supabase = createMockSupabase(() => createChainMock({ data: [] }));
 
     const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
 
     expect(result).toEqual([]);
   });
 
-  it('should group and count by loss reason', async () => {
-    const enrollmentChain = createChainMock({
+  it('should group and count by loss reason (from interaction metadata)', async () => {
+    const interactionsChain = createChainMock({
       data: [
-        { loss_reason_id: 'lr-1' },
-        { loss_reason_id: 'lr-1' },
-        { loss_reason_id: 'lr-2' },
+        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-2' } },
       ],
     });
     const reasonsChain = createChainMock({
@@ -54,7 +52,7 @@ describe('fetchLossReasons', () => {
     });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'interactions') return interactionsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
@@ -66,13 +64,33 @@ describe('fetchLossReasons', () => {
     expect(result[1]).toEqual({ reason: 'Sem interesse', count: 1, percent: 33 });
   });
 
-  it('should sort by count descending', async () => {
-    const enrollmentChain = createChainMock({
+  it('should exclude auto-loss-by-inactivity interactions', async () => {
+    const interactionsChain = createChainMock({
       data: [
-        { loss_reason_id: 'lr-a' },
-        { loss_reason_id: 'lr-b' },
-        { loss_reason_id: 'lr-b' },
-        { loss_reason_id: 'lr-b' },
+        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
+        { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-auto', reason: 'auto_loss_inactivity' } },
+      ],
+    });
+    const reasonsChain = createChainMock({ data: [{ id: 'lr-1', name: 'Sem interesse' }] });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'interactions') return interactionsChain;
+      if (table === 'loss_reasons') return reasonsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
+
+    expect(result).toEqual([{ reason: 'Sem interesse', count: 1, percent: 100 }]);
+  });
+
+  it('should sort by count descending', async () => {
+    const interactionsChain = createChainMock({
+      data: [
+        { metadata: { loss_reason_id: 'lr-a' } },
+        { metadata: { loss_reason_id: 'lr-b' } },
+        { metadata: { loss_reason_id: 'lr-b' } },
+        { metadata: { loss_reason_id: 'lr-b' } },
       ],
     });
     const reasonsChain = createChainMock({
@@ -83,7 +101,7 @@ describe('fetchLossReasons', () => {
     });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'interactions') return interactionsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
@@ -95,13 +113,13 @@ describe('fetchLossReasons', () => {
   });
 
   it('should use "Desconhecido" for unknown reason ids', async () => {
-    const enrollmentChain = createChainMock({
-      data: [{ loss_reason_id: 'lr-unknown' }],
+    const interactionsChain = createChainMock({
+      data: [{ metadata: { loss_reason_id: 'lr-unknown' } }],
     });
     const reasonsChain = createChainMock({ data: [] });
 
     const supabase = createMockSupabase((table) => {
-      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'interactions') return interactionsChain;
       if (table === 'loss_reasons') return reasonsChain;
       return createChainMock();
     });
