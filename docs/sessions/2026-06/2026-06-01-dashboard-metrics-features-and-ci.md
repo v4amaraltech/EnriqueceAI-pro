@@ -94,6 +94,26 @@ atribuição por `assigned_to`). `cadence_enrollments.loss_reason_id` segue escr
 mas não é mais fonte de leitura (depreciável). Débito do backlog (seção DB)
 marcado RESOLVIDO.
 
+## 9. Gravação de ligação durável na timeline (PR #11 + #12, 06-06)
+Player de áudio não aparecia na timeline do lead para ligações externas e,
+quando aparecia, dava `0:00/0:00`. Duas causas:
+- **Sem `metadata.callId`** nas interações `external_api4com` → `fetchLeadTimeline`
+  não enriquecia. Webhook passou a gravar o `callId`; migration `20260606170000`
+  fez backfill de **1.284** interações (casa pelo id API4COM). 0 sem link.
+- **`recording_url` do webhook é efêmera** (`listener.api4com.com`, expira em
+  horas → 404). Solução: persistir o áudio no **bucket privado `call-recordings`**
+  (migration `20260606173000`, coluna `calls.recording_storage_path`), servido via
+  `/api/proxy/recording?callId=` (service role + checagem de org). Ver memória
+  `reference_call_recording_durability`.
+- **Forward** (PR #11): webhook dispara `/api/workers/persist-recording` (baixa o
+  link vivo → bucket). **Backfill** (PR #12): cron `/api/cron/persist-pending-recordings`
+  (`*/15`, no `vercel.json`) drena o histórico; `persistCallRecording` re-resolve a
+  URL durável (`fs*.api4com.com`) via `lookupRecordingFromApi4Com` quando o link
+  morreu. Consolidou duplicação (removeu `resolveApi4ComRecordingUrl`).
+- **Validado em prod:** ligação do print (`97905bb6`) persistida — objeto 4,75MB
+  audio/mpeg no bucket; cron rodando (46 persistidas, ~5.781 na fila, drena ~50/15min;
+  ligações > ~90d são best-effort por retenção da API4COM). Migrations já em prod.
+
 ## Concluído nesta sessão (commits diretos na main)
 - `d0c20ff` handoff inicial · `352a3e3` débito rollback no backlog · `480b265`
   descontinuação de rollbacks · `3e5e68b` handoff atualizado · (este handoff).
