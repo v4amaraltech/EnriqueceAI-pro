@@ -164,9 +164,16 @@ export function LeadTimelineTab({ timeline }: LeadTimelineTabProps) {
                 {entry.channel === 'phone' && entry.recording_url && (
                   <div className="mt-2 space-y-2">
                     <div className="flex items-center gap-2">
-                      <audio controls preload="none" className="h-8 max-w-[300px]">
-                        <source src={entry.recording_url} type="audio/mpeg" />
-                      </audio>
+                      <audio
+                        controls
+                        preload="none"
+                        className="h-8 max-w-[300px]"
+                        src={
+                          entry.call_id
+                            ? `/api/proxy/recording?callId=${entry.call_id}`
+                            : `/api/proxy/recording?url=${encodeURIComponent(entry.recording_url)}`
+                        }
+                      />
                       {entry.call_duration && (
                         <span className="text-[10px] text-muted-foreground">
                           {Math.floor(entry.call_duration / 60)}:{String(entry.call_duration % 60).padStart(2, '0')}

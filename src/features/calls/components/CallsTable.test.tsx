@@ -23,6 +23,7 @@ function createMockCall(overrides?: Partial<CallRow>): CallRow {
     type: 'outbound',
     cost: null,
     recording_url: null,
+    recording_storage_path: null,
     notes: null,
     is_important: false,
     metadata: null,

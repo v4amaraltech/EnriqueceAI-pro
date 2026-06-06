@@ -116,6 +116,7 @@ export async function fetchLeadTimeline(
       step_instructions: stepData?.instructions ?? undefined,
       metadata: meta,
       performed_by_name: performedBy ? userNameMap.get(performedBy) : undefined,
+      call_id: callId ?? null,
       recording_url: callData?.recording_url ?? null,
       transcription: callData?.transcription ?? null,
       call_duration: callData?.duration_seconds ?? null,
