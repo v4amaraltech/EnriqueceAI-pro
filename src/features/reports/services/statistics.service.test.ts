@@ -102,14 +102,14 @@ describe('fetchLossReasonStats', () => {
               ],
             });
         } else {
-          // lead_lost interactions (authoritative loss-reason source)
+          // lost leads (canonical loss-reason source: leads.loss_reason_id)
           chain.then = (resolve: (v: unknown) => void) =>
             resolve({
               data: [
-                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-1' } },
-                { metadata: { system_event: 'lead_lost', loss_reason_id: 'lr-2' } },
+                { loss_reason_id: 'lr-1', loss_notes: null },
+                { loss_reason_id: 'lr-1', loss_notes: null },
+                { loss_reason_id: 'lr-1', loss_notes: null },
+                { loss_reason_id: 'lr-2', loss_notes: null },
               ],
             });
         }

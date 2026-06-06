@@ -68,35 +68,33 @@ export async function fetchLossReasonStats(
   if (!reasons || reasons.length === 0) return [];
 
   // Get enrollments with loss_reason_id in period
-  // Loss reasons are read from the lead_lost interaction (authoritative source).
-  // The enrollment-side copy (cadence_enrollments.loss_reason_id) is unreliable:
-  // markLeadLost only stamps active/paused enrollments, so leads lost without an
-  // active cadence never land a reason there — leaving this empty despite real
-  // losses.
-  let query = from(supabase, 'interactions')
-    .select('metadata, performed_by')
+  // Loss reason is a canonical lead-level attribute (leads.loss_reason_id),
+  // written by markLeadLost / expireInactiveLeads. (Previously read from
+  // cadence_enrollments, which only gets the reason for active/paused
+  // enrollments — leaving this empty for leads lost without an active cadence.)
+  let query = from(supabase, 'leads')
+    .select('loss_reason_id, loss_notes, assigned_to')
     .eq('org_id', orgId)
-    .eq('channel', 'system')
-    .eq('metadata->>system_event', 'lead_lost')
-    .not('metadata->>loss_reason_id', 'is', null)
-    .gte('created_at', filters.periodStart)
-    .lte('created_at', filters.periodEnd);
+    .is('deleted_at', null)
+    .not('loss_reason_id', 'is', null)
+    .gte('lost_at', filters.periodStart)
+    .lte('lost_at', filters.periodEnd);
 
   if (filters.userIds && filters.userIds.length > 0) {
-    query = query.in('performed_by', filters.userIds);
+    query = query.in('assigned_to', filters.userIds);
   }
 
-  const { data: interactions } = await query as {
-    data: { metadata: Record<string, unknown> | null }[] | null;
+  const { data: lostLeads } = await query as {
+    data: { loss_reason_id: string; loss_notes: string | null }[] | null;
   };
 
-  if (!interactions || interactions.length === 0) return [];
+  if (!lostLeads || lostLeads.length === 0) return [];
 
   // Exclude auto-loss-by-inactivity (cron expirations), not SDR-chosen loss
-  // reasons. expireInactiveLeads() stamps metadata.reason = 'auto_loss_inactivity'.
-  // Total is recomputed from qualified-only rows so percentages reflect real loss.
-  const qualified = interactions.filter(
-    (i) => i.metadata?.reason !== 'auto_loss_inactivity' && i.metadata?.loss_reason_id != null,
+  // reasons (loss_notes marker). Total is recomputed from qualified-only rows so
+  // percentages reflect real loss.
+  const qualified = lostLeads.filter(
+    (l) => !(l.loss_notes ?? '').startsWith('Auto-perda por inatividade'),
   );
 
   if (qualified.length === 0) return [];
@@ -104,9 +102,8 @@ export async function fetchLossReasonStats(
   const total = qualified.length;
   const countMap = new Map<string, number>();
 
-  for (const i of qualified) {
-    const reasonId = String(i.metadata?.loss_reason_id);
-    countMap.set(reasonId, (countMap.get(reasonId) ?? 0) + 1);
+  for (const l of qualified) {
+    countMap.set(l.loss_reason_id, (countMap.get(l.loss_reason_id) ?? 0) + 1);
   }
 
   return reasons

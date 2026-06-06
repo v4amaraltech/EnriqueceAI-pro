@@ -40,44 +40,39 @@ export async function fetchLossReasons(
 ): Promise<LossReasonEntry[]> {
   const { start, end } = getDateRange(filters);
 
-  // Loss reasons are read from the lead_lost interaction (authoritative source).
-  // The enrollment-side copy (cadence_enrollments.loss_reason_id) is unreliable:
-  // markLeadLost only stamps active/paused enrollments, so leads lost without an
-  // active cadence (the majority) never land a reason there — which left this
-  // chart empty despite hundreds of real losses.
-  let query = from(supabase, 'interactions')
-    .select('metadata, cadence_id, performed_by')
+  // Loss reason is a canonical lead-level attribute (leads.loss_reason_id),
+  // written by markLeadLost / expireInactiveLeads. (Previously read from
+  // cadence_enrollments, which only gets the reason for active/paused
+  // enrollments — leaving this chart empty for leads lost without an active
+  // cadence.) Attribution by lead owner (assigned_to), consistent with the
+  // other SDR metrics; auto-loss-by-inactivity is excluded via loss_notes.
+  let query = from(supabase, 'leads')
+    .select('loss_reason_id, loss_notes, assigned_to')
     .eq('org_id', orgId)
-    .eq('channel', 'system')
-    .eq('metadata->>system_event', 'lead_lost')
-    .not('metadata->>loss_reason_id', 'is', null)
-    .gte('created_at', start)
-    .lt('created_at', end);
+    .is('deleted_at', null)
+    .not('loss_reason_id', 'is', null)
+    .gte('lost_at', start)
+    .lt('lost_at', end);
 
-  if (filters.cadenceIds.length > 0) {
-    query = query.in('cadence_id', filters.cadenceIds);
-  }
   if (filters.userIds.length > 0) {
-    query = query.in('performed_by', filters.userIds);
+    query = query.in('assigned_to', filters.userIds);
   }
 
-  const { data: interactions } = (await query) as {
-    data: Array<{ metadata: Record<string, unknown> | null }> | null;
+  const { data: lostLeads } = (await query) as {
+    data: Array<{ loss_reason_id: string; loss_notes: string | null }> | null;
   };
 
-  // Exclude auto-loss-by-inactivity (cron expirations) — not an SDR-chosen
-  // reason. expireInactiveLeads() stamps metadata.reason = 'auto_loss_inactivity'.
-  const rows = (interactions ?? []).filter(
-    (i) => i.metadata?.reason !== 'auto_loss_inactivity' && i.metadata?.loss_reason_id != null,
+  // Exclude auto-loss-by-inactivity (cron expirations) — not an SDR-chosen reason.
+  const rows = (lostLeads ?? []).filter(
+    (l) => !(l.loss_notes ?? '').startsWith('Auto-perda por inatividade'),
   );
 
   if (rows.length === 0) return [];
 
-  // Count by loss_reason_id (from the interaction metadata)
+  // Count by loss_reason_id
   const reasonCounts = new Map<string, number>();
-  for (const i of rows) {
-    const reasonId = String(i.metadata?.loss_reason_id);
-    reasonCounts.set(reasonId, (reasonCounts.get(reasonId) ?? 0) + 1);
+  for (const l of rows) {
+    reasonCounts.set(l.loss_reason_id, (reasonCounts.get(l.loss_reason_id) ?? 0) + 1);
   }
 
   // Fetch reason names

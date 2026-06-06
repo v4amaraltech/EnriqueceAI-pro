@@ -151,7 +151,11 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
     }
 
     const { error: leadError } = await from(supabase, 'leads')
-      .update({ status: 'unqualified' } as Record<string, unknown>)
+      .update({
+        status: 'unqualified',
+        loss_reason_id: row.auto_loss_reason_id,
+        loss_notes: `Auto-perda por inatividade (${row.inactive_days}d sem atividade)`,
+      } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', row.org_id)
       .not('status', 'in', '("won","unqualified","archived")');

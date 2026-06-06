@@ -84,9 +84,15 @@ export async function markLeadAsLost(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // 1. Update lead status to unqualified
+  // 1. Update lead status to unqualified + persist the loss reason on the lead
+  // (canonical source — the loss reason belongs to the lead, not a cadence;
+  // the enrollment copy below is only stamped for active/paused enrollments).
   const { error: leadError } = await from(supabase, 'leads')
-    .update({ status: 'unqualified' } as Record<string, unknown>)
+    .update({
+      status: 'unqualified',
+      loss_reason_id: lossReasonId,
+      loss_notes: lossNotes ?? null,
+    } as Record<string, unknown>)
     .eq('id', leadId)
     .eq('org_id', orgId);
 
