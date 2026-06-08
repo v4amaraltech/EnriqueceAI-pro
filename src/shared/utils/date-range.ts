@@ -52,5 +52,6 @@ export function parseDateRangeParams(params: {
   if (params.period) {
     return { ...periodToRange(params.period), compare };
   }
-  return { from: defaultFrom(), to: todayStr(), compare };
+  // No explicit range/period → default to the current month (1st → today)
+  return { ...currentMonthRange(), compare };
 }

@@ -2,6 +2,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 
 import { fetchPerformanceAnalytics } from '@/features/statistics/actions/fetch-performance-analytics';
 import { PerformanceAnalyticsView } from '@/features/statistics/components/PerformanceAnalyticsView';
+import { currentMonthRange } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
@@ -15,7 +16,7 @@ export default async function ProspectingPerformancePage({ searchParams }: PageP
 
   const dateRange = params.from && params.to
     ? { from: params.from, to: params.to }
-    : undefined;
+    : currentMonthRange();
 
   const result = await fetchPerformanceAnalytics('30d', userIds, cadenceId, dateRange);
 

@@ -3,10 +3,9 @@
 import { useCallback, useMemo, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { format } from 'date-fns';
-
 import { cn } from '@/lib/utils';
 import { DateRangePicker } from '@/shared/components/DateRangePicker';
+import { currentMonthRange } from '@/shared/utils/date-range';
 
 import type { OrgMember } from '../types/shared';
 
@@ -29,14 +28,8 @@ export function ProspectingSidebarFilters({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  // Initialize date range from URL params or default to last 30 days
-  const { defaultFrom, defaultTo } = useMemo(() => {
-    const now = new Date();
-    return {
-      defaultTo: format(now, 'yyyy-MM-dd'),
-      defaultFrom: format(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    };
-  }, []);
+  // Default to the current month (1st → today), matching the picker's "Esse mês" preset
+  const { from: defaultFrom, to: defaultTo } = useMemo(() => currentMonthRange(), []);
   const dateFrom = searchParams.get('from') ?? defaultFrom;
   const dateTo = searchParams.get('to') ?? defaultTo;
 

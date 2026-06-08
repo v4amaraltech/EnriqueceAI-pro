@@ -3,6 +3,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 import { fetchActivityAnalytics } from '@/features/statistics/actions/fetch-activity-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ActivityAnalyticsView } from '@/features/statistics/components/ActivityAnalyticsView';
+import { currentMonthRange } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
@@ -15,7 +16,7 @@ export default async function ProspectingActivitiesPage({ searchParams }: PagePr
 
   const dateRange = params.from && params.to
     ? { from: params.from, to: params.to }
-    : undefined;
+    : currentMonthRange();
 
   const [result, members] = await Promise.all([
     fetchActivityAnalytics('30d', userIds, dateRange),

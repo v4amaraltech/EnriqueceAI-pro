@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { defaultFrom, periodToRange, todayStr } from '@/shared/utils/date-range';
+import { currentMonthRange, periodToRange } from '@/shared/utils/date-range';
 
 // Re-export for backward compatibility with client components
 export { parseDateRangeParams } from '@/shared/utils/date-range';
@@ -27,8 +27,9 @@ export function useDateRange(basePath?: string) {
     from = range.from;
     to = range.to;
   } else {
-    from = defaultFrom();
-    to = todayStr();
+    const range = currentMonthRange();
+    from = range.from;
+    to = range.to;
   }
 
   const setRange = useCallback(

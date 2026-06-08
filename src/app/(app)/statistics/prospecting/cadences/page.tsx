@@ -2,6 +2,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 
 import { fetchCadenceAnalytics } from '@/features/statistics/actions/fetch-cadence-analytics';
 import { CadenceAnalyticsView } from '@/features/statistics/components/CadenceAnalyticsView';
+import { currentMonthRange } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
@@ -15,7 +16,7 @@ export default async function ProspectingCadencesPage({ searchParams }: PageProp
 
   const dateRange = params.from && params.to
     ? { from: params.from, to: params.to }
-    : undefined;
+    : currentMonthRange();
 
   const result = await fetchCadenceAnalytics('30d', userIds, cadenceId, dateRange);
 

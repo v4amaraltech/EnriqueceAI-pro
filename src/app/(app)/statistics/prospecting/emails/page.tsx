@@ -2,6 +2,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 
 import { fetchEmailAnalytics } from '@/features/statistics/actions/fetch-email-analytics';
 import { EmailAnalyticsView } from '@/features/statistics/components/EmailAnalyticsView';
+import { currentMonthRange } from '@/shared/utils/date-range';
 
 interface PageProps {
   searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
@@ -15,7 +16,7 @@ export default async function ProspectingEmailsPage({ searchParams }: PageProps)
 
   const dateRange = params.from && params.to
     ? { from: params.from, to: params.to }
-    : undefined;
+    : currentMonthRange();
 
   const result = await fetchEmailAnalytics('30d', userIds, cadenceId, dateRange);
 
