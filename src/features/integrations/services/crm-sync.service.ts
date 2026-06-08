@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { leadFieldLabel } from '@/features/leads/constants/lead-field-labels';
 
 import type {
   CrmConnectionRow,
@@ -283,7 +284,7 @@ export class CrmSyncService {
           lead_id: existingId,
           channel: 'system',
           type: 'sent',
-          message_content: `Campos atualizados via CRM: ${changedFields.join(', ')}`,
+          message_content: `Campos atualizados via CRM: ${changedFields.map(leadFieldLabel).join(', ')}`,
           metadata: { system_event: 'fields_updated', source: 'crm_pull', changed_fields: changedFields },
           performed_by: null,
         } as Record<string, unknown>);

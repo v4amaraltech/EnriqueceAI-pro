@@ -18,8 +18,28 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { leadFieldLabel } from '@/features/leads/constants/lead-field-labels';
 
 import type { TimelineEntry } from '../cadences.contract';
+
+/**
+ * Rebuild the displayed text for a `fields_updated` event from its raw
+ * `changed_fields` metadata, translating each field key to its pt-BR label.
+ * This fixes already-stored CRM-pull entries whose message_content was written
+ * with raw column names (e.g. "last_name, telefone") before the labels existed.
+ * Returns null when there's nothing to override (non-CRM events keep their
+ * already-localized message_content).
+ */
+function localizedFieldsUpdatedContent(entry: TimelineEntry): string | null {
+  const metadata = entry.metadata as Record<string, unknown> | null;
+  if (metadata?.system_event !== 'fields_updated') return null;
+  const changed = metadata.changed_fields;
+  if (!Array.isArray(changed) || changed.length === 0) return null;
+  const labels = changed.map((f) => leadFieldLabel(String(f))).join(', ');
+  return metadata.source === 'crm_pull'
+    ? `Campos atualizados via CRM: ${labels}`
+    : `Campos atualizados: ${labels}`;
+}
 
 interface LeadTimelineProps {
   entries: TimelineEntry[];
@@ -304,7 +324,9 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                       {isSystem ? (
                         <div className="mt-2 rounded-lg border border-[var(--border)] p-3">
                           <p className="text-sm font-semibold text-[var(--foreground)]">{entry.subject}</p>
-                          <p className="mt-1 text-sm text-[var(--muted-foreground)]">{entry.message_content}</p>
+                          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                            {localizedFieldsUpdatedContent(entry) ?? entry.message_content}
+                          </p>
                         </div>
                       ) : (
                         <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />

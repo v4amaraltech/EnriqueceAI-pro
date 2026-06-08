@@ -4,34 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { History, Loader2 } from 'lucide-react';
 
 import type { AuditLogEntry } from '../actions/fetch-lead-audit';
-
-const FIELD_LABELS: Record<string, string> = {
-  first_name: 'Nome',
-  last_name: 'Sobrenome',
-  email: 'Email',
-  telefone: 'Telefone',
-  nome_fantasia: 'Nome Fantasia',
-  razao_social: 'Razão Social',
-  cnpj: 'CNPJ',
-  status: 'Status',
-  lead_source: 'Origem',
-  canal: 'Sub-origem',
-  job_title: 'Cargo',
-  linkedin: 'LinkedIn',
-  website: 'Website',
-  instagram: 'Instagram',
-  notes: 'Anotações',
-  assigned_to: 'Responsável',
-  closer_id: 'Closer',
-  is_inbound: 'Inbound',
-  porte: 'Porte',
-  faturamento_estimado: 'Faturamento Estimado',
-  custom_field_values: 'Campos Personalizados',
-  phones: 'Telefones',
-  socios: 'Sócios',
-  email_bounced_at: 'Email Bounce',
-  whatsapp_invalid_at: 'WhatsApp Inválido',
-};
+import { leadFieldLabel } from '../constants/lead-field-labels';
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Novo',
@@ -131,7 +104,7 @@ export function LeadAuditTab({ leadId }: LeadAuditTabProps) {
               {Object.entries(entry.metadata.changes as Record<string, { from: unknown; to: unknown }>).map(([field, change]: [string, { from: unknown; to: unknown }]) => (
                 <div key={field} className="flex flex-wrap items-baseline gap-1 text-sm">
                   <span className="font-medium text-[var(--foreground)]">
-                    {FIELD_LABELS[field] ?? field}:
+                    {leadFieldLabel(field)}:
                   </span>
                   <span className="text-red-500 line-through text-xs">
                     {formatValue(field, change.from, entry.closerNames)}

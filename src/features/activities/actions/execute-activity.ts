@@ -17,6 +17,7 @@ import type { InteractionRow } from '@/features/cadences/types';
 
 import { toPlainText } from '@/lib/utils/html-to-plaintext';
 import { withTimeout } from '@/lib/utils/with-timeout';
+import { CHANNEL_LABELS } from '@/shared/constants/chart-colors';
 
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
 import { createNotification } from '@/features/notifications/services/notification.service';
@@ -282,7 +283,7 @@ export async function executeActivity(
         step_id: s.id,
         channel: 'system',
         type: 'sent',
-        message_content: `Step ${s.step_order} (${s.channel}) pulado — SDR executou o step ${executedStepOrder} (${input.channel}) primeiro.`,
+        message_content: `Etapa ${s.step_order} (${CHANNEL_LABELS[s.channel] ?? s.channel}) pulada — SDR executou a etapa ${executedStepOrder} (${CHANNEL_LABELS[input.channel] ?? input.channel}) primeiro.`,
         performed_by: userId,
         metadata: {
           system_event: 'step_skipped',
