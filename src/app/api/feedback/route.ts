@@ -32,6 +32,18 @@ interface FeedbackRequestFull {
   expires_at: string;
 }
 
+/** Next business day (Mon–Fri) at 09:00 BRT, returned as a UTC ISO string. */
+function nextBusinessDayAt9hBRT(now: Date): string {
+  // Reason in BRT (UTC-3) calendar terms.
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const d = new Date(Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate() + 1));
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  // 09:00 BRT == 12:00 UTC on that day.
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0)).toISOString();
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -151,6 +163,16 @@ export async function POST(request: Request) {
           closer_id: feedbackReq.closer_id,
         },
       } as Record<string, unknown>);
+
+      // Reopening leaves the lead 'qualified' but passive — without a task it
+      // tends to go cold (audit 2026-06: ~1/3 of reopened leads got no
+      // follow-up). Schedule a phone follow-up so it resurfaces in the SDR's
+      // queue. Runs in background; never blocks/breaks the feedback response.
+      after(() =>
+        scheduleReopenFollowUp(supabase, feedbackReq, result).catch((err) =>
+          console.error('[api/feedback] reopen follow-up task error:', err),
+        ),
+      );
     }
 
     // Notify SDR in background after response is sent
@@ -181,6 +203,61 @@ export async function POST(request: Request) {
     console.error('[api/feedback] Unexpected error:', err);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
+}
+
+/**
+ * After a closer reopens a lead (no_show / rescheduled), create a phone
+ * follow-up task so the lead returns to the SDR's activity queue instead of
+ * silently going cold. This endpoint is public (no session), so we insert
+ * directly with the service role and set user_id to the owning SDR — we can't
+ * reuse scheduleActivity(), which requires an authenticated user.
+ */
+async function scheduleReopenFollowUp(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  feedbackReq: FeedbackRequestFull,
+  result: string,
+) {
+  // Owning SDR: whoever marked as won, fallback to assigned_to.
+  const { data: lead } = (await from(supabase, 'leads')
+    .select('won_by, assigned_to')
+    .eq('id', feedbackReq.lead_id)
+    .eq('org_id', feedbackReq.org_id)
+    .is('deleted_at', null)
+    .single()) as { data: { won_by: string | null; assigned_to: string | null } | null };
+
+  const sdrUserId = lead?.won_by ?? lead?.assigned_to;
+  if (!sdrUserId) return;
+
+  // Don't stack tasks: skip if the lead already has a pending activity.
+  const { data: existing } = (await from(supabase, 'scheduled_activities')
+    .select('id')
+    .eq('lead_id', feedbackReq.lead_id)
+    .eq('status', 'pending')
+    .limit(1)) as { data: Array<{ id: string }> | null };
+  if (existing?.length) return;
+
+  await from(supabase, 'scheduled_activities').insert({
+    org_id: feedbackReq.org_id,
+    lead_id: feedbackReq.lead_id,
+    user_id: sdrUserId,
+    channel: 'phone',
+    scheduled_at: nextBusinessDayAt9hBRT(new Date()),
+    status: 'pending',
+    notes:
+      result === 'no_show'
+        ? 'Reaberto: closer marcou não compareceu — retomar contato'
+        : 'Reaberto: reunião remarcada pelo closer — combinar nova data',
+  } as Record<string, unknown>);
+
+  // Timeline audit, mirroring scheduleActivity's system_event.
+  await from(supabase, 'interactions').insert({
+    org_id: feedbackReq.org_id,
+    lead_id: feedbackReq.lead_id,
+    channel: 'system',
+    type: 'sent',
+    message_content: 'Atividade de retorno agendada automaticamente (telefone) — lead reaberto',
+    metadata: { system_event: 'activity_scheduled', auto: true, source: 'closer_feedback_reopen' },
+  } as Record<string, unknown>);
 }
 
 async function notifySdr(
