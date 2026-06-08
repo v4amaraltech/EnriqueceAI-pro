@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { formatRelativeTime } from './ActivityRow';
 
 describe('formatRelativeTime', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should return "Agora" for just now', () => {
     const result = formatRelativeTime(new Date().toISOString());
     expect(result.text).toBe('Agora');
@@ -26,7 +30,12 @@ describe('formatRelativeTime', () => {
   });
 
   it('should return days for >= 24h', () => {
-    const date = new Date(Date.now() - 2 * 24 * 3600000); // 2 days ago
+    // Fixed mid-week "now" so "2 days ago" is also a business day. Otherwise the
+    // business-hours overdue clamp drops isUrgent when the test runs on a Monday
+    // (2 days ago lands on the weekend), making it flaky by day-of-week.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-10T15:00:00-03:00')); // Wednesday 15h BRT
+    const date = new Date(Date.now() - 2 * 24 * 3600000); // 2 days ago → Monday
     const result = formatRelativeTime(date.toISOString());
     expect(result.text).toBe('Há 2d');
     expect(result.isUrgent).toBe(true);

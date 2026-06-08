@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { format, subDays } from 'date-fns';
+import { format, startOfMonth, subDays } from 'date-fns';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDateRange, parseDateRangeParams } from './useDateRange';
@@ -19,6 +19,9 @@ function today(): string {
 function daysAgo(n: number): string {
   return format(subDays(new Date(), n), 'yyyy-MM-dd');
 }
+function monthStart(): string {
+  return format(startOfMonth(new Date()), 'yyyy-MM-dd');
+}
 
 beforeEach(() => {
   currentParams = new URLSearchParams();
@@ -26,9 +29,9 @@ beforeEach(() => {
 });
 
 describe('useDateRange', () => {
-  it('returns default 30-day range when no params', () => {
+  it('returns current-month range when no params', () => {
     const { result } = renderHook(() => useDateRange());
-    expect(result.current.from).toBe(daysAgo(30));
+    expect(result.current.from).toBe(monthStart());
     expect(result.current.to).toBe(today());
   });
 
@@ -113,9 +116,9 @@ describe('parseDateRangeParams', () => {
     expect(result.compare).toBe(false);
   });
 
-  it('returns 30-day default when no params', () => {
+  it('returns current-month default when no params', () => {
     const result = parseDateRangeParams({});
-    expect(result.from).toBe(daysAgo(30));
+    expect(result.from).toBe(monthStart());
     expect(result.to).toBe(today());
     expect(result.compare).toBe(false);
   });
@@ -125,9 +128,9 @@ describe('parseDateRangeParams', () => {
     expect(result).toEqual({ from: '2026-02-01', to: '2026-02-15', compare: false });
   });
 
-  it('falls back to default when only from is provided', () => {
+  it('falls back to current-month default when only from is provided', () => {
     const result = parseDateRangeParams({ from: '2026-01-01' });
-    expect(result.from).toBe(daysAgo(30));
+    expect(result.from).toBe(monthStart());
     expect(result.to).toBe(today());
     expect(result.compare).toBe(false);
   });
