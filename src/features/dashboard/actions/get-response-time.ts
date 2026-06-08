@@ -22,6 +22,14 @@ function toBRT(date: Date): { hours: number; minutes: number; dayOfWeek: number 
   return { hours: brt.getUTCHours(), minutes: brt.getUTCMinutes(), dayOfWeek: brt.getUTCDay() };
 }
 
+// Inbound lead sources — leads that ARRIVE on the platform and need a fast
+// first response. Outbound (SDR-prospected) leads are excluded because their
+// created_at is the import time, not a real arrival, so "response time" isn't
+// meaningful for them: an SDR who imports leads just before working them shows
+// a near-100% rate that only reflects the import-to-approach gap, not how fast
+// an incoming lead was answered. To add a new inbound source, list it here.
+const INBOUND_LEAD_SOURCES = ['Blackbox', 'Leadbroker'];
+
 export interface ResponseTimeFilters {
   cadenceFocus?: string[];
   days?: number[];
@@ -50,12 +58,15 @@ export async function getResponseTimeData(
 
   // Fetch leads created in period. Archived leads excluded — they were
   // discarded by the SDR/manager and shouldn't drag the response-time
-  // denominator down.
+  // denominator down. Only INBOUND leads count: response time measures how
+  // fast an incoming lead is answered, which is meaningless for outbound
+  // leads the SDR imports and prospects himself (see INBOUND_LEAD_SOURCES).
   const { data: leads } = (await from(supabase, 'leads')
-    .select('id, created_at, assigned_to')
+    .select('id, created_at, assigned_to, lead_source')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .neq('status', 'archived')
+    .in('lead_source', INBOUND_LEAD_SOURCES)
     .gte('created_at', monthStart)
     .lte('created_at', monthEnd)) as { data: LeadQueryRow[] | null };
 

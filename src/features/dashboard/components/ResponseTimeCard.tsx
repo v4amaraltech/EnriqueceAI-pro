@@ -211,7 +211,7 @@ export function ResponseTimeCard({ data, dateRange }: ResponseTimeCardProps) {
             abordados em até <span className="text-primary font-semibold">{threshold}</span>
           </p>
           <p className="mt-6 text-sm text-[var(--muted-foreground)] text-center max-w-[300px] leading-relaxed">
-            O tempo de resposta mede o tempo corrido entre o recebimento do lead na plataforma e a primeira atividade do vendedor.
+            Considera apenas leads inbound (Blackbox, Leadbroker). Mede o tempo corrido entre o recebimento do lead na plataforma e a primeira atividade do vendedor.
           </p>
         </div>
 

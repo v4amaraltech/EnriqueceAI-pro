@@ -41,4 +41,5 @@ export interface LeadQueryRow {
   won_by: string | null;
   created_at: string;
   won_at: string | null;
+  lead_source?: string | null;
 }
