@@ -12,7 +12,6 @@ import { Calendar } from '@/shared/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -43,7 +42,6 @@ import type { MissingRequiredField } from '../utils/required-field-validation';
 import { getMissingRequiredFields } from '../utils/required-field-validation';
 import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead } from '../actions/lead-lifecycle';
 import { fetchCrmPipelines, fetchKommoUsers, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { fetchCloserFeedback, type CloserFeedbackData } from '../actions/fetch-closer-feedback';
@@ -84,7 +82,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [isPending, startTransition] = useTransition();
 
   // Dialog state
-  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
@@ -232,19 +229,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [wonMissingFields, setWonMissingFields] = useState<MissingRequiredField[]>([]);
   const [wonFieldValues, setWonFieldValues] = useState<Record<string, string>>({});
   const [loadingRequiredFields, setLoadingRequiredFields] = useState(false);
-
-  const handleArchive = useCallback(() => {
-    startTransition(async () => {
-      const result = await archiveLead(lead.id);
-      if (result.success) {
-        toast.success('Lead arquivado');
-        router.push('/leads');
-      } else {
-        toast.error(result.error);
-      }
-    });
-    setShowArchiveDialog(false);
-  }, [lead.id, router]);
 
   const handleCall = useCallback(async () => {
     const phone = lead.telefone ?? lead.phones?.[0]?.numero;
@@ -457,7 +441,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         onShowCadence={() => setShowEnrollCadence(true)}
         onShowAI={() => setShowAIGenerator(true)}
         onShowMeeting={() => setShowMeeting(true)}
-        onShowArchive={() => setShowArchiveDialog(true)}
         onShowLost={handleOpenLostDialog}
         onShowWon={handleOpenWonDialog}
         onEnrichApollo={handleEnrichApollo}
@@ -590,26 +573,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} jobTitleOptions={jobTitleOptions} standardFieldSettings={standardFieldSettings} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
-
-      {/* Archive confirmation dialog */}
-      <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Arquivar lead</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja arquivar este lead? O lead não aparecerá mais na lista principal.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowArchiveDialog(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleArchive} disabled={isPending}>
-              Arquivar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Loss reason dialog */}
       <MarkLeadLostDialog
