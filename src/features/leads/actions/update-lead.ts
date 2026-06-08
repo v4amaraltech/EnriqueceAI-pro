@@ -12,6 +12,7 @@ import { from } from '@/lib/supabase/from';
 import { logLeadEvent } from './log-lead-event';
 import { recalcFitScoreForLead } from './recalc-fit-scores';
 import { normalizeOriginFields } from '../schemas/lead.schemas';
+import { leadFieldLabel } from '../constants/lead-field-labels';
 
 /**
  * Resume paused enrollments when lead data is updated.
@@ -193,15 +194,6 @@ export async function updateLead(
         metadata: { changes },
       });
 
-      // Log to lead timeline
-      const fieldLabels: Record<string, string> = {
-        first_name: 'Nome', last_name: 'Sobrenome', nome_fantasia: 'Empresa', email: 'Email',
-        telefone: 'Telefone', job_title: 'Cargo', lead_source: 'Origem', canal: 'Sub-origem',
-        segmento: 'Segmento',
-        cnpj: 'CNPJ', instagram: 'Instagram', linkedin: 'LinkedIn', website: 'Website',
-        status: 'Status', assigned_to: 'Responsável', closer_id: 'Closer',
-        faturamento_estimado: 'Faturamento', phones: 'Telefones', emails: 'E-mails',
-      };
       // Skip complex object fields (phones, socios, emails) from the message — they're in metadata
       const skipFields = new Set(['phones', 'socios', 'emails']);
       const changeDescriptions: string[] = [];
@@ -232,7 +224,7 @@ export async function updateLead(
           continue;
         }
 
-        const label = fieldLabels[key] ?? key;
+        const label = leadFieldLabel(key);
         let fromStr = oldVal != null && oldVal !== '' && typeof oldVal !== 'object' ? String(oldVal) : '(vazio)';
         let toStr = newVal != null && newVal !== '' && typeof newVal !== 'object' ? String(newVal) : '(vazio)';
 
