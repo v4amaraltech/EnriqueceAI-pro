@@ -3,7 +3,6 @@
 import { useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Archive,
   Calendar,
   ChevronLeft,
   Globe,
@@ -38,7 +37,6 @@ interface LeadDetailHeaderProps {
   onShowCadence: () => void;
   onShowAI: () => void;
   onShowMeeting: () => void;
-  onShowArchive: () => void;
   onShowLost: () => void;
   onShowWon: () => void;
   onEnrichApollo: () => void;
@@ -54,7 +52,6 @@ export function LeadDetailHeader({
   onShowCadence,
   onShowAI,
   onShowMeeting,
-  onShowArchive,
   onShowLost,
   onShowWon,
   onEnrichApollo,
@@ -235,11 +232,6 @@ export function LeadDetailHeader({
                 </DropdownMenuItem>
               </>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onShowArchive} className="text-red-600">
-              <Archive className="mr-2 h-3.5 w-3.5" />
-              Arquivar
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

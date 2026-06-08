@@ -24,7 +24,6 @@ const STATUS_TABS: Array<{ key: string; label: string; countKey: keyof LeadStatu
   { key: 'qualified', label: 'Qualificado', countKey: 'qualified' },
   { key: 'won', label: 'Ganho', countKey: 'won' },
   { key: 'unqualified', label: 'Não Qualificado', countKey: 'unqualified' },
-  { key: 'archived', label: 'Arquivado', countKey: 'archived' },
 ];
 
 interface LeadListViewProps {

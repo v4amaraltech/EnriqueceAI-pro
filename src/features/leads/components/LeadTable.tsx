@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, UserCheck, Zap } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpDown, Download, Globe, MoreHorizontal, Pause, Pencil, Play, RefreshCw, ThumbsDown, UserCheck, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -24,7 +24,7 @@ import {
 } from '@/shared/components/ui/table';
 
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
-import { bulkArchiveLeads, bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkReopenLeads, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkReopenLeads, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
@@ -34,6 +34,7 @@ import { EngagementScoreBadge } from './EngagementScoreBadge';
 import { LeadAvatar } from './LeadAvatar';
 import { LeadSourceBadge, LeadStatusBadge } from './LeadStatusBadge';
 import { AssignDialog, ConfirmDialog, EnrichConfirmDialog, StatusDialog } from './LeadTableDialogs';
+import { BulkMarkLeadsLostDialog } from './BulkMarkLeadsLostDialog';
 
 interface LeadTableProps {
   leads: LeadRow[];
@@ -59,9 +60,10 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showEnrichConfirm, setShowEnrichConfirm] = useState<'apollo' | null>(null);
-  const [singleArchiveId, setSingleArchiveId] = useState<string | null>(null);
+  // Holds the lead ids targeted by the "Perdido" dialog — the selected set for
+  // the bulk-bar action, or a single [lead.id] from the row "..." menu.
+  const [lostLeadIds, setLostLeadIds] = useState<string[] | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusTarget, setStatusTarget] = useState('');
@@ -138,21 +140,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     router.push(`/leads?${params.toString()}`);
   }, [router, searchParams, currentSortBy, currentSortDir]);
 
-  const handleArchiveConfirmed = useCallback(() => {
-    const ids = Array.from(selected);
-    startTransition(async () => {
-      const result = await bulkArchiveLeads(ids);
-      if (result.success) {
-        toast.success(`${result.data.count} leads arquivados`);
-        setSelected(new Set());
-        setShowArchiveConfirm(false);
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [selected, router]);
-
   const handleDeleteConfirmed = useCallback(() => {
     const ids = Array.from(selected);
     startTransition(async () => {
@@ -217,20 +204,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
       }
     });
   }, [router]);
-
-  const handleSingleArchiveConfirmed = useCallback(() => {
-    if (!singleArchiveId) return;
-    startTransition(async () => {
-      const result = await bulkArchiveLeads([singleArchiveId]);
-      if (result.success) {
-        toast.success('Lead arquivado');
-        setSingleArchiveId(null);
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [singleArchiveId, router]);
 
   const handleOpenAssignDialog = useCallback(() => {
     setShowAssignDialog(true);
@@ -425,11 +398,11 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowArchiveConfirm(true)}
-              disabled={isPending}
+              onClick={() => setLostLeadIds(Array.from(selected))}
+              disabled={isPending || selected.size === 0}
             >
-              <Archive className="mr-1 h-3.5 w-3.5" />
-              Arquivar
+              <ThumbsDown className="mr-1 h-3.5 w-3.5" />
+              Perdido
             </Button>
             <Button
               variant="outline"
@@ -588,9 +561,9 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                           Enriquecer (Apollo)
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setSingleArchiveId(lead.id)}>
-                          <Archive className="mr-2 h-3.5 w-3.5" />
-                          Arquivar
+                        <DropdownMenuItem onClick={() => setLostLeadIds([lead.id])} className="text-red-600">
+                          <ThumbsDown className="mr-2 h-3.5 w-3.5" />
+                          Perdido
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -603,17 +576,6 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
       </div>
 
       {/* Confirmation dialogs */}
-      <ConfirmDialog
-        open={showArchiveConfirm}
-        onOpenChange={setShowArchiveConfirm}
-        title="Arquivar leads"
-        description={`${selected.size} lead${selected.size > 1 ? 's serão arquivados' : ' será arquivado'}. Leads arquivados saem da lista principal e da fila de atividades, mas continuam acessíveis pelo filtro "Arquivado". Cadências ativas serão encerradas.`}
-        confirmLabel="Arquivar"
-        pendingLabel="Arquivando..."
-        onConfirm={handleArchiveConfirmed}
-        isPending={isPending}
-      />
-
       <ConfirmDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
@@ -636,15 +598,15 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
         isPending={isPending}
       />
 
-      <ConfirmDialog
-        open={!!singleArchiveId}
-        onOpenChange={(open) => !open && setSingleArchiveId(null)}
-        title="Arquivar lead"
-        description="O lead será arquivado. Ele sairá da lista principal e da fila de atividades, mas continuará acessível pelo filtro 'Arquivado'. Cadências ativas serão encerradas."
-        confirmLabel="Arquivar"
-        pendingLabel="Arquivando..."
-        onConfirm={handleSingleArchiveConfirmed}
-        isPending={isPending}
+      <BulkMarkLeadsLostDialog
+        leadIds={lostLeadIds ?? []}
+        open={!!lostLeadIds}
+        onOpenChange={(open) => !open && setLostLeadIds(null)}
+        onSuccess={() => {
+          setSelected(new Set());
+          setLostLeadIds(null);
+          router.refresh();
+        }}
       />
 
       <AssignDialog
