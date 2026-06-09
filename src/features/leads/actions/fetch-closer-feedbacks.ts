@@ -17,6 +17,27 @@ export interface CloserFeedbackRow {
   expires_at: string;
 }
 
+// A feedback request gets killed when a manager reassigns the lead's closer:
+// reassignCloser sets the old request's `expires_at = now()` (well before its
+// natural 7-day window) and creates a fresh request for the new closer. The
+// killed request lingers as an unanswered "Expirado" row next to the real one,
+// polluting both the list and the closer response-rate metrics. We hide those
+// superseded requests from the reporting view (data is untouched).
+const NATURAL_WINDOW_FLOOR_MS = 6 * 24 * 60 * 60 * 1000; // 6 days (natural window is 7)
+
+function isSupersededByReassignment(
+  row: { responded_at: string | null; sent_at: string; expires_at: string; lead_id: string },
+  newestSentByLead: Map<string, number>,
+): boolean {
+  if (row.responded_at) return false; // answered requests always count
+  const sentMs = new Date(row.sent_at).getTime();
+  const expiresMs = new Date(row.expires_at).getTime();
+  // Killed early (short validity window) → reassignment, not a natural 7-day expiry.
+  if (expiresMs - sentMs >= NATURAL_WINDOW_FLOOR_MS) return false;
+  // A later request exists for the same lead = the replacement that superseded it.
+  return (newestSentByLead.get(row.lead_id) ?? -Infinity) > sentMs;
+}
+
 export async function fetchCloserFeedbacks(
   dateFrom?: string,
   dateTo?: string,
@@ -51,9 +72,19 @@ export async function fetchCloserFeedbacks(
 
   if (error || !data) return { success: false, error: 'Erro ao buscar feedbacks' };
 
+  // Drop requests that were superseded by a closer reassignment so they don't
+  // show up as phantom "Expirado" rows or drag down response-rate metrics.
+  const newestSentByLead = new Map<string, number>();
+  for (const d of data) {
+    const ms = new Date(d.sent_at).getTime();
+    const current = newestSentByLead.get(d.lead_id);
+    if (current === undefined || ms > current) newestSentByLead.set(d.lead_id, ms);
+  }
+  const visible = data.filter((d) => !isSupersededByReassignment(d, newestSentByLead));
+
   // Batch fetch lead names and closer names
-  const leadIds = [...new Set(data.map((d) => d.lead_id))];
-  const closerIds = [...new Set(data.map((d) => d.closer_id))];
+  const leadIds = [...new Set(visible.map((d) => d.lead_id))];
+  const closerIds = [...new Set(visible.map((d) => d.closer_id))];
 
   const [leadsResult, closersResult] = await Promise.all([
     from(supabase, 'leads')
@@ -69,7 +100,7 @@ export async function fetchCloserFeedbacks(
 
   return {
     success: true,
-    data: data.map((d) => ({
+    data: visible.map((d) => ({
       id: d.id,
       lead_name: leadMap.get(d.lead_id) ?? 'Lead',
       closer_name: closerMap.get(d.closer_id)?.name ?? 'Closer',
