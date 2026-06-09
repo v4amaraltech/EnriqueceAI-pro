@@ -60,6 +60,32 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
       feedbackToken = existing.token;
       console.warn('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
     } else {
+      // Don't re-ask a closer who already graded this lead in the last 24h.
+      // This happens when a lead is marked "Ganho" a second time (without a
+      // reopen) hours after the first feedback was already answered, spawning a
+      // duplicate request for the same meeting. A genuine second meeting is
+      // always days apart (and the lead goes through a reopen first), so it
+      // falls outside this window and still gets its own request.
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentlyAnswered } = (await from(supabase, 'closer_feedback_requests')
+        .select('id')
+        .eq('lead_id', leadId)
+        .eq('closer_id', closerId)
+        .not('responded_at', 'is', null)
+        .gte('responded_at', since24h)
+        .limit(1)
+        .maybeSingle()) as { data: { id: string } | null };
+
+      if (recentlyAnswered) {
+        console.warn(
+          '[closer-feedback] Skipping — closer=%s already answered feedback for lead=%s within 24h',
+          closerId,
+          leadId,
+        );
+        channels.emailError = 'already_answered_recently';
+        return channels;
+      }
+
       // Don't create a feedback request before the meeting actually happens.
       // Otherwise the closer gets pestered to grade a meeting that's still in the future.
       const { data: latestMeeting } = (await from(supabase, 'interactions')
