@@ -326,15 +326,21 @@ export async function markLeadAsWon(
       .eq('system_key', 'meeting_held_at')
       .maybeSingle()) as { data: { id: string } | null };
 
+    // Idempotency guard: re-marking an already-won lead must NOT re-stamp
+    // won_at/meeting_held_at — that overwrites the real win date and (combined
+    // with a duplicate feedback request) is how the same meeting ended up
+    // graded twice. We still upsert status='won' (a no-op) so the legitimate
+    // reopen→re-win path (status='qualified' at that point) stamps fresh.
+    const { data: currentLead } = (await from(supabase, 'leads')
+      .select('status, custom_field_values')
+      .eq('id', leadId)
+      .eq('org_id', orgId)
+      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null } | null };
+    const wasAlreadyWon = currentLead?.status === 'won';
+
     let customFieldUpdate: Record<string, unknown> | null = null;
     if (mhCustomField) {
-      const { data: existingLead } = (await from(supabase, 'leads')
-        .select('custom_field_values')
-        .eq('id', leadId)
-        .eq('org_id', orgId)
-        .single()) as { data: { custom_field_values: Record<string, unknown> | null } | null };
-
-      const currentValues = (existingLead?.custom_field_values ?? {}) as Record<string, unknown>;
+      const currentValues = (currentLead?.custom_field_values ?? {}) as Record<string, unknown>;
       const existingValue = currentValues[mhCustomField.id];
       if (existingValue === undefined || existingValue === null || existingValue === '') {
         // Custom field is type='date' — store as YYYY-MM-DD in the org's
@@ -346,13 +352,15 @@ export async function markLeadAsWon(
       }
     }
 
+    // Preserve the original win timestamps when the lead was already won.
+    const wonStamps = wasAlreadyWon
+      ? {}
+      : { won_by: userId, won_at: nowIso, meeting_held_at: nowIso, qualified_at: nowIso };
+
     const { error: leadError } = await from(supabase, 'leads')
       .update({
         status: 'won',
-        won_by: userId,
-        won_at: nowIso,
-        meeting_held_at: nowIso,
-        qualified_at: nowIso,
+        ...wonStamps,
         ...(customFieldUpdate ?? {}),
       } as Record<string, unknown>)
       .eq('id', leadId)
