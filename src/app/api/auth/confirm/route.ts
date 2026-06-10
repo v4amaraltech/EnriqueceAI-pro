@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 import { acceptPendingInvite } from '@/features/auth/actions/accept-invite';
 
@@ -17,19 +18,19 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type'); // 'recovery' for password reset
 
     if (!code) {
-      return NextResponse.redirect(new URL('/login?error=missing_code', request.url));
+      return NextResponse.redirect(new URL('/login?error=missing_code', getAppUrl()));
     }
 
     const supabase = await createServerSupabaseClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
-      return NextResponse.redirect(new URL('/login?error=auth', request.url));
+      return NextResponse.redirect(new URL('/login?error=auth', getAppUrl()));
     }
 
     // Password recovery flow → redirect to set new password
     if (type === 'recovery') {
-      return NextResponse.redirect(new URL('/setup-password', request.url));
+      return NextResponse.redirect(new URL('/setup-password', getAppUrl()));
     }
 
     // Accept pending org invite if one exists (deletes auto-created org, activates member)
@@ -40,12 +41,12 @@ export async function GET(request: NextRequest) {
 
     // Invite accepted → redirect to set up password
     if (inviteResult && inviteResult.success && inviteResult.data) {
-      return NextResponse.redirect(new URL('/setup-password', request.url));
+      return NextResponse.redirect(new URL('/setup-password', getAppUrl()));
     }
 
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/dashboard', getAppUrl()));
   } catch (err) {
     console.error('[auth/confirm] Unexpected error:', err);
-    return NextResponse.redirect(new URL('/login?error=auth', request.url));
+    return NextResponse.redirect(new URL('/login?error=auth', getAppUrl()));
   }
 }
