@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { handleCrmCallback } from '@/features/integrations/actions/manage-crm';
 import { consumeOAuthState } from '@/lib/security/oauth-state';
+import { getAppUrl } from '@/lib/utils/app-url';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL('/settings/integrations?error=oauth_denied', url.origin),
+      new URL('/settings/integrations?error=oauth_denied', getAppUrl()),
     );
   }
 
@@ -27,19 +28,19 @@ export async function GET(request: Request) {
   const stateValid = await consumeOAuthState('kommo', state);
   if (!stateValid) {
     return NextResponse.redirect(
-      new URL('/settings/integrations?error=oauth_state_mismatch', url.origin),
+      new URL('/settings/integrations?error=oauth_state_mismatch', getAppUrl()),
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL('/settings/integrations?error=no_code', url.origin),
+      new URL('/settings/integrations?error=no_code', getAppUrl()),
     );
   }
 
   if (!referer) {
     return NextResponse.redirect(
-      new URL('/settings/integrations?error=kommo_missing_subdomain', url.origin),
+      new URL('/settings/integrations?error=kommo_missing_subdomain', getAppUrl()),
     );
   }
 
@@ -47,11 +48,11 @@ export async function GET(request: Request) {
 
   if (result.success) {
     return NextResponse.redirect(
-      new URL('/settings/integrations?success=kommo_connected', url.origin),
+      new URL('/settings/integrations?success=kommo_connected', getAppUrl()),
     );
   }
 
   return NextResponse.redirect(
-    new URL(`/settings/integrations?error=${encodeURIComponent(result.error)}`, url.origin),
+    new URL(`/settings/integrations?error=${encodeURIComponent(result.error)}`, getAppUrl()),
   );
 }
