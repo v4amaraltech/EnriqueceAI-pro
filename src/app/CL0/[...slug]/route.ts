@@ -1,36 +1,42 @@
 import { NextResponse } from 'next/server';
 
-// Closers' inboxes rewrite our feedback links into the `/CL0/<encoded-url>/<id>/<hash>`
-// shape (SendGrid/MailGun-style click tracking). Without this handler the path
-// 404s and the middleware bounces the closer to /login — they think the
-// feedback form is gated. Decode the wrapped URL, sanity-check the host, and
-// redirect back to the intended destination.
+import { getAppUrl } from '@/lib/utils/app-url';
+
+// Corporate inboxes rewrite outbound links into `/CL0/<encoded-url>/<id>/<hash>`
+// (SendGrid/MailGun-style click tracking). This hits feedback links and also
+// Supabase auth emails (password reset, invites). Decode the wrapped URL,
+// sanity-check the host, and redirect to the intended destination.
 
 const ALLOWED_HOSTS = new Set([
   'app.enriqueceai.com.br',
   'enriqueceai.com.br',
 ]);
 
-function safeFallback(origin: string): NextResponse {
-  return NextResponse.redirect(new URL('/', origin), 302);
+function isAllowedRedirectHost(host: string): boolean {
+  return ALLOWED_HOSTS.has(host) || host.endsWith('.supabase.co');
+}
+
+function safeFallback(): NextResponse {
+  // Never use request.url origin behind Coolify/proxies — it can be 0.0.0.0:80.
+  return NextResponse.redirect(new URL('/', getAppUrl()), 302);
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const trailing = url.pathname.replace(/^\/CL0\//i, '');
-  if (!trailing) return safeFallback(url.origin);
+  if (!trailing) return safeFallback();
 
   const encoded = trailing.split('/')[0];
-  if (!encoded) return safeFallback(url.origin);
+  if (!encoded) return safeFallback();
 
   let target: URL;
   try {
     target = new URL(decodeURIComponent(encoded));
   } catch {
-    return safeFallback(url.origin);
+    return safeFallback();
   }
 
-  if (!ALLOWED_HOSTS.has(target.host)) return safeFallback(url.origin);
+  if (!isAllowedRedirectHost(target.host)) return safeFallback();
 
   return NextResponse.redirect(target.toString(), 302);
 }
