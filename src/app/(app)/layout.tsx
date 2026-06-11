@@ -18,14 +18,11 @@ import { NotificationProvider } from '@/features/notifications/components/Notifi
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
 import { ChunkReloadFlagReset } from '@/shared/components/ChunkReloadFlagReset';
-import { ClientErrorBoundary } from '@/shared/components/ClientErrorBoundary';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
 import { fetchPendingActivitiesCount } from '@/features/activities/actions/fetch-pending-count';
 import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
-
-import { Api4ComWebphoneWrapper } from '@/features/integrations/components/Api4ComWebphone';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
@@ -166,11 +163,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </SubscriptionGuard>
             <Toaster />
             <ChunkReloadFlagReset />
-            <ClientErrorBoundary>
-              <Suspense fallback={null}>
-                <Api4ComWebphoneWrapper />
-              </Suspense>
-            </ClientErrorBoundary>
           </NotificationProvider>
         </OrganizationProvider>
       </TooltipProvider>
