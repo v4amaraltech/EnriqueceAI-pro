@@ -12,13 +12,26 @@ import { logLeadEventBulk } from './log-lead-event';
 
 const bulkChangeStatusSchema = z.object({
   leadIds: z.array(z.string().uuid()).min(1, 'Nenhum lead selecionado').max(MAX_BULK_LEAD_IDS),
-  newStatus: z.enum(['new', 'contacted', 'qualified', 'unqualified']),
+  newStatus: z.enum(['new', 'contacted', 'qualified']),
 });
 
 export async function bulkChangeStatus(
   leadIds: string[],
-  newStatus: 'new' | 'contacted' | 'qualified' | 'unqualified',
+  newStatus: 'new' | 'contacted' | 'qualified',
 ): Promise<ActionResult<{ count: number }>> {
+  // Closed backdoor: marking leads 'unqualified' (perdido) MUST go through
+  // bulkMarkLeadsLost — it requires a loss reason and writes the lead_lost
+  // timeline event. Doing it here skipped both, leaving leads "perdidos" with
+  // no motivo and a blank timeline (34 such leads found on V4 Amaral, all
+  // status-changed via this path + later deleted). Reject it explicitly, even
+  // for non-TS callers that bypass the narrowed type above.
+  if ((newStatus as string) === 'unqualified') {
+    return {
+      success: false,
+      error: 'Para dar um lead como perdido use "Marcar como perdido" (exige motivo).',
+    };
+  }
+
   const parsed = bulkChangeStatusSchema.safeParse({ leadIds, newStatus });
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
