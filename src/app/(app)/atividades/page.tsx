@@ -9,6 +9,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '@/features/leads/actions/fetch-org-members';
 
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
+import { fetchActiveProspectingCount } from '@/features/activities/actions/fetch-active-prospecting-count';
 import { fetchAvailableLeadsCount } from '@/features/activities/actions/fetch-available-leads-count';
 import { fetchDailyProgress } from '@/features/activities/actions/fetch-daily-progress';
 import { fetchDialerPreferences } from '@/features/activities/actions/fetch-dialer-preferences';
@@ -22,11 +23,12 @@ export default async function AtividadesPage() {
   await requireAuth();
   const managerFlag = await isManager();
 
-  const [activitiesResult, progressResult, dialerResult, availableResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
+  const [activitiesResult, progressResult, dialerResult, availableResult, activeProspectingResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
     fetchPendingActivities(),
     fetchDailyProgress(),
     fetchDialerQueue(),
     fetchAvailableLeadsCount(),
+    fetchActiveProspectingCount(),
     fetchDialerStats(),
     fetchDialerPreferences(),
     getDialerProvider(),
@@ -66,6 +68,7 @@ export default async function AtividadesPage() {
   const availableLeads = availableResult.success
     ? availableResult.data
     : { count: 0, leadIds: [] as string[] };
+  const activeProspectingCount = activeProspectingResult.success ? activeProspectingResult.data : 0;
   const dialerStats = statsResult.success ? statsResult.data : undefined;
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
   const dialerProvider = providerResult.success ? providerResult.data.provider : null;
@@ -85,6 +88,7 @@ export default async function AtividadesPage() {
         dialerPreferences={dialerPreferences}
         dialerProvider={dialerProvider}
         availableLeadsCount={availableLeads.count}
+        activeProspectingCount={activeProspectingCount}
         availableLeadIds={availableLeads.leadIds}
         allCadenceNames={cadenceNames}
         isManager={managerFlag}
