@@ -7,8 +7,9 @@ Bug reportado pelo manager: o lead **KUBA SMARTHOME**
 `app.enriqueceai.com.br/leads/1d66ffdc-...`) foi dado como **perdido**, mas a
 atividade e o motivo **não apareciam na timeline** do lead.
 
-> **Status final: resolvido em duas frentes — dado backfillado em prod + código
-> blindado (PR #28 `27df43d`, mergeado na `main`).** Auto-deploy Coolify.
+> **Status final: resolvido em três frentes — dado backfillado em prod (A) +
+> markLeadAsLost blindado (B, PR #28 `27df43d`) + backdoor do bulkChangeStatus
+> fechada (C, PR #30 `4144b71`).** Tudo na `main`, auto-deploy Coolify.
 
 ## Diagnóstico
 
@@ -64,9 +65,34 @@ Backfill da interação faltante via SQL (MCP Supabase, projeto `Enriquece AI`
 - `pnpm typecheck` ✅ / `eslint` no arquivo ✅ / CI `Lint·Typecheck·Test·Build`
   pass (3m52s).
 
+## Varredura da org (após o fix)
+Checado o banco inteiro (incluindo leads deletados): **1343 leads com sinal de
+perda → 34 sem interação `lead_lost`, e todos os 34 são `deletado=true` +
+`loss_reason_id=null`**. Ou seja: **0 leads ativos** afetados (o backfill resolveu
+o único). Esses 34 NÃO são o mesmo bug — foram setados `unqualified` **sem motivo**
+via `bulkChangeStatus` (mudança de status em massa) e depois deletados. Sem motivo
+pra mostrar e fora da UI → não backfillados de propósito.
+
+## Frente C — backdoor do bulkChangeStatus fechada (PR #30, `4144b71`)
+Os 34 acima vieram de um caminho que deixava marcar `unqualified` **sem** motivo e
+**sem** o evento `lead_lost` (só logava `status_changed`). Fechado em duas camadas:
+- **Server** (`bulk-change-status.ts`): rejeita `'unqualified'` explicitamente
+  (mensagem aponta pra "Marcar como perdido") e o Zod enum + tipo do parâmetro não
+  aceitam mais o valor — bloqueia até callers fora do TS.
+- **Cliente** (`LeadTableDialogs.tsx` / `LeadTable.tsx`): removida a opção "Não
+  Qualificado" do dropdown de status em massa. O botão dedicado "Marcar como
+  perdido" (seletor de motivo, via `bulkMarkLeadsLost`) é o único caminho restante.
+
+Resultado: **não há mais como perder um lead sem motivo + sem timeline.** Todo
+`unqualified` passa obrigatoriamente pelo fluxo que grava `loss_reason` + `lead_lost`.
+
 ## Arquivos
 - `src/features/leads/actions/lead-lifecycle.ts` — `markLeadAsLost` reordenado +
-  hardening (+36/−21).
+  hardening (+36/−21). [PR #28]
+- `src/features/leads/actions/bulk-change-status.ts` — rejeita `'unqualified'`. [PR #30]
+- `src/features/leads/components/LeadTableDialogs.tsx` — removida opção "Não
+  Qualificado" do bulk status. [PR #30]
+- `src/features/leads/components/LeadTable.tsx` — cast do status ajustado. [PR #30]
 
 ## Processo / infra (relembrar)
 - Repo `Mercantes/EnriqueceAI-pro` é **redirect** para `v4amaraltech/EnriqueceAI-pro`.
