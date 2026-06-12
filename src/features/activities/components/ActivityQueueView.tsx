@@ -42,6 +42,8 @@ interface ActivityQueueViewProps {
   dialerProvider?: DialerProvider;
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
+  /** Total distinct leads in an active manual cadence (includes future steps). Banner headline. */
+  activeProspectingCount?: number;
   availableLeadIds?: string[];
   allCadenceNames?: string[];
   /** Manager view: enables the per-SDR filter over the (org-wide) queue. */
@@ -97,7 +99,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
   const router = useRouter();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
@@ -352,7 +354,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
       {/* Prospecting banner */}
       <div className="flex items-center justify-between rounded-lg border bg-[var(--card)] px-6 py-4">
         <p className="text-sm">
-          Você está prospectando <span className="font-semibold text-emerald-600">{prospectingLeadsCount} leads</span> e existem <span className="font-semibold text-emerald-600">{availableLeadsCount} leads disponíveis</span> para serem iniciados
+          Você está prospectando <span className="font-semibold text-emerald-600">{Math.max(activeProspectingCount, prospectingLeadsCount)} leads</span> <span className="text-muted-foreground">({prospectingLeadsCount} com atividade hoje)</span> e existem <span className="font-semibold text-emerald-600">{availableLeadsCount} leads disponíveis</span> para serem iniciados
         </p>
         <Button
           size="sm"
