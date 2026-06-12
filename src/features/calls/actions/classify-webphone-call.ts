@@ -9,7 +9,7 @@ import { from } from '@/lib/supabase/from';
 import { callStatusSchema } from '../schemas/call.schemas';
 
 // `status` is accepted for backwards compatibility with existing callers
-// (PostCallClassificationDialog, ActivityPhonePanel, Api4ComWebphone) but is
+// (PostCallClassificationDialog, ActivityPhonePanel) but is
 // no longer written to the calls table. Single source of truth for call
 // status is the API4COM webhook (/api/webhooks/api4com), which classifies
 // significant / no_contact / not_connected from hangup_cause + duration.
