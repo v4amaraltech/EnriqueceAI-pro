@@ -167,7 +167,6 @@ export function StatusDialog({ open, onOpenChange, statusTarget, onTargetChange,
             <SelectItem value="new">Novo</SelectItem>
             <SelectItem value="contacted">Contatado</SelectItem>
             <SelectItem value="qualified">Qualificado</SelectItem>
-            <SelectItem value="unqualified">Não Qualificado</SelectItem>
           </SelectContent>
         </Select>
         <DialogFooter>

@@ -233,7 +233,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
     if (!statusTarget) return;
     const ids = Array.from(selected);
     startTransition(async () => {
-      const result = await bulkChangeStatus(ids, statusTarget as 'new' | 'contacted' | 'qualified' | 'unqualified');
+      const result = await bulkChangeStatus(ids, statusTarget as 'new' | 'contacted' | 'qualified');
       if (result.success) {
         toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} atualizado${result.data.count > 1 ? 's' : ''}`);
         setSelected(new Set());
