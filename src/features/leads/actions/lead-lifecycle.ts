@@ -84,7 +84,40 @@ export async function markLeadAsLost(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  // 1. Update lead status to unqualified + persist the loss reason on the lead
+  // 1. Record the loss on the timeline FIRST, before flipping the lead status.
+  // The interaction insert error must NEVER be swallowed: a lead marked
+  // 'unqualified' with no timeline entry is invisible to the SDR (KUBA
+  // SMARTHOME, 12/06/2026 — the loss persisted at 17:17 but this insert dropped
+  // silently and the timeline stayed blank, 1 lead in 1270). Same ordering
+  // rationale as expire-inactive-leads: the audit trail outlives the status flip.
+  const { data: reason } = (await from(supabase, 'loss_reasons')
+    .select('name')
+    .eq('id', lossReasonId)
+    .single()) as { data: { name: string } | null };
+
+  const lossMessage = `Lead marcado como perdido — Motivo: ${reason?.name ?? 'Desconhecido'}${lossNotes ? ` | Obs: ${lossNotes}` : ''}`;
+  const lossInteraction = {
+    org_id: orgId,
+    lead_id: leadId,
+    channel: 'system',
+    type: 'sent',
+    message_content: lossMessage,
+    performed_by: auth.data.userId,
+    metadata: { system_event: 'lead_lost', loss_reason_id: lossReasonId, loss_reason_name: reason?.name },
+  } as Record<string, unknown>;
+
+  // Insert with one retry. The error is checked (never ignored) so a transient
+  // failure is logged loudly instead of silently dropping the timeline event.
+  let { error: interactionError } = await from(supabase, 'interactions').insert(lossInteraction);
+  if (interactionError) {
+    console.error(`[markLeadAsLost] lead=${leadId} interaction insert failed, retrying:`, interactionError.message);
+    ({ error: interactionError } = await from(supabase, 'interactions').insert(lossInteraction));
+    if (interactionError) {
+      console.error(`[markLeadAsLost] lead=${leadId} interaction insert failed after retry:`, interactionError.message);
+    }
+  }
+
+  // 2. Flip lead status to unqualified + persist the loss reason on the lead
   // (canonical source — the loss reason belongs to the lead, not a cadence;
   // the enrollment copy below is only stamped for active/paused enrollments).
   const { error: leadError } = await from(supabase, 'leads')
@@ -106,7 +139,7 @@ export async function markLeadAsLost(
     loss_notes: lossNotes ?? null,
   }).catch((err) => console.error('[webhook] lead.unqualified dispatch failed:', err));
 
-  // 2. Complete active/paused enrollments with loss reason (service role to bypass RLS)
+  // 3. Complete active/paused enrollments with loss reason (service role to bypass RLS)
   const enrollmentUpdate: Record<string, unknown> = {
     status: 'completed',
     loss_reason_id: lossReasonId,
@@ -121,7 +154,7 @@ export async function markLeadAsLost(
     .eq('lead_id', leadId)
     .in('status', ['active', 'paused']);
 
-  // 2b. Cancel pending scheduled return-activities for this lead. Without this,
+  // 3b. Cancel pending scheduled return-activities for this lead. Without this,
   // a return scheduled before the loss decision keeps showing up in the SDR's
   // queue and they can "execute" the cadence on a lost lead — exactly what
   // happened on M&A distribuidora (lost on May 5, the SDR ran another call
@@ -130,24 +163,6 @@ export async function markLeadAsLost(
     .update({ status: 'cancelled' } as Record<string, unknown>)
     .eq('lead_id', leadId)
     .eq('status', 'pending');
-
-  // 3. Record system interaction for timeline visibility
-  const { data: reason } = (await from(supabase, 'loss_reasons')
-    .select('name')
-    .eq('id', lossReasonId)
-    .single()) as { data: { name: string } | null };
-
-  const lossMessage = `Lead marcado como perdido — Motivo: ${reason?.name ?? 'Desconhecido'}${lossNotes ? ` | Obs: ${lossNotes}` : ''}`;
-  await from(supabase, 'interactions')
-    .insert({
-      org_id: orgId,
-      lead_id: leadId,
-      channel: 'system',
-      type: 'sent',
-      message_content: lossMessage,
-      performed_by: auth.data.userId,
-      metadata: { system_event: 'lead_lost', loss_reason_id: lossReasonId, loss_reason_name: reason?.name },
-    } as Record<string, unknown>);
 
   // Notify managers that a lead was lost
   const leadName = (await from(supabase, 'leads').select('nome_fantasia, razao_social').eq('id', leadId).single() as { data: { nome_fantasia: string | null; razao_social: string | null } | null }).data;
