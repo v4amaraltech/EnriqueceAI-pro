@@ -286,7 +286,7 @@ export function ScheduleMeetingModal({
     <div className="space-y-1">
       <div className="flex items-center gap-2 text-primary text-lg font-semibold">
         <CalendarIcon className="h-5 w-5" />
-        {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
+        {isEditing ? 'Reagendar reunião' : 'Registrar reunião'}
       </div>
       <p className="text-sm text-[var(--muted-foreground)]">
         Registre aqui a reunião agendada para o closer.
@@ -490,8 +490,8 @@ export function ScheduleMeetingModal({
       >
         <CalendarIcon className="mr-2 h-4 w-4" />
         {isPending
-          ? (isEditing ? 'Salvando...' : 'Agendando...')
-          : (isEditing ? 'Salvar' : 'Agendar')}
+          ? (isEditing ? 'Reagendando...' : 'Agendando...')
+          : (isEditing ? 'Reagendar' : 'Agendar')}
       </Button>
     </div>
   );
@@ -527,7 +527,7 @@ export function ScheduleMeetingModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
             <CalendarIcon className="h-5 w-5" />
-            {isEditing ? 'Editar Reunião' : 'Registrar reunião'}
+            {isEditing ? 'Reagendar reunião' : 'Registrar reunião'}
           </DialogTitle>
           <p className="text-sm text-[var(--muted-foreground)]">
             Registre aqui a reunião agendada para o closer.

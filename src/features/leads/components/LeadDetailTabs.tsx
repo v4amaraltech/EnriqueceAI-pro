@@ -9,8 +9,8 @@ import {
   Linkedin,
   Mail,
   MessageSquare,
-  Pencil,
   Phone,
+  RefreshCw,
   Search,
   Trash2,
   Video,
@@ -201,13 +201,14 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
                             {new Date(m.created_at).toLocaleDateString('pt-BR')}
                           </span>
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
                             onClick={() => handleEditMeeting(m)}
-                            title="Editar reunião"
+                            title="Reagendar reunião"
                           >
-                            <Pencil className="h-3 w-3" />
+                            <RefreshCw className="h-3 w-3" />
+                            Reagendar
                           </Button>
                           <Button
                             variant="ghost"
@@ -274,27 +275,45 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         leadFirstName={lead.first_name}
         editData={editingMeeting ? (() => {
           const meta = editingMeeting.metadata as Record<string, unknown> | undefined;
-          // Parse start/end time from message_content (format: "Horário: DD/MM/YYYY HH:mm:ss - DD/MM/YYYY HH:mm:ss")
-          const content = editingMeeting.message_content ?? '';
-          const horarioMatch = content.match(/Horário: (.+?) - (.+)$/m);
           let dateStr = '';
           let timeStr = '09:00';
           let durationStr = '30';
-          if (horarioMatch?.[1] && horarioMatch?.[2]) {
-            // Parse pt-BR date format
-            const startParts = horarioMatch[1].trim().split(/[/\s:]/);
-            if (startParts.length >= 5) {
-              const day = startParts[0];
-              const month = startParts[1];
-              const year = startParts[2];
-              dateStr = `${year}-${month}-${day}`;
-              timeStr = `${startParts[3]}:${startParts[4]}`;
+
+          // Prefer the clean ISO timestamps persisted in metadata (e.g.
+          // "2026-06-15T14:00:00", local time, no UTC suffix). This is the
+          // source of truth written by scheduleMeeting/updateMeeting.
+          const startIso = typeof meta?.start_time === 'string' ? meta.start_time : '';
+          const endIso = typeof meta?.end_time === 'string' ? meta.end_time : '';
+
+          if (startIso) {
+            const [datePart, timePart] = startIso.split('T');
+            if (datePart) dateStr = datePart;
+            if (timePart) timeStr = timePart.slice(0, 5);
+            if (endIso) {
+              const diffMin = Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000);
+              if (diffMin > 0) durationStr = String(diffMin);
             }
-            const endParts = horarioMatch[2].trim().split(/[/\s:]/);
-            if (startParts.length >= 5 && endParts.length >= 5) {
-              const startMin = parseInt(startParts[3] ?? '0') * 60 + parseInt(startParts[4] ?? '0');
-              const endMin = parseInt(endParts[3] ?? '0') * 60 + parseInt(endParts[4] ?? '0');
-              durationStr = String(endMin - startMin > 0 ? endMin - startMin : 30);
+          } else {
+            // Legacy fallback: parse the rendered message_content for meetings
+            // created before start_time/end_time were stored in metadata.
+            // Format: "Horário: DD/MM/YYYY HH:mm:ss - DD/MM/YYYY HH:mm:ss"
+            const content = editingMeeting.message_content ?? '';
+            const horarioMatch = content.match(/Horário: (.+?) - (.+)$/m);
+            if (horarioMatch?.[1] && horarioMatch?.[2]) {
+              const startParts = horarioMatch[1].trim().split(/[/\s:]/);
+              if (startParts.length >= 5) {
+                const day = startParts[0];
+                const month = startParts[1];
+                const year = startParts[2];
+                dateStr = `${year}-${month}-${day}`;
+                timeStr = `${startParts[3]}:${startParts[4]}`;
+              }
+              const endParts = horarioMatch[2].trim().split(/[/\s:]/);
+              if (startParts.length >= 5 && endParts.length >= 5) {
+                const startMin = parseInt(startParts[3] ?? '0') * 60 + parseInt(startParts[4] ?? '0');
+                const endMin = parseInt(endParts[3] ?? '0') * 60 + parseInt(endParts[4] ?? '0');
+                durationStr = String(endMin - startMin > 0 ? endMin - startMin : 30);
+              }
             }
           }
           return {
