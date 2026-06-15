@@ -101,6 +101,27 @@ Verificado: 99 avançaram, 0 ainda atrasados, 0 órfãos.
 - CI `Lint·Typecheck·Test·Build` ✅ nos dois PRs (#37 3m43s, #38 3m35s)
 - RPCs aplicados em produção via MCP; smoke-test dos guards ok.
 
+## Verificação pós-deploy (dashboard, 15/06 fim do dia)
+Reproduzido o cálculo do dashboard (RPC novo `list_overdue_enrollments_brt` +
+filtros do service) com reverificação de fantasmas — **zero fantasmas** em todos
+os SDRs:
+
+| SDR | Dashboard conta | Fantasma "já feito" | Fantasma WhatsApp |
+|-----|-----------------|---------------------|-------------------|
+| Rafael Alécio | 95 | 0 | 0 |
+| Ismael Dobelin | 21 | 0 | 0 |
+| Matheus Martins | 11 | 0 | 0 |
+| Giovanni Olivieri | 10 | 0 | 0 |
+| Guilherme Marques | 4 | 0 | 0 |
+| **Total** | **141** | **0** | **0** |
+
+- **Giovanni 98 → 10**: os 98 eram todos fantasmas; os 10 atuais são atrasadas
+  **reais** (step atual não-feito, sem WhatsApp travado) — batem com a fila dele.
+- O total flutua em tempo real (SDRs trabalhando + novos steps vencendo); por isso
+  difere dos 130 logo após a reconciliação. O que importa: 0 fantasmas, o número
+  reflete exatamente o que os SDRs têm na fila.
+- Saúde dos 99 reconciliados rechecada: 99/99 avançados, 0 regrediram a preso.
+
 ## Processo / infra (relembrar)
 - Repo `Mercantes/EnriqueceAI-pro` é **redirect** pra `v4amaraltech/EnriqueceAI-pro`.
   Usar `--repo v4amaraltech/EnriqueceAI-pro` no `gh`.
@@ -110,7 +131,7 @@ Verificado: 99 avançaram, 0 ainda atrasados, 0 órfãos.
 - **Coolify auto-deploy**: merge na `main` dispara build/deploy do código sozinho.
 
 ## Pendências
-- **Limpeza:** dropar `public._overdue_reconcile_backup_20260615` quando não precisar
-  mais do rollback dos 99 reconciliados.
+- ~~Dropar `public._overdue_reconcile_backup_20260615`~~ — **feito** (15/06, após
+  rechecar saúde dos 99: 99/99 avançados, 0 regrediram). Tabela não existe mais.
 - **Rotação do `CRON_SECRET`** segue PENDENTE (fora desta sessão — não trocar no
   Coolify antes do verificador multivalor `feat/cron-secret-multivalue` no ar).
