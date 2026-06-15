@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
+import { expectedByBusinessDay } from '../utils/pacing';
 import type { DailyDataPoint, OpportunityKpiData } from '../types';
 
 const MONTH_NAMES = [
@@ -164,9 +165,11 @@ export function OpportunityKpiCard({
   const monthAbbr = getMonthAbbr(month);
   const isAbove = kpi.percentOfTarget >= 0;
   const absPercent = Math.abs(kpi.percentOfTarget);
-  const expectedByNow = kpi.monthTarget > 0
-    ? Math.round((kpi.monthTarget / kpi.daysInMonth) * kpi.currentDay)
-    : 0;
+  // Pace the "esperado até hoje" on business days (Mon–Fri), not calendar days,
+  // so weekends don't inflate the expectation. Matches the dashed "Meta" line,
+  // which is computed server-side with the same helper.
+  const [kpiYear, kpiMonth] = month.split('-').map(Number) as [number, number];
+  const expectedByNow = Math.round(expectedByBusinessDay(kpi.monthTarget, kpiYear, kpiMonth, kpi.currentDay));
 
   const chartData = kpi.dailyData.map((point: DailyDataPoint) => ({
     day: point.day,

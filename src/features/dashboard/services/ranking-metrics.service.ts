@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 
 import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
 
+import { expectedByBusinessDay } from '../utils/pacing';
 import type {
   DailyDataPoint,
   DashboardFilters,
@@ -43,7 +44,7 @@ function computePercentOfTarget(actual: number, target: number, days: number, mo
   const [yr, mo] = month.split('-').map(Number) as [number, number];
   const isCurrentMonth = nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
   const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
-  const expectedByToday = (target / days) * currentDay;
+  const expectedByToday = expectedByBusinessDay(target, yr, mo, currentDay);
   if (expectedByToday <= 0) return 0;
   return Math.round(((actual - expectedByToday) / expectedByToday) * 100);
 }
@@ -473,7 +474,7 @@ async function fetchLeadsOpenedDaily(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
       actual: day <= maxDay ? cumulative : 0,
-      target: target > 0 ? Math.round((target / days) * day) : 0,
+      target: Math.round(expectedByBusinessDay(target, year, mon, day)),
     });
   }
   return result;
@@ -550,7 +551,7 @@ export async function fetchMeetingsScheduledRanking(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
       day: d,
       actual: d <= maxDay ? cumulative : 0,
-      target: monthTarget > 0 ? Math.round((monthTarget / days) * d) : 0,
+      target: Math.round(expectedByBusinessDay(monthTarget, year, mon, d)),
     });
   }
   return { ...card, dailyData };
