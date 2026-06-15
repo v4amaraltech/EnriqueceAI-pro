@@ -15,6 +15,30 @@
  * UTC calendar date directly — no timezone library needed.
  */
 
+/**
+ * Count of weekdays (Mon–Fri, BRT) in the inclusive range [start, end]. Use this
+ * to pace a metric over an arbitrary period (not a whole calendar month) — e.g.
+ * a statistics filter range. Returns at least 1 so it is safe as a divisor.
+ *
+ * BRT is fixed UTC-3: shift each instant by -3h to land on its BRT calendar day,
+ * truncate to day granularity, then walk day-by-day counting non-weekend days.
+ */
+export function businessDaysBetween(start: Date | string | number, end: Date | string | number): number {
+  const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+  const DAY_MS = 86_400_000;
+  const startMs = (start instanceof Date ? start : new Date(start)).getTime() - BRT_OFFSET_MS;
+  const endMs = (end instanceof Date ? end : new Date(end)).getTime() - BRT_OFFSET_MS;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 1;
+  const firstDay = Math.floor(startMs / DAY_MS);
+  const lastDay = Math.floor(endMs / DAY_MS);
+  let count = 0;
+  for (let d = firstDay; d <= lastDay; d++) {
+    const dow = new Date(d * DAY_MS).getUTCDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count || 1;
+}
+
 /** Count of weekdays (Mon–Fri) from day 1 through `throughDay` (inclusive). */
 export function businessDaysThrough(year: number, month1: number, throughDay: number): number {
   let count = 0;

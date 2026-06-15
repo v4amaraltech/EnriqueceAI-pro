@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
-import { businessDaysInMonth, businessDaysThrough, expectedByBusinessDay } from './pacing';
+import { businessDaysBetween, businessDaysInMonth, businessDaysThrough, expectedByBusinessDay } from './pacing';
+
+// June 2026: 1st is a Monday. Noon UTC = 09:00 BRT, safely inside the BRT day.
+describe('businessDaysBetween (June 2026)', () => {
+  it('counts an inclusive Mon–Fri week as 5', () => {
+    expect(businessDaysBetween('2026-06-01T12:00:00Z', '2026-06-05T12:00:00Z')).toBe(5);
+  });
+
+  it('ignores weekend days inside the range', () => {
+    // Mon 1 → Sun 7 includes Sat 6 + Sun 7 → still 5 weekdays.
+    expect(businessDaysBetween('2026-06-01T12:00:00Z', '2026-06-07T12:00:00Z')).toBe(5);
+  });
+
+  it('counts the full month as 22 business days', () => {
+    expect(businessDaysBetween('2026-06-01T12:00:00Z', '2026-06-30T12:00:00Z')).toBe(22);
+  });
+
+  it('clamps a weekend-only range to 1 (safe divisor)', () => {
+    expect(businessDaysBetween('2026-06-06T12:00:00Z', '2026-06-07T12:00:00Z')).toBe(1);
+  });
+
+  it('returns 1 when end precedes start', () => {
+    expect(businessDaysBetween('2026-06-10T12:00:00Z', '2026-06-01T12:00:00Z')).toBe(1);
+  });
+});
 
 // June 2026: 1st is a Monday. 30 calendar days, 22 business days.
 // Weekends fall on: 6,7 / 13,14 / 20,21 / 27,28.
