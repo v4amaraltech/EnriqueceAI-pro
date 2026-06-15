@@ -4,9 +4,10 @@ import { revalidatePath } from 'next/cache';
 
 import { z } from 'zod';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { ERR_ALREADY_EXECUTED } from '@/lib/constants/error-codes';
 import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
@@ -17,7 +18,6 @@ import type { InteractionRow } from '@/features/cadences/types';
 
 import { toPlainText } from '@/lib/utils/html-to-plaintext';
 import { withTimeout } from '@/lib/utils/with-timeout';
-import { CHANNEL_LABELS } from '@/shared/constants/chart-colors';
 
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
 import { createNotification } from '@/features/notifications/services/notification.service';
@@ -70,8 +70,11 @@ export async function executeActivity(
     templateId,
   } = input;
 
-  // Idempotency check: skip if interaction already exists for this step + lead
-  // Allow retry if previous attempt failed
+  // Idempotency check: a non-failed interaction already exists for this step.
+  // Antes isso retornava erro e parava — mas se o avanço anterior tivesse
+  // falhado APÓS gravar a interaction, o enrollment ficava preso pra sempre
+  // (a fila esconde o step via get_executed_steps, então o SDR nunca reexecuta).
+  // Agora reconcilia: garante o avanço atômico via RPC e retorna sucesso.
   const { data: existingInteraction } = (await from(supabase, 'interactions')
     .select('id')
     .eq('cadence_id', cadenceId)
@@ -82,7 +85,9 @@ export async function executeActivity(
     .maybeSingle()) as { data: { id: string } | null };
 
   if (existingInteraction) {
-    return { success: false, error: 'Esta atividade já foi executada', code: ERR_ALREADY_EXECUTED };
+    await advanceEnrollment(supabase, { enrollmentId, stepId, userId, leadId, to: input.to, orgId });
+    revalidatePath('/atividades');
+    return { success: true, data: { interactionId: existingInteraction.id } };
   }
 
   // Para channel=phone, reaproveita a interaction `internal_api4com` que
@@ -232,95 +237,65 @@ export async function executeActivity(
   // Mark lead as contacted on first activity
   markLeadContacted(supabase, leadId).catch(() => {});
 
-  // Advance step or mark enrollment completed.
-  //
-  // Bug 26/05/2026 (lead Chopp Brahma): SDR executava o step do meio
-  // de um lote D+0 e os steps anteriores sumiam da fila SEM rastro —
-  // o cursor pulava direto pra depois do executado. Ismael fez WhatsApp,
-  // o phone do mesmo dia virou inacessível e nem aparecia na timeline.
-  //
-  // Fix: antes de avançar, computar quais step_orders ficaram pulados
-  // (entre o current_step antigo e o executado, exclusive do executado)
-  // e registrar uma interaction `step_skipped` por cada um. Mantém o
-  // comportamento de UX (fila avança pra frente, SDR não fica refazendo)
-  // e ganha auditoria completa na timeline do lead.
-  const { data: executedStep } = (await from(supabase, 'cadence_steps')
-    .select('step_order')
-    .eq('id', stepId)
-    .single()) as { data: { step_order: number } | null };
-  const executedStepOrder = executedStep?.step_order ?? 0;
-
-  const { data: currentEnrollment } = (await from(supabase, 'cadence_enrollments')
-    .select('current_step')
-    .eq('id', enrollmentId)
-    .single()) as { data: { current_step: number } | null };
-  const oldCurrentStep = currentEnrollment?.current_step ?? executedStepOrder;
-
-  const { data: nextStep } = (await from(supabase, 'cadence_steps')
-    .select('step_order')
-    .eq('cadence_id', cadenceId)
-    .gt('step_order', executedStepOrder)
-    .order('step_order', { ascending: true })
-    .limit(1)
-    .maybeSingle()) as { data: { step_order: number } | null };
-
-  // Log skipped steps in the timeline. The executed step itself doesn't
-  // count as skipped — we look strictly at the gap [oldCurrentStep, executedStepOrder).
-  if (executedStepOrder > oldCurrentStep) {
-    const { data: skipped } = (await from(supabase, 'cadence_steps')
-      .select('id, step_order, channel')
-      .eq('cadence_id', cadenceId)
-      .gte('step_order', oldCurrentStep)
-      .lt('step_order', executedStepOrder)
-      .order('step_order', { ascending: true })) as {
-        data: Array<{ id: string; step_order: number; channel: string }> | null;
-      };
-    if (skipped && skipped.length > 0) {
-      const skippedInteractions = skipped.map((s) => ({
-        org_id: input.orgId,
-        lead_id: leadId,
-        cadence_id: cadenceId,
-        step_id: s.id,
-        channel: 'system',
-        type: 'sent',
-        message_content: `Etapa ${s.step_order} (${CHANNEL_LABELS[s.channel] ?? s.channel}) pulada — SDR executou a etapa ${executedStepOrder} (${CHANNEL_LABELS[input.channel] ?? input.channel}) primeiro.`,
-        performed_by: userId,
-        metadata: {
-          system_event: 'step_skipped',
-          reason: 'advanced_past',
-          skipped_step_order: s.step_order,
-          skipped_channel: s.channel,
-          executed_step_order: executedStepOrder,
-          executed_channel: input.channel,
-        },
-      }));
-      await from(supabase, 'interactions').insert(skippedInteractions as unknown as Record<string, unknown>);
-    }
-  }
-
-  if (nextStep) {
-    await from(supabase, 'cadence_enrollments')
-      .update({ current_step: nextStep.step_order } as Record<string, unknown>)
-      .eq('id', enrollmentId);
-  } else {
-    await from(supabase, 'cadence_enrollments')
-      .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-      .eq('id', enrollmentId);
-
-    // Notify SDR that cadence is completed for this lead
-    const leadDisplay = input.to || leadId.slice(0, 8);
-    createNotification({
-        org_id: orgId,
-        user_id: userId,
-        type: 'cadence_completed',
-        title: 'Cadência concluída',
-        body: `Todos os steps foram executados para ${leadDisplay}`,
-        resource_type: 'lead',
-        resource_id: leadId,
-      }).catch((err) => console.error('[notification] cadence_completed failed:', err));
-  }
+  // Advance step (or complete) atomically. Single RPC, row-locked e idempotente
+  // — substitui os ~5 round-trips que antes podiam estrangular o avanço e deixar
+  // o enrollment preso num step já feito. O RPC também audita steps pulados.
+  await advanceEnrollment(supabase, { enrollmentId, stepId, userId, leadId, to: input.to, orgId });
 
   revalidatePath('/atividades');
 
   return { success: true, data: { interactionId: interaction.id } };
+}
+
+interface AdvanceArgs {
+  enrollmentId: string;
+  stepId: string;
+  userId: string;
+  leadId: string;
+  to: string;
+  orgId: string;
+}
+
+/**
+ * Avança o enrollment após um step executado, atomicamente, via RPC
+ * `advance_enrollment_after_step` (row-locked + idempotente). Reexecuções,
+ * retries e duplos cliques não duplicam nem regridem o cursor. Dispara a
+ * notificação de cadência concluída quando o RPC sinaliza `completed`.
+ *
+ * Tolerante a erro: loga e retorna sem estourar a action — o estado fica
+ * reconciliável por uma nova execução (o RPC é idempotente).
+ */
+async function advanceEnrollment(
+  supabase: SupabaseClient,
+  { enrollmentId, stepId, userId, leadId, to, orgId }: AdvanceArgs,
+): Promise<void> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<{ advanced: boolean; completed: boolean; new_step: number | null }> | null;
+    error: { message: string } | null;
+  }>)('advance_enrollment_after_step', {
+    p_enrollment_id: enrollmentId,
+    p_executed_step_id: stepId,
+    p_performed_by: userId,
+  });
+
+  if (error) {
+    console.error('[execute-activity] advance_enrollment_after_step falhou:', error.message);
+    return;
+  }
+
+  if (data?.[0]?.completed) {
+    const leadDisplay = to || leadId.slice(0, 8);
+    createNotification({
+      org_id: orgId,
+      user_id: userId,
+      type: 'cadence_completed',
+      title: 'Cadência concluída',
+      body: `Todos os steps foram executados para ${leadDisplay}`,
+      resource_type: 'lead',
+      resource_id: leadId,
+    }).catch((err) => console.error('[notification] cadence_completed failed:', err));
+  }
 }
