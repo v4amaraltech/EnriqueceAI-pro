@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { businessDaysBetween } from '@/features/dashboard/utils/pacing';
 import {
   CHANNEL_COLORS,
   CHANNEL_LABELS,
@@ -50,7 +51,7 @@ export async function fetchActivityAnalyticsData(
   const userId = userIds && userIds.length === 1 ? userIds[0] : undefined;
   const target = await fetchGoalTarget(supabase, orgId, userId);
 
-  const kpis = calculateKpis(interactions, periodStart, target);
+  const kpis = calculateKpis(interactions, periodStart, periodEnd, target);
   const channelVolume = calculateChannelVolume(interactions);
   const dailyTrend = calculateDailyTrend(interactions, periodStart, periodEnd, target);
   const activityTypes = calculateActivityTypes(interactions);
@@ -158,6 +159,7 @@ async function fetchGoalTarget(
 function calculateKpis(
   interactions: InteractionQueryRow[],
   periodStart: string,
+  periodEnd: string,
   target: number,
 ): ActivityAnalyticsKpis {
   const total = interactions.length;
@@ -169,9 +171,12 @@ function calculateKpis(
     (i) => new Date(i.created_at) >= todayStart,
   ).length;
 
-  const start = new Date(periodStart);
-  const daysDiff = Math.max(1, Math.ceil((Date.now() - start.getTime()) / (24 * 60 * 60 * 1000)));
-  const avgPerDay = Math.round((total / daysDiff) * 10) / 10;
+  // Average per BUSINESS day (Mon–Fri, BRT) — SDRs don't work weekends, so
+  // dividing by calendar days deflated the rate against a per-working-day goal.
+  // Cap the window at "now" so an ongoing period only counts elapsed weekdays.
+  const periodEndMs = Math.min(Date.now(), new Date(periodEnd).getTime());
+  const businessDays = businessDaysBetween(periodStart, periodEndMs);
+  const avgPerDay = Math.round((total / businessDays) * 10) / 10;
 
   const goalAchievement = safeRate(avgPerDay, target);
 
