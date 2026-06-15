@@ -153,18 +153,23 @@ describe('executeActivity — email channel', () => {
     mockCheckAndDeductCredit.mockReset();
   });
 
-  it('should return ALREADY_EXECUTED if interaction exists', async () => {
-    // idempotency lookup returns an existing interaction
+  it('should reconcile (advance) and return success if interaction already exists', async () => {
+    // idempotency lookup returns an existing interaction → não barra mais:
+    // reconcilia o avanço via RPC (caso o avanço anterior tenha falhado e
+    // deixado o enrollment preso) e retorna sucesso, sem reenviar.
     wireMocks({ interactions: [{ data: { id: 'existing-int' } }] });
 
     const result = await executeActivity(baseInput);
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.code).toBe('ALREADY_EXECUTED');
-      expect(result.error).toBe('Esta atividade já foi executada');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.interactionId).toBe('existing-int');
     }
     expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      'advance_enrollment_after_step',
+      expect.objectContaining({ p_enrollment_id: ENROLLMENT_ID, p_executed_step_id: STEP_ID }),
+    );
   });
 
   it('should return error if interaction insert fails', async () => {
@@ -211,6 +216,12 @@ describe('executeActivity — email channel', () => {
       },
       'int-1',
       mockSupabase,
+    );
+
+    // O avanço agora é atômico via RPC (não mais via reads/updates separados).
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      'advance_enrollment_after_step',
+      expect.objectContaining({ p_enrollment_id: ENROLLMENT_ID, p_executed_step_id: STEP_ID }),
     );
   });
 
