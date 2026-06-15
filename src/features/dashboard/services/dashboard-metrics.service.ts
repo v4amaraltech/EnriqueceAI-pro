@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
+import { expectedByBusinessDay } from '../utils/pacing';
 import type {
   CadenceOption,
   DailyDataPoint,
@@ -63,7 +64,7 @@ function computeDailyData(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
       actual: day <= maxDay ? cumulative : 0,
-      target: Math.round((target / days) * day),
+      target: Math.round(expectedByBusinessDay(target, year, mon, day)),
     });
   }
 
@@ -145,8 +146,7 @@ export async function fetchOpportunityKpi(
     nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
   const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
 
-  const expectedByToday =
-    monthTarget > 0 ? (monthTarget / days) * currentDay : 0;
+  const expectedByToday = expectedByBusinessDay(monthTarget, yr, mo, currentDay);
   const percentOfTarget =
     expectedByToday > 0
       ? Math.round(
