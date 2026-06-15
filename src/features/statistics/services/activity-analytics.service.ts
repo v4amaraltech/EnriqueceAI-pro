@@ -266,8 +266,13 @@ function calculateGoal(interactions: InteractionQueryRow[], target: number): Goa
     (i) => new Date(i.created_at) >= todayStart,
   ).length;
   const percentage = safeRate(actual, target);
+  // Weekend (BRT): no daily goal — SDRs don't work Sat/Sun, so the card should
+  // not show a red "0% da meta" on those days. Mirrors the business-day pacing
+  // applied to the rest of the dashboard/statistics.
+  const dow = nowBrt.getUTCDay();
+  const isWeekend = dow === 0 || dow === 6;
 
-  return { target, actual, percentage };
+  return { target, actual, percentage, isWeekend };
 }
 
 function calculateChannelCompletion(interactions: InteractionQueryRow[]): ChannelCompletionEntry[] {
