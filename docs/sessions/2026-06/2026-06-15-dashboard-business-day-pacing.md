@@ -1,13 +1,20 @@
-# Handoff — 2026-06-15: Pacing de metas do dashboard por dias úteis
+# Handoff — 2026-06-15: Pacing por dias úteis (dashboard + estatísticas)
 
 ## Contexto
 Sessão na V4 Company Amaral (org `c2727473-1df8-4faa-9264-a9fc1759fe3b`).
 O gestor perguntou se o número **"Esperado Hoje"** do card "Leads abertos"
-(Visão geral) contava dias úteis ou também sábado/domingo.
+(Visão geral) contava dias úteis ou também sábado/domingo. A correção depois se
+estendeu pras estatísticas e pra um card de meta diária.
 
-> **Status final: resolvido e em produção.** Pacing de **todos** os cards de
-> meta migrado de dias corridos → dias úteis (seg–sex, BRT). PR #32 (`71a39e0`),
-> mergeado na `main`, auto-deploy Coolify. Verificado no dashboard de produção.
+> **Status final: resolvido e em produção, em 3 PRs.**
+> - **PR #32** (`71a39e0`) — pacing de **todos** os cards de meta do **dashboard**
+>   migrado de dias corridos → dias úteis (seg–sex, BRT). Verificado em produção.
+> - **PR #34** (`3515d7a`) — média diária de atividades das **estatísticas**
+>   (`avgPerDay`/`goalAchievement`) blindada pra dias úteis.
+> - **PR #35** (`58d8614`) — card **"Meta de Atividades Hoje"** (antes órfão)
+>   conectado na tela de Atividades, com tratamento de fim de semana.
+>
+> Tudo na `main`, auto-deploy Coolify.
 
 ## Diagnóstico
 
@@ -74,13 +81,65 @@ foram tocados. Efeito visual: a linha Meta agora fica **plana no fim de semana**
   pro pace por dias úteis (fev/2026, 1º = domingo → target 0/1/3 nos dias 1/2/3).
 - CI `Lint·Typecheck·Test·Build` ✅ (3m36s). `pnpm typecheck/lint/build` locais ✅.
 
+## Extensão — estatísticas (PR #34, `3515d7a`)
+O gestor pediu pra aplicar o pacing nas estatísticas também. **Achado
+importante:** as estatísticas **não têm** régua de "esperado/ritmo/Meta" visível
+como o dashboard. O único cálculo por dia corrido que é pacing é a **média
+diária de atividades** (`avgPerDay`/`goalAchievement`) em
+`activity-analytics.service.ts` (`calculateKpis`), que dividia o total por dias
+corridos — achatando a média contra uma meta que é por dia útil.
+
+- Novo helper compartilhado `businessDaysBetween(start, end)` em
+  `dashboard/utils/pacing.ts` — conta seg–sex (BRT) num **intervalo arbitrário**
+  (não só mês), clamp ≥ 1 pra ser divisor seguro. (`businessDaysThrough` é
+  month-scoped; estatísticas usam range, daí a função nova.)
+- `calculateKpis` passou a receber `periodEnd` e dividir por dias úteis
+  decorridos, com janela limitada a "agora".
+- Import cross-feature `@/features/dashboard/utils/pacing` (segue precedente:
+  `ranking-metrics` importa de `activities/utils/overdue`).
+- **Decisão do gestor:** "blindar o cálculo existente". Esses campos **não eram
+  exibidos** (o `GoalAchievementCard` estava órfão) → correção sem efeito visível
+  na hora; o PR #35 abaixo passou a exibir.
+- **Não tocados** (não são pacing): idade de lead por quartil (bucketing,
+  `activity-analytics:312`) e dias-até-qualificação (velocidade retrospectiva,
+  `conversion-analytics:217`).
+
+## Extensão — card de meta diária (PR #35, `58d8614`)
+O gestor pediu pra **exibir** a meta. O `GoalAchievementCard`
+("Meta de Atividades Hoje") já existia mas estava desconectado — foi conectado
+na `ActivityAnalyticsView` (aparece em `/statistics/activities` e no embed da
+prospecção), alimentado pelo `data.goal` (atividades de **hoje** vs meta diária).
+
+- O card é **de hoje** (snapshot do dia), independente do filtro de período da
+  página — por isso o título diz "Hoje".
+- **Fim de semana:** `GoalData` ganhou flag `isWeekend` (BRT). Sáb/dom o card
+  mostra a contagem feita **sem** o vermelho "0% da meta" ("Sem meta hoje — fim
+  de semana") — coerente com o pacing por dias úteis. SDR não tem meta no fim de
+  semana.
+- Possível evolução (não pedida): fazer o card acompanhar o período filtrado em
+  vez de só "hoje".
+
 ## Arquivos
-- `src/features/dashboard/utils/pacing.ts` — helper novo. [PR #32]
-- `src/features/dashboard/utils/pacing.test.ts` — testes novos. [PR #32]
+**Dashboard (PR #32):**
+- `src/features/dashboard/utils/pacing.ts` — helper novo (`expectedByBusinessDay`,
+  `businessDaysThrough`, `businessDaysInMonth`; `businessDaysBetween` add no #34).
+- `src/features/dashboard/utils/pacing.test.ts` — testes.
 - `src/features/dashboard/services/ranking-metrics.service.ts` — pacing dias úteis.
 - `src/features/dashboard/services/dashboard-metrics.service.ts` — pacing dias úteis.
 - `src/features/dashboard/components/OpportunityKpiCard.tsx` — `expectedByNow`.
 - `src/features/dashboard/services/dashboard-metrics.service.test.ts` — asserções.
+
+**Estatísticas (PR #34):**
+- `src/features/dashboard/utils/pacing.ts` (+ `.test.ts`) — `businessDaysBetween`.
+- `src/features/statistics/services/activity-analytics.service.ts` — `calculateKpis`
+  por dias úteis (+ `periodEnd`).
+
+**Card de meta (PR #35):**
+- `src/features/statistics/types/activity-analytics.types.ts` — `GoalData.isWeekend`.
+- `src/features/statistics/services/activity-analytics.service.ts` — `calculateGoal`
+  seta `isWeekend`.
+- `src/features/statistics/components/GoalAchievementCard.tsx` — branch de fim de semana.
+- `src/features/statistics/components/ActivityAnalyticsView.tsx` — render do card.
 
 ## Processo / infra (relembrar)
 - Repo `Mercantes/EnriqueceAI-pro` é **redirect** pra `v4amaraltech/EnriqueceAI-pro`.
