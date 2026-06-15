@@ -108,7 +108,14 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
           } satisfies OpportunityKpiData}
           month={filters.month}
           label="Leads abertos"
-          labelTooltip="Conta cada lead pelo seu primeiro contato humano (email, WhatsApp, telefone, LinkedIn ou pesquisa), atribuído ao SDR responsável pelo lead — uma única vez, no mês em que esse primeiro contato aconteceu. É recalculado em tempo real: sobe ao longo do dia conforme novos leads recebem o 1º contato e pode recuar se um lead for arquivado, reatribuído, ou se um contato mais antigo do mesmo lead entrar no sistema depois (reclassificando-o para o mês correto)."
+          labelTooltip={
+            'Quantos leads tiveram o 1º contato humano neste mês.\n\n' +
+            '• Conta uma vez por lead, no mês do primeiro contato (não a cada atividade).\n' +
+            '• Vale qualquer canal humano: e-mail, WhatsApp, telefone, LinkedIn ou pesquisa — fazer a pesquisa do lead já o abre.\n' +
+            '• É creditado ao SDR dono do lead.\n\n' +
+            'Não conta: notas importadas, leads arquivados, leads sem responsável, e o que não é um contato enviado (abertura, clique, resposta).\n\n' +
+            'Atualiza em tempo real: sobe conforme novos leads recebem o 1º contato e pode recuar se o lead for arquivado, reatribuído, ou se um contato mais antigo dele entrar no sistema depois (reclassificando-o para o mês certo).'
+          }
         />
       )}
 
