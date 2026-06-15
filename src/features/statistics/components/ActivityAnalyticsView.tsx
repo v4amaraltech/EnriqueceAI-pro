@@ -7,6 +7,8 @@ import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { useDateRange } from '@/shared/hooks/useDateRange';
 
+import { GoalAchievementCard } from './GoalAchievementCard';
+
 import type { ActivityAnalyticsData, ChannelCompletionEntry, UserActivityRow, UserChannelProgress } from '../types/activity-analytics.types';
 import type { OrgMember } from '../types/shared';
 
@@ -339,6 +341,11 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
         {!hideFilters && (
           <AnalyticsFilters basePath="/statistics/activities" members={members} />
         )}
+      </div>
+
+      {/* Daily activity goal (today, BRT) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <GoalAchievementCard goal={data.goal} />
       </div>
 
       {/* Summary bar + Channel completion */}

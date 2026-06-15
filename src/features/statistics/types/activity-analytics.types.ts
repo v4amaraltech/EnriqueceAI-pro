@@ -31,6 +31,8 @@ export interface GoalData {
   target: number;
   actual: number;
   percentage: number;
+  /** True when "today" (BRT) is a weekend — SDRs don't work, so there's no daily goal. */
+  isWeekend: boolean;
 }
 
 export interface UserChannelProgress {

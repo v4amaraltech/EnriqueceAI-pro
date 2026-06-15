@@ -27,6 +27,30 @@ export function GoalAchievementCard({ goal }: GoalAchievementCardProps) {
   const textColor = getGoalTextColor(goal.percentage);
   const barWidth = Math.min(goal.percentage, 100);
 
+  // Weekend (BRT): no daily goal. Show the count done (if any) without the
+  // red "0% da meta" pressure — consistent with business-day pacing elsewhere.
+  if (goal.isWeekend) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            Meta de Atividades Hoje
+          </CardTitle>
+          <Target className="h-4 w-4 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-[var(--muted-foreground)]">{goal.actual}</span>
+            <span className="text-sm text-[var(--muted-foreground)]">atividades</span>
+          </div>
+          <p className="text-xs font-medium text-[var(--muted-foreground)]">
+            Sem meta hoje — fim de semana
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
