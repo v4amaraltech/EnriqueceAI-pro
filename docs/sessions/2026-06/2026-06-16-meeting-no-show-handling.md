@@ -88,6 +88,21 @@ feedback**, cadência `completed`. A query encontrou **21 leads** nesse limbo.
 - 11 testes unitários (#43) ✅ · CI `Lint·Typecheck·Test·Build` ✅ (#43 3m43s, #44 3m41s)
 - Lógica da RPC validada em produção (read-only) + execução controlada por dado.
 
+## Trabalho adicional na sessão — remoção de UI (PR #46)
+
+A pedido do gestor, removido o card **"Programação da cadência"** (componente
+`CadenceProgramCard`, "Reativação — N passos" com chevron) do detalhe do lead.
+Como a action `fetchCadencePrograms` (`fetch-cadence-program.ts`) era consumida
+**exclusivamente** por esse componente — e seus tipos não eram usados em nenhum
+outro lugar — ela também foi removida (sem deixar código morto). **328 linhas a
+menos.**
+
+- `src/features/leads/components/CadenceProgramCard.tsx` — removido
+- `src/features/cadences/actions/fetch-cadence-program.ts` — removido (órfão)
+- `src/features/leads/components/LeadDetailLayout.tsx` — remove import + uso
+
+Deploy Coolify verificado: release de produção = `702e4df` = HEAD da `main` (#46).
+
 ## Pendências (fora desta sessão)
 - **Rotação do `CRON_SECRET`** segue PENDENTE — não trocar no Coolify antes do
   verificador multivalor `feat/cron-secret-multivalue` estar no ar (senão 401 em
