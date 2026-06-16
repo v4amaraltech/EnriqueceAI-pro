@@ -103,6 +103,26 @@ menos.**
 
 Deploy Coolify verificado: release de produção = `702e4df` = HEAD da `main` (#46).
 
+## Verificação pós-deploy — jornada de no-show (16/06, fim do dia)
+
+Auditado o que acontece **depois** que o closer preenche o formulário marcando
+`no_show`. No dia houve **apenas 1 no-show** (confirmado pelo gestor) —
+**FARMACIA FARMACEUTICA LTDA (Silvana)** — e a jornada rodou correta ponta a ponta:
+
+| Hora (UTC) | Evento |
+|------------|--------|
+| 17:47 | Cron cria atividade de retorno (telefone) na fila do SDR — agendada 17/06 09h |
+| 18:22:00 | Closer (Jhonata) preenche o formulário = não compareceu |
+| 18:22:01 | Lead reaberto (`meeting_unconfirmed`); `status='qualified'`, won_at/meeting_held_at nulos |
+| 18:22:01 | Notificação ao SDR ("reaberto — não compareceu") |
+| 18:22:02 | Notificação ao gestor ("feedback exige atenção") |
+
+A atividade de retorno **não foi duplicada** — o guard anti-empilhamento do
+`scheduleReopenFollowUp` viu que já existia a atividade do checkpoint do cron, então
+o SDR ficou com **1** tarefa de telefone na fila (correto). Varredura nas 24/48h por
+todos os caminhos (`no_show` do closer, `rescheduled`, botão manual) confirmou
+**1 único no-show** — sem 2º caso, sem anomalia. Fluxo validado em produção.
+
 ## Pendências (fora desta sessão)
 - **Rotação do `CRON_SECRET`** segue PENDENTE — não trocar no Coolify antes do
   verificador multivalor `feat/cron-secret-multivalue` estar no ar (senão 401 em
