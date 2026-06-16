@@ -4,6 +4,7 @@ import { useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
+  CalendarX,
   ChevronLeft,
   Globe,
   Mail,
@@ -28,6 +29,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 
 import { resyncLeadToCrm } from '../actions/lead-crm';
+import { markMeetingNoShow } from '../actions/lead-noshow';
 import { updateLead } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 
@@ -81,6 +83,18 @@ export function LeadDetailHeader({
         toast.success(`Lead resincronizado com Kommo (${fieldsTotal} campos enviados).`);
       }
       router.refresh();
+    });
+  }, [lead.id, router]);
+
+  const handleNoShow = useCallback(() => {
+    startTransition(async () => {
+      const result = await markMeetingNoShow(lead.id);
+      if (result.success) {
+        toast.success('No-show registrado — follow-up criado na fila do SDR');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
     });
   }, [lead.id, router]);
 
@@ -211,6 +225,12 @@ export function LeadDetailHeader({
               <Calendar className="mr-2 h-3.5 w-3.5" />
               Agendar Reunião
             </DropdownMenuItem>
+            {lead.meeting_scheduled_at && lead.status !== 'unqualified' && (
+              <DropdownMenuItem onClick={handleNoShow} disabled={isPending}>
+                <CalendarX className="mr-2 h-3.5 w-3.5" />
+                Reunião não aconteceu
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             {lead.source_id ? (
               <DropdownMenuItem onClick={onReenrichApollo} disabled={isEnriching}>
