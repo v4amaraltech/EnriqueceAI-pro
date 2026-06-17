@@ -123,6 +123,32 @@ o SDR ficou com **1** tarefa de telefone na fila (correto). Varredura nas 24/48h
 todos os caminhos (`no_show` do closer, `rescheduled`, botão manual) confirmou
 **1 único no-show** — sem 2º caso, sem anomalia. Fluxo validado em produção.
 
+## Trabalho adicional na sessão — fix gráficos "Motivos de Perda" (PR #49, 17/06)
+
+O gestor notou barras "sem nome" intercaladas no gráfico **Motivos de Perda** do
+dashboard. Investigado: **não era dado**. Query em produção (V4 Amaral) confirmou
+**19 motivos, todos com nome válido, sem órfãos, sem nome em branco** — dado limpo.
+
+**Causa raiz (renderização):** o `YAxis` categórico do Recharts usa por padrão
+`interval="preserveEnd"`, que **descarta rótulos alternados** quando há muitas
+categorias e pouco espaço vertical. As barras existiam e tinham nome — só o label
+não era desenhado (daí o padrão "uma nomeada, uma fantasma"). Também explicava a
+ordem estranha (topo "Duplicado" em vez de "Nunca respondeu", o maior real).
+
+**Correção (opção 1)** nos **3** gráficos de Motivos de Perda:
+- `interval={0}` no `YAxis` → força todos os rótulos a renderizar.
+- Dashboard ganhou **altura dinâmica** (44px/barra; `height` fixo → `minHeight`
+  420/500). Os de `/statistics` já tinham altura proporcional (50px / 45px por barra).
+
+Arquivos:
+- `src/features/dashboard/components/LossReasonsChart.tsx` (interval + altura dinâmica)
+- `src/features/reports/components/LossReasonsChart.tsx` (interval)
+- `src/features/statistics/components/LossReasonsBarChart.tsx` (interval)
+
+Validação: `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm build` ✅ · CI
+`Lint·Typecheck·Test·Build` ✅ 3m36s. Merge squash (#49). Deploy Coolify
+verificado: release de produção = `30e3bea` = HEAD da `main`.
+
 ## Pendências (fora desta sessão)
 - **Rotação do `CRON_SECRET`** segue PENDENTE — não trocar no Coolify antes do
   verificador multivalor `feat/cron-secret-multivalue` estar no ar (senão 401 em
