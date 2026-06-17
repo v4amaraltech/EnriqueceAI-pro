@@ -38,6 +38,7 @@ export function LossReasonsBarChart({ data }: LossReasonsBarChartProps) {
         <YAxis
           type="category"
           dataKey="reasonName"
+          interval={0}
           width={150}
           tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
         />

@@ -66,6 +66,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           <YAxis
             type="category"
             dataKey="name"
+            interval={0}
             width={140}
             tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           />

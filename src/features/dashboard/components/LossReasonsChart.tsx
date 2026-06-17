@@ -26,7 +26,10 @@ interface LossReasonsChartProps {
   data: LossReasonEntry[];
 }
 
-function LossReasonsBarChart({ data, height }: { data: LossReasonEntry[]; height: number }) {
+function LossReasonsBarChart({ data, minHeight }: { data: LossReasonEntry[]; minHeight: number }) {
+  // Altura proporcional ao nº de barras (44px/barra) para caber todos os rótulos
+  // sem o Recharts decimar labels via o interval padrão ("preserveEnd").
+  const height = Math.max(minHeight, data.length * 44 + 40);
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
@@ -43,6 +46,7 @@ function LossReasonsBarChart({ data, height }: { data: LossReasonEntry[]; height
         <YAxis
           type="category"
           dataKey="reason"
+          interval={0}
           tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
           width={160}
         />
@@ -99,7 +103,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           </button>
         </div>
         <div className="flex-1 min-h-[350px]">
-          <LossReasonsBarChart data={data} height={420} />
+          <LossReasonsBarChart data={data} minHeight={420} />
         </div>
       </div>
 
@@ -109,7 +113,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
             <DialogTitle>Motivos de Perda</DialogTitle>
           </DialogHeader>
           <div className="min-h-[500px]">
-            <LossReasonsBarChart data={data} height={500} />
+            <LossReasonsBarChart data={data} minHeight={500} />
           </div>
         </DialogContent>
       </Dialog>
