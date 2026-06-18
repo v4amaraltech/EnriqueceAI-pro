@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { isSessionDeadError } from './whatsapp-evolution.service';
 import { validateBrazilianPhone } from './whatsapp.service';
 
 interface CreateGroupResult {
@@ -104,6 +105,17 @@ export async function createMeetingWhatsAppGroup(
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
       console.error('[whatsapp-group] Create failed:', createResponse.status, errorText);
+      // A 500 "Connection Closed" (and similar) means the SDR's WhatsApp
+      // session dropped on Evolution even though our cached status said
+      // 'connected'. Reflect reality so the UI prompts a reconnect and future
+      // meetings stop silently failing against a dead session — mirrors the
+      // self-heal already done in EvolutionWhatsAppService.
+      if (isSessionDeadError(errorText)) {
+        await from(supabase, 'whatsapp_instances' as never)
+          .update({ status: 'disconnected', last_error: `group/create ${createResponse.status}: ${errorText.slice(0, 200)}` } as Record<string, unknown>)
+          .eq('id', sdrInstance.id);
+        return { success: false, error: 'WhatsApp do SDR desconectado (sessão caiu). Reconecte via QR Code.' };
+      }
       return { success: false, error: `Erro ao criar grupo: ${createResponse.status}` };
     }
 

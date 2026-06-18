@@ -10,7 +10,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance } from "../_shared/evolution.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
@@ -30,53 +30,49 @@ serve(async (req)=>{
   const { organizationId, userId } = authResult.context;
   console.log("[create-instance] Auth OK, org:", organizationId, "user:", userId);
   try {
-    // Verificar se já existe uma instância para este usuário (ou org default)
-    console.log("[create-instance] Checking existing instance for user...");
-    const existingInstance = await getWhatsAppInstance(organizationId, userId);
-    if (existingInstance) {
-      console.log("[create-instance] Found existing instance:", existingInstance.instance_name, "status:", existingInstance.status);
-      // ALWAYS destroy + recreate when user clicks "Conectar"
-      // This ensures a completely fresh session for the user's phone
-      console.log("[create-instance] Destroying existing instance for fresh start...");
-      await logoutInstance(existingInstance.instance_name);
-      await deleteInstance(existingInstance.instance_name);
-      await deleteWhatsAppInstance(existingInstance.id);
-      console.log("[create-instance] Old instance destroyed, will create new one below");
-      // Fall through to create new instance
-    }
-    // Criar nova instância
-    console.log("[create-instance] Creating new instance...");
+    // Canonical, suffix-free name for this user. We ALWAYS reuse this exact
+    // name so a user never accumulates multiple Evolution instances.
     const instanceName = generateInstanceName(organizationId, userId);
     const webhookUrl = `${SUPABASE_URL}/functions/v1/evolution-webhook`;
-    // Criar na Evolution API
+
+    // 1) Sweep EVERY Evolution instance belonging to this user — the canonical
+    //    name AND any orphaned suffixed names (`ea_org_user_5qqp`) left behind
+    //    by past "already in use" retries. Leaving an old instance alive paired
+    //    to the same phone is what caused the "Connection Closed" session
+    //    conflict (two Baileys sockets fighting over one number — V4 Amaral,
+    //    jun/2026). Best-effort: logout then delete each.
+    console.log("[create-instance] Sweeping existing Evolution instances for user...");
+    const allNames = await listInstanceNames();
+    const mine = allNames.filter((n) => n === instanceName || n.startsWith(`${instanceName}_`));
+    console.log("[create-instance] Found", mine.length, "instance(s) to remove:", mine.join(", ") || "(none)");
+    for (const name of mine) {
+      await logoutInstance(name);
+      await deleteInstance(name);
+    }
+
+    // 2) Drop our DB row for this user so the insert below doesn't hit the
+    //    UNIQUE(org_id, user_id) constraint.
+    const existingInstance = await getWhatsAppInstance(organizationId, userId);
+    if (existingInstance) {
+      await deleteWhatsAppInstance(existingInstance.id);
+    }
+
+    // 3) Create ONE fresh instance under the canonical name.
     console.log("[create-instance] Calling Evolution API to create:", instanceName);
-    const createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    let createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+
+    // If the sweep missed a stale instance (race, or version-specific list
+    // shape), force-remove THIS exact name and retry once with the SAME name.
+    // Never fall back to a suffixed name — that is what orphans instances.
+    if (!createResult.ok && createResult.error?.includes("already in use")) {
+      console.log("[create-instance] Still in use after sweep — force-deleting and retrying same name...");
+      await logoutInstance(instanceName);
+      await deleteInstance(instanceName);
+      await new Promise((r) => setTimeout(r, 1500));
+      createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    }
+
     if (!createResult.ok) {
-      // Handle "already in use" — orphaned instance in Evolution, create with new name
-      const isAlreadyInUse = createResult.error?.includes("already in use");
-      if (isAlreadyInUse) {
-        console.log("[create-instance] Instance name conflict, creating with new name...");
-        const retryName = generateInstanceName(organizationId, userId, true);
-        console.log("[create-instance] Retry with name:", retryName);
-        const retryResult = await createInstance(retryName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
-        if (!retryResult.ok) {
-          console.error("[create-instance] Retry failed:", retryResult.error);
-          return errorResponse(`Failed after retry: ${retryResult.error}`, 500);
-        }
-        const retryQr = retryResult.data.qrcode?.base64 || null;
-        const savedInstance = await createWhatsAppInstance(organizationId, retryName, retryQr || undefined, userId);
-        if (!savedInstance) {
-          return errorResponse("Failed to save instance to database", 500);
-        }
-        if (!retryQr) {
-          const connectResult = await connectInstance(retryName);
-          if (connectResult.ok && connectResult.data.base64) {
-            await updateWhatsAppInstance(savedInstance.id, { qr_base64: connectResult.data.base64 });
-            return jsonResponse({ instance_name: retryName, qr_base64: connectResult.data.base64, status: "connecting" });
-          }
-        }
-        return jsonResponse({ instance_name: retryName, qr_base64: retryQr, status: "connecting" });
-      }
       console.error("[create-instance] Evolution API error:", createResult.error);
       return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
     }

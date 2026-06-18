@@ -137,6 +137,30 @@ export async function fetchInstance(
   }
 }
 
+/** List every instance name currently registered in Evolution. Tolerates the
+ *  different response shapes across Evolution versions (v2 returns
+ *  `[{ name, ... }]`, older builds return `[{ instance: { instanceName } }]`).
+ *  Returns an empty array on any failure so callers can degrade gracefully. */
+export async function listInstanceNames(): Promise<string[]> {
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+      method: 'GET',
+      headers: headers(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const arr = Array.isArray(data) ? data : [];
+    return arr
+      .map((it: Record<string, unknown>) => {
+        const inst = it?.instance as Record<string, unknown> | undefined;
+        return (it?.name ?? inst?.instanceName ?? inst?.name ?? it?.instanceName) as unknown;
+      })
+      .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 /** Restart an instance */
 export async function restartInstance(
   instanceName: string,

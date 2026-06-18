@@ -42,7 +42,7 @@ const SESSION_DEAD_PATTERNS = [
   'does not exist',
 ];
 
-function isSessionDeadError(message: string): boolean {
+export function isSessionDeadError(message: string): boolean {
   const lower = message.toLowerCase();
   return SESSION_DEAD_PATTERNS.some((pattern) => lower.includes(pattern));
 }
