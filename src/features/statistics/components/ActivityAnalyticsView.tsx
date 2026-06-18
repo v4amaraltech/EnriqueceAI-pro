@@ -403,7 +403,7 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
               </th>
               <th className={thClass} onClick={() => toggleSort('onTime')}>
                 <span className="inline-flex items-center justify-center">
-                  On time*
+                  Conclusão*
                   <SortIcon column="onTime" current={sort} />
                 </span>
               </th>
@@ -442,6 +442,12 @@ export function ActivityAnalyticsView({ data, members, hideFilters }: ActivityAn
           </tbody>
         </table>
       </div>
+
+      <p className="text-xs text-[var(--muted-foreground)]">
+        * <strong>Conclusão</strong>: percentual de atividades efetivamente executadas —
+        enviadas, entregues ou com reunião agendada — sobre o total de atividades registradas
+        no período. Não mede prazo/horário.
+      </p>
     </div>
   );
 }
