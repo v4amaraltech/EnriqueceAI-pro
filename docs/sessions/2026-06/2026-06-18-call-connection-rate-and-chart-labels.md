@@ -1,8 +1,9 @@
 # Handoff — 2026-06-18: Taxa de Conexão + rótulos de gráficos + WhatsApp (convite e grupo/órfãs)
 
-> Sessão longa: 4 PRs (#51 taxa de conexão, #52 rótulo "Conclusão", #53 texto convite
-> WhatsApp, #54 instâncias órfãs Evolution + self-heal grupo). Todos mergeados e
-> deployados (incl. 1 edge function via Supabase CLI). Ver Pendências ao fim.
+> Sessão longa: 7 PRs (#51 taxa de conexão, #52 rótulo "Conclusão", #53 texto convite
+> WhatsApp, #54 instâncias órfãs Evolution + self-heal grupo, #55 handoff, #56 botão
+> Reconectar, #57 fallback de nome preso). Todos mergeados e deployados (incl. edge
+> function via Supabase CLI, re-deployada). Ver Pendências ao fim.
 
 Org V4 Amaral (`c2727473-1df8-4faa-9264-a9fc1759fe3b`). Agente: @devops (Gage).
 
@@ -100,13 +101,38 @@ dhkmonctyoaenejemkrt`** (NÃO sobe pelo Coolify — CLI logada, projeto linkado)
 **Ação operacional:** os 4 SDRs afetados clicarem "Conectar" 1× → varredura limpa as
 órfãs. Ismael é o mais urgente (erro nos grupos hoje).
 
+## 4b. Continuação WhatsApp — botão Reconectar (#56) + nome preso (#57)
+Ao operacionalizar a reconexão, dois aprendizados:
+- **UX:** quando `connected`, a UI só tinha "Desconectar" — reconectar exigia
+  Desconectar→Conectar. **PR #56** adicionou botão **"Reconectar"** (1 clique = mesmo
+  `connect()`, que varre órfãs + QR novo). `IntegrationsView.tsx`.
+- **Evolution trava o NOME:** o servidor Evolution é **compartilhado** (v2.3.7, 50+
+  instâncias de vários clientes) e mantém o nome reservado após delete ("already in use"
+  no create, instância sumida do manager). Isso **bloqueava** o SDR (caso Ismael
+  `ea_c2727473_dcb4b327`, 403 Forbidden). **PR #57:** após varredura + force-delete + retry,
+  se ainda "already in use", conecta com **nome novo único** em vez de bloquear (a varredura
+  já deslogou as antigas → aparelho escaneado é o único pareado, sem Connection Closed; o
+  nome preso vira entrada morta). Ismael reconectou OK como `ea_c2727473_dcb4b327_md1h`,
+  status `connected`. **Deploy via `supabase functions deploy` (re-deployado 2×).**
+- **Conexão é por usuário:** cada SDR loga na própria conta; o manager não reconecta pelo
+  outro. Card mostra "Conectar" (sem instância) ou "Reconectar/Desconectar" (conectado).
+- **Resolução das órfãs presas:** delete manual no Evolution às vezes não libera o nome na
+  hora; o fallback do #57 contorna isso (não precisa restart do servidor compartilhado).
+
 ## Validação
 - Todos os PRs: `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm build` ✅.
-  PR #51 (148 testes) e #54 (91 integrations) também `pnpm test` ✅.
-- CI `Lint·Typecheck·Test·Build` ✅ (#51 3m46s, #52 3m53s, #53, #54 3m46s). Squash em todos.
+  PR #51 (148 testes), #54 (91 integrations), #56 (17 IntegrationsView) também `pnpm test` ✅.
+- CI `Lint·Typecheck·Test·Build` ✅ em todos (#51–#57). Squash em todos.
+- **7 PRs na sessão:** #51, #52, #53, #54, #55 (handoff), #56, #57. Edge function deployada
+  via Supabase CLI (re-deployada nas iterações do #57).
 
 ## Pendências
-- **Reconexão dos 4 SDRs** (Ismael/Giovanni/Rafael/Vinicius) p/ limpar órfãs — mensagem enviada ao gestor.
+- **Reconexão de Vinícius e Guilherme** (têm órfãs) — agora NÃO bloqueia mais (fallback do
+  #57), é só pedir pra reconectarem. Ismael e Rafael já reconectaram OK.
+- **Teste final do grupo:** Ismael agendar reunião → confirmar grupo criado (log
+  `[whatsapp-group] Group created`). Não dá pra ver pelo banco (não persiste).
+- **Faxina opcional no Evolution:** nomes mortos presos (ex.: `ea_c2727473_dcb4b327`) —
+  restart do servidor compartilhado libera; sem urgência (inofensivos).
 - **`'Nenhuma instância encontrada'`** nos lembretes de atividade do **Rafael** (109× no log,
   `activity-reminders` → `resolveInstance` null mesmo com instância conectada) — revalidar
   DEPOIS que ele reconectar (provável reflexo da órfã).
