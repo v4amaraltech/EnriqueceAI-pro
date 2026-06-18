@@ -57,32 +57,47 @@ serve(async (req)=>{
       await deleteWhatsAppInstance(existingInstance.id);
     }
 
-    // 3) Create ONE fresh instance under the canonical name.
-    console.log("[create-instance] Calling Evolution API to create:", instanceName);
-    let createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    // 3) Create the instance. Prefer the canonical name; the name actually used
+    //    is tracked in `usedName` (may differ if we fall back below).
+    let usedName = instanceName;
+    console.log("[create-instance] Calling Evolution API to create:", usedName);
+    let createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
 
     // If the sweep missed a stale instance (race, or version-specific list
     // shape), force-remove THIS exact name and retry once with the SAME name.
-    // Never fall back to a suffixed name — that is what orphans instances.
     if (!createResult.ok && createResult.error?.includes("already in use")) {
       console.log("[create-instance] Still in use after sweep — force-deleting and retrying same name...");
-      await logoutInstance(instanceName);
-      await deleteInstance(instanceName);
+      await logoutInstance(usedName);
+      await deleteInstance(usedName);
       await new Promise((r) => setTimeout(r, 1500));
-      createResult = await createInstance(instanceName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+      createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    }
+
+    // Last resort: the Evolution server is holding the canonical name reserved
+    // even though our delete reports done (known on shared Evolution servers —
+    // the name lingers in its DB/cache after the manager "delete"). Rather than
+    // BLOCK the user, connect under a fresh unique name. The sweep above already
+    // logged out the user's old instances, so the freshly-scanned one becomes
+    // the only paired device — no "Connection Closed" conflict. The stuck
+    // canonical name is a harmless reserved entry until the Evolution server is
+    // cleaned/restarted.
+    if (!createResult.ok && createResult.error?.includes("already in use")) {
+      usedName = generateInstanceName(organizationId, userId, true);
+      console.warn("[create-instance] Canonical name stuck on Evolution — falling back to fresh name:", usedName);
+      createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
     }
 
     if (!createResult.ok) {
       console.error("[create-instance] Evolution API error:", createResult.error);
       return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
     }
-    console.log("[create-instance] Evolution API success");
+    console.log("[create-instance] Evolution API success as:", usedName);
     // Extrair QR code se disponível
     const qrBase64 = createResult.data.qrcode?.base64 || null;
     console.log("[create-instance] QR from create:", qrBase64 ? "yes" : "no");
     // Salvar no banco
     console.log("[create-instance] Saving to database...");
-    const savedInstance = await createWhatsAppInstance(organizationId, instanceName, qrBase64 || undefined, userId);
+    const savedInstance = await createWhatsAppInstance(organizationId, usedName, qrBase64 || undefined, userId);
     if (!savedInstance) {
       console.error("[create-instance] Failed to save to database");
       return errorResponse("Failed to save instance to database", 500);
@@ -91,14 +106,14 @@ serve(async (req)=>{
     // Se não veio QR na criação, tentar buscar via connect
     if (!qrBase64) {
       console.log("[create-instance] No QR from create, trying connect...");
-      const connectResult = await connectInstance(instanceName);
+      const connectResult = await connectInstance(usedName);
       if (connectResult.ok && connectResult.data.base64) {
         console.log("[create-instance] Got QR from connect");
         await updateWhatsAppInstance(savedInstance.id, {
           qr_base64: connectResult.data.base64
         });
         return jsonResponse({
-          instance_name: instanceName,
+          instance_name: usedName,
           qr_base64: connectResult.data.base64,
           status: "connecting"
         });
@@ -107,7 +122,7 @@ serve(async (req)=>{
     }
     console.log("[create-instance] Returning response");
     return jsonResponse({
-      instance_name: instanceName,
+      instance_name: usedName,
       qr_base64: qrBase64,
       status: "connecting"
     });
