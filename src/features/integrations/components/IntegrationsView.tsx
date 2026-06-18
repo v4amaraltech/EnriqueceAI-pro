@@ -222,15 +222,33 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             )}
             <div className="ml-auto shrink-0 flex items-center gap-2">
               {whatsappConnected ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                  onClick={() => setShowDisconnect('whatsapp')}
-                >
-                  <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  Desconectar
-                </Button>
+                <>
+                  {/* Reconectar: dispara o mesmo connect(), que no Evolution varre
+                      TODAS as instâncias do usuário (inclui sessões órfãs) e recria
+                      uma limpa com QR novo — resolve "Connection Closed" sem o
+                      vai-e-volta de Desconectar→Conectar. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowEvolutionModal(true);
+                      evolution.connect();
+                    }}
+                    disabled={evolution.step === 'creating' || evolution.step === 'waiting_scan'}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Reconectar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    onClick={() => setShowDisconnect('whatsapp')}
+                  >
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                    Desconectar
+                  </Button>
+                </>
               ) : whatsapp?.status === 'connected' ? null : (
                 <Button
                   size="sm"
