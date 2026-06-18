@@ -46,7 +46,7 @@ function buildInviteMessage(greetingName: string, meeting: MeetingDetails): stri
   const formattedTime = meeting.time;
 
   let msg = `Olá ${greetingName}! 👋\n\n`;
-  msg += `Sua reunião foi agendada:\n\n`;
+  msg += `Seu diagnóstico foi agendado:\n\n`;
   msg += `📋 *${meeting.title}*\n`;
   msg += `📅 ${formattedDate}\n`;
   msg += `🕐 ${formattedTime} (${meeting.duration} min)\n`;
