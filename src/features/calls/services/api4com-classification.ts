@@ -6,6 +6,14 @@ import type { CallStatus } from '../types';
 
 const DEFAULT_SIGNIFICANT_THRESHOLD_SECONDS = 30;
 
+// Talk-time floor (seconds) above which a call carrying NO hangup_cause and no
+// answered_at is still treated as connected. Covers ramais whose API4COM
+// webhook arrives stripped of the usual connect signals (V4 Amaral ramais
+// 1040/1042, jun/2026) — without this the calls rot at the seed
+// 'not_connected' and show a false 0% connection rate. 15s is a conservative
+// "this was a real conversation" floor agreed with the operator.
+const CONNECTED_FALLBACK_DURATION_SECONDS = 15;
+
 /**
  * In-memory cache for org-level significant threshold.
  * Both webhook (per-event) and reconcile (per-org-batch) hit the same orgs
@@ -99,7 +107,13 @@ export function classifyApi4ComCall(input: ClassifyInput): ClassifyOutput {
     // picked up. API4COM dashboard's "Chamadas Atendidas" metric uses the
     // same rule (validated against May/2026 numbers — 970 connected calls
     // matched this exact predicate within ±5%).
-    || (hangupCause === 'NORMAL_CLEARING' && durationSeconds > 0);
+    || (hangupCause === 'NORMAL_CLEARING' && durationSeconds > 0)
+    // Fallback for ramais whose webhook arrives WITHOUT answered_at AND
+    // without any hangup_cause: real talk time proves the call connected even
+    // though the provider sent none of the usual signals. Gated on a missing
+    // hangup_cause so it NEVER overrides an explicit not-connected cause
+    // (USER_BUSY, NO_ANSWER, CALL_REJECTED, ...) on the healthy ramais.
+    || (!hangupCause && durationSeconds >= CONNECTED_FALLBACK_DURATION_SECONDS);
 
   if (wasAnswered) {
     return {

@@ -120,7 +120,7 @@ describe('classifyApi4ComCall', () => {
       expect(out).toEqual({ connected: false, status: 'no_contact' });
     });
 
-    it('missing hangup cause → not_connected fallback', () => {
+    it('missing hangup cause + duration=0 → not_connected fallback', () => {
       const out = classifyApi4ComCall({
         answeredAt: null,
         hangupCause: null,
@@ -128,6 +128,81 @@ describe('classifyApi4ComCall', () => {
         significantThresholdSeconds: threshold,
       });
       expect(out).toEqual({ connected: false, status: 'no_contact' });
+    });
+  });
+
+  describe('duration fallback (no answeredAt, no hangup_cause — broken-webhook ramais)', () => {
+    it('missing hangup cause + duration ≥15s (short) → connected + not_significant', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: null,
+        durationSeconds: 21, // typical V4 Amaral ramal 1042 talk time
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: true, status: 'not_significant' });
+    });
+
+    it('missing hangup cause + duration ≥ significant threshold → connected + significant', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: null,
+        durationSeconds: 90,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: true, status: 'significant' });
+    });
+
+    it('missing hangup cause at the 15s floor → connected (boundary)', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: null,
+        durationSeconds: 15,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out.connected).toBe(true);
+      expect(out.status).toBe('not_significant');
+    });
+
+    it('missing hangup cause just below the 15s floor → stays not connected', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: null,
+        durationSeconds: 14,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'no_contact' });
+    });
+
+    it('empty-string hangup cause + long duration → treated as missing → connected', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: '',
+        durationSeconds: 40,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: true, status: 'significant' });
+    });
+
+    it('healthy ramal: explicit USER_BUSY with long duration is NOT upgraded by the fallback', () => {
+      // The fallback must never override an explicit not-connected cause —
+      // otherwise the working ramais would start over-counting.
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: 'USER_BUSY',
+        durationSeconds: 60,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'busy' });
+    });
+
+    it('healthy ramal: ORIGINATOR_CANCEL with talk time stays not_connected (no fallback)', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: null,
+        hangupCause: 'ORIGINATOR_CANCEL',
+        durationSeconds: 40,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'not_connected' });
     });
   });
 
