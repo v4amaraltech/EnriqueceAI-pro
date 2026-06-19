@@ -666,8 +666,10 @@ export async function fetchHitRateRanking(
 /**
  * Card 8: Leads para Abrir — snapshot da fila de cada SDR. Conta leads
  * com status='new' (não arquivados, não deletados) atribuídos ao SDR
- * que NÃO têm enrollment ativo em nenhuma cadência. É o que o SDR ainda
- * precisa puxar pra cadência. Não tem meta (snapshot atual).
+ * que NUNCA foram adicionados a nenhuma cadência (sem QUALQUER enrollment,
+ * mesmo pausado/concluído). É o lead importado que o SDR ainda não colocou
+ * em cadência. Definição canônica alinhada com a RPC
+ * get_sdr_leads_para_abrir_v2 consumida pelo Sales Hub. Não tem meta.
  */
 export async function fetchLeadsToOpenRanking(
   supabase: SupabaseClient,
@@ -695,16 +697,18 @@ export async function fetchLeadsToOpenRanking(
   }
 
   const leadIds = rows.map((l) => l.id);
-  const activeEnrollments = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+  // Qualquer enrollment (qualquer status) exclui o lead da fila "para abrir":
+  // uma vez colocado em cadência, ele já foi "aberto" — mesmo que a cadência
+  // tenha pausado/concluído depois. Casa com get_sdr_leads_para_abrir_v2.
+  const everEnrolled = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
     from(supabase, 'cadence_enrollments')
       .select('lead_id')
-      .in('lead_id', chunk)
-      .eq('status', 'active') as unknown as PromiseLike<{
+      .in('lead_id', chunk) as unknown as PromiseLike<{
       data: Array<{ lead_id: string }> | null;
       error: unknown;
     }>,
   );
-  const enrolledIds = new Set(activeEnrollments.map((e) => e.lead_id));
+  const enrolledIds = new Set(everEnrolled.map((e) => e.lead_id));
 
   const counts = new Map<string, number>();
   let total = 0;
