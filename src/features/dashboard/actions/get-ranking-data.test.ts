@@ -51,7 +51,7 @@ describe('getRankingData', () => {
   const fullRanking = (overrides: Record<string, unknown> = {}) => ({
     leadsFinished: { ...emptyCard },
     activitiesDone: { ...emptyCard },
-    conversionRate: { ...emptyCard },
+    attendanceRate: { ...emptyCard },
     leadsOpened: { ...emptyCard },
     meetingsScheduled: { ...emptyCard },
     meetingsHeld: { ...emptyCard },
@@ -65,7 +65,7 @@ describe('getRankingData', () => {
     const rankingData = fullRanking({
       leadsFinished: { ...emptyCard, total: 15 },
       activitiesDone: { ...emptyCard, total: 200 },
-      conversionRate: { ...emptyCard, total: 42 },
+      attendanceRate: { ...emptyCard, total: 42 },
     });
     mockFetchRanking.mockResolvedValue(rankingData);
 

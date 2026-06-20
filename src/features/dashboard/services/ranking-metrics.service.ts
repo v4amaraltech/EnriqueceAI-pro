@@ -230,144 +230,57 @@ export async function fetchActivitiesRanking(
 }
 
 /**
- * Card 3: Taxa de Conversão — qualified / total leads per SDR
- * Only counts users with role='sdr' — managers are excluded.
+ * Card 3: Taxa de Comparecimento (Marcada → Realizada). Numerador = reuniões
+ * realizadas; denominador = reuniões marcadas no período, ambos por SDR. O
+ * inverso desta taxa é o no-show. Calculada em memória a partir dos cards de
+ * Reuniões Marcadas e Realizadas — mesmo padrão do Hit Rate, sem RPC própria.
+ *
+ * Aproximação temporal (idêntica à do Hit Rate): marcadas e realizadas são
+ * contadas dentro da janela do filtro; não rastreamos se a reunião específica
+ * marcada no período foi a mesma realizada. Por isso a taxa pode passar de
+ * 100% quando há acúmulo de reuniões marcadas em meses anteriores sendo
+ * realizadas agora.
  */
-export async function fetchConversionRanking(
-  supabase: SupabaseClient,
-  orgId: string,
-  filters: DashboardFilters,
-): Promise<RankingCardData> {
-  const { start, end } = getDateRange(filters);
+export function fetchAttendanceRateRanking(
+  scheduled: RankingCardData,
+  held: RankingCardData,
+): RankingCardData {
+  const scheduledByUser = new Map<string, number>();
+  for (const e of scheduled.sdrBreakdown) scheduledByUser.set(e.userId, e.value);
+  const heldByUser = new Map<string, number>();
+  for (const e of held.sdrBreakdown) heldByUser.set(e.userId, e.value);
 
-  // Get list of SDRs (exclude managers)
-  const { data: sdrs } = (await from(supabase, 'organization_members')
-    .select('user_id')
-    .eq('org_id', orgId)
-    .eq('role', 'sdr')
-    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
-  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
-
-  // Denominator: leads that were "worked" in the period (had a cadence enrollment in the period).
-  // Uses SQL function to avoid PostgREST .in() URL length limit.
-  const { data: workedRows } = await (supabase.rpc as any)('fetch_conversion_ranking_data', {
-    p_org_id: orgId,
-    p_start: start,
-    p_end: end,
-  }) as {
-    data: Array<{
-      lead_id: string;
-      status: string;
-      assigned_to: string | null;
-      won_by: string | null;
-      won_in_period: boolean;
-    }> | null;
-  };
-
-  const leadRows = (workedRows ?? []).map((r) => ({
-    id: r.lead_id,
-    status: r.status,
-    assigned_to: r.assigned_to,
-    won_by: r.won_by,
-  }));
-  const wonRows = (workedRows ?? [])
-    .filter((r) => r.won_in_period)
-    .map((r) => ({ id: r.lead_id, assigned_to: r.assigned_to, won_by: r.won_by }));
-
-  if (leadRows.length === 0) {
-    const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await from(supabase, 'goals')
-      .select('conversion_target')
-      .eq('org_id', orgId)
-      .eq('month', monthStart)
-      .maybeSingle()) as { data: { conversion_target: number } | null };
-
-    return buildRankingCardData([], 0, goal?.conversion_target ?? 0, filters.month);
-  }
-
-  // If cadence filter is active, narrow down to leads enrolled in those cadences
-  let filteredLeadIds: Set<string> | null = null;
-  if (filters.cadenceIds.length > 0) {
-    const leadIds = leadRows.map((l) => l.id);
-    const enrollments = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
-      from(supabase, 'cadence_enrollments')
-        .select('lead_id')
-        .in('lead_id', chunk)
-        .in('cadence_id', filters.cadenceIds) as unknown as PromiseLike<{
-        data: Array<{ lead_id: string }> | null;
-        error: unknown;
-      }>,
-    );
-    filteredLeadIds = new Set(enrollments.map((e) => e.lead_id));
-  }
-
-  // Build set of won lead IDs in the period for quick lookup
-  const wonLeadIds = new Set(wonRows.map((l) => l.id));
-  // Map won leads to their SDR (won_by, fallback assigned_to)
-  const wonLeadSdr = new Map<string, string>();
-  for (const l of wonRows) {
-    const sdr = l.won_by ?? l.assigned_to;
-    if (sdr) wonLeadSdr.set(l.id, sdr);
-  }
-
-  // Count total leads per SDR and won leads per SDR
-  const sdrStats = new Map<string, { qualified: number; total: number }>();
-  for (const lead of leadRows) {
-    if (filteredLeadIds && !filteredLeadIds.has(lead.id)) continue;
-    const sdr = lead.assigned_to;
-    if (!sdr) continue;
-    if (!sdrIds.has(sdr)) continue; // Exclude managers
-    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
-    const stats = sdrStats.get(sdr) ?? { qualified: 0, total: 0 };
-    stats.total++;
-    // Count as qualified only if won in the period
-    if (wonLeadIds.has(lead.id)) {
-      const wonSdr = wonLeadSdr.get(lead.id) ?? sdr;
-      if (wonSdr !== sdr && sdrIds.has(wonSdr)) {
-        // Won by different SDR — attribute to the one who won it
-        const wonStats = sdrStats.get(wonSdr) ?? { qualified: 0, total: 0 };
-        wonStats.qualified++;
-        sdrStats.set(wonSdr, wonStats);
-      } else if (wonSdr === sdr) {
-        stats.qualified++;
-      }
-    }
-    sdrStats.set(sdr, stats);
-  }
-
+  const allUserIds = new Set<string>([...scheduledByUser.keys(), ...heldByUser.keys()]);
   const entries: SdrRankingEntry[] = [];
-  let totalQualified = 0;
-  let totalLeads = 0;
-  for (const [userId, stats] of sdrStats) {
-    totalQualified += stats.qualified;
-    totalLeads += stats.total;
-    const rate = stats.total > 0 ? Math.round((stats.qualified / stats.total) * 100) : 0;
-    entries.push({
-      userId,
-      userName: '',
-      value: rate,
-      secondaryValue: stats.total,
-    });
+  let totalScheduled = 0;
+  let totalHeld = 0;
+  for (const userId of allUserIds) {
+    const sc = scheduledByUser.get(userId) ?? 0;
+    const hd = heldByUser.get(userId) ?? 0;
+    totalScheduled += sc;
+    totalHeld += hd;
+    const rate = sc > 0 ? Math.round((hd / sc) * 100) : 0;
+    entries.push({ userId, userName: '', value: rate, secondaryValue: hd });
   }
 
-  const overallRate = totalLeads > 0 ? Math.round((totalQualified / totalLeads) * 100) : 0;
-
-  // Get goal
-  const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await from(supabase, 'goals')
-    .select('conversion_target')
-    .eq('org_id', orgId)
-    .eq('month', monthStart)
-    .maybeSingle()) as { data: { conversion_target: number } | null };
-
-  const target = goal?.conversion_target ?? 0;
+  const overallRate = totalScheduled > 0 ? Math.round((totalHeld / totalScheduled) * 100) : 0;
   const sdrCount = entries.length || 1;
+
+  // Meta derivada das metas dos dois cards: se a empresa espera marcar N
+  // reuniões e realizar M, a taxa de comparecimento alvo é M/N. Mesma lógica
+  // do Hit Rate — evita o usuário definir um número solto e desalinhado.
+  const derivedTarget = scheduled.monthTarget > 0 && held.monthTarget > 0
+    ? Math.round((held.monthTarget / scheduled.monthTarget) * 100)
+    : 0;
+  const percentOfTarget = derivedTarget > 0
+    ? Math.round(((overallRate - derivedTarget) / derivedTarget) * 100)
+    : 0;
 
   return {
     total: overallRate,
-    monthTarget: target,
-    percentOfTarget: target > 0 ? Math.round(((overallRate - target) / target) * 100) : 0,
-    averagePerSdr: Math.round(entries.reduce((sum, e) => sum + e.value, 0) / sdrCount),
+    monthTarget: derivedTarget,
+    percentOfTarget,
+    averagePerSdr: Math.round((entries.reduce((s, e) => s + e.value, 0) / sdrCount) * 10) / 10,
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
   };
 }
@@ -818,10 +731,9 @@ export async function fetchRankingData(
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingData> {
-  const [leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, leadsToOpen, overdueActivities] = await Promise.all([
+  const [leadsFinished, activitiesDone, leadsOpened, meetingsScheduled, meetingsHeld, leadsToOpen, overdueActivities] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchActivitiesRanking(supabase, orgId, filters),
-    fetchConversionRanking(supabase, orgId, filters),
     fetchLeadsOpenedRanking(supabase, orgId, filters),
     fetchMeetingsScheduledRanking(supabase, orgId, filters),
     fetchMeetingsHeldRanking(supabase, orgId, filters),
@@ -829,7 +741,9 @@ export async function fetchRankingData(
     fetchOverdueActivitiesRanking(supabase, orgId, filters),
   ]);
 
+  // Derived in-memory from the cards above (no extra round-trip).
   const hitRate = await fetchHitRateRanking(supabase, orgId, filters, leadsOpened, meetingsHeld);
+  const attendanceRate = fetchAttendanceRateRanking(meetingsScheduled, meetingsHeld);
 
-  return { leadsFinished, activitiesDone, conversionRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen, overdueActivities };
+  return { leadsFinished, activitiesDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen, overdueActivities };
 }

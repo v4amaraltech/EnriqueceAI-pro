@@ -209,7 +209,7 @@ describe('DashboardView', () => {
         averagePerSdr: 25,
         sdrBreakdown: [],
       },
-      conversionRate: {
+      attendanceRate: {
         total: 30,
         monthTarget: 40,
         percentOfTarget: -5,
@@ -272,7 +272,7 @@ describe('DashboardView', () => {
     expect(screen.getByText('Leads Abertos')).toBeInTheDocument();
     expect(screen.getByText('Reuniões Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Atividades Realizadas')).toBeInTheDocument();
-    expect(screen.getByText('Taxa de Conversão')).toBeInTheDocument();
+    expect(screen.getByText('Taxa de Comparecimento')).toBeInTheDocument();
   });
 
   it('should not render ranking section when ranking prop is absent', () => {

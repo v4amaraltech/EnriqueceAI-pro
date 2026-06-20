@@ -40,7 +40,7 @@ export async function getRankingData(
 
     // Resolve user IDs to display names
     const allUserIds = new Set<string>();
-    for (const card of [ranking.leadsFinished, ranking.activitiesDone, ranking.conversionRate, ranking.leadsOpened, ranking.meetingsScheduled, ranking.meetingsHeld, ranking.hitRate, ranking.leadsToOpen, ranking.overdueActivities]) {
+    for (const card of [ranking.leadsFinished, ranking.activitiesDone, ranking.attendanceRate, ranking.leadsOpened, ranking.meetingsScheduled, ranking.meetingsHeld, ranking.hitRate, ranking.leadsToOpen, ranking.overdueActivities]) {
       for (const entry of card.sdrBreakdown) {
         allUserIds.add(entry.userId);
       }
@@ -80,7 +80,7 @@ export async function getRankingData(
 
     ranking.leadsFinished.sdrBreakdown = resolveNames(ranking.leadsFinished.sdrBreakdown);
     ranking.activitiesDone.sdrBreakdown = resolveNames(ranking.activitiesDone.sdrBreakdown);
-    ranking.conversionRate.sdrBreakdown = resolveNames(ranking.conversionRate.sdrBreakdown);
+    ranking.attendanceRate.sdrBreakdown = resolveNames(ranking.attendanceRate.sdrBreakdown);
     ranking.leadsOpened.sdrBreakdown = resolveNames(ranking.leadsOpened.sdrBreakdown);
     ranking.meetingsScheduled.sdrBreakdown = resolveNames(ranking.meetingsScheduled.sdrBreakdown);
     ranking.meetingsHeld.sdrBreakdown = resolveNames(ranking.meetingsHeld.sdrBreakdown);
