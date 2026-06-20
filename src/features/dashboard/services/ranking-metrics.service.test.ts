@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   fetchActivitiesRanking,
-  fetchConversionRanking,
+  fetchAttendanceRateRanking,
   fetchLeadsFinishedRanking,
   fetchRankingData,
 } from './ranking-metrics.service';
+import type { RankingCardData } from '../types';
 
 // --- Chainable + thenable mock builder ---
 function createChainMock(finalResult: unknown = { data: null }) {
@@ -179,63 +180,44 @@ describe('fetchActivitiesRanking', () => {
   });
 });
 
-describe('fetchConversionRanking', () => {
-  it('should return 0% when no leads', async () => {
-    const sdrsChain = createChainMock({ data: [] });
-    const goalsChain = createChainMock({ data: null });
+describe('fetchAttendanceRateRanking', () => {
+  const card = (
+    total: number,
+    monthTarget: number,
+    sdrBreakdown: RankingCardData['sdrBreakdown'],
+  ): RankingCardData => ({ total, monthTarget, percentOfTarget: 0, averagePerSdr: 0, sdrBreakdown });
 
-    const supabase = createMockSupabase(
-      (table) => {
-        if (table === 'organization_members') return sdrsChain;
-        if (table === 'goals') return goalsChain;
-        return createChainMock();
-      },
-      () => Promise.resolve({ data: [] }),
-    );
-
-    const result = await fetchConversionRanking(supabase as never, ORG, baseFilters);
-
+  it('should return 0% when no meetings', () => {
+    const result = fetchAttendanceRateRanking(card(0, 0, []), card(0, 0, []));
     expect(result.total).toBe(0);
+    expect(result.sdrBreakdown).toHaveLength(0);
   });
 
-  it('should compute conversion rate per SDR', async () => {
-    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
-    const goalsChain = createChainMock({ data: { conversion_target: 30 } });
+  it('should compute attendance rate per SDR (realizadas ÷ marcadas)', () => {
+    // Marcadas: u1=4, u2=2. Realizadas: u1=2, u2=2.
+    const scheduled = card(6, 10, [
+      { userId: 'u1', userName: '', value: 4 },
+      { userId: 'u2', userName: '', value: 2 },
+    ]);
+    const held = card(4, 5, [
+      { userId: 'u1', userName: '', value: 2 },
+      { userId: 'u2', userName: '', value: 2 },
+    ]);
 
-    // Qualified = won_in_period, attributed to assigned_to (fallback won_by).
-    // u1: l1 won, l2 not → 1/2 = 50%. u2: l3 won, l4 not → 1/2 = 50%.
-    const supabase = createMockSupabase(
-      (table) => {
-        if (table === 'organization_members') return sdrsChain;
-        if (table === 'goals') return goalsChain;
-        return createChainMock();
-      },
-      (fn) => {
-        if (fn === 'fetch_conversion_ranking_data') {
-          return Promise.resolve({
-            data: [
-              { lead_id: 'l1', status: 'qualified', assigned_to: 'u1', won_by: 'u1', won_in_period: true },
-              { lead_id: 'l2', status: 'contacted', assigned_to: 'u1', won_by: null, won_in_period: false },
-              { lead_id: 'l3', status: 'qualified', assigned_to: 'u2', won_by: 'u2', won_in_period: true },
-              { lead_id: 'l4', status: 'new', assigned_to: 'u2', won_by: null, won_in_period: false },
-            ],
-          });
-        }
-        return Promise.resolve({ data: [] });
-      },
-    );
+    const result = fetchAttendanceRateRanking(scheduled, held);
 
-    const result = await fetchConversionRanking(supabase as never, ORG, baseFilters);
-
-    // Overall: 2 won / 4 total = 50%
-    expect(result.total).toBe(50);
-    expect(result.monthTarget).toBe(30);
+    // Overall: 4 realizadas / 6 marcadas = 67%
+    expect(result.total).toBe(67);
+    // Meta derivada: held.monthTarget / scheduled.monthTarget = 5/10 = 50%
+    expect(result.monthTarget).toBe(50);
     expect(result.sdrBreakdown).toHaveLength(2);
 
-    // u1: 1/2 = 50%, u2: 1/2 = 50%
+    // u1: 2/4 = 50% (secondaryValue = realizadas), u2: 2/2 = 100%
     const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
     expect(u1?.value).toBe(50);
-    expect(u1?.secondaryValue).toBe(2); // total leads
+    expect(u1?.secondaryValue).toBe(2);
+    const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
+    expect(u2?.value).toBe(100);
   });
 });
 
@@ -254,7 +236,7 @@ describe('fetchRankingData', () => {
 
     expect(result).toHaveProperty('leadsFinished');
     expect(result).toHaveProperty('activitiesDone');
-    expect(result).toHaveProperty('conversionRate');
+    expect(result).toHaveProperty('attendanceRate');
     expect(result.leadsFinished.total).toBe(0);
   });
 });
