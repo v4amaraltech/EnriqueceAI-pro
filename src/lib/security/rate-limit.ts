@@ -5,6 +5,7 @@
 
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import * as Sentry from '@sentry/nextjs';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -16,13 +17,23 @@ export interface RateLimitResult {
 // --- Upstash Redis singleton ---
 let redis: Redis | null = null;
 
+// getRedis() runs on every checkRateLimit call when Redis is absent (a null
+// client isn't cached), so guard the alert to fire once per process — otherwise
+// each request would flood Sentry/logs while the misconfiguration persists.
+let fallbackReported = false;
+
 function getRedis(): Redis | null {
   if (redis) return redis;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[SECURITY] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting falls back to in-memory (ineffective on serverless)');
+    if (process.env.NODE_ENV === 'production' && !fallbackReported) {
+      fallbackReported = true;
+      const msg = '[SECURITY] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting falls back to in-memory (ineffective on serverless, distributed rate limiting disabled)';
+      console.error(msg);
+      // Explicit capture so it surfaces as a Sentry event (the SDK does not
+      // forward console.* by default) and can drive an alert rule.
+      Sentry.captureMessage(msg, 'error');
     }
     return null;
   }
