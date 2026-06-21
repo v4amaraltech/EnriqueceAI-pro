@@ -17,6 +17,8 @@ const NAV: NavItem[] = [
   { id: 'limites', label: 'Limites de uso' },
   { id: 'criar-lead', label: 'Criar lead (REST)' },
   { id: 'enviar-lote', label: 'Enviar em lote (Webhook)' },
+  { id: 'listar-leads', label: 'Listar leads (GET)' },
+  { id: 'buscar-lead', label: 'Buscar lead por ID (GET)' },
   { id: 'health', label: 'Health check' },
   { id: 'campos', label: 'Campos do lead' },
   { id: 'erros', label: 'Códigos de erro' },
@@ -65,6 +67,7 @@ const ERRORS: ErrorCode[] = [
   { code: '400', meaning: 'JSON inválido ou payload malformado' },
   { code: '401', meaning: 'API key ausente, inválida ou expirada' },
   { code: '402', meaning: 'Limite de leads do plano atingido' },
+  { code: '404', meaning: 'Lead não encontrado (GET por ID)' },
   { code: '409', meaning: 'Lead duplicado (retorna existing_lead_id) — apenas REST' },
   { code: '413', meaning: 'Payload excede 1 MB — apenas REST' },
   { code: '422', meaning: 'Erro de validação (retorna details com os campos), nenhum lead no payload, ou mais de 100 leads' },
@@ -117,6 +120,64 @@ const RESPONSE_BATCH = `{
 }`;
 
 const CURL_HEALTH = `curl ${BASE_URL}/api/health`;
+
+const CURL_LIST = `curl "${BASE_URL}/api/v1/leads?page=1&per_page=50&status=new,contacted" \\
+  -H "Authorization: Bearer SUA_CHAVE_API"`;
+
+const RESPONSE_LIST = `{
+  "success": true,
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "contacted",
+      "first_name": "Carlos",
+      "last_name": null,
+      "email": "carlos@empresa.com",
+      "telefone": "+5511999999999",
+      "empresa": "XPTO Ltda",
+      "cnpj": null,
+      "lead_source": "Inbound",
+      "canal": "Landing Page",
+      "assigned_to": "a1b2c3d4-...",
+      "created_at": "2026-06-20T13:45:00Z",
+      "updated_at": "2026-06-21T09:10:00Z",
+      "meeting_scheduled_at": null,
+      "won_at": null
+    }
+  ],
+  "pagination": { "page": 1, "per_page": 50, "total": 312, "total_pages": 7 }
+}`;
+
+const CURL_GET = `curl ${BASE_URL}/api/v1/leads/550e8400-e29b-41d4-a716-446655440000 \\
+  -H "Authorization: Bearer SUA_CHAVE_API"`;
+
+const RESPONSE_GET = `{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "qualified",
+    "first_name": "Carlos",
+    "email": "carlos@empresa.com",
+    "empresa": "XPTO Ltda",
+    "custom_fields": { "Valor do Lead": 5000 },
+    "created_at": "2026-06-20T13:45:00Z",
+    "qualified_at": "2026-06-21T10:00:00Z"
+  }
+}`;
+
+interface QueryParam {
+  name: string;
+  desc: string;
+}
+
+const LIST_PARAMS: QueryParam[] = [
+  { name: 'page', desc: 'Página (default 1)' },
+  { name: 'per_page', desc: 'Itens por página (default 50, máximo 100)' },
+  { name: 'status', desc: 'Filtra por status (lista separada por vírgula): new, contacted, qualified, won, unqualified, archived' },
+  { name: 'updated_since', desc: 'Só leads alterados desde a data (ISO 8601, ex: 2026-06-21T00:00:00Z) — ideal para sync incremental' },
+  { name: 'lead_source', desc: 'Filtra pela origem (ex: Inbound, Outbound)' },
+  { name: 'canal', desc: 'Filtra pela sub-origem (ex: Google, Landing Page)' },
+];
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -245,6 +306,8 @@ export function ApiDocsContent() {
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Endpoint method="POST" path="/api/v1/leads" />
             <Endpoint method="POST" path="/api/webhooks/inbound-leads" />
+            <Endpoint method="GET" path="/api/v1/leads" />
+            <Endpoint method="GET" path="/api/v1/leads/{id}" />
           </div>
         </section>
 
@@ -416,6 +479,82 @@ export function ApiDocsContent() {
             lead novo é criado, o status HTTP é{' '}
             <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">200</code>.
           </p>
+        </section>
+
+        {/* Listar leads (GET) */}
+        <section id="listar-leads" className="scroll-mt-24">
+          <h2 className="text-2xl font-bold tracking-tight">Listar leads</h2>
+          <div className="mt-3">
+            <Endpoint method="GET" path="/api/v1/leads" />
+          </div>
+          <p className="mt-4 max-w-2xl text-[var(--muted-foreground)]">
+            Retorna os leads da sua organização, paginados e ordenados do mais recente para o mais
+            antigo. Use{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">updated_since</code> para
+            sincronização incremental (só o que mudou desde a última leitura). Leads excluídos não
+            aparecem.
+          </p>
+
+          <p className="mt-6 text-sm font-medium">Parâmetros de query</p>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-left">
+                  <th className="p-2 font-semibold">Parâmetro</th>
+                  <th className="p-2 font-semibold">Descrição</th>
+                </tr>
+              </thead>
+              <tbody>
+                {LIST_PARAMS.map((p) => (
+                  <tr key={p.name} className="border-b border-[var(--border)] last:border-0">
+                    <td className="p-2 font-mono text-xs">{p.name}</td>
+                    <td className="p-2 text-xs">{p.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="mt-6 text-sm font-medium">Requisição</p>
+          <div className="mt-2">
+            <CodeBlock code={CURL_LIST} language="bash" />
+          </div>
+
+          <p className="mt-6 text-sm font-medium">Resposta — 200 OK</p>
+          <div className="mt-2">
+            <CodeBlock code={RESPONSE_LIST} language="json" />
+          </div>
+          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
+            O objeto{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">pagination</code> traz{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">total</code> e{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">total_pages</code> para
+            você iterar as páginas.
+          </p>
+        </section>
+
+        {/* Buscar lead por ID (GET) */}
+        <section id="buscar-lead" className="scroll-mt-24">
+          <h2 className="text-2xl font-bold tracking-tight">Buscar lead por ID</h2>
+          <div className="mt-3">
+            <Endpoint method="GET" path="/api/v1/leads/{id}" />
+          </div>
+          <p className="mt-4 max-w-2xl text-[var(--muted-foreground)]">
+            Retorna um único lead pelo{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">id</code> (UUID). Responde{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">404</code> se o lead não
+            existir na sua organização.
+          </p>
+
+          <p className="mt-6 text-sm font-medium">Requisição</p>
+          <div className="mt-2">
+            <CodeBlock code={CURL_GET} language="bash" />
+          </div>
+
+          <p className="mt-6 text-sm font-medium">Resposta — 200 OK</p>
+          <div className="mt-2">
+            <CodeBlock code={RESPONSE_GET} language="json" />
+          </div>
         </section>
 
         {/* Health check */}
