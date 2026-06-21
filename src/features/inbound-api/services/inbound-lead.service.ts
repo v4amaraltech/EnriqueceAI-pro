@@ -16,6 +16,12 @@ interface IngestOptions {
   onDuplicate: 'skip' | 'update';
 }
 
+/** Keys created earlier in the current batch (for intra-batch dedup). */
+interface BatchSeen {
+  emails: Map<string, string>; // lower(email) -> lead_id
+  cnpjs: Map<string, string>; // cnpj -> lead_id
+}
+
 /**
  * Ingest a batch of inbound leads. Shared between REST API and webhook endpoints.
  * Uses service role client (caller is responsible for auth).
@@ -49,9 +55,14 @@ export async function ingestInboundLeads(
   let updated = 0;
   let errors = 0;
 
+  // Intra-batch dedup: track keys created earlier in THIS batch so that a
+  // payload repeating the same email/CNPJ doesn't insert twice (the per-lead
+  // DB check can't see rows that haven't been committed within the same loop).
+  const seen: BatchSeen = { emails: new Map(), cnpjs: new Map() };
+
   for (let i = 0; i < rawLeads.length; i++) {
     const raw = rawLeads[i]!;
-    const result = await ingestSingleLead(raw, i, orgId, supabase, defaultSource, onDuplicate);
+    const result = await ingestSingleLead(raw, i, orgId, supabase, defaultSource, onDuplicate, seen);
     results.push(result);
 
     if (result.status === 'created') created++;
@@ -77,6 +88,7 @@ async function ingestSingleLead(
   supabase: SupabaseClient,
   defaultSource: string,
   onDuplicate: 'skip' | 'update',
+  seen: BatchSeen,
 ): Promise<InboundLeadResult> {
   const parsed = inboundLeadSchema.safeParse(raw);
   if (!parsed.success) {
@@ -89,42 +101,26 @@ async function ingestSingleLead(
   const source = normalized.lead_source;
   const canal = normalized.canal;
 
-  // Check for duplicate by email (within same org, case-insensitive — providers
-  // treat email as case-insensitive)
-  if (data.email) {
-    const { data: existing } = await from(supabase, 'leads')
-      .select('id')
-      .eq('org_id', orgId)
-      .ilike('email', data.email)
-      .is('deleted_at', null)
-      .maybeSingle() as { data: { id: string } | null };
+  const emailKey = data.email ? data.email.toLowerCase().trim() : null;
+  const cnpjKey = data.cnpj ?? null;
 
-    if (existing) {
-      if (onDuplicate === 'update') {
-        await updateExistingLead(supabase, existing.id, data);
-        return { index, status: 'updated', lead_id: existing.id };
-      }
-      return { index, status: 'duplicate', existing_lead_id: existing.id };
+  // Apply skip/update consistently for any duplicate hit.
+  const resolveDuplicate = async (existingId: string): Promise<InboundLeadResult> => {
+    if (onDuplicate === 'update') {
+      await updateExistingLead(supabase, existingId, data);
+      return { index, status: 'updated', lead_id: existingId };
     }
-  }
+    return { index, status: 'duplicate', existing_lead_id: existingId };
+  };
 
-  // Check for duplicate by CNPJ (within same org)
-  if (data.cnpj) {
-    const { data: existing } = await from(supabase, 'leads')
-      .select('id')
-      .eq('org_id', orgId)
-      .eq('cnpj', data.cnpj)
-      .is('deleted_at', null)
-      .maybeSingle() as { data: { id: string } | null };
+  // 1. Intra-batch dedup: a lead created earlier in THIS same batch isn't yet
+  // visible to the DB lookups below, so check the in-memory maps first.
+  const seenId = (emailKey && seen.emails.get(emailKey)) || (cnpjKey && seen.cnpjs.get(cnpjKey));
+  if (seenId) return resolveDuplicate(seenId);
 
-    if (existing) {
-      if (onDuplicate === 'update') {
-        await updateExistingLead(supabase, existing.id, data);
-        return { index, status: 'updated', lead_id: existing.id };
-      }
-      return { index, status: 'duplicate', existing_lead_id: existing.id };
-    }
-  }
+  // 2. DB dedup: existing active lead (same org) by email or CNPJ.
+  const existingId = await findExistingLeadId(supabase, orgId, data.email ?? null, cnpjKey);
+  if (existingId) return resolveDuplicate(existingId);
 
   // Resolve custom fields: accept both field IDs (UUID) and field names
   const resolvedCustomFields = data.custom_fields
@@ -162,10 +158,21 @@ async function ingestSingleLead(
     .single();
 
   if (error || !lead) {
+    // 23505 = unique_violation: a concurrent request created the same
+    // email/CNPJ between our dedup check and this insert. Re-resolve and
+    // treat it as a duplicate instead of leaking a raw DB error.
+    if ((error as { code?: string } | null)?.code === '23505') {
+      const racedId = await findExistingLeadId(supabase, orgId, data.email ?? null, cnpjKey);
+      if (racedId) return resolveDuplicate(racedId);
+    }
     return { index, status: 'error', error: error?.message ?? 'Erro ao criar lead' };
   }
 
   const leadId = (lead as { id: string }).id;
+
+  // Record in the batch maps so later leads in this payload dedup against it.
+  if (emailKey) seen.emails.set(emailKey, leadId);
+  if (cnpjKey) seen.cnpjs.set(cnpjKey, leadId);
 
   // Log API creation to timeline
   logLeadEvent(supabase as Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>, {
@@ -213,6 +220,40 @@ async function ingestSingleLead(
   }
 
   return { index, status: 'created', lead_id: leadId };
+}
+
+/**
+ * Find an active lead (same org) matching by email (case-insensitive) or CNPJ.
+ * Returns its id or null. Used for both the pre-insert dedup check and the
+ * post-insert race fallback.
+ */
+async function findExistingLeadId(
+  supabase: SupabaseClient,
+  orgId: string,
+  email: string | null,
+  cnpj: string | null,
+): Promise<string | null> {
+  if (email) {
+    const { data } = await from(supabase, 'leads')
+      .select('id')
+      .eq('org_id', orgId)
+      .ilike('email', email)
+      .is('deleted_at', null)
+      .maybeSingle() as { data: { id: string } | null };
+    if (data) return data.id;
+  }
+
+  if (cnpj) {
+    const { data } = await from(supabase, 'leads')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('cnpj', cnpj)
+      .is('deleted_at', null)
+      .maybeSingle() as { data: { id: string } | null };
+    if (data) return data.id;
+  }
+
+  return null;
 }
 
 async function updateExistingLead(

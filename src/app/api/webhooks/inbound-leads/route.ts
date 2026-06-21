@@ -4,94 +4,126 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { authenticateApiKey } from '@/features/inbound-api/services/api-key-auth';
 import { ingestInboundLeads } from '@/features/inbound-api/services/inbound-lead.service';
+import { isEventProcessed, markEventProcessed } from '@/lib/webhooks/idempotency';
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  // 1. Authenticate
-  const auth = await authenticateApiKey(request);
-  if (!auth) {
-    return NextResponse.json(
-      { success: false, error: 'API key inválida ou expirada' },
-      { status: 401 },
-    );
-  }
-
-  // 2. Rate limit: 100 req/min per org
-  const rateLimit = await checkRateLimit(`inbound-webhook:${auth.orgId}`, 100, 60_000);
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { success: false, error: 'Rate limit excedido' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.ceil((rateLimit.retryAfterMs ?? 60_000) / 1000)),
-        },
-      },
-    );
-  }
-
-  // 3. Parse body
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    // 1. Authenticate
+    const auth = await authenticateApiKey(request);
+    if (!auth) {
+      return NextResponse.json(
+        { success: false, error: 'API key inválida ou expirada' },
+        { status: 401 },
+      );
+    }
+
+    // 2. Rate limit: 100 req/min per org
+    const rateLimit = await checkRateLimit(`inbound-webhook:${auth.orgId}`, 100, 60_000);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Rate limit excedido' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.retryAfterMs ?? 60_000) / 1000)),
+            'X-RateLimit-Limit': String(rateLimit.limit),
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+          },
+        },
+      );
+    }
+
+    const supabase = createServiceRoleClient();
+
+    // 3. Idempotency: platforms (RD Station, Zapier, Make) retry on network
+    // failure — skip reprocessing the same batch when given an idempotency key.
+    const idempotencyKey = request.headers.get('x-idempotency-key');
+    if (idempotencyKey) {
+      const alreadyProcessed = await isEventProcessed(supabase, 'inbound-webhook', idempotencyKey);
+      if (alreadyProcessed) {
+        return NextResponse.json(
+          { success: true, message: 'Requisição já processada (idempotência)' },
+          { status: 200 },
+        );
+      }
+    }
+
+    // 4. Parse body
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'JSON inválido' },
+        { status: 400 },
+      );
+    }
+
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { success: false, error: 'Payload deve ser um objeto JSON' },
+        { status: 400 },
+      );
+    }
+
+    // 5. Normalize payload — support multiple formats
+    const rawLeads = normalizePayload(body as Record<string, unknown>);
+    if (rawLeads.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Nenhum lead encontrado no payload' },
+        { status: 422 },
+      );
+    }
+
+    if (rawLeads.length > 100) {
+      return NextResponse.json(
+        { success: false, error: 'Máximo de 100 leads por request' },
+        { status: 422 },
+      );
+    }
+
+    // 6. Apply field mapping to each lead
+    const mappedLeads = rawLeads.map(mapExternalFields);
+
+    // 7. Determine on_duplicate from payload
+    const onDuplicate = (body as Record<string, unknown>).on_duplicate === 'update' ? 'update' as const : 'skip' as const;
+
+    // 8. Ingest
+    const result = await ingestInboundLeads(mappedLeads, {
+      orgId: auth.orgId,
+      supabase,
+      defaultSource: 'webhook',
+      onDuplicate,
+    });
+
+    // Check if all failed due to lead limit
+    if (result.errors === result.received && result.results[0]?.error?.includes('Limite')) {
+      return NextResponse.json(
+        { success: false, error: result.results[0].error },
+        { status: 402 },
+      );
+    }
+
+    // 9. Mark idempotency (fire-and-forget — never block the response on it)
+    if (idempotencyKey) {
+      await markEventProcessed(supabase, 'inbound-webhook', idempotencyKey, 'lead.batch').catch(
+        (err: unknown) => console.error('[inbound-leads] markEventProcessed failed:', err),
+      );
+    }
+
     return NextResponse.json(
-      { success: false, error: 'JSON inválido' },
-      { status: 400 },
+      { success: true, data: result },
+      { status: result.created > 0 ? 201 : 200 },
+    );
+  } catch (err) {
+    console.error('[inbound-leads] Unhandled error:', err);
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Erro interno do servidor' },
+      { status: 500 },
     );
   }
-
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json(
-      { success: false, error: 'Payload deve ser um objeto JSON' },
-      { status: 400 },
-    );
-  }
-
-  // 4. Normalize payload — support multiple formats
-  const rawLeads = normalizePayload(body as Record<string, unknown>);
-  if (rawLeads.length === 0) {
-    return NextResponse.json(
-      { success: false, error: 'Nenhum lead encontrado no payload' },
-      { status: 422 },
-    );
-  }
-
-  if (rawLeads.length > 100) {
-    return NextResponse.json(
-      { success: false, error: 'Máximo de 100 leads por request' },
-      { status: 422 },
-    );
-  }
-
-  // 5. Apply field mapping to each lead
-  const mappedLeads = rawLeads.map(mapExternalFields);
-
-  // 6. Determine on_duplicate from payload
-  const onDuplicate = (body as Record<string, unknown>).on_duplicate === 'update' ? 'update' as const : 'skip' as const;
-
-  // 7. Ingest
-  const supabase = createServiceRoleClient();
-  const result = await ingestInboundLeads(mappedLeads, {
-    orgId: auth.orgId,
-    supabase,
-    defaultSource: 'webhook',
-    onDuplicate,
-  });
-
-  // Check if all failed due to lead limit
-  if (result.errors === result.received && result.results[0]?.error?.includes('Limite')) {
-    return NextResponse.json(
-      { success: false, error: result.results[0].error },
-      { status: 402 },
-    );
-  }
-
-  return NextResponse.json(
-    { success: true, data: result },
-    { status: result.created > 0 ? 201 : 200 },
-  );
 }
 
 /**
