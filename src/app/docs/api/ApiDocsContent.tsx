@@ -92,6 +92,7 @@ const RESPONSE_CREATE = `{
 const CURL_BATCH = `curl -X POST ${BASE_URL}/api/webhooks/inbound-leads \\
   -H "Authorization: Bearer SUA_CHAVE_API" \\
   -H "Content-Type: application/json" \\
+  -H "X-Idempotency-Key: 1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed" \\
   -d '{
     "on_duplicate": "skip",
     "leads": [
@@ -383,6 +384,16 @@ export function ApiDocsContent() {
             <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">{'"update"'}</code>{' '}
             atualiza o
             lead existente.
+          </p>
+
+          <p className="mt-5 max-w-2xl text-[var(--muted-foreground)]">
+            <strong>Retentativas seguras.</strong> Plataformas como RD Station, Zapier e Make
+            reenviam o mesmo lote quando a rede falha. Envie um header opcional{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">X-Idempotency-Key</code>{' '}
+            (qualquer string única por lote, ex: um UUID): se a mesma chave chegar de novo, a API
+            responde{' '}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-sm">200</code> sem
+            reprocessar o lote, evitando leads duplicados.
           </p>
 
           <p className="mt-6 text-sm font-medium">Requisição</p>
