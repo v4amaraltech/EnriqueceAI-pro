@@ -308,7 +308,10 @@ export class CrmSyncService {
 
     // Get leads updated since last sync
     let query = from(supabase, 'leads')
-      .select('id, org_id, cnpj, razao_social, nome_fantasia, first_name, last_name, job_title, email, telefone, porte, cnae, situacao_cadastral, faturamento_estimado, uf, lead_source, instagram, linkedin, website, notes, custom_field_values, updated_at')
+      // uf lives inside the endereco jsonb, not a top-level column — alias the
+      // json path so the row still exposes `uf` (a bare `uf` errored with
+      // "column leads.uf does not exist" and broke every CRM push).
+      .select('id, org_id, cnpj, razao_social, nome_fantasia, first_name, last_name, job_title, email, telefone, porte, cnae, situacao_cadastral, faturamento_estimado, uf:endereco->>uf, lead_source, instagram, linkedin, website, notes, custom_field_values, updated_at')
       .eq('org_id', connection.org_id)
       .is('deleted_at', null)
       .limit(200);
