@@ -4,12 +4,90 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { authenticateApiKey } from '@/features/inbound-api/services/api-key-auth';
 import { inboundLeadSchema } from '@/features/inbound-api/schemas/inbound-lead.schemas';
+import { readLeadsQuerySchema } from '@/features/inbound-api/schemas/read-leads.schemas';
 import { ingestInboundLeads } from '@/features/inbound-api/services/inbound-lead.service';
+import { listLeads } from '@/features/inbound-api/services/read-leads.service';
 import { isEventProcessed, markEventProcessed } from '@/lib/webhooks/idempotency';
 
 export const maxDuration = 30;
 
 const MAX_BODY_SIZE = 1_048_576; // 1MB
+
+const READ_QUERY_KEYS = ['page', 'per_page', 'status', 'updated_since', 'lead_source', 'canal'] as const;
+
+/**
+ * List leads for the authenticated org (paginated, filtered).
+ * GET /api/v1/leads?page=1&per_page=50&status=new,contacted&updated_since=ISO
+ */
+export async function GET(request: Request) {
+  try {
+    // 1. Authenticate
+    const auth = await authenticateApiKey(request);
+    if (!auth) {
+      return NextResponse.json(
+        { success: false, error: 'API key inválida ou expirada' },
+        { status: 401 },
+      );
+    }
+
+    // 2. Rate limit: 100 req/min per org (separate bucket from writes)
+    const rateLimit = await checkRateLimit(`api-read:${auth.orgId}`, 100, 60_000);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Rate limit excedido. Tente novamente em breve.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.retryAfterMs ?? 60_000) / 1000)),
+            'X-RateLimit-Limit': String(rateLimit.limit),
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+          },
+        },
+      );
+    }
+
+    // 3. Parse + validate query params
+    const searchParams = new URL(request.url).searchParams;
+    const rawQuery: Record<string, string> = {};
+    for (const key of READ_QUERY_KEYS) {
+      const value = searchParams.get(key);
+      if (value !== null) rawQuery[key] = value;
+    }
+
+    const parsed = readLeadsQuerySchema.safeParse(rawQuery);
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      return NextResponse.json(
+        { success: false, error: 'Parâmetros inválidos', details: fieldErrors },
+        { status: 422 },
+      );
+    }
+
+    // 4. Query (org-scoped — service role bypasses RLS, so org_id is enforced here)
+    const supabase = createServiceRoleClient();
+    const result = await listLeads(supabase, auth.orgId, parsed.data);
+
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      pagination: {
+        page: result.page,
+        per_page: result.per_page,
+        total: result.total,
+        total_pages: result.total_pages,
+      },
+    });
+  } catch (err) {
+    console.error('[v1/leads GET] error:', err);
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Erro interno do servidor' },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {

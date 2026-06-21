@@ -38,8 +38,7 @@ const baseLead = {
 
 const options = {
   orgId: 'org-1',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: {} as any,
+  supabase: {} as never,
   defaultSource: 'webhook' as const,
   onDuplicate: 'skip' as const,
 };
