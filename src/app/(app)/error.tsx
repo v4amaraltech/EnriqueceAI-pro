@@ -5,7 +5,12 @@ import { useEffect, useState, useTransition } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle } from 'lucide-react';
 
-const CHUNK_ERROR_PATTERN = /Loading chunk|Failed to load external script|ChunkLoadError|Loading CSS chunk/i;
+// Errors that mean "the client is running an older build than the server" —
+// all recover with a single reload to pull the new build. Besides chunk loads,
+// this covers stale Server Action references after a deploy: action IDs are
+// content-hashed and change per build, so an open tab calling an old action ID
+// gets "Server Action ... was not found" / UnrecognizedActionError.
+const STALE_DEPLOY_ERROR_PATTERN = /Loading chunk|Failed to load external script|ChunkLoadError|Loading CSS chunk|Server Action .*was not found|UnrecognizedActionError|failed to find server action/i;
 const RELOAD_FLAG_KEY = 'chunk-reload-attempted';
 
 export default function AppError({
@@ -19,11 +24,12 @@ export default function AppError({
   const [, startTransition] = useTransition();
 
   useEffect(() => {
-    const isChunkError = CHUNK_ERROR_PATTERN.test(error.message);
-    if (isChunkError && typeof window !== 'undefined' && !sessionStorage.getItem(RELOAD_FLAG_KEY)) {
-      // Stale chunk after a deploy. Auto-recover once per session — the flag
-      // prevents a reload loop if the second attempt still can't find the
-      // chunk (network down, CDN failing, etc).
+    const isStaleDeploy = STALE_DEPLOY_ERROR_PATTERN.test(error.message) || error.name === 'UnrecognizedActionError';
+    if (isStaleDeploy && typeof window !== 'undefined' && !sessionStorage.getItem(RELOAD_FLAG_KEY)) {
+      // Client is on an older build than the server (stale chunk or stale
+      // Server Action ID after a deploy). Auto-recover once per session — the
+      // flag prevents a reload loop if the second attempt still fails (network
+      // down, CDN failing, etc).
       sessionStorage.setItem(RELOAD_FLAG_KEY, '1');
       startTransition(() => setIsReloading(true));
       const id = window.setTimeout(() => window.location.reload(), 1200);
