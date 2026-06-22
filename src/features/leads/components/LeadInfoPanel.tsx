@@ -35,6 +35,7 @@ import {
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
 import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
+import { STANDARD_FIELDS } from '@/features/settings-prospecting/constants/standard-fields';
 import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { normalizePhone } from '@/lib/utils/phone';
 
@@ -56,6 +57,17 @@ import { LeadTimelineTab } from './LeadTimelineTab';
 import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
 import { GenerateSpicedDialog } from './GenerateSpicedDialog';
+
+/**
+ * Fallback de Cargo: quando o surface que renderiza este painel não passa
+ * `jobTitleOptions` (ex.: painel do lead dentro da execução de atividade), o
+ * dropdown ficava vazio. Usa os defaults do STANDARD_FIELDS — mesma fonte da
+ * tela de Ajustes > Prospecção e do getJobTitleOptions — espelhando o fallback
+ * que a Origem (lead_source) já tem.
+ */
+const DEFAULT_JOB_TITLE_OPTIONS: { value: string; label: string }[] = (
+  STANDARD_FIELDS.find((f) => f.key === 'job_title')?.defaultOptions ?? []
+).map((label) => ({ value: label, label }));
 
 /**
  * Build a clickable Instagram URL from stored value.
@@ -132,7 +144,7 @@ export function LeadInfoPanel({
 }: LeadInfoPanelProps) {
   const [isPending, startTransition] = useTransition();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
-  const cargoOptions = jobTitleOptions ?? [];
+  const cargoOptions = jobTitleOptions && jobTitleOptions.length > 0 ? jobTitleOptions : DEFAULT_JOB_TITLE_OPTIONS;
 
   const orgContext = useContext(OrgContext);
   const members = orgContext?.members ?? [];
