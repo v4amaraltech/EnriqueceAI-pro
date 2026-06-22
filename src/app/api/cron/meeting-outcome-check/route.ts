@@ -5,7 +5,6 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
-import { sendCloserFeedbackEmail } from '@/features/leads/actions/send-closer-feedback';
 
 export const maxDuration = 60;
 
@@ -20,8 +19,8 @@ export const maxDuration = 60;
  *
  * Este cron varre `find_meetings_pending_outcome()` e age em dois estágios:
  *  - Estágio 1 (checkpoint, reunião + 24h): cria uma atividade na fila do SDR
- *    pra registrar o desfecho, manda o link de feedback ao closer (se a reunião
- *    for recente) e notifica o SDR.
+ *    pra registrar o desfecho e notifica o SDR. O feedback ao closer NÃO é
+ *    disparado aqui — fica reservado ao fluxo de Ganho (decisão de produto).
  *  - Estágio 2 (escalação, checkpoint + 2 dias úteis sem desfecho): garante um
  *    follow-up de telefone na fila e escala ao gestor.
  *
@@ -33,9 +32,6 @@ export const maxDuration = 60;
 
 const CHECKPOINT_GRACE_HOURS = 24;
 const ESCALATE_BUSINESS_DAYS = 2;
-// Reunião mais velha que isto: não vale pedir feedback ao closer (não lembra).
-// Ainda criamos a atividade do SDR e notificamos — só pulamos o link do closer.
-const STALE_FOR_CLOSER_DAYS = 10;
 // Teto por execução pra não disparar uma rajada de e-mails/notificações quando
 // houver acúmulo histórico (na 1ª execução há ~20 leads antigos em limbo).
 const MAX_PER_RUN = 50;
@@ -107,13 +103,6 @@ interface LeadInfo {
   last_name: string | null;
 }
 
-interface CloserInfo {
-  id: string;
-  name: string;
-  email: string;
-  phone: string | null;
-}
-
 function leadDisplayName(l: LeadInfo | undefined): string {
   if (!l) return 'Lead';
   return (
@@ -153,31 +142,22 @@ async function runMeetingOutcomeCheck() {
     return { candidates: rows.length, checkpoints: 0, escalations: 0, skipped: rows.length };
   }
 
-  // Batch-fetch lead + closer info for everything we'll touch.
+  // Batch-fetch lead info for everything we'll touch.
   const leadIds = [...new Set([...stage1, ...stage2].map((s) => s.row.lead_id))];
-  const closerIds = [
-    ...new Set(stage1.map((s) => s.row.closer_id).filter((c): c is string => !!c)),
-  ];
 
-  const [leadsResult, closersResult] = await Promise.all([
-    from(supabase, 'leads')
-      .select('id, nome_fantasia, razao_social, first_name, last_name')
-      .in('id', leadIds)
-      .is('deleted_at', null) as Promise<{ data: LeadInfo[] | null }>,
-    closerIds.length
-      ? (from(supabase, 'closers').select('id, name, email, phone').in('id', closerIds) as Promise<{ data: CloserInfo[] | null }>)
-      : Promise.resolve({ data: [] as CloserInfo[] }),
-  ]);
+  const { data: leadsData } = (await from(supabase, 'leads')
+    .select('id, nome_fantasia, razao_social, first_name, last_name')
+    .in('id', leadIds)
+    .is('deleted_at', null)) as { data: LeadInfo[] | null };
 
-  const leadMap = new Map((leadsResult.data ?? []).map((l) => [l.id, l]));
-  const closerMap = new Map((closersResult.data ?? []).map((c) => [c.id, c]));
+  const leadMap = new Map((leadsData ?? []).map((l) => [l.id, l]));
 
   let checkpoints = 0;
   let escalations = 0;
 
   for (const { row } of stage1) {
     try {
-      await handleCheckpoint(supabase, row, leadMap.get(row.lead_id), row.closer_id ? closerMap.get(row.closer_id) : undefined, now);
+      await handleCheckpoint(supabase, row, leadMap.get(row.lead_id), now);
       checkpoints++;
     } catch (err) {
       console.error('[meeting-outcome-check] checkpoint failed for lead=%s:', row.lead_id, err);
@@ -203,14 +183,14 @@ async function runMeetingOutcomeCheck() {
 
 /**
  * Estágio 1 — checkpoint. Cria a atividade de "registrar desfecho" na fila do
- * SDR, manda o link de feedback ao closer (se a reunião for recente) e notifica
- * o SDR. Grava o marcador `meeting_outcome_checkpoint` na timeline.
+ * SDR e notifica o SDR. NÃO pede feedback ao closer — isso fica reservado ao
+ * fluxo de Ganho (decisão de produto). Grava o marcador
+ * `meeting_outcome_checkpoint` na timeline.
  */
 async function handleCheckpoint(
   supabase: ReturnType<typeof createServiceRoleClient>,
   row: PendingOutcomeRow,
   lead: LeadInfo | undefined,
-  closer: CloserInfo | undefined,
   now: Date,
 ) {
   const sdrUserId = row.won_by ?? row.assigned_to;
@@ -227,23 +207,6 @@ async function handleCheckpoint(
     status: 'pending',
     notes: 'Reunião sem desfecho registrado — confirme se aconteceu (marque Ganho/Perdido) ou ligue para retomar o contato.',
   } as Record<string, unknown>);
-
-  // Pede o desfecho ao closer reaproveitando toda a máquina de feedback — mas
-  // só se a reunião for recente (reunião antiga o closer não lembra) e ainda
-  // não houver um link de feedback aberto.
-  const meetingAgeDays = (now.getTime() - new Date(row.meeting_end).getTime()) / (24 * 60 * 60 * 1000);
-  if (closer?.email && row.closer_id && !row.has_open_feedback && meetingAgeDays <= STALE_FOR_CLOSER_DAYS) {
-    await sendCloserFeedbackEmail({
-      leadId: row.lead_id,
-      orgId: row.org_id,
-      closerId: row.closer_id,
-      closerName: closer.name,
-      closerEmail: closer.email,
-      closerPhone: closer.phone,
-      leadName,
-      senderUserId: sdrUserId,
-    }).catch((err) => console.error('[meeting-outcome-check] closer feedback send failed:', err));
-  }
 
   // Notifica o SDR (in-app + Realtime).
   await createNotification({
@@ -263,7 +226,7 @@ async function handleCheckpoint(
     lead_id: row.lead_id,
     channel: 'system',
     type: 'sent',
-    message_content: 'Reunião sem desfecho — checkpoint criado (atividade na fila + feedback ao closer)',
+    message_content: 'Reunião sem desfecho — checkpoint criado (atividade na fila do SDR)',
     metadata: { system_event: 'meeting_outcome_checkpoint', auto: true, source: 'meeting_outcome_check' },
   } as Record<string, unknown>);
 }
