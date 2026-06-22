@@ -200,6 +200,8 @@ export function ActivityExecutionSheetContent({
     return (
       <ActivityResearchPanel
         leadName={leadName}
+        cnpj={activity.lead.cnpj}
+        website={activity.lead.website}
         isSending={isSending}
         onMarkDone={onMarkDone}
         onSkip={onSkip}

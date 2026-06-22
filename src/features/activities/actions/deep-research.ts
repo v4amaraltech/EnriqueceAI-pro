@@ -12,11 +12,25 @@ function cleanDossie(raw: string): string {
 }
 const TIMEOUT_MS = 180_000; // 3min timeout — AI agent research takes time
 
+interface DeepResearchInput {
+  empresa: string;
+  cnpj?: string | null;
+  site?: string | null;
+}
+
 export async function deepResearchLead(
-  empresa: string,
+  input: DeepResearchInput,
 ): Promise<ActionResult<{ dossie: string }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+
+  // Send empresa always; include cnpj/site only when filled so the n8n flow
+  // can use them as extra context for the research.
+  const payload: Record<string, string> = { empresa: input.empresa };
+  const cnpj = input.cnpj?.trim();
+  const site = input.site?.trim();
+  if (cnpj) payload.cnpj = cnpj;
+  if (site) payload.site = site;
 
   try {
     const controller = new AbortController();
@@ -25,7 +39,7 @@ export async function deepResearchLead(
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empresa }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
