@@ -122,6 +122,7 @@ export const createLeadSchema = z.object({
   telefone: z.string().min(1, 'Telefone é obrigatório'),
   empresa: z.string().min(1, 'Empresa é obrigatória'),
   job_title: z.string().min(1, 'Cargo é obrigatório'),
+  segmento: z.string().min(1, 'Segmento é obrigatório'),
   lead_source: z.string().min(1, 'Fonte é obrigatória'),
   canal: z.string().min(1, 'Sub-origem é obrigatório').optional().or(z.literal('')),
   is_inbound: z.boolean().default(false),

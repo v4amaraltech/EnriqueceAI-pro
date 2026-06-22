@@ -28,7 +28,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
+import { LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
 import { getCanalOptions } from '../utils/canal-options';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
@@ -54,6 +54,7 @@ const INITIAL_FORM = {
   telefone: '',
   empresa: '',
   job_title: '',
+  segmento: '',
   lead_source: '',
   canal: '',
   is_inbound: false,
@@ -77,6 +78,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   // when those exist. Both code paths flow through getCanalOptions so the
   // CreateLeadDialog and LeadInfoPanel can never drift apart again.
   const [canalOptions, setCanalOptions] = useState<string[]>(() => getCanalOptions(null));
+  const [segmentoOptions, setSegmentoOptions] = useState<readonly string[]>(SEGMENTO_OPTIONS);
   const [jobTitleOptions, setJobTitleOptions] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [cadenceSearch, setCadenceSearch] = useState('');
@@ -100,6 +102,9 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
         if (cadencesResult.success) setCadences(cadencesResult.data);
         if (settingsResult.success) {
           setCanalOptions(getCanalOptions(settingsResult.data));
+          setSegmentoOptions(
+            settingsResult.data.find((s) => s.field_key === 'segmento')?.options ?? SEGMENTO_OPTIONS,
+          );
         }
         setJobTitleOptions(jobTitlesResult.map((o) => o.value));
         setLoaded(true);
@@ -149,6 +154,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
   else if (!phoneRegex.test(form.telefone)) fieldErrors.telefone = 'Telefone inválido';
   if (!form.empresa.trim()) fieldErrors.empresa = 'Empresa obrigatória';
   if (!form.job_title.trim()) fieldErrors.job_title = 'Cargo obrigatório';
+  if (!form.segmento.trim()) fieldErrors.segmento = 'Segmento obrigatório';
   if (!form.lead_source) fieldErrors.lead_source = 'Origem obrigatória';
   if (!form.canal) fieldErrors.canal = 'Sub-origem obrigatória';
   if (!form.assigned_to) fieldErrors.assigned_to = 'Responsável obrigatório';
@@ -170,6 +176,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
         telefone: form.telefone,
         empresa: form.empresa,
         job_title: form.job_title,
+        segmento: form.segmento,
         lead_source: form.lead_source,
         canal: form.canal,
         is_inbound: form.is_inbound,
@@ -448,6 +455,28 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId, leadSource
                     </SelectContent>
                   </Select>
                   {fieldError('job_title') && <p className="text-xs text-red-500">{fieldError('job_title')}</p>}
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>
+                    Segmento <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.segmento || undefined}
+                    onValueChange={(v) => { setForm({ ...form, segmento: v }); markTouched('segmento'); }}
+                  >
+                    <SelectTrigger
+                      aria-invalid={!!fieldError('segmento')}
+                      className={fieldError('segmento') ? 'w-full border-red-500' : 'w-full'}
+                    >
+                      <SelectValue placeholder="Selecione o segmento" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[250px] overflow-y-auto">
+                      {segmentoOptions.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldError('segmento') && <p className="text-xs text-red-500">{fieldError('segmento')}</p>}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label>

@@ -132,6 +132,7 @@ export async function createLead(
       email: parsed.data.email,
       telefone: parsed.data.telefone,
       job_title: parsed.data.job_title,
+      segmento: parsed.data.segmento,
       lead_source: normalized.lead_source,
       canal: normalized.canal,
       is_inbound: parsed.data.is_inbound,
