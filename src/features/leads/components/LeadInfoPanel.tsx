@@ -802,17 +802,14 @@ export function LeadInfoPanel({
                       }}
                     />
                   )}
+                  {/* Cargo is a managed dropdown (Ajustes > Prospecção) — show it
+                      read-only here like the other dropdown fields (Origem,
+                      Sub-origem, Segmento) so it can only be set by selecting a
+                      predefined option in edit mode, never free-typed. */}
                   {isFieldVisible('job_title') && (
-                    <InlineEditField
-                      leadId={data.id}
-                      fieldKey="job_title"
+                    <MeetimeFieldRow
                       label="Cargo"
-                      value={data.job_title}
-                      placeholder="Adicionar cargo"
-                      onSaved={(v) => {
-                        setData((prev) => ({ ...prev, job_title: v || null }));
-                        setEditFields((prev) => ({ ...prev, job_title: v ?? '' }));
-                      }}
+                      value={cargoOptions.find((o) => o.value === data.job_title)?.label ?? data.job_title ?? '—'}
                     />
                   )}
                   {isFieldVisible('lead_source') && (
