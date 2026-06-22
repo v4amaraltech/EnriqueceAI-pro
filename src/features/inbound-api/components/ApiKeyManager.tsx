@@ -24,6 +24,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { getAppUrl } from '@/lib/utils/app-url';
+
 import type { ApiKeySafe } from '../types';
 import { revokeApiKeyAction, deleteApiKeyAction } from '../actions/manage-api-keys';
 import { ApiKeyCreateDialog } from './ApiKeyCreateDialog';
@@ -71,7 +73,13 @@ export function ApiKeyManager({ initialKeys }: Props) {
     setTimeout(() => setCopiedEndpoint(null), 2000);
   }
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  // Use the configured app URL (NEXT_PUBLIC_APP_URL, inlined at build) instead
+  // of `window.location.origin`. The previous `typeof window !== 'undefined'`
+  // check rendered '' on the server and the real origin on the client, so these
+  // endpoint strings never matched between SSR and hydration — a guaranteed
+  // hydration mismatch (React #418) that crashed the page into the error
+  // boundary on every load. getAppUrl() is deterministic on both sides.
+  const appUrl = getAppUrl();
   const restEndpoint = `${appUrl}/api/v1/leads`;
   const webhookEndpoint = `${appUrl}/api/webhooks/inbound-leads`;
 
@@ -131,15 +139,15 @@ export function ApiKeyManager({ initialKeys }: Props) {
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)]">
                     {key.last_used_at
-                      ? new Date(key.last_used_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                      ? new Date(key.last_used_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
                       : 'Nunca'}
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)]">
-                    {new Date(key.created_at).toLocaleDateString('pt-BR')}
+                    {new Date(key.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                   </TableCell>
                   <TableCell className="text-sm text-[var(--muted-foreground)]">
                     {key.expires_at
-                      ? new Date(key.expires_at).toLocaleDateString('pt-BR')
+                      ? new Date(key.expires_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
                       : 'Sem expiração'}
                   </TableCell>
                   <TableCell className="text-right">
