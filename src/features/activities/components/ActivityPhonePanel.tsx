@@ -568,49 +568,55 @@ export function ActivityPhonePanel({
               </div>
           </div>
 
-          <DialogFooter className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleDismissModal}>
-              Cancelar
-            </Button>
-            {canRetry && (
-              <Button variant="secondary" onClick={handleRetryAttempt}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Tentar novamente
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {/* Esquerda: ações de sair/repetir */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={handleDismissModal}>
+                Cancelar
               </Button>
-            )}
-            {onLeadLost && (
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  handleDismissModal();
-                  onLeadLost();
-                }}
-                disabled={isSending}
-              >
-                <ThumbsDown className="mr-2 h-4 w-4" />
-                Perdido
-              </Button>
-            )}
-            {/* Agendar Reunião — always visible now. The previous gate on
-                callStatus 'connected' | 'meeting_scheduled' depended on the
-                manual select that's gone; SDR decides per call. */}
-            <Button
-              variant="default"
-              onClick={() => setScheduleMeetingOpen(true)}
-              disabled={isSending}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Agendar Reunião
-            </Button>
-            <Button onClick={handleSubmitResult} disabled={isSending}>
-              {isSending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="mr-2 h-4 w-4" />
+              {canRetry && (
+                <Button variant="secondary" onClick={handleRetryAttempt}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Tentar novamente
+                </Button>
               )}
-              Concluir atividade
-            </Button>
+            </div>
+            {/* Direita: desfechos da ligação */}
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              {onLeadLost && (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    handleDismissModal();
+                    onLeadLost();
+                  }}
+                  disabled={isSending}
+                >
+                  <ThumbsDown className="mr-2 h-4 w-4" />
+                  Perdido
+                </Button>
+              )}
+              {/* Agendar Reunião — always visible now. The previous gate on
+                  callStatus 'connected' | 'meeting_scheduled' depended on the
+                  manual select that's gone; SDR decides per call. */}
+              <Button
+                variant="default"
+                onClick={() => setScheduleMeetingOpen(true)}
+                disabled={isSending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <CalendarPlus className="mr-2 h-4 w-4" />
+                Agendar Reunião
+              </Button>
+              <Button onClick={handleSubmitResult} disabled={isSending}>
+                {isSending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                Concluir atividade
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
