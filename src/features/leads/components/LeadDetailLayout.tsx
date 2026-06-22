@@ -27,8 +27,6 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
-import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
-import type { LeadContext } from '@/features/ai/types';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { listStandardFieldSettingsForMember } from '@/features/settings-prospecting/actions/standard-field-settings';
 import type { CustomFieldRow } from '@/features/settings-prospecting/types/custom-field';
@@ -82,7 +80,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
 
   // Dialog state
   const [showLostDialog, setShowLostDialog] = useState(false);
-  const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
@@ -438,7 +435,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         lead={lead}
         onShowEmail={() => setShowSendEmail(true)}
         onShowCadence={() => setShowEnrollCadence(true)}
-        onShowAI={() => setShowAIGenerator(true)}
         onShowMeeting={() => setShowMeeting(true)}
         onShowLost={handleOpenLostDialog}
         onShowWon={handleOpenWonDialog}
@@ -855,25 +851,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* AI Message Generator */}
-      <AIMessageGenerator
-        open={showAIGenerator}
-        onOpenChange={setShowAIGenerator}
-        leadContext={{
-          nome_fantasia: lead.nome_fantasia,
-          razao_social: lead.razao_social,
-          cnpj: lead.cnpj,
-          email: lead.email,
-          telefone: lead.telefone,
-          porte: lead.porte,
-          cnae: lead.cnae,
-          situacao_cadastral: lead.situacao_cadastral,
-          faturamento_estimado: lead.faturamento_estimado,
-          endereco: lead.endereco ? { cidade: lead.endereco.cidade, uf: lead.endereco.uf } : null,
-          socios: lead.socios?.map((s) => ({ nome: s.nome, qualificacao: s.qualificacao })) ?? null,
-        } satisfies LeadContext}
-      />
 
       {/* Send Email Dialog */}
       <SendEmailDialog
