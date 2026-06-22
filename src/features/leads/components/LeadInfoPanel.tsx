@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useContext, useEffect, useState, useTransition } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   CalendarDays,
@@ -169,6 +169,16 @@ export function LeadInfoPanel({
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
   const [isEditing, setIsEditing] = useState(false);
+  // Snapshot of the form state captured when editing starts, so on save we
+  // send ONLY the fields the user actually changed. Without this the form
+  // submits every field (pre-filled from socio/razao_social fallbacks), and
+  // the lead timeline logs all of them as "changed" instead of just the edit.
+  const editSnapshotRef = useRef<{
+    editFields: Record<string, string>;
+    phoneEntries: LeadPhone[];
+    emailEntries: LeadEmail[];
+    customFieldValues: Record<string, string>;
+  } | null>(null);
   const [isSpicedDialogOpen, setIsSpicedDialogOpen] = useState(false);
 
   // Detect if org has any SPICED-style custom fields configured
@@ -359,6 +369,17 @@ export function LeadInfoPanel({
     );
   }, []);
 
+  const handleStartEdit = useCallback(() => {
+    // Capture the baseline the form shows now, so save can diff against it.
+    editSnapshotRef.current = {
+      editFields: { ...editFields },
+      phoneEntries: phoneEntries.map((p) => ({ ...p })),
+      emailEntries: emailEntries.map((e) => ({ ...e })),
+      customFieldValues: { ...editCustomFieldValues },
+    };
+    setIsEditing(true);
+  }, [editFields, phoneEntries, emailEntries, editCustomFieldValues]);
+
   const handleSave = useCallback(() => {
     startTransition(async () => {
       const { email: _editEmail, ...leadFields } = editFields;
@@ -375,17 +396,44 @@ export function LeadInfoPanel({
       if (!(cleanFields.canal as string)?.trim()) delete cleanFields.canal;
       if (!(cleanFields.segmento as string)?.trim()) delete cleanFields.segmento;
 
-      const updatePayload: Record<string, unknown> = {
-        ...cleanFields,
-        email: primaryEmailValue,
-        telefone: primaryPhone,
-        phones: validPhones,
-        custom_field_values: editCustomFieldValues,
-      };
-      // Only send emails if column exists (migration applied)
-      if (Array.isArray(data.emails) || validEmails.length > 0) {
-        updatePayload.emails = validEmails;
+      // Send ONLY the fields the user actually changed, diffing against the
+      // snapshot taken when editing started. Avoids submitting pre-filled
+      // fallback values (socio name, razao_social) that were never touched,
+      // which would otherwise show up as bogus entries in the lead timeline.
+      const snap = editSnapshotRef.current;
+      const same = (a: unknown, b: unknown) =>
+        (typeof a === 'string' ? a.trim() : a ?? '') === (typeof b === 'string' ? b.trim() : b ?? '');
+
+      const updatePayload: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(cleanFields)) {
+        if (!snap || !same(val, snap.editFields[key])) updatePayload[key] = val;
       }
+
+      // Phones/emails/custom are arrays/objects — compare structurally.
+      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => p.numero.trim() !== ''));
+      if (phonesChanged) {
+        updatePayload.telefone = primaryPhone;
+        updatePayload.phones = validPhones;
+      }
+      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => e.email.trim() !== ''));
+      if (emailsChanged) {
+        updatePayload.email = primaryEmailValue;
+        // Only send emails if column exists (migration applied)
+        if (Array.isArray(data.emails) || validEmails.length > 0) {
+          updatePayload.emails = validEmails;
+        }
+      }
+      const customChanged = !snap || JSON.stringify(editCustomFieldValues) !== JSON.stringify(snap.customFieldValues);
+      if (customChanged) {
+        updatePayload.custom_field_values = editCustomFieldValues;
+      }
+
+      // Nothing actually changed — close edit mode without a no-op write.
+      if (Object.keys(updatePayload).length === 0) {
+        setIsEditing(false);
+        return;
+      }
+
       const result = await updateLead(data.id, updatePayload);
       if (result.success) {
         setData((prev) => ({
@@ -1159,7 +1207,7 @@ export function LeadInfoPanel({
               variant="default"
               aria-label="Editar lead"
               className="h-10 w-10 rounded-full shadow-lg"
-              onClick={() => setIsEditing(true)}
+              onClick={handleStartEdit}
             >
               <Pencil className="h-4 w-4" />
             </Button>
