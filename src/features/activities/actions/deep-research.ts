@@ -14,6 +14,7 @@ const TIMEOUT_MS = 180_000; // 3min timeout — AI agent research takes time
 
 interface DeepResearchInput {
   empresa: string;
+  lead_id?: string | null;
   cnpj?: string | null;
   site?: string | null;
 }
@@ -24,11 +25,13 @@ export async function deepResearchLead(
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
 
-  // Send empresa always; include cnpj/site only when filled so the n8n flow
-  // can use them as extra context for the research.
+  // Send empresa + lead_id always; include cnpj/site only when filled so the
+  // n8n flow can use them as extra context for the research.
   const payload: Record<string, string> = { empresa: input.empresa };
+  const leadId = input.lead_id?.trim();
   const cnpj = input.cnpj?.trim();
   const site = input.site?.trim();
+  if (leadId) payload.lead_id = leadId;
   if (cnpj) payload.cnpj = cnpj;
   if (site) payload.site = site;
 
