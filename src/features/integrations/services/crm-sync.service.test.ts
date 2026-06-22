@@ -235,7 +235,10 @@ describe('CrmSyncService.syncConnection', () => {
     vi.clearAllMocks();
   });
 
-  it('success flow: pulls contacts, pushes leads, pushes activities', async () => {
+  it('pulls contacts but does not push leads/activities (outbound push disabled)', async () => {
+    // PUSH_LEADS_TO_CRM is disabled: the periodic sync only pulls from the CRM.
+    // Even with leads and interactions present, no contact/activity is pushed —
+    // the CRM only receives deals created on the won path (pushLeadToCrm).
     const mockAdapter = buildMockAdapter({
       pullContacts: vi.fn().mockResolvedValue(MOCK_CONTACTS),
       pushContact: vi.fn().mockResolvedValue({ external_id: 'hs-ext-new' }),
@@ -275,27 +278,14 @@ describe('CrmSyncService.syncConnection', () => {
 
     const result = await CrmSyncService.syncConnection('conn-1');
 
-    // pull: 2 contacts from MOCK_CONTACTS, but no existing lead found so synced = 0
-    // (upsertLeadFromContact only updates — not creates — so synced counts the attempt)
+    // pull still runs normally
     expect(result.pull.errors).toBe(0);
 
-    // push: 1 lead pushed successfully
-    expect(result.push.synced).toBe(1);
-    expect(result.push.errors).toBe(0);
-    expect(mockAdapter.pushContact).toHaveBeenCalledOnce();
-
-    // activities: 1 interaction pushed
-    expect(result.activities.synced).toBe(1);
-    expect(result.activities.errors).toBe(0);
-    expect(mockAdapter.pushActivity).toHaveBeenCalledOnce();
-    expect(mockAdapter.pushActivity).toHaveBeenCalledWith(
-      BASE_CREDENTIALS,
-      expect.objectContaining({
-        contact_external_id: 'hs-ext-new',
-        type: 'email',
-        body: 'Hello from cadence',
-      }),
-    );
+    // push is skipped entirely — no contacts, no activities sent to the CRM
+    expect(result.push.synced).toBe(0);
+    expect(mockAdapter.pushContact).not.toHaveBeenCalled();
+    expect(result.activities.synced).toBe(0);
+    expect(mockAdapter.pushActivity).not.toHaveBeenCalled();
   });
 
   it('throws "Connection not found" when connection row does not exist', async () => {
@@ -362,56 +352,6 @@ describe('CrmSyncService.syncConnection', () => {
     );
     // Should have been called at least twice: once for select and once for status update
     expect(updateCalls.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('handles field mapping correctly when pushing leads', async () => {
-    const connectionWithMapping: CrmConnectionRow = {
-      ...BASE_CONNECTION,
-      field_mapping: {
-        leads: {
-          nome_fantasia: 'company',
-          email: 'email',
-          telefone: 'phone',
-          cnpj: 'hs_additional_id',
-        },
-      },
-    };
-
-    const mockAdapter = buildMockAdapter({
-      pullContacts: vi.fn().mockResolvedValue([]),
-      pushContact: vi.fn().mockResolvedValue({ external_id: 'hs-mapped' }),
-    });
-
-    vi.mocked(CRMRegistry.getAdapter).mockReturnValue(mockAdapter as never);
-
-    buildSupabaseMock({
-      connectionData: connectionWithMapping,
-      leadsListData: [
-        {
-          id: 'lead-2',
-          org_id: 'org-1',
-          cnpj: '98.765.432/0001-00',
-          razao_social: 'Mapped Corp',
-          nome_fantasia: 'Mapped Corp',
-          email: 'mapped@corp.com',
-          telefone: '11999990099',
-          porte: null,
-          cnae: null,
-          situacao_cadastral: null,
-          updated_at: '2026-02-19T12:00:00Z',
-        },
-      ],
-    });
-
-    const result = await CrmSyncService.syncConnection('conn-1');
-
-    expect(result.push.synced).toBe(1);
-    expect(mockAdapter.pushContact).toHaveBeenCalledWith(
-      expect.objectContaining({ access_token: BASE_CREDENTIALS.access_token }),
-      expect.objectContaining({ nome_fantasia: 'Mapped Corp', email: 'mapped@corp.com' }),
-      connectionWithMapping.field_mapping!.leads,
-      undefined, // no existing external_id (crmSyncedData defaults to null)
-    );
   });
 
   it('returns zeroed SyncResult when there are no leads or contacts to sync', async () => {

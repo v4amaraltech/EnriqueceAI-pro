@@ -15,6 +15,18 @@ import type {
 import { CRMRegistry } from './crm-registry';
 import { ensureFreshCredentials } from './crm-token';
 
+/**
+ * Outbound contact/activity push toggle for the periodic sync.
+ *
+ * When false, the periodic /api/crm/sync only PULLs from the CRM — it does NOT
+ * push every prospected lead into the CRM as a contact, nor its cadence
+ * interactions as activities. The CRM then only receives deals created on the
+ * won path (pushLeadToCrm), which is self-contained and creates the contact +
+ * deal on its own. This matches the org's workflow of "only Ganho deals in the
+ * CRM, not every touched lead". Flip to true to re-enable contact + activity push.
+ */
+const PUSH_LEADS_TO_CRM = false;
+
 interface LeadForSync {
   id: string;
   org_id: string;
@@ -101,21 +113,28 @@ export class CrmSyncService {
       );
 
       // 2. Push EnriqueceAI leads → CRM contacts
-      pushResult = await CrmSyncService.pushLeads(
-        supabase,
-        adapter,
-        credentials,
-        connection,
-        fieldMapping,
-      );
-
       // 3. Push EnriqueceAI interactions → CRM activities
-      activityResult = await CrmSyncService.pushActivities(
-        supabase,
-        adapter,
-        credentials,
-        connection,
-      );
+      //
+      // Disabled by default (PUSH_LEADS_TO_CRM): the CRM should only receive
+      // deals created on the won path (pushLeadToCrm), not every prospected
+      // lead synced as a contact + its activities. The periodic sync therefore
+      // only pulls from the CRM. See PUSH_LEADS_TO_CRM doc for re-enabling.
+      if (PUSH_LEADS_TO_CRM) {
+        pushResult = await CrmSyncService.pushLeads(
+          supabase,
+          adapter,
+          credentials,
+          connection,
+          fieldMapping,
+        );
+
+        activityResult = await CrmSyncService.pushActivities(
+          supabase,
+          adapter,
+          credentials,
+          connection,
+        );
+      }
 
       // Update connection status
       await from(supabase, 'crm_connections')
