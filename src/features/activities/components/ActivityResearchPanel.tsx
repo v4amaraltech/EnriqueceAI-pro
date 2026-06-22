@@ -13,6 +13,7 @@ import { deepResearchLead } from '../actions/deep-research';
 
 interface ActivityResearchPanelProps {
   leadName: string;
+  leadId: string;
   cnpj?: string | null;
   website?: string | null;
   isSending: boolean;
@@ -20,13 +21,13 @@ interface ActivityResearchPanelProps {
   onSkip: () => void;
 }
 
-export function ActivityResearchPanel({ leadName, cnpj, website, isSending, onMarkDone, onSkip }: ActivityResearchPanelProps) {
+export function ActivityResearchPanel({ leadName, leadId, cnpj, website, isSending, onMarkDone, onSkip }: ActivityResearchPanelProps) {
   const [notes, setNotes] = useState('');
   const [isResearching, startResearch] = useTransition();
 
   function handleDeepResearch() {
     startResearch(async () => {
-      const result = await deepResearchLead({ empresa: leadName, cnpj, site: website });
+      const result = await deepResearchLead({ empresa: leadName, lead_id: leadId, cnpj, site: website });
       if (result.success) {
         setNotes(result.data.dossie);
         toast.success('Deep Research concluído!');

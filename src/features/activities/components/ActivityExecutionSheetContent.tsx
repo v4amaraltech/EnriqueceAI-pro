@@ -200,6 +200,7 @@ export function ActivityExecutionSheetContent({
     return (
       <ActivityResearchPanel
         leadName={leadName}
+        leadId={activity.lead.id}
         cnpj={activity.lead.cnpj}
         website={activity.lead.website}
         isSending={isSending}
