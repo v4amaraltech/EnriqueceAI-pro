@@ -8,6 +8,19 @@ import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
 
+// Build the PostgREST `or` clauses for one search term. CNPJ is stored
+// digits-only, so a punctuated query like "08.942.835/0001-72" never matches
+// `cnpj.ilike`. We additionally search the normalized digits against cnpj so
+// the SDR can paste a formatted CNPJ and still find the lead.
+function searchClausesForTerm(term: string, fields: readonly string[]): string[] {
+  const clauses = fields.map((field) => `${field}.ilike.%${term}%`);
+  const digits = term.replace(/\D/g, '');
+  if (digits.length >= 3 && digits !== term) {
+    clauses.push(`cnpj.ilike.%${digits}%`);
+  }
+  return clauses;
+}
+
 export async function fetchLeads(
   rawFilters: Record<string, unknown>,
 ): Promise<ActionResult<LeadListResult>> {
@@ -104,8 +117,7 @@ export async function fetchLeads(
     // If the entire query is short (e.g. "AI"), use what we have rather than searching everything.
     const effectiveTerms = terms.length > 0 ? terms : allTerms;
     for (const term of effectiveTerms) {
-      const fieldClauses = searchFields.map((field) => `${field}.ilike.%${term}%`).join(',');
-      query = query.or(fieldClauses);
+      query = query.or(searchClausesForTerm(term, searchFields).join(','));
     }
   }
 
@@ -221,9 +233,7 @@ export async function fetchFilteredLeadIds(
     const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
     const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
     if (terms.length > 0) {
-      const clauses = terms.flatMap((term) =>
-        searchFields.map((field) => `${field}.ilike.%${term}%`),
-      );
+      const clauses = terms.flatMap((term) => searchClausesForTerm(term, searchFields));
       query = query.or(clauses.join(','));
     }
   }
