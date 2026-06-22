@@ -12,7 +12,6 @@ import {
   Phone,
   RefreshCw,
   RotateCw,
-  Sparkles,
   ThumbsDown,
   ThumbsUp,
   Zap,
@@ -37,7 +36,6 @@ interface LeadDetailHeaderProps {
   lead: LeadRow;
   onShowEmail: () => void;
   onShowCadence: () => void;
-  onShowAI: () => void;
   onShowMeeting: () => void;
   onShowLost: () => void;
   onShowWon: () => void;
@@ -52,7 +50,6 @@ export function LeadDetailHeader({
   lead,
   onShowEmail,
   onShowCadence,
-  onShowAI,
   onShowMeeting,
   onShowLost,
   onShowWon,
@@ -216,10 +213,6 @@ export function LeadDetailHeader({
             <DropdownMenuItem onClick={onShowCadence}>
               <Zap className="mr-2 h-3.5 w-3.5" />
               Inscrever em Cadência
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onShowAI}>
-              <Sparkles className="mr-2 h-3.5 w-3.5" />
-              Gerar com IA
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onShowMeeting}>
               <Calendar className="mr-2 h-3.5 w-3.5" />
