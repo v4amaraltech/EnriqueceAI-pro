@@ -602,10 +602,9 @@ export function ActivityPhonePanel({
             <div className="flex flex-wrap gap-2 sm:justify-end">
               {canMarkNoShow && (
                 <Button
-                  variant="outline"
                   onClick={handleMarkNoShow}
                   disabled={isSending || isPending}
-                  className="border-amber-500/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:text-amber-400"
+                  className="bg-amber-500 text-white hover:bg-amber-600"
                 >
                   <CalendarX className="mr-2 h-4 w-4" />
                   No-show
