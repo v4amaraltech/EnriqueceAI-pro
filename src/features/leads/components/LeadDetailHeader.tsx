@@ -196,6 +196,18 @@ export function LeadDetailHeader({
               <ThumbsDown className="mr-1 h-4 w-4" />
               Perdido
             </Button>
+            {lead.meeting_scheduled_at && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNoShow}
+                disabled={isPending}
+                className="border-amber-500/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:text-amber-400"
+              >
+                <CalendarX className="mr-1 h-4 w-4" />
+                No-show
+              </Button>
+            )}
           </>
         )}
 

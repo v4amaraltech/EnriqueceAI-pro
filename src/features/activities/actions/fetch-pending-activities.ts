@@ -29,6 +29,7 @@ interface RawLead {
   linkedin: string | null;
   website: string | null;
   status: LeadStatus | null;
+  meeting_scheduled_at: string | null;
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
   fit_score: number | null;
@@ -226,7 +227,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
   const scheduledResult = (await from(supabase, 'scheduled_activities')
-    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
+    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
     .eq('status', 'pending')
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{

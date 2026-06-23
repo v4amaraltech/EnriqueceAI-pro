@@ -30,6 +30,7 @@ interface RawLead {
   linkedin: string | null;
   website: string | null;
   status: LeadStatus | null;
+  meeting_scheduled_at: string | null;
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
   fit_score: number | null;

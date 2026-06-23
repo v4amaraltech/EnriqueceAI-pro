@@ -224,6 +224,7 @@ export function ActivityExecutionSheetContent({
         onMarkDone={onMarkDone}
         onSkip={onSkip}
         onLeadLost={onLeadLost}
+        canMarkNoShow={!!activity.lead.meeting_scheduled_at}
         activityName={activity.activityName}
         callScript={activity.callScript}
         dialerProvider={dialerProvider}
