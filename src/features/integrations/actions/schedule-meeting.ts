@@ -15,6 +15,7 @@ import { createMeetingWhatsAppGroup } from '../services/whatsapp-group.service';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
 import {
+  CalendarEventGoneError,
   checkFreeBusy,
   createCalendarEvent,
   deleteCalendarEvent,
@@ -22,6 +23,7 @@ import {
   updateCalendarEvent,
 } from '../services/calendar.service';
 import type { BusySlot } from '../services/calendar.service';
+import { formatMeetingDateTime } from '../utils/format-meeting-datetime';
 
 export async function scheduleMeeting(
   leadId: string,
@@ -257,15 +259,25 @@ export async function deleteMeeting(
   const meta = interaction.metadata as Record<string, unknown> | null;
   const calendarEventId = meta?.calendar_event_id as string | undefined;
 
-  // Try to delete from Google Calendar (best-effort)
+  // Delete from Google Calendar. Cancellation still proceeds if this ultimately
+  // fails (we don't want a Google outage to block cancelling a meeting), but a
+  // single silent failure here used to leave the event orphaned on the calendar
+  // forever — which is how Ismael's 09:00 ghost survived. So we now retry and
+  // log at error level (was a swallowed `warn`) to make orphans traceable.
   if (calendarEventId) {
-    try {
-      const connection = await getCalendarConnection(userId, orgId);
-      if (connection) {
-        await deleteCalendarEvent(connection, calendarEventId);
+    const connection = await getCalendarConnection(userId, orgId);
+    if (connection) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await deleteCalendarEvent(connection, calendarEventId);
+          break;
+        } catch (err) {
+          console.error(
+            `[deleteMeeting] Google Calendar delete failed (attempt ${attempt}/2) for event ${calendarEventId}:`,
+            err,
+          );
+        }
       }
-    } catch (err) {
-      console.warn('[deleteMeeting] Failed to delete from Google Calendar:', err);
     }
   }
 
@@ -276,9 +288,7 @@ export async function deleteMeeting(
   // and the lead stays `qualified` with `meeting_scheduled_at` set forever.
   if (leadId) {
     const startTime = meta?.start_time as string | undefined;
-    const whenLabel = startTime
-      ? new Date(startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : null;
+    const whenLabel = startTime ? formatMeetingDateTime(startTime) : null;
     await logLeadEvent(supabase, {
       orgId,
       leadId,
@@ -346,9 +356,31 @@ export async function updateMeeting(
     let event: CalendarEvent;
 
     if (calendarEventId) {
-      event = await updateCalendarEvent(connection, calendarEventId, input);
+      try {
+        // Reuse the existing invite — move it in place (PATCH) so the same
+        // event and Meet link survive the reschedule.
+        event = await updateCalendarEvent(connection, calendarEventId, input);
+      } catch (err) {
+        if (err instanceof CalendarEventGoneError) {
+          // The tracked event was deleted out-of-band (e.g. directly in Google).
+          // Recreate it so the reschedule still lands on the calendar instead of
+          // throwing and leaving the user thinking it worked.
+          console.error(
+            `[updateMeeting] Tracked calendar event ${calendarEventId} is gone — recreating for interaction ${interactionId}`,
+          );
+          event = await createCalendarEvent(connection, input);
+        } else {
+          throw err;
+        }
+      }
     } else {
-      // No calendar event yet — create a new one
+      // No calendar_event_id on an existing meeting means a prior sync dropped
+      // the link (and likely left an orphan event on the calendar that nothing
+      // tracks anymore). Log it at error level so these silent desyncs are
+      // traceable, then create a fresh event for the new time.
+      console.error(
+        `[updateMeeting] Interaction ${interactionId} had no calendar_event_id — creating a new event (possible orphan on calendar)`,
+      );
       event = await createCalendarEvent(connection, input);
     }
 
@@ -386,13 +418,12 @@ export async function updateMeeting(
     // Reschedule trace: the meeting_scheduled row is mutated in place, so
     // without this the original time is overwritten with no record it moved.
     if (previousStartTime && previousStartTime !== input.startTime) {
-      const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       await logLeadEvent(supabase, {
         orgId,
         leadId,
         userId,
         event: 'meeting_rescheduled',
-        message: `Reunião remarcada de ${fmt(previousStartTime)} para ${fmt(input.startTime)}`,
+        message: `Reunião remarcada de ${formatMeetingDateTime(previousStartTime)} para ${formatMeetingDateTime(input.startTime)}`,
       });
       revalidatePath(`/leads/${leadId}`);
     }

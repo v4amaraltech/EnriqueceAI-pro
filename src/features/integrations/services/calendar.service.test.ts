@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { checkFreeBusy, createCalendarEvent } from './calendar.service';
+import { CalendarEventGoneError, checkFreeBusy, createCalendarEvent, updateCalendarEvent } from './calendar.service';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -101,6 +101,60 @@ describe('calendar.service', () => {
           endTime: '2026-02-20T14:30:00Z',
         }),
       ).rejects.toThrow('Erro ao criar evento');
+    });
+  });
+
+  describe('updateCalendarEvent', () => {
+    const input = {
+      title: 'Reagendada',
+      startTime: '2026-06-23T17:30:00',
+      endTime: '2026-06-23T18:30:00',
+    };
+
+    it('moves the existing event in place (PATCH)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'event-123',
+          htmlLink: 'https://calendar.google.com/event/123',
+          hangoutLink: 'https://meet.google.com/abc-def-ghi',
+          status: 'confirmed',
+          summary: 'Reagendada',
+          start: { dateTime: '2026-06-23T17:30:00-03:00' },
+          end: { dateTime: '2026-06-23T18:30:00-03:00' },
+        }),
+      });
+
+      const result = await updateCalendarEvent(mockConnection, 'event-123', input);
+
+      expect(result.id).toBe('event-123');
+      const [url, options] = mockFetch.mock.calls[0]!;
+      expect(url).toContain('/events/event-123');
+      expect(options.method).toBe('PATCH');
+    });
+
+    it('throws CalendarEventGoneError when the event is 404', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => 'Not Found' });
+
+      await expect(updateCalendarEvent(mockConnection, 'missing', input)).rejects.toBeInstanceOf(
+        CalendarEventGoneError,
+      );
+    });
+
+    it('throws CalendarEventGoneError when the event is 410 Gone', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 410, text: async () => 'Gone' });
+
+      await expect(updateCalendarEvent(mockConnection, 'deleted', input)).rejects.toBeInstanceOf(
+        CalendarEventGoneError,
+      );
+    });
+
+    it('throws a generic error on other API failures', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Server error' });
+
+      await expect(updateCalendarEvent(mockConnection, 'event-123', input)).rejects.toThrow(
+        'Erro ao atualizar evento',
+      );
     });
   });
 

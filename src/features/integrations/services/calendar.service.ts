@@ -64,6 +64,19 @@ export interface BusySlot {
   end: string;
 }
 
+/**
+ * Thrown when a Google Calendar event we still track no longer exists (the API
+ * answers 404 Not Found or 410 Gone — e.g. it was deleted directly in Google).
+ * Callers can catch this to recreate the event instead of failing the whole
+ * operation, so a reschedule still lands on the calendar.
+ */
+export class CalendarEventGoneError extends Error {
+  constructor(eventId: string) {
+    super(`Evento de calendário não existe mais: ${eventId}`);
+    this.name = 'CalendarEventGone';
+  }
+}
+
 async function ensureValidToken(connection: CalendarConnectionTokens): Promise<string> {
   const expiresAt = new Date(connection.token_expires_at);
   const now = new Date();
@@ -345,6 +358,11 @@ export async function updateCalendarEvent(
   );
 
   if (!response.ok) {
+    // 404/410 → the tracked event is gone. Surface a typed error so the caller
+    // can recreate it instead of leaving the reschedule stranded.
+    if (response.status === 404 || response.status === 410) {
+      throw new CalendarEventGoneError(eventId);
+    }
     const errorText = await response.text();
     throw new Error(`Erro ao atualizar evento: ${errorText}`);
   }
