@@ -28,6 +28,7 @@ interface LeadNoShowRow {
   won_by: string | null;
   nome_fantasia: string | null;
   razao_social: string | null;
+  meeting_scheduled_at: string | null;
 }
 
 /**
@@ -53,7 +54,7 @@ export async function markMeetingNoShow(leadId: string): Promise<ActionResult<vo
   const { orgId, userId, supabase } = auth.data;
 
   const { data: lead } = (await from(supabase, 'leads')
-    .select('id, status, assigned_to, won_by, nome_fantasia, razao_social')
+    .select('id, status, assigned_to, won_by, nome_fantasia, razao_social, meeting_scheduled_at')
     .eq('id', leadId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -62,6 +63,11 @@ export async function markMeetingNoShow(leadId: string): Promise<ActionResult<vo
   if (!lead) return { success: false, error: 'Lead não encontrado' };
   if (lead.status === 'unqualified') {
     return { success: false, error: 'Lead já está marcado como perdido. Reabra-o antes de registrar o no-show.' };
+  }
+  // Defense-in-depth: no-show only makes sense for a lead that had a meeting.
+  // The button surfaces gate on this too, but the server must not trust them.
+  if (!lead.meeting_scheduled_at) {
+    return { success: false, error: 'Este lead não tem reunião agendada para registrar no-show.' };
   }
 
   const displayName = lead.nome_fantasia ?? lead.razao_social ?? 'Lead';

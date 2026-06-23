@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import {
   CalendarIcon,
   CalendarPlus,
+  CalendarX,
   CheckCircle2,
   Clock,
   FileText,
@@ -47,6 +48,7 @@ import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
+import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
 import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 
@@ -69,6 +71,8 @@ interface ActivityPhonePanelProps {
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
   onLeadLost?: () => void;
+  /** When true, shows a "No-show" button (lead has a scheduled meeting). */
+  canMarkNoShow?: boolean;
   activityName?: string | null;
   callScript?: string | null;
   dialerProvider?: DialerProvider;
@@ -85,6 +89,7 @@ export function ActivityPhonePanel({
   onMarkDone,
   onSkip,
   onLeadLost,
+  canMarkNoShow,
   activityName,
   callScript,
   dialerProvider = 'api4com',
@@ -282,6 +287,18 @@ export function ActivityPhonePanel({
     setProviderCallId(null);
     setElapsed(0);
     setCallDuration(0);
+  }
+
+  function handleMarkNoShow() {
+    startTransition(async () => {
+      const result = await markMeetingNoShow(leadId);
+      if (result.success) {
+        toast.success('No-show registrado — follow-up criado na fila do SDR');
+        handleDismissModal();
+      } else {
+        toast.error(result.error);
+      }
+    });
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
@@ -583,6 +600,17 @@ export function ActivityPhonePanel({
             </div>
             {/* Direita: desfechos da ligação */}
             <div className="flex flex-wrap gap-2 sm:justify-end">
+              {canMarkNoShow && (
+                <Button
+                  variant="outline"
+                  onClick={handleMarkNoShow}
+                  disabled={isSending || isPending}
+                  className="border-amber-500/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:text-amber-400"
+                >
+                  <CalendarX className="mr-2 h-4 w-4" />
+                  No-show
+                </Button>
+              )}
               {onLeadLost && (
                 <Button
                   variant="destructive"
