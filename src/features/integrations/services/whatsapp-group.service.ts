@@ -211,3 +211,73 @@ export async function createMeetingWhatsAppGroup(
     return { success: false, error: err instanceof Error ? err.message : 'Erro desconhecido' };
   }
 }
+
+interface SendGroupMessageParams {
+  orgId: string;
+  /** SDR whose Evolution instance owns the group (the meeting's creator). */
+  sdrUserId: string;
+  /** Evolution group JID, e.g. "1203...@g.us". */
+  groupJid: string;
+  text: string;
+}
+
+/**
+ * Sends a text message to an existing meeting WhatsApp group via Evolution API.
+ *
+ * The group lives on the SDR's instance (whoever created it), so we resolve that
+ * instance and POST `/message/sendText` with the group JID as `number` — the same
+ * raw call createMeetingWhatsAppGroup uses for the invite. Note we deliberately do
+ * NOT route through EvolutionWhatsAppService.sendMessage: that validates a
+ * Brazilian phone and would reject a "@g.us" group JID.
+ *
+ * Best-effort: the caller runs it in the background (after()).
+ */
+export async function sendMeetingGroupMessage(
+  supabase: SupabaseClient,
+  params: SendGroupMessageParams,
+): Promise<{ success: boolean; error?: string }> {
+  const { orgId, sdrUserId, groupJid, text } = params;
+
+  try {
+    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiKey = process.env.EVOLUTION_API_KEY;
+    if (!apiUrl || !apiKey) {
+      return { success: false, error: 'Evolution API não configurada' };
+    }
+
+    const { data: sdrInstance } = (await from(supabase, 'whatsapp_instances' as never)
+      .select('id, instance_name, status')
+      .eq('org_id', orgId)
+      .eq('user_id', sdrUserId)
+      .maybeSingle()) as { data: { id: string; instance_name: string; status: string } | null };
+
+    if (!sdrInstance || sdrInstance.status !== 'connected') {
+      console.warn('[whatsapp-group] SDR WhatsApp not connected, skipping group message');
+      return { success: false, error: 'WhatsApp do SDR não conectado' };
+    }
+
+    const baseUrl = apiUrl.replace(/\/+$/, '');
+    const res = await fetch(`${baseUrl}/message/sendText/${sdrInstance.instance_name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({ number: groupJid, text }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error('[whatsapp-group] Group message failed:', res.status, errText);
+      // Reflect a dropped session so the UI prompts a reconnect (mirrors create).
+      if (isSessionDeadError(errText)) {
+        await from(supabase, 'whatsapp_instances' as never)
+          .update({ status: 'disconnected', last_error: `message/sendText ${res.status}: ${errText.slice(0, 200)}` } as Record<string, unknown>)
+          .eq('id', sdrInstance.id);
+      }
+      return { success: false, error: `Erro ao enviar mensagem ao grupo: ${res.status}` };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[whatsapp-group] Unexpected error sending group message:', err);
+    return { success: false, error: err instanceof Error ? err.message : 'Erro desconhecido' };
+  }
+}

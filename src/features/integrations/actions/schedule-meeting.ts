@@ -11,7 +11,7 @@ import { from } from '@/lib/supabase/from';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
-import { createMeetingWhatsAppGroup } from '../services/whatsapp-group.service';
+import { createMeetingWhatsAppGroup, sendMeetingGroupMessage } from '../services/whatsapp-group.service';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
 import {
@@ -73,8 +73,20 @@ export async function scheduleMeeting(
   try {
     const event = await createCalendarEvent(connection, input);
 
-    // Register interaction as meeting_scheduled
-    await from(supabase, 'interactions')
+    // Register interaction as meeting_scheduled. Capture the row id + metadata so
+    // the WhatsApp group JID can be persisted onto it once the group is created
+    // (see the after() below) — a later reschedule reads it to notify the group.
+    const meetingMetadata: Record<string, unknown> = {
+      subject: input.title,
+      calendar_event_id: event.id,
+      calendar_link: event.htmlLink,
+      meet_link: event.meetLink,
+      attendees: input.attendeeEmails ?? [],
+      closer_id: input.closerId ?? null,
+      start_time: input.startTime,
+      end_time: input.endTime,
+    };
+    const { data: meetingInteraction } = (await from(supabase, 'interactions')
       .insert({
         org_id: orgId,
         lead_id: leadId,
@@ -86,18 +98,11 @@ export async function scheduleMeeting(
           event.meetLink ? `Google Meet: ${event.meetLink}` : '',
           `Horário: ${new Date(event.startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} - ${new Date(event.endTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].filter(Boolean).join('\n'),
-        metadata: {
-          subject: input.title,
-          calendar_event_id: event.id,
-          calendar_link: event.htmlLink,
-          meet_link: event.meetLink,
-          attendees: input.attendeeEmails ?? [],
-          closer_id: input.closerId ?? null,
-          start_time: input.startTime,
-          end_time: input.endTime,
-        },
+        metadata: meetingMetadata,
         performed_by: userId,
-      } as Record<string, unknown>);
+      } as Record<string, unknown>)
+      .select('id')
+      .single()) as { data: { id: string } | null };
 
     // Update lead: qualified_at (reunião agendada = qualificado) + closer_id if provided.
     // faturamento_estimado is updated here too — the SDR is required to fill it
@@ -172,7 +177,15 @@ export async function scheduleMeeting(
         };
         after(async () => {
           try {
-            await createMeetingWhatsAppGroup(supabase, groupParams);
+            const groupResult = await createMeetingWhatsAppGroup(supabase, groupParams);
+            // Persist the group JID on the meeting interaction — it isn't stored
+            // anywhere else, and a later reschedule needs it to notify the group.
+            if (groupResult.success && groupResult.groupId && meetingInteraction?.id) {
+              await from(supabase, 'interactions')
+                .update({ metadata: { ...meetingMetadata, whatsapp_group_jid: groupResult.groupId } } as Record<string, unknown>)
+                .eq('id', meetingInteraction.id)
+                .eq('org_id', orgId);
+            }
           } catch (err) {
             console.error('[scheduleMeeting] WhatsApp group error:', err);
           }
@@ -334,7 +347,7 @@ export async function updateMeeting(
 
   // Fetch interaction and validate org ownership
   const { data: interaction, error: fetchError } = await from(supabase, 'interactions')
-    .select('id, metadata')
+    .select('id, metadata, performed_by')
     .eq('id', interactionId)
     .eq('org_id', orgId)
     .maybeSingle();
@@ -346,6 +359,9 @@ export async function updateMeeting(
   const meta = interaction.metadata as Record<string, unknown> | null;
   const calendarEventId = meta?.calendar_event_id as string | undefined;
   const previousStartTime = meta?.start_time as string | undefined;
+  const whatsappGroupJid = meta?.whatsapp_group_jid as string | undefined;
+  // The meeting WhatsApp group lives on the SDR's Evolution instance (its creator).
+  const groupOwnerUserId = (interaction as { performed_by?: string | null }).performed_by ?? userId;
 
   const connection = await getCalendarConnection(userId, orgId);
   if (!connection) {
@@ -402,6 +418,8 @@ export async function updateMeeting(
           closer_id: input.closerId ?? null,
           start_time: input.startTime,
           end_time: input.endTime,
+          // Carry the group JID forward so repeated reschedules keep notifying it.
+          ...(whatsappGroupJid ? { whatsapp_group_jid: whatsappGroupJid } : {}),
         },
       } as Record<string, unknown>)
       .eq('id', interactionId)
@@ -426,6 +444,29 @@ export async function updateMeeting(
         message: `Reunião remarcada de ${formatMeetingDateTime(previousStartTime)} para ${formatMeetingDateTime(input.startTime)}`,
       });
       revalidatePath(`/leads/${leadId}`);
+
+      // Notify the lead's meeting WhatsApp group about the new time (best-effort,
+      // background — uses the SDR's instance that owns the group).
+      if (whatsappGroupJid) {
+        const groupMessage = [
+          `🔄 *Reunião remarcada*`,
+          `📅 Novo horário: ${formatMeetingDateTime(input.startTime)}`,
+          event.meetLink ? `\n🔗 Link da reunião:\n${event.meetLink}` : '',
+          `\nQualquer dúvida, estamos à disposição! 🤝`,
+        ].filter(Boolean).join('\n');
+        after(async () => {
+          try {
+            await sendMeetingGroupMessage(supabase, {
+              orgId,
+              sdrUserId: groupOwnerUserId,
+              groupJid: whatsappGroupJid,
+              text: groupMessage,
+            });
+          } catch (err) {
+            console.error('[updateMeeting] WhatsApp group notify error:', err);
+          }
+        });
+      }
     }
 
     return { success: true, data: event };
