@@ -311,31 +311,46 @@ export function ActivityExecutionSheet({
 
             {/* Right — Activity panel (adapts by type) */}
             <div className="relative flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-14">
-              {/* Navigation controls — centered, close button pinned right */}
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={!prevActivity}
-                  onClick={() => prevActivity && onNavigate(keyOf(prevActivity))}
-                  title="Anterior (←)"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  {selectedIndex >= 0 ? selectedIndex + 1 : 0} de {activities.length}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={!nextActivity}
-                  onClick={() => nextActivity && onNavigate(keyOf(nextActivity))}
-                  title="Próxima (→)"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              {/* Top controls — prev/next stay centered, close pinned right.
+                  Laid out as one flex row with equal spacers so the X can never
+                  overlap the next arrow when the panel gets narrow. */}
+              <div className="absolute top-3 inset-x-3 z-10 flex items-center gap-2">
+                <div className="flex-1" />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={!prevActivity}
+                    onClick={() => prevActivity && onNavigate(keyOf(prevActivity))}
+                    title="Anterior (←)"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    {selectedIndex >= 0 ? selectedIndex + 1 : 0} de {activities.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={!nextActivity}
+                    onClick={() => nextActivity && onNavigate(keyOf(nextActivity))}
+                    title="Próxima (→)"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-1 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={onClose}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               {quickMode && (
                 <div className="absolute top-3 left-4 z-10 flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -343,14 +358,6 @@ export function ActivityExecutionSheet({
                   Modo rápido
                 </div>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-3 right-3 z-10 h-8 w-8"
-                onClick={onClose}
-              >
-                <X className="h-4 w-4" />
-              </Button>
 
               <ActivityExecutionSheetContent
                 key={`${activity.enrollmentId}:${activity.stepId}`}
