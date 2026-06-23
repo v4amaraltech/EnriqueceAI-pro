@@ -149,6 +149,25 @@ describe('calendar.service', () => {
       );
     });
 
+    it('throws CalendarEventGoneError on a 200 response with status "cancelled" (deleted in Google)', async () => {
+      // Patching an event that was deleted directly in Google returns 200 but
+      // with a cancelled tombstone — the move would silently vanish.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'tombstone',
+          status: 'cancelled',
+          summary: 'Reagendada',
+          start: { dateTime: '2026-06-24T16:00:00-03:00' },
+          end: { dateTime: '2026-06-24T17:00:00-03:00' },
+        }),
+      });
+
+      await expect(updateCalendarEvent(mockConnection, 'tombstone', input)).rejects.toBeInstanceOf(
+        CalendarEventGoneError,
+      );
+    });
+
     it('throws a generic error on other API failures', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Server error' });
 

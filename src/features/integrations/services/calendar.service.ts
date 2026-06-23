@@ -369,6 +369,17 @@ export async function updateCalendarEvent(
 
   const updated = (await response.json()) as GCalEvent;
 
+  // An event deleted directly in Google Calendar is NOT a 404 here: a PATCH
+  // against it still returns HTTP 200, but the resource comes back with
+  // status "cancelled" — the new time is applied to a tombstone that never
+  // renders on anyone's calendar. (This is exactly how Ismael's rescheduled
+  // meeting vanished: he deleted the event in Google, then hit "Reagendar".)
+  // Treat it as gone so the caller recreates a fresh, confirmed event instead
+  // of silently reporting success.
+  if (updated.status === 'cancelled') {
+    throw new CalendarEventGoneError(eventId);
+  }
+
   return {
     id: updated.id,
     htmlLink: updated.htmlLink,
