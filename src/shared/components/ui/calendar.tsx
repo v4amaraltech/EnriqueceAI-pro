@@ -18,7 +18,13 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row gap-2",
+        // `relative` is required: react-day-picker v9 renders the month nav as a
+        // sibling of the month (inside `months`), and button_previous/next are
+        // absolutely positioned. Without a positioned ancestor here they escaped
+        // to the nearest one (the Dialog `fixed` content, or the viewport for the
+        // inline calendar) and rendered the ‹ › arrows pinned to the modal/screen
+        // corners. Scoping them to `months` puts them back flanking the caption.
+        months: "relative flex flex-col sm:flex-row gap-2",
         month: "flex flex-col gap-4",
         month_caption: "flex justify-center pt-1 relative items-center w-full",
         caption_label: "text-sm font-medium",
