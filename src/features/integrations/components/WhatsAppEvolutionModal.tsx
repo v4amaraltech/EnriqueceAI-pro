@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Loader2, RefreshCw, X, CheckCircle2 } from 'lucide-react';
+import { Loader2, RefreshCw, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 
@@ -71,12 +71,15 @@ export function WhatsAppEvolutionModal({
             </div>
 
             {/* QR Code */}
-            <div className="mb-6 flex h-64 w-64 items-center justify-center rounded-lg border border-[var(--border)] bg-white p-1">
+            <div className="mb-6 flex h-64 w-64 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-white p-1">
               {step === 'creating' ? (
                 <Loader2 className="h-10 w-10 animate-spin text-zinc-400" />
               ) : step === 'error' ? (
-                <div className="text-center">
-                  <p className="text-sm text-red-600">{error ?? 'Erro ao gerar QR Code'}</p>
+                <div className="flex max-h-full flex-col items-center gap-2 overflow-y-auto px-3 text-center">
+                  <AlertTriangle className="h-8 w-8 shrink-0 text-red-500" />
+                  <p className="line-clamp-5 break-words text-sm font-medium text-red-600">
+                    {error ?? 'Erro ao gerar QR Code'}
+                  </p>
                 </div>
               ) : qrBase64 ? (
                 /* eslint-disable-next-line @next/next/no-img-element -- base64 data URI, next/image incompatible */

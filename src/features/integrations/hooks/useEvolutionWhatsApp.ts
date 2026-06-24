@@ -16,6 +16,44 @@ interface EvolutionState {
 
 const POLL_INTERVAL_MS = 5000;
 
+/**
+ * Turn whatever the edge function / Evolution API returned into a short,
+ * user-safe message. The shared Evolution server can answer a transient 500
+ * whose body is its full minified bundle/stack trace; we must NEVER surface
+ * that raw payload in the UI (it used to paint code across the screen). Map the
+ * known transient cases to friendly PT copy and collapse anything code-like.
+ */
+function friendlyEvolutionError(raw: string | null | undefined): string {
+  const msg = (raw ?? '').toString().trim();
+  const lower = msg.toLowerCase();
+
+  // Transient server hiccups: timeout / network / any 5xx from Evolution.
+  if (
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('connection closed') ||
+    lower.includes('econnrefused') ||
+    lower.includes('fetch failed') ||
+    lower.includes('network') ||
+    /evolution api 5\d\d/.test(lower)
+  ) {
+    return 'O servidor de WhatsApp demorou a responder. Aguarde alguns segundos e toque em "Atualizar QR Code".';
+  }
+
+  if (lower.includes('already in use')) {
+    return 'Não foi possível preparar sua sessão agora. Toque em "Atualizar QR Code" para tentar novamente.';
+  }
+
+  // Never surface raw Evolution payloads / stack traces. If the message is long
+  // or looks like code/markup, collapse to a generic message.
+  const looksLikeCode = msg.length > 140 || /[{}<>;]|=>|function|catch\(|await /.test(msg);
+  if (!msg || looksLikeCode) {
+    return 'Não foi possível gerar o QR Code agora. Tente novamente em instantes.';
+  }
+
+  return msg;
+}
+
 export function useEvolutionWhatsApp() {
   const [state, setState] = useState<EvolutionState>({
     step: 'idle',
@@ -110,7 +148,7 @@ export function useEvolutionWhatsApp() {
       setState((prev) => ({
         ...prev,
         step: 'error',
-        error: errorMsg,
+        error: friendlyEvolutionError(errorMsg),
       }));
       return;
     }
@@ -160,7 +198,7 @@ export function useEvolutionWhatsApp() {
         }
       }
       console.error('[evolution] QR refresh error:', errorMsg);
-      setState((prev) => ({ ...prev, step: 'error', error: errorMsg }));
+      setState((prev) => ({ ...prev, step: 'error', error: friendlyEvolutionError(errorMsg) }));
       return;
     }
 
