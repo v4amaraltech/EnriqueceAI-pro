@@ -1122,13 +1122,14 @@ export function LeadInfoPanel({
                               ))}
                             </SelectContent>
                           </Select>
-                        ) : cf.field_type === 'textarea' ? (
+                        ) : cf.field_type === 'textarea' || cf.field_type === 'text' ? (
                           <textarea
                             value={editCustomFieldValues[cf.id] ?? ''}
                             onChange={(e) =>
                               setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
                             }
-                            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] min-h-[80px] resize-y"
+                            rows={1}
+                            className={`w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] resize-y field-sizing-content ${cf.field_type === 'textarea' ? 'min-h-[80px]' : 'min-h-[40px]'}`}
                             placeholder={cf.field_name}
                           />
                         ) : cf.field_type === 'currency' ? (
@@ -1171,6 +1172,7 @@ export function LeadInfoPanel({
                           key={cf.id}
                           label={cf.field_name}
                           value={display}
+                          multiline={cf.field_type === 'textarea' || cf.field_type === 'text'}
                           href={cf.field_type === 'url' && rawVal ? (rawVal.startsWith('http://') || rawVal.startsWith('https://') ? rawVal : `https://${rawVal}`) : undefined}
                         />
                       );
