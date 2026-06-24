@@ -397,9 +397,9 @@ export function LeadInfoPanel({
       const { email: _editEmail, ...leadFields } = editFields;
 
       // Filter out empty phone/email entries
-      const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
+      const validPhones = phoneEntries.filter((p) => (p.numero ?? '').trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
-      const validEmails = emailEntries.filter((e) => e.email.trim() !== '');
+      const validEmails = emailEntries.filter((e) => (e.email ?? '').trim() !== '');
       const primaryEmailValue = validEmails[0]?.email ?? '';
 
       // Remove empty cnpj/canal/segmento to avoid check constraint violations
@@ -422,12 +422,12 @@ export function LeadInfoPanel({
       }
 
       // Phones/emails/custom are arrays/objects — compare structurally.
-      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => p.numero.trim() !== ''));
+      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => (p.numero ?? '').trim() !== ''));
       if (phonesChanged) {
         updatePayload.telefone = primaryPhone;
         updatePayload.phones = validPhones;
       }
-      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => e.email.trim() !== ''));
+      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => (e.email ?? '').trim() !== ''));
       if (emailsChanged) {
         updatePayload.email = primaryEmailValue;
         // Only send emails if column exists (migration applied)
