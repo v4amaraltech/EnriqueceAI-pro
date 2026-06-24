@@ -227,6 +227,28 @@ export async function logoutInstance(
   }
 }
 
+/** Verified removal of an instance: logout, delete, then CONFIRM it is actually
+ *  gone. The shared Evolution server frequently reports delete success while the
+ *  instance keeps lingering (and CONNECTED) in the manager, so a single delete
+ *  call is not trustworthy. Retries up to `attempts` times with a short pause.
+ *  Returns true only when absence is confirmed. */
+export async function purgeInstance(instanceName: string, attempts = 2): Promise<boolean> {
+  const stillPresent = async (): Promise<boolean> => {
+    const check = await fetchInstance(instanceName);
+    if (!check.ok) return false; // can't fetch → assume our delete took effect
+    const data = check.data as Record<string, unknown> | undefined;
+    return !!data && Object.keys(data).length > 0;
+  };
+
+  for (let i = 0; i < attempts; i++) {
+    await logoutInstance(instanceName);
+    await deleteInstance(instanceName);
+    if (!(await stillPresent())) return true;
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  return !(await stillPresent());
+}
+
 /** Check if Evolution API is healthy */
 export async function checkHealth(): Promise<boolean> {
   try {
