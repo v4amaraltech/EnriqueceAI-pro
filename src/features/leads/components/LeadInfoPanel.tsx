@@ -59,6 +59,23 @@ import { LeadScheduleTab } from './LeadScheduleTab';
 import { GenerateSpicedDialog } from './GenerateSpicedDialog';
 
 /**
+ * Normaliza uma entrada do array `phones`. A coluna JSONB armazena objetos
+ * `{ tipo, numero }`, mas alguns leads legados/importados guardaram telefones
+ * como strings simples (ex.: `["+55 19 3516-3500"]`). Acessar `.numero` nesses
+ * casos retornava `undefined` e quebrava a página de detalhe do lead. Aceita
+ * ambos os formatos e sempre devolve um `LeadPhone` válido (ou null se vazio).
+ */
+function coercePhoneEntry(raw: LeadPhone | string | null | undefined): LeadPhone | null {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const numero = raw.trim();
+    return numero ? { tipo: 'fixo', numero } : null;
+  }
+  if (!raw.numero) return null;
+  return raw;
+}
+
+/**
  * Fallback de Cargo: quando o surface que renderiza este painel não passa
  * `jobTitleOptions` (ex.: painel do lead dentro da execução de atividade), o
  * dropdown ficava vazio. Usa os defaults do STANDARD_FIELDS — mesma fonte da
@@ -268,7 +285,9 @@ export function LeadInfoPanel({
     }
 
     // Phones JSONB (user-edited list, has explicit type)
-    for (const phone of data.phones ?? []) {
+    for (const raw of data.phones ?? []) {
+      const phone = coercePhoneEntry(raw);
+      if (!phone) continue;
       const key = normalizePhone(phone.numero);
       if (!seen.has(key)) {
         seen.add(key);
@@ -397,9 +416,9 @@ export function LeadInfoPanel({
       const { email: _editEmail, ...leadFields } = editFields;
 
       // Filter out empty phone/email entries
-      const validPhones = phoneEntries.filter((p) => p.numero.trim() !== '');
+      const validPhones = phoneEntries.filter((p) => (p.numero ?? '').trim() !== '');
       const primaryPhone = validPhones[0]?.numero ?? '';
-      const validEmails = emailEntries.filter((e) => e.email.trim() !== '');
+      const validEmails = emailEntries.filter((e) => (e.email ?? '').trim() !== '');
       const primaryEmailValue = validEmails[0]?.email ?? '';
 
       // Remove empty cnpj/canal/segmento to avoid check constraint violations
@@ -422,12 +441,12 @@ export function LeadInfoPanel({
       }
 
       // Phones/emails/custom are arrays/objects — compare structurally.
-      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => p.numero.trim() !== ''));
+      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => (p.numero ?? '').trim() !== ''));
       if (phonesChanged) {
         updatePayload.telefone = primaryPhone;
         updatePayload.phones = validPhones;
       }
-      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => e.email.trim() !== ''));
+      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => (e.email ?? '').trim() !== ''));
       if (emailsChanged) {
         updatePayload.email = primaryEmailValue;
         // Only send emails if column exists (migration applied)
@@ -528,7 +547,9 @@ export function LeadInfoPanel({
   }
 
   // Phones from phones JSONB (has explicit type — preferred source)
-  for (const phone of data.phones ?? []) {
+  for (const raw of data.phones ?? []) {
+    const phone = coercePhoneEntry(raw);
+    if (!phone) continue;
     const key = normalizePhone(phone.numero);
     if (!seenPhones.has(key)) {
       seenPhones.add(key);
