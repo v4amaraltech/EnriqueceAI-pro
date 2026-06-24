@@ -8,7 +8,11 @@ export interface ResolvedPhone {
 }
 
 function formatPhone(ddd: number, numero: string): { formatted: string; raw: string } {
-  const cleaned = numero.replace(/\D/g, '');
+  // `celulares` comes from an enrichment JSONB column, so the runtime shape
+  // isn't guaranteed — `numero` (or `ddd`) may be missing/null even though the
+  // type says string. Coerce defensively to avoid crashing the execution sheet
+  // render with "Cannot read properties of undefined (reading 'replace')".
+  const cleaned = String(numero ?? '').replace(/\D/g, '');
   return {
     formatted: `(${ddd}) ${cleaned}`,
     raw: `55${ddd}${cleaned}`,
@@ -36,6 +40,9 @@ export function getAllLeadPhones(lead: ActivityLead): ResolvedPhone[] {
 
   for (const socio of lead.socios ?? []) {
     for (const cel of socio.celulares ?? []) {
+      // Skip malformed enrichment entries with no usable number — they would
+      // otherwise produce empty "(undefined) " labels (or crash downstream).
+      if (!cel || String(cel.numero ?? '').replace(/\D/g, '') === '') continue;
       if (cel.whatsapp) {
         whatsappPhones.push({ ...cel, socioNome: socio.nome });
       } else {
