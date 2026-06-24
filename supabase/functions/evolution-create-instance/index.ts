@@ -10,7 +10,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames, purgeInstance } from "../_shared/evolution.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames, purgeInstance, restartInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
@@ -35,20 +35,22 @@ serve(async (req)=>{
     const instanceName = generateInstanceName(organizationId, userId);
     const webhookUrl = `${SUPABASE_URL}/functions/v1/evolution-webhook`;
 
-    // 1) Sweep EVERY Evolution instance belonging to this user — the canonical
-    //    name AND any orphaned suffixed names (`ea_org_user_5qqp`) left behind
-    //    by past "already in use" retries. Leaving an old instance alive paired
-    //    to the same phone is what caused the "Connection Closed" session
-    //    conflict (two Baileys sockets fighting over one number — V4 Amaral,
-    //    jun/2026). Best-effort: logout then delete each.
-    console.log("[create-instance] Sweeping existing Evolution instances for user...");
+    // 1) Sweep only SUFFIXED orphans for this user (ea_<org>_<user>_xxxx) left
+    //    by past fallbacks. We deliberately KEEP the canonical instance if it
+    //    exists — below we REUSE it (logout + connect for a fresh QR) instead of
+    //    delete+recreate. On the shared Evolution server, delete frequently
+    //    leaves the name stuck "already in use" (and sometimes a zombie the API
+    //    can't remove at all), which is exactly what used to force the ugly
+    //    suffixed name. Reusing the canonical keeps the name clean
+    //    (ea_<org>_<user>) and guarantees a single instance per number.
+    console.log("[create-instance] Sweeping SUFFIXED orphans for user...");
     const allNames = await listInstanceNames();
-    const mine = allNames.filter((n) => n === instanceName || n.startsWith(`${instanceName}_`));
-    console.log("[create-instance] Found", mine.length, "instance(s) to remove:", mine.join(", ") || "(none)");
-    for (const name of mine) {
+    const suffixedOrphans = allNames.filter((n) => n.startsWith(`${instanceName}_`));
+    console.log("[create-instance] Suffixed orphans to remove:", suffixedOrphans.join(", ") || "(none)");
+    for (const name of suffixedOrphans) {
       const gone = await purgeInstance(name);
       if (!gone) {
-        console.warn(`[create-instance] Could not confirm removal of ${name} — may linger as orphan (will be reaped by evolution-cleanup)`);
+        console.warn(`[create-instance] Could not confirm removal of ${name} — may linger (reaped later or needs server cleanup)`);
       }
     }
 
@@ -59,70 +61,91 @@ serve(async (req)=>{
       await deleteWhatsAppInstance(existingInstance.id);
     }
 
-    // 3) Create the instance. Prefer the canonical name; the name actually used
-    //    is tracked in `usedName` (may differ if we fall back below).
-    let usedName = instanceName;
-    console.log("[create-instance] Calling Evolution API to create:", usedName);
-    let createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    // 3) Obtain a QR on the CANONICAL name — always ea_<org>_<user>, no suffix.
+    const usedName = instanceName;
 
-    // If the sweep missed a stale instance (race, or version-specific list
-    // shape), force-remove THIS exact name and retry once with the SAME name.
-    if (!createResult.ok && createResult.error?.includes("already in use")) {
-      console.log("[create-instance] Still in use after sweep — force-deleting and retrying same name...");
+    // Pull a fresh QR by reusing the existing instance: logout any stale pairing
+    // (so the new scan links cleanly), then connect; nudge a broken instance
+    // with a restart and try once more.
+    const pullQrViaConnect = async (): Promise<string | null> => {
       await logoutInstance(usedName);
-      await deleteInstance(usedName);
-      await new Promise((r) => setTimeout(r, 1500));
-      createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+      let r = await connectInstance(usedName);
+      if (r.ok && r.data.base64) return r.data.base64;
+      await restartInstance(usedName);
+      await new Promise((res) => setTimeout(res, 1000));
+      r = await connectInstance(usedName);
+      return r.ok ? (r.data.base64 ?? null) : null;
+    };
+
+    let qrBase64: string | null = null;
+
+    // 3a) Canonical already on Evolution → reuse it directly.
+    if (allNames.includes(usedName)) {
+      console.log("[create-instance] Canonical exists — reusing via connect:", usedName);
+      qrBase64 = await pullQrViaConnect();
     }
 
-    // Last resort: the Evolution server is holding the canonical name reserved
-    // even though our delete reports done (known on shared Evolution servers —
-    // the name lingers in its DB/cache after the manager "delete"). Rather than
-    // BLOCK the user, connect under a fresh unique name. The sweep above already
-    // logged out the user's old instances, so the freshly-scanned one becomes
-    // the only paired device — no "Connection Closed" conflict. The stuck
-    // canonical name is a harmless reserved entry until the Evolution server is
-    // cleaned/restarted.
-    if (!createResult.ok && createResult.error?.includes("already in use")) {
-      usedName = generateInstanceName(organizationId, userId, true);
-      console.warn("[create-instance] Canonical name stuck on Evolution — falling back to fresh name:", usedName);
-      createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+    // 3b) Otherwise create it. If the server says the name is reserved, reuse it
+    //     via connect rather than minting a suffixed instance.
+    if (!qrBase64) {
+      console.log("[create-instance] Creating canonical instance:", usedName);
+      let createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+      if (createResult.ok) {
+        qrBase64 = createResult.data.qrcode?.base64 || null;
+        if (!qrBase64) qrBase64 = await pullQrViaConnect();
+      } else if (createResult.error?.includes("already in use")) {
+        console.warn("[create-instance] Name reserved — reusing canonical via connect");
+        qrBase64 = await pullQrViaConnect();
+        if (!qrBase64) {
+          // Force-delete + a single recreate attempt on the SAME name.
+          console.log("[create-instance] Reuse failed — force-deleting and recreating same name...");
+          await logoutInstance(usedName);
+          await deleteInstance(usedName);
+          await new Promise((res) => setTimeout(res, 1500));
+          createResult = await createInstance(usedName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+          if (createResult.ok) {
+            qrBase64 = createResult.data.qrcode?.base64 || (await pullQrViaConnect());
+          }
+        }
+      } else {
+        console.error("[create-instance] Evolution API error:", createResult.error);
+        return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
+      }
     }
 
-    if (!createResult.ok) {
-      console.error("[create-instance] Evolution API error:", createResult.error);
-      return errorResponse(`Failed to create Evolution instance: ${createResult.error}`, 500);
+    // 3c) Absolute last resort: the canonical name is a true reserved-zombie the
+    //     API won't free (only a server/container restart clears it). Don't
+    //     hard-block the SDR — create under a suffixed name this once; the reaper
+    //     removes it later once the server recovers. Should now be rare.
+    if (!qrBase64) {
+      const fallbackName = generateInstanceName(organizationId, userId, true);
+      console.warn("[create-instance] Canonical unusable (reserved-zombie) — last-resort suffixed name:", fallbackName);
+      const fb = await createInstance(fallbackName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+      if (!fb.ok) {
+        return errorResponse(`Failed to create Evolution instance: ${fb.error}`, 500);
+      }
+      const savedFb = await createWhatsAppInstance(organizationId, fallbackName, fb.data.qrcode?.base64 || undefined, userId);
+      if (!savedFb) {
+        return errorResponse("Failed to save instance to database", 500);
+      }
+      let fbQr = fb.data.qrcode?.base64 || null;
+      if (!fbQr) {
+        const c = await connectInstance(fallbackName);
+        if (c.ok && c.data.base64) {
+          fbQr = c.data.base64;
+          await updateWhatsAppInstance(savedFb.id, { qr_base64: fbQr });
+        }
+      }
+      return jsonResponse({ instance_name: fallbackName, qr_base64: fbQr, status: "connecting" });
     }
-    console.log("[create-instance] Evolution API success as:", usedName);
-    // Extrair QR code se disponível
-    const qrBase64 = createResult.data.qrcode?.base64 || null;
-    console.log("[create-instance] QR from create:", qrBase64 ? "yes" : "no");
-    // Salvar no banco
-    console.log("[create-instance] Saving to database...");
+
+    // 4) Persist the canonical instance + QR and return.
+    console.log("[create-instance] Got QR on canonical:", usedName);
     const savedInstance = await createWhatsAppInstance(organizationId, usedName, qrBase64 || undefined, userId);
     if (!savedInstance) {
       console.error("[create-instance] Failed to save to database");
       return errorResponse("Failed to save instance to database", 500);
     }
-    console.log("[create-instance] Saved to DB, id:", savedInstance.id);
-    // Se não veio QR na criação, tentar buscar via connect
-    if (!qrBase64) {
-      console.log("[create-instance] No QR from create, trying connect...");
-      const connectResult = await connectInstance(usedName);
-      if (connectResult.ok && connectResult.data.base64) {
-        console.log("[create-instance] Got QR from connect");
-        await updateWhatsAppInstance(savedInstance.id, {
-          qr_base64: connectResult.data.base64
-        });
-        return jsonResponse({
-          instance_name: usedName,
-          qr_base64: connectResult.data.base64,
-          status: "connecting"
-        });
-      }
-      console.log("[create-instance] No QR from connect either");
-    }
-    console.log("[create-instance] Returning response");
     return jsonResponse({
       instance_name: usedName,
       qr_base64: qrBase64,
