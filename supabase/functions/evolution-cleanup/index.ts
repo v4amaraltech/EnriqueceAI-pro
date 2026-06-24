@@ -11,8 +11,8 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { deleteInstance, logoutInstance, fetchInstance } from '../_shared/evolution.ts';
-import { getStaleInstances, deleteWhatsAppInstance } from '../_shared/supabase.ts';
+import { deleteInstance, logoutInstance, fetchInstance, listInstanceNames, purgeInstance } from '../_shared/evolution.ts';
+import { getStaleInstances, deleteWhatsAppInstance, getAllTrackedInstanceNames } from '../_shared/supabase.ts';
 
 const STALE_THRESHOLD_MINUTES = 10;
 
@@ -28,15 +28,6 @@ serve(async (req) => {
     console.log(`Running evolution-cleanup (threshold: ${STALE_THRESHOLD_MINUTES}min)...`);
 
     const staleInstances = await getStaleInstances(STALE_THRESHOLD_MINUTES);
-
-    if (staleInstances.length === 0) {
-      console.log('No stale instances found');
-      return jsonResponse({
-        cleaned: 0,
-        message: 'No stale instances to clean up',
-        checked_at: new Date().toISOString(),
-      });
-    }
 
     console.log(`Found ${staleInstances.length} stale instance(s) to clean up`);
 
@@ -111,9 +102,51 @@ serve(async (req) => {
     const cleanedCount = results.filter((r) => r.db_deleted).length;
     console.log(`Cleanup complete: ${cleanedCount}/${staleInstances.length} instances removed`);
 
+    // -----------------------------------------------------------------------
+    // Evolution-side orphan reaper
+    // -----------------------------------------------------------------------
+    // The per-user sweep in evolution-create-instance is best-effort; on the
+    // shared Evolution server, suffixed fallback instances
+    // (ea_<org>_<user>_xxxx) from past reconnects can linger CONNECTED in the
+    // manager while our DB only tracks the current one. Those orphans are
+    // invisible to the DB-based cleanup above (they were never persisted).
+    // Here we enumerate Evolution directly and reap any instance that:
+    //   1. matches our app naming fingerprint (so we never touch another
+    //      client's instance on the shared server), AND
+    //   2. is NOT the tracked keeper for its user, AND
+    //   3. DOES have a tracked sibling for the same user/org identity — so a
+    //      mid-connect instance (no DB row yet during the create swap window)
+    //      is left alone, and only true duplicates get removed.
+    const APP_NAME_RE = /^ea_[0-9a-f]{8}(?:_[0-9a-f]{8})?(?:_[0-9a-z]{1,8})?$/;
+    const canonicalBase = (name: string): string => {
+      const userMatch = name.match(/^(ea_[0-9a-f]{8}_[0-9a-f]{8})(?:_[0-9a-z]{1,8})?$/);
+      if (userMatch && userMatch[1]) return userMatch[1];
+      const orgMatch = name.match(/^(ea_[0-9a-f]{8})(?:_[0-9a-z]{1,8})?$/);
+      if (orgMatch && orgMatch[1]) return orgMatch[1];
+      return name;
+    };
+
+    const evoNames = await listInstanceNames();
+    const trackedNames = new Set(await getAllTrackedInstanceNames());
+    const trackedBases = new Set([...trackedNames].map(canonicalBase));
+
+    const reaped: Array<{ instance_name: string; gone: boolean }> = [];
+    for (const name of evoNames) {
+      if (!APP_NAME_RE.test(name)) continue; // not created by our app
+      if (trackedNames.has(name)) continue; // the current keeper for some user
+      if (!trackedBases.has(canonicalBase(name))) continue; // no current sibling → skip (mid-connect / unmanaged)
+      const gone = await purgeInstance(name);
+      console.log(`[reaper] Orphan ${name} → ${gone ? 'removed' : 'still present'}`);
+      reaped.push({ instance_name: name, gone });
+    }
+    const reapedCount = reaped.filter((r) => r.gone).length;
+    console.log(`Reaper complete: ${reapedCount}/${reaped.length} orphan(s) removed`);
+
     return jsonResponse({
       cleaned: cleanedCount,
       total_stale: staleInstances.length,
+      orphans_reaped: reapedCount,
+      orphans: reaped,
       details: results,
       checked_at: new Date().toISOString(),
     });

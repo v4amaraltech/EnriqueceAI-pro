@@ -10,7 +10,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames } from "../_shared/evolution.ts";
+import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames, purgeInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
@@ -46,8 +46,10 @@ serve(async (req)=>{
     const mine = allNames.filter((n) => n === instanceName || n.startsWith(`${instanceName}_`));
     console.log("[create-instance] Found", mine.length, "instance(s) to remove:", mine.join(", ") || "(none)");
     for (const name of mine) {
-      await logoutInstance(name);
-      await deleteInstance(name);
+      const gone = await purgeInstance(name);
+      if (!gone) {
+        console.warn(`[create-instance] Could not confirm removal of ${name} — may linger as orphan (will be reaped by evolution-cleanup)`);
+      }
     }
 
     // 2) Drop our DB row for this user so the insert below doesn't hit the

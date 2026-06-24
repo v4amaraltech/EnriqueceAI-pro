@@ -161,6 +161,24 @@ export async function getStaleInstances(thresholdMinutes: number = 30) {
   return data || [];
 }
 
+/** Every instance_name currently tracked in our DB. This is the keep-set: the
+ *  single instance we maintain per user/org. Used by the cleanup reaper to
+ *  identify Evolution-side orphans (anything matching our naming that isn't
+ *  here). */
+export async function getAllTrackedInstanceNames(): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_instances')
+    .select('instance_name');
+
+  if (error || !data) {
+    console.error('[supabase] Error fetching tracked instance names:', error);
+    return [];
+  }
+  return data
+    .map((r) => r.instance_name as string)
+    .filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
 /** Delete a WhatsApp instance row by id */
 export async function deleteWhatsAppInstance(id: string) {
   const { error } = await supabaseAdmin
