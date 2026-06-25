@@ -38,11 +38,12 @@ export async function fetchAutoEmailMetrics(
     return { success: false, error: 'Erro ao buscar métricas de enrollments' };
   }
 
-  // Fetch interaction counts grouped by cadence_id + type
+  // Fetch interaction rows (incl. lead_id) grouped by cadence_id + type.
+  // lead_id powers per-prospect rates (unique leads who acted, not raw events).
   const { data: interactionRows, error: interactionError } = (await from(supabase, 'interactions')
-    .select('cadence_id, type')
+    .select('cadence_id, type, lead_id')
     .in('cadence_id', cadenceIds)) as {
-    data: Array<{ cadence_id: string; type: string }> | null;
+    data: Array<{ cadence_id: string; type: string; lead_id: string | null }> | null;
     error: { message: string } | null;
   };
 
@@ -60,14 +61,27 @@ export async function fetchAutoEmailMetrics(
     bucket[row.status] = (bucket[row.status] ?? 0) + 1;
   }
 
-  // Aggregate interaction counts per cadence
+  // Aggregate interaction counts (raw event volume) and distinct-lead sets
+  // (per-prospect reach) per cadence + type.
   const interactionCounts: Record<string, Record<string, number>> = {};
+  const interactionLeads: Record<string, Record<string, Set<string>>> = {};
   for (const row of interactionRows ?? []) {
     if (!interactionCounts[row.cadence_id]) {
       interactionCounts[row.cadence_id] = {};
     }
     const bucket = interactionCounts[row.cadence_id]!;
     bucket[row.type] = (bucket[row.type] ?? 0) + 1;
+
+    if (row.lead_id) {
+      if (!interactionLeads[row.cadence_id]) {
+        interactionLeads[row.cadence_id] = {};
+      }
+      const leadBucket = interactionLeads[row.cadence_id]!;
+      if (!leadBucket[row.type]) {
+        leadBucket[row.type] = new Set();
+      }
+      leadBucket[row.type]!.add(row.lead_id);
+    }
   }
 
   // Build metrics map
@@ -76,29 +90,38 @@ export async function fetchAutoEmailMetrics(
   for (const cadenceId of cadenceIds) {
     const ec = enrollmentCounts[cadenceId] ?? {};
     const ic = interactionCounts[cadenceId] ?? {};
+    const il = interactionLeads[cadenceId] ?? {};
 
+    // Raw event volume (shown in the count columns).
     const sent = ic['sent'] ?? 0;
     const replied = ic['replied'] ?? 0;
     const opened = ic['opened'] ?? 0;
+
+    // Per-prospect reach (unique leads) powering the rate columns. The same lead
+    // opens an email multiple times, so rates use distinct leads, not raw events.
+    const sentLeads = il['sent']?.size ?? 0;
+    const openedLeads = il['opened']?.size ?? 0;
+    const repliedLeads = il['replied']?.size ?? 0;
 
     metrics[cadenceId] = {
       cadenceId,
       active: ec['active'] ?? 0,
       paused: ec['paused'] ?? 0,
       completed: ec['completed'] ?? 0,
-      // "Respondido" conta interações type='replied' (mesma fonte de replyRate),
-      // não enrollment status='replied'. Respostas chegam após a sequência
-      // terminar (enrollment já 'completed' ou inexistente), então o status do
-      // enrollment subconta — a interação é o sinal canônico de resposta.
+      // "Respondido" and "Rejeitado" read from interactions (the canonical
+      // signal), not enrollment status. Enrollment status only flips while the
+      // enrollment is still 'active' (see recordReply / recordBounce), so it
+      // undercounts replies/bounces that land after the sequence ends.
       replied,
-      bounced: ec['bounced'] ?? 0,
+      bounced: ic['bounced'] ?? 0,
       sent,
       delivered: ic['delivered'] ?? 0,
       opened,
       failed: ic['failed'] ?? 0,
       meetings: ic['meeting_scheduled'] ?? 0,
-      replyRate: safeRate(replied, sent),
-      openRate: safeRate(opened, sent),
+      // Rates are per unique prospect: leads who replied/opened ÷ leads emailed.
+      replyRate: safeRate(repliedLeads, sentLeads),
+      openRate: safeRate(openedLeads, sentLeads),
     };
   }
 
