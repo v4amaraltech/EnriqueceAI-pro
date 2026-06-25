@@ -4,7 +4,7 @@
 
 ## Resumo executivo
 
-Partiu de um bug pontual ("Respondido = 0" numa cadência) e virou uma **auditoria de todo o app** sob um único critério. Raiz comum: métricas que leem de `cadence_enrollments.status` subcontam eventos pós-sequência. 3 PRs de correção + 2 features auditadas e aprovadas limpas.
+Partiu de um bug pontual ("Respondido = 0" numa cadência) e virou uma **auditoria de todo o app** sob um único critério. Raiz comum: métricas que leem de `cadence_enrollments.status` subcontam eventos pós-sequência. **4 PRs de correção** (#98, #99, #100, #101) + dashboard auditado e aprovado limpo. Encerrou com as taxas de e-mail unificadas no padrão por-prospect em todas as telas.
 
 ## A raiz comum (critério da auditoria)
 
@@ -44,9 +44,22 @@ Verificado na org V4 (`c2727473-...`): `enrollment.status='replied'` = 1 vs **4*
 ### PR #100 (squash `4aa21d4`) — replyRate da Cadence Analytics
 `statistics/services/cadence-analytics.service.ts:101`: KPI global `replyRate` derivava `totalReplied` de `status='replied'` (1 vs 4 reais) → passou a contar leads distintos com interação `replied` (dado já vinha em `engagementInteractions`, mudança só de numerador). Impacto visual mínimo (org tem 4 respostas no total), mas estruturalmente correto.
 
-### Fora de escopo (decisão do Vinícius: "só o bug real")
-- **Taxas por-evento** em `email-analytics.service.ts` e `reports/utils/metrics.ts` (openRate/replyRate = eventos ÷ enviados) — incoerente com a lista de cadência que virou por-prospect (#99): a *mesma* cadência mostra 24.1% na página de E-mail Analytics e 31.6% na lista. Não é bug; mantido. **Candidato a follow-up se quiserem coerência entre telas.**
+### Definicional (consistente em todo lugar, mantido)
 - **`completed || replied` como "conversão/won/finalizado"** em reports/statistics/dashboard — consistente e robusto por design (balde `completed` domina); não subconta.
+
+---
+
+## Rodada 4 — Unificar taxas por-evento → por-prospect
+
+### PR #101 (squash `861480f`) — coerência de taxas entre telas
+A lista de cadências virou por-prospect em #99, mas E-mail Analytics, tabela por step e Relatórios ainda calculavam taxas por **evento bruto** (aberturas ÷ enviados) → a *mesma* cadência mostrava 24.1% de abertura no E-mail Analytics e 31.6% na lista. Unificadas as três para **leads distintos que abriram/clicaram/responderam ÷ leads distintos que receberam**:
+- `statistics/services/email-analytics.service.ts` — openRate, clickRate, replyRate (KPI cards)
+- `statistics/services/step-analytics.service.ts` — openRate, clickRate, replyRate por step
+- `reports/utils/metrics.ts` — openRate, replyRate, bounceRate da cadência
+
+Colunas de contagem e os **funis de volume** (Funil de E-mails, funil de conversão) seguem por evento de propósito (lente de volume). Validado: `vitest run` statistics + reports = **81 testes ✓**. Confirmado no ar por Vinícius (período amplo: abertura 31.6% bate entre telas).
+
+> Nota: E-mail Analytics é filtrado por período; a lista de cadências é histórica. Para bater exatamente, o período precisa cobrir desde o início dos envios — diferença de escopo de data, não de definição.
 
 ---
 
@@ -56,13 +69,13 @@ Verificado na org V4 (`c2727473-...`): `enrollment.status='replied'` = 1 vs **4*
 |------|-----------|
 | Tabela de cadências | 🔧 corrigido (#98, #99) |
 | Dashboard | ✅ limpo |
-| Relatórios | ✅ limpo |
-| Estatísticas | 🔧 corrigido (#100) |
+| Relatórios | 🔧 corrigido (#100, #101) |
+| Estatísticas | 🔧 corrigido (#100, #101) |
 
 ## Notas
 
 - Todas as mudanças são **de leitura/agregação** — sem migração, sem alterar `recordReply`/`recordBounce`, sem mexer no schema.
 - Quality gates por PR: typecheck ✓ · lint ✓ · CI `Lint · Typecheck · Test · Build` ✓. Build local indisponível (restrição TCC do macOS em `~/Documents`) — CI é o gate autoritativo.
-- Deploy = **Redeploy manual no painel Coolify** após o merge. #98 e #99 validados visualmente por Vinícius; #100 confirmado no ar (impacto visual mínimo por design).
+- Deploy = **Redeploy manual no painel Coolify** após o merge. #98, #99 e #101 validados visualmente por Vinícius; #100 confirmado no ar (impacto visual mínimo por design).
 - **Gap conhecido (não corrigido):** e-mail não grava `type='delivered'` (Gmail não dá recibo); estima `delivered = sent − bounced`. Bounces só detectados via polling de threads Gmail (`mailer-daemon`/`postmaster`), não por webhook. Observação solta: a org tinha 395 interações `bounced` para só 13 leads distintos — possível re-inserção de bounce pelo cron (não investigado).
 - **Lição reaproveitável (na memória):** qualquer métrica que dependa de `cadence_enrollments.status` para eventos pós-sequência (replied/bounced) é instável — preferir `interactions` como sinal canônico; usar leads distintos para taxas.
