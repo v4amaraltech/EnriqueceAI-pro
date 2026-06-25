@@ -23,6 +23,13 @@ export function NotificationDropdown() {
     if (!notification.read_at) {
       markAsRead(notification.id);
     }
+    // Resumo de atividades atrasadas: não aponta para um recurso específico
+    // (sem resource_id), então leva direto à fila de Atividades já filtrada
+    // por "Atrasada".
+    if (notification.metadata?.alert_type === 'overdue_summary') {
+      router.push('/atividades?status=overdue');
+      return;
+    }
     if (notification.resource_type && notification.resource_id) {
       const base = RESOURCE_ROUTES[notification.resource_type];
       if (base) {
