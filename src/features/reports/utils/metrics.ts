@@ -44,6 +44,22 @@ export function calculateCadenceMetrics(
         .map((e) => e.lead_id),
     );
 
+    // Rates are per unique prospect (distinct leads who acted ÷ distinct leads
+    // emailed), matching the cadence list (#99). Opens repeat for the same lead,
+    // so event-based rates distort; the count columns above stay raw volume.
+    const sentLeads = new Set(
+      cadenceInteractions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
+    ).size;
+    const openedLeads = new Set(
+      cadenceInteractions.filter((i) => i.type === 'opened').map((i) => i.lead_id),
+    ).size;
+    const repliedLeadCount = new Set(
+      cadenceInteractions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
+    ).size;
+    const bouncedLeads = new Set(
+      cadenceInteractions.filter((i) => i.type === 'bounced').map((i) => i.lead_id),
+    ).size;
+
     return {
       cadenceId: cadence.id,
       cadenceName: cadence.name,
@@ -54,9 +70,9 @@ export function calculateCadenceMetrics(
       replied,
       bounced,
       meetings,
-      openRate: safeRate(opened, sent),
-      replyRate: safeRate(replied, sent),
-      bounceRate: safeRate(bounced, sent),
+      openRate: safeRate(openedLeads, sentLeads),
+      replyRate: safeRate(repliedLeadCount, sentLeads),
+      bounceRate: safeRate(bouncedLeads, sentLeads),
       conversionRate: safeRate(repliedLeads.size, cadenceEnrollments.length),
     };
   });

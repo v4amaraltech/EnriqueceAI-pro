@@ -82,6 +82,15 @@ function calculateEmailAnalytics(interactions: InteractionQueryRow[]): EmailAnal
   const totalClicked = interactions.filter((i) => i.type === 'clicked').length;
   const totalReplied = interactions.filter((i) => i.type === 'replied').length;
 
+  // Rates are per unique prospect (distinct leads who acted ÷ distinct leads
+  // emailed), matching the cadence list (#99) so the same cadence shows the same
+  // open/reply rate across screens. The total* counts and the volume funnel
+  // below stay event-based.
+  const sentLeads = new Set(interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id)).size;
+  const openedLeads = new Set(interactions.filter((i) => i.type === 'opened').map((i) => i.lead_id)).size;
+  const clickedLeads = new Set(interactions.filter((i) => i.type === 'clicked').map((i) => i.lead_id)).size;
+  const repliedLeads = new Set(interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id)).size;
+
   const funnel = buildFunnel(totalSent, totalDelivered, totalOpened, totalClicked, totalReplied);
   const dailyTrend = buildDailyTrend(interactions);
   const bounceTrend = buildBounceTrend(interactions);
@@ -93,9 +102,9 @@ function calculateEmailAnalytics(interactions: InteractionQueryRow[]): EmailAnal
     totalClicked,
     totalReplied,
     totalBounced,
-    openRate: safeRate(totalOpened, totalSent),
-    clickRate: safeRate(totalClicked, totalSent),
-    replyRate: safeRate(totalReplied, totalSent),
+    openRate: safeRate(openedLeads, sentLeads),
+    clickRate: safeRate(clickedLeads, sentLeads),
+    replyRate: safeRate(repliedLeads, sentLeads),
     funnel,
     dailyTrend,
     bounceTrend,

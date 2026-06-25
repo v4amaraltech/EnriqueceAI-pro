@@ -92,6 +92,15 @@ function buildStepAnalytics(
     meetingScheduled: number;
   }>();
 
+  // Per-step distinct-lead sets power the rates (per prospect, matching the
+  // cadence list); the event counts above stay as raw volume.
+  const stepLeadMap = new Map<string, {
+    sent: Set<string>;
+    opened: Set<string>;
+    clicked: Set<string>;
+    replied: Set<string>;
+  }>();
+
   const engagedLeadIds = new Set<string>();
   const sentLeadIds = new Set<string>();
 
@@ -101,23 +110,30 @@ function buildStepAnalytics(
     const counts = stepCountMap.get(interaction.step_id) ?? {
       sent: 0, opened: 0, clicked: 0, replied: 0, meetingScheduled: 0,
     };
+    const leads = stepLeadMap.get(interaction.step_id) ?? {
+      sent: new Set<string>(), opened: new Set<string>(), clicked: new Set<string>(), replied: new Set<string>(),
+    };
 
     switch (interaction.type) {
       case 'sent':
         counts.sent++;
         sentLeadIds.add(interaction.lead_id);
+        leads.sent.add(interaction.lead_id);
         break;
       case 'opened':
         counts.opened++;
         engagedLeadIds.add(interaction.lead_id);
+        leads.opened.add(interaction.lead_id);
         break;
       case 'clicked':
         counts.clicked++;
         engagedLeadIds.add(interaction.lead_id);
+        leads.clicked.add(interaction.lead_id);
         break;
       case 'replied':
         counts.replied++;
         engagedLeadIds.add(interaction.lead_id);
+        leads.replied.add(interaction.lead_id);
         break;
       case 'meeting_scheduled':
         counts.meetingScheduled++;
@@ -126,12 +142,15 @@ function buildStepAnalytics(
     }
 
     stepCountMap.set(interaction.step_id, counts);
+    stepLeadMap.set(interaction.step_id, leads);
   }
 
   const stepMetrics: CadenceStepMetrics[] = steps.map((step) => {
     const counts = stepCountMap.get(step.id) ?? {
       sent: 0, opened: 0, clicked: 0, replied: 0, meetingScheduled: 0,
     };
+    const leads = stepLeadMap.get(step.id);
+    const sentLeads = leads?.sent.size ?? 0;
     return {
       stepId: step.id,
       stepOrder: step.step_order,
@@ -142,9 +161,9 @@ function buildStepAnalytics(
       clicked: counts.clicked,
       replied: counts.replied,
       meetingScheduled: counts.meetingScheduled,
-      openRate: safeRate(counts.opened, counts.sent),
-      clickRate: safeRate(counts.clicked, counts.sent),
-      replyRate: safeRate(counts.replied, counts.sent),
+      openRate: safeRate(leads?.opened.size ?? 0, sentLeads),
+      clickRate: safeRate(leads?.clicked.size ?? 0, sentLeads),
+      replyRate: safeRate(leads?.replied.size ?? 0, sentLeads),
     };
   });
 
