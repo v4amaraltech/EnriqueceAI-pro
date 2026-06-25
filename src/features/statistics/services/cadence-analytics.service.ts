@@ -98,7 +98,13 @@ export async function fetchCadenceAnalyticsData(
   const activeCadences = cadences.filter((c) => c.status === 'active').length;
   const totalEnrolled = enrollments.length;
   const totalCompleted = enrollments.filter((e) => e.status === 'completed').length;
-  const totalReplied = enrollments.filter((e) => e.status === 'replied').length;
+  // Replies count distinct leads from interactions, not enrollment status:
+  // status='replied' only sticks while the enrollment is 'active', so replies
+  // landing after the sequence ends are missed (same fix as the cadence table).
+  // engagementInteractions already carries 'replied' rows with lead_id.
+  const totalReplied = new Set(
+    engagementInteractions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
+  ).size;
 
   // Engagement KPIs
   const sentLeadIds = new Set(
