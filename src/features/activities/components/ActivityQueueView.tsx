@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, ListChecks, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -101,6 +101,7 @@ const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_pe
 
 export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   // Selection is keyed by `${enrollmentId}:${stepId}` (a stable identity) instead of
   // a numeric index. Otherwise, when revalidatePath triggers an RSC re-render that
@@ -126,7 +127,14 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   }, [initialActivities]);
   const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
-  const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
+  // Seed the status filter from the URL (?status=overdue|due) so the overdue
+  // notification can deep-link straight into the pre-filtered queue.
+  const [filters, setFilters] = useState<ActivityFilterValues>(() => {
+    const status = searchParams.get('status');
+    return status === 'overdue' || status === 'due'
+      ? { ...defaultFilters, status }
+      : defaultFilters;
+  });
   const [startNewLeadsOpen, setStartNewLeadsOpen] = useState(false);
 
   // Pagination state
