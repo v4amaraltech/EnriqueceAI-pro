@@ -86,7 +86,11 @@ export async function fetchAutoEmailMetrics(
       active: ec['active'] ?? 0,
       paused: ec['paused'] ?? 0,
       completed: ec['completed'] ?? 0,
-      replied: ec['replied'] ?? 0,
+      // "Respondido" conta interações type='replied' (mesma fonte de replyRate),
+      // não enrollment status='replied'. Respostas chegam após a sequência
+      // terminar (enrollment já 'completed' ou inexistente), então o status do
+      // enrollment subconta — a interação é o sinal canônico de resposta.
+      replied,
       bounced: ec['bounced'] ?? 0,
       sent,
       delivered: ic['delivered'] ?? 0,
