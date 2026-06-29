@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { toE164BR } from '../phone';
+
 const persistSchema = z.object({
   stepId: z.string().uuid(),
   cadenceId: z.string().uuid(),
@@ -73,7 +75,7 @@ export async function persistWhatsAppCall(
       user_id: user.id,
       lead_id: p.leadId,
       origin: 'whatsapp',
-      destination: p.destination,
+      destination: toE164BR(p.destination) || p.destination,
       started_at: p.startedAt,
       duration_seconds: p.durationSeconds,
       status: p.disposition,
