@@ -77,6 +77,16 @@ describe('getAllLeadPhones', () => {
     expect(phones).toHaveLength(1);
     expect(phones[0]?.source).toBe('lead_telefone');
   });
+
+  it('labels a landline lead.telefone as "Fixo empresa"', () => {
+    const phones = getAllLeadPhones(makeLead({ telefone: '(11) 3333-2222' }));
+    expect(phones[0]?.label).toContain('(Fixo empresa)');
+  });
+
+  it('labels a mobile lead.telefone as "Celular" (digit pattern, not hardcoded)', () => {
+    const phones = getAllLeadPhones(makeLead({ telefone: '11954958486' }));
+    expect(phones[0]?.label).toContain('(Celular)');
+  });
 });
 
 describe('resolveWhatsAppPhone', () => {

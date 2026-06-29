@@ -7,6 +7,18 @@ export interface ResolvedPhone {
   source: 'socio_whatsapp' | 'socio_celular' | 'lead_telefone';
 }
 
+/**
+ * Detecta celular BR pelo padrão de dígitos: DDD (2) + 9 dígitos = 11 locais
+ * (com DDI 55 = 13). Fixo tem 8 dígitos (10 locais). Usado para rotular o número
+ * do campo `lead.telefone`, que não carrega o tipo — antes era sempre "Fixo
+ * empresa", mesmo quando era um celular.
+ */
+function isMobileBR(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  return local.length === 11;
+}
+
 function formatPhone(ddd: number, numero: string): { formatted: string; raw: string } {
   // `celulares` comes from an enrichment JSONB column, so the runtime shape
   // isn't guaranteed — `numero` (or `ddd`) may be missing/null even though the
@@ -109,7 +121,7 @@ export function getAllLeadPhones(lead: ActivityLead): ResolvedPhone[] {
       phones.push({
         formatted: lead.telefone,
         raw: dedupKey,
-        label: `${lead.telefone} (Fixo empresa)`,
+        label: `${lead.telefone} (${isMobileBR(lead.telefone) ? 'Celular' : 'Fixo empresa'})`,
         source: 'lead_telefone',
       });
     }
