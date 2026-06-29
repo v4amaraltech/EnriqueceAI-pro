@@ -57,4 +57,30 @@ describe('ActivityTypeSidebar', () => {
     render(<ActivityTypeSidebar />);
     expect(screen.getByTestId('activity-sidebar')).toBeInTheDocument();
   });
+
+  it('should create a variation when clicking "+" on a single-type category', async () => {
+    const user = userEvent.setup();
+    render(<ActivityTypeSidebar />);
+
+    // Only the category header + its single default item exist initially.
+    expect(screen.getAllByText(/^Ligação/).length).toBe(2);
+
+    await user.click(screen.getByTitle('Adicionar Ligação'));
+
+    // A new "Ligação 2" variation is added.
+    expect(screen.getByText('Ligação 2')).toBeInTheDocument();
+  });
+
+  it('should create a variation when clicking "+" on a multi-type category (Social Point)', async () => {
+    const user = userEvent.setup();
+    render(<ActivityTypeSidebar />);
+
+    // Social Point starts with LinkedIn + WhatsApp, no numbered variations.
+    expect(screen.queryByText('LinkedIn 2')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTitle('Adicionar Social Point'));
+
+    // Clicking the header "+" must add a variation (was previously a no-op).
+    expect(screen.getByText('LinkedIn 2')).toBeInTheDocument();
+  });
 });

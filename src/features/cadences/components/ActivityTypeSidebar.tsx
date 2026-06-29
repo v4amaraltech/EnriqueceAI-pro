@@ -217,14 +217,13 @@ export function ActivityTypeSidebar() {
   }
 
   function handleCategoryAdd(category: ActivityCategory) {
-    const isMultiType = category.defaultItems.length > 1;
-    if (isMultiType) {
-      // Multi-type: just expand to show per-item "+" buttons
-      setExpanded((prev) => ({ ...prev, [category.label]: true }));
-    } else {
-      const item = category.defaultItems[0]!;
-      addItemByChannel(category.label, item.channel, item.label);
-    }
+    // The "+" on a category header must always create a new variation.
+    // Previously multi-type categories (e.g. Social Point) only toggled
+    // expansion here, so — since categories start expanded — clicking "+"
+    // appeared to do nothing. Default to a variation of the category's first
+    // channel; users rename it or use the per-item "+" for a specific channel.
+    const item = category.defaultItems[0]!;
+    addItemByChannel(category.label, item.channel, item.label);
   }
 
   function renameItem(categoryLabel: string, itemId: string, newLabel: string) {
