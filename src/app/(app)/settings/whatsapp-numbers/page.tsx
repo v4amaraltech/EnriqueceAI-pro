@@ -4,6 +4,7 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { WhatsAppNumbersManager } from '@/features/whatsapp-calls/components/WhatsAppNumbersManager';
+import { computeNumberHealth } from '@/features/whatsapp-calls/health';
 import type { WhatsAppCallSessionStatus, WhatsAppNumberRow } from '@/features/whatsapp-calls/types';
 
 interface MemberRow {
@@ -38,7 +39,8 @@ export default async function WhatsAppNumbersPage() {
     );
   }
 
-  const [{ data: members }, { data: sessions }] = await Promise.all([
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [{ data: members }, { data: sessions }, { data: recentCalls }] = await Promise.all([
     from(supabase, 'organization_members')
       .select('user_id, role')
       .eq('org_id', currentMember.org_id)
@@ -47,10 +49,25 @@ export default async function WhatsAppNumbersPage() {
     from(supabase, 'whatsapp_call_sessions')
       .select('id, user_id, service_session_id, phone_number, status, paired_at')
       .eq('org_id', currentMember.org_id) as unknown as Promise<{ data: SessionRow[] | null }>,
+    from(supabase, 'calls')
+      .select('user_id, status')
+      .eq('org_id', currentMember.org_id)
+      .eq('type', 'outbound')
+      .eq('metadata->>provider', 'whatsapp')
+      .gte('started_at', since) as unknown as Promise<{ data: { user_id: string; status: string }[] | null }>,
   ]);
 
   const sessionByUser = new Map<string, SessionRow>();
   for (const s of sessions ?? []) sessionByUser.set(s.user_id, s);
+
+  // Uso/saúde por número nas últimas 24h (story 7.9).
+  const usageByUser = new Map<string, { calls: number; notConnected: number }>();
+  for (const c of recentCalls ?? []) {
+    const u = usageByUser.get(c.user_id) ?? { calls: 0, notConnected: 0 };
+    u.calls += 1;
+    if (c.status === 'not_connected') u.notConnected += 1;
+    usageByUser.set(c.user_id, u);
+  }
 
   // Resolve nomes/e-mails via admin client (auth.users), como na tela de usuários.
   const admin = createAdminSupabaseClient();
@@ -78,6 +95,10 @@ export default async function WhatsAppNumbersPage() {
             pairedAt: session.paired_at,
           }
         : null,
+      usage: computeNumberHealth(
+        usageByUser.get(m.user_id)?.calls ?? 0,
+        usageByUser.get(m.user_id)?.notConnected ?? 0,
+      ),
     });
   }
 

@@ -28,7 +28,7 @@ export interface WhatsAppCallSessionInsert {
 }
 
 // View-model da tela manager-only "Números WhatsApp" (story 7.3): um membro +
-// sua sessão (ou null se nunca pareou).
+// sua sessão (ou null se nunca pareou) + uso/saúde 24h (story 7.9).
 export interface WhatsAppNumberRow {
   userId: string;
   name: string;
@@ -40,4 +40,5 @@ export interface WhatsAppNumberRow {
     status: WhatsAppCallSessionStatus;
     pairedAt: string | null;
   } | null;
+  usage: import('../health').NumberUsage;
 }

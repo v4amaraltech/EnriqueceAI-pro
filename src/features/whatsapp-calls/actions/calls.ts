@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { DAILY_CALL_LIMIT } from '../constants';
 import { VoiceServiceError, endVoiceCall, startVoiceCall } from '../services/voice-service-client';
 
 function mapVoiceError(err: unknown): { success: false; error: string } {
@@ -44,6 +45,22 @@ export async function startWhatsAppCall(
 
   if (!session) {
     return { success: false, error: 'Seu número WhatsApp não está pareado. Configure em Integrações → Ligação via WhatsApp.' };
+  }
+
+  // Anti-ban (story 7.9): teto de ligações por número numa janela móvel de 24h.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recent } = (await from(supabase, 'calls')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('type', 'outbound')
+    .eq('metadata->>provider', 'whatsapp')
+    .gte('started_at', since)
+    .limit(DAILY_CALL_LIMIT + 1)) as { data: { id: string }[] | null };
+  if ((recent?.length ?? 0) >= DAILY_CALL_LIMIT) {
+    return {
+      success: false,
+      error: `Limite de ${DAILY_CALL_LIMIT} ligações WhatsApp por número em 24h atingido. Aguarde para retomar.`,
+    };
   }
 
   try {

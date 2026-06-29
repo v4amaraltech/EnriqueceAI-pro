@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
+import type { NumberHealth } from '../health';
 import type { WhatsAppCallSessionStatus, WhatsAppNumberRow } from '../types';
 import { PairNumberDialog, type PairTarget } from './PairNumberDialog';
 
@@ -13,6 +14,12 @@ const STATUS_META: Record<WhatsAppCallSessionStatus | 'none', { label: string; c
   pairing: { label: 'Pareando', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
   disconnected: { label: 'Desconectado', className: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-500/15 dark:text-zinc-400' },
   none: { label: 'Sem número', className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-500/10 dark:text-zinc-500' },
+};
+
+const HEALTH_META: Record<NumberHealth, { label: string; className: string }> = {
+  healthy: { label: 'Saudável', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' },
+  degraded: { label: 'Degradado', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
+  limit: { label: 'Limite 24h', className: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' },
 };
 
 export function WhatsAppNumbersManager({ rows }: { rows: WhatsAppNumberRow[] }) {
@@ -38,13 +45,14 @@ export function WhatsAppNumbersManager({ rows }: { rows: WhatsAppNumberRow[] }) 
             <th className="px-4 py-3 font-medium">SDR</th>
             <th className="px-4 py-3 font-medium">Número</th>
             <th className="px-4 py-3 font-medium">Status</th>
+            <th className="px-4 py-3 font-medium">Uso (24h)</th>
             <th className="px-4 py-3 font-medium text-right">Ação</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                 Nenhum membro ativo na organização.
               </td>
             </tr>
@@ -68,6 +76,18 @@ export function WhatsAppNumbersManager({ rows }: { rows: WhatsAppNumberRow[] }) 
                   <Badge variant="outline" className={`border-0 ${meta.className}`}>
                     {meta.label}
                   </Badge>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="tabular-nums text-muted-foreground">
+                      {row.usage.callsLast24h}/{row.usage.limit}
+                    </span>
+                    {row.usage.health !== 'healthy' && (
+                      <Badge variant="outline" className={`border-0 ${HEALTH_META[row.usage.health].className}`}>
+                        {HEALTH_META[row.usage.health].label}
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Button
