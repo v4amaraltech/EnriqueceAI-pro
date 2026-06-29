@@ -1,0 +1,27 @@
+# Deploy do microserviço de voz WhatsApp (Epic 7 / 7.1) na VPS.
+#
+# network_mode: host é RECOMENDADO — o WebRTC precisa enxergar a interface real
+# para os candidatos ICE (mídia direta browser <-> serviço). Com host networking,
+# liberar no firewall: a porta HTTP (8080) e a porta de mídia (WACALLS_UDP_PORT,
+# UDP + TCP para o fallback ICE-TCP).
+
+services:
+  voice:
+    image: whatsapp-voice:latest   # build: . (ou puxar de um registry)
+    build: .
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - voice-data:/data           # SQLite da sessão WhatsApp (persistente)
+    # distroless não tem shell/curl → healthcheck é externo:
+    #   curl -fsS -H "X-API-Key: $WACALLS_API_KEY" http://localhost:8080/api/sessions
+    # (configurar no uptime monitor / Traefik).
+
+volumes:
+  voice-data:
+
+# --- HTTPS (server-to-server) ---
+# O Enriquece chama a API server-to-server. Para TLS, terminar num reverse proxy
+# no host (Caddy/Nginx/Traefik) apontando https://voice.<dominio> -> 127.0.0.1:8080.
+# A MÍDIA não passa pelo proxy (vai direto na WACALLS_UDP_PORT) — não proxiar UDP.
