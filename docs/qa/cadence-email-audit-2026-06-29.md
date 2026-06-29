@@ -33,7 +33,19 @@
 >
 > **Também corrigido:** `fix(build)` — `turbopack.root` fixado no projeto (um `~/package-lock.json` órfão fazia o build varrer `~/Documents` e quebrar via TCC do macOS). Build voltou a passar.
 >
-> **Pendente:** unsubscribe LGPD (M9), cota/warmup Gmail (H8), soft-bounce DSN (H10), circuit breaker org (M13), bot-filter no open-tracking (M6) — features maiores, exigem decisão de produto/jurídico.
+> **Pendente:** cota/warmup Gmail (H8), soft-bounce DSN (H10), circuit breaker org (M13), bot-filter no open-tracking (M6) — features maiores, exigem decisão de produto/jurídico.
+
+> ## ✅ M9 APLICADA (29/jun) — Unsubscribe LGPD
+> Corrigido e validado (typecheck/lint/1510 testes/**build**):
+> - **Supressão por e-mail:** nova tabela `email_suppressions` (org + `lower(email)`, RLS org-scoped, migration `20260629150000` **já aplicada em prod**). É a fonte de verdade que o motor consulta.
+> - **Token HMAC stateless** (`src/lib/security/unsubscribe-token.ts`): carrega `leadId`+`email`, assinado (sem coluna de token). +6 testes.
+> - **Header `List-Unsubscribe` + `List-Unsubscribe-Post: One-Click`** (RFC 8058) em `buildRawEmail` + link "Cancelar inscrição" no rodapé (injetado **após** o click-tracking para não ser reescrito). Dirigido por `SendEmailParams.leadId`.
+> - **Endpoint `/api/unsubscribe`**: `POST` one-click (Gmail/Apple) processa direto; `GET` → página de confirmação (`GET` nunca muta — scanners não optam-out ninguém).
+> - **Página pública `/unsubscribe/[token]`** + `unsubscribeByToken()` (service role): insere supressão (idempotente, `23505`=ok) + marca enrollments `'unsubscribed'`.
+> - **Motor:** `execute-cadence` pré-carrega supressões por org e faz auto-stop (`'unsubscribed'`) antes de qualquer envio — espelha o check de bounce.
+> - **Middleware:** `/unsubscribe/` e `/api/unsubscribe` liberados.
+>
+> **Notas:** o estado `unsubscribed` do enum (antes órfão) agora é gravado. Texto da página com `TODO(jurídico)`. Token usa `SUPABASE_SERVICE_ROLE_KEY` como chave por padrão — setar `UNSUBSCRIBE_SIGNING_SECRET` dedicado evita invalidar links se a service key rotacionar (opcional).
 
 ---
 

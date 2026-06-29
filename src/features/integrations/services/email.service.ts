@@ -4,6 +4,7 @@ import { decrypt, encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { signUnsubscribeToken } from '@/lib/security/unsubscribe-token';
 
 import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 
@@ -19,6 +20,9 @@ interface SendEmailParams {
   inReplyToMessageId?: string;
   trackOpens?: boolean;
   trackClicks?: boolean;
+  /** Lead id — when set, the message gets a List-Unsubscribe header + footer link
+   *  (M9). The unsubscribe token is derived from `leadId` + `to`. */
+  leadId?: string;
 }
 
 interface SendEmailResult {
@@ -121,6 +125,8 @@ function generateMessageId(fromAddress: string): string {
 interface BuildRawEmailOptions {
   messageId?: string;
   inReplyTo?: string;
+  /** M9: absolute URL for the List-Unsubscribe header (one-click POST endpoint). */
+  listUnsubscribeUrl?: string;
 }
 
 function buildRawEmail(
@@ -146,6 +152,12 @@ function buildRawEmail(
     // mirror In-Reply-To.
     headers.push(`In-Reply-To: ${options.inReplyTo}`);
     headers.push(`References: ${options.inReplyTo}`);
+  }
+  if (options.listUnsubscribeUrl) {
+    // M9 / RFC 8058: one-click unsubscribe. Modern clients (Gmail/Apple) POST to
+    // this URL; the footer link below serves the GET (human) page.
+    headers.push(`List-Unsubscribe: <${sanitizeHeaderValue(options.listUnsubscribeUrl)}>`);
+    headers.push('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
   }
   headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
 
@@ -310,12 +322,24 @@ export class EmailService {
       }
     }
 
+    // M9: unsubscribe header + footer link. Added AFTER click tracking so the
+    // unsubscribe link isn't rewritten through /api/track/click.
+    let listUnsubscribeUrl: string | undefined;
+    if (params.leadId) {
+      const token = signUnsubscribeToken(params.leadId, params.to);
+      const baseUrl = getAppUrl();
+      listUnsubscribeUrl = `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
+      const pageUrl = `${baseUrl}/unsubscribe/${encodeURIComponent(token)}`;
+      html += `<div style="margin-top:24px;font-size:12px;color:#888;text-align:center">Não deseja mais receber estes e-mails? <a href="${pageUrl}" style="color:#888;text-decoration:underline">Cancelar inscrição</a>.</div>`;
+    }
+
     // Build raw email — include a stable Message-ID + In-Reply-To/References
     // so that non-Gmail recipients see replies as a continuing thread.
     const rfcMessageId = generateMessageId(connection.email_address);
     const raw = buildRawEmail(connection.email_address, params.to, params.subject, html, {
       messageId: rfcMessageId,
       inReplyTo: params.inReplyToMessageId,
+      listUnsubscribeUrl,
     });
 
     // Send via Gmail API
