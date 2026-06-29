@@ -12,6 +12,18 @@ vi.mock('@dnd-kit/core', () => ({
   }),
 }));
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+vi.mock('../actions/manage-activity-variations', () => ({
+  fetchActivityVariations: vi.fn(async () => ({ success: true, data: [] })),
+  createActivityVariation: vi.fn(async ({ channel, label }: { channel: string; label: string }) => ({
+    success: true,
+    data: { id: '00000000-0000-0000-0000-000000000001', org_id: 'org', channel, label, sort_order: 0, created_at: '', updated_at: '' },
+  })),
+  renameActivityVariation: vi.fn(async () => ({ success: true, data: {} })),
+  deleteActivityVariation: vi.fn(async () => ({ success: true, data: { id: 'x' } })),
+}));
+
 import { ActivityTypeSidebar } from './ActivityTypeSidebar';
 
 describe('ActivityTypeSidebar', () => {

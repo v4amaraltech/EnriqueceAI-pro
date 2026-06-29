@@ -19,6 +19,17 @@ export type ChannelType = 'email' | 'whatsapp' | 'phone' | 'linkedin' | 'researc
 // Reply type for auto email steps
 export type ReplyType = 'new_conversation' | 'reply';
 
+// Persisted custom activity-type variation shown in the cadence builder sidebar
+export interface ActivityTypeVariationRow {
+  id: string;
+  org_id: string;
+  channel: ChannelType;
+  label: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Interaction type enum matching database
 export type InteractionType =
   | 'sent'
