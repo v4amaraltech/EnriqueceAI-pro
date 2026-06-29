@@ -8,6 +8,7 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { DAILY_CALL_LIMIT } from '../constants';
+import { toE164BR } from '../phone';
 import {
   VoiceServiceError,
   endVoiceCall,
@@ -57,6 +58,13 @@ export async function startWhatsAppCall(
     return { success: false, error: 'Seu número WhatsApp não está pareado. Configure em Integrações → Ligação via WhatsApp.' };
   }
 
+  // Destino em E.164 (com DDI 55) — o `raw` do lead pode vir sem o 55 conforme a
+  // origem (sócio vs lead.telefone), e o WhatsApp só roteia com o código do país.
+  const destination = toE164BR(parsed.data.phone);
+  if (destination.length < 12) {
+    return { success: false, error: 'Número de destino inválido (confira DDD e dígitos).' };
+  }
+
   // Anti-ban (story 7.9): teto de ligações por número numa janela móvel de 24h.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: recent } = (await from(supabase, 'calls')
@@ -76,7 +84,7 @@ export async function startWhatsAppCall(
   try {
     // Gravação sempre ON (decisão de produto) — o lead é informado no início da
     // chamada. Texto/retenção LGPD: ver RECORDING_CONSENT_NOTICE (a validar c/ jurídico).
-    const { callId } = await startVoiceCall(session.service_session_id, parsed.data.phone, true);
+    const { callId } = await startVoiceCall(session.service_session_id, destination, true);
     return { success: true, data: { sid: session.service_session_id, callId } };
   } catch (err) {
     return mapVoiceError(err);
