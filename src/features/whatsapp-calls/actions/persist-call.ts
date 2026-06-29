@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { toE164BR } from '../phone';
 
@@ -73,9 +74,12 @@ export async function persistWhatsAppCall(
 
   // Gravação: usa a URL passada ou consome o buffer (o webhook do AstraCalls pode
   // ter chegado antes desta call ser criada). Ver /api/webhooks/wacalls.
+  // O buffer tem RLS habilitada SEM policies (acesso só via service role), então
+  // o cliente do usuário não enxerga essas linhas — lemos com service role.
   let recordingUrl = p.recordingUrl ?? null;
   if (!recordingUrl && p.callId) {
-    const { data: pending } = (await from(supabase, 'whatsapp_pending_recordings')
+    const serviceClient = createServiceRoleClient();
+    const { data: pending } = (await from(serviceClient, 'whatsapp_pending_recordings')
       .select('recording_url')
       .eq('service_call_id', p.callId)
       .maybeSingle()) as { data: { recording_url: string } | null };

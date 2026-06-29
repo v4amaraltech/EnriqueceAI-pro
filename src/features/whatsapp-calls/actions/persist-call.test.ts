@@ -27,6 +27,11 @@ vi.mock('@/lib/supabase/server', () => ({
   ),
 }));
 
+// O buffer de gravações tem RLS sem policies — a leitura usa service role.
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(() => ({ from: (table: string) => makeChain(table) })),
+}));
+
 import { persistWhatsAppCall, type PersistWhatsAppCallInput } from './persist-call';
 
 const baseInput: PersistWhatsAppCallInput = {
@@ -65,6 +70,24 @@ describe('persistWhatsAppCall', () => {
     expect(callRow.type).toBe('outbound');
     expect(callRow.recording_url).toBe('https://voice.example/rec/1.mp3');
     expect((callRow.metadata as Record<string, unknown>).provider).toBe('whatsapp');
+  });
+
+  it('consumes a buffered recording via service role when no recordingUrl is passed', async () => {
+    queues.organization_members = [{ data: { org_id: 'org-1' } }];
+    queues.calls = [
+      { data: null }, // dedup: no existing call
+      { data: { id: 'call-2' }, error: null }, // insert ... select single
+    ];
+    // The AstraCalls webhook buffered the recording before the call existed.
+    queues.whatsapp_pending_recordings = [
+      { data: { recording_url: 'https://voice.example/rec/buffered.mp3' } },
+    ];
+
+    const result = await persistWhatsAppCall(baseInput); // no recordingUrl in input
+    expect(result.success).toBe(true);
+
+    const callRow = inserts.calls?.[0] as Record<string, unknown>;
+    expect(callRow.recording_url).toBe('https://voice.example/rec/buffered.mp3');
   });
 
   it('is idempotent on the same service_call_id', async () => {
