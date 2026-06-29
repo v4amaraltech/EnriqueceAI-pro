@@ -25,6 +25,16 @@
 > **Nota:** o A/B fica correto para dados NOVOS. Interações `opened`/`replied`/`bounced` históricas não têm `ab_variant`/`step_id` — backfill via `metadata.sent_interaction_id` é opcional (não aplicado).
 > **L8 (Finalizado):** reavaliado como **não-bug** — `enrollment.status='completed'` é o sinal correto de "esgotou a sequência" (replied/bounced são estados terminais distintos).
 
+> ## ✅ SEGURANÇA APLICADA (29/jun) — M1, M2, M3
+> Corrigidos e validados (typecheck/lint/1504 testes/**build**):
+> - **M1** (open redirect em `/api/track/click`): agora só redireciona para URLs que **realmente aparecem no `message_content`** da interação (que guarda as URLs originais) — fecha o vetor de phishing **sem quebrar links legados** (não exige HMAC/env nova). UUID inválido, interação inexistente, URL forjada ou erro de DB → **400/502 (fail closed)**, nunca redireciona. +2 testes.
+> - **M2** (injeção HTML via dados de lead): `renderTemplate(..., { escapeHtml: true })` no **corpo** (não no assunto, que é texto). Valores de lead (CSV/API) não quebram mais o HTML nem injetam markup. +4 testes.
+> - **M3** (header injection / CRLF no assunto): `sanitizeHeaderValue` remove CR/LF de `From`/`To`/`Subject` em `buildRawEmail`.
+>
+> **Também corrigido:** `fix(build)` — `turbopack.root` fixado no projeto (um `~/package-lock.json` órfão fazia o build varrer `~/Documents` e quebrar via TCC do macOS). Build voltou a passar.
+>
+> **Pendente:** unsubscribe LGPD (M9), cota/warmup Gmail (H8), soft-bounce DSN (H10), circuit breaker org (M13), bot-filter no open-tracking (M6) — features maiores, exigem decisão de produto/jurídico.
+
 ---
 
 ## Sumário executivo

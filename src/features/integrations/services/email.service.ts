@@ -72,6 +72,16 @@ function injectClickTracking(html: string, interactionId: string): string {
 }
 
 /**
+ * M3: strip CR/LF from any value interpolated into an email header, preventing
+ * header injection (e.g. a lead's `nome_fantasia` from a CSV carrying "\r\nBcc:").
+ * encodeSubject only base64-encodes non-ASCII subjects, so an ASCII subject with
+ * CRLF would otherwise reach the raw header unescaped.
+ */
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
+/**
  * Encodes a subject line with RFC 2047 for non-ASCII characters.
  */
 function encodeSubject(subject: string): string {
@@ -123,9 +133,9 @@ function buildRawEmail(
   const boundary = `boundary_${Date.now()}`;
   const plainText = htmlToPlainText(htmlBody);
   const headers: string[] = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${encodeSubject(subject)}`,
+    `From: ${sanitizeHeaderValue(from)}`,
+    `To: ${sanitizeHeaderValue(to)}`,
+    `Subject: ${encodeSubject(sanitizeHeaderValue(subject))}`,
     'MIME-Version: 1.0',
   ];
   if (options.messageId) {

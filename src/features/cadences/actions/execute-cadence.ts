@@ -448,7 +448,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             console.error(`[cadence-engine] enrollment=${enrollment.id} failed to fetch vendor data:`, vendorErr);
           }
 
-          messageContent = stripUnresolvedVars(renderTemplate(template.body, variables));
+          // M2: escape variable values in the HTML body (lead data from CSV/API can
+          // contain '<', '&', tags). The subject is plain text — no HTML escaping.
+          messageContent = stripUnresolvedVars(renderTemplate(template.body, variables, { escapeHtml: true }));
           if (template.subject) {
             subject = stripUnresolvedVars(renderTemplate(template.subject, variables));
           }

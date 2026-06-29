@@ -66,4 +66,25 @@ describe('renderTemplate', () => {
     const result = renderTemplate(template, { email: '' });
     expect(result).toBe('Contato: ');
   });
+
+  // M2: HTML escaping of interpolated values (lead data is untrusted)
+  it('should NOT escape HTML by default (plain-text contexts like subject)', () => {
+    const result = renderTemplate('Olá {{nome_fantasia}}', { nome_fantasia: 'A & B <tag>' });
+    expect(result).toBe('Olá A & B <tag>');
+  });
+
+  it('should escape HTML in variable values when escapeHtml is enabled', () => {
+    const result = renderTemplate('<p>Olá {{nome_fantasia}}</p>', { nome_fantasia: 'A & B <script>x</script>' }, { escapeHtml: true });
+    expect(result).toBe('<p>Olá A &amp; B &lt;script&gt;x&lt;/script&gt;</p>');
+  });
+
+  it('should escape quotes to prevent attribute injection', () => {
+    const result = renderTemplate('{{v}}', { v: `"' onmouseover=alert(1)` }, { escapeHtml: true });
+    expect(result).toBe('&quot;&#39; onmouseover=alert(1)');
+  });
+
+  it('should not escape the template markup itself, only the values', () => {
+    const result = renderTemplate('<a href="x">{{v}}</a>', { v: 'Acme' }, { escapeHtml: true });
+    expect(result).toBe('<a href="x">Acme</a>');
+  });
 });
