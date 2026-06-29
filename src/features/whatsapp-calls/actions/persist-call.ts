@@ -20,6 +20,10 @@ const persistSchema = z.object({
   durationSeconds: z.number().int().min(0),
   startedAt: z.string().datetime(),
   answeredAt: z.string().datetime().nullable().optional(),
+  // URL da gravação vinda do serviço de voz (story 7.8). Quando setada, o cron
+  // `persist-pending-recordings` baixa + armazena no bucket call-recordings e o
+  // `process-pending-transcriptions` transcreve — pipeline já provider-agnóstico.
+  recordingUrl: z.string().url().nullable().optional(),
 });
 
 export type PersistWhatsAppCallInput = z.infer<typeof persistSchema>;
@@ -76,6 +80,7 @@ export async function persistWhatsAppCall(
       type: 'outbound',
       connected: p.connected,
       answered_at: p.answeredAt ?? null,
+      recording_url: p.recordingUrl ?? null,
       metadata: { provider: 'whatsapp', service_session_id: p.sid, service_call_id: p.callId },
     } as Record<string, unknown>)
     .select('id')

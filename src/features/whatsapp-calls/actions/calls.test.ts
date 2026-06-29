@@ -44,7 +44,8 @@ describe('startWhatsAppCall', () => {
       expect(result.data.sid).toBe('sess-1');
       expect(result.data.callId).toBe('call-1');
     }
-    expect(voice.startVoiceCall).toHaveBeenCalledWith('sess-1', '5511999990000');
+    // Gravação sempre ON (story 7.8) → record=true.
+    expect(voice.startVoiceCall).toHaveBeenCalledWith('sess-1', '5511999990000', true);
   });
 
   it('errors when the SDR has no connected session', async () => {
