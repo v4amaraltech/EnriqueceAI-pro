@@ -222,6 +222,8 @@ export function ActivityExecutionSheetContent({
       <ActivityWhatsAppCallPanel
         enrollmentId={activity.enrollmentId}
         stepId={activity.stepId}
+        cadenceId={activity.cadenceId}
+        leadId={activity.lead.id}
         leadName={leadName}
         phones={phones}
         activityName={activity.activityName}
