@@ -71,6 +71,17 @@ export async function persistWhatsAppCall(
     if (existing) return { success: true, data: { callId: existing.id } };
   }
 
+  // Gravação: usa a URL passada ou consome o buffer (o webhook do AstraCalls pode
+  // ter chegado antes desta call ser criada). Ver /api/webhooks/wacalls.
+  let recordingUrl = p.recordingUrl ?? null;
+  if (!recordingUrl && p.callId) {
+    const { data: pending } = (await from(supabase, 'whatsapp_pending_recordings')
+      .select('recording_url')
+      .eq('service_call_id', p.callId)
+      .maybeSingle()) as { data: { recording_url: string } | null };
+    if (pending) recordingUrl = pending.recording_url;
+  }
+
   const { data: call, error: callError } = (await from(supabase, 'calls')
     .insert({
       org_id: orgId,
@@ -84,7 +95,7 @@ export async function persistWhatsAppCall(
       type: 'outbound',
       connected: p.connected,
       answered_at: p.answeredAt ?? null,
-      recording_url: p.recordingUrl ?? null,
+      recording_url: recordingUrl,
       metadata: { provider: 'whatsapp', service_session_id: p.sid, service_call_id: p.callId },
     } as Record<string, unknown>)
     .select('id')
