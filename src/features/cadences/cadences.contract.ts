@@ -83,6 +83,13 @@ export interface AutoEmailCadenceMetrics {
   meetings: number;
   replyRate: number;
   openRate: number;
+  /**
+   * Fail rate (%) over a recent rolling window — the deliverability signal used
+   * for the health badge. `null` when there were no sends in the window (falls
+   * back to the all-time rate). Prevents a healthy all-time average from masking
+   * a current spike of failures/bounces.
+   */
+  recentFailRate: number | null;
 }
 
 // A/B variant rates with computed percentages

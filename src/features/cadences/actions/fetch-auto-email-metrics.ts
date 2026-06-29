@@ -12,6 +12,9 @@ import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 
 const cadenceIdsSchema = z.array(z.string().uuid()).max(100);
 
+/** Rolling window (days) for the health-badge fail rate — a recent deliverability signal. */
+const RECENT_FAIL_WINDOW_DAYS = 14;
+
 export async function fetchAutoEmailMetrics(
   cadenceIds: string[],
 ): Promise<ActionResult<Record<string, AutoEmailCadenceMetrics>>> {
@@ -41,9 +44,9 @@ export async function fetchAutoEmailMetrics(
   // Fetch interaction rows (incl. lead_id) grouped by cadence_id + type.
   // lead_id powers per-prospect rates (unique leads who acted, not raw events).
   const { data: interactionRows, error: interactionError } = (await from(supabase, 'interactions')
-    .select('cadence_id, type, lead_id')
+    .select('cadence_id, type, lead_id, created_at')
     .in('cadence_id', cadenceIds)) as {
-    data: Array<{ cadence_id: string; type: string; lead_id: string | null }> | null;
+    data: Array<{ cadence_id: string; type: string; lead_id: string | null; created_at: string }> | null;
     error: { message: string } | null;
   };
 
@@ -61,10 +64,12 @@ export async function fetchAutoEmailMetrics(
     bucket[row.status] = (bucket[row.status] ?? 0) + 1;
   }
 
-  // Aggregate interaction counts (raw event volume) and distinct-lead sets
-  // (per-prospect reach) per cadence + type.
+  // Aggregate interaction counts (raw event volume), distinct-lead sets
+  // (per-prospect reach), and recent-window counts (health signal) per cadence + type.
+  const recentCutoffMs = Date.now() - RECENT_FAIL_WINDOW_DAYS * 86_400_000;
   const interactionCounts: Record<string, Record<string, number>> = {};
   const interactionLeads: Record<string, Record<string, Set<string>>> = {};
+  const recentCounts: Record<string, Record<string, number>> = {};
   for (const row of interactionRows ?? []) {
     if (!interactionCounts[row.cadence_id]) {
       interactionCounts[row.cadence_id] = {};
@@ -82,6 +87,15 @@ export async function fetchAutoEmailMetrics(
       }
       leadBucket[row.type]!.add(row.lead_id);
     }
+
+    // H6: recent-window tally for the health-badge fail rate.
+    if (new Date(row.created_at).getTime() >= recentCutoffMs) {
+      if (!recentCounts[row.cadence_id]) {
+        recentCounts[row.cadence_id] = {};
+      }
+      const recentBucket = recentCounts[row.cadence_id]!;
+      recentBucket[row.type] = (recentBucket[row.type] ?? 0) + 1;
+    }
   }
 
   // Build metrics map
@@ -91,6 +105,13 @@ export async function fetchAutoEmailMetrics(
     const ec = enrollmentCounts[cadenceId] ?? {};
     const ic = interactionCounts[cadenceId] ?? {};
     const il = interactionLeads[cadenceId] ?? {};
+    const rc = recentCounts[cadenceId] ?? {};
+
+    // H6: fail rate over the recent window (deliverability signal). null when no
+    // recent sends — the health badge falls back to the all-time rate.
+    const recentAttempts = (rc['sent'] ?? 0) + (rc['failed'] ?? 0) + (rc['bounced'] ?? 0);
+    const recentFailRate =
+      recentAttempts > 0 ? (((rc['failed'] ?? 0) + (rc['bounced'] ?? 0)) / recentAttempts) * 100 : null;
 
     // Raw event volume (shown in the count columns).
     const sent = ic['sent'] ?? 0;
@@ -122,6 +143,7 @@ export async function fetchAutoEmailMetrics(
       // Rates are per unique prospect: leads who replied/opened ÷ leads emailed.
       replyRate: safeRate(repliedLeads, sentLeads),
       openRate: safeRate(openedLeads, sentLeads),
+      recentFailRate,
     };
   }
 

@@ -295,6 +295,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     const stepStart = Date.now();
     result.processed++;
 
+    // C1: track the optimistic 'sent' interaction so a *thrown* exception (e.g. a
+    // network error inside EmailService.sendEmail, or a token decrypt failure)
+    // marks it 'failed' in the catch below — instead of leaving a phantom 'sent'
+    // that makes the idempotency guard advance the enrollment WITHOUT ever sending.
+    let pendingInteractionId: string | null = null;
+    let emailDispatched = false;
+
     try {
       // Fetch current step from the pre-loaded map (avoids per-enrollment query)
       const step = stepsByCadence.get(enrollment.cadence_id)?.get(enrollment.current_step) ?? null;
@@ -441,7 +448,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             console.error(`[cadence-engine] enrollment=${enrollment.id} failed to fetch vendor data:`, vendorErr);
           }
 
-          messageContent = stripUnresolvedVars(renderTemplate(template.body, variables));
+          // M2: escape variable values in the HTML body (lead data from CSV/API can
+          // contain '<', '&', tags). The subject is plain text — no HTML escaping.
+          messageContent = stripUnresolvedVars(renderTemplate(template.body, variables, { escapeHtml: true }));
           if (template.subject) {
             subject = stripUnresolvedVars(renderTemplate(template.subject, variables));
           }
@@ -470,7 +479,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       if (subject) interactionMeta.subject = subject;
       if (abVariant) interactionMeta.ab_variant = abVariant;
 
-      const { data: interaction } = (await from(supabase, 'interactions')
+      const { data: interaction, error: insertErr } = (await from(supabase, 'interactions')
         .insert({
           org_id: enrollment.lead.org_id,
           lead_id: enrollment.lead_id,
@@ -489,7 +498,25 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           performed_by: enrollment.cadence.created_by ?? cadenceCreatedBy ?? null,
         } as Record<string, unknown>)
         .select('id')
-        .single()) as { data: Pick<InteractionRow, 'id'> | null };
+        .single()) as { data: Pick<InteractionRow, 'id'> | null; error: { code?: string } | null };
+
+      // H3: the unique partial index uq_interactions_sent_step_lead makes a
+      // concurrent run's duplicate insert fail with 23505. Treat it as idempotent —
+      // the other run already recorded (and sent) this step — so advance via the
+      // row-locked RPC and skip, instead of double-sending the email.
+      if (insertErr?.code === '23505') {
+        await (supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>)('advance_enrollment_after_step', {
+          p_enrollment_id: enrollment.id,
+          p_executed_step_id: step.id,
+          p_performed_by: enrollment.cadence.created_by ?? cadenceCreatedBy ?? null,
+        });
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=skipped reason=duplicate_sent_unique_violation duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
 
       if (!interaction) {
         result.failed++;
@@ -497,6 +524,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=failed reason=insert_error duration_ms=${Date.now() - stepStart}`);
         continue;
       }
+
+      // C1: from here on, a thrown exception must demote this interaction to 'failed'.
+      pendingInteractionId = interaction.id;
 
       // Send via the appropriate channel
       let sendSuccess = false;
@@ -608,6 +638,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         );
 
         if (emailResult.success && emailResult.messageId) {
+          // C1: email is confirmed sent — mark it now (before the metadata update) so
+          // any exception below the send cannot demote a real send to 'failed' and
+          // trigger a re-send. The unique index then guards against duplicate inserts.
+          emailDispatched = true;
           // Save messageId, threadId, RFC Message-ID and subject for reply tracking
           const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
           const metaUpdate: Record<string, unknown> = {};
@@ -655,25 +689,27 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         }
       }
 
-      // Check if there's a next step (handles non-contiguous step_order) —
-      // resolved from the pre-loaded map.
-      const cadenceStepsForNext = stepsByCadence.get(enrollment.cadence_id);
-      const nextStep = cadenceStepsForNext
-        ? [...cadenceStepsForNext.values()]
-            .filter((s) => s.step_order > enrollment.current_step)
-            .sort((a, b) => a.step_order - b.step_order)[0] ?? null
-        : null;
+      // H4: advance the enrollment atomically via the same row-locked, idempotent
+      // RPC the manual activity path uses (advance_enrollment_after_step). Replaces
+      // the previous non-atomic JS UPDATE that could leave the enrollment desynced
+      // (old current_step + next_step_due in the past) if it failed after the email
+      // was already sent. For auto-email the executed step IS current_step, so the
+      // RPC's skipped-step audit range is empty (no spurious 'system' rows).
+      const { data: advanceData, error: advanceErr } = await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{
+        data: Array<{ advanced: boolean; completed: boolean; new_step: number | null }> | null;
+        error: { message: string } | null;
+      }>)('advance_enrollment_after_step', {
+        p_enrollment_id: enrollment.id,
+        p_executed_step_id: step.id,
+        p_performed_by: cadenceCreatedBy ?? enrollment.cadence.created_by ?? null,
+      });
 
-      if (nextStep) {
-        const { error: nextErr } = await from(supabase, 'cadence_enrollments')
-          .update({ current_step: nextStep.step_order } as Record<string, unknown>)
-          .eq('id', enrollment.id);
-        if (nextErr) console.error(`[cadence-engine] Failed to advance enrollment=${enrollment.id} to step=${nextStep.step_order}:`, nextErr);
-      } else {
-        const { error: doneErr } = await from(supabase, 'cadence_enrollments')
-          .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-          .eq('id', enrollment.id);
-        if (doneErr) console.error(`[cadence-engine] Failed to complete enrollment=${enrollment.id}:`, doneErr);
+      if (advanceErr) {
+        console.error(`[cadence-engine] Failed to advance enrollment=${enrollment.id}:`, advanceErr.message);
+      } else if (advanceData?.[0]?.completed) {
         result.completed++;
         dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'enrollment.completed', {
           lead_id: enrollment.lead_id,
@@ -699,6 +735,14 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       const message = err instanceof Error ? err.message : String(err);
       result.errors.push(`enrollment=${enrollment.id}: ${message}`);
       console.error(`[cadence-engine] enrollment=${enrollment.id} status=error error="${message}" duration_ms=${Date.now() - stepStart}`);
+      // C1: if an interaction was optimistically recorded as 'sent' but the send was
+      // never confirmed (exception thrown mid-send), demote it to 'failed' so the
+      // idempotency guard retries next tick instead of advancing without sending.
+      if (pendingInteractionId && !emailDispatched) {
+        await markInteractionFailed(supabase, pendingInteractionId, `unexpected_error: ${message}`).catch(
+          (markErr) => console.error(`[cadence-engine] Failed to demote interaction after exception:`, markErr),
+        );
+      }
     }
   }
 

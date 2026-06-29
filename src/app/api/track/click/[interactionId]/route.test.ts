@@ -18,11 +18,27 @@ function createChainMock(finalResult: unknown) {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn().mockReturnValue(chain);
   chain.update = vi.fn().mockReturnValue(chain);
+  chain.insert = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
   chain.single = vi.fn().mockImplementation(() => Promise.resolve(finalResult));
   chain.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
     Promise.resolve(finalResult).then(resolve, reject);
   return chain;
+}
+
+/** Interaction row shape the route validates against (M1): message_content must
+ *  contain the target URL for the redirect to be allowed. */
+function interactionData(messageContent: string, metadata: Record<string, unknown> = {}) {
+  return {
+    data: {
+      metadata,
+      message_content: messageContent,
+      org_id: 'org-1',
+      lead_id: 'lead-1',
+      cadence_id: 'cad-1',
+      step_id: 'step-1',
+    },
+  };
 }
 
 function makeParams(interactionId: string) {
@@ -34,8 +50,10 @@ describe('Track Click Endpoint', () => {
     vi.clearAllMocks();
   });
 
-  it('should redirect to target URL with 302', async () => {
-    const selectChain = createChainMock({ data: { metadata: {} } });
+  it('should redirect to target URL with 302 when the url is in the email body', async () => {
+    const selectChain = createChainMock(
+      interactionData('<a href="https://acme.com/pricing">Ver preços</a>'),
+    );
     const updateChain = createChainMock({ data: null });
 
     let callIndex = 0;
@@ -54,7 +72,9 @@ describe('Track Click Endpoint', () => {
   });
 
   it('should record click in metadata', async () => {
-    const selectChain = createChainMock({ data: { metadata: { subject: 'Hello' } } });
+    const selectChain = createChainMock(
+      interactionData('Veja em https://acme.com agora', { subject: 'Hello' }),
+    );
     const updateChain = createChainMock({ data: null });
 
     let callIndex = 0;
@@ -82,7 +102,9 @@ describe('Track Click Endpoint', () => {
 
   it('should append to existing clicks array', async () => {
     const existingClicks = [{ url: 'https://old.com', clicked_at: '2026-01-01T00:00:00.000Z' }];
-    const selectChain = createChainMock({ data: { metadata: { clicks: existingClicks } } });
+    const selectChain = createChainMock(
+      interactionData('Link: https://new.com', { clicks: existingClicks }),
+    );
     const updateChain = createChainMock({ data: null });
 
     let callIndex = 0;
@@ -106,6 +128,33 @@ describe('Track Click Endpoint', () => {
         }),
       }),
     );
+  });
+
+  // M1: open-redirect protection — only follow URLs that were in the sent email.
+  it('should return 400 when the url is NOT in the email body (open-redirect block)', async () => {
+    const selectChain = createChainMock(
+      interactionData('<a href="https://acme.com/pricing">Ver preços</a>'),
+    );
+    mockFrom.mockReturnValue(selectChain);
+
+    const request = new Request(
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://phishing.example/steal',
+    );
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('Location')).toBeNull();
+  });
+
+  it('should return 400 when the interaction does not exist', async () => {
+    mockFrom.mockReturnValue(createChainMock({ data: null }));
+
+    const request = new Request(
+      'https://example.com/api/track/click/550e8400-e29b-41d4-a716-446655440000?url=https://acme.com',
+    );
+    const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
+
+    expect(response.status).toBe(400);
   });
 
   it('should return 400 when url param is missing', async () => {
@@ -137,7 +186,8 @@ describe('Track Click Endpoint', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should still redirect on Supabase error', async () => {
+  // M1: fail closed — if validation can't run (DB error), do NOT redirect.
+  it('should NOT redirect on Supabase error (fail closed)', async () => {
     mockFrom.mockImplementation(() => {
       throw new Error('DB connection failed');
     });
@@ -149,8 +199,8 @@ describe('Track Click Endpoint', () => {
     );
     const response = await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('https://acme.com/');
+    expect(response.status).toBe(502);
+    expect(response.headers.get('Location')).toBeNull();
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('[track/click]'),
       expect.any(Error),

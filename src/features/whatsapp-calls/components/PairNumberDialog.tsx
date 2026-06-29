@@ -37,15 +37,18 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('starting');
   const [qr, setQr] = useState<string | null>(null);
-  const [sid, setSid] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const startedRef = useRef(false);
   const confirmingRef = useRef(false);
   const sidRef = useRef<string | null>(null);
   const phaseRef = useRef<Phase>(phase);
+  const onConnectedRef = useRef(onConnected);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+  }, [onConnected]);
 
   // Inicia o pareamento na montagem (setState só dentro do callback async).
   useEffect(() => {
@@ -60,9 +63,11 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
         return;
       }
       sidRef.current = result.data.sid;
-      setSid(result.data.sid);
-      if (result.data.qr) setQr(result.data.qr);
-      setPhase(result.data.status === 'connected' ? 'connected' : 'awaiting');
+      // O SSE (aberto na montagem) talvez já tenha trazido o QR — não o sobrescreve.
+      if (result.data.qr) setQr((prev) => prev ?? result.data.qr);
+      setPhase((prev) =>
+        prev === 'error' ? prev : result.data.status === 'connected' ? 'connected' : 'awaiting',
+      );
     })();
   }, [target]);
 
@@ -76,13 +81,16 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
     [],
   );
 
-  // Assina o SSE enquanto aguarda o scan: recebe o QR e detecta o pareamento.
+  // Assina o SSE JÁ NA MONTAGEM — em paralelo à criação da sessão — para não
+  // perder o primeiro QR (broadcast incremental do serviço). O QR vem global; o
+  // `paired`/`dead` só passam a valer quando `sidRef.current` já existe.
   useEffect(() => {
-    if (phase !== 'awaiting' || !sid) return undefined;
-    const unsubscribe = subscribeSessionEvents(sid, {
+    const unsubscribe = subscribeSessionEvents(() => sidRef.current, {
       onQr: (next) => setQr((prev) => (next !== prev ? next : prev)),
       onPaired: () => {
         if (confirmingRef.current) return;
+        const sid = sidRef.current;
+        if (!sid) return;
         confirmingRef.current = true;
         void (async () => {
           // Confirma e persiste o número + status `connected` no banco.
@@ -91,7 +99,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
             setPhase('connected');
             toast.success('Número WhatsApp pareado com sucesso');
             router.refresh();
-            onConnected();
+            onConnectedRef.current();
           } else {
             confirmingRef.current = false;
           }
@@ -103,7 +111,9 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
       },
     });
     return unsubscribe;
-  }, [phase, sid, router, onConnected]);
+    // Montagem única (handlers via ref); router do Next é referencialmente estável.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 py-2 text-center">
