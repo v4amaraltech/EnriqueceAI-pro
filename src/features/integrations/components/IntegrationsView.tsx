@@ -8,6 +8,7 @@ import {
   Check,
   FileSignature,
   Key,
+  Phone,
   RefreshCw,
   Settings2,
   Unplug,
@@ -321,6 +322,27 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               )}
             </div>
           </div>
+
+          {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7) */}
+          {isManager && (
+            <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+              <div className="flex w-10 shrink-0 justify-center">
+                <Phone className="h-7 w-7 text-emerald-600" />
+              </div>
+              <div className="w-32 shrink-0 font-medium">Ligação via WhatsApp</div>
+              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                Discador WhatsApp-nativo — pareie um número dedicado por SDR
+              </div>
+              <div className="ml-auto shrink-0 flex items-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/settings/whatsapp-numbers">
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Gerenciar números
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Google */}
           <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">

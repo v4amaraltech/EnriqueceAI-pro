@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Building2, CreditCard, Phone, Plug, User, Users } from 'lucide-react';
+import { Building2, CreditCard, Plug, User, Users } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
@@ -13,7 +13,6 @@ const settingsLinks = [
   { label: 'Meu Perfil', href: '/settings/profile', icon: User, description: 'Nome, email e senha' },
   { label: 'Usuários', href: '/settings/users', icon: Users, description: 'Gerenciar membros da equipe' },
   { label: 'Integrações', href: '/settings/integrations', icon: Plug, description: 'Gmail, WhatsApp, CRM' },
-  { label: 'Números WhatsApp', href: '/settings/whatsapp-numbers', icon: Phone, description: 'Discador WhatsApp por SDR' },
   { label: 'Faturamento', href: '/settings/billing', icon: CreditCard, description: 'Plano e pagamento' },
 ];
 
