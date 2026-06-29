@@ -138,3 +138,31 @@ export async function pairVoiceSession(sid: string): Promise<VoiceSession> {
   });
   return normalize({ ...raw, sid });
 }
+
+// --- Chamadas (story 7.5) ------------------------------------------------------
+
+interface RawCall {
+  id?: string;
+  call_id?: string;
+}
+
+/** Inicia uma chamada de saída na sessão. Retorna o id da chamada no serviço. */
+export async function startVoiceCall(
+  sid: string,
+  phone: string,
+  record = false,
+): Promise<{ callId: string }> {
+  const raw = await request<RawCall>(`/api/sessions/${encodeURIComponent(sid)}/calls`, {
+    method: 'POST',
+    body: JSON.stringify({ phone, record }),
+  });
+  return { callId: raw.call_id ?? raw.id ?? '' };
+}
+
+/** Encerra uma chamada ativa. */
+export async function endVoiceCall(sid: string, callId: string): Promise<void> {
+  await request<unknown>(
+    `/api/sessions/${encodeURIComponent(sid)}/calls/${encodeURIComponent(callId)}`,
+    { method: 'DELETE' },
+  );
+}

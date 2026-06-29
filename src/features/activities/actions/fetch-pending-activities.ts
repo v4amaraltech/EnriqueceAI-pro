@@ -207,6 +207,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
           lead: leadData,
           activityName: step.activity_name ?? null,
           callScript: step.instructions ?? null,
+          callProvider: step.call_provider ?? null,
         },
       });
     }
@@ -278,6 +279,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     },
     activityName: row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
     callScript: row.notes,
+    callProvider: null,
   }));
 
   // 7. Merge and sort: group by lead so SDR finishes all steps for one lead before moving to the next

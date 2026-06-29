@@ -87,6 +87,7 @@ function makeActivity(overrides: Partial<PendingActivity> = {}): PendingActivity
     lead: baseLead,
     activityName: null,
     callScript: null,
+    callProvider: null,
     ...overrides,
   };
 }
