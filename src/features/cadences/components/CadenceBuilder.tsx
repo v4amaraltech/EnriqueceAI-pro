@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { CadenceDetail, CadenceMetrics, CadenceStepWithTemplate, EnrollmentWithLead } from '../cadences.contract';
-import type { CadenceOrigin, CadencePriority, ChannelType, MessageTemplateRow } from '../types';
+import type { CadenceOrigin, CadencePriority, CallProvider, ChannelType, MessageTemplateRow } from '../types';
 import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
@@ -59,6 +59,7 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
       aiPersonalization: step.ai_personalization,
       activityName: step.activity_name,
       instructions: step.instructions,
+      callProvider: step.call_provider,
     });
   }
 
@@ -73,7 +74,7 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
 
 // Convert DayData back to flat step inputs for saving
 function daysToStepInputs(days: DayData[]) {
-  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean; activity_name?: string | null; instructions?: string | null }[] = [];
+  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean; activity_name?: string | null; instructions?: string | null; call_provider?: CallProvider | null }[] = [];
   let globalOrder = 1;
 
   for (const day of days) {
@@ -87,6 +88,7 @@ function daysToStepInputs(days: DayData[]) {
         ai_personalization: step.aiPersonalization,
         activity_name: step.activityName,
         instructions: step.instructions,
+        call_provider: step.callProvider,
       });
       globalOrder++;
     }

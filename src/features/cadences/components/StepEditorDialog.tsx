@@ -81,6 +81,9 @@ function StepEditorForm({
   const Icon = config.icon;
   const placeholder = channelPlaceholders[step.channel];
   const instrLabel = channelInstructionLabels[step.channel];
+  // Ligação via WhatsApp é um passo phone com call_provider='whatsapp' (Epic 7).
+  const isWhatsAppCall = step.channel === 'phone' && step.callProvider === 'whatsapp';
+  const headerLabel = isWhatsAppCall ? 'ligação via WhatsApp' : config.label.toLowerCase();
 
   const editor = useEditor({
     extensions: [
@@ -141,7 +144,7 @@ function StepEditorForm({
           <div className={`flex h-10 w-10 items-center justify-center rounded-full ${config.bgColor}`}>
             <Icon className={`h-5 w-5 ${config.color}`} />
           </div>
-          Editar atividade de {config.label.toLowerCase()}
+          Editar atividade de {headerLabel}
         </DialogTitle>
       </DialogHeader>
 
