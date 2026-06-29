@@ -11,9 +11,9 @@ import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp
 
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
 import { persistWhatsAppCall } from '../actions/persist-call';
-import { RECORDING_CONSENT_NOTICE } from '../constants';
 import { INITIAL_CALL_STATE, callReducer } from '../call-machine';
-import { acquireMic, releaseMic } from '../voice-call-media';
+import { RECORDING_CONSENT_NOTICE } from '../constants';
+import { acquireMic, openCall, releaseMic, subscribeCallEvents, type OpenCall } from '../voice-call-media';
 import { CallDispositionForm } from './CallDispositionForm';
 
 function formatElapsed(totalSeconds: number): string {
@@ -51,12 +51,14 @@ export function ActivityWhatsAppCallPanel({
   const sidRef = useRef<string | null>(null);
   const callIdRef = useRef<string | null>(null);
   const micRef = useRef<MediaStream | null>(null);
+  const connRef = useRef<OpenCall | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   // Metadados da chamada para persistir ao encerrar (story 7.7).
   const callStartedAtRef = useRef<string | null>(null);
   const answeredAtRef = useRef<string | null>(null);
   const durationRef = useRef<number>(0);
-  // URL da gravação (story 7.8) — preenchida pela perna de mídia do 7.1 ao
-  // encerrar (TODO em voice-call-media). Hoje fica null no shell.
+  // O serviço (AstraCalls) não devolve URL de gravação pela API → null por ora.
   const recordingUrlRef = useRef<string | null>(null);
 
   // Cronômetro só na conexão real (status active).
@@ -66,11 +68,43 @@ export function ActivityWhatsAppCallPanel({
     return () => clearInterval(id);
   }, [state.status]);
 
-  // Solta o microfone ao desmontar.
-  useEffect(() => () => releaseMic(micRef.current), []);
+  // Liga o áudio remoto no <audio> assim que o track chega.
+  useEffect(() => {
+    if (state.status !== 'ringing' && state.status !== 'active') return undefined;
+    const id = setInterval(() => {
+      const remote = connRef.current?.getRemoteStream();
+      if (remote && audioRef.current && audioRef.current.srcObject !== remote) {
+        audioRef.current.srcObject = remote;
+        void audioRef.current.play().catch(() => {});
+      }
+    }, 300);
+    return () => clearInterval(id);
+  }, [state.status]);
+
+  // Limpeza ao desmontar.
+  useEffect(
+    () => () => {
+      unsubRef.current?.();
+      connRef.current?.close();
+      releaseMic(micRef.current);
+    },
+    [],
+  );
 
   const elapsed =
     state.status === 'active' ? Math.max(0, Math.floor((now - state.startedAt) / 1000)) : 0;
+
+  function teardown() {
+    durationRef.current = answeredAtRef.current
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(answeredAtRef.current)) / 1000))
+      : 0;
+    unsubRef.current?.();
+    unsubRef.current = null;
+    connRef.current?.close();
+    connRef.current = null;
+    releaseMic(micRef.current);
+    micRef.current = null;
+  }
 
   function handleDial() {
     if (!selectedPhone) {
@@ -85,34 +119,51 @@ export function ActivityWhatsAppCallPanel({
         dispatch({ type: 'MIC_DENIED' });
         return;
       }
-      const result = await startWhatsAppCall({ phone: selectedPhone });
-      if (!result.success) {
+
+      const started = await startWhatsAppCall({ phone: selectedPhone });
+      if (!started.success) {
         releaseMic(micRef.current);
         micRef.current = null;
-        dispatch({ type: 'SERVICE_ERROR', message: result.error });
+        dispatch({ type: 'SERVICE_ERROR', message: started.error });
         return;
       }
-      sidRef.current = result.data.sid;
-      callIdRef.current = result.data.callId;
+      sidRef.current = started.data.sid;
+      callIdRef.current = started.data.callId;
       callStartedAtRef.current = new Date().toISOString();
+
+      try {
+        connRef.current = await openCall({
+          sid: started.data.sid,
+          callId: started.data.callId,
+          micStream: micRef.current,
+        });
+      } catch {
+        teardown();
+        dispatch({ type: 'SERVICE_ERROR', message: 'Falha ao estabelecer o áudio (WebRTC).' });
+        return;
+      }
+
+      // Lifecycle via SSE: o atendimento e o encerramento agora são automáticos.
+      unsubRef.current = subscribeCallEvents(started.data.callId, {
+        onConnected: () => {
+          if (!answeredAtRef.current) answeredAtRef.current = new Date().toISOString();
+          setNow(Date.now());
+          dispatch({ type: 'ANSWERED', at: Date.now() });
+        },
+        onEnded: () => {
+          teardown();
+          dispatch({ type: 'HANGUP' });
+        },
+      });
+
       dispatch({ type: 'CALL_STARTED' });
     });
-  }
-
-  // Stand-in temporário: até a perna SSE do 7.1, o atendimento é marcado à mão.
-  function handleAnswered() {
-    answeredAtRef.current = new Date().toISOString();
-    setNow(Date.now());
-    dispatch({ type: 'ANSWERED', at: Date.now() });
   }
 
   function handleHangup() {
     const sid = sidRef.current;
     const callId = callIdRef.current;
-    durationRef.current =
-      state.status === 'active' ? Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)) : 0;
-    releaseMic(micRef.current);
-    micRef.current = null;
+    teardown();
     dispatch({ type: 'HANGUP' });
     if (sid && callId) {
       startTransition(async () => {
@@ -153,6 +204,9 @@ export function ActivityWhatsAppCallPanel({
 
   return (
     <div className="space-y-4 p-1">
+      {/* Áudio remoto (oculto) */}
+      <audio ref={audioRef} autoPlay className="hidden" />
+
       <div>
         <h3 className="text-sm font-semibold">{activityName || 'Ligação via WhatsApp'}</h3>
         <p className="text-xs text-muted-foreground">{leadName}</p>
@@ -195,9 +249,7 @@ export function ActivityWhatsAppCallPanel({
             </p>
           )}
 
-          {state.status === 'error' && (
-            <p className="text-sm text-destructive">{state.message}</p>
-          )}
+          {state.status === 'error' && <p className="text-sm text-destructive">{state.message}</p>}
 
           <Button onClick={handleDial} disabled={isPending || !selectedPhone} className="w-full gap-2">
             <Phone className="h-4 w-4" />
@@ -213,18 +265,11 @@ export function ActivityWhatsAppCallPanel({
       {state.status === 'ringing' && (
         <div className="space-y-3 text-center">
           <p className="text-sm font-medium">Chamando…</p>
-          <p className="text-xs text-muted-foreground">
-            O atendimento automático chega com o serviço de voz (em configuração).
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={handleAnswered}>
-              Atendeu
-            </Button>
-            <Button variant="destructive" className="flex-1 gap-2" onClick={handleHangup}>
-              <PhoneOff className="h-4 w-4" />
-              Encerrar
-            </Button>
-          </div>
+          <p className="text-xs text-muted-foreground">Aguardando o lead atender.</p>
+          <Button variant="destructive" className="w-full gap-2" onClick={handleHangup}>
+            <PhoneOff className="h-4 w-4" />
+            Encerrar
+          </Button>
         </div>
       )}
 

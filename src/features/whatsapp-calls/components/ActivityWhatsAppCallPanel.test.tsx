@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../actions/calls', () => ({ startWhatsAppCall: vi.fn(), endWhatsAppCall: vi.fn() }));
 vi.mock('../actions/persist-call', () => ({ persistWhatsAppCall: vi.fn() }));
 vi.mock('../actions/apply-call-disposition', () => ({ applyCallDisposition: vi.fn() }));
-vi.mock('../voice-call-media', () => ({ acquireMic: vi.fn(), releaseMic: vi.fn() }));
+vi.mock('../voice-call-media', () => ({
+  acquireMic: vi.fn(),
+  releaseMic: vi.fn(),
+  openCall: vi.fn(),
+  subscribeCallEvents: vi.fn(() => () => {}),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';

@@ -8,7 +8,12 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { DAILY_CALL_LIMIT } from '../constants';
-import { VoiceServiceError, endVoiceCall, startVoiceCall } from '../services/voice-service-client';
+import {
+  VoiceServiceError,
+  endVoiceCall,
+  exchangeVoiceSdp,
+  startVoiceCall,
+} from '../services/voice-service-client';
 
 function mapVoiceError(err: unknown): { success: false; error: string } {
   if (err instanceof VoiceServiceError) {
@@ -22,6 +27,11 @@ function mapVoiceError(err: unknown): { success: false; error: string } {
 
 const startSchema = z.object({ phone: z.string().min(8, 'Número inválido') });
 const endSchema = z.object({ sid: z.string().min(1), callId: z.string().min(1) });
+const sdpSchema = z.object({
+  sid: z.string().min(1),
+  callId: z.string().min(1),
+  sdpOffer: z.string().min(1),
+});
 
 /**
  * Inicia uma Ligação via WhatsApp (story 7.5). Resolve a sessão pareada do SDR
@@ -68,6 +78,28 @@ export async function startWhatsAppCall(
     // chamada. Texto/retenção LGPD: ver RECORDING_CONSENT_NOTICE (a validar c/ jurídico).
     const { callId } = await startVoiceCall(session.service_session_id, parsed.data.phone, true);
     return { success: true, data: { sid: session.service_session_id, callId } };
+  } catch (err) {
+    return mapVoiceError(err);
+  }
+}
+
+/**
+ * Proxy da troca de SDP (story 7.5/7.1): o browser cria a offer e a manda por
+ * aqui; injetamos a API key e devolvemos a answer do serviço. A mídia (áudio)
+ * flui direto browser ↔ serviço; só a sinalização passa pelo servidor.
+ */
+export async function exchangeCallSdp(
+  input: z.infer<typeof sdpSchema>,
+): Promise<ActionResult<{ sdpAnswer: string }>> {
+  const parsed = sdpSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Dados de SDP inválidos' };
+
+  await requireAuth();
+
+  try {
+    const sdpAnswer = await exchangeVoiceSdp(parsed.data.sid, parsed.data.callId, parsed.data.sdpOffer);
+    if (!sdpAnswer) return { success: false, error: 'Serviço de voz não retornou a resposta SDP' };
+    return { success: true, data: { sdpAnswer } };
   } catch (err) {
     return mapVoiceError(err);
   }

@@ -7,6 +7,7 @@ vi.mock('@/lib/auth/require-auth', () => ({
 const voice = vi.hoisted(() => ({
   startVoiceCall: vi.fn(),
   endVoiceCall: vi.fn(),
+  exchangeVoiceSdp: vi.fn(),
 }));
 
 vi.mock('../services/voice-service-client', async (importOriginal) => {
@@ -32,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { DAILY_CALL_LIMIT } from '../constants';
 import { VoiceServiceError } from '../services/voice-service-client';
-import { endWhatsAppCall, startWhatsAppCall } from './calls';
+import { endWhatsAppCall, exchangeCallSdp, startWhatsAppCall } from './calls';
 
 describe('startWhatsAppCall', () => {
   beforeEach(() => {
@@ -85,5 +86,23 @@ describe('endWhatsAppCall', () => {
     const result = await endWhatsAppCall({ sid: 'sess-1', callId: 'call-1' });
     expect(result.success).toBe(true);
     expect(voice.endVoiceCall).toHaveBeenCalledWith('sess-1', 'call-1');
+  });
+});
+
+describe('exchangeCallSdp', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('proxies the SDP offer and returns the answer', async () => {
+    voice.exchangeVoiceSdp.mockResolvedValue('v=0\r\n(answer)');
+    const result = await exchangeCallSdp({ sid: 'sess-1', callId: 'call-1', sdpOffer: 'v=0\r\n(offer)' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.sdpAnswer).toBe('v=0\r\n(answer)');
+    expect(voice.exchangeVoiceSdp).toHaveBeenCalledWith('sess-1', 'call-1', 'v=0\r\n(offer)');
+  });
+
+  it('errors when the service returns an empty answer', async () => {
+    voice.exchangeVoiceSdp.mockResolvedValue('');
+    const result = await exchangeCallSdp({ sid: 'sess-1', callId: 'call-1', sdpOffer: 'x' });
+    expect(result.success).toBe(false);
   });
 });
