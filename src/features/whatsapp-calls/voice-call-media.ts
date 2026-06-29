@@ -123,9 +123,16 @@ interface SessionSnapshot {
  * pareado nos snapshots `{ sessions: [...] }`. Como o pareamento é uma ação única
  * por vez, o QR do stream é o da sessão `sid` recém-criada; o pareado é confirmado
  * pelo snapshot (onde o `sid` aparece com `paired: true`). Retorna o unsubscribe.
+ *
+ * `sid` é um GETTER (não um valor) de propósito: o stream pode — e deve — ser
+ * aberto ANTES de a sessão existir, para não perder o primeiro QR (o serviço faz
+ * broadcast incremental do QR; se o EventSource só conecta depois do POST de
+ * criação, perde-se o 1º QR e espera-se o re-broadcast do whatsmeow ~20s depois).
+ * O QR (global) é entregue de imediato; `paired`/`dead` só passam a ser avaliados
+ * quando o getter já retorna um `sid`.
  */
 export function subscribeSessionEvents(
-  sid: string,
+  getSid: () => string | null,
   handlers: { onQr?: (qr: string) => void; onPaired?: () => void; onDead?: () => void },
 ): () => void {
   const clientId =
@@ -137,6 +144,8 @@ export function subscribeSessionEvents(
       const data = JSON.parse(ev.data) as SessionSnapshot;
       if (typeof data.qr === 'string' && data.qr) handlers.onQr?.(data.qr);
       if (Array.isArray(data.sessions)) {
+        const sid = getSid();
+        if (!sid) return; // ainda sem sessão criada: ignora estado de pareamento
         const mine = data.sessions.find((s) => s.id === sid);
         if (mine?.paired === true) handlers.onPaired?.();
         else if (mine && (mine.state === 'close' || mine.state === 'logged_out')) handlers.onDead?.();
