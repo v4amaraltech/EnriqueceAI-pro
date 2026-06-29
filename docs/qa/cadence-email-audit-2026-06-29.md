@@ -12,7 +12,18 @@
 > - **H4:** avanço do enrollment migrado para o RPC atômico `advance_enrollment_after_step` (row-locked + idempotente).
 > - **H3:** índice único parcial `uq_interactions_sent_step_lead` (migration `20260629140000`) + tratamento de `23505` no insert (avança idempotente em vez de reenviar). Backfill **não-destrutivo** reclassificou 39 `sent` duplicadas → `failed` (preservadas em metadata; 69 eram fantasmas do C1, só 2 grupos eram double-send real). 0 duplicatas restantes.
 >
-> **Pendente:** Ondas 2-5. Build local (`pnpm build`) e commit/push (@devops).
+> **Pendente:** Ondas 3-5. Build local (`pnpm build`) e commit/push (@devops).
+
+> ## ✅ ONDA 2 APLICADA (29/jun) — Métricas & A/B confiáveis
+> **H1, H2, H5, H6, H7 corrigidos e validados** (typecheck/lint/1498 testes):
+> - **H1:** `opened`/`clicked` herdam `ab_variant` do `sent` pai (`track/open`, `track/click`) — antes toda abertura caía na variante A.
+> - **H2:** `replied`/`bounced` herdam `step_id`+`ab_variant` da `sent` originadora (`check-email-replies.ts`) — antes `step_id=null` os mantinha fora de `fetchStepAbMetrics`, e o qui-quadrado nunca rodava.
+> - **H5:** o resumo da página de Performance passou a usar **prospect único** (leads distintos), unificando com a lista. Breakdown por step segue por evento (≈ equivalente por step).
+> - **H6:** saúde usa `recentFailRate` (janela de 14 dias) em vez do failRate all-time — não mascara picos recentes. Novo campo `recentFailRate` em `AutoEmailCadenceMetrics`.
+> - **H7:** `sent=0` com `failed/bounced>0` agora é "Crítico", não "Sem dados".
+>
+> **Nota:** o A/B fica correto para dados NOVOS. Interações `opened`/`replied`/`bounced` históricas não têm `ab_variant`/`step_id` — backfill via `metadata.sent_interaction_id` é opcional (não aplicado).
+> **L8 (Finalizado):** reavaliado como **não-bug** — `enrollment.status='completed'` é o sinal correto de "esgotou a sequência" (replied/bounced são estados terminais distintos).
 
 ---
 

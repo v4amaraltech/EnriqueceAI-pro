@@ -22,6 +22,7 @@ interface SentInteraction {
   id: string;
   lead_id: string;
   cadence_id: string;
+  step_id: string | null;
   external_id: string;
   metadata: Record<string, unknown> | null;
   performed_by: string | null;
@@ -40,7 +41,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   cutoffDate.setDate(cutoffDate.getDate() - REPLY_CHECK_DAYS);
 
   const { data: sentInteractions, error: fetchError } = (await from(supabase, 'interactions')
-    .select('id, lead_id, cadence_id, external_id, metadata, performed_by')
+    .select('id, lead_id, cadence_id, step_id, external_id, metadata, performed_by')
     .eq('type', 'sent')
     .eq('channel', 'email')
     .not('external_id', 'is', null)
@@ -350,17 +351,25 @@ async function recordReply(
 
   if (!lead) return;
 
-  // Create replied interaction
+  // Create replied interaction. H2: inherit step_id + ab_variant from the
+  // originating 'sent' so the A/B panel (which filters by step_id and buckets by
+  // ab_variant) actually counts replies — previously step_id=null made them
+  // invisible to fetchStepAbMetrics, so the chi-squared test never ran.
+  const replyAbVariant = sentInteraction.metadata?.ab_variant;
   await from(supabase, 'interactions')
     .insert({
       org_id: lead.org_id,
       lead_id: sentInteraction.lead_id,
       cadence_id: sentInteraction.cadence_id,
-      step_id: null,
+      step_id: sentInteraction.step_id,
       channel: 'email',
       type: 'replied',
       message_content: null,
-      metadata: { detected_by: 'gmail_thread_poll', sent_interaction_id: sentInteraction.id },
+      metadata: {
+        detected_by: 'gmail_thread_poll',
+        sent_interaction_id: sentInteraction.id,
+        ...(replyAbVariant ? { ab_variant: replyAbVariant } : {}),
+      },
     } as Record<string, unknown>);
 
   // Mark ALL active enrollments of this lead as replied — when a lead engages
@@ -393,17 +402,24 @@ async function recordBounce(
 
   if (!lead) return;
 
-  // 1. Create bounced interaction
+  // 1. Create bounced interaction. H2: inherit step_id + ab_variant from the
+  // originating 'sent' so A/B bounce metrics are attributed to the right step/variant
+  // (previously step_id=null kept bounces out of fetchStepAbMetrics entirely).
+  const bounceAbVariant = sentInteraction.metadata?.ab_variant;
   await from(supabase, 'interactions')
     .insert({
       org_id: lead.org_id,
       lead_id: sentInteraction.lead_id,
       cadence_id: sentInteraction.cadence_id,
-      step_id: null,
+      step_id: sentInteraction.step_id,
       channel: 'email',
       type: 'bounced',
       message_content: null,
-      metadata: { detected_by: 'gmail_thread_poll', sent_interaction_id: sentInteraction.id },
+      metadata: {
+        detected_by: 'gmail_thread_poll',
+        sent_interaction_id: sentInteraction.id,
+        ...(bounceAbVariant ? { ab_variant: bounceAbVariant } : {}),
+      },
     } as Record<string, unknown>);
 
   // 2. Mark lead email as bounced

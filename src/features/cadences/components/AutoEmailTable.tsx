@@ -86,19 +86,27 @@ function _getCreatorInitial(userId: string | null, userMap: Record<string, strin
 type HealthLevel = 'green' | 'yellow' | 'red' | 'gray';
 
 function getCadenceHealth(m: AutoEmailCadenceMetrics | undefined): { level: HealthLevel; label: string; detail: string } {
-  if (!m || m.sent === 0) {
+  // H7: only "Sem dados" when there's truly no activity. A cadence whose sends all
+  // failed has sent=0 but failed/bounced>0 — that's Crítico, not "Sem dados".
+  if (!m || (m.sent === 0 && m.failed === 0 && m.bounced === 0)) {
     return { level: 'gray', label: 'Sem dados', detail: 'Nenhum envio registrado' };
   }
   const totalAttempts = m.sent + m.failed + m.bounced;
-  const failRate = ((m.failed + m.bounced) / totalAttempts) * 100;
+  const allTimeFailRate = totalAttempts > 0 ? ((m.failed + m.bounced) / totalAttempts) * 100 : 100;
+  // H6: prefer the recent rolling-window fail rate so a healthy all-time average
+  // can't mask a current spike of failures/bounces. Falls back to all-time.
+  const usingRecent = m.recentFailRate !== null;
+  const failRate = m.recentFailRate ?? allTimeFailRate;
+  const window = usingRecent ? ' (recente)' : '';
+  const detail = `${failRate.toFixed(0)}% de falha${window}`;
 
   if (failRate > 25) {
-    return { level: 'red', label: 'Crítico', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+    return { level: 'red', label: 'Crítico', detail };
   }
   if (failRate > 10) {
-    return { level: 'yellow', label: 'Atenção', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+    return { level: 'yellow', label: 'Atenção', detail };
   }
-  return { level: 'green', label: 'Saudável', detail: `${failRate.toFixed(0)}% de falha (${m.failed + m.bounced} de ${totalAttempts})` };
+  return { level: 'green', label: 'Saudável', detail };
 }
 
 const HEALTH_STYLES: Record<HealthLevel, string> = {

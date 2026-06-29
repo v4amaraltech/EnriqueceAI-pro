@@ -73,7 +73,7 @@ export async function fetchCadencePerformance(
 
   // Fetch interactions
   let interactionQuery = from(supabase, 'interactions')
-    .select('step_id, type')
+    .select('step_id, type, lead_id')
     .eq('cadence_id', cadenceId)
     .in('type', ['sent', 'opened', 'replied', 'bounced', 'meeting_scheduled']);
 
@@ -82,7 +82,7 @@ export async function fetchCadencePerformance(
   }
 
   const { data: interactions } = (await interactionQuery) as {
-    data: Array<{ step_id: string | null; type: string }> | null;
+    data: Array<{ step_id: string | null; type: string; lead_id: string | null }> | null;
     error: { message: string } | null;
   };
 
@@ -112,6 +112,15 @@ export async function fetchCadencePerformance(
   let totalBounced = 0;
   let totalMeetings = 0;
 
+  // H5: per-prospect reach (distinct leads) for the SUMMARY rates — unified with the
+  // cadence list, which reports rates per unique prospect (not raw events). The
+  // per-step breakdown below stays per-event (≈ per-prospect at step level, since
+  // each lead gets one send per step).
+  const sentLeadSet = new Set<string>();
+  const openedLeadSet = new Set<string>();
+  const repliedLeadSet = new Set<string>();
+  const bouncedLeadSet = new Set<string>();
+
   for (const row of interactions ?? []) {
     if (row.type === 'meeting_scheduled') {
       totalMeetings++;
@@ -122,6 +131,13 @@ export async function fetchCadencePerformance(
     if (row.type === 'opened') totalOpened++;
     if (row.type === 'replied') totalReplied++;
     if (row.type === 'bounced') totalBounced++;
+
+    if (row.lead_id) {
+      if (row.type === 'sent') sentLeadSet.add(row.lead_id);
+      else if (row.type === 'opened') openedLeadSet.add(row.lead_id);
+      else if (row.type === 'replied') repliedLeadSet.add(row.lead_id);
+      else if (row.type === 'bounced') bouncedLeadSet.add(row.lead_id);
+    }
 
     if (row.step_id) {
       let counts = stepMap.get(row.step_id);
@@ -171,9 +187,11 @@ export async function fetchCadencePerformance(
         replied: totalReplied,
         bounced: totalBounced,
         meetings: totalMeetings,
-        openRate: safeRate(totalOpened, totalSent),
-        replyRate: safeRate(totalReplied, totalSent),
-        bounceRate: safeRate(totalBounced, totalSent),
+        // H5: per unique prospect (leads who acted ÷ leads emailed) — same definition
+        // as the cadence list, so the two screens no longer disagree.
+        openRate: safeRate(openedLeadSet.size, sentLeadSet.size),
+        replyRate: safeRate(repliedLeadSet.size, sentLeadSet.size),
+        bounceRate: safeRate(bouncedLeadSet.size, sentLeadSet.size),
         conversionRate: safeRate(enrollmentCounts.replied, enrollmentCounts.total),
       },
       enrollments: enrollmentCounts,

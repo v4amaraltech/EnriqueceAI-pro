@@ -62,11 +62,14 @@ export async function GET(
       // Create 'clicked' interaction record (only on first click)
       if (isFirstClick) {
         const { data: sent } = (await from(supabase, 'interactions')
-          .select('org_id, lead_id, cadence_id, step_id')
+          .select('org_id, lead_id, cadence_id, step_id, metadata')
           .eq('id', interactionId)
-          .single()) as { data: { org_id: string; lead_id: string; cadence_id: string | null; step_id: string | null } | null };
+          .single()) as { data: { org_id: string; lead_id: string; cadence_id: string | null; step_id: string | null; metadata: Record<string, unknown> | null } | null };
 
         if (sent) {
+          // H1: inherit the A/B variant from the parent 'sent' so click metrics
+          // attribute to the correct variant instead of always landing in A.
+          const abVariant = sent.metadata?.ab_variant;
           await from(supabase, 'interactions')
             .insert({
               org_id: sent.org_id,
@@ -75,7 +78,11 @@ export async function GET(
               step_id: sent.step_id,
               channel: 'email',
               type: 'clicked',
-              metadata: { sent_interaction_id: interactionId, url: parsedUrl.href },
+              metadata: {
+                sent_interaction_id: interactionId,
+                url: parsedUrl.href,
+                ...(abVariant ? { ab_variant: abVariant } : {}),
+              },
             } as Record<string, unknown>);
         }
       }
