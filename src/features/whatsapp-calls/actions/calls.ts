@@ -47,7 +47,9 @@ export async function startWhatsAppCall(
   }
 
   try {
-    const { callId } = await startVoiceCall(session.service_session_id, parsed.data.phone);
+    // Gravação sempre ON (decisão de produto) — o lead é informado no início da
+    // chamada. Texto/retenção LGPD: ver RECORDING_CONSENT_NOTICE (a validar c/ jurídico).
+    const { callId } = await startVoiceCall(session.service_session_id, parsed.data.phone, true);
     return { success: true, data: { sid: session.service_session_id, callId } };
   } catch (err) {
     return mapVoiceError(err);

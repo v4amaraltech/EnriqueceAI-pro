@@ -11,6 +11,7 @@ import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp
 
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
 import { persistWhatsAppCall } from '../actions/persist-call';
+import { RECORDING_CONSENT_NOTICE } from '../constants';
 import { INITIAL_CALL_STATE, callReducer } from '../call-machine';
 import { acquireMic, releaseMic } from '../voice-call-media';
 import { CallDispositionForm } from './CallDispositionForm';
@@ -54,6 +55,9 @@ export function ActivityWhatsAppCallPanel({
   const callStartedAtRef = useRef<string | null>(null);
   const answeredAtRef = useRef<string | null>(null);
   const durationRef = useRef<number>(0);
+  // URL da gravação (story 7.8) — preenchida pela perna de mídia do 7.1 ao
+  // encerrar (TODO em voice-call-media). Hoje fica null no shell.
+  const recordingUrlRef = useRef<string | null>(null);
 
   // Cronômetro só na conexão real (status active).
   useEffect(() => {
@@ -138,6 +142,7 @@ export function ActivityWhatsAppCallPanel({
               durationSeconds: durationRef.current,
               startedAt: callStartedAtRef.current ?? new Date().toISOString(),
               answeredAt: answeredAtRef.current,
+              recordingUrl: recordingUrlRef.current,
             }).then((r) => r.success)
           }
           onDone={() => onResolved()}
@@ -151,6 +156,11 @@ export function ActivityWhatsAppCallPanel({
       <div>
         <h3 className="text-sm font-semibold">{activityName || 'Ligação via WhatsApp'}</h3>
         <p className="text-xs text-muted-foreground">{leadName}</p>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-400">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+        {RECORDING_CONSENT_NOTICE}
       </div>
 
       {callScript && (

@@ -5,10 +5,15 @@ vi.mock('@/lib/auth/require-auth', () => ({
 }));
 
 let queues: Record<string, unknown[]>;
+let inserts: Record<string, unknown[]>;
 
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'insert']) chain[m] = vi.fn(() => chain);
+  for (const m of ['select', 'eq']) chain[m] = vi.fn(() => chain);
+  chain.insert = vi.fn((payload: unknown) => {
+    (inserts[table] ??= []).push(payload);
+    return chain;
+  });
   const shift = () => (queues[table]?.shift() ?? { data: null, error: null });
   chain.single = vi.fn(() => Promise.resolve(shift()));
   chain.maybeSingle = vi.fn(() => Promise.resolve(shift()));
@@ -42,6 +47,7 @@ describe('persistWhatsAppCall', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queues = {};
+    inserts = {};
   });
 
   it('inserts the call + interaction and returns the call id', async () => {
@@ -51,9 +57,14 @@ describe('persistWhatsAppCall', () => {
       { data: { id: 'call-1' }, error: null }, // insert ... select single
     ];
 
-    const result = await persistWhatsAppCall(baseInput);
+    const result = await persistWhatsAppCall({ ...baseInput, recordingUrl: 'https://voice.example/rec/1.mp3' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.callId).toBe('call-1');
+
+    const callRow = inserts.calls?.[0] as Record<string, unknown>;
+    expect(callRow.type).toBe('outbound');
+    expect(callRow.recording_url).toBe('https://voice.example/rec/1.mp3');
+    expect((callRow.metadata as Record<string, unknown>).provider).toBe('whatsapp');
   });
 
   it('is idempotent on the same service_call_id', async () => {
