@@ -206,7 +206,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           {/* WhatsApp */}
           <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="w-10 shrink-0">
+            <div className="flex w-10 shrink-0 items-center justify-center">
               <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">WhatsApp</div>
@@ -266,7 +266,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
 
           {/* API4Com */}
           <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="w-10 shrink-0">
+            <div className="flex w-10 shrink-0 items-center justify-center">
               <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">API4Com</div>
@@ -325,8 +325,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
           {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7) */}
           {isManager && (
             <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-              <div className="flex w-10 shrink-0 justify-center">
-                <WhatsAppGlyph className="h-7 w-7 text-emerald-600" />
+              <div className="flex w-10 shrink-0 items-center justify-center">
+                <WhatsAppGlyph className="h-8 w-8 text-emerald-600" />
               </div>
               <div className="w-32 shrink-0 font-medium">WhatsApp Call</div>
               <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
@@ -345,7 +345,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
 
           {/* Google */}
           <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="w-10 shrink-0">
+            <div className="flex w-10 shrink-0 items-center justify-center">
               <Image src="/logos/google-logo.png" alt="Google" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 flex items-center gap-2">
@@ -412,7 +412,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
 
           {/* Apollo */}
           <div className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30">
-            <div className="w-10 shrink-0">
+            <div className="flex w-10 shrink-0 items-center justify-center">
               <Image src="/logos/apollo-logo.webp" alt="Apollo.io" width={32} height={32} className="rounded-lg" />
             </div>
             <div className="w-32 shrink-0 font-medium">Apollo.io</div>
@@ -465,7 +465,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 key={provider.id}
                 className={`group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 ${!isLast ? 'border-b border-[var(--border)]' : ''}`}
               >
-                <div className="w-10 shrink-0">
+                <div className="flex w-10 shrink-0 items-center justify-center">
                   <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
                 </div>
                 <div className="w-32 shrink-0 font-medium">{provider.name}</div>

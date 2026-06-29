@@ -486,7 +486,7 @@ export function ActivityPhonePanel({
 
       {/* Post-call result modal */}
       <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resultado da Ligação</DialogTitle>
           </DialogHeader>
