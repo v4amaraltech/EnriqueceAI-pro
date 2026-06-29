@@ -26,3 +26,18 @@ export interface WhatsAppCallSessionInsert {
   status?: WhatsAppCallSessionStatus;
   paired_at?: string | null;
 }
+
+// View-model da tela manager-only "Números WhatsApp" (story 7.3): um membro +
+// sua sessão (ou null se nunca pareou).
+export interface WhatsAppNumberRow {
+  userId: string;
+  name: string;
+  role: 'manager' | 'sdr';
+  session: {
+    id: string;
+    serviceSessionId: string;
+    phoneNumber: string | null;
+    status: WhatsAppCallSessionStatus;
+    pairedAt: string | null;
+  } | null;
+}
