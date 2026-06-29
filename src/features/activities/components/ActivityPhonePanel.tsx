@@ -2,34 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
-import {
-  CalendarIcon,
-  CalendarPlus,
-  CalendarX,
-  CheckCircle2,
-  Clock,
-  FileText,
-  Loader2,
-  Phone,
-  PhoneCall,
-  PhoneOff,
-  RotateCcw,
-  ThumbsDown,
-  User,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { Clock, Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
 import { Label } from '@/shared/components/ui/label';
 import {
   Select,
@@ -38,19 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import { Calendar } from '@/shared/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
-import { Switch } from '@/shared/components/ui/switch';
-import { Textarea } from '@/shared/components/ui/textarea';
-import { cn } from '@/lib/utils';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
-import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
 import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
 
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
@@ -102,11 +74,6 @@ export function ActivityPhonePanel({
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
-  const [notes, setNotes] = useState('');
-  const [scheduleReturn, setScheduleReturn] = useState(false);
-  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
-  const [returnTime, setReturnTime] = useState('09:00');
-  const [returnChannel, setReturnChannel] = useState<'phone' | 'whatsapp'>('phone');
   const [elapsed, setElapsed] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -118,7 +85,6 @@ export function ActivityPhonePanel({
   // <5s with both supposedly answered, which is physically impossible.
   const inFlightRef = useRef(false);
   const [attempts, setAttempts] = useState<CallAttempt[]>([]);
-  const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
@@ -190,18 +156,18 @@ export function ActivityPhonePanel({
     });
   }
 
-  function buildCurrentAttempt(): CallAttempt {
+  function buildCurrentAttempt(attemptNotes: string): CallAttempt {
     return {
       attemptNumber: currentAttemptNumber,
       phone: selectedPhone,
       status: callStatus,
-      notes,
+      notes: attemptNotes,
       durationSeconds: callDuration,
     };
   }
 
-  function handleRetryAttempt() {
-    const attempt = buildCurrentAttempt();
+  function handleRetryAttempt(attemptNotes: string) {
+    const attempt = buildCurrentAttempt(attemptNotes);
 
     // Persist notes + duration. Call status (significant/not_connected/etc)
     // is owned by the API4COM webhook now — we don't pass it here.
@@ -209,7 +175,7 @@ export function ActivityPhonePanel({
       classifyWebphoneCall({
         callId,
         clientDurationSeconds: callDuration,
-        notes: notes || undefined,
+        notes: attemptNotes || undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
@@ -225,7 +191,6 @@ export function ActivityPhonePanel({
 
     setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
-    setNotes('');
     setCallState('idle');
     setCallId(null);
     setProviderCallId(null);
@@ -233,8 +198,8 @@ export function ActivityPhonePanel({
     setCallDuration(0);
   }
 
-  function handleSubmitResult() {
-    const allAttempts = [...attempts, buildCurrentAttempt()];
+  function handleSubmitResult(resultNotes: string, returnSchedule: CallReturnSchedule | null) {
+    const allAttempts = [...attempts, buildCurrentAttempt(resultNotes)];
     const aggregatedNotes = formatAggregatedNotes(allAttempts);
 
     // Persist notes + duration. Call status (significant/not_connected/etc)
@@ -243,33 +208,24 @@ export function ActivityPhonePanel({
       classifyWebphoneCall({
         callId,
         clientDurationSeconds: callDuration,
-        notes: notes || undefined,
+        notes: resultNotes || undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
 
     // Schedule return activity if requested
-    if (scheduleReturn && returnDate) {
-      const [hours, minutes] = returnTime.split(':').map(Number);
-      const scheduledAt = new Date(returnDate);
-      scheduledAt.setHours(hours!, minutes!, 0, 0);
-
+    if (returnSchedule) {
       scheduleActivity({
         leadId,
-        channel: returnChannel,
-        scheduledAt: scheduledAt.toISOString(),
-        notes: notes ? `Retorno: ${notes}` : undefined,
+        channel: returnSchedule.channel,
+        scheduledAt: returnSchedule.scheduledAt,
+        notes: resultNotes ? `Retorno: ${resultNotes}` : undefined,
         completeEnrollments: true,
       }).catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
     }
 
     onMarkDone(aggregatedNotes);
     setCallStatus('');
-    setNotes('');
-    setScheduleReturn(false);
-    setReturnDate(undefined);
-    setReturnTime('09:00');
-    setReturnChannel('phone');
     setCallState('idle');
     setCallId(null);
     setProviderCallId(null);
@@ -282,7 +238,6 @@ export function ActivityPhonePanel({
     // Keep previous attempts when dismissing (user might want to retry)
     setCallState('idle');
     setCallStatus('');
-    setNotes('');
     setCallId(null);
     setProviderCallId(null);
     setElapsed(0);
@@ -484,206 +439,28 @@ export function ActivityPhonePanel({
         </Button>
       </div>
 
-      {/* Post-call result modal */}
-      <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
-        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Resultado da Ligação</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Call duration summary */}
-            <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">{leadName}</p>
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{selectedPhone}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-sm tabular-nums">{formatDuration(callDuration)}</p>
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
-              </div>
-            </div>
-
-            {/* Call status is owned by the API4COM webhook + reconcile cron;
-                the manual classifier here was the source of the BI divergence. */}
-
-            {/* Notes */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
-                <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  Anotações
-                </Label>
-              </div>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Faça anotações sobre a ligação..."
-                className="min-h-[100px] resize-y"
-              />
-            </div>
-            {/* Schedule return toggle. Used to gate on callStatus ===
-                'connected' | 'gatekeeper', but the manual status select was
-                removed (API4COM owns the truth now). SDR decides each call
-                whether a return needs to be scheduled. */}
-            <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Agendar retorno</Label>
-                  <Switch checked={scheduleReturn} onCheckedChange={setScheduleReturn} />
-                </div>
-                {scheduleReturn && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Canal</Label>
-                        <Select value={returnChannel} onValueChange={(v) => setReturnChannel(v as 'phone' | 'whatsapp')}>
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="phone">Ligação</SelectItem>
-                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Data</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn('h-8 w-full justify-start text-xs font-normal', !returnDate && 'text-muted-foreground')}>
-                              <CalendarIcon className="mr-1 h-3 w-3" />
-                              {returnDate ? format(returnDate, 'dd/MM', { locale: ptBR }) : 'Data'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar mode="single" selected={returnDate} onSelect={setReturnDate} locale={ptBR} disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Horário</Label>
-                        <Select value={returnTime} onValueChange={setReturnTime}>
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => i + 8).flatMap((h) => [
-                              `${h.toString().padStart(2, '0')}:00`,
-                              `${h.toString().padStart(2, '0')}:30`,
-                            ]).map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      A cadência será encerrada e a atividade de retorno criada.
-                    </p>
-                  </div>
-                )}
-              </div>
-          </div>
-
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* Esquerda: ações de sair/repetir */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={handleDismissModal}>
-                Cancelar
-              </Button>
-              {canRetry && (
-                <Button variant="secondary" onClick={handleRetryAttempt}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Tentar novamente
-                </Button>
-              )}
-            </div>
-            {/* Direita: desfechos da ligação */}
-            <div className="flex flex-wrap gap-2 sm:justify-end">
-              {canMarkNoShow && (
-                <Button
-                  onClick={handleMarkNoShow}
-                  disabled={isSending || isPending}
-                  className="bg-amber-500 text-white hover:bg-amber-600"
-                >
-                  <CalendarX className="mr-2 h-4 w-4" />
-                  No-show
-                </Button>
-              )}
-              {onLeadLost && (
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    handleDismissModal();
-                    onLeadLost();
-                  }}
-                  disabled={isSending}
-                >
-                  <ThumbsDown className="mr-2 h-4 w-4" />
-                  Perdido
-                </Button>
-              )}
-              {/* Agendar Reunião — always visible now. The previous gate on
-                  callStatus 'connected' | 'meeting_scheduled' depended on the
-                  manual select that's gone; SDR decides per call. */}
-              <Button
-                variant="default"
-                onClick={() => setScheduleMeetingOpen(true)}
-                disabled={isSending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <CalendarPlus className="mr-2 h-4 w-4" />
-                Agendar Reunião
-              </Button>
-              <Button onClick={handleSubmitResult} disabled={isSending}>
-                {isSending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                )}
-                Concluir atividade
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Schedule Meeting Modal — opens on top of result modal */}
-      <ScheduleMeetingModal
-        open={scheduleMeetingOpen}
-        onOpenChange={setScheduleMeetingOpen}
-        leadId={leadId}
-        leadEmail={leadEmail ?? null}
+      {/* Post-call result modal — shared component (também usado na Ligação WhatsApp) */}
+      <CallResultModal
+        open={callState === 'ended'}
+        onClose={handleDismissModal}
         leadName={leadName}
+        leadId={leadId}
+        leadEmail={leadEmail}
         leadFirstName={leadFirstName}
-        defaultTitle={`V4 Company + ${leadName}`}
-        onScheduled={() => {
-          // Auto-set status and complete the activity after meeting scheduled
-          setCallStatus('meeting_scheduled');
-          // Append meeting note to the call notes
-          const meetingNote = '✅ Reunião agendada durante a ligação.';
-          const finalNotes = notes ? `${notes}\n\n${meetingNote}` : meetingNote;
-          setNotes(finalNotes);
-          // Build attempt with updated values and submit
-          const allAttempts = [...attempts, {
-            attemptNumber: currentAttemptNumber,
-            phone: selectedPhone,
-            status: 'meeting_scheduled',
-            notes: finalNotes,
-            durationSeconds: callDuration,
-          }];
-          const aggregated = formatAggregatedNotes(allAttempts);
-          onMarkDone(aggregated);
-          // Reset state
-          setCallStatus('');
-          setNotes('');
-          setCallState('idle');
-          setCallId(null);
-          setProviderCallId(null);
-          setElapsed(0);
-          setCallDuration(0);
-          setAttempts([]);
-        }}
+        phoneLabel={selectedPhone}
+        durationSeconds={callDuration}
+        isSending={isSending || isPending}
+        onRetry={canRetry ? handleRetryAttempt : undefined}
+        onMarkNoShow={canMarkNoShow ? handleMarkNoShow : undefined}
+        onLeadLost={
+          onLeadLost
+            ? () => {
+                handleDismissModal();
+                onLeadLost();
+              }
+            : undefined
+        }
+        onConclude={({ notes, returnSchedule }) => handleSubmitResult(notes, returnSchedule)}
       />
     </div>
   );

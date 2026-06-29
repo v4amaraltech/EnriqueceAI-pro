@@ -56,8 +56,9 @@ export interface CallResultModalProps {
   phoneLabel: string;
   durationSeconds: number;
   isSending?: boolean;
-  /** Quando presente, mostra "Tentar novamente". */
-  onRetry?: () => void;
+  /** Quando presente, mostra "Tentar novamente". Recebe as anotações atuais (o
+   *  fluxo de ligação normal registra a tentativa com elas antes de re-discar). */
+  onRetry?: (notes: string) => void;
   /** Quando presente, mostra "Perdido". */
   onLeadLost?: () => void;
   /** Quando presente, mostra "No-show". */
@@ -227,7 +228,7 @@ export function CallResultModal({
                 Cancelar
               </Button>
               {onRetry && (
-                <Button variant="secondary" onClick={onRetry} disabled={isSending}>
+                <Button variant="secondary" onClick={() => onRetry(notes)} disabled={isSending}>
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Tentar novamente
                 </Button>
