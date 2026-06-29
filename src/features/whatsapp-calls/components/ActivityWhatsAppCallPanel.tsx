@@ -10,6 +10,7 @@ import { Label } from '@/shared/components/ui/label';
 import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
+import { persistWhatsAppCall } from '../actions/persist-call';
 import { INITIAL_CALL_STATE, callReducer } from '../call-machine';
 import { acquireMic, releaseMic } from '../voice-call-media';
 import { CallDispositionForm } from './CallDispositionForm';
@@ -23,6 +24,8 @@ function formatElapsed(totalSeconds: number): string {
 export function ActivityWhatsAppCallPanel({
   enrollmentId,
   stepId,
+  cadenceId,
+  leadId,
   leadName,
   phones,
   activityName,
@@ -31,6 +34,8 @@ export function ActivityWhatsAppCallPanel({
 }: {
   enrollmentId: string;
   stepId: string;
+  cadenceId: string;
+  leadId: string;
   leadName: string;
   phones: ResolvedPhone[];
   activityName: string | null;
@@ -45,6 +50,10 @@ export function ActivityWhatsAppCallPanel({
   const sidRef = useRef<string | null>(null);
   const callIdRef = useRef<string | null>(null);
   const micRef = useRef<MediaStream | null>(null);
+  // Metadados da chamada para persistir ao encerrar (story 7.7).
+  const callStartedAtRef = useRef<string | null>(null);
+  const answeredAtRef = useRef<string | null>(null);
+  const durationRef = useRef<number>(0);
 
   // Cronômetro só na conexão real (status active).
   useEffect(() => {
@@ -81,12 +90,14 @@ export function ActivityWhatsAppCallPanel({
       }
       sidRef.current = result.data.sid;
       callIdRef.current = result.data.callId;
+      callStartedAtRef.current = new Date().toISOString();
       dispatch({ type: 'CALL_STARTED' });
     });
   }
 
   // Stand-in temporário: até a perna SSE do 7.1, o atendimento é marcado à mão.
   function handleAnswered() {
+    answeredAtRef.current = new Date().toISOString();
     setNow(Date.now());
     dispatch({ type: 'ANSWERED', at: Date.now() });
   }
@@ -94,6 +105,8 @@ export function ActivityWhatsAppCallPanel({
   function handleHangup() {
     const sid = sidRef.current;
     const callId = callIdRef.current;
+    durationRef.current =
+      state.status === 'active' ? Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)) : 0;
     releaseMic(micRef.current);
     micRef.current = null;
     dispatch({ type: 'HANGUP' });
@@ -109,7 +122,26 @@ export function ActivityWhatsAppCallPanel({
     return (
       <div className="space-y-4 p-1">
         <p className="text-sm text-muted-foreground">Ligação encerrada com {leadName}.</p>
-        <CallDispositionForm enrollmentId={enrollmentId} stepId={stepId} onDone={() => onResolved()} />
+        <CallDispositionForm
+          enrollmentId={enrollmentId}
+          stepId={stepId}
+          onPersist={(disposition) =>
+            persistWhatsAppCall({
+              stepId,
+              cadenceId,
+              leadId,
+              sid: sidRef.current ?? '',
+              callId: callIdRef.current ?? '',
+              destination: selectedPhone,
+              disposition,
+              connected: !!answeredAtRef.current,
+              durationSeconds: durationRef.current,
+              startedAt: callStartedAtRef.current ?? new Date().toISOString(),
+              answeredAt: answeredAtRef.current,
+            }).then((r) => r.success)
+          }
+          onDone={() => onResolved()}
+        />
       </div>
     );
   }

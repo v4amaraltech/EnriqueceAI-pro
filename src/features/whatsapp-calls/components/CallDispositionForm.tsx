@@ -28,10 +28,14 @@ function toLocalInputValue(date: Date): string {
 export function CallDispositionForm({
   enrollmentId,
   stepId,
+  onPersist,
   onDone,
 }: {
   enrollmentId: string;
   stepId: string;
+  // Persistência best-effort da call (story 7.7) com a disposition escolhida.
+  // Retorna true se gravou. Falha aqui NÃO bloqueia o avanço da cadência.
+  onPersist?: (disposition: CallStatus) => Promise<boolean>;
   onDone?: (result: DispositionResult) => void;
 }) {
   const [selected, setSelected] = useState<CallStatus | null>(null);
@@ -48,6 +52,12 @@ export function CallDispositionForm({
       needsCallback && callbackAt ? new Date(callbackAt).toISOString() : undefined;
 
     startTransition(async () => {
+      // Persiste a call primeiro (best-effort) — não bloqueia a cadência.
+      if (onPersist) {
+        const persisted = await onPersist(selected);
+        if (!persisted) toast.error('Não foi possível registrar a ligação no histórico.');
+      }
+
       const result = await applyCallDisposition({
         enrollmentId,
         stepId,
