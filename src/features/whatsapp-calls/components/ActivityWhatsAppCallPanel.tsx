@@ -8,12 +8,15 @@ import { Button } from '@/shared/components/ui/button';
 
 import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 
+import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
+import { CallResultModal } from '@/features/activities/components/CallResultModal';
+
+import { applyCallDisposition } from '../actions/apply-call-disposition';
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
 import { persistWhatsAppCall } from '../actions/persist-call';
 import { INITIAL_CALL_STATE, callReducer } from '../call-machine';
 import { RECORDING_CONSENT_NOTICE } from '../constants';
 import { acquireMic, openCall, releaseMic, subscribeCallEvents, type OpenCall } from '../voice-call-media';
-import { CallDispositionForm } from './CallDispositionForm';
 import { WhatsAppGlyph } from './WhatsAppGlyph';
 
 function formatElapsed(totalSeconds: number): string {
@@ -28,25 +31,34 @@ export function ActivityWhatsAppCallPanel({
   cadenceId,
   leadId,
   leadName,
+  leadEmail,
+  leadFirstName,
   phones,
   activityName,
   callScript,
   onResolved,
+  onLeadLost,
 }: {
   enrollmentId: string;
   stepId: string;
   cadenceId: string;
   leadId: string;
   leadName: string;
+  leadEmail?: string | null;
+  leadFirstName?: string | null;
   phones: ResolvedPhone[];
   activityName: string | null;
   callScript: string | null;
   onResolved: () => void;
+  onLeadLost?: () => void;
 }) {
   const [state, dispatch] = useReducer(callReducer, INITIAL_CALL_STATE);
   const [selectedPhone, setSelectedPhone] = useState(phones[0]?.raw ?? '');
   const [now, setNow] = useState<number>(() => Date.now());
   const [isPending, startTransition] = useTransition();
+  // Duração final em state (não ref) para o render do modal de resultado —
+  // ler durationRef.current durante o render viola react-hooks/refs.
+  const [endedDuration, setEndedDuration] = useState(0);
 
   const sidRef = useRef<string | null>(null);
   const callIdRef = useRef<string | null>(null);
@@ -101,6 +113,7 @@ export function ActivityWhatsAppCallPanel({
     durationRef.current = answeredAtRef.current
       ? Math.max(0, Math.floor((Date.now() - Date.parse(answeredAtRef.current)) / 1000))
       : 0;
+    setEndedDuration(durationRef.current);
     unsubRef.current?.();
     unsubRef.current = null;
     connRef.current?.close();
@@ -175,33 +188,74 @@ export function ActivityWhatsAppCallPanel({
     }
   }
 
-  // Encerrada → captura de disposition (story 7.6) que avança/reagenda a cadência.
+  // Encerrada → modal de resultado compartilhado (anotações + agendar retorno +
+  // Perdido / Agendar Reunião / Concluir). O "atendeu" vem do SSE; "Concluir"
+  // avança a cadência, "Agendar retorno" cria a atividade de retorno e encerra.
   if (state.status === 'ended') {
     return (
-      <div className="space-y-4 p-1">
-        <p className="text-sm text-muted-foreground">Ligação encerrada com {leadName}.</p>
-        <CallDispositionForm
-          enrollmentId={enrollmentId}
-          stepId={stepId}
-          onPersist={(disposition) =>
-            persistWhatsAppCall({
+      <CallResultModal
+        open
+        onClose={() => onResolved()}
+        leadName={leadName}
+        leadId={leadId}
+        leadEmail={leadEmail}
+        leadFirstName={leadFirstName}
+        phoneLabel={displayNumber}
+        durationSeconds={endedDuration}
+        isSending={isPending}
+        onRetry={() => dispatch({ type: 'RESET' })}
+        onLeadLost={onLeadLost}
+        onConclude={({ notes, returnSchedule }) => {
+          startTransition(async () => {
+            const persistDisposition = returnSchedule
+              ? 'no_contact'
+              : answeredAtRef.current
+                ? 'significant'
+                : 'not_connected';
+            const persisted = await persistWhatsAppCall({
               stepId,
               cadenceId,
               leadId,
               sid: sidRef.current ?? '',
               callId: callIdRef.current ?? '',
               destination: selectedPhone,
-              disposition,
+              disposition: persistDisposition,
               connected: !!answeredAtRef.current,
               durationSeconds: durationRef.current,
               startedAt: callStartedAtRef.current ?? new Date().toISOString(),
               answeredAt: answeredAtRef.current,
               recordingUrl: recordingUrlRef.current,
-            }).then((r) => r.success)
-          }
-          onDone={() => onResolved()}
-        />
-      </div>
+              notes,
+            });
+            if (!persisted.success) {
+              toast.error('Não foi possível registrar a ligação no histórico.');
+            }
+
+            if (returnSchedule) {
+              const r = await scheduleActivity({
+                leadId,
+                channel: returnSchedule.channel,
+                scheduledAt: returnSchedule.scheduledAt,
+                notes: notes || undefined,
+                completeEnrollments: true,
+              });
+              if (!r.success) {
+                toast.error(r.error);
+                return;
+              }
+              toast.success('Retorno agendado');
+            } else {
+              const r = await applyCallDisposition({ enrollmentId, stepId, disposition: 'significant' });
+              if (!r.success) {
+                toast.error(r.error);
+                return;
+              }
+              toast.success('Atividade concluída');
+            }
+            onResolved();
+          });
+        }}
+      />
     );
   }
 
