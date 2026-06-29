@@ -20,7 +20,7 @@ interface ActivityCategory {
   defaultItems: ActivityTypeItem[];
 }
 
-const DEFAULT_IDS = new Set(['new-email', 'new-phone', 'new-linkedin', 'new-whatsapp', 'new-research']);
+const DEFAULT_IDS = new Set(['new-email', 'new-phone', 'new-whatsapp-call', 'new-linkedin', 'new-whatsapp', 'new-research']);
 
 const categories: ActivityCategory[] = [
   {
@@ -39,6 +39,7 @@ const categories: ActivityCategory[] = [
     channel: 'phone',
     defaultItems: [
       { id: 'new-phone', channel: 'phone', label: 'Ligação' },
+      { id: 'new-whatsapp-call', channel: 'phone', label: 'WhatsApp Ligação' },
     ],
   },
   {
@@ -48,7 +49,7 @@ const categories: ActivityCategory[] = [
     channel: 'linkedin',
     defaultItems: [
       { id: 'new-linkedin', channel: 'linkedin', label: 'LinkedIn' },
-      { id: 'new-whatsapp', channel: 'whatsapp', label: 'WhatsApp' },
+      { id: 'new-whatsapp', channel: 'whatsapp', label: 'WhatsApp Msg' },
     ],
   },
   {

@@ -33,7 +33,9 @@ describe('ActivityTypeSidebar', () => {
     render(<ActivityTypeSidebar />);
     // All categories start expanded
     expect(screen.getByText('LinkedIn')).toBeInTheDocument();
-    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp Msg')).toBeInTheDocument();
+    // WhatsApp Ligação lives under the Ligação category (tracked as a phone step)
+    expect(screen.getByText('WhatsApp Ligação')).toBeInTheDocument();
   });
 
   it('should collapse a category when clicked', async () => {
