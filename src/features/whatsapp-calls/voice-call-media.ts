@@ -110,3 +110,41 @@ export function subscribeCallEvents(
 
   return () => es.close();
 }
+
+interface SessionSnapshot {
+  sessions?: Array<{ id?: string; jid?: string | null; state?: string | null; paired?: boolean }>;
+  qr?: string;
+  paired?: boolean;
+}
+
+/**
+ * Assina os eventos de PAREAMENTO (SSE proxiado). O AstraCalls entrega o QR só
+ * por aqui — como uma string crua `wa.me/...` em `{ qr }` (sem o sid) — e o estado
+ * pareado nos snapshots `{ sessions: [...] }`. Como o pareamento é uma ação única
+ * por vez, o QR do stream é o da sessão `sid` recém-criada; o pareado é confirmado
+ * pelo snapshot (onde o `sid` aparece com `paired: true`). Retorna o unsubscribe.
+ */
+export function subscribeSessionEvents(
+  sid: string,
+  handlers: { onQr?: (qr: string) => void; onPaired?: () => void; onDead?: () => void },
+): () => void {
+  const clientId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now());
+  const es = new EventSource(`/api/whatsapp-calls/events?clientId=${encodeURIComponent(clientId)}`);
+
+  es.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data) as SessionSnapshot;
+      if (typeof data.qr === 'string' && data.qr) handlers.onQr?.(data.qr);
+      if (Array.isArray(data.sessions)) {
+        const mine = data.sessions.find((s) => s.id === sid);
+        if (mine?.paired === true) handlers.onPaired?.();
+        else if (mine && (mine.state === 'close' || mine.state === 'logged_out')) handlers.onDead?.();
+      }
+    } catch {
+      // ignora linhas que não são JSON
+    }
+  };
+
+  return () => es.close();
+}

@@ -84,6 +84,8 @@ interface RawSession {
   sid?: string;
   jid?: string | null;
   status?: string | null;
+  /** whatsmeow connection state ('open' | 'qr' | 'close' | ...) — campo real do AstraCalls. */
+  state?: string | null;
   paired?: boolean;
   qr?: string | null;
   qrCode?: string | null;
@@ -92,8 +94,10 @@ interface RawSession {
 
 function mapStatus(raw: RawSession): WhatsAppCallSessionStatus {
   if (raw.paired === true) return 'connected';
-  const s = (raw.status ?? '').toLowerCase();
-  if (s === 'disconnected' || s === 'logged_out' || s === 'loggedout') return 'disconnected';
+  const s = (raw.status ?? raw.state ?? '').toLowerCase();
+  if (s === 'disconnected' || s === 'logged_out' || s === 'loggedout' || s === 'close') {
+    return 'disconnected';
+  }
   // Em pareamento (tem QR) ou estado intermediário.
   return 'pairing';
 }

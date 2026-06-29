@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { toast } from 'sonner';
 
 import {
@@ -14,8 +13,8 @@ import {
 } from '@/shared/components/ui/dialog';
 
 import { createPairingSession, getPairingStatus, repairSession } from '../actions/pairing';
-
-const POLL_INTERVAL_MS = 2500;
+import { subscribeSessionEvents } from '../voice-call-media';
+import { QrCode } from './QrCode';
 
 export interface PairTarget {
   userId: string;
@@ -29,6 +28,10 @@ type Phase = 'starting' | 'awaiting' | 'connected' | 'error';
 /**
  * Fluxo de pareamento. Montado via `key` por tentativa, então o estado inicial
  * vem do useState (sem reset síncrono dentro de efeito) — evita cascading renders.
+ *
+ * O QR e o estado pareado chegam via SSE (o AstraCalls não os expõe no polling):
+ * `subscribeSessionEvents` entrega o QR (string `wa.me/...`) e sinaliza quando o
+ * `sid` aparece pareado; aí `getPairingStatus` persiste o número + `connected`.
  */
 function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: () => void }) {
   const router = useRouter();
@@ -37,6 +40,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
   const [sid, setSid] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const startedRef = useRef(false);
+  const confirmingRef = useRef(false);
 
   // Inicia o pareamento na montagem (setState só dentro do callback async).
   useEffect(() => {
@@ -53,31 +57,38 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
         return;
       }
       setSid(result.data.sid);
-      setQr(result.data.qr);
+      if (result.data.qr) setQr(result.data.qr);
       setPhase(result.data.status === 'connected' ? 'connected' : 'awaiting');
     })();
   }, [target]);
 
-  // Polling do status enquanto aguarda o scan do QR.
+  // Assina o SSE enquanto aguarda o scan: recebe o QR e detecta o pareamento.
   useEffect(() => {
     if (phase !== 'awaiting' || !sid) return undefined;
-    const id = setInterval(() => {
-      void (async () => {
-        const result = await getPairingStatus(sid);
-        if (!result.success) return;
-        if (result.data.qr) setQr((prev) => (result.data.qr !== prev ? result.data.qr : prev));
-        if (result.data.status === 'connected') {
-          setPhase('connected');
-          toast.success('Número WhatsApp pareado com sucesso');
-          router.refresh();
-          onConnected();
-        } else if (result.data.status === 'disconnected') {
-          setErrorMsg('A sessão caiu antes de parear. Tente de novo.');
-          setPhase('error');
-        }
-      })();
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    const unsubscribe = subscribeSessionEvents(sid, {
+      onQr: (next) => setQr((prev) => (next !== prev ? next : prev)),
+      onPaired: () => {
+        if (confirmingRef.current) return;
+        confirmingRef.current = true;
+        void (async () => {
+          // Confirma e persiste o número + status `connected` no banco.
+          const result = await getPairingStatus(sid);
+          if (result.success && result.data.status === 'connected') {
+            setPhase('connected');
+            toast.success('Número WhatsApp pareado com sucesso');
+            router.refresh();
+            onConnected();
+          } else {
+            confirmingRef.current = false;
+          }
+        })();
+      },
+      onDead: () => {
+        setErrorMsg('A sessão caiu antes de parear. Tente de novo.');
+        setPhase('error');
+      },
+    });
+    return unsubscribe;
   }, [phase, sid, router, onConnected]);
 
   return (
@@ -87,20 +98,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
       {phase === 'awaiting' && (
         <>
           {qr ? (
-            qr.startsWith('data:image') ? (
-              <Image
-                src={qr}
-                alt="QR Code de pareamento"
-                width={240}
-                height={240}
-                unoptimized
-                className="rounded-md border bg-white p-2"
-              />
-            ) : (
-              <pre className="max-w-full overflow-auto rounded-md border bg-[var(--muted)] p-3 text-left text-xs">
-                {qr}
-              </pre>
-            )
+            <QrCode value={qr} />
           ) : (
             <p className="text-sm text-muted-foreground">Aguardando o QR do serviço de voz…</p>
           )}
