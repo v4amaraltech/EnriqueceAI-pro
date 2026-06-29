@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import { createPairingSession, getPairingStatus, repairSession } from '../actions/pairing';
+import { cancelPairingSession, createPairingSession, getPairingStatus } from '../actions/pairing';
 import { subscribeSessionEvents } from '../voice-call-media';
 import { QrCode } from './QrCode';
 
@@ -41,26 +41,40 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const startedRef = useRef(false);
   const confirmingRef = useRef(false);
+  const sidRef = useRef<string | null>(null);
+  const phaseRef = useRef<Phase>(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   // Inicia o pareamento na montagem (setState só dentro do callback async).
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     void (async () => {
-      const result =
-        target.mode === 'repair' && target.sid
-          ? await repairSession(target.sid)
-          : await createPairingSession(target.userId);
+      // Sempre cria uma sessão nova (QR fresco) — a action limpa a anterior.
+      const result = await createPairingSession(target.userId);
       if (!result.success) {
         setErrorMsg(result.error);
         setPhase('error');
         return;
       }
+      sidRef.current = result.data.sid;
       setSid(result.data.sid);
       if (result.data.qr) setQr(result.data.qr);
       setPhase(result.data.status === 'connected' ? 'connected' : 'awaiting');
     })();
   }, [target]);
+
+  // Ao fechar sem parear (desmontar), remove a sessão abandonada do serviço.
+  useEffect(
+    () => () => {
+      if (sidRef.current && phaseRef.current !== 'connected') {
+        void cancelPairingSession(sidRef.current);
+      }
+    },
+    [],
+  );
 
   // Assina o SSE enquanto aguarda o scan: recebe o QR e detecta o pareamento.
   useEffect(() => {

@@ -135,12 +135,9 @@ export async function getVoiceSession(sid: string): Promise<VoiceSession | null>
   return found ? normalize(found) : null;
 }
 
-/** Gera um novo QR para re-parear uma sessão existente. */
-export async function pairVoiceSession(sid: string): Promise<VoiceSession> {
-  const raw = await request<RawSession>(`/api/sessions/${encodeURIComponent(sid)}/pair`, {
-    method: 'POST',
-  });
-  return normalize({ ...raw, sid });
+/** Remove uma sessão (conta) do serviço — limpa pareamentos abandonados/mortos. */
+export async function deleteVoiceSession(sid: string): Promise<void> {
+  await request<unknown>(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
 }
 
 // --- Chamadas (story 7.5) ------------------------------------------------------

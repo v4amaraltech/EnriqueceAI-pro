@@ -8,7 +8,6 @@ import {
   Check,
   FileSignature,
   Key,
-  Phone,
   RefreshCw,
   Settings2,
   Unplug,
@@ -29,6 +28,7 @@ import {
 
 import type { PlanFeatures } from '@/features/billing/types';
 import { checkFeature } from '@/features/billing/services/feature-flags';
+import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
 import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, CrmProvider, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { getCrmAuthUrl, disconnectCrm, triggerCrmSync } from '../actions/manage-crm';
@@ -326,9 +326,9 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
           {isManager && (
             <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
               <div className="flex w-10 shrink-0 justify-center">
-                <Phone className="h-7 w-7 text-emerald-600" />
+                <WhatsAppGlyph className="h-7 w-7 text-emerald-600" />
               </div>
-              <div className="w-32 shrink-0 font-medium">Ligação via WhatsApp</div>
+              <div className="w-32 shrink-0 font-medium">WhatsApp Call</div>
               <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Discador WhatsApp-nativo — pareie um número dedicado por SDR
               </div>
