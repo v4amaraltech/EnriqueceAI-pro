@@ -1,10 +1,22 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+// Pin the workspace root to THIS project directory. Without it, a stray
+// ~/package-lock.json (e.g. from an accidental `npm install` in the home dir)
+// makes Next/Turbopack infer the home directory as the workspace root and scan
+// ~/Documents — which macOS blocks via TCC ("reading dir ... Operation not
+// permitted"), breaking `next build` entirely.
+const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   devIndicators: false,
+  turbopack: {
+    root: projectRoot,
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',
