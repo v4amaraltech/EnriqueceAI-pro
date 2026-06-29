@@ -72,6 +72,7 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
     },
     activityName: null,
     callScript: null,
+    callProvider: null,
     ...overrides,
   };
 }

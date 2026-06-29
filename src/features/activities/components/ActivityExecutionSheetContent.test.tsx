@@ -107,6 +107,7 @@ function makeActivity(channel: string, overrides: Partial<PendingActivity> = {})
     lead: baseLead,
     activityName: null,
     callScript: null,
+    callProvider: null,
     ...overrides,
   };
 }

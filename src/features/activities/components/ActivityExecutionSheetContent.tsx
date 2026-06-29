@@ -18,6 +18,8 @@ import type { PendingActivity } from '../types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import { ActivityEmailCompose } from './ActivityEmailCompose';
+import { ActivityWhatsAppCallPanel } from '@/features/whatsapp-calls/components/ActivityWhatsAppCallPanel';
+
 import { ActivityPhonePanel } from './ActivityPhonePanel';
 import { ActivityResearchPanel } from './ActivityResearchPanel';
 import { ActivitySocialPointPanel } from './ActivitySocialPointPanel';
@@ -31,6 +33,7 @@ interface ActivityExecutionSheetContentProps {
   onMarkDone: (notes: string) => void;
   onLeadLost?: () => void;
   onReportWhatsAppInvalid?: () => void;
+  onCallResolved?: () => void;
   dialerProvider?: DialerProvider;
 }
 
@@ -42,6 +45,7 @@ export function ActivityExecutionSheetContent({
   onMarkDone,
   onLeadLost,
   onReportWhatsAppInvalid,
+  onCallResolved,
   dialerProvider,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -211,6 +215,22 @@ export function ActivityExecutionSheetContent({
   }
 
   // Phone
+  // Ligação via WhatsApp (passo phone + call_provider='whatsapp', Epic 7) usa o
+  // discador WebRTC nativo, não o painel de telefonia (API4COM).
+  if (activity.channel === 'phone' && activity.callProvider === 'whatsapp') {
+    return (
+      <ActivityWhatsAppCallPanel
+        enrollmentId={activity.enrollmentId}
+        stepId={activity.stepId}
+        leadName={leadName}
+        phones={phones}
+        activityName={activity.activityName}
+        callScript={activity.callScript}
+        onResolved={() => onCallResolved?.()}
+      />
+    );
+  }
+
   if (activity.channel === 'phone') {
     return (
       <ActivityPhonePanel
