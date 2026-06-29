@@ -264,6 +264,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // Load blacklisted email domains for all orgs in this batch
   const orgIds = [...new Set((enrollments ?? []).map((e) => e.lead.org_id))];
   const blacklistedDomains = new Set<string>();
+  const suppressedEmails = new Set<string>(); // M9: `${org_id}:${lower(email)}` unsubscribed
 
   // Pre-fetch every cadence step for the batch's cadences in one query.
   // Avoids the N+1 of fetching the current step per enrollment inside the loop.
@@ -288,6 +289,14 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       .in('org_id', orgIds)) as { data: Array<{ domain: string; org_id: string }> | null };
     for (const row of blacklistRows ?? []) {
       blacklistedDomains.add(`${row.org_id}:${row.domain}`);
+    }
+
+    // M9: pre-load suppressed (unsubscribed) e-mails for these orgs.
+    const { data: suppressionRows } = (await from(supabase, 'email_suppressions')
+      .select('org_id, email')
+      .in('org_id', orgIds)) as { data: Array<{ org_id: string; email: string }> | null };
+    for (const row of suppressionRows ?? []) {
+      suppressedEmails.add(`${row.org_id}:${row.email.toLowerCase()}`);
     }
   }
 
@@ -395,6 +404,20 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         if (bounceErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as bounced:`, bounceErr);
         result.skipped++;
         console.warn(`[cadence-engine] enrollment=${enrollment.id} status=bounced reason=auto_stop duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
+
+      // Auto-stop: lead unsubscribed (M9). Suppression is per org + e-mail, so it
+      // also stops other leads that share a suppressed address. Checked before any
+      // 'sent' interaction is recorded — we must not e-mail an opted-out address.
+      const suppressedEmail = enrollment.lead.email?.toLowerCase();
+      if (suppressedEmail && suppressedEmails.has(`${enrollment.lead.org_id}:${suppressedEmail}`)) {
+        const { error: unsubErr } = await from(supabase, 'cadence_enrollments')
+          .update({ status: 'unsubscribed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+          .eq('id', enrollment.id);
+        if (unsubErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as unsubscribed:`, unsubErr);
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} status=unsubscribed reason=auto_stop duration_ms=${Date.now() - stepStart}`);
         continue;
       }
 
@@ -632,6 +655,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             htmlBody: messageContent,
             threadId: replyThreadId,
             inReplyToMessageId,
+            leadId: enrollment.lead_id, // M9: drives the List-Unsubscribe header + footer
           },
           interaction.id,
           supabase,
