@@ -11,8 +11,8 @@ import type { WhatsAppCallSessionStatus } from '../types';
 import {
   VoiceServiceError,
   createVoiceSession,
+  deleteVoiceSession,
   getVoiceSession,
-  pairVoiceSession,
 } from '../services/voice-service-client';
 
 const uuidSchema = z.string().uuid();
@@ -71,19 +71,30 @@ export async function createPairingSession(
     .single()) as { data: { user_id: string } | null };
   if (!target) return { success: false, error: 'SDR não encontrado nesta organização' };
 
+  // 1 linha por SDR. Se já houver uma sessão anterior, limpa-a no serviço ANTES
+  // de criar a nova — evita acúmulo de sessões e o 400 de "repair" em sessão morta
+  // (o serviço retorna 400 ao re-parear um sid que não existe mais).
+  const { data: existing } = (await from(supabase, 'whatsapp_call_sessions')
+    .select('id, service_session_id')
+    .eq('org_id', org.orgId)
+    .eq('user_id', targetUserId)
+    .maybeSingle()) as { data: { id: string; service_session_id: string | null } | null };
+
+  if (existing?.service_session_id) {
+    try {
+      await deleteVoiceSession(existing.service_session_id);
+    } catch {
+      // best-effort: a sessão antiga pode já não existir no serviço
+    }
+  }
+
+  // SEMPRE cria uma sessão NOVA (QR fresco) — robusto contra sessão expirada/morta.
   let voice;
   try {
     voice = await createVoiceSession(targetUserId);
   } catch (err) {
     return mapVoiceError(err);
   }
-
-  // Upsert manual: 1 linha por SDR (reusa a existente em re-pareamento).
-  const { data: existing } = (await from(supabase, 'whatsapp_call_sessions')
-    .select('id')
-    .eq('org_id', org.orgId)
-    .eq('user_id', targetUserId)
-    .maybeSingle()) as { data: { id: string } | null };
 
   if (existing) {
     await from(supabase, 'whatsapp_call_sessions')
@@ -141,29 +152,32 @@ export async function getPairingStatus(sid: string): Promise<ActionResult<Pairin
   };
 }
 
-/** Gera novo QR para re-parear uma sessão morta. Manager-only. */
-export async function repairSession(sid: string): Promise<ActionResult<PairingResult>> {
+/**
+ * Cancela um pareamento em andamento: remove a sessão do serviço e o row local
+ * (se ainda não conectado). Chamado quando o gestor fecha o diálogo sem parear —
+ * impede que sessões abandonadas acumulem no serviço. Manager-only.
+ */
+export async function cancelPairingSession(
+  sid: string,
+): Promise<ActionResult<{ canceled: true }>> {
   const org = await managerOrgId();
   if ('error' in org) return { success: false, error: org.error };
 
   const parsed = sidSchema.safeParse(sid);
   if (!parsed.success) return { success: false, error: 'Sessão inválida' };
 
-  let voice;
   try {
-    voice = await pairVoiceSession(sid);
-  } catch (err) {
-    return mapVoiceError(err);
+    await deleteVoiceSession(sid);
+  } catch {
+    // best-effort
   }
 
   const supabase = await createServerSupabaseClient();
   await from(supabase, 'whatsapp_call_sessions')
-    .update({ status: 'pairing', phone_number: null } as Record<string, unknown>)
+    .delete()
     .eq('org_id', org.orgId)
-    .eq('service_session_id', sid);
+    .eq('service_session_id', sid)
+    .neq('status', 'connected');
 
-  return {
-    success: true,
-    data: { sid, status: voice.status, qr: voice.qr, phoneNumber: voice.phoneNumber },
-  };
+  return { success: true, data: { canceled: true } };
 }
