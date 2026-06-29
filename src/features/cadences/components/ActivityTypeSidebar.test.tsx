@@ -16,9 +16,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock('../actions/manage-activity-variations', () => ({
   fetchActivityVariations: vi.fn(async () => ({ success: true, data: [] })),
-  createActivityVariation: vi.fn(async ({ channel, label }: { channel: string; label: string }) => ({
+  createActivityVariation: vi.fn(async ({ channel, label, call_provider }: { channel: string; label: string; call_provider?: string | null }) => ({
     success: true,
-    data: { id: '00000000-0000-0000-0000-000000000001', org_id: 'org', channel, label, sort_order: 0, created_at: '', updated_at: '' },
+    data: { id: '00000000-0000-0000-0000-000000000001', org_id: 'org', channel, label, call_provider: call_provider ?? null, sort_order: 0, created_at: '', updated_at: '' },
   })),
   renameActivityVariation: vi.fn(async () => ({ success: true, data: {} })),
   deleteActivityVariation: vi.fn(async () => ({ success: true, data: { id: 'x' } })),
@@ -45,7 +45,9 @@ describe('ActivityTypeSidebar', () => {
     render(<ActivityTypeSidebar />);
     // All categories start expanded
     expect(screen.getByText('LinkedIn')).toBeInTheDocument();
-    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp Msg')).toBeInTheDocument();
+    // WhatsApp Ligação lives under the Ligação category (tracked as a phone step)
+    expect(screen.getByText('WhatsApp Ligação')).toBeInTheDocument();
   });
 
   it('should collapse a category when clicked', async () => {
@@ -70,17 +72,22 @@ describe('ActivityTypeSidebar', () => {
     expect(screen.getByTestId('activity-sidebar')).toBeInTheDocument();
   });
 
-  it('should create a variation when clicking "+" on a single-type category', async () => {
+  it('should create a variation when clicking "+" on the Ligação category', async () => {
     const user = userEvent.setup();
     render(<ActivityTypeSidebar />);
 
-    // Only the category header + its single default item exist initially.
+    // Header "Ligação" + default item "Ligação" (the "WhatsApp Ligação" item
+    // doesn't match /^Ligação/), so 2 before adding.
     expect(screen.getAllByText(/^Ligação/).length).toBe(2);
 
-    await user.click(screen.getByTitle('Adicionar Ligação'));
+    // Two "Adicionar Ligação" titles exist (category header + per-item "+");
+    // the header is first in the DOM.
+    const [categoryAddButton] = screen.getAllByTitle('Adicionar Ligação');
+    await user.click(categoryAddButton!);
 
-    // A new "Ligação 2" variation is added.
-    expect(screen.getByText('Ligação 2')).toBeInTheDocument();
+    // A new variation is added; label counts existing phone items (Ligação +
+    // WhatsApp Ligação = 2) so the next one is "Ligação 3".
+    expect(screen.getByText('Ligação 3')).toBeInTheDocument();
   });
 
   it('should create a variation when clicking "+" on a multi-type category (Social Point)', async () => {

@@ -1,4 +1,4 @@
-import type { ChannelType, InteractionType } from '@/features/cadences/types';
+import type { CallProvider, ChannelType, InteractionType } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
 // Lead info embedded in a pending activity
@@ -59,6 +59,8 @@ export interface PendingActivity {
   lead: ActivityLead;
   activityName: string | null;
   callScript: string | null;
+  // 'whatsapp' = passo de Ligação via WhatsApp (channel='phone'); senão null (Epic 7).
+  callProvider: CallProvider | null;
 }
 
 // Prepared email ready for review/send

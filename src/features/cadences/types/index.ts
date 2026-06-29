@@ -16,6 +16,10 @@ export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'replied' | '
 // Channel type enum matching database
 export type ChannelType = 'email' | 'whatsapp' | 'phone' | 'linkedin' | 'research';
 
+// Discriminador do passo de ligação (channel='phone'):
+// null = PSTN/API4COM; 'whatsapp' = discador WhatsApp-nativo (Epic 7).
+export type CallProvider = 'whatsapp';
+
 // Reply type for auto email steps
 export type ReplyType = 'new_conversation' | 'reply';
 
@@ -25,6 +29,9 @@ export interface ActivityTypeVariationRow {
   org_id: string;
   channel: ChannelType;
   label: string;
+  // Discriminador do discador para variações de ligação (channel='phone'):
+  // 'whatsapp' = Ligação via WhatsApp; null = ligação comum (PSTN/API4COM).
+  call_provider: CallProvider | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -72,6 +79,7 @@ export interface CadenceStepRow {
   ai_personalization: boolean;
   activity_name: string | null;
   instructions: string | null;
+  call_provider: CallProvider | null;
   reply_type: ReplyType;
   template_id_b: string | null;
   ab_enabled: boolean;
@@ -154,6 +162,7 @@ export interface CadenceStepInsert {
   ai_personalization?: boolean;
   activity_name?: string | null;
   instructions?: string | null;
+  call_provider?: CallProvider | null;
   reply_type?: ReplyType;
 }
 

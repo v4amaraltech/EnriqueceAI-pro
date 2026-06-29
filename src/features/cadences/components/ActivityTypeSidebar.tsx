@@ -5,7 +5,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import type { ChannelType } from '../types';
+import type { CallProvider, ChannelType } from '../types';
 import {
   createActivityVariation,
   deleteActivityVariation,
@@ -20,6 +20,9 @@ export interface ActivityTypeItem {
   id: string;
   channel: ChannelType;
   label: string;
+  // Discriminador do discador para passos de ligação (channel='phone'):
+  // 'whatsapp' = Ligação via WhatsApp; undefined = ligação comum (PSTN/API4COM).
+  callProvider?: CallProvider;
 }
 
 interface ActivityCategory {
@@ -30,7 +33,7 @@ interface ActivityCategory {
   defaultItems: ActivityTypeItem[];
 }
 
-const DEFAULT_IDS = new Set(['new-email', 'new-phone', 'new-linkedin', 'new-whatsapp', 'new-research']);
+const DEFAULT_IDS = new Set(['new-email', 'new-phone', 'new-whatsapp-call', 'new-linkedin', 'new-whatsapp', 'new-research']);
 
 const categories: ActivityCategory[] = [
   {
@@ -49,6 +52,7 @@ const categories: ActivityCategory[] = [
     channel: 'phone',
     defaultItems: [
       { id: 'new-phone', channel: 'phone', label: 'Ligação' },
+      { id: 'new-whatsapp-call', channel: 'phone', label: 'WhatsApp Ligação', callProvider: 'whatsapp' },
     ],
   },
   {
@@ -58,7 +62,7 @@ const categories: ActivityCategory[] = [
     channel: 'linkedin',
     defaultItems: [
       { id: 'new-linkedin', channel: 'linkedin', label: 'LinkedIn' },
-      { id: 'new-whatsapp', channel: 'whatsapp', label: 'WhatsApp' },
+      { id: 'new-whatsapp', channel: 'whatsapp', label: 'WhatsApp Msg' },
     ],
   },
   {
@@ -83,13 +87,13 @@ function DraggableItem({
   item: ActivityTypeItem;
   isCustom: boolean;
   showAdd?: boolean;
-  onAdd?: (channel: ChannelType, label: string) => void;
+  onAdd?: (channel: ChannelType, label: string, callProvider?: CallProvider) => void;
   onRename?: (id: string, newLabel: string) => void;
   onRemove?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
-    data: { type: 'activity-type', channel: item.channel, label: item.label },
+    data: { type: 'activity-type', channel: item.channel, label: item.label, callProvider: item.callProvider },
   });
 
   const [editing, setEditing] = useState(false);
@@ -153,7 +157,7 @@ function DraggableItem({
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
-            onAdd?.(item.channel, item.label);
+            onAdd?.(item.channel, item.label, item.callProvider);
           }}
           onPointerDown={(e) => e.stopPropagation()}
           className="hidden rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] group-hover:block"
@@ -202,14 +206,21 @@ const channelToCategory: Record<ChannelType, string> = (() => {
 
 // Merge hardcoded default items with persisted variations, grouped by category.
 function buildCategoryItems(
-  variations: Pick<ActivityTypeItem, 'id' | 'channel' | 'label'>[],
+  variations: { id: string; channel: ChannelType; label: string; call_provider?: CallProvider | null }[],
 ): Record<string, ActivityTypeItem[]> {
   const result: Record<string, ActivityTypeItem[]> = {};
   for (const cat of categories) result[cat.label] = [...cat.defaultItems];
   for (const v of variations) {
     const catLabel = channelToCategory[v.channel];
     const bucket = catLabel ? result[catLabel] : undefined;
-    if (bucket) bucket.push({ id: v.id, channel: v.channel, label: v.label });
+    if (bucket) {
+      bucket.push({
+        id: v.id,
+        channel: v.channel,
+        label: v.label,
+        ...(v.call_provider ? { callProvider: v.call_provider } : {}),
+      });
+    }
   }
   return result;
 }
@@ -242,7 +253,7 @@ export function ActivityTypeSidebar() {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
   }
 
-  function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string) {
+  function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string, callProvider?: CallProvider) {
     const current = categoryItems[categoryLabel] ?? [];
     const count = current.filter((i) => i.channel === channel).length;
     const newLabel = `${baseLabel} ${count + 1}`;
@@ -251,17 +262,27 @@ export function ActivityTypeSidebar() {
     // Optimistic insert; reconcile with the DB row (or roll back) below.
     setCategoryItems((prev) => ({
       ...prev,
-      [categoryLabel]: [...(prev[categoryLabel] ?? []), { id: tempId, channel, label: newLabel }],
+      [categoryLabel]: [
+        ...(prev[categoryLabel] ?? []),
+        { id: tempId, channel, label: newLabel, ...(callProvider ? { callProvider } : {}) },
+      ],
     }));
     setExpanded((prev) => ({ ...prev, [categoryLabel]: true }));
 
     startSave(async () => {
-      const res = await createActivityVariation({ channel, label: newLabel });
+      const res = await createActivityVariation({ channel, label: newLabel, call_provider: callProvider ?? null });
       setCategoryItems((prev) => ({
         ...prev,
         [categoryLabel]: res.success
           ? (prev[categoryLabel] ?? []).map((i) =>
-              i.id === tempId ? { id: res.data.id, channel: res.data.channel, label: res.data.label } : i,
+              i.id === tempId
+                ? {
+                    id: res.data.id,
+                    channel: res.data.channel,
+                    label: res.data.label,
+                    ...(res.data.call_provider ? { callProvider: res.data.call_provider } : {}),
+                  }
+                : i,
             )
           : (prev[categoryLabel] ?? []).filter((i) => i.id !== tempId),
       }));
@@ -271,12 +292,12 @@ export function ActivityTypeSidebar() {
 
   function handleCategoryAdd(category: ActivityCategory) {
     // The "+" on a category header must always create a new variation.
-    // Previously multi-type categories (e.g. Social Point) only toggled
+    // Multi-type categories (Ligação, Social Point) previously only toggled
     // expansion here, so — since categories start expanded — clicking "+"
     // appeared to do nothing. Default to a variation of the category's first
-    // channel; users rename it or use the per-item "+" for a specific channel.
+    // item; users rename it or use the per-item "+" for a specific channel.
     const item = category.defaultItems[0]!;
-    addItemByChannel(category.label, item.channel, item.label);
+    addItemByChannel(category.label, item.channel, item.label, item.callProvider);
   }
 
   function renameItem(categoryLabel: string, itemId: string, newLabel: string) {
@@ -379,7 +400,7 @@ export function ActivityTypeSidebar() {
                         item={item}
                         isCustom={!isDefault}
                         showAdd={isDefault && isMultiType}
-                        onAdd={(channel, label) => addItemByChannel(category.label, channel, label)}
+                        onAdd={(channel, label, callProvider) => addItemByChannel(category.label, channel, label, callProvider)}
                         onRename={(id, newLabel) => renameItem(category.label, id, newLabel)}
                         onRemove={(id) => removeItem(category.label, id)}
                       />

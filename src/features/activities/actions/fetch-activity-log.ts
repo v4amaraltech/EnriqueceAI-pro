@@ -188,6 +188,7 @@ export async function fetchActivityLog(
       },
       activityName: currentStep.activity_name ?? null,
       callScript: currentStep.instructions ?? null,
+      callProvider: currentStep.call_provider ?? null,
     };
 
     // Search filter

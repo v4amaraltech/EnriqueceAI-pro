@@ -10,10 +10,12 @@ import { from } from '@/lib/supabase/from';
 import type { ActivityTypeVariationRow } from '../types';
 
 const channelSchema = z.enum(['email', 'whatsapp', 'phone', 'linkedin', 'research']);
+const callProviderSchema = z.enum(['whatsapp']).nullish();
 
 const createSchema = z.object({
   channel: channelSchema,
   label: z.string().trim().min(1, 'Rótulo é obrigatório').max(60, 'Rótulo muito longo'),
+  call_provider: callProviderSchema,
   sort_order: z.number().int().optional(),
 });
 
@@ -59,6 +61,7 @@ export async function createActivityVariation(
       org_id: orgId,
       channel: parsed.data.channel,
       label: parsed.data.label,
+      call_provider: parsed.data.call_provider ?? null,
       sort_order: parsed.data.sort_order ?? 0,
     } as Record<string, unknown>)
     .select('*')

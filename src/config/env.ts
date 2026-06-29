@@ -45,6 +45,10 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  // WhatsApp-native dialer voice microservice (Epic 7). Server-only — the API
+  // key is never exposed to the browser; all calls go through Server Actions.
+  WACALLS_BASE_URL: z.string().url().optional(),
+  WACALLS_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

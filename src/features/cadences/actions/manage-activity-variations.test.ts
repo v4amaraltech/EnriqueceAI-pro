@@ -37,6 +37,7 @@ const row = {
   org_id: 'org-1',
   channel: 'phone',
   label: 'Ligação 2',
+  call_provider: null,
   sort_order: 0,
   created_at: '',
   updated_at: '',

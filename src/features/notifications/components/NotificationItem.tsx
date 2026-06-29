@@ -72,7 +72,7 @@ export function NotificationItem({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn('truncate text-sm', isUnread && 'font-medium')}>
+          <span className={cn('line-clamp-2 text-sm', isUnread && 'font-medium')}>
             {notification.title}
           </span>
           {isUnread && (
@@ -80,7 +80,7 @@ export function NotificationItem({
           )}
         </div>
         {notification.body && (
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
+          <p className="text-muted-foreground mt-0.5 line-clamp-3 text-xs">
             {notification.body}
           </p>
         )}

@@ -208,6 +208,13 @@ export function ActivityExecutionSheet({
     });
   };
 
+  // Ligação via WhatsApp: a disposition (7.6) já avançou/reagendou a cadência,
+  // então aqui só seguimos para a próxima atividade / fechamos — SEM executeActivity.
+  const handleCallResolved = () => {
+    if (!activity) return;
+    advanceOrClose(activity.enrollmentId, activity.stepId);
+  };
+
   const handleReportWhatsAppInvalid = () => {
     if (!activity) return;
     if (isScheduled) {
@@ -368,6 +375,7 @@ export function ActivityExecutionSheet({
                 onMarkDone={handleMarkDone}
                 onLeadLost={onLeadLost ? () => onLeadLost(activity) : undefined}
                 onReportWhatsAppInvalid={handleReportWhatsAppInvalid}
+                onCallResolved={handleCallResolved}
                 dialerProvider={dialerProvider}
               />
             </div>
