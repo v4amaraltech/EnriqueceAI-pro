@@ -225,10 +225,13 @@ export function ActivityExecutionSheetContent({
         cadenceId={activity.cadenceId}
         leadId={activity.lead.id}
         leadName={leadName}
+        leadEmail={resolvedEmail || activity.lead.email}
+        leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
         phones={phones}
         activityName={activity.activityName}
         callScript={activity.callScript}
         onResolved={() => onCallResolved?.()}
+        onLeadLost={onLeadLost}
       />
     );
   }

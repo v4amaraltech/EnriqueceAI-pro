@@ -26,6 +26,8 @@ const persistSchema = z.object({
   // `persist-pending-recordings` baixa + armazena no bucket call-recordings e o
   // `process-pending-transcriptions` transcreve — pipeline já provider-agnóstico.
   recordingUrl: z.string().url().nullable().optional(),
+  // Anotações do SDR no modal de resultado (gravadas na interação da call).
+  notes: z.string().optional(),
 });
 
 export type PersistWhatsAppCallInput = z.infer<typeof persistSchema>;
@@ -99,6 +101,7 @@ export async function persistWhatsAppCall(
     channel: 'phone',
     type: 'sent',
     performed_by: user.id,
+    message_content: p.notes || null,
     metadata: { provider: 'whatsapp', service_call_id: p.callId },
   } as Record<string, unknown>);
 
