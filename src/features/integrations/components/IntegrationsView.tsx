@@ -59,9 +59,8 @@ interface IntegrationsViewProps {
 }
 
 const CRM_PROVIDERS = [
-  { id: 'hubspot' as const, name: 'HubSpot', logo: '/logos/hubspot-icon.svg', description: 'Sincronize leads e atividades com o HubSpot CRM.' },
-  { id: 'pipedrive' as const, name: 'Pipedrive', logo: '/logos/pipedrive-icon.png', description: 'Sincronize leads e negócios com o Pipedrive.' },
-  { id: 'rdstation' as const, name: 'RD Station', logo: '/logos/rdstation-icon.png', description: 'Sincronize leads e oportunidades com o RD Station CRM.' },
+  // HubSpot, Pipedrive e RD Station ocultados do frontend a pedido — backend,
+  // tipos (CrmProvider) e actions permanecem intactos para reativação futura.
   { id: 'kommo' as const, name: 'KommoCRM', logo: '/logos/kommo-icon.png', description: 'Sincronize leads e negócios com o KommoCRM.' },
 ] as const;
 

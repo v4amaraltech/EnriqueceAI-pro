@@ -1,10 +1,20 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import type { CallProvider, ChannelType } from '../types';
+import {
+  createActivityVariation,
+  deleteActivityVariation,
+  fetchActivityVariations,
+  renameActivityVariation,
+} from '../actions/manage-activity-variations';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isPersistedId = (id: string) => UUID_RE.test(id);
 
 export interface ActivityTypeItem {
   id: string;
@@ -185,6 +195,36 @@ export const channelConfig: Record<ChannelType, { icon: typeof Mail; color: stri
 
 let nextItemId = 1;
 
+// Channel → sidebar category label (e.g. whatsapp/linkedin → "Social Point").
+const channelToCategory: Record<ChannelType, string> = (() => {
+  const map = {} as Record<ChannelType, string>;
+  for (const cat of categories) {
+    for (const it of cat.defaultItems) map[it.channel] = cat.label;
+  }
+  return map;
+})();
+
+// Merge hardcoded default items with persisted variations, grouped by category.
+function buildCategoryItems(
+  variations: { id: string; channel: ChannelType; label: string; call_provider?: CallProvider | null }[],
+): Record<string, ActivityTypeItem[]> {
+  const result: Record<string, ActivityTypeItem[]> = {};
+  for (const cat of categories) result[cat.label] = [...cat.defaultItems];
+  for (const v of variations) {
+    const catLabel = channelToCategory[v.channel];
+    const bucket = catLabel ? result[catLabel] : undefined;
+    if (bucket) {
+      bucket.push({
+        id: v.id,
+        channel: v.channel,
+        label: v.label,
+        ...(v.call_provider ? { callProvider: v.call_provider } : {}),
+      });
+    }
+  }
+  return result;
+}
+
 export function ActivityTypeSidebar() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     'E-mail': true,
@@ -193,59 +233,117 @@ export function ActivityTypeSidebar() {
     'Pesquisa': true,
   });
 
-  const [categoryItems, setCategoryItems] = useState<Record<string, ActivityTypeItem[]>>(() => {
-    const initial: Record<string, ActivityTypeItem[]> = {};
-    for (const cat of categories) {
-      initial[cat.label] = [...cat.defaultItems];
-    }
-    return initial;
-  });
+  const [categoryItems, setCategoryItems] = useState<Record<string, ActivityTypeItem[]>>(
+    () => buildCategoryItems([]),
+  );
+  const [, startSave] = useTransition();
+
+  // Load persisted variations on mount; defaults render immediately meanwhile.
+  useEffect(() => {
+    let active = true;
+    fetchActivityVariations().then((res) => {
+      if (active && res.success) setCategoryItems(buildCategoryItems(res.data));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function toggleCategory(label: string) {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
   }
 
   function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string, callProvider?: CallProvider) {
-    setCategoryItems((prev) => {
-      const current = prev[categoryLabel] ?? [];
-      const count = current.filter((i) => i.channel === channel).length;
-      const newLabel = `${baseLabel} ${count + 1}`;
-      const newItem: ActivityTypeItem = {
-        id: `new-${channel}-${Date.now()}-${nextItemId++}`,
-        channel,
-        label: newLabel,
-        ...(callProvider ? { callProvider } : {}),
-      };
-      return { ...prev, [categoryLabel]: [...current, newItem] };
-    });
+    const current = categoryItems[categoryLabel] ?? [];
+    const count = current.filter((i) => i.channel === channel).length;
+    const newLabel = `${baseLabel} ${count + 1}`;
+    const tempId = `temp-${channel}-${Date.now()}-${nextItemId++}`;
+
+    // Optimistic insert; reconcile with the DB row (or roll back) below.
+    setCategoryItems((prev) => ({
+      ...prev,
+      [categoryLabel]: [
+        ...(prev[categoryLabel] ?? []),
+        { id: tempId, channel, label: newLabel, ...(callProvider ? { callProvider } : {}) },
+      ],
+    }));
     setExpanded((prev) => ({ ...prev, [categoryLabel]: true }));
+
+    startSave(async () => {
+      const res = await createActivityVariation({ channel, label: newLabel, call_provider: callProvider ?? null });
+      setCategoryItems((prev) => ({
+        ...prev,
+        [categoryLabel]: res.success
+          ? (prev[categoryLabel] ?? []).map((i) =>
+              i.id === tempId
+                ? {
+                    id: res.data.id,
+                    channel: res.data.channel,
+                    label: res.data.label,
+                    ...(res.data.call_provider ? { callProvider: res.data.call_provider } : {}),
+                  }
+                : i,
+            )
+          : (prev[categoryLabel] ?? []).filter((i) => i.id !== tempId),
+      }));
+      if (!res.success) toast.error(res.error);
+    });
   }
 
   function handleCategoryAdd(category: ActivityCategory) {
-    const isMultiType = category.defaultItems.length > 1;
-    if (isMultiType) {
-      // Multi-type: just expand to show per-item "+" buttons
-      setExpanded((prev) => ({ ...prev, [category.label]: true }));
-    } else {
-      const item = category.defaultItems[0]!;
-      addItemByChannel(category.label, item.channel, item.label, item.callProvider);
-    }
+    // The "+" on a category header must always create a new variation.
+    // Multi-type categories (Ligação, Social Point) previously only toggled
+    // expansion here, so — since categories start expanded — clicking "+"
+    // appeared to do nothing. Default to a variation of the category's first
+    // item; users rename it or use the per-item "+" for a specific channel.
+    const item = category.defaultItems[0]!;
+    addItemByChannel(category.label, item.channel, item.label, item.callProvider);
   }
 
   function renameItem(categoryLabel: string, itemId: string, newLabel: string) {
+    const prevLabel = (categoryItems[categoryLabel] ?? []).find((i) => i.id === itemId)?.label;
     setCategoryItems((prev) => ({
       ...prev,
       [categoryLabel]: (prev[categoryLabel] ?? []).map((i) =>
         i.id === itemId ? { ...i, label: newLabel } : i,
       ),
     }));
+
+    // Only persisted (uuid) items can be renamed server-side; temp items are
+    // still being created and will save with their current label.
+    if (!isPersistedId(itemId)) return;
+    startSave(async () => {
+      const res = await renameActivityVariation({ id: itemId, label: newLabel });
+      if (!res.success) {
+        setCategoryItems((prev) => ({
+          ...prev,
+          [categoryLabel]: (prev[categoryLabel] ?? []).map((i) =>
+            i.id === itemId ? { ...i, label: prevLabel ?? i.label } : i,
+          ),
+        }));
+        toast.error(res.error);
+      }
+    });
   }
 
   function removeItem(categoryLabel: string, itemId: string) {
+    const removed = (categoryItems[categoryLabel] ?? []).find((i) => i.id === itemId);
     setCategoryItems((prev) => ({
       ...prev,
       [categoryLabel]: (prev[categoryLabel] ?? []).filter((i) => i.id !== itemId),
     }));
+
+    if (!isPersistedId(itemId)) return;
+    startSave(async () => {
+      const res = await deleteActivityVariation(itemId);
+      if (!res.success && removed) {
+        setCategoryItems((prev) => ({
+          ...prev,
+          [categoryLabel]: [...(prev[categoryLabel] ?? []), removed],
+        }));
+        toast.error(res.error);
+      }
+    });
   }
 
   return (

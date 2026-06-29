@@ -23,6 +23,20 @@ export type CallProvider = 'whatsapp';
 // Reply type for auto email steps
 export type ReplyType = 'new_conversation' | 'reply';
 
+// Persisted custom activity-type variation shown in the cadence builder sidebar
+export interface ActivityTypeVariationRow {
+  id: string;
+  org_id: string;
+  channel: ChannelType;
+  label: string;
+  // Discriminador do discador para variações de ligação (channel='phone'):
+  // 'whatsapp' = Ligação via WhatsApp; null = ligação comum (PSTN/API4COM).
+  call_provider: CallProvider | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Interaction type enum matching database
 export type InteractionType =
   | 'sent'

@@ -12,6 +12,18 @@ vi.mock('@dnd-kit/core', () => ({
   }),
 }));
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+vi.mock('../actions/manage-activity-variations', () => ({
+  fetchActivityVariations: vi.fn(async () => ({ success: true, data: [] })),
+  createActivityVariation: vi.fn(async ({ channel, label, call_provider }: { channel: string; label: string; call_provider?: string | null }) => ({
+    success: true,
+    data: { id: '00000000-0000-0000-0000-000000000001', org_id: 'org', channel, label, call_provider: call_provider ?? null, sort_order: 0, created_at: '', updated_at: '' },
+  })),
+  renameActivityVariation: vi.fn(async () => ({ success: true, data: {} })),
+  deleteActivityVariation: vi.fn(async () => ({ success: true, data: { id: 'x' } })),
+}));
+
 import { ActivityTypeSidebar } from './ActivityTypeSidebar';
 
 describe('ActivityTypeSidebar', () => {
@@ -58,5 +70,36 @@ describe('ActivityTypeSidebar', () => {
   it('should have data-testid on sidebar', () => {
     render(<ActivityTypeSidebar />);
     expect(screen.getByTestId('activity-sidebar')).toBeInTheDocument();
+  });
+
+  it('should create a variation when clicking "+" on the Ligação category', async () => {
+    const user = userEvent.setup();
+    render(<ActivityTypeSidebar />);
+
+    // Header "Ligação" + default item "Ligação" (the "WhatsApp Ligação" item
+    // doesn't match /^Ligação/), so 2 before adding.
+    expect(screen.getAllByText(/^Ligação/).length).toBe(2);
+
+    // Two "Adicionar Ligação" titles exist (category header + per-item "+");
+    // the header is first in the DOM.
+    const [categoryAddButton] = screen.getAllByTitle('Adicionar Ligação');
+    await user.click(categoryAddButton!);
+
+    // A new variation is added; label counts existing phone items (Ligação +
+    // WhatsApp Ligação = 2) so the next one is "Ligação 3".
+    expect(screen.getByText('Ligação 3')).toBeInTheDocument();
+  });
+
+  it('should create a variation when clicking "+" on a multi-type category (Social Point)', async () => {
+    const user = userEvent.setup();
+    render(<ActivityTypeSidebar />);
+
+    // Social Point starts with LinkedIn + WhatsApp, no numbered variations.
+    expect(screen.queryByText('LinkedIn 2')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTitle('Adicionar Social Point'));
+
+    // Clicking the header "+" must add a variation (was previously a no-op).
+    expect(screen.getByText('LinkedIn 2')).toBeInTheDocument();
   });
 });
