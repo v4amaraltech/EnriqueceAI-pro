@@ -4,12 +4,15 @@ import { useRef, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ChevronDown, ChevronRight, Linkedin, Mail, MessageSquare, Phone, Plus, Search, Trash2 } from 'lucide-react';
 
-import type { ChannelType } from '../types';
+import type { CallProvider, ChannelType } from '../types';
 
 export interface ActivityTypeItem {
   id: string;
   channel: ChannelType;
   label: string;
+  // Discriminador do discador para passos de ligação (channel='phone'):
+  // 'whatsapp' = Ligação via WhatsApp; undefined = ligação comum (PSTN/API4COM).
+  callProvider?: CallProvider;
 }
 
 interface ActivityCategory {
@@ -39,7 +42,7 @@ const categories: ActivityCategory[] = [
     channel: 'phone',
     defaultItems: [
       { id: 'new-phone', channel: 'phone', label: 'Ligação' },
-      { id: 'new-whatsapp-call', channel: 'phone', label: 'WhatsApp Ligação' },
+      { id: 'new-whatsapp-call', channel: 'phone', label: 'WhatsApp Ligação', callProvider: 'whatsapp' },
     ],
   },
   {
@@ -74,13 +77,13 @@ function DraggableItem({
   item: ActivityTypeItem;
   isCustom: boolean;
   showAdd?: boolean;
-  onAdd?: (channel: ChannelType, label: string) => void;
+  onAdd?: (channel: ChannelType, label: string, callProvider?: CallProvider) => void;
   onRename?: (id: string, newLabel: string) => void;
   onRemove?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
-    data: { type: 'activity-type', channel: item.channel, label: item.label },
+    data: { type: 'activity-type', channel: item.channel, label: item.label, callProvider: item.callProvider },
   });
 
   const [editing, setEditing] = useState(false);
@@ -144,7 +147,7 @@ function DraggableItem({
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
-            onAdd?.(item.channel, item.label);
+            onAdd?.(item.channel, item.label, item.callProvider);
           }}
           onPointerDown={(e) => e.stopPropagation()}
           className="hidden rounded p-0.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] group-hover:block"
@@ -202,7 +205,7 @@ export function ActivityTypeSidebar() {
     setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
   }
 
-  function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string) {
+  function addItemByChannel(categoryLabel: string, channel: ChannelType, baseLabel: string, callProvider?: CallProvider) {
     setCategoryItems((prev) => {
       const current = prev[categoryLabel] ?? [];
       const count = current.filter((i) => i.channel === channel).length;
@@ -211,6 +214,7 @@ export function ActivityTypeSidebar() {
         id: `new-${channel}-${Date.now()}-${nextItemId++}`,
         channel,
         label: newLabel,
+        ...(callProvider ? { callProvider } : {}),
       };
       return { ...prev, [categoryLabel]: [...current, newItem] };
     });
@@ -224,7 +228,7 @@ export function ActivityTypeSidebar() {
       setExpanded((prev) => ({ ...prev, [category.label]: true }));
     } else {
       const item = category.defaultItems[0]!;
-      addItemByChannel(category.label, item.channel, item.label);
+      addItemByChannel(category.label, item.channel, item.label, item.callProvider);
     }
   }
 
@@ -298,7 +302,7 @@ export function ActivityTypeSidebar() {
                         item={item}
                         isCustom={!isDefault}
                         showAdd={isDefault && isMultiType}
-                        onAdd={(channel, label) => addItemByChannel(category.label, channel, label)}
+                        onAdd={(channel, label, callProvider) => addItemByChannel(category.label, channel, label, callProvider)}
                         onRename={(id, newLabel) => renameItem(category.label, id, newLabel)}
                         onRemove={(id) => removeItem(category.label, id)}
                       />

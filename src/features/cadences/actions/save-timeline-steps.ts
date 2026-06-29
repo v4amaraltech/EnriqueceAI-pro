@@ -4,7 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import type { ChannelType } from '../types';
+import type { CallProvider, ChannelType } from '../types';
 
 export interface TimelineStepInput {
   channel: ChannelType;
@@ -15,6 +15,7 @@ export interface TimelineStepInput {
   ai_personalization?: boolean;
   activity_name?: string | null;
   instructions?: string | null;
+  call_provider?: CallProvider | null;
 }
 
 export async function saveTimelineSteps(
@@ -62,6 +63,7 @@ export async function saveTimelineSteps(
       ai_personalization: s.ai_personalization ?? false,
       activity_name: s.activity_name ?? null,
       instructions: s.instructions ?? null,
+      call_provider: s.call_provider ?? null,
     }));
 
     const { error: insertError } = await from(supabase, 'cadence_steps')

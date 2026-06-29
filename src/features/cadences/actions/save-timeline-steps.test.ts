@@ -95,6 +95,27 @@ describe('saveTimelineSteps', () => {
     }
   });
 
+  it('should persist call_provider on WhatsApp-call steps and null otherwise', async () => {
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
+    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'draft' } });
+    (stepsChain.delete as ReturnType<typeof vi.fn>).mockReturnValue(stepsChain);
+    (stepsChain.eq as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
+    (stepsChain.insert as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
+    (cadenceChain.update as ReturnType<typeof vi.fn>).mockReturnValue(cadenceChain);
+
+    const steps = [
+      { channel: 'phone' as const, delay_days: 0, step_order: 1, call_provider: 'whatsapp' as const },
+      { channel: 'phone' as const, delay_days: 0, step_order: 2 },
+    ];
+
+    const result = await saveTimelineSteps('cad-1', steps);
+    expect(result.success).toBe(true);
+
+    const insertArg = (stepsChain.insert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(insertArg[0]?.call_provider).toBe('whatsapp');
+    expect(insertArg[1]?.call_provider).toBeNull();
+  });
+
   it('should save empty steps (clear all) for draft cadence', async () => {
     (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
     (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'draft' } });

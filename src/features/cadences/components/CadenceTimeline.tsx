@@ -17,7 +17,7 @@ import { ChevronDown, ChevronRight, GripHorizontal, Plus, Trash2 } from 'lucide-
 
 import { Button } from '@/shared/components/ui/button';
 
-import type { ChannelType } from '../types';
+import type { CallProvider, ChannelType } from '../types';
 import { channelConfig } from './ActivityTypeSidebar';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -30,6 +30,8 @@ export interface TimelineStep {
   aiPersonalization?: boolean;
   activityName?: string | null;
   instructions?: string | null;
+  // Discador para passos de ligação (channel='phone'): 'whatsapp' = Ligação via WhatsApp.
+  callProvider?: CallProvider | null;
 }
 
 export interface DayData {
@@ -370,6 +372,7 @@ export function CadenceTimeline({ days, onDaysChange, sidebarSlot, onStepClick }
         id: generateStepId(),
         channel,
         label,
+        callProvider: (activeData.callProvider as CallProvider | undefined) ?? null,
       };
 
       // Find target day

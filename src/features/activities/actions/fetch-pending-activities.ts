@@ -8,6 +8,7 @@ import { from } from '@/lib/supabase/from';
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
+import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
 interface RawLead {
@@ -164,6 +165,14 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       // Suppress WhatsApp steps when the lead's number was flagged as not WhatsApp
       // (SDR feedback via "Não é WhatsApp" button)
       if (step.channel === 'whatsapp' && enrollment.lead.whatsapp_invalid_at) continue;
+
+      // Ligação via WhatsApp (passo phone com call_provider='whatsapp', Epic 7): só
+      // é executável quando o lead tem número WhatsApp resolvível e não foi marcado
+      // como inválido — caso contrário some da fila (não dá pra discar).
+      if (step.channel === 'phone' && step.call_provider === 'whatsapp') {
+        if (enrollment.lead.whatsapp_invalid_at) continue;
+        if (!resolveWhatsAppPhone(leadData)) continue;
+      }
 
       const isCurrentStep = step.step_order === currentStepOrder;
       const template = step.template_id ? templateMap.get(step.template_id) : null;

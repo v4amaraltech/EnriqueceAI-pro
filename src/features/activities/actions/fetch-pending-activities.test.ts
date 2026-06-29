@@ -256,6 +256,58 @@ describe('fetchPendingActivities', () => {
     }
   });
 
+  // --- Epic 7: gate de elegibilidade da Ligação via WhatsApp ---
+  const waCallStep = {
+    ...mockStep,
+    id: 'step-wa',
+    channel: 'phone' as const,
+    template_id: null,
+    call_provider: 'whatsapp' as const,
+  };
+
+  it('should suppress a WhatsApp-call step when the lead has no reachable number', async () => {
+    const leadNoPhone = { ...mockLead, telefone: null, socios: null, phones: null };
+    wireByTable({
+      cadence_enrollments: { data: [{ ...mockEnrollment, lead: leadNoPhone }], error: null },
+      cadence_steps: { data: [waCallStep] },
+      scheduled_activities: { data: [], error: null },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toHaveLength(0);
+  });
+
+  it('should keep a WhatsApp-call step when the lead has a reachable number', async () => {
+    wireByTable({
+      cadence_enrollments: { data: [{ ...mockEnrollment, lead: { ...mockLead, phones: null } }], error: null },
+      cadence_steps: { data: [waCallStep] },
+      scheduled_activities: { data: [], error: null },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]!.channel).toBe('phone');
+  });
+
+  it('should suppress a WhatsApp-call step when the number was flagged not-WhatsApp', async () => {
+    const leadFlagged = { ...mockLead, phones: null, whatsapp_invalid_at: '2026-02-01T00:00:00Z' };
+    wireByTable({
+      cadence_enrollments: { data: [{ ...mockEnrollment, lead: leadFlagged }], error: null },
+      cadence_steps: { data: [waCallStep] },
+      scheduled_activities: { data: [], error: null },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toHaveLength(0);
+  });
+
   it('should handle multiple enrollments across different cadences', async () => {
     const mockLead2 = { ...mockLead, id: 'lead-2', nome_fantasia: 'Empresa XYZ' };
     const mockCadence2 = { ...mockCadence, id: 'cad-2', name: 'Follow Up' };
