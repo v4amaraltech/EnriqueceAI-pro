@@ -141,9 +141,11 @@ export async function pairVoiceSession(sid: string): Promise<VoiceSession> {
 
 // --- Chamadas (story 7.5) ------------------------------------------------------
 
+// Resposta real do serviço: { call: { callId } } (confirmado no cliente AstraCalls).
 interface RawCall {
-  id?: string;
+  call?: { callId?: string };
   call_id?: string;
+  id?: string;
 }
 
 /** Inicia uma chamada de saída na sessão. Retorna o id da chamada no serviço. */
@@ -154,9 +156,25 @@ export async function startVoiceCall(
 ): Promise<{ callId: string }> {
   const raw = await request<RawCall>(`/api/sessions/${encodeURIComponent(sid)}/calls`, {
     method: 'POST',
-    body: JSON.stringify({ phone, record }),
+    body: JSON.stringify({ phone, duration_ms: 300_000, record }),
   });
-  return { callId: raw.call_id ?? raw.id ?? '' };
+  return { callId: raw.call?.callId ?? raw.call_id ?? raw.id ?? '' };
+}
+
+/**
+ * Troca de SDP (sinalização WebRTC). Recebe a offer do browser (proxiada pelo
+ * Enriquece p/ injetar a API key) e devolve a answer do serviço.
+ */
+export async function exchangeVoiceSdp(
+  sid: string,
+  callId: string,
+  sdpOffer: string,
+): Promise<string> {
+  const raw = await request<{ sdp_answer?: string }>(
+    `/api/sessions/${encodeURIComponent(sid)}/calls/${encodeURIComponent(callId)}/webrtc`,
+    { method: 'POST', body: JSON.stringify({ sdp_offer: sdpOffer }) },
+  );
+  return raw.sdp_answer ?? '';
 }
 
 /** Encerra uma chamada ativa. */

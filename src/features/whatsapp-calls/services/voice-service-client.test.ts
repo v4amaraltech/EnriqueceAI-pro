@@ -7,6 +7,7 @@ import {
   VoiceServiceError,
   createVoiceSession,
   endVoiceCall,
+  exchangeVoiceSdp,
   getVoiceSession,
   isVoiceServiceConfigured,
   startVoiceCall,
@@ -76,9 +77,18 @@ describe('voice-service-client', () => {
     expect(await getVoiceSession('s1')).toBeNull();
   });
 
-  it('reads the call id from call_id or id on startVoiceCall', async () => {
-    mockFetchOnce({ call_id: 'c1' });
+  it('reads the call id from the { call: { callId } } shape and sends duration_ms', async () => {
+    mockFetchOnce({ call: { callId: 'c1' } });
     expect(await startVoiceCall('s1', '5511999990000', true)).toEqual({ callId: 'c1' });
+    const body = JSON.parse(
+      ((global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1].body) as string,
+    );
+    expect(body).toMatchObject({ phone: '5511999990000', record: true, duration_ms: 300000 });
+  });
+
+  it('exchanges SDP offer for answer', async () => {
+    mockFetchOnce({ sdp_answer: 'v=0\r\n(answer)' });
+    expect(await exchangeVoiceSdp('s1', 'c1', 'v=0\r\n(offer)')).toBe('v=0\r\n(answer)');
   });
 
   it('raises request_failed on a non-ok response', async () => {
