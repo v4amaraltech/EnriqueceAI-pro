@@ -1,58 +1,57 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import {
+  endActiveEnrollments,
+  revalidateLeadPaths,
+  validateBulkLeadIds,
+} from '../services/bulk-leads.service';
 import { logLeadEventBulk } from './log-lead-event';
 
 export async function bulkArchiveLeads(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
-  if (leadIds.length === 0) {
-    return { success: false, error: 'Nenhum lead selecionado' };
-  }
-  if (leadIds.length > MAX_BULK_LEAD_IDS) {
-    return { success: false, error: `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação` };
-  }
+  const sizeError = validateBulkLeadIds(leadIds);
+  if (sizeError) return { success: false, error: sizeError };
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
   const archivedAt = new Date().toISOString();
-  const { error } = await from(supabase, 'leads')
+  // .select('id') devolve só os leads que eram REALMENTE da org — ids de outra
+  // org são silenciosamente ignorados pelo filtro org-scoped. Usamos esses ids
+  // confirmados adiante (fecha o IDOR cross-org nos enrollments — S6).
+  const { data: updated, error } = (await from(supabase, 'leads')
     .update({ status: 'archived', archived_at: archivedAt } as Record<string, unknown>)
     .eq('org_id', orgId)
-    .in('id', leadIds);
+    .in('id', leadIds)
+    .select('id')) as { data: Array<{ id: string }> | null; error: { message: string } | null };
 
   if (error) {
     return { success: false, error: 'Erro ao arquivar leads' };
   }
+  const confirmedIds = (updated ?? []).map((l) => l.id);
 
-  // Mirror the single-lead archive: end any active/paused enrollments so the
-  // cadence engine stops scheduling activities for these leads. Service role
-  // bypasses RLS — scope by lead_id (already verified above by org).
+  // End any active/paused enrollments so the cadence engine stops scheduling.
   const svc = createServiceRoleClient();
-  await from(svc, 'cadence_enrollments')
-    .update({ status: 'completed', completed_at: archivedAt } as Record<string, unknown>)
-    .in('lead_id', leadIds)
-    .in('status', ['active', 'paused']);
+  await endActiveEnrollments(svc, confirmedIds, { status: 'completed', completed_at: archivedAt });
 
-  await logLeadEventBulk(supabase, {
-    orgId,
-    leadIds,
-    userId,
-    event: 'lead_archived',
-    message: 'Lead arquivado',
-  });
+  if (confirmedIds.length > 0) {
+    await logLeadEventBulk(supabase, {
+      orgId,
+      leadIds: confirmedIds,
+      userId,
+      event: 'lead_archived',
+      message: 'Lead arquivado',
+    });
+  }
 
-  revalidatePath('/leads');
-  revalidatePath('/atividades');
+  revalidateLeadPaths();
 
-  return { success: true, data: { count: leadIds.length } };
+  return { success: true, data: { count: confirmedIds.length } };
 }

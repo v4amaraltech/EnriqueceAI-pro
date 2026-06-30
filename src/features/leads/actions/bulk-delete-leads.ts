@@ -1,48 +1,53 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+
+import {
+  endActiveEnrollments,
+  revalidateLeadPaths,
+  validateBulkLeadIds,
+} from '../services/bulk-leads.service';
 import { logLeadEvent } from './log-lead-event';
 
 export async function bulkDeleteLeads(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
-  if (leadIds.length === 0) {
-    return { success: false, error: 'Nenhum lead selecionado' };
-  }
-  if (leadIds.length > MAX_BULK_LEAD_IDS) {
-    return { success: false, error: `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação` };
-  }
+  const sizeError = validateBulkLeadIds(leadIds);
+  if (sizeError) return { success: false, error: sizeError };
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { error } = await from(supabase, 'leads')
-    .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
+  const deletedAt = new Date().toISOString();
+  // .select('id') → só os leads confirmados como da org (ids de outra org são
+  // ignorados pelo filtro org-scoped). Usamos os confirmados nos enrollments e
+  // no log (fecha o IDOR cross-org — S6).
+  const { data: updated, error } = (await from(supabase, 'leads')
+    .update({ deleted_at: deletedAt } as Record<string, unknown>)
     .eq('org_id', orgId)
-    .in('id', leadIds);
+    .in('id', leadIds)
+    .select('id')) as { data: Array<{ id: string }> | null; error: { message: string } | null };
 
   if (error) {
     return { success: false, error: 'Erro ao excluir leads' };
   }
+  const confirmedIds = (updated ?? []).map((l) => l.id);
 
-  // Complete active/paused enrollments for deleted leads so they stop appearing in activity queue
+  // Complete active/paused enrollments so deleted leads leave the activity queue.
   const serviceClient = createServiceRoleClient();
-  await from(serviceClient, 'cadence_enrollments')
-    .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-    .in('lead_id', leadIds)
-    .in('status', ['active', 'paused']);
+  await endActiveEnrollments(serviceClient, confirmedIds, {
+    status: 'completed',
+    completed_at: deletedAt,
+  });
 
   // Timeline event per deleted lead — was missing, so 225 V4 Amaral
   // soft-deletes ended up with no history entry. Fire-and-forget so a
   // single failure doesn't roll back the whole bulk operation.
-  for (const leadId of leadIds) {
+  for (const leadId of confirmedIds) {
     logLeadEvent(supabase, {
       orgId,
       leadId,
@@ -53,8 +58,7 @@ export async function bulkDeleteLeads(
     });
   }
 
-  revalidatePath('/leads');
-  revalidatePath('/atividades');
+  revalidateLeadPaths();
 
-  return { success: true, data: { count: leadIds.length } };
+  return { success: true, data: { count: confirmedIds.length } };
 }

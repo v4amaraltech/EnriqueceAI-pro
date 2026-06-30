@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
@@ -11,6 +10,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
+import { endActiveEnrollments, revalidateLeadPaths } from '../services/bulk-leads.service';
 import { logLeadEventBulk } from './log-lead-event';
 
 const bulkMarkLostSchema = z.object({
@@ -52,43 +52,46 @@ export async function bulkMarkLeadsLost(
     return { success: false, error: 'Motivo de perda não encontrado' };
   }
 
-  // 1. Update leads → unqualified + persist loss reason (org-scoped)
-  const { error: leadError } = await from(supabase, 'leads')
+  // 1. Update leads → unqualified + persist loss reason (org-scoped). .select('id')
+  // devolve só os leads confirmados como da org (ids de outra org são ignorados).
+  const { data: updated, error: leadError } = (await from(supabase, 'leads')
     .update({
       status: 'unqualified',
       loss_reason_id: lossReasonId,
       loss_notes: notes ?? null,
     } as Record<string, unknown>)
     .eq('org_id', orgId)
-    .in('id', leadIds);
+    .in('id', leadIds)
+    .select('id')) as { data: Array<{ id: string }> | null; error: { message: string } | null };
 
   if (leadError) {
     return { success: false, error: 'Erro ao marcar leads como perdidos' };
   }
+  const confirmedIds = (updated ?? []).map((l) => l.id);
 
   // 2. Complete active/paused enrollments + cancel pending scheduled activities
-  // (service role to bypass RLS), so lost leads stop surfacing in the SDR queue.
+  // (service role), usando só os ids confirmados (fecha o IDOR cross-org — S6),
+  // para os leads perdidos saírem da fila do SDR.
   const serviceClient = createServiceRoleClient();
-  await from(serviceClient, 'cadence_enrollments')
-    .update({
-      status: 'completed',
-      loss_reason_id: lossReasonId,
-      completed_at: new Date().toISOString(),
-      ...(notes ? { loss_notes: notes } : {}),
-    } as Record<string, unknown>)
-    .in('lead_id', leadIds)
-    .in('status', ['active', 'paused']);
+  await endActiveEnrollments(serviceClient, confirmedIds, {
+    status: 'completed',
+    loss_reason_id: lossReasonId,
+    completed_at: new Date().toISOString(),
+    ...(notes ? { loss_notes: notes } : {}),
+  });
 
-  await from(serviceClient, 'scheduled_activities' as never)
-    .update({ status: 'cancelled' } as Record<string, unknown>)
-    .in('lead_id', leadIds)
-    .eq('status', 'pending');
+  if (confirmedIds.length > 0) {
+    await from(serviceClient, 'scheduled_activities' as never)
+      .update({ status: 'cancelled' } as Record<string, unknown>)
+      .in('lead_id', confirmedIds)
+      .eq('status', 'pending');
+  }
 
   // 3. Timeline event per lead
   const lossMessage = `Lead marcado como perdido — Motivo: ${reason.name}${notes ? ` | Obs: ${notes}` : ''}`;
   await logLeadEventBulk(supabase, {
     orgId,
-    leadIds,
+    leadIds: confirmedIds,
     userId,
     event: 'lead_lost',
     message: lossMessage,
@@ -99,16 +102,16 @@ export async function bulkMarkLeadsLost(
   createNotificationsForOrgMembers({
     orgId,
     type: 'lead_lost',
-    title: `${leadIds.length} lead(s) marcados como perdidos`,
+    title: `${confirmedIds.length} lead(s) marcados como perdidos`,
     body: `Motivo: ${reason.name}`,
     resourceType: 'lead',
-    resourceId: leadIds[0] ?? '',
+    resourceId: confirmedIds[0] ?? '',
     roleFilter: 'manager',
     excludeUserId: userId,
   }).catch((err) => console.error('[notification] bulk lead_lost failed:', err));
 
   // 5. Webhook per lead (fire-and-forget)
-  for (const leadId of leadIds) {
+  for (const leadId of confirmedIds) {
     dispatchWebhookEvent(supabase, orgId, 'lead.unqualified', {
       lead_id: leadId,
       loss_reason_id: lossReasonId,
@@ -116,7 +119,6 @@ export async function bulkMarkLeadsLost(
     }).catch((err) => console.error('[webhook] bulk lead.unqualified dispatch failed:', err));
   }
 
-  revalidatePath('/leads');
-  revalidatePath('/atividades');
-  return { success: true, data: { count: leadIds.length } };
+  revalidateLeadPaths();
+  return { success: true, data: { count: confirmedIds.length } };
 }
