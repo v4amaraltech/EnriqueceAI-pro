@@ -120,7 +120,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true }, isManager: true };
+const defaultProps = { gmail: null, whatsapp: null, crmConnections: [], calendar: null, api4com: null, evolutionInstance: null, apollo: null, planFeatures: { enrichment: 'full' as const, crm: true, calendar: true }, isManager: true, myWhatsAppCall: { userId: 'user-1', name: 'Você', session: null } };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {
@@ -143,6 +143,36 @@ describe('IntegrationsView', () => {
   it('should show WhatsApp card', () => {
     render(<IntegrationsView {...defaultProps} />);
     expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+  });
+
+  it('should let a SDR self-pair their WhatsApp Call number', () => {
+    render(<IntegrationsView {...defaultProps} isManager={false} />);
+    expect(screen.getByText('WhatsApp Call')).toBeInTheDocument();
+    expect(screen.getByText('Parear meu número')).toBeInTheDocument();
+    // SDR vê o auto-pareamento, não o link de gestão de números.
+    expect(screen.queryByText('Gerenciar números')).not.toBeInTheDocument();
+  });
+
+  it('should show the SDR connected number on the WhatsApp Call row', () => {
+    render(
+      <IntegrationsView
+        {...defaultProps}
+        isManager={false}
+        myWhatsAppCall={{
+          userId: 'user-1',
+          name: 'Ismael',
+          session: { status: 'connected', phoneNumber: '+5511999990000', serviceSessionId: 'sess-1' },
+        }}
+      />,
+    );
+    expect(screen.getByText(/Conectado: \+5511999990000/)).toBeInTheDocument();
+    expect(screen.getByText('Reparear')).toBeInTheDocument();
+  });
+
+  it('should show the manage-numbers link to a manager', () => {
+    render(<IntegrationsView {...defaultProps} isManager={true} />);
+    expect(screen.getByText('Gerenciar números')).toBeInTheDocument();
+    expect(screen.queryByText('Parear meu número')).not.toBeInTheDocument();
   });
 
   it('should show email address when Gmail connected', () => {

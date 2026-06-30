@@ -29,6 +29,8 @@ import {
 import type { PlanFeatures } from '@/features/billing/types';
 import { checkFeature } from '@/features/billing/services/feature-flags';
 import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
+import { MyWhatsAppCallRow } from '@/features/whatsapp-calls/components/MyWhatsAppCallRow';
+import type { MyWhatsAppNumber } from '@/features/whatsapp-calls/components/MyWhatsAppNumberCard';
 import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, CrmProvider, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { getCrmAuthUrl, disconnectCrm, triggerCrmSync } from '../actions/manage-crm';
@@ -56,6 +58,8 @@ interface IntegrationsViewProps {
   apollo: ApolloConnectionSafe | null;
   planFeatures: PlanFeatures;
   isManager: boolean;
+  /** Sessão de Ligação via WhatsApp do próprio usuário (auto-pareamento do SDR). */
+  myWhatsAppCall: MyWhatsAppNumber;
 }
 
 const CRM_PROVIDERS = [
@@ -83,7 +87,7 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
   );
 }
 
-export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures, isManager }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures, isManager, myWhatsAppCall }: IntegrationsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -320,8 +324,10 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             </div>
           </div>
 
-          {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7) */}
-          {isManager && (
+          {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7).
+              Gestor: gerencia os números de todos os SDRs.
+              SDR: pareia o PRÓPRIO número via QR, igual ao WhatsApp da Evolution. */}
+          {isManager ? (
             <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
               <div className="flex w-10 shrink-0 items-center justify-center">
                 <WhatsAppGlyph className="h-8 w-8 text-emerald-600" />
@@ -339,6 +345,8 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                 </Button>
               </div>
             </div>
+          ) : (
+            <MyWhatsAppCallRow me={myWhatsAppCall} />
           )}
 
           {/* Google */}
