@@ -97,9 +97,13 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   const [isSavingPreset, startPresetTransition] = useTransition();
 
   useEffect(() => {
-    listApolloSearches().then((r) => {
-      if (r.success) setSavedSearches(r.data);
-    });
+    // Falha silenciosa: se a action não resolver (ex.: aba aberta numa versão
+    // anterior a um deploy), só não lista presets — não derruba a tela.
+    listApolloSearches()
+      .then((r) => {
+        if (r.success) setSavedSearches(r.data);
+      })
+      .catch(() => {});
   }, []);
 
   function currentFilterState() {
@@ -121,36 +125,50 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     setIncludeSimilarTitles(f.includeSimilarTitles ?? true);
   }
 
+  // Toast amigável quando a server action não resolve (ex.: deployment skew —
+  // aba aberta antes de um deploy). Sem o try/catch, o erro do transition sobe
+  // para o error boundary e derruba a tela.
+  const STALE_DEPLOY_MSG =
+    'Não foi possível concluir. Recarregue a página (Ctrl/Cmd+Shift+R) e tente de novo.';
+
   function handleSavePreset() {
     const name = presetName.trim();
     if (!name) return;
     startPresetTransition(async () => {
-      const r = await saveApolloSearch({ name, filters: currentFilterState() });
-      if (!r.success) {
-        toast.error(r.error);
-        return;
+      try {
+        const r = await saveApolloSearch({ name, filters: currentFilterState() });
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+        const list = await listApolloSearches();
+        if (list.success) {
+          setSavedSearches(list.data);
+          setSelectedSearchId(r.data.id);
+        }
+        setPresetName('');
+        toast.success('Filtro salvo');
+      } catch {
+        toast.error(STALE_DEPLOY_MSG);
       }
-      const list = await listApolloSearches();
-      if (list.success) {
-        setSavedSearches(list.data);
-        setSelectedSearchId(r.data.id);
-      }
-      setPresetName('');
-      toast.success('Filtro salvo');
     });
   }
 
   function handleDeletePreset() {
     if (!selectedSearchId) return;
     startPresetTransition(async () => {
-      const r = await deleteApolloSearch(selectedSearchId);
-      if (!r.success) {
-        toast.error(r.error);
-        return;
+      try {
+        const r = await deleteApolloSearch(selectedSearchId);
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+        setSavedSearches((prev) => prev.filter((s) => s.id !== selectedSearchId));
+        setSelectedSearchId('');
+        toast.success('Filtro excluído');
+      } catch {
+        toast.error(STALE_DEPLOY_MSG);
       }
-      setSavedSearches((prev) => prev.filter((s) => s.id !== selectedSearchId));
-      setSelectedSearchId('');
-      toast.success('Filtro excluído');
     });
   }
 
