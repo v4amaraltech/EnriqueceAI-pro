@@ -7,6 +7,19 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));
 
+// Service role client (usado por endActiveEnrollments) — stub chainable/thenable
+// independente do mockFrom, para a baixa de enrollments não afetar a contagem
+// de chamadas roteada por fromCallCount nos testes.
+vi.mock('@/lib/supabase/service', () => {
+  const chain: Record<string, unknown> = {};
+  for (const m of ['select', 'update', 'insert', 'delete', 'eq', 'neq', 'in', 'is']) {
+    chain[m] = vi.fn(() => chain);
+  }
+  chain.then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: null }).then(resolve);
+  return { createServiceRoleClient: vi.fn(() => ({ from: () => chain })) };
+});
+
 vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
@@ -27,9 +40,14 @@ function makeOrgMemberChain(orgId: string | null) {
   return { select: selectMock };
 }
 
-// Helper to build a chainable mock for: .from('leads').update().eq().in()
-function makeUpdateChain(error: { message: string } | null = null) {
-  const inMock = vi.fn().mockResolvedValue({ error });
+// Helper to build a chainable mock for: .from('leads').update().eq().in().select('id')
+// O .select('id') devolve os ids confirmados como da org (base da contagem).
+function makeUpdateChain(
+  rows: Array<{ id: string }> | null = [],
+  error: { message: string } | null = null,
+) {
+  const selectMock = vi.fn().mockResolvedValue({ data: rows, error });
+  const inMock = vi.fn().mockReturnValue({ select: selectMock });
   const eqMock = vi.fn().mockReturnValue({ in: inMock });
   const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
   return { update: updateMock };
@@ -59,7 +77,7 @@ describe('bulkDeleteLeads', () => {
       if (fromCallCount === 1) {
         return makeOrgMemberChain('org-1');
       }
-      return makeUpdateChain(null);
+      return makeUpdateChain([{ id: 'lead-1' }, { id: 'lead-2' }]);
     });
 
     const result = await bulkDeleteLeads(['lead-1', 'lead-2']);
@@ -100,7 +118,7 @@ describe('bulkDeleteLeads', () => {
       if (fromCallCount === 1) {
         return makeOrgMemberChain('org-1');
       }
-      return makeUpdateChain({ message: 'Update failed' });
+      return makeUpdateChain(null, { message: 'Update failed' });
     });
 
     const result = await bulkDeleteLeads(['lead-1']);
@@ -126,8 +144,8 @@ describe('bulkArchiveLeads', () => {
         // getOrgId: organization_members
         return makeOrgMemberChain('org-1');
       }
-      // Archive: leads update
-      return makeUpdateChain(null);
+      // Archive: leads update → returns the org-confirmed ids
+      return makeUpdateChain([{ id: 'lead-1' }, { id: 'lead-2' }, { id: 'lead-3' }]);
     });
 
     const result = await bulkArchiveLeads(['lead-1', 'lead-2', 'lead-3']);
@@ -137,6 +155,23 @@ describe('bulkArchiveLeads', () => {
       expect(result.data.count).toBe(3);
     }
     expect(revalidatePath).toHaveBeenCalledWith('/leads');
+  });
+
+  it('counts only org-confirmed ids (foreign-org id is ignored — S6)', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) return makeOrgMemberChain('org-1');
+      // Two ids requested, but only one belongs to the org → update returns one.
+      return makeUpdateChain([{ id: 'lead-1' }]);
+    });
+
+    const result = await bulkArchiveLeads(['lead-1', 'foreign-lead']);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.count).toBe(1);
+    }
   });
 
   it('should return error when org is not found', async () => {
@@ -168,7 +203,7 @@ describe('bulkArchiveLeads', () => {
       if (fromCallCount === 1) {
         return makeOrgMemberChain('org-1');
       }
-      return makeUpdateChain({ message: 'Update failed' });
+      return makeUpdateChain(null, { message: 'Update failed' });
     });
 
     const result = await bulkArchiveLeads(['lead-1', 'lead-2']);
