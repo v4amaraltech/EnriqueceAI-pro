@@ -39,9 +39,8 @@ export async function fetchLossReasonAnalyticsData(
     .is('deleted_at', null)) as { data: CadenceRow[] | null };
   const cadences = rawCadences ?? [];
 
-  if (cadences.length === 0) {
-    return emptyData();
-  }
+  // Sem early-return em "0 cadências": o ranking org-wide vem de leads, que
+  // existem independentemente de cadências. As views por cadência ficam vazias.
 
   // Fetch enrollments scoped to org cadences (cadence_enrollments has no org_id column)
   const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
@@ -59,9 +58,8 @@ export async function fetchLossReasonAnalyticsData(
   const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
   const enrollments = rawEnrollments ?? [];
 
-  if (enrollments.length === 0) {
-    return emptyData();
-  }
+  // NÃO retornamos cedo em "0 enrollments": no modo org-wide o ranking vem de
+  // leads (um lead perdido sem cadência ativa não tem enrollment, mas conta).
 
   // Fetch loss reasons
   const { data: rawReasons } = (await from(supabase, 'loss_reasons')
@@ -70,21 +68,40 @@ export async function fetchLossReasonAnalyticsData(
   const reasons = rawReasons ?? [];
 
   const lostEnrollments = enrollments.filter((e) => e.loss_reason_id != null);
-  const totalLost = lostEnrollments.length;
+  const enrollmentLost = lostEnrollments.length;
   const totalEnrolled = enrollments.length;
 
-  const reasonsRanking = buildReasonsRanking(lostEnrollments, reasons, totalLost);
+  const memberInfoMap = await buildMemberInfoMap(supabase, orgId);
+
+  // Views por cadência são enrollment-level por natureza (precisam do vínculo
+  // enrollment→cadência).
   const lossByCadence = buildLossByCadence(enrollments, cadences, reasons);
   const lossByCadenceStacked = buildLossByCadenceStacked(lostEnrollments, cadences, reasons);
 
-  // Build user-level stacked data (grouped by lead's assigned_to, not enrolled_by)
-  const memberInfoMap = await buildMemberInfoMap(supabase, orgId);
-  const lostLeadIds = [...new Set(lostEnrollments.map((e) => e.lead_id))];
-  const { data: lostLeads } = lostLeadIds.length > 0
-    ? (await from(supabase, 'leads').select('id, assigned_to').in('id', lostLeadIds).is('deleted_at', null)) as { data: Array<{ id: string; assigned_to: string | null }> | null }
-    : { data: [] as Array<{ id: string; assigned_to: string | null }> };
-  const leadAssignedMap = new Map((lostLeads ?? []).map((l) => [l.id, l.assigned_to]));
-  const lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap, leadAssignedMap);
+  // Ranking de motivos + total + por-SDR:
+  //  - org-wide (sem filtro de cadência): lê de leads.loss_reason_id (canônico,
+  //    igual Dashboard/Relatórios). O enrollment-level subcontava (perde lead
+  //    perdido sem cadência, duplica lead multi-cadência, filtra por enrolled_at).
+  //  - com filtro de cadência: é uma view por cadência → enrollment-level.
+  let reasonsRanking: LossReasonEntry[];
+  let lossByUserStacked: LossByUserStackedRow[];
+  let totalLost: number;
+
+  if (cadenceId) {
+    totalLost = enrollmentLost;
+    reasonsRanking = buildReasonsRanking(lostEnrollments, reasons, totalLost);
+    const lostLeadIds = [...new Set(lostEnrollments.map((e) => e.lead_id))];
+    const { data: lostLeads } = lostLeadIds.length > 0
+      ? ((await from(supabase, 'leads').select('id, assigned_to').in('id', lostLeadIds).is('deleted_at', null)) as { data: Array<{ id: string; assigned_to: string | null }> | null })
+      : { data: [] as Array<{ id: string; assigned_to: string | null }> };
+    const leadAssignedMap = new Map((lostLeads ?? []).map((l) => [l.id, l.assigned_to]));
+    lossByUserStacked = buildLossByUserStacked(lostEnrollments, reasons, memberInfoMap, leadAssignedMap);
+  } else {
+    const leadRows = await fetchLostLeadRows(supabase, orgId, periodStart, periodEnd, userIds);
+    totalLost = leadRows.length;
+    reasonsRanking = buildReasonsRanking(leadRows, reasons, totalLost);
+    lossByUserStacked = buildLossByUserStackedFromLeads(leadRows, reasons, memberInfoMap);
+  }
 
   const topReason = reasonsRanking[0];
 
@@ -92,7 +109,9 @@ export async function fetchLossReasonAnalyticsData(
     totalLost,
     topReasonName: topReason?.reasonName ?? '—',
     topReasonCount: topReason?.count ?? 0,
-    overallLossRate: safeRate(totalLost, totalEnrolled),
+    // Taxa de perda = funil de enrollments (% de enrollments do período que
+    // terminaram em perda), mantida enrollment-level mesmo no modo org-wide.
+    overallLossRate: safeRate(enrollmentLost, totalEnrolled),
     totalEnrolled,
     reasonsRanking,
     lossByCadence,
@@ -101,8 +120,81 @@ export async function fetchLossReasonAnalyticsData(
   };
 }
 
+/**
+ * Leads perdidos no período (nível lead, canônico) — fonte do ranking org-wide,
+ * igual ao Dashboard/Relatórios. Exclui a auto-perda por inatividade (cron).
+ */
+async function fetchLostLeadRows(
+  supabase: SupabaseClient,
+  orgId: string,
+  periodStart: string,
+  periodEnd: string,
+  userIds?: string[],
+): Promise<Array<{ loss_reason_id: string | null; assigned_to: string | null }>> {
+  let q = from(supabase, 'leads')
+    .select('loss_reason_id, loss_notes, assigned_to')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .not('loss_reason_id', 'is', null)
+    .gte('lost_at', periodStart)
+    .lte('lost_at', periodEnd);
+  if (userIds && userIds.length > 0) q = q.in('assigned_to', userIds);
+
+  const { data } = (await q.limit(10000)) as {
+    data: Array<{ loss_reason_id: string | null; loss_notes: string | null; assigned_to: string | null }> | null;
+  };
+  return (data ?? []).filter((l) => !(l.loss_notes ?? '').startsWith('Auto-perda por inatividade'));
+}
+
+/** Por-SDR (nível lead, por assigned_to) — espelha buildLossByUserStacked. */
+function buildLossByUserStackedFromLeads(
+  leadRows: Array<{ loss_reason_id: string | null; assigned_to: string | null }>,
+  reasons: LossReasonRow[],
+  memberInfoMap: Map<string, { name: string }>,
+): LossByUserStackedRow[] {
+  const reasonNameMap = new Map(reasons.map((r) => [r.id, r.name]));
+
+  const globalReasonIds = new Set<string>();
+  for (const l of leadRows) if (l.loss_reason_id) globalReasonIds.add(l.loss_reason_id);
+  const reasonColorMap = new Map<string, string>();
+  let colorIdx = 0;
+  for (const rId of globalReasonIds) {
+    reasonColorMap.set(rId, CHART_SERIES_COLORS[colorIdx % CHART_SERIES_COLORS.length] ?? CHART_FALLBACK_COLOR);
+    colorIdx++;
+  }
+
+  const userMap = new Map<string, Map<string, number>>();
+  for (const l of leadRows) {
+    if (!l.loss_reason_id || !l.assigned_to) continue;
+    const rMap = userMap.get(l.assigned_to) ?? new Map<string, number>();
+    rMap.set(l.loss_reason_id, (rMap.get(l.loss_reason_id) ?? 0) + 1);
+    userMap.set(l.assigned_to, rMap);
+  }
+
+  const rows: LossByUserStackedRow[] = [];
+  for (const [userId, reasonMap] of userMap) {
+    const totalLost = Array.from(reasonMap.values()).reduce((a, b) => a + b, 0);
+    const reasonEntries = Array.from(reasonMap.entries())
+      .map(([reasonId, count]) => ({
+        reasonName: reasonNameMap.get(reasonId) ?? 'Outro',
+        count,
+        color: reasonColorMap.get(reasonId) ?? CHART_FALLBACK_COLOR,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    rows.push({
+      userId,
+      userName: memberInfoMap.get(userId)?.name ?? userId.slice(0, 8),
+      totalLost,
+      reasons: reasonEntries,
+    });
+  }
+
+  return rows.sort((a, b) => b.totalLost - a.totalLost);
+}
+
 function buildReasonsRanking(
-  lostEnrollments: EnrollmentQueryRow[],
+  lostEnrollments: Array<{ loss_reason_id: string | null }>,
   reasons: LossReasonRow[],
   totalLost: number,
 ): LossReasonEntry[] {
@@ -169,20 +261,6 @@ function buildLossByCadence(
     })
     .filter((c) => c.lost > 0)
     .sort((a, b) => b.lost - a.lost);
-}
-
-function emptyData(): LossReasonAnalyticsData {
-  return {
-    totalLost: 0,
-    topReasonName: '—',
-    topReasonCount: 0,
-    overallLossRate: 0,
-    totalEnrolled: 0,
-    reasonsRanking: [],
-    lossByCadence: [],
-    lossByCadenceStacked: [],
-    lossByUserStacked: [],
-  };
 }
 
 function buildLossByCadenceStacked(
