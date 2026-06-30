@@ -6,6 +6,8 @@ import type {
   CrmProvider,
 } from '../types/crm';
 
+import { crmFetch } from './crm-http';
+
 const PIPEDRIVE_AUTH_URL = 'https://oauth.pipedrive.com/oauth/authorize';
 const PIPEDRIVE_TOKEN_URL = 'https://oauth.pipedrive.com/oauth/token';
 
@@ -77,22 +79,15 @@ async function pipedriveFetch<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const baseUrl = apiDomain || 'https://api.pipedrive.com';
-  const response = await fetch(`${baseUrl}${path}`, {
+  return crmFetch<T>(`${baseUrl}${path}`, {
     ...options,
-    signal: options.signal ?? AbortSignal.timeout(15_000),
+    label: 'Pipedrive',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Pipedrive API error (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export class PipedriveAdapter implements CRMAdapter {

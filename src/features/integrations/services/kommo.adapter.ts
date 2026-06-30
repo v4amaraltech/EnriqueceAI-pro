@@ -7,6 +7,8 @@ import type {
 } from '../types/crm';
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { crmFetch } from './crm-http';
+
 const KOMMO_AUTH_URL = 'https://www.kommo.com/oauth';
 
 const KOMMO_CLIENT_ID = process.env.KOMMO_CLIENT_ID ?? '';
@@ -88,26 +90,15 @@ async function kommoFetch<T>(
   accessToken: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`https://${subdomain}.kommo.com/api/v4${path}`, {
+  return crmFetch<T>(`https://${subdomain}.kommo.com/api/v4${path}`, {
     ...options,
-    signal: options.signal ?? AbortSignal.timeout(15_000),
+    label: 'Kommo',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Kommo API error (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 function extractCustomFieldValue(

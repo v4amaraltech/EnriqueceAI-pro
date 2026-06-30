@@ -6,6 +6,8 @@ import type {
   CrmProvider,
 } from '../types/crm';
 
+import { crmFetch } from './crm-http';
+
 const HUBSPOT_AUTH_URL = 'https://app.hubspot.com/oauth/authorize';
 const HUBSPOT_TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const HUBSPOT_API_BASE = 'https://api.hubapi.com';
@@ -72,22 +74,15 @@ async function hubspotFetch<T>(
   accessToken: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${HUBSPOT_API_BASE}${path}`, {
+  return crmFetch<T>(`${HUBSPOT_API_BASE}${path}`, {
     ...options,
-    signal: options.signal ?? AbortSignal.timeout(15_000),
+    label: 'HubSpot',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HubSpot API error (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export class HubSpotAdapter implements CRMAdapter {
