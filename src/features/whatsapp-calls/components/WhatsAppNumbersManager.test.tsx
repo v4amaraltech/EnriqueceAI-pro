@@ -6,7 +6,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../actions/pairing', () => ({
   createPairingSession: vi.fn(),
   getPairingStatus: vi.fn(),
-  repairSession: vi.fn(),
+  cancelPairingSession: vi.fn(),
 }));
 
 import type { WhatsAppNumberRow } from '../types';

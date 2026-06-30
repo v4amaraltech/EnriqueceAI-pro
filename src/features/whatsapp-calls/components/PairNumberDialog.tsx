@@ -13,6 +13,7 @@ import {
 } from '@/shared/components/ui/dialog';
 
 import { cancelPairingSession, createPairingSession, getPairingStatus } from '../actions/pairing';
+import type { PairingActions } from '../pairing-types';
 import { subscribeSessionEvents } from '../voice-call-media';
 import { QrCode } from './QrCode';
 
@@ -22,6 +23,14 @@ export interface PairTarget {
   mode: 'pair' | 'repair';
   sid: string | null;
 }
+
+// Default: pareamento conduzido pelo gestor (manager-only). A tela de self-service
+// do SDR injeta as actions escopadas ao próprio usuário (pairing-self.ts).
+const MANAGER_ACTIONS: PairingActions = {
+  create: createPairingSession,
+  getStatus: getPairingStatus,
+  cancel: cancelPairingSession,
+};
 
 type Phase = 'starting' | 'awaiting' | 'connected' | 'error';
 
@@ -33,7 +42,15 @@ type Phase = 'starting' | 'awaiting' | 'connected' | 'error';
  * `subscribeSessionEvents` entrega o QR (string `wa.me/...`) e sinaliza quando o
  * `sid` aparece pareado; aí `getPairingStatus` persiste o número + `connected`.
  */
-function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: () => void }) {
+function PairFlow({
+  target,
+  actions,
+  onConnected,
+}: {
+  target: PairTarget;
+  actions: PairingActions;
+  onConnected: () => void;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('starting');
   const [qr, setQr] = useState<string | null>(null);
@@ -43,12 +60,18 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
   const sidRef = useRef<string | null>(null);
   const phaseRef = useRef<Phase>(phase);
   const onConnectedRef = useRef(onConnected);
+  // actions via ref: os efeitos rodam na montagem (handlers estáveis), então
+  // lemos a versão corrente sem re-disparar nem violar exhaustive-deps.
+  const actionsRef = useRef(actions);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
   useEffect(() => {
     onConnectedRef.current = onConnected;
   }, [onConnected]);
+  useEffect(() => {
+    actionsRef.current = actions;
+  }, [actions]);
 
   // Inicia o pareamento na montagem (setState só dentro do callback async).
   useEffect(() => {
@@ -56,7 +79,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
     startedRef.current = true;
     void (async () => {
       // Sempre cria uma sessão nova (QR fresco) — a action limpa a anterior.
-      const result = await createPairingSession(target.userId);
+      const result = await actionsRef.current.create(target.userId);
       if (!result.success) {
         setErrorMsg(result.error);
         setPhase('error');
@@ -75,7 +98,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
   useEffect(
     () => () => {
       if (sidRef.current && phaseRef.current !== 'connected') {
-        void cancelPairingSession(sidRef.current);
+        void actionsRef.current.cancel(sidRef.current);
       }
     },
     [],
@@ -94,7 +117,7 @@ function PairFlow({ target, onConnected }: { target: PairTarget; onConnected: ()
         confirmingRef.current = true;
         void (async () => {
           // Confirma e persiste o número + status `connected` no banco.
-          const result = await getPairingStatus(sid);
+          const result = await actionsRef.current.getStatus(sid);
           if (result.success && result.data.status === 'connected') {
             setPhase('connected');
             toast.success('Número WhatsApp pareado com sucesso');
@@ -145,10 +168,15 @@ export function PairNumberDialog({
   target,
   open,
   onOpenChange,
+  actions = MANAGER_ACTIONS,
+  description,
 }: {
   target: PairTarget | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Default: actions do gestor. O self-service injeta as actions do próprio SDR.
+  actions?: PairingActions;
+  description?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,7 +184,8 @@ export function PairNumberDialog({
         <DialogHeader>
           <DialogTitle>Parear número WhatsApp</DialogTitle>
           <DialogDescription>
-            {target ? `Escaneie o QR com o WhatsApp do número de ${target.name}.` : ''}
+            {description ??
+              (target ? `Escaneie o QR com o WhatsApp do número de ${target.name}.` : '')}
           </DialogDescription>
         </DialogHeader>
 
@@ -164,6 +193,7 @@ export function PairNumberDialog({
           <PairFlow
             key={`${target.userId}:${target.mode}:${target.sid ?? ''}`}
             target={target}
+            actions={actions}
             onConnected={() => setTimeout(() => onOpenChange(false), 1200)}
           />
         ) : (

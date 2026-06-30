@@ -7,7 +7,7 @@ import { requireManager } from '@/lib/auth/require-manager';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import type { WhatsAppCallSessionStatus } from '../types';
+import type { PairingResult } from '../pairing-types';
 import {
   VoiceServiceError,
   createVoiceSession,
@@ -17,13 +17,6 @@ import {
 
 const uuidSchema = z.string().uuid();
 const sidSchema = z.string().min(1);
-
-interface PairingResult {
-  sid: string;
-  status: WhatsAppCallSessionStatus;
-  qr: string | null;
-  phoneNumber: string | null;
-}
 
 function mapVoiceError(err: unknown): { success: false; error: string } {
   if (err instanceof VoiceServiceError) {

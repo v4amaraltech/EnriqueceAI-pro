@@ -27,6 +27,7 @@ const pathLabels: Record<string, string> = {
   users: 'Usuários',
   integrations: 'Integrações',
   'whatsapp-numbers': 'WhatsApp Números',
+  'my-whatsapp-number': 'Ligação via WhatsApp',
   billing: 'Faturamento',
   prospecting: 'Prospecção',
   'daily-goals': 'Metas Diárias',
