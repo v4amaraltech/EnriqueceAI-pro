@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 
-import { Loader2, Search, Trash2, X } from 'lucide-react';
+import { Check, Loader2, Pencil, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -15,7 +15,9 @@ import { Switch } from '@/shared/components/ui/switch';
 import {
   deleteApolloSearch,
   listApolloSearches,
+  renameApolloSearch,
   saveApolloSearch,
+  updateApolloSearchFilters,
   type ApolloSavedSearch,
 } from '../actions/apollo-saved-searches';
 import type { SearchApolloInput } from '../actions/search-apollo';
@@ -94,6 +96,8 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   const [savedSearches, setSavedSearches] = useState<ApolloSavedSearch[]>([]);
   const [selectedSearchId, setSelectedSearchId] = useState('');
   const [presetName, setPresetName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
   const [isSavingPreset, startPresetTransition] = useTransition();
 
   useEffect(() => {
@@ -112,6 +116,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
 
   function applyPreset(id: string) {
     setSelectedSearchId(id);
+    setIsRenaming(false);
     const preset = savedSearches.find((s) => s.id === id);
     if (!preset) return;
     const f = preset.filters;
@@ -172,6 +177,51 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     });
   }
 
+  // Sobrescreve os filtros do preset selecionado com o estado atual da tela.
+  function handleUpdateFilters() {
+    if (!selectedSearchId) return;
+    startPresetTransition(async () => {
+      try {
+        const filters = currentFilterState();
+        const r = await updateApolloSearchFilters({ id: selectedSearchId, filters });
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+        setSavedSearches((prev) => prev.map((s) => (s.id === selectedSearchId ? { ...s, filters } : s)));
+        toast.success('Filtro atualizado');
+      } catch {
+        toast.error(STALE_DEPLOY_MSG);
+      }
+    });
+  }
+
+  function startRename() {
+    const preset = savedSearches.find((s) => s.id === selectedSearchId);
+    if (!preset) return;
+    setRenameValue(preset.name);
+    setIsRenaming(true);
+  }
+
+  function handleRename() {
+    const name = renameValue.trim();
+    if (!name || !selectedSearchId) return;
+    startPresetTransition(async () => {
+      try {
+        const r = await renameApolloSearch({ id: selectedSearchId, name });
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+        setSavedSearches((prev) => prev.map((s) => (s.id === selectedSearchId ? { ...s, name } : s)));
+        setIsRenaming(false);
+        toast.success('Filtro renomeado');
+      } catch {
+        toast.error(STALE_DEPLOY_MSG);
+      }
+    });
+  }
+
   function handleSearch() {
     const params: SearchApolloInput = {
       page: 1,
@@ -226,36 +276,100 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
       <Separator />
       <div className="space-y-2">
         <Label>Filtros salvos</Label>
-        {savedSearches.length > 0 && (
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedSearchId}
-              onChange={(e) => applyPreset(e.target.value)}
-              disabled={isLoading || isSavingPreset}
-              className="h-9 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-60"
-            >
-              <option value="">Carregar filtro salvo…</option>
-              {savedSearches.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {selectedSearchId && (
+        {savedSearches.length > 0 &&
+          (isRenaming ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={renameValue}
+                maxLength={80}
+                autoFocus
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRename();
+                  if (e.key === 'Escape') setIsRenaming(false);
+                }}
+              />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 shrink-0 text-[var(--muted-foreground)] hover:text-red-600"
-                onClick={handleDeletePreset}
-                disabled={isSavingPreset}
-                aria-label="Excluir filtro salvo"
+                className="h-9 w-9 shrink-0 text-emerald-600 hover:text-emerald-700"
+                onClick={handleRename}
+                disabled={isSavingPreset || !renameValue.trim()}
+                aria-label="Confirmar novo nome"
               >
-                <Trash2 className="h-4 w-4" />
+                <Check className="h-4 w-4" />
               </Button>
-            )}
-          </div>
-        )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-[var(--muted-foreground)]"
+                onClick={() => setIsRenaming(false)}
+                disabled={isSavingPreset}
+                aria-label="Cancelar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedSearchId}
+                  onChange={(e) => applyPreset(e.target.value)}
+                  disabled={isLoading || isSavingPreset}
+                  className="h-9 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-60"
+                >
+                  <option value="">Carregar filtro salvo…</option>
+                  {savedSearches.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedSearchId && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                      onClick={startRename}
+                      disabled={isSavingPreset}
+                      aria-label="Renomear filtro"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-[var(--muted-foreground)] hover:text-red-600"
+                      onClick={handleDeletePreset}
+                      disabled={isSavingPreset}
+                      aria-label="Excluir filtro salvo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+              {selectedSearchId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleUpdateFilters}
+                  disabled={isSavingPreset}
+                >
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  Atualizar com os filtros atuais
+                </Button>
+              )}
+            </>
+          ))}
         <div className="flex items-center gap-2">
           <Input
             placeholder="Nome do filtro"
