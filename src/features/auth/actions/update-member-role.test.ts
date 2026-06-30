@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mockSupabase, mockSupabaseAuth, resetMocks } from '@tests/mocks/supabase';
+import { mockSupabase, resetMocks } from '@tests/mocks/supabase';
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -12,11 +12,16 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-vi.mock('@/lib/supabase/server', () => ({
-  createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
+// getManagerOrgId encapsula requireManager + org do caller; mockamos direto para
+// desacoplar o teste do internamento (a action escopa as escritas por essa org).
+vi.mock('@/lib/auth/get-org-id', () => ({
+  getManagerOrgId: vi.fn(),
 }));
 
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { updateMemberRole } from './update-member-role';
+
+const mockedGetManagerOrgId = vi.mocked(getManagerOrgId);
 
 function makeFormData(data: Record<string, string>): FormData {
   const fd = new FormData();
@@ -26,48 +31,32 @@ function makeFormData(data: Record<string, string>): FormData {
   return fd;
 }
 
-function setupManagerMock() {
-  mockSupabaseAuth.getUser.mockResolvedValue({
-    data: { user: { id: 'user-123' } },
-  });
-
+// from sequence (após getManagerOrgId mockado): #1 member, #2 owner, #3 update.
+// O update encadeia DOIS .eq() (id + org_id, defense-in-depth).
+function setupMemberMocks(member: { user_id: string; org_id: string }, ownerId: string) {
   let fromCallCount = 0;
   mockSupabase.from.mockImplementation(() => {
     fromCallCount++;
 
     if (fromCallCount === 1) {
-      // requireManager: role check
-      const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
-      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
-      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+      const singleMock = vi.fn().mockResolvedValue({ data: member });
+      const eqMock1 = vi.fn().mockReturnValue({ single: singleMock });
       const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
       return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
     }
 
     if (fromCallCount === 2) {
-      // Get member
-      const singleMock = vi.fn().mockResolvedValue({
-        data: { user_id: 'other-user', org_id: 'org-abc' },
-      });
+      const singleMock = vi.fn().mockResolvedValue({ data: { owner_id: ownerId } });
       const eqMock1 = vi.fn().mockReturnValue({ single: singleMock });
       const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
       return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
     }
 
     if (fromCallCount === 3) {
-      // Get org owner
-      const singleMock = vi.fn().mockResolvedValue({
-        data: { owner_id: 'user-123' },
-      });
-      const eqMock1 = vi.fn().mockReturnValue({ single: singleMock });
-      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
-    }
-
-    if (fromCallCount === 4) {
-      // Update role
-      const eqMock = vi.fn().mockResolvedValue({ error: null });
-      const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+      // Update role — .update().eq('id').eq('org_id')
+      const eq2Mock = vi.fn().mockResolvedValue({ error: null });
+      const eq1Mock = vi.fn().mockReturnValue({ eq: eq2Mock });
+      const updateMock = vi.fn().mockReturnValue({ eq: eq1Mock });
       return { select: vi.fn(), update: updateMock, insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
     }
 
@@ -78,18 +67,14 @@ function setupManagerMock() {
 describe('updateMemberRole', () => {
   beforeEach(() => {
     resetMocks();
+    mockedGetManagerOrgId.mockResolvedValue({
+      orgId: 'org-abc',
+      userId: 'user-123',
+      supabase: mockSupabase,
+    } as unknown as Awaited<ReturnType<typeof getManagerOrgId>>);
   });
 
   it('should return validation error for invalid role', async () => {
-    mockSupabaseAuth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-123' } },
-    });
-    const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
-    const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
-    const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
-    const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-    mockSupabase.from.mockReturnValue({ select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() });
-
     const result = await updateMemberRole(
       makeFormData({ memberId: '550e8400-e29b-41d4-a716-446655440000', role: 'admin' }),
     );
@@ -101,44 +86,7 @@ describe('updateMemberRole', () => {
   });
 
   it('should prevent changing role of org owner', async () => {
-    mockSupabaseAuth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-123' } },
-    });
-
-    let fromCallCount = 0;
-    mockSupabase.from.mockImplementation(() => {
-      fromCallCount++;
-
-      if (fromCallCount === 1) {
-        const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
-        const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
-        const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
-        const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-        return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
-      }
-
-      if (fromCallCount === 2) {
-        // Member IS the owner
-        const singleMock = vi.fn().mockResolvedValue({
-          data: { user_id: 'owner-user', org_id: 'org-abc' },
-        });
-        const eqMock1 = vi.fn().mockReturnValue({ single: singleMock });
-        const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-        return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
-      }
-
-      if (fromCallCount === 3) {
-        // Org owner matches the member
-        const singleMock = vi.fn().mockResolvedValue({
-          data: { owner_id: 'owner-user' },
-        });
-        const eqMock1 = vi.fn().mockReturnValue({ single: singleMock });
-        const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
-        return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
-      }
-
-      return { select: vi.fn().mockReturnThis(), update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn().mockReturnThis(), single: vi.fn() };
-    });
+    setupMemberMocks({ user_id: 'owner-user', org_id: 'org-abc' }, 'owner-user');
 
     const result = await updateMemberRole(
       makeFormData({ memberId: '550e8400-e29b-41d4-a716-446655440000', role: 'sdr' }),
@@ -150,8 +98,21 @@ describe('updateMemberRole', () => {
     }
   });
 
+  it('should reject a member from another org', async () => {
+    setupMemberMocks({ user_id: 'other-user', org_id: 'org-OTHER' }, 'user-123');
+
+    const result = await updateMemberRole(
+      makeFormData({ memberId: '550e8400-e29b-41d4-a716-446655440000', role: 'sdr' }),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('não encontrado');
+    }
+  });
+
   it('should succeed with valid data', async () => {
-    setupManagerMock();
+    setupMemberMocks({ user_id: 'other-user', org_id: 'org-abc' }, 'user-123');
 
     const result = await updateMemberRole(
       makeFormData({ memberId: '550e8400-e29b-41d4-a716-446655440000', role: 'sdr' }),

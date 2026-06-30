@@ -295,11 +295,12 @@ export class EmailService {
             if (sigData.signature) {
               signature = sigData.signature;
               // Cache the signature (fire-and-forget)
-              const dbClient = supabase;
-              (dbClient as any).from('gmail_connections')
-                .update({ cached_signature: signature, signature_cached_at: new Date().toISOString() })
-                .eq('user_id', userId)
-                .then(() => {});
+              void from(supabase, 'gmail_connections')
+                .update({
+                  cached_signature: signature,
+                  signature_cached_at: new Date().toISOString(),
+                } as Record<string, unknown>)
+                .eq('user_id', userId);
             }
           }
         } catch {

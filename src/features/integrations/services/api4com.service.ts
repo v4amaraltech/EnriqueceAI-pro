@@ -105,7 +105,9 @@ export async function originateCall(
   // a request_id but webhook fires with channel_id. Logging the full response
   // so we can see if API4COM returns an additional channelId/callId field we
   // are currently ignoring via the narrow Api4ComOriginateResponse type.
-  console.warn('[api4com][originate-response]', JSON.stringify(data));
+  // Loga só as CHAVES da resposta (não o payload) — basta para a investigação
+  // do id-mismatch (channelId/callId extra) sem despejar dados da chamada no log.
+  console.warn('[api4com][originate-response] keys:', Object.keys(data ?? {}));
 
   return { data, ramal: creds.ramal };
 }
