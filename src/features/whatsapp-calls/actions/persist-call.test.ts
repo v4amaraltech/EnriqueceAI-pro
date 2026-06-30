@@ -90,6 +90,23 @@ describe('persistWhatsAppCall', () => {
     expect(callRow.recording_url).toBe('https://voice.example/rec/buffered.mp3');
   });
 
+  it('persists a standalone call (no cadence) with null step/cadence in the interaction', async () => {
+    queues.organization_members = [{ data: { org_id: 'org-1' } }];
+    queues.calls = [
+      { data: null }, // dedup: no existing call
+      { data: { id: 'call-3' }, error: null }, // insert ... select single
+    ];
+    // Ligação avulsa da tela do lead: sem stepId/cadenceId.
+    const { stepId: _s, cadenceId: _c, ...standalone } = baseInput;
+    const result = await persistWhatsAppCall(standalone);
+    expect(result.success).toBe(true);
+
+    const interactionRow = inserts.interactions?.[0] as Record<string, unknown>;
+    expect(interactionRow.cadence_id).toBeNull();
+    expect(interactionRow.step_id).toBeNull();
+    expect(interactionRow.channel).toBe('phone');
+  });
+
   it('is idempotent on the same service_call_id', async () => {
     queues.organization_members = [{ data: { org_id: 'org-1' } }];
     queues.calls = [{ data: { id: 'existing-1' } }]; // dedup hit

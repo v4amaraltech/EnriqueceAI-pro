@@ -43,7 +43,9 @@ function formatPhone(ddd: number, numero: string): { formatted: string; raw: str
  * stored in the JSONB column only ever showed the first one in the
  * WhatsApp activity composer — SDR couldn't pick alternates.
  */
-export function getAllLeadPhones(lead: ActivityLead): ResolvedPhone[] {
+export function getAllLeadPhones(
+  lead: Pick<ActivityLead, 'socios' | 'phones' | 'telefone'>,
+): ResolvedPhone[] {
   const phones: ResolvedPhone[] = [];
   const seen = new Set<string>();
 

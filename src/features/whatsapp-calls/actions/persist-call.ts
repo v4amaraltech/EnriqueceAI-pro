@@ -11,8 +11,11 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { toE164BR } from '../phone';
 
 const persistSchema = z.object({
-  stepId: z.string().uuid(),
-  cadenceId: z.string().uuid(),
+  // Opcionais: uma Ligação via WhatsApp avulsa (disparada da tela do lead, fora
+  // da fila de atividades) não tem passo/cadência. A linha em `calls` continua
+  // alimentando o BI + o pipeline de gravação→transcrição→SPICED do mesmo jeito.
+  stepId: z.string().uuid().optional(),
+  cadenceId: z.string().uuid().optional(),
   leadId: z.string().uuid(),
   sid: z.string().min(1),
   callId: z.string().optional().default(''),
@@ -107,12 +110,14 @@ export async function persistWhatsAppCall(
 
   if (callError || !call) return { success: false, error: 'Erro ao registrar a ligação' };
 
-  // Interação canônica do passo (flui para as métricas de Ligação + BI).
+  // Interação canônica do passo (flui para as métricas de Ligação + BI). Numa
+  // ligação avulsa, cadence_id/step_id ficam NULL (a coluna aceita) e a interação
+  // entra como toque manual — fora do índice único parcial (que exige step_id).
   await from(supabase, 'interactions').insert({
     org_id: orgId,
     lead_id: p.leadId,
-    cadence_id: p.cadenceId,
-    step_id: p.stepId,
+    cadence_id: p.cadenceId ?? null,
+    step_id: p.stepId ?? null,
     channel: 'phone',
     type: 'sent',
     performed_by: user.id,
