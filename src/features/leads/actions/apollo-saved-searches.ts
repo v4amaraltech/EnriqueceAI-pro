@@ -10,8 +10,14 @@ import { from } from '@/lib/supabase/from';
  * Estado do formulário de busca do Apollo (ApolloSearchForm). É exatamente o que
  * persistimos como preset — carregar um filtro salvo é só re-hidratar estes
  * campos no form (sem mapeamento reverso para SearchApolloInput).
+ *
+ * NÃO exportar: este arquivo é `'use server'`, que só pode exportar funções
+ * async — exportar este objeto Zod quebrava o módulo inteiro em runtime
+ * ("A 'use server' file can only export async functions, found object"),
+ * derrubando salvar E buscar no Apollo. Mantém-se interno; o tipo derivado
+ * (ApolloFilterState) pode ser exportado (tipos somem em runtime).
  */
-export const apolloFilterStateSchema = z.object({
+const apolloFilterStateSchema = z.object({
   titles: z.string(),
   locations: z.string(),
   keywords: z.string(),
