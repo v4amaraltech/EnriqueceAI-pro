@@ -36,47 +36,53 @@ export interface SearchApolloResult {
 }
 
 export async function searchApollo(input: SearchApolloInput): Promise<ActionResult<SearchApolloResult>> {
+  // requireAuthWithMember pode chamar redirect() — fica FORA do try p/ o
+  // NEXT_REDIRECT propagar (não pode ser engolido como erro).
   const { orgId } = await requireAuthWithMember();
 
-  // Rate limit: 30 searches per org per minute
-  const rl = await checkRateLimit(`apollo-search:${orgId}`, 30, 60_000);
-  if (!rl.allowed) {
-    return { success: false, error: 'Limite de buscas atingido. Aguarde um momento.' };
-  }
-
-  // Use org-level key only (no global fallback for multi-tenant isolation)
-  const apiKey = await getApolloApiKey(orgId);
-  if (!apiKey) {
-    return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
-  }
-
-  const parsed = searchSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, error: 'Parâmetros de busca inválidos' };
-  }
-
-  const params = parsed.data;
-
-  // At least one filter must be provided
-  const hasFilter =
-    (params.personTitles?.length ?? 0) > 0 ||
-    (params.personLocations?.length ?? 0) > 0 ||
-    (params.organizationLocations?.length ?? 0) > 0 ||
-    (params.organizationKeywords?.length ?? 0) > 0 ||
-    (params.organizationDomains?.length ?? 0) > 0 ||
-    (params.employeeRanges?.length ?? 0) > 0 ||
-    (params.personSeniorities?.length ?? 0) > 0 ||
-    (params.contactEmailStatus?.length ?? 0) > 0 ||
-    (params.technologyUids?.length ?? 0) > 0 ||
-    (params.organizationIndustryTagIds?.length ?? 0) > 0 ||
-    !!params.revenueRange ||
-    !!params.qKeywords;
-
-  if (!hasFilter) {
-    return { success: false, error: 'Preencha pelo menos um filtro de busca' };
-  }
-
+  // Tudo o mais dentro de um try: rate-limit (Upstash), chave (decrypt) e a
+  // chamada externa ao Apollo podem lançar; sem o catch, o throw vira um erro
+  // não tratado da server action ("An error occurred in the Server Components
+  // render…") no client.
   try {
+    // Rate limit: 30 searches per org per minute
+    const rl = await checkRateLimit(`apollo-search:${orgId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return { success: false, error: 'Limite de buscas atingido. Aguarde um momento.' };
+    }
+
+    // Use org-level key only (no global fallback for multi-tenant isolation)
+    const apiKey = await getApolloApiKey(orgId);
+    if (!apiKey) {
+      return { success: false, error: 'Apollo não conectado. Configure em Settings > Integrações.' };
+    }
+
+    const parsed = searchSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: 'Parâmetros de busca inválidos' };
+    }
+
+    const params = parsed.data;
+
+    // At least one filter must be provided
+    const hasFilter =
+      (params.personTitles?.length ?? 0) > 0 ||
+      (params.personLocations?.length ?? 0) > 0 ||
+      (params.organizationLocations?.length ?? 0) > 0 ||
+      (params.organizationKeywords?.length ?? 0) > 0 ||
+      (params.organizationDomains?.length ?? 0) > 0 ||
+      (params.employeeRanges?.length ?? 0) > 0 ||
+      (params.personSeniorities?.length ?? 0) > 0 ||
+      (params.contactEmailStatus?.length ?? 0) > 0 ||
+      (params.technologyUids?.length ?? 0) > 0 ||
+      (params.organizationIndustryTagIds?.length ?? 0) > 0 ||
+      !!params.revenueRange ||
+      !!params.qKeywords;
+
+    if (!hasFilter) {
+      return { success: false, error: 'Preencha pelo menos um filtro de busca' };
+    }
+
     const result = await searchPeople(apiKey, params);
     return {
       success: true,
@@ -89,6 +95,6 @@ export async function searchApollo(input: SearchApolloInput): Promise<ActionResu
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao buscar no Apollo';
     console.error('[search-apollo]', message);
-    return { success: false, error: message };
+    return { success: false, error: 'Não foi possível buscar no Apollo agora. Tente de novo em instantes.' };
   }
 }

@@ -108,14 +108,23 @@ export async function checkRateLimit(
     return checkInMemory(key, limit, windowMs);
   }
 
-  const result = await limiter.limit(key);
+  try {
+    const result = await limiter.limit(key);
 
-  return {
-    allowed: result.success,
-    remaining: result.remaining,
-    limit: result.limit,
-    retryAfterMs: result.success ? undefined : Math.max(result.reset - Date.now(), 0),
-  };
+    return {
+      allowed: result.success,
+      remaining: result.remaining,
+      limit: result.limit,
+      retryAfterMs: result.success ? undefined : Math.max(result.reset - Date.now(), 0),
+    };
+  } catch (err) {
+    // Fail-open: uma falha de infraestrutura do rate-limiter (Upstash indisponível
+    // / erro de rede) NÃO pode derrubar a ação que ele protege. Cai para o
+    // contador in-memory e segue. Sem isto, qualquer hiccup do Redis virava um
+    // erro não tratado na server action (ex.: "Server Components render" no Apollo).
+    console.error('[rate-limit] Upstash indisponível — fallback in-memory:', err);
+    return checkInMemory(key, limit, windowMs);
+  }
 }
 
 /**
