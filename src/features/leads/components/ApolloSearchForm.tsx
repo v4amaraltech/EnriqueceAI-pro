@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
-import { Loader2, Search, X } from 'lucide-react';
+import { Loader2, Search, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -11,6 +12,12 @@ import { Label } from '@/shared/components/ui/label';
 import { Separator } from '@/shared/components/ui/separator';
 import { Switch } from '@/shared/components/ui/switch';
 
+import {
+  deleteApolloSearch,
+  listApolloSearches,
+  saveApolloSearch,
+  type ApolloSavedSearch,
+} from '../actions/apollo-saved-searches';
 import type { SearchApolloInput } from '../actions/search-apollo';
 
 const EMAIL_STATUS_OPTIONS = [
@@ -83,6 +90,70 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
   // Toggle
   const [includeSimilarTitles, setIncludeSimilarTitles] = useState(true);
 
+  // Filtros salvos (presets por SDR)
+  const [savedSearches, setSavedSearches] = useState<ApolloSavedSearch[]>([]);
+  const [selectedSearchId, setSelectedSearchId] = useState('');
+  const [presetName, setPresetName] = useState('');
+  const [isSavingPreset, startPresetTransition] = useTransition();
+
+  useEffect(() => {
+    listApolloSearches().then((r) => {
+      if (r.success) setSavedSearches(r.data);
+    });
+  }, []);
+
+  function currentFilterState() {
+    return { titles, locations, keywords, domains, emailStatuses, industries, employeeRanges, includeSimilarTitles };
+  }
+
+  function applyPreset(id: string) {
+    setSelectedSearchId(id);
+    const preset = savedSearches.find((s) => s.id === id);
+    if (!preset) return;
+    const f = preset.filters;
+    setTitles(f.titles ?? '');
+    setLocations(f.locations ?? '');
+    setKeywords(f.keywords ?? '');
+    setDomains(f.domains ?? '');
+    setEmailStatuses(f.emailStatuses ?? []);
+    setIndustries(f.industries ?? []);
+    setEmployeeRanges(f.employeeRanges ?? []);
+    setIncludeSimilarTitles(f.includeSimilarTitles ?? true);
+  }
+
+  function handleSavePreset() {
+    const name = presetName.trim();
+    if (!name) return;
+    startPresetTransition(async () => {
+      const r = await saveApolloSearch({ name, filters: currentFilterState() });
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
+      const list = await listApolloSearches();
+      if (list.success) {
+        setSavedSearches(list.data);
+        setSelectedSearchId(r.data.id);
+      }
+      setPresetName('');
+      toast.success('Filtro salvo');
+    });
+  }
+
+  function handleDeletePreset() {
+    if (!selectedSearchId) return;
+    startPresetTransition(async () => {
+      const r = await deleteApolloSearch(selectedSearchId);
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
+      setSavedSearches((prev) => prev.filter((s) => s.id !== selectedSearchId));
+      setSelectedSearchId('');
+      toast.success('Filtro excluído');
+    });
+  }
+
   function handleSearch() {
     const params: SearchApolloInput = {
       page: 1,
@@ -114,6 +185,7 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
     setIndustries([]);
     setEmployeeRanges([]);
     setIncludeSimilarTitles(true);
+    setSelectedSearchId('');
   }
 
   return (
@@ -131,6 +203,60 @@ export function ApolloSearchForm({ onSearch, isLoading }: ApolloSearchFormProps)
           </>
         )}
       </Button>
+
+      {/* Filtros salvos (presets por SDR) */}
+      <Separator />
+      <div className="space-y-2">
+        <Label>Filtros salvos</Label>
+        {savedSearches.length > 0 && (
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedSearchId}
+              onChange={(e) => applyPreset(e.target.value)}
+              disabled={isLoading || isSavingPreset}
+              className="h-9 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-60"
+            >
+              <option value="">Carregar filtro salvo…</option>
+              {savedSearches.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            {selectedSearchId && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-[var(--muted-foreground)] hover:text-red-600"
+                onClick={handleDeletePreset}
+                disabled={isSavingPreset}
+                aria-label="Excluir filtro salvo"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Nome do filtro"
+            value={presetName}
+            maxLength={80}
+            onChange={(e) => setPresetName(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={handleSavePreset}
+            disabled={isSavingPreset || !presetName.trim()}
+          >
+            Salvar
+          </Button>
+        </div>
+      </div>
 
       {/* Pessoa */}
       <Separator />
