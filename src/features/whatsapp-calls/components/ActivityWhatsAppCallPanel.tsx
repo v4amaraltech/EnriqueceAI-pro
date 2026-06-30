@@ -39,9 +39,12 @@ export function ActivityWhatsAppCallPanel({
   onResolved,
   onLeadLost,
 }: {
-  enrollmentId: string;
-  stepId: string;
-  cadenceId: string;
+  // Contexto de cadência (fila de atividades). Ausente numa ligação avulsa
+  // disparada da tela do lead — aí o painel só registra a ligação, sem avançar
+  // nenhuma atividade.
+  enrollmentId?: string;
+  stepId?: string;
+  cadenceId?: string;
   leadId: string;
   leadName: string;
   leadEmail?: string | null;
@@ -237,20 +240,25 @@ export function ActivityWhatsAppCallPanel({
                 channel: returnSchedule.channel,
                 scheduledAt: returnSchedule.scheduledAt,
                 notes: notes || undefined,
-                completeEnrollments: true,
+                // Só conclui enrollments ativos quando a ligação nasce de uma
+                // atividade de cadência; numa ligação avulsa não mexemos na cadência.
+                completeEnrollments: !!enrollmentId,
               });
               if (!r.success) {
                 toast.error(r.error);
                 return;
               }
               toast.success('Retorno agendado');
-            } else {
+            } else if (enrollmentId && stepId) {
               const r = await applyCallDisposition({ enrollmentId, stepId, disposition: 'significant' });
               if (!r.success) {
                 toast.error(r.error);
                 return;
               }
               toast.success('Atividade concluída');
+            } else {
+              // Ligação avulsa: nada de cadência para avançar — só registramos.
+              toast.success('Ligação registrada');
             }
             onResolved();
           });

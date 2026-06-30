@@ -48,6 +48,8 @@ import { reassignCloser } from '../actions/reassign-closer';
 import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
+import { getMyWhatsAppCallStatus } from '@/features/whatsapp-calls/actions/get-my-call-status';
+import { LeadWhatsAppCallDialog } from '@/features/whatsapp-calls/components/LeadWhatsAppCallDialog';
 
 const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
@@ -84,6 +86,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  const [canWhatsAppCall, setCanWhatsAppCall] = useState(false);
+  const [showWhatsAppCall, setShowWhatsAppCall] = useState(false);
   // Synchronous guard: setIsCalling only flips on next render, so a fast
   // double-click slips both calls through and the API4COM ends up with two
   // identical originate requests in <5s.
@@ -134,6 +138,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   useEffect(() => {
     setSelectedCloserId(lead.closer_id ?? '');
   }, [lead.closer_id]);
+
+  // Habilita a opção "Ligar via WhatsApp" no botão Ligar só se o SDR logado tem
+  // um número WhatsApp pareado e conectado (pareamento é feito pelo gestor).
+  useEffect(() => {
+    getMyWhatsAppCallStatus().then((result) => {
+      if (result.success) setCanWhatsAppCall(result.data.paired);
+    });
+  }, []);
 
   const handleResendFeedback = useCallback(() => {
     setIsResendingFeedback(true);
@@ -441,8 +453,16 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         onEnrichApollo={handleEnrichApollo}
         onReenrichApollo={handleReenrichApollo}
         onCall={handleCall}
+        onWhatsAppCall={() => setShowWhatsAppCall(true)}
+        canWhatsAppCall={canWhatsAppCall}
         isEnriching={isPending}
         isCalling={isCalling}
+      />
+
+      <LeadWhatsAppCallDialog
+        lead={lead}
+        open={showWhatsAppCall}
+        onOpenChange={setShowWhatsAppCall}
       />
 
       {enrollmentData.enrollments.length > 0 && (

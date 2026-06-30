@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Calendar,
   CalendarX,
+  ChevronDown,
   ChevronLeft,
   Globe,
   Mail,
@@ -27,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
+import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
+
 import { resyncLeadToCrm } from '../actions/lead-crm';
 import { markMeetingNoShow } from '../actions/lead-noshow';
 import { updateLead } from '../actions/update-lead';
@@ -42,6 +45,8 @@ interface LeadDetailHeaderProps {
   onEnrichApollo: () => void;
   onReenrichApollo: () => void;
   onCall?: () => void;
+  onWhatsAppCall?: () => void;
+  canWhatsAppCall?: boolean;
   isEnriching?: boolean;
   isCalling?: boolean;
 }
@@ -56,6 +61,8 @@ export function LeadDetailHeader({
   onEnrichApollo,
   onReenrichApollo,
   onCall,
+  onWhatsAppCall,
+  canWhatsAppCall,
   isEnriching,
   isCalling,
 }: LeadDetailHeaderProps) {
@@ -155,17 +162,33 @@ export function LeadDetailHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {lead.telefone && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCall}
-            disabled={isCalling}
-          >
-            <Phone className="mr-1 h-4 w-4" />
-            {isCalling ? 'Ligando...' : 'Ligar'}
-          </Button>
-        )}
+        {lead.telefone &&
+          (canWhatsAppCall ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isCalling}>
+                  <Phone className="mr-1 h-4 w-4" />
+                  {isCalling ? 'Ligando...' : 'Ligar'}
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onCall}>
+                  <Phone className="mr-2 h-3.5 w-3.5" />
+                  Ligar (telefone)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onWhatsAppCall}>
+                  <WhatsAppGlyph className="mr-2 h-3.5 w-3.5" />
+                  Ligar via WhatsApp
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="outline" size="sm" onClick={onCall} disabled={isCalling}>
+              <Phone className="mr-1 h-4 w-4" />
+              {isCalling ? 'Ligando...' : 'Ligar'}
+            </Button>
+          ))}
         {isClosed ? (
           <Button
             variant="outline"
