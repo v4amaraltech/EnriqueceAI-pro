@@ -1,5 +1,6 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { isUuid } from '@/shared/utils/uuid';
 
 import { FeedbackForm } from './FeedbackForm';
 
@@ -31,8 +32,7 @@ export default async function FeedbackPage({
   const supabase = createServiceRoleClient();
 
   // Validate UUID format
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_REGEX.test(token)) {
+  if (!isUuid(token)) {
     return <ErrorPage message="Link inválido." />;
   }
 

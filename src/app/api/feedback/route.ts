@@ -5,8 +5,8 @@ import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
+import { isUuid } from '@/shared/utils/uuid';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
 
 const RESULT_LABELS: Record<string, string> = {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const { token, result, rating, comment } = body;
 
     // Validate input
-    if (!token || !UUID_REGEX.test(token)) {
+    if (!token || !isUuid(token)) {
       return NextResponse.json({ error: 'Token inválido' }, { status: 400 });
     }
     if (!result || !VALID_RESULTS.includes(result)) {

@@ -3,8 +3,7 @@ import { NextResponse } from 'next/server';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit } from '@/lib/security/rate-limit';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from '@/shared/utils/uuid';
 
 export async function GET(
   request: Request,
@@ -32,7 +31,7 @@ export async function GET(
   // M1: an invalid interaction id can't be a real tracking link — refuse to
   // redirect (previously this redirected to any ?url=, an open-redirect / phishing
   // vector that abused the platform's trusted domain).
-  if (!UUID_REGEX.test(interactionId)) {
+  if (!isUuid(interactionId)) {
     return NextResponse.json({ error: 'Invalid tracking link' }, { status: 400 });
   }
 
