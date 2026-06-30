@@ -6,6 +6,8 @@ import type {
   CrmProvider,
 } from '../types/crm';
 
+import { crmFetch } from './crm-http';
+
 const RD_CRM_BASE = 'https://crm.rdstation.com/api/v1';
 
 interface RdCrmContactResponse {
@@ -52,25 +54,15 @@ async function rdCrmFetch<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const separator = path.includes('?') ? '&' : '?';
-  const url = `${RD_CRM_BASE}${path}${separator}token=${token}`;
-
-  const response = await fetch(url, {
+  // RD usa token na query (não Bearer); só Content-Type no header.
+  return crmFetch<T>(`${RD_CRM_BASE}${path}${separator}token=${token}`, {
     ...options,
+    label: 'RD Station CRM',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    // Timeout de 15s (alinhado aos outros adapters) — endpoint RD lento não pode
-    // pendurar o cron de sync indefinidamente.
-    signal: options.signal ?? AbortSignal.timeout(15_000),
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`RD Station CRM API error (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export class RDStationAdapter implements CRMAdapter {
