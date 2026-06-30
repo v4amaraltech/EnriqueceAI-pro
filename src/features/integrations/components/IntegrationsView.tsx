@@ -242,7 +242,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnect('whatsapp')}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -282,7 +282,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="outline"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100"
                     onClick={() => {
                       startTransition(async () => {
                         const r = await testApi4ComConnection();
@@ -298,7 +297,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="outline"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100"
                     onClick={() => setShowApi4ComConfig(true)}
                   >
                     <Settings2 className="mr-1.5 h-3.5 w-3.5" />
@@ -307,7 +305,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnectApi4Com(true)}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -370,7 +368,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="outline"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100"
                     onClick={() => {
                       startTransition(async () => {
                         const r = await testGmailConnection();
@@ -386,7 +383,6 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="outline"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100"
                     onClick={() => setShowSignatureEditor(true)}
                   >
                     <FileSignature className="mr-1.5 h-3.5 w-3.5" />
@@ -395,7 +391,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnect('google')}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -428,7 +424,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                     onClick={() => setShowDisconnect('apollo')}
                   >
                     <Unplug className="mr-1.5 h-3.5 w-3.5" />
@@ -489,8 +485,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                         <Button
                           variant="outline"
                           size="sm"
-                          className="opacity-0 group-hover:opacity-100"
-                          disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
+                                disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
                           onClick={() => handleSyncCrm(provider.id)}
                         >
                           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -499,8 +494,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                         <Button
                           variant="outline"
                           size="sm"
-                          className="opacity-0 group-hover:opacity-100"
-                          onClick={() => setFieldMappingProvider(provider.id)}
+                                onClick={() => setFieldMappingProvider(provider.id)}
                         >
                           <Settings2 className="mr-1.5 h-3.5 w-3.5" />
                           Campos
@@ -508,7 +502,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                          className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
                           onClick={() => setShowDisconnect(provider.id)}
                         >
                           <Unplug className="mr-1.5 h-3.5 w-3.5" />
