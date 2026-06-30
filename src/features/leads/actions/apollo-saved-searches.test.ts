@@ -9,10 +9,11 @@ const eqArgs: Array<[string, unknown]> = [];
 
 function makeChain() {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'upsert', 'delete', 'order']) {
+  for (const m of ['select', 'upsert', 'delete', 'update', 'order']) {
     chain[m] = vi.fn((...args: unknown[]) => {
       if (m === 'upsert') lastOp = 'upsert';
       if (m === 'delete') lastOp = 'delete';
+      if (m === 'update') lastOp = 'update';
       void args;
       return chain;
     });
@@ -37,6 +38,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import {
   deleteApolloSearch,
   listApolloSearches,
+  renameApolloSearch,
+  updateApolloSearchFilters,
   saveApolloSearch,
 } from './apollo-saved-searches';
 
@@ -101,6 +104,44 @@ describe('deleteApolloSearch', () => {
     const r = await deleteApolloSearch('550e8400-e29b-41d4-a716-446655440000');
     expect(r.success).toBe(true);
     expect(lastOp).toBe('delete');
+    expect(eqArgs).toContainEqual(['org_id', 'org-1']);
+    expect(eqArgs).toContainEqual(['user_id', 'user-1']);
+  });
+});
+
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+describe('renameApolloSearch', () => {
+  it('updates the name scoped by id + org + user', async () => {
+    chainResult = { data: null, error: null };
+    const r = await renameApolloSearch({ id: UUID, name: 'Novo nome' });
+    expect(r.success).toBe(true);
+    expect(lastOp).toBe('update');
+    expect(eqArgs).toContainEqual(['id', UUID]);
+    expect(eqArgs).toContainEqual(['org_id', 'org-1']);
+    expect(eqArgs).toContainEqual(['user_id', 'user-1']);
+  });
+
+  it('rejects an empty name', async () => {
+    const r = await renameApolloSearch({ id: UUID, name: '  ' });
+    expect(r.success).toBe(false);
+  });
+
+  it('returns a friendly error on a duplicate-name unique violation', async () => {
+    chainResult = { data: null, error: { message: 'duplicate key value', code: '23505' } };
+    const r = await renameApolloSearch({ id: UUID, name: 'Já existe' });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error).toContain('já tem um filtro');
+  });
+});
+
+describe('updateApolloSearchFilters', () => {
+  it('overwrites filters scoped by id + org + user', async () => {
+    chainResult = { data: null, error: null };
+    const r = await updateApolloSearchFilters({ id: UUID, filters: baseFilters });
+    expect(r.success).toBe(true);
+    expect(lastOp).toBe('update');
+    expect(eqArgs).toContainEqual(['id', UUID]);
     expect(eqArgs).toContainEqual(['org_id', 'org-1']);
     expect(eqArgs).toContainEqual(['user_id', 'user-1']);
   });

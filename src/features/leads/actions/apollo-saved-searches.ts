@@ -115,3 +115,65 @@ export async function deleteApolloSearch(id: string): Promise<ActionResult<void>
   if (error) return { success: false, error: 'Erro ao excluir o filtro' };
   return { success: true, data: undefined };
 }
+
+const renameSchema = z.object({
+  id: z.string().uuid('Filtro inválido'),
+  name: z.string().trim().min(1, 'Dê um nome ao filtro').max(80, 'Nome muito longo'),
+});
+
+/** Renomeia um filtro salvo do usuário logado (por id, escopado org+user). */
+export async function renameApolloSearch(
+  input: z.infer<typeof renameSchema>,
+): Promise<ActionResult<void>> {
+  const parsed = renameSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+
+  const { error } = (await from(supabase, 'apollo_saved_searches')
+    .update({ name: parsed.data.name, updated_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('id', parsed.data.id)
+    .eq('org_id', orgId)
+    .eq('user_id', userId)) as { error: { message: string; code?: string } | null };
+
+  if (error) {
+    // UNIQUE(org_id, user_id, name) — nome já usado por outro preset do usuário.
+    if (error.code === '23505' || error.message?.includes('duplicate')) {
+      return { success: false, error: 'Você já tem um filtro com esse nome' };
+    }
+    return { success: false, error: 'Erro ao renomear o filtro' };
+  }
+  return { success: true, data: undefined };
+}
+
+const updateFiltersSchema = z.object({
+  id: z.string().uuid('Filtro inválido'),
+  filters: apolloFilterStateSchema,
+});
+
+/** Sobrescreve os filtros de um preset com o estado atual (por id, org+user). */
+export async function updateApolloSearchFilters(
+  input: z.infer<typeof updateFiltersSchema>,
+): Promise<ActionResult<void>> {
+  const parsed = updateFiltersSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+
+  const { error } = await from(supabase, 'apollo_saved_searches')
+    .update({ filters: parsed.data.filters, updated_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('id', parsed.data.id)
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
+
+  if (error) return { success: false, error: 'Erro ao atualizar o filtro' };
+  return { success: true, data: undefined };
+}
