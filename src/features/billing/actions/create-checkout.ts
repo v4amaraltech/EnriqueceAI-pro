@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireManager } from '@/lib/auth/require-manager';
 import { stripe } from '@/lib/stripe';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -14,7 +14,8 @@ export async function createCheckoutSession(
   planId: string,
   returnPath?: string,
 ): Promise<ActionResult<{ url: string }>> {
-  const user = await requireAuth();
+  // Billing é manager-only: criar/alterar a assinatura é ação de gestor.
+  const user = await requireManager();
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;

@@ -68,7 +68,7 @@ export async function inviteMember(
       if (allMembers) {
         for (const member of allMembers) {
           const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
-          if (userData?.user?.email === parsed.data.email) {
+          if (userData?.user?.email?.toLowerCase() === parsed.data.email.toLowerCase()) {
             existingUser = userData.user;
             break;
           }

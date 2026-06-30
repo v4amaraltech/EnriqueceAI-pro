@@ -60,6 +60,9 @@ async function rdCrmFetch<T>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+    // Timeout de 15s (alinhado aos outros adapters) — endpoint RD lento não pode
+    // pendurar o cron de sync indefinidamente.
+    signal: options.signal ?? AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {

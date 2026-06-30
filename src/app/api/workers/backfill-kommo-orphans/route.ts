@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
@@ -17,9 +18,8 @@ export const maxDuration = 300;
  * Auth: Bearer SUPABASE_SERVICE_ROLE_KEY
  */
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('Authorization');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
+  // Comparação timing-safe da SERVICE_ROLE_KEY (evita side-channel de tempo).
+  if (!verifyServiceRole(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

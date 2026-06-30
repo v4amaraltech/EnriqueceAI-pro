@@ -63,6 +63,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         'X-API-Key': apiKey,
         ...(init?.headers ?? {}),
       },
+      // Timeout de 15s — serviço de voz lento não pode travar a Server Action.
+      signal: init?.signal ?? AbortSignal.timeout(15_000),
       cache: 'no-store',
     });
   } catch (err) {

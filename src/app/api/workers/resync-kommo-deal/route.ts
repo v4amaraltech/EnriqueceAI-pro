@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { resyncCrmDealFields } from '@/features/leads/services/crm-resync.service';
 
 export const maxDuration = 30;
@@ -15,9 +16,8 @@ export const maxDuration = 30;
  * needed by the user).
  */
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('Authorization');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
+  // Comparação timing-safe da SERVICE_ROLE_KEY (evita side-channel de tempo).
+  if (!verifyServiceRole(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
