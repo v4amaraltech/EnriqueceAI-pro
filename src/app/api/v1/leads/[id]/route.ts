@@ -4,8 +4,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { authenticateApiKey } from '@/features/inbound-api/services/api-key-auth';
 import { getLeadById } from '@/features/inbound-api/services/read-leads.service';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from '@/shared/utils/uuid';
 
 /**
  * Fetch a single lead by id, scoped to the authenticated org.
@@ -43,7 +42,7 @@ export async function GET(
 
     // 3. Validate id
     const { id } = await params;
-    if (!UUID_REGEX.test(id)) {
+    if (!isUuid(id)) {
       return NextResponse.json(
         { success: false, error: 'ID de lead inválido' },
         { status: 422 },

@@ -295,7 +295,6 @@ export async function fetchLeadsOpenedRanking(
   filters: DashboardFilters,
 ): Promise<RankingCardData> {
   const { start, end } = getDateRange(filters);
-  const days = getDaysInMonth(filters.month);
 
   // Get list of SDRs (exclude managers)
   const { data: sdrs } = (await from(supabase, 'organization_members')
@@ -339,8 +338,6 @@ export async function fetchLeadsOpenedRanking(
 
   const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month);
   return { ...card, dailyData };
-
-  void days; // unused — buildRankingCardData computes its own days inside
 }
 
 /**
@@ -527,13 +524,10 @@ export async function fetchMeetingsHeldRanking(
  * denominador = leads abertos no período (primeira interaction humana),
  * ambos atribuídos via leads.assigned_to.
  */
-export async function fetchHitRateRanking(
-  supabase: SupabaseClient,
-  orgId: string,
-  filters: DashboardFilters,
+export function fetchHitRateRanking(
   opened: RankingCardData,
   held: RankingCardData,
-): Promise<RankingCardData> {
+): RankingCardData {
   const openedByUser = new Map<string, number>();
   for (const e of opened.sdrBreakdown) openedByUser.set(e.userId, e.value);
   const heldByUser = new Map<string, number>();
@@ -572,8 +566,6 @@ export async function fetchHitRateRanking(
     averagePerSdr: Math.round((entries.reduce((s, e) => s + e.value, 0) / sdrCount) * 10) / 10,
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
   };
-
-  void supabase; void orgId; void filters;
 }
 
 /**
@@ -746,7 +738,7 @@ export async function fetchRankingData(
   ]);
 
   // Derived in-memory from the cards above (no extra round-trip).
-  const hitRate = await fetchHitRateRanking(supabase, orgId, filters, leadsOpened, meetingsHeld);
+  const hitRate = fetchHitRateRanking(leadsOpened, meetingsHeld);
   const attendanceRate = fetchAttendanceRateRanking(meetingsScheduled, meetingsHeld);
 
   return { leadsFinished, activitiesDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen, overdueActivities };

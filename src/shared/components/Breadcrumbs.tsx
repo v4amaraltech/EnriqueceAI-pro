@@ -13,6 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
+import { isUuid } from '@/shared/utils/uuid';
 
 const pathLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -65,14 +66,12 @@ const pathLabels: Record<string, string> = {
   password: 'Alterar Senha',
 };
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
 
   // Hide UUID segments from breadcrumb — the detail page handles its own title
-  const visibleSegments = segments.filter((s) => !UUID_REGEX.test(s));
+  const visibleSegments = segments.filter((s) => !isUuid(s));
 
   if (visibleSegments.length <= 1) return null;
 

@@ -3,14 +3,13 @@ import { NextResponse } from 'next/server';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { isUuid } from '@/shared/utils/uuid';
 
 // 1x1 transparent GIF
 const TRANSPARENT_GIF = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
   'base64',
 );
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const GIF_HEADERS = {
   'Content-Type': 'image/gif',
@@ -25,7 +24,7 @@ export async function GET(
   const { interactionId } = await params;
 
   // Validate UUID format before querying DB
-  if (!UUID_REGEX.test(interactionId)) {
+  if (!isUuid(interactionId)) {
     return new NextResponse(TRANSPARENT_GIF, { status: 200, headers: GIF_HEADERS });
   }
 

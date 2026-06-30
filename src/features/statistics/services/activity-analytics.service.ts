@@ -44,12 +44,15 @@ export async function fetchActivityAnalyticsData(
     query = query.in('performed_by', userIds);
   }
 
-  const { data: rawInteractions } = (await query.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
-
-  // Get goal target
+  // userId não depende das interações — calculado antes do fetch paralelo.
   const userId = userIds && userIds.length === 1 ? userIds[0] : undefined;
-  const target = await fetchGoalTarget(supabase, orgId, userId);
+
+  // Interações e meta (goal) são independentes → buscadas em paralelo.
+  const [interactionsRes, target] = await Promise.all([
+    query.limit(10000),
+    fetchGoalTarget(supabase, orgId, userId),
+  ]);
+  const interactions = (interactionsRes as { data: InteractionQueryRow[] | null }).data ?? [];
 
   const kpis = calculateKpis(interactions, periodStart, periodEnd, target);
   const channelVolume = calculateChannelVolume(interactions);
@@ -57,39 +60,45 @@ export async function fetchActivityAnalyticsData(
   const activityTypes = calculateActivityTypes(interactions);
   const goal = calculateGoal(interactions, target);
 
-  // Fetch leads won/lost in period using accurate timestamps
-  const { data: wonLeadsRaw } = (await from(supabase, 'leads')
-    .select('id, status, assigned_to')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .eq('status', 'won')
-    .not('won_at', 'is', null)
-    .gte('won_at', periodStart)
-    .lte('won_at', periodEnd)
-    .limit(10000)) as {
-    data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
-  };
-  const { data: lostLeadsRaw } = (await from(supabase, 'leads')
-    .select('id, status, assigned_to')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .eq('status', 'unqualified')
-    .not('lost_at', 'is', null)
-    .gte('lost_at', periodStart)
-    .lte('lost_at', periodEnd)
-    .limit(10000)) as {
-    data: Array<{ id: string; status: string; assigned_to: string | null }> | null;
-  };
+  // Leads em 4 recortes (won/lost no período por timestamp, ativos no período,
+  // e total por SDR all-time). As 4 queries são independentes → paralelas.
+  const [wonRes, lostRes, activeRes, allLeadsRes] = await Promise.all([
+    from(supabase, 'leads')
+      .select('id, status, assigned_to')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .eq('status', 'won')
+      .not('won_at', 'is', null)
+      .gte('won_at', periodStart)
+      .lte('won_at', periodEnd)
+      .limit(10000),
+    from(supabase, 'leads')
+      .select('id, status, assigned_to')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .eq('status', 'unqualified')
+      .not('lost_at', 'is', null)
+      .gte('lost_at', periodStart)
+      .lte('lost_at', periodEnd)
+      .limit(10000),
+    from(supabase, 'leads')
+      .select('id, assigned_to, status, created_at')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .limit(10000),
+    from(supabase, 'leads')
+      .select('id, assigned_to')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .limit(10000),
+  ]);
+  const wonLeadsRaw = (wonRes as { data: Array<{ id: string; status: string; assigned_to: string | null }> | null }).data;
+  const lostLeadsRaw = (lostRes as { data: Array<{ id: string; status: string; assigned_to: string | null }> | null }).data;
   const leads = [...(wonLeadsRaw ?? []), ...(lostLeadsRaw ?? [])];
-
-  // Count leads in period (any lead that had an interaction)
-  const { data: activeLeads } = (await from(supabase, 'leads')
-    .select('id, assigned_to, status, created_at')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null };
+  const activeLeads = (activeRes as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null }).data;
+  const allLeadsForCount = (allLeadsRes as { data: Array<{ id: string; assigned_to: string | null }> | null }).data;
 
   const allActiveLeads = activeLeads ?? [];
   const leadsInPeriod = allActiveLeads.length;
@@ -112,13 +121,7 @@ export async function fetchActivityAnalyticsData(
   // Channel completion (% of steps completed vs total per channel)
   const channelCompletion = calculateChannelCompletion(interactions);
 
-  // Fetch total leads per SDR (all time, no date filter) for "Leads" column
-  const { data: allLeadsForCount } = (await from(supabase, 'leads')
-    .select('id, assigned_to')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
-
+  // Total de leads por SDR (allLeadsForCount) já veio no batch paralelo acima.
   const totalLeadsByUser = new Map<string, number>();
   for (const l of allLeadsForCount ?? []) {
     if (l.assigned_to) {
@@ -142,7 +145,7 @@ async function fetchGoalTarget(
       .select('target')
       .eq('org_id', orgId)
       .eq('user_id', userId)
-      .single()) as { data: { target: number } | null };
+      .maybeSingle()) as { data: { target: number } | null };
 
     if (userGoal) return userGoal.target;
   }
@@ -151,7 +154,7 @@ async function fetchGoalTarget(
     .select('target')
     .eq('org_id', orgId)
     .is('user_id', null)
-    .single()) as { data: { target: number } | null };
+    .maybeSingle()) as { data: { target: number } | null };
 
   return orgGoal?.target ?? 20;
 }

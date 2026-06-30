@@ -81,19 +81,24 @@ export async function fetchConversionAnalyticsData(
   // Status-transition leads: ganhos/perdidos/reuniões realizadas no período.
   // Sem este passo perdemos leads que o closer fecha sem nenhum 'sent' nem
   // criação no período (ex.: fechamento via WhatsApp fora do app).
-  const transitionLeads: LeadQueryRow[] = [];
   const transitionDateCols = ['won_at', 'lost_at', 'meeting_held_at'] as const;
-  for (const col of transitionDateCols) {
-    let q = from(supabase, 'leads')
-      .select('id, status, created_at, created_by, won_at')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .gte(col, periodStart)
-      .lte(col, periodEnd);
-    if (userIds && userIds.length > 0) q = q.in('created_by', userIds);
-    const { data } = (await q.limit(5000)) as { data: LeadQueryRow[] | null };
-    if (data) transitionLeads.push(...data);
-  }
+  // As 3 queries (uma por coluna de transição) são independentes e o resultado
+  // é deduplicado por id adiante → buscadas em paralelo.
+  const transitionResults = await Promise.all(
+    transitionDateCols.map((col) => {
+      let q = from(supabase, 'leads')
+        .select('id, status, created_at, created_by, won_at')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .gte(col, periodStart)
+        .lte(col, periodEnd);
+      if (userIds && userIds.length > 0) q = q.in('created_by', userIds);
+      return q.limit(5000);
+    }),
+  );
+  const transitionLeads: LeadQueryRow[] = transitionResults.flatMap(
+    (res) => (res as { data: LeadQueryRow[] | null }).data ?? [],
+  );
 
   const leadsMap = new Map<string, LeadQueryRow>();
   for (const l of periodLeads) leadsMap.set(l.id, l);
