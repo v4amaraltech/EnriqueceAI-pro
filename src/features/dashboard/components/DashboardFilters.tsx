@@ -19,6 +19,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 
 import type { CadenceOption, DashboardFilters as Filters } from '../types';
+import { brtNowParts } from '../utils/brt-now';
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -27,9 +28,11 @@ const MONTH_NAMES = [
 
 function getLast12Months(): { value: string; label: string }[] {
   const months: { value: string; label: string }[] = [];
-  const now = new Date();
+  // Anchor on the current BRT month so the top of the list matches the server's
+  // default period (both roll over at 00:00 BRT, never a day early at 21:00 BRT).
+  const { year, month1 } = brtNowParts();
   for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(year, month1 - 1 - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
     months.push({ value, label: label ?? value });

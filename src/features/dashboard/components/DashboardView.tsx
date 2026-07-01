@@ -9,6 +9,7 @@ import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, P
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
 import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData } from '../types';
+import { currentDayOfMonthBrt } from '../utils/brt-now';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
 import { GoalsModal } from './GoalsModal';
@@ -96,13 +97,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             monthTarget: ranking.leadsOpened.monthTarget,
             conversionTarget: 0,
             percentOfTarget: ranking.leadsOpened.percentOfTarget,
-            currentDay: (() => {
-              const now = new Date();
-              const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
-              const days = new Date(yr, mo, 0).getDate();
-              const isCurrent = now.getFullYear() === yr && now.getMonth() + 1 === mo;
-              return isCurrent ? now.getDate() : days;
-            })(),
+            currentDay: currentDayOfMonthBrt(filters.month),
             daysInMonth: ranking.leadsOpened.dailyData.length,
             dailyData: ranking.leadsOpened.dailyData,
           } satisfies OpportunityKpiData}
@@ -127,13 +122,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             monthTarget: ranking.meetingsScheduled.monthTarget,
             conversionTarget: 0,
             percentOfTarget: ranking.meetingsScheduled.percentOfTarget,
-            currentDay: (() => {
-              const now = new Date();
-              const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
-              const days = new Date(yr, mo, 0).getDate();
-              const isCurrent = now.getFullYear() === yr && now.getMonth() + 1 === mo;
-              return isCurrent ? now.getDate() : days;
-            })(),
+            currentDay: currentDayOfMonthBrt(filters.month),
             daysInMonth: ranking.meetingsScheduled.dailyData.length,
             dailyData: ranking.meetingsScheduled.dailyData,
           } satisfies OpportunityKpiData}
