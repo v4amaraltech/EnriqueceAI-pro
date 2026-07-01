@@ -13,37 +13,30 @@ import { getRankingData } from '@/features/dashboard/actions/get-ranking-data';
 import { getResponseTimeData } from '@/features/dashboard/actions/get-response-time';
 import { DashboardView } from '@/features/dashboard/components/DashboardView';
 import type { DashboardFilters } from '@/features/dashboard/types';
+import { brtNowParts, currentMonthBrt } from '@/features/dashboard/utils/brt-now';
 
 interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function getDefaultDateRange(): { from: string; to: string; month: string } {
-  const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  return {
-    from: format(firstOfMonth, 'yyyy-MM-dd'),
-    to: format(now, 'yyyy-MM-dd'),
-    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-  };
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   await requireAuth();
 
   const params = await searchParams;
-  const defaults = getDefaultDateRange();
 
-  // Month-based filter (primary) — dateFrom/dateTo derived from month
+  // Month-based filter (primary) — dateFrom/dateTo derived from month.
+  // Default is the current month in BRT (not UTC), so it only rolls to the next
+  // month at 00:00 BRT — otherwise it flipped a day early at 21:00 BRT.
   const month = typeof params.month === 'string'
     ? params.month
-    : defaults.month;
+    : currentMonthBrt();
 
-  // Derive date range from month
+  // Derive date range from month, clamping the end to "today" in BRT.
   const [yearStr, monthStr] = month.split('-');
   const monthStart = `${yearStr}-${monthStr}-01`;
   const monthEndDate = new Date(Number(yearStr), Number(monthStr), 0);
-  const today = new Date();
+  const brtToday = brtNowParts();
+  const today = new Date(brtToday.year, brtToday.month1 - 1, brtToday.day);
   const effectiveEnd = monthEndDate < today ? monthEndDate : today;
   const dateFrom = monthStart;
   const dateTo = format(effectiveEnd, 'yyyy-MM-dd');
