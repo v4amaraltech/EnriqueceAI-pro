@@ -58,38 +58,48 @@ describe('voice-service-client', () => {
     expect((call[1].headers as Record<string, string>)['X-API-Key']).toBe('secret-key');
   });
 
-  it('maps paired session → connected and jid → phone number', async () => {
-    mockFetchOnce([
-      { id: 's1', jid: '5511999990000@s.whatsapp.net', paired: true },
-      { id: 's2', status: 'disconnected' },
-    ]);
+  // GET /api/sessions no AstraCalls devolve { sessions: [...] } (objeto), NÃO um
+  // array puro — ler como array puro fazia o find nunca casar e o pareamento
+  // nunca confirmar. Estes testes usam o shape REAL.
+  it('unwraps the { sessions: [...] } envelope and maps paired → connected', async () => {
+    mockFetchOnce({
+      sessions: [
+        { id: 's1', jid: '5511999990000@s.whatsapp.net', paired: true },
+        { id: 's2', state: 'disconnected' },
+      ],
+    });
     const session = await getVoiceSession('s1');
     expect(session).toEqual({ sid: 's1', status: 'connected', phoneNumber: '5511999990000', qr: null });
   });
 
+  it('still tolerates a bare array (defensive, in case the service changes)', async () => {
+    mockFetchOnce([{ id: 's1', jid: '5511999990000@s.whatsapp.net', paired: true }]);
+    expect((await getVoiceSession('s1'))?.status).toBe('connected');
+  });
+
   it("maps a whatsmeow state:'open' session → connected (AstraCalls may not set paired:true)", async () => {
-    mockFetchOnce([{ id: 's1', jid: '5511988887777@s.whatsapp.net', state: 'open' }]);
+    mockFetchOnce({ sessions: [{ id: 's1', jid: '5511988887777@s.whatsapp.net', state: 'open' }] });
     const session = await getVoiceSession('s1');
     expect(session).toEqual({ sid: 's1', status: 'connected', phoneNumber: '5511988887777', qr: null });
   });
 
   it("maps status:'connected' → connected", async () => {
-    mockFetchOnce([{ id: 's1', status: 'connected', jid: '5511988887777@s.whatsapp.net' }]);
+    mockFetchOnce({ sessions: [{ id: 's1', status: 'connected', jid: '5511988887777@s.whatsapp.net' }] });
     expect((await getVoiceSession('s1'))?.status).toBe('connected');
   });
 
   it("keeps state:'qr' (pre-scan) as pairing", async () => {
-    mockFetchOnce([{ id: 's1', state: 'qr', qr: 'wa.me/x' }]);
+    mockFetchOnce({ sessions: [{ id: 's1', state: 'qr', qr: 'wa.me/x' }] });
     expect((await getVoiceSession('s1'))?.status).toBe('pairing');
   });
 
   it('maps an explicitly disconnected session', async () => {
-    mockFetchOnce([{ id: 's2', status: 'disconnected' }]);
+    mockFetchOnce({ sessions: [{ id: 's2', state: 'disconnected' }] });
     expect((await getVoiceSession('s2'))?.status).toBe('disconnected');
   });
 
   it('returns null when the session is not in the list', async () => {
-    mockFetchOnce([{ id: 'other' }]);
+    mockFetchOnce({ sessions: [{ id: 'other' }] });
     expect(await getVoiceSession('s1')).toBeNull();
   });
 
