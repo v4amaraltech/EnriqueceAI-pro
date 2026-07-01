@@ -238,6 +238,7 @@ export function ActivityWhatsAppCallPanel({
               const r = await scheduleActivity({
                 leadId,
                 channel: returnSchedule.channel,
+                callProvider: returnSchedule.callProvider,
                 scheduledAt: returnSchedule.scheduledAt,
                 notes: notes || undefined,
                 // Só conclui enrollments ativos quando a ligação nasce de uma

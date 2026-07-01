@@ -14,6 +14,8 @@ import { getCalendarConnection, createCalendarEvent } from '@/features/integrati
 const scheduleActivitySchema = z.object({
   leadId: z.string().uuid(),
   channel: z.enum(['phone', 'whatsapp', 'email', 'linkedin', 'research']),
+  // 'whatsapp' quando o retorno é uma Ligação via WhatsApp (channel='phone').
+  callProvider: z.enum(['whatsapp']).nullish(),
   scheduledAt: z.string().min(1),
   notes: z.string().optional(),
   completeEnrollments: z.boolean().default(true),
@@ -29,7 +31,7 @@ export async function scheduleActivity(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { leadId, channel, scheduledAt, notes, completeEnrollments } = parsed.data;
+  const { leadId, channel, callProvider, scheduledAt, notes, completeEnrollments } = parsed.data;
 
   // Create scheduled activity
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
@@ -38,6 +40,7 @@ export async function scheduleActivity(
       lead_id: leadId,
       user_id: userId,
       channel,
+      call_provider: callProvider ?? null,
       scheduled_at: scheduledAt,
       notes: notes || null,
     } as Record<string, unknown>)
@@ -71,9 +74,7 @@ export async function scheduleActivity(
   }
 
   // Record system interaction for timeline
-  const channelLabels: Record<string, string> = {
-    phone: 'Ligação', whatsapp: 'WhatsApp', email: 'Email', linkedin: 'LinkedIn', research: 'Pesquisa',
-  };
+  const channelLabel = returnChannelLabel(channel, callProvider);
   const dateStr = new Date(scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   await from(supabase, 'interactions')
     .insert({
@@ -81,7 +82,7 @@ export async function scheduleActivity(
       lead_id: leadId,
       channel: 'system',
       type: 'sent',
-      message_content: `Atividade agendada: ${channelLabels[channel] ?? channel} para ${dateStr}${notes ? ` — ${notes}` : ''}`,
+      message_content: `Atividade agendada: ${channelLabel} para ${dateStr}${notes ? ` — ${notes}` : ''}`,
       performed_by: userId,
       metadata: { system_event: 'activity_scheduled', scheduled_activity_id: data.id },
     } as Record<string, unknown>);
@@ -89,7 +90,7 @@ export async function scheduleActivity(
   // Create Google Calendar event
   let calendarFailed = false;
   try {
-    await createCalendarEventForActivity(userId, orgId, leadId, channel, scheduledAt, notes);
+    await createCalendarEventForActivity(userId, orgId, leadId, channelLabel, scheduledAt, notes);
   } catch (err) {
     console.warn('[schedule-activity] Calendar event failed:', err);
     calendarFailed = true;
@@ -104,11 +105,20 @@ export async function scheduleActivity(
   } as ActionResult<{ id: string; calendarFailed?: boolean }>;
 }
 
+/** Rótulo humano do canal do retorno, considerando a Ligação via WhatsApp. */
+function returnChannelLabel(channel: string, callProvider?: 'whatsapp' | null): string {
+  if (channel === 'phone' && callProvider === 'whatsapp') return 'Ligação (WhatsApp)';
+  const labels: Record<string, string> = {
+    phone: 'Ligação', whatsapp: 'WhatsApp', email: 'Email', linkedin: 'LinkedIn', research: 'Pesquisa',
+  };
+  return labels[channel] ?? channel;
+}
+
 async function createCalendarEventForActivity(
   userId: string,
   orgId: string,
   leadId: string,
-  channel: string,
+  channelLabel: string,
   scheduledAt: string,
   notes?: string,
 ): Promise<void> {
@@ -122,11 +132,7 @@ async function createCalendarEventForActivity(
     .eq('id', leadId)
     .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; first_name: string | null; last_name: string | null } | null };
 
-  const channelLabels: Record<string, string> = {
-    phone: 'Ligação', whatsapp: 'WhatsApp', email: 'Email', linkedin: 'LinkedIn', research: 'Pesquisa',
-  };
   const leadName = lead?.nome_fantasia ?? lead?.razao_social ?? [lead?.first_name, lead?.last_name].filter(Boolean).join(' ') ?? 'Lead';
-  const channelLabel = channelLabels[channel] ?? channel;
 
   const startTime = new Date(scheduledAt);
   const endTime = new Date(startTime.getTime() + 15 * 60 * 1000); // 15 min duration

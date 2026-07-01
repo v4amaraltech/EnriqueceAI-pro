@@ -237,13 +237,14 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
   const scheduledResult = (await from(supabase, 'scheduled_activities')
-    .select('id, lead_id, channel, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
+    .select('id, lead_id, channel, call_provider, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
     .eq('status', 'pending')
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
       id: string;
       lead_id: string;
       channel: string;
+      call_provider: string | null;
       scheduled_at: string;
       notes: string | null;
       leads: RawLead;
@@ -279,7 +280,9 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     },
     activityName: row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
     callScript: row.notes,
-    callProvider: null,
+    // Retorno de "WhatsApp Ligação" (channel='phone' + provider) reabre o discador
+    // WhatsApp na fila; os demais retornos ficam com callProvider null.
+    callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
   }));
 
   // 7. Merge and sort: group by lead so SDR finishes all steps for one lead before moving to the next
