@@ -84,7 +84,7 @@ export function NotificationProvider({
             isNotificationSoundEnabled() &&
             SOUND_NOTIFICATION_TYPES.has(newNotification.type)
           ) {
-            playNotificationSound();
+            playNotificationSound(newNotification.type);
           }
         },
       )

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { NotificationType } from '../types';
 import {
+  chimeNameForType,
   isNotificationSoundEnabled,
   playNotificationSound,
   setNotificationSoundEnabled,
@@ -64,10 +65,26 @@ describe('sound preference', () => {
   });
 });
 
+describe('chimeNameForType', () => {
+  it('maps the confirmed per-type overrides', () => {
+    expect(chimeNameForType('meeting_reminder')).toBe('tri-tom');
+    expect(chimeNameForType('goal_reached')).toBe('fanfarra');
+    expect(chimeNameForType('closer_feedback')).toBe('descendente');
+  });
+
+  it('falls back to the default bell for every other type', () => {
+    expect(chimeNameForType('lead_replied')).toBe('sino');
+    expect(chimeNameForType('whatsapp_reply')).toBe('sino');
+    expect(chimeNameForType('lead_inbound')).toBe('sino');
+    expect(chimeNameForType('lead_won')).toBe('sino'); // celebratório, mas fica no Sino
+  });
+});
+
 describe('playNotificationSound', () => {
   it('never throws when the Web Audio API is unavailable (jsdom)', () => {
     // jsdom has no AudioContext — the call must degrade silently, not crash the
     // realtime notification handler.
-    expect(() => playNotificationSound()).not.toThrow();
+    expect(() => playNotificationSound('lead_replied')).not.toThrow();
+    expect(() => playNotificationSound('goal_reached')).not.toThrow();
   });
 });
