@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Bell, Loader2 } from 'lucide-react';
+import { Bell, Loader2, Volume2, VolumeX } from 'lucide-react';
 
 import { useNotifications } from '../hooks/useNotifications';
+import { useNotificationSound } from '../hooks/useNotificationSound';
 
 import { NotificationItem } from './NotificationItem';
 
@@ -18,6 +19,7 @@ export function NotificationDropdown() {
   const router = useRouter();
   const { notifications, unreadCount, loading, hasMore, markAsRead, markAllAsRead, loadMore } =
     useNotifications();
+  const { enabled: soundEnabled, toggle: toggleSound } = useNotificationSound();
 
   function handleClick(notification: (typeof notifications)[0]) {
     if (!notification.read_at) {
@@ -42,15 +44,30 @@ export function NotificationDropdown() {
     <div className="w-80">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h3 className="text-sm font-semibold">Notificações</h3>
-        {unreadCount > 0 && (
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => markAllAsRead()}
-            className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+            onClick={toggleSound}
+            title={soundEnabled ? 'Desativar som' : 'Ativar som'}
+            aria-label={
+              soundEnabled
+                ? 'Desativar som das notificações'
+                : 'Ativar som das notificações'
+            }
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
-            Marcar todas como lidas
+            {soundEnabled ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
           </button>
-        )}
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => markAllAsRead()}
+              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+            >
+              Marcar todas como lidas
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
