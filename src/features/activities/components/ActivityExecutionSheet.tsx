@@ -377,6 +377,7 @@ export function ActivityExecutionSheet({
                 onReportWhatsAppInvalid={handleReportWhatsAppInvalid}
                 onCallResolved={handleCallResolved}
                 dialerProvider={dialerProvider}
+                quickMode={quickMode}
               />
             </div>
           </div>

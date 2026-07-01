@@ -35,6 +35,7 @@ interface ActivityExecutionSheetContentProps {
   onReportWhatsAppInvalid?: () => void;
   onCallResolved?: () => void;
   dialerProvider?: DialerProvider;
+  quickMode?: boolean;
 }
 
 export function ActivityExecutionSheetContent({
@@ -47,6 +48,7 @@ export function ActivityExecutionSheetContent({
   onReportWhatsAppInvalid,
   onCallResolved,
   dialerProvider,
+  quickMode = false,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [waConnected, setWaConnected] = useState<boolean | null>(null);
@@ -216,8 +218,11 @@ export function ActivityExecutionSheetContent({
 
   // Phone
   // Ligação via WhatsApp (passo phone + call_provider='whatsapp', Epic 7) usa o
-  // discador WebRTC nativo, não o painel de telefonia (API4COM).
-  if (activity.channel === 'phone' && activity.callProvider === 'whatsapp') {
+  // discador WebRTC nativo, não o painel de telefonia (API4COM). EXCEÇÃO: no
+  // Modo Execução Rápida a ligação é sempre por API4COM (o modo é de discagem
+  // rápida em lote), então ignoramos o call_provider e caímos no painel API4COM
+  // abaixo — assim o SDR nunca fica travado se o WhatsApp dele não estiver pareado.
+  if (activity.channel === 'phone' && activity.callProvider === 'whatsapp' && !quickMode) {
     return (
       <ActivityWhatsAppCallPanel
         enrollmentId={activity.enrollmentId}

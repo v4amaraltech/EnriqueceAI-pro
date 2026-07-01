@@ -49,6 +49,12 @@ vi.mock('../actions/fetch-gmail-signature', () => ({
   }),
 }));
 
+// Stub the WhatsApp call panel — its server-action imports would run at import
+// time in jsdom. We only assert WHICH panel gets chosen, not its internals.
+vi.mock('@/features/whatsapp-calls/components/ActivityWhatsAppCallPanel', () => ({
+  ActivityWhatsAppCallPanel: () => <div>WHATSAPP_CALL_PANEL</div>,
+}));
+
 import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
 
 const baseLead = {
@@ -190,6 +196,38 @@ describe('ActivityExecutionSheetContent', () => {
     );
 
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    expect(screen.getByText('11999999999')).toBeInTheDocument();
+  });
+
+  it('should render WhatsApp call panel for phone + call_provider whatsapp (normal mode)', () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('phone', { callProvider: 'whatsapp' })}
+        isSending={false}
+        onSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(screen.getByText('WHATSAPP_CALL_PANEL')).toBeInTheDocument();
+  });
+
+  it('should route a WhatsApp-call activity to the API4COM phone panel in quick mode', () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('phone', { callProvider: 'whatsapp' })}
+        isSending={false}
+        onSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+        quickMode
+      />,
+    );
+
+    // Quick mode ignores call_provider → API4COM panel (lead number visible),
+    // never the WhatsApp discador.
+    expect(screen.queryByText('WHATSAPP_CALL_PANEL')).not.toBeInTheDocument();
     expect(screen.getByText('11999999999')).toBeInTheDocument();
   });
 
