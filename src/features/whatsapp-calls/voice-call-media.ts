@@ -112,7 +112,7 @@ export function subscribeCallEvents(
 }
 
 interface SessionSnapshot {
-  sessions?: Array<{ id?: string; jid?: string | null; state?: string | null; paired?: boolean }>;
+  sessions?: Array<{ id?: string; sid?: string; jid?: string | null; state?: string | null; paired?: boolean }>;
   qr?: string;
   paired?: boolean;
 }
@@ -146,8 +146,11 @@ export function subscribeSessionEvents(
       if (Array.isArray(data.sessions)) {
         const sid = getSid();
         if (!sid) return; // ainda sem sessão criada: ignora estado de pareamento
-        const mine = data.sessions.find((s) => s.id === sid);
-        if (mine?.paired === true) handlers.onPaired?.();
+        const mine = data.sessions.find((s) => (s.id ?? s.sid) === sid);
+        // Pareado = `paired:true` OU state 'open' (whatsmeow conectado) — o
+        // AstraCalls nem sempre seta `paired`, então sem o 'open' o pareamento
+        // travava em "Pareando" mesmo com o número já conectado no serviço.
+        if (mine && (mine.paired === true || mine.state === 'open')) handlers.onPaired?.();
         else if (mine && (mine.state === 'close' || mine.state === 'logged_out')) handlers.onDead?.();
       }
     } catch {
