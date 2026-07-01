@@ -218,6 +218,7 @@ export function ActivityPhonePanel({
       scheduleActivity({
         leadId,
         channel: returnSchedule.channel,
+        callProvider: returnSchedule.callProvider,
         scheduledAt: returnSchedule.scheduledAt,
         notes: resultNotes ? `Retorno: ${resultNotes}` : undefined,
         completeEnrollments: true,

@@ -42,8 +42,23 @@ import { ScheduleMeetingModal } from '@/features/integrations/components/Schedul
 
 export interface CallReturnSchedule {
   scheduledAt: string;
-  channel: 'phone' | 'whatsapp';
+  channel: 'phone' | 'whatsapp' | 'email';
+  /** 'whatsapp' quando o retorno é uma Ligação via WhatsApp (channel='phone'); senão null. */
+  callProvider: 'whatsapp' | null;
 }
+
+/** Valor do dropdown "Canal" — "whatsapp_call" mapeia p/ phone + callProvider. */
+type ReturnChannelOption = 'phone' | 'whatsapp' | 'whatsapp_call' | 'email';
+
+const RETURN_CHANNEL_MAP: Record<
+  ReturnChannelOption,
+  { channel: CallReturnSchedule['channel']; callProvider: 'whatsapp' | null }
+> = {
+  phone: { channel: 'phone', callProvider: null },
+  whatsapp: { channel: 'whatsapp', callProvider: null },
+  whatsapp_call: { channel: 'phone', callProvider: 'whatsapp' },
+  email: { channel: 'email', callProvider: null },
+};
 
 export interface CallResultModalProps {
   open: boolean;
@@ -95,7 +110,7 @@ export function CallResultModal({
   const [scheduleReturn, setScheduleReturn] = useState(false);
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [returnTime, setReturnTime] = useState('09:00');
-  const [returnChannel, setReturnChannel] = useState<'phone' | 'whatsapp'>('phone');
+  const [returnChannel, setReturnChannel] = useState<ReturnChannelOption>('phone');
   const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
 
   function buildReturnSchedule(): CallReturnSchedule | null {
@@ -103,7 +118,7 @@ export function CallResultModal({
     const [hours, minutes] = returnTime.split(':').map(Number);
     const scheduledAt = new Date(returnDate);
     scheduledAt.setHours(hours ?? 9, minutes ?? 0, 0, 0);
-    return { scheduledAt: scheduledAt.toISOString(), channel: returnChannel };
+    return { scheduledAt: scheduledAt.toISOString(), ...RETURN_CHANNEL_MAP[returnChannel] };
   }
 
   function handleConclude(extraNote?: string) {
@@ -159,13 +174,15 @@ export function CallResultModal({
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Canal</Label>
-                      <Select value={returnChannel} onValueChange={(v) => setReturnChannel(v as 'phone' | 'whatsapp')}>
+                      <Select value={returnChannel} onValueChange={(v) => setReturnChannel(v as ReturnChannelOption)}>
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="phone">Ligação</SelectItem>
                           <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          <SelectItem value="whatsapp_call">WhatsApp Ligação</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
