@@ -73,6 +73,24 @@ function PairFlow({
     actionsRef.current = actions;
   }, [actions]);
 
+  // Confirma e persiste o número + status `connected` (idempotente via ref).
+  // Compartilhado pelo SSE (`onPaired`) e pelo polling de fallback abaixo.
+  const tryConfirmRef = useRef(async () => {
+    if (confirmingRef.current) return;
+    const sid = sidRef.current;
+    if (!sid) return;
+    confirmingRef.current = true;
+    const result = await actionsRef.current.getStatus(sid);
+    if (result.success && result.data.status === 'connected') {
+      setPhase('connected');
+      toast.success('Número WhatsApp pareado com sucesso');
+      router.refresh();
+      onConnectedRef.current();
+    } else {
+      confirmingRef.current = false;
+    }
+  });
+
   // Inicia o pareamento na montagem (setState só dentro do callback async).
   useEffect(() => {
     if (startedRef.current) return;
@@ -111,22 +129,7 @@ function PairFlow({
     const unsubscribe = subscribeSessionEvents(() => sidRef.current, {
       onQr: (next) => setQr((prev) => (next !== prev ? next : prev)),
       onPaired: () => {
-        if (confirmingRef.current) return;
-        const sid = sidRef.current;
-        if (!sid) return;
-        confirmingRef.current = true;
-        void (async () => {
-          // Confirma e persiste o número + status `connected` no banco.
-          const result = await actionsRef.current.getStatus(sid);
-          if (result.success && result.data.status === 'connected') {
-            setPhase('connected');
-            toast.success('Número WhatsApp pareado com sucesso');
-            router.refresh();
-            onConnectedRef.current();
-          } else {
-            confirmingRef.current = false;
-          }
-        })();
+        void tryConfirmRef.current();
       },
       onDead: () => {
         setErrorMsg('A sessão caiu antes de parear. Tente de novo.');
@@ -134,8 +137,20 @@ function PairFlow({
       },
     });
     return unsubscribe;
-    // Montagem única (handlers via ref); router do Next é referencialmente estável.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Montagem única — handlers estáveis via ref.
+  }, []);
+
+  // Polling de fallback (a cada 3s enquanto aguarda o scan). O AstraCalls NÃO
+  // emite um snapshot `{ sessions }` pós-scan no SSE — só faz broadcast do QR —,
+  // então o `onPaired` sozinho pode nunca disparar mesmo com o número já
+  // conectado no serviço, travando em "Pareando". Aqui consultamos GET
+  // /api/sessions periodicamente: `mapStatus` reconhece o state 'open' (número
+  // pareado no whatsmeow) e `getStatus` persiste `connected`.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (phaseRef.current === 'awaiting') void tryConfirmRef.current();
+    }, 3000);
+    return () => clearInterval(id);
   }, []);
 
   return (
