@@ -343,11 +343,19 @@ async function recordReply(
   supabase: SupabaseClient,
   sentInteraction: SentInteraction,
 ): Promise<void> {
-  // Get org_id from the lead
+  // Get org_id + owner + name from the lead (owner/name used for the SDR notification)
   const { data: lead } = (await from(supabase, 'leads')
-    .select('org_id')
+    .select('org_id, assigned_to, nome_fantasia, razao_social, cnpj')
     .eq('id', sentInteraction.lead_id)
-    .single()) as { data: { org_id: string } | null };
+    .single()) as {
+      data: {
+        org_id: string;
+        assigned_to: string | null;
+        nome_fantasia: string | null;
+        razao_social: string | null;
+        cnpj: string | null;
+      } | null;
+    };
 
   if (!lead) return;
 
@@ -387,6 +395,32 @@ async function recordReply(
     cadence_id: sentInteraction.cadence_id,
     interaction_id: sentInteraction.id,
   });
+
+  // Notify the SDR who owns the lead that it replied by email. This mirrors the
+  // bounce path (recordBounce) — previously the reply was recorded and cadences
+  // stopped, but the SDR was never told, so 'lead_replied' notifications never
+  // fired. High-signal type: also chimes (see notification-sound allow-list).
+  if (lead.assigned_to) {
+    const leadName = lead.nome_fantasia || lead.razao_social || lead.cnpj || 'Lead';
+    try {
+      await createNotification({
+        org_id: lead.org_id,
+        user_id: lead.assigned_to,
+        type: 'lead_replied',
+        title: `Lead respondeu: ${leadName}`,
+        body: 'Respondeu um email da sua cadência. Abra para ver e responder.',
+        resource_type: 'lead',
+        resource_id: sentInteraction.lead_id,
+        metadata: {
+          cadence_id: sentInteraction.cadence_id,
+          detected_by: 'gmail_thread_poll',
+          sent_interaction_id: sentInteraction.id,
+        },
+      });
+    } catch (notifErr) {
+      console.error(`[reply-check] Failed to notify reply for lead=${sentInteraction.lead_id}:`, notifErr);
+    }
+  }
 }
 
 /** Record a bounce: create bounced interaction, mark lead, pause ALL enrollments, notify SDR */
