@@ -115,6 +115,8 @@ interface SessionSnapshot {
   sessions?: Array<{ id?: string; sid?: string; jid?: string | null; state?: string | null; paired?: boolean }>;
   qr?: string;
   paired?: boolean;
+  /** Presente nos eventos `auth-state`/`session-qr` do AstraCalls (a qual sessão o evento pertence). */
+  sessionId?: string;
 }
 
 /**
@@ -142,14 +144,23 @@ export function subscribeSessionEvents(
   es.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data) as SessionSnapshot;
-      if (typeof data.qr === 'string' && data.qr) handlers.onQr?.(data.qr);
+      const sid = getSid();
+      // QR: aceita SÓ o QR da nossa sessão. O AstraCalls faz broadcast global a
+      // todos os assinantes (broker.broadcast); sem esse filtro, com vários SDRs
+      // pareando ao mesmo tempo, um veria/escanearia o QR do outro e pareava a
+      // sessão errada — a linha dele nunca conectava. Antes de termos o sid (curta
+      // janela até o create resolver) aceitamos o QR global para não perder o 1º.
+      if (typeof data.qr === 'string' && data.qr) {
+        if (!sid || !data.sessionId || data.sessionId === sid) handlers.onQr?.(data.qr);
+      }
+      if (!sid) return; // ainda sem sessão criada: ignora estado de pareamento
+      // Evento `auth-state` (pontual): o serviço manda `paired` no topo junto do
+      // `sessionId` assim que o número conecta — confirmação direta e imediata.
+      if (data.sessionId === sid && data.paired === true) handlers.onPaired?.();
+      // Evento `session-list` (snapshot): acha a nossa sessão e confere o estado.
+      // Pareado = `paired:true` OU state 'open' (whatsmeow conectado).
       if (Array.isArray(data.sessions)) {
-        const sid = getSid();
-        if (!sid) return; // ainda sem sessão criada: ignora estado de pareamento
         const mine = data.sessions.find((s) => (s.id ?? s.sid) === sid);
-        // Pareado = `paired:true` OU state 'open' (whatsmeow conectado) — o
-        // AstraCalls nem sempre seta `paired`, então sem o 'open' o pareamento
-        // travava em "Pareando" mesmo com o número já conectado no serviço.
         if (mine && (mine.paired === true || mine.state === 'open')) handlers.onPaired?.();
         else if (mine && (mine.state === 'close' || mine.state === 'logged_out')) handlers.onDead?.();
       }

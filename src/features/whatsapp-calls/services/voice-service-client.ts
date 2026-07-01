@@ -137,8 +137,16 @@ export async function createVoiceSession(name: string): Promise<VoiceSession> {
 
 /** Busca o estado atual de uma sessão pelo sid. Retorna null se não existir. */
 export async function getVoiceSession(sid: string): Promise<VoiceSession | null> {
-  const list = await request<RawSession[]>('/api/sessions', { method: 'GET' });
-  const found = (Array.isArray(list) ? list : []).find((s) => (s.sid ?? s.id) === sid);
+  // O AstraCalls devolve `{ "sessions": [ {id, jid, state, paired} ] }` — um
+  // OBJETO com o array dentro, NÃO um array puro. Ler como array puro fazia
+  // `find` nunca casar → getVoiceSession sempre null → o pareamento NUNCA
+  // confirmava (nem por SSE nem por polling, pois ambos caem aqui). Desembrulha
+  // `.sessions`, mas tolera array puro (defensivo, caso o serviço mude).
+  const res = await request<{ sessions?: RawSession[] } | RawSession[]>('/api/sessions', {
+    method: 'GET',
+  });
+  const list = Array.isArray(res) ? res : (res?.sessions ?? []);
+  const found = list.find((s) => (s.sid ?? s.id) === sid);
   return found ? normalize(found) : null;
 }
 
