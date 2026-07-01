@@ -67,6 +67,22 @@ describe('voice-service-client', () => {
     expect(session).toEqual({ sid: 's1', status: 'connected', phoneNumber: '5511999990000', qr: null });
   });
 
+  it("maps a whatsmeow state:'open' session → connected (AstraCalls may not set paired:true)", async () => {
+    mockFetchOnce([{ id: 's1', jid: '5511988887777@s.whatsapp.net', state: 'open' }]);
+    const session = await getVoiceSession('s1');
+    expect(session).toEqual({ sid: 's1', status: 'connected', phoneNumber: '5511988887777', qr: null });
+  });
+
+  it("maps status:'connected' → connected", async () => {
+    mockFetchOnce([{ id: 's1', status: 'connected', jid: '5511988887777@s.whatsapp.net' }]);
+    expect((await getVoiceSession('s1'))?.status).toBe('connected');
+  });
+
+  it("keeps state:'qr' (pre-scan) as pairing", async () => {
+    mockFetchOnce([{ id: 's1', state: 'qr', qr: 'wa.me/x' }]);
+    expect((await getVoiceSession('s1'))?.status).toBe('pairing');
+  });
+
   it('maps an explicitly disconnected session', async () => {
     mockFetchOnce([{ id: 's2', status: 'disconnected' }]);
     expect((await getVoiceSession('s2'))?.status).toBe('disconnected');

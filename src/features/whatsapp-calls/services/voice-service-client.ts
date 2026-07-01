@@ -97,6 +97,11 @@ interface RawSession {
 function mapStatus(raw: RawSession): WhatsAppCallSessionStatus {
   if (raw.paired === true) return 'connected';
   const s = (raw.status ?? raw.state ?? '').toLowerCase();
+  // whatsmeow reporta a sessão pareada como state='open' (e alguns builds como
+  // status='connected'). O AstraCalls NEM SEMPRE seta `paired:true`, então sem
+  // reconhecer 'open' aqui o número conectado no serviço ficava preso em
+  // "Pareando" no app para sempre. 'open' só ocorre após o scan (pré-scan é 'qr').
+  if (s === 'open' || s === 'connected') return 'connected';
   if (s === 'disconnected' || s === 'logged_out' || s === 'loggedout' || s === 'close') {
     return 'disconnected';
   }
