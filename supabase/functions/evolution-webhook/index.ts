@@ -11,6 +11,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { validateWebhookSecret } from "../_shared/auth.ts";
 import { normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
+import { parseInboundMessage, captureInboundReply } from "../_shared/whatsapp-reply.ts";
 serve(async (req)=>{
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -123,6 +124,22 @@ serve(async (req)=>{
             last_seen_at: new Date().toISOString(),
             status: "connected"
           });
+          // Capturar resposta do lead: registra interação 'replied', para as
+          // cadências ativas e notifica o SDR dono (que ainda toca o som).
+          // Best-effort — falha aqui não pode quebrar o ack do webhook.
+          try {
+            const reply = parseInboundMessage(data);
+            if (reply) {
+              const result = await captureInboundReply(instance.organization_id, reply);
+              if (result.status === "recorded") {
+                console.log(`[evolution-webhook] WhatsApp reply recorded lead=${result.leadId} instance=${instanceName}`);
+              } else if (result.status === "no_lead") {
+                console.warn(`[evolution-webhook] Inbound WhatsApp with no matching lead phone=${reply.phone} org=${instance.organization_id}`);
+              }
+            }
+          } catch (replyErr) {
+            console.error("[evolution-webhook] reply capture failed:", replyErr);
+          }
           break;
         }
       case "MESSAGES_UPDATE":
