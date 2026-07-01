@@ -9,6 +9,11 @@ import { fetchNotifications } from '../actions/fetch-notifications';
 import { markAllNotificationsRead as markAllAction } from '../actions/mark-all-notifications-read';
 import { markNotificationRead as markOneAction } from '../actions/mark-notification-read';
 import type { NotificationRow } from '../types';
+import {
+  isNotificationSoundEnabled,
+  playNotificationSound,
+  SOUND_NOTIFICATION_TYPES,
+} from '../utils/notification-sound';
 
 const PAGE_SIZE = 20;
 
@@ -73,6 +78,14 @@ export function NotificationProvider({
           toast(newNotification.title, {
             description: newNotification.body ?? undefined,
           });
+          // Audible chime for high-signal notifications, honoring the per-browser
+          // toggle. Read fresh from storage so a mid-session toggle takes effect.
+          if (
+            isNotificationSoundEnabled() &&
+            SOUND_NOTIFICATION_TYPES.has(newNotification.type)
+          ) {
+            playNotificationSound(newNotification.type);
+          }
         },
       )
       .on(
