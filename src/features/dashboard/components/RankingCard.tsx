@@ -39,6 +39,9 @@ interface RankingCardProps {
   primaryColumnTooltip?: string;
   primaryValueDivisor?: number;
   secondaryColumnLabel?: string;
+  /** Rótulo da coluna "ideal até hoje" (pace por dia útil sem feriados). */
+  idealColumnLabel?: string;
+  idealColumnTooltip?: string;
   averageLabel?: string;
   onSdrClick?: (userId: string) => void;
 }
@@ -53,6 +56,8 @@ interface RankingContentProps {
   primaryColumnTooltip?: string;
   primaryValueDivisor?: number;
   secondaryColumnLabel?: string;
+  idealColumnLabel?: string;
+  idealColumnTooltip?: string;
   averageLabel?: string;
   onSdrClick?: (userId: string) => void;
 }
@@ -67,11 +72,15 @@ function RankingContent({
   primaryColumnTooltip,
   primaryValueDivisor,
   secondaryColumnLabel,
+  idealColumnLabel,
+  idealColumnTooltip,
   averageLabel,
   onSdrClick,
 }: RankingContentProps) {
   const isAbove = data.percentOfTarget >= 0;
   const absPercent = Math.abs(data.percentOfTarget);
+  // Só mostra a coluna "ideal dia" quando há valor calculado (meta + SDRs).
+  const showIdeal = Boolean(idealColumnLabel) && data.idealToDate != null;
 
   return (
     <>
@@ -121,6 +130,23 @@ function RankingContent({
               {secondaryColumnLabel && (
                 <span className="w-20 text-center">{secondaryColumnLabel}</span>
               )}
+              {showIdeal && (
+                <span className="w-20 text-center inline-flex items-center justify-center gap-1 whitespace-nowrap">
+                  {idealColumnLabel}
+                  {idealColumnTooltip && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3 w-3 opacity-50" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[220px] text-xs">
+                          {idealColumnTooltip}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </span>
+              )}
               {primaryColumnLabel && (
                 <span className="w-24 text-center inline-flex items-center justify-center gap-1 whitespace-nowrap">
                   {primaryColumnLabel}
@@ -168,6 +194,12 @@ function RankingContent({
                   {secondaryColumnLabel && (
                     <span className="w-20 text-center text-sm text-muted-foreground">
                       {sdr.secondaryValue ?? '—'}
+                    </span>
+                  )}
+                  {showIdeal && (
+                    <span className="w-20 text-center text-sm text-muted-foreground">
+                      {data.idealToDate}
+                      {unit}
                     </span>
                   )}
                   {primaryColumnLabel && (
@@ -223,6 +255,8 @@ export function RankingCard({
   primaryColumnTooltip,
   primaryValueDivisor,
   secondaryColumnLabel,
+  idealColumnLabel,
+  idealColumnTooltip,
   averageLabel,
   onSdrClick,
 }: RankingCardProps) {
@@ -236,6 +270,8 @@ export function RankingCard({
     primaryColumnTooltip,
     primaryValueDivisor,
     secondaryColumnLabel,
+    idealColumnLabel,
+    idealColumnTooltip,
     averageLabel,
     onSdrClick,
   };

@@ -6,6 +6,7 @@ import { from } from '@/lib/supabase/from';
 import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
 
 import { expectedByBusinessDay } from '../utils/pacing';
+import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   DailyDataPoint,
   DashboardFilters,
@@ -49,11 +50,30 @@ function computePercentOfTarget(actual: number, target: number, days: number, mo
   return Math.round(((actual - expectedByToday) / expectedByToday) * 100);
 }
 
+/**
+ * Ideal por SDR acumulado até hoje: fatia da meta que cada SDR deveria ter
+ * atingido no ritmo de dias úteis (sem feriados). Meta org ÷ nº de SDRs ativos,
+ * paceada até o dia de hoje (BRT). `undefined` quando não há meta ou SDRs — aí
+ * a coluna "ideal dia" não é exibida.
+ */
+function computeIdealToDate(
+  monthTarget: number,
+  activeSdrCount: number,
+  month: string,
+): number | undefined {
+  if (monthTarget <= 0 || activeSdrCount <= 0) return undefined;
+  const [yr, mo] = month.split('-').map(Number) as [number, number];
+  const currentDay = currentDayOfMonthBrt(month);
+  const perSdr = monthTarget / activeSdrCount;
+  return Math.round(expectedByBusinessDay(perSdr, yr, mo, currentDay));
+}
+
 function buildRankingCardData(
   entries: SdrRankingEntry[],
   total: number,
   monthTarget: number,
   month: string,
+  activeSdrCount?: number,
 ): RankingCardData {
   const days = getDaysInMonth(month);
   const sdrCount = entries.length || 1;
@@ -63,6 +83,8 @@ function buildRankingCardData(
     percentOfTarget: computePercentOfTarget(total, monthTarget, days, month),
     averagePerSdr: Math.round(total / sdrCount),
     sdrBreakdown: entries.sort((a, b) => b.value - a.value),
+    idealToDate:
+      activeSdrCount != null ? computeIdealToDate(monthTarget, activeSdrCount, month) : undefined,
   };
 }
 
@@ -336,7 +358,7 @@ export async function fetchLeadsOpenedRanking(
   // interactions slice. We do it client-side because the RPC already aggregates.
   const dailyData = await fetchLeadsOpenedDaily(supabase, orgId, filters, sdrIds, monthTarget);
 
-  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month);
+  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month, sdrIds.size);
   return { ...card, dailyData };
 }
 
@@ -446,7 +468,7 @@ export async function fetchMeetingsScheduledRanking(
   for (const [userId, value] of counts) {
     entries.push({ userId, userName: '', value });
   }
-  const card = buildRankingCardData(entries, total, monthTarget, filters.month);
+  const card = buildRankingCardData(entries, total, monthTarget, filters.month, sdrIds.size);
 
   // Daily cumulative for the KPI chart
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
@@ -516,7 +538,7 @@ export async function fetchMeetingsHeldRanking(
   for (const [userId, value] of counts) {
     entries.push({ userId, userName: '', value });
   }
-  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month);
+  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month, sdrIds.size);
 }
 
 /**
