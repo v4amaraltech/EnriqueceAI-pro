@@ -18,8 +18,8 @@ describe('ActivityFilters — SDR filter', () => {
         onFiltersChange={vi.fn()}
         cadenceOptions={[]}
         sdrOptions={[
-          { id: 'u1', name: 'João Silva', overdueCount: 12 },
-          { id: 'u2', name: 'Maria Souza', overdueCount: 0 },
+          { id: 'u1', name: 'João Silva' },
+          { id: 'u2', name: 'Maria Souza' },
         ]}
       />,
     );

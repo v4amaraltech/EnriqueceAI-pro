@@ -265,23 +265,20 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   );
   const sdrOptions = useMemo<SdrFilterOption[]>(() => {
     if (!isManager) return [];
-    const overdueById = new Map<string, number>();
     const seen = new Set<string>();
     for (const a of cadenceActivities) {
       const id = a.lead.assigned_to;
-      // Skip leads owned by anyone who isn't an active SDR: managers (they don't
-      // appear on the dashboard card) and deactivated/suspended users (absent
-      // from the member list, which is why a raw user_id like "c00b38bc" used to
-      // leak into the dropdown). Keeps the filter aligned with the dashboard.
+      // Skip leads owned by anyone who isn't an active SDR: managers and
+      // deactivated/suspended users (absent from the member list — which is why
+      // a raw user_id like "c00b38bc" used to leak into the dropdown). The
+      // dropdown just scopes the queue by owner; the authoritative "atrasadas"
+      // count lives on the dashboard card, so no count is shown here.
       if (!id || !sdrIdSet.has(id)) continue;
       seen.add(id);
-      if (hoursOverdue(a.nextStepDue) >= OVERDUE_THRESHOLD_HOURS) {
-        overdueById.set(id, (overdueById.get(id) ?? 0) + 1);
-      }
     }
     return [...seen]
-      .map((id) => ({ id, name: memberNameMap.get(id) ?? id.slice(0, 8), overdueCount: overdueById.get(id) ?? 0 }))
-      .sort((a, b) => b.overdueCount - a.overdueCount || a.name.localeCompare(b.name, 'pt-BR'));
+      .map((id) => ({ id, name: memberNameMap.get(id) ?? id.slice(0, 8) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [isManager, cadenceActivities, memberNameMap, sdrIdSet]);
 
   // Filtered activities (cadence only — retornos are always shown separately)
