@@ -4,6 +4,7 @@ import {
   fetchActivitiesRanking,
   fetchAttendanceRateRanking,
   fetchLeadsFinishedRanking,
+  fetchMeetingsHeldRanking,
   fetchRankingData,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
@@ -218,6 +219,70 @@ describe('fetchAttendanceRateRanking', () => {
     expect(u1?.secondaryValue).toBe(2);
     const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
     expect(u2?.value).toBe(100);
+  });
+});
+
+describe('fetchMeetingsHeldRanking — idealToDate (divisor por meta individual)', () => {
+  it('divides the org target only by SDRs with an individual goal > 0', async () => {
+    // Past month (2026-01) → pace is fully elapsed, so ideal = target / divisor.
+    // 5 SDRs ativos, mas só 4 têm meta individual (u5 = 0) → divisor 4.
+    const sdrsChain = createChainMock({
+      data: [
+        { user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }, { user_id: 'u4' }, { user_id: 'u5' },
+      ],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u2' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { meetings_held_target: 100 } });
+    const goalsPerUserChain = createChainMock({
+      data: [
+        { user_id: 'u1', opportunity_target: 10 },
+        { user_id: 'u2', opportunity_target: 10 },
+        { user_id: 'u3', opportunity_target: 10 },
+        { user_id: 'u4', opportunity_target: 10 },
+        { user_id: 'u5', opportunity_target: 0 },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'goals') return goalsChain;
+      if (table === 'goals_per_user') return goalsPerUserChain;
+      return createChainMock();
+    });
+
+    const result = await fetchMeetingsHeldRanking(supabase as never, ORG, baseFilters);
+
+    expect(result.total).toBe(3);
+    expect(result.monthTarget).toBe(100);
+    // Divisor = 4 (u5 sem meta individual não conta) → 100 / 4 = 25 (mês passado = meta cheia).
+    expect(result.idealToDate).toBe(25);
+  });
+
+  it('falls back to all active SDRs when none have an individual goal', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
+    const leadsChain = createChainMock({ data: [{ id: 'l1', assigned_to: 'u1' }] });
+    const goalsChain = createChainMock({ data: { meetings_held_target: 100 } });
+    const goalsPerUserChain = createChainMock({ data: [] }); // ninguém com meta individual
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'goals') return goalsChain;
+      if (table === 'goals_per_user') return goalsPerUserChain;
+      return createChainMock();
+    });
+
+    const result = await fetchMeetingsHeldRanking(supabase as never, ORG, baseFilters);
+
+    // Fallback: divisor = 2 SDRs ativos → 100 / 2 = 50.
+    expect(result.idealToDate).toBe(50);
   });
 });
 

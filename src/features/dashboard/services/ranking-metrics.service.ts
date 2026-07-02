@@ -68,6 +68,34 @@ function computeIdealToDate(
   return Math.round(expectedByBusinessDay(perSdr, yr, mo, currentDay));
 }
 
+/**
+ * Nº de SDRs no divisor do "ideal dia": SDRs ativos que TÊM meta individual
+ * (`goals_per_user.opportunity_target > 0`) no mês. SDRs sem meta individual
+ * (ex.: recém-adicionados, ainda sem alvo) não diluem a meta da org. Fallback:
+ * se nenhum SDR ativo tem meta individual, usa o total de SDRs ativos — evita
+ * dividir por zero e esconder a coluna em orgs que nunca definiram metas
+ * individuais.
+ */
+async function countSdrsForIdeal(
+  supabase: SupabaseClient,
+  orgId: string,
+  month: string,
+  sdrIds: Set<string>,
+): Promise<number> {
+  const monthStart = `${month}-01`;
+  const { data } = (await from(supabase, 'goals_per_user')
+    .select('user_id, opportunity_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .gt('opportunity_target', 0)) as {
+    data: Array<{ user_id: string; opportunity_target: number }> | null;
+  };
+  const withGoal = (data ?? []).filter(
+    (g) => sdrIds.has(g.user_id) && g.opportunity_target > 0,
+  ).length;
+  return withGoal > 0 ? withGoal : sdrIds.size;
+}
+
 function buildRankingCardData(
   entries: SdrRankingEntry[],
   total: number,
@@ -358,7 +386,8 @@ export async function fetchLeadsOpenedRanking(
   // interactions slice. We do it client-side because the RPC already aggregates.
   const dailyData = await fetchLeadsOpenedDaily(supabase, orgId, filters, sdrIds, monthTarget);
 
-  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month, sdrIds.size);
+  const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
+  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month, idealSdrCount);
   return { ...card, dailyData };
 }
 
@@ -468,7 +497,8 @@ export async function fetchMeetingsScheduledRanking(
   for (const [userId, value] of counts) {
     entries.push({ userId, userName: '', value });
   }
-  const card = buildRankingCardData(entries, total, monthTarget, filters.month, sdrIds.size);
+  const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
+  const card = buildRankingCardData(entries, total, monthTarget, filters.month, idealSdrCount);
 
   // Daily cumulative for the KPI chart
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
@@ -538,7 +568,8 @@ export async function fetchMeetingsHeldRanking(
   for (const [userId, value] of counts) {
     entries.push({ userId, userName: '', value });
   }
-  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month, sdrIds.size);
+  const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
+  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month, idealSdrCount);
 }
 
 /**
