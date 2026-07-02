@@ -48,8 +48,8 @@ interface ActivityQueueViewProps {
   allCadenceNames?: string[];
   /** Manager view: enables the per-SDR filter over the (org-wide) queue. */
   isManager?: boolean;
-  /** userId → display name, for labeling the SDR filter. */
-  members?: Array<{ userId: string; name: string }>;
+  /** Active org members, for labeling and scoping the per-SDR filter. */
+  members?: Array<{ userId: string; name: string; role: 'manager' | 'sdr' }>;
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -257,13 +257,23 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   // Per-SDR filter options (managers only): which lead owners appear in the
   // queue, with their overdue count so the manager can spot who to chase first.
   const memberNameMap = useMemo(() => new Map(members.map((m) => [m.userId, m.name])), [members]);
+  // Only active members with role 'sdr' are eligible filter options, matching
+  // the dashboard "Atividades Atrasadas" card (which counts role='sdr' only).
+  const sdrIdSet = useMemo(
+    () => new Set(members.filter((m) => m.role === 'sdr').map((m) => m.userId)),
+    [members],
+  );
   const sdrOptions = useMemo<SdrFilterOption[]>(() => {
     if (!isManager) return [];
     const overdueById = new Map<string, number>();
     const seen = new Set<string>();
     for (const a of cadenceActivities) {
       const id = a.lead.assigned_to;
-      if (!id) continue;
+      // Skip leads owned by anyone who isn't an active SDR: managers (they don't
+      // appear on the dashboard card) and deactivated/suspended users (absent
+      // from the member list, which is why a raw user_id like "c00b38bc" used to
+      // leak into the dropdown). Keeps the filter aligned with the dashboard.
+      if (!id || !sdrIdSet.has(id)) continue;
       seen.add(id);
       if (hoursOverdue(a.nextStepDue) >= OVERDUE_THRESHOLD_HOURS) {
         overdueById.set(id, (overdueById.get(id) ?? 0) + 1);
@@ -272,7 +282,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
     return [...seen]
       .map((id) => ({ id, name: memberNameMap.get(id) ?? id.slice(0, 8), overdueCount: overdueById.get(id) ?? 0 }))
       .sort((a, b) => b.overdueCount - a.overdueCount || a.name.localeCompare(b.name, 'pt-BR'));
-  }, [isManager, cadenceActivities, memberNameMap]);
+  }, [isManager, cadenceActivities, memberNameMap, sdrIdSet]);
 
   // Filtered activities (cadence only — retornos are always shown separately)
   const filtered = useMemo(() => applyFilters(cadenceActivities, filters), [cadenceActivities, filters]);

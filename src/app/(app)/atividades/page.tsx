@@ -74,7 +74,7 @@ export default async function AtividadesPage() {
   const dialerProvider = providerResult.success ? providerResult.data.provider : null;
   const cadenceNames = cadenceNamesResult.success ? cadenceNamesResult.data : [];
   const members = managerFlag && membersResult.success
-    ? membersResult.data.map((m) => ({ userId: m.userId, name: m.name }))
+    ? membersResult.data.map((m) => ({ userId: m.userId, name: m.name, role: m.role }))
     : [];
 
   return (

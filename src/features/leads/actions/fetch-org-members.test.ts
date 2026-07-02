@@ -41,8 +41,9 @@ function makeOrgMemberChain(orgId: string | null) {
   return { select: selectMock };
 }
 
-function makeMembersListChain(members: Array<{ user_id: string }> | null) {
-  const eqStatusMock = vi.fn().mockResolvedValue({ data: members });
+function makeMembersListChain(members: Array<{ user_id: string; role?: 'manager' | 'sdr' }> | null) {
+  const withRole = members?.map((m) => ({ role: 'sdr' as const, ...m })) ?? members;
+  const eqStatusMock = vi.fn().mockResolvedValue({ data: withRole });
   const eqOrgMock = vi.fn().mockReturnValue({ eq: eqStatusMock });
   const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
   return { select: selectMock };
@@ -71,8 +72,8 @@ describe('fetchOrgMembersAuth', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data).toHaveLength(2);
-      expect(result.data[0]).toEqual({ userId: 'user-1', email: 'alice@company.com', name: 'Alice Silva' });
-      expect(result.data[1]).toEqual({ userId: 'user-2', email: 'bob@company.com', name: 'Bob Santos' });
+      expect(result.data[0]).toEqual({ userId: 'user-1', email: 'alice@company.com', name: 'Alice Silva', role: 'sdr' });
+      expect(result.data[1]).toEqual({ userId: 'user-2', email: 'bob@company.com', name: 'Bob Santos', role: 'sdr' });
     }
   });
 
