@@ -54,9 +54,10 @@ export interface RankingCardData {
   sdrBreakdown: SdrRankingEntry[];
   /**
    * Ideal por SDR acumulado até hoje: fatia da meta que cada SDR deveria ter
-   * atingido no ritmo de dias úteis (sem feriados) — meta org ÷ nº de SDRs
-   * ativos, paceada até o dia de hoje (BRT). É o mesmo para todos os SDRs do
-   * card (a meta é org-level). `undefined` quando não há meta ou nº de SDRs.
+   * atingido no ritmo de dias úteis (sem feriados) — meta org ÷ nº de SDRs com
+   * meta individual definida (fallback: SDRs ativos), paceada até o dia de hoje
+   * (BRT). É o mesmo para todos os SDRs do card (a meta é org-level).
+   * `undefined` quando não há meta ou nº de SDRs.
    */
   idealToDate?: number;
   /** Daily cumulative actual vs target — populated for cards that want a chart. */
