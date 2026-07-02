@@ -154,6 +154,8 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             iconTextColor="text-sky-500"
             data={ranking.leadsOpened}
             primaryColumnLabel="abertos"
+            idealColumnLabel="ideal dia"
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: meta do mês ÷ SDRs ativos, no ritmo de dias úteis (sem feriados)."
             averageLabel="média leads abertos/vendedor"
             onSdrClick={handleSdrClick}
           />
@@ -168,6 +170,8 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             iconTextColor="text-indigo-500"
             data={ranking.meetingsScheduled}
             primaryColumnLabel="marcadas"
+            idealColumnLabel="ideal dia"
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: meta do mês ÷ SDRs ativos, no ritmo de dias úteis (sem feriados)."
             averageLabel="média reuniões marcadas/vendedor"
             onSdrClick={handleSdrClick}
           />
@@ -182,6 +186,8 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             iconTextColor="text-emerald-500"
             data={ranking.meetingsHeld}
             primaryColumnLabel="realizadas"
+            idealColumnLabel="ideal dia"
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: meta do mês ÷ SDRs ativos, no ritmo de dias úteis (sem feriados)."
             averageLabel="média reuniões realizadas/vendedor"
             onSdrClick={handleSdrClick}
           />

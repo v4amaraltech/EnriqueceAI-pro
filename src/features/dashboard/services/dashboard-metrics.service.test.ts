@@ -101,12 +101,13 @@ describe('fetchOpportunityKpi', () => {
     // Day 3: 3 (one more)
     expect(result.dailyData[2]?.actual).toBe(3);
 
-    // Target paces on BUSINESS DAYS, not calendar days. Feb 2026 has 20
-    // weekdays; Feb 1 is a Sunday, Feb 2 a Monday, Feb 3 a Tuesday.
-    // target[day] = round(28 * businessDaysThrough(day) / 20)
-    expect(result.dailyData[0]?.target).toBe(0); // Sun → 0 business days → 0
-    expect(result.dailyData[1]?.target).toBe(1); // Mon → 1 business day → round(1.4) = 1
-    expect(result.dailyData[2]?.target).toBe(3); // Tue → 2 business days → round(2.8) = 3
+    // Target paces on WORKING DAYS (weekdays minus holidays), not calendar days.
+    // Feb 2026 has 18 working days (20 weekdays minus Carnaval 16–17). Feb 1 is a
+    // Sunday, Feb 2 a Monday, Feb 3 a Tuesday (none are holidays).
+    // target[day] = round(28 * businessDaysThrough(day) / 18)
+    expect(result.dailyData[0]?.target).toBe(0); // Sun → 0 working days → 0
+    expect(result.dailyData[1]?.target).toBe(2); // Mon → 1 working day → round(1.56) = 2
+    expect(result.dailyData[2]?.target).toBe(3); // Tue → 2 working days → round(3.11) = 3
   });
 
   it('should return zero data when no won leads exist under cadence filter', async () => {

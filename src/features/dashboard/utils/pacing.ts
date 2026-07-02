@@ -1,19 +1,22 @@
 /**
- * Goal pacing on BUSINESS DAYS (Mon–Fri, BRT calendar) instead of calendar days.
+ * Goal pacing on BUSINESS DAYS (Mon–Fri, BRT calendar, minus national holidays)
+ * instead of calendar days.
  *
- * SDRs don't open leads, book meetings or run activities on weekends, so a
- * linear calendar-day pace ("esperado até hoje") inflated the expectation every
- * Saturday/Sunday even though nobody was working — making the team look behind
- * the goal when they weren't. We pace on weekdays instead: the "expected" line
- * only rises on business days and stays flat across weekends.
+ * SDRs don't open leads, book meetings or run activities on weekends or holidays,
+ * so a linear calendar-day pace ("esperado até hoje") inflated the expectation
+ * every Saturday/Sunday/feriado even though nobody was working — making the team
+ * look behind the goal when they weren't. We pace on working days instead: the
+ * "expected" line only rises on business days and stays flat across weekends and
+ * Brazilian national holidays (see `holidays-br.ts`).
  *
  * Shared by every goal-paced card on the dashboard (Leads abertos, Reuniões
- * marcadas, Reuniões realizadas, and the ranking percentOfTarget) so sibling
- * cards never disagree on what "no ritmo" means.
+ * marcadas, Reuniões realizadas, the ranking percentOfTarget and the per-SDR
+ * "ideal até hoje") so sibling cards never disagree on what "no ritmo" means.
  *
  * BRT is fixed UTC-3 (no DST since 2019), so day-of-week is derived from the
  * UTC calendar date directly — no timezone library needed.
  */
+import { isHolidayBr } from './holidays-br';
 
 /**
  * Count of weekdays (Mon–Fri, BRT) in the inclusive range [start, end]. Use this
@@ -33,23 +36,26 @@ export function businessDaysBetween(start: Date | string | number, end: Date | s
   const lastDay = Math.floor(endMs / DAY_MS);
   let count = 0;
   for (let d = firstDay; d <= lastDay; d++) {
-    const dow = new Date(d * DAY_MS).getUTCDay();
-    if (dow !== 0 && dow !== 6) count++;
+    const dt = new Date(d * DAY_MS);
+    const dow = dt.getUTCDay();
+    if (dow !== 0 && dow !== 6 && !isHolidayBr(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())) {
+      count++;
+    }
   }
   return count || 1;
 }
 
-/** Count of weekdays (Mon–Fri) from day 1 through `throughDay` (inclusive). */
+/** Count of working days (Mon–Fri, minus holidays) from day 1 through `throughDay` (inclusive). */
 export function businessDaysThrough(year: number, month1: number, throughDay: number): number {
   let count = 0;
   for (let d = 1; d <= throughDay; d++) {
     const dow = new Date(Date.UTC(year, month1 - 1, d)).getUTCDay();
-    if (dow !== 0 && dow !== 6) count++;
+    if (dow !== 0 && dow !== 6 && !isHolidayBr(year, month1, d)) count++;
   }
   return count;
 }
 
-/** Total weekdays (Mon–Fri) in the whole month. */
+/** Total working days (Mon–Fri, minus holidays) in the whole month. */
 export function businessDaysInMonth(year: number, month1: number): number {
   const daysInMonth = new Date(year, month1, 0).getDate();
   return businessDaysThrough(year, month1, daysInMonth);
