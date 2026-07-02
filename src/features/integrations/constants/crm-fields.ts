@@ -8,6 +8,10 @@ export const PROVIDER_NAMES: Record<CrmProvider, string> = {
 };
 
 export const APP_LEAD_FIELDS = [
+  // ID único do lead no Enriquece AI (UUID, leads.id). Serve como chave de
+  // sincronização: mapeie para um campo do CRM (ex.: custom field no Kommo) e
+  // cada contato/negócio criado carrega a referência de volta ao lead.
+  { value: 'id', label: 'Lead_ID' },
   { value: 'cnpj', label: 'CNPJ' },
   { value: 'razao_social', label: 'Razao Social' },
   { value: 'nome_fantasia', label: 'Nome Fantasia' },
