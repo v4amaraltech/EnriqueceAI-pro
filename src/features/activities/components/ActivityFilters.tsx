@@ -24,7 +24,6 @@ export interface ActivityFilterValues {
 export interface SdrFilterOption {
   id: string;
   name: string;
-  overdueCount: number;
 }
 
 interface ActivityFiltersProps {
@@ -77,7 +76,7 @@ export function ActivityFilters({ filters, onFiltersChange, cadenceOptions, sdrO
             <SelectItem value="all">Todos SDRs</SelectItem>
             {sdrOptions.map((s) => (
               <SelectItem key={s.id} value={s.id}>
-                {s.name}{s.overdueCount > 0 ? ` (${s.overdueCount} atrasadas)` : ''}
+                {s.name}
               </SelectItem>
             ))}
           </SelectContent>
