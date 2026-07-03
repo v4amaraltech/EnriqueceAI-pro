@@ -14,6 +14,7 @@ export default async function CallsPage({ searchParams }: CallsPageProps) {
   // Build filters from URL search params
   const filters: Record<string, unknown> = {};
   if (params.status) filters.status = params.status;
+  if (params.provider) filters.provider = params.provider;
   if (params.period) filters.period = params.period;
   if (params.user_id) filters.user_id = params.user_id;
   if (params.search) filters.search = params.search;

@@ -39,6 +39,14 @@ export async function getCalls(
     query = query.eq('status', filters.status);
   }
 
+  // Provider/origin filter: WhatsApp calls carry metadata.provider='whatsapp';
+  // everything else (API4COM) has no provider marker.
+  if (filters.provider === 'whatsapp') {
+    query = query.eq('metadata->>provider', 'whatsapp');
+  } else if (filters.provider === 'api4com') {
+    query = query.or('metadata->>provider.is.null,metadata->>provider.neq.whatsapp');
+  }
+
   // User filter
   if (filters.user_id) {
     query = query.eq('user_id', filters.user_id);

@@ -101,6 +101,36 @@ describe('getCalls', () => {
     expect(eqCalls).toContainEqual(['status', 'significant']);
   });
 
+  it('should apply provider filter for whatsapp', async () => {
+    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
+    const callsChain = createChainMock({ data: [], count: 0, error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return memberChain;
+      return callsChain;
+    });
+
+    await getCalls({ provider: 'whatsapp' });
+
+    expect(callsChain.eq!.mock.calls).toContainEqual(['metadata->>provider', 'whatsapp']);
+  });
+
+  it('should apply provider filter for api4com (not whatsapp)', async () => {
+    const memberChain = createChainMock({ data: { org_id: 'org-1' } });
+    const callsChain = createChainMock({ data: [], count: 0, error: null });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return memberChain;
+      return callsChain;
+    });
+
+    await getCalls({ provider: 'api4com' });
+
+    expect(callsChain.or).toHaveBeenCalledWith(
+      expect.stringContaining('metadata->>provider.neq.whatsapp'),
+    );
+  });
+
   it('should apply period filter for today', async () => {
     const memberChain = createChainMock({ data: { org_id: 'org-1' } });
     const callsChain = createChainMock({ data: [], count: 0, error: null });

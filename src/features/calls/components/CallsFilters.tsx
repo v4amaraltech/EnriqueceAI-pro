@@ -25,6 +25,11 @@ const statusLabels: Record<string, string> = {
   not_connected: 'Não Conectada',
 };
 
+const providerOptions = [
+  { value: 'api4com', label: 'API4COM' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+];
+
 const periodOptions = [
   { value: 'today', label: 'Hoje' },
   { value: 'week', label: 'Esta Semana' },
@@ -40,6 +45,7 @@ export function CallsFilters() {
 
   const currentSearch = searchParams.get('search') ?? '';
   const currentStatus = searchParams.get('status') ?? '';
+  const currentProvider = searchParams.get('provider') ?? '';
   const currentPeriod = searchParams.get('period') ?? '';
   const currentUserId = searchParams.get('user_id') ?? '';
   const currentImportant = searchParams.get('important_only') === 'true';
@@ -65,6 +71,7 @@ export function CallsFilters() {
   }
 
   const activeStatus = overrides.status ?? (currentStatus || ALL_VALUE);
+  const activeProvider = overrides.provider ?? (currentProvider || ALL_VALUE);
   const activePeriod = overrides.period ?? (currentPeriod || ALL_VALUE);
   const activeUserId = overrides.user_id ?? (currentUserId || ALL_VALUE);
 
@@ -73,7 +80,7 @@ export function CallsFilters() {
     updateParam(key, value);
   }
 
-  const hasFilters = currentStatus || currentPeriod || currentSearch || currentImportant || currentUserId;
+  const hasFilters = currentStatus || currentProvider || currentPeriod || currentSearch || currentImportant || currentUserId;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -135,6 +142,24 @@ export function CallsFilters() {
             {callStatusValues.map((s) => (
               <SelectItem key={s} value={s}>
                 {statusLabels[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Provider / origem */}
+        <Select
+          value={activeProvider}
+          onValueChange={(v) => handleFilterChange('provider', v)}
+        >
+          <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectValue placeholder="Origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>Todas origens</SelectItem>
+            {providerOptions.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
               </SelectItem>
             ))}
           </SelectContent>
