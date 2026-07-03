@@ -52,7 +52,7 @@ export function CallsListView({ initialFilters }: CallsListViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const hasFilters = !!(initialFilters.status || initialFilters.period || initialFilters.search || initialFilters.important_only === 'true' || initialFilters.user_id);
+  const hasFilters = !!(initialFilters.status || initialFilters.provider || initialFilters.period || initialFilters.search || initialFilters.important_only === 'true' || initialFilters.user_id);
   const filtersKey = JSON.stringify(initialFilters);
 
   // Fetch calls asynchronously on mount and when filters change

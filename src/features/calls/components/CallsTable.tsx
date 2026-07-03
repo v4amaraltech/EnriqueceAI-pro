@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { Eye } from 'lucide-react';
 
+import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import {
   Table,
@@ -15,8 +16,28 @@ import {
 
 import { formatDateTime, formatDuration } from '@/lib/utils/format';
 
+import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
+
 import type { CallRow } from '../types';
 import { CallStatusIcon } from './CallStatusIcon';
+
+/** Ligações via WhatsApp gravam `origin: 'whatsapp'` + `metadata.provider`;
+ *  mostramos um selo verde em vez do texto cru. Ver whatsapp-calls/persist-call. */
+function isWhatsAppCall(call: CallRow): boolean {
+  return call.origin === 'whatsapp' || call.metadata?.provider === 'whatsapp';
+}
+
+function OriginCell({ call }: { call: CallRow }) {
+  if (isWhatsAppCall(call)) {
+    return (
+      <Badge className="gap-1 border-transparent bg-[#25D366] text-white hover:bg-[#25D366]">
+        <WhatsAppGlyph className="size-3" />
+        WhatsApp
+      </Badge>
+    );
+  }
+  return <span>{call.origin}</span>;
+}
 
 interface CallsTableProps {
   calls: CallRow[];
@@ -54,7 +75,9 @@ export function CallsTable({ calls, onView }: CallsTableProps) {
               <TableCell>
                 <CallStatusIcon status={call.status} />
               </TableCell>
-              <TableCell className="font-medium">{call.origin}</TableCell>
+              <TableCell className="font-medium">
+                <OriginCell call={call} />
+              </TableCell>
               <TableCell>{call.destination}</TableCell>
               <TableCell>{formatDateTime(call.started_at)}</TableCell>
               <TableCell className="tabular-nums">

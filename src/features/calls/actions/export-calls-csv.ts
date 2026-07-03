@@ -44,6 +44,11 @@ export async function exportCallsCsv(
   if (filters.status) {
     query = query.eq('status', filters.status);
   }
+  if (filters.provider === 'whatsapp') {
+    query = query.eq('metadata->>provider', 'whatsapp');
+  } else if (filters.provider === 'api4com') {
+    query = query.or('metadata->>provider.is.null,metadata->>provider.neq.whatsapp');
+  }
   if (filters.user_id) {
     query = query.eq('user_id', filters.user_id);
   }
@@ -92,7 +97,7 @@ export async function exportCallsCsv(
   const rows = calls.map((c) => [
     escapeCsvField(statusLabels[c.status] ?? c.status),
     escapeCsvField(typeLabels[c.type] ?? c.type),
-    escapeCsvField(c.origin),
+    escapeCsvField(c.origin === 'whatsapp' || c.metadata?.provider === 'whatsapp' ? 'WhatsApp' : c.origin),
     escapeCsvField(c.destination),
     new Date(c.started_at).toLocaleString('pt-BR'),
     formatDuration(c.duration_seconds),

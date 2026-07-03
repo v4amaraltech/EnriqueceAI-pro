@@ -103,4 +103,23 @@ describe('CallsTable', () => {
     const svgs = container.querySelectorAll('svg');
     expect(svgs.length).toBeGreaterThan(0);
   });
+
+  it('should render a WhatsApp badge instead of raw origin for WhatsApp calls', () => {
+    const calls = [
+      createMockCall({ origin: 'whatsapp', metadata: { provider: 'whatsapp' } }),
+    ];
+    renderWithProvider(<CallsTable calls={calls} onView={vi.fn()} />);
+
+    // Shows the friendly label, never the raw "whatsapp" origin string.
+    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.queryByText('whatsapp')).not.toBeInTheDocument();
+  });
+
+  it('should render raw origin (ramal/phone) for API4COM calls', () => {
+    const calls = [createMockCall({ origin: '1028', metadata: null })];
+    renderWithProvider(<CallsTable calls={calls} onView={vi.fn()} />);
+
+    expect(screen.getByText('1028')).toBeInTheDocument();
+    expect(screen.queryByText('WhatsApp')).not.toBeInTheDocument();
+  });
 });

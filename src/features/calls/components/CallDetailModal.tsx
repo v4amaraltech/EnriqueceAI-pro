@@ -24,6 +24,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { formatDateTime, formatDuration } from '@/lib/utils/format';
 
+import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
+
 import type { CallDetail, CallFeedbackRow, CallStatus } from '../types';
 import { callStatusValues } from '../schemas/call.schemas';
 import { addCallFeedback } from '../actions/add-call-feedback';
@@ -270,7 +272,14 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
               <div className="grid grid-cols-2 gap-3 rounded-lg bg-[var(--muted)]/40 p-3">
                 <div>
                   <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
-                  <p className="text-sm font-semibold">{activeCall.origin}</p>
+                  {activeCall.origin === 'whatsapp' || activeCall.metadata?.provider === 'whatsapp' ? (
+                    <Badge className="mt-0.5 gap-1 border-transparent bg-[#25D366] text-white hover:bg-[#25D366]">
+                      <WhatsAppGlyph className="size-3" />
+                      WhatsApp
+                    </Badge>
+                  ) : (
+                    <p className="text-sm font-semibold">{activeCall.origin}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted-foreground)]">Destino</p>

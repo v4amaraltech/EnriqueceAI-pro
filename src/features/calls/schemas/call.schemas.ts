@@ -8,6 +8,11 @@ export const TRANSCRIPTION_MIN_DURATION_SECONDS = 90;
 export const callStatusValues = ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'] as const;
 export const callTypeValues = ['inbound', 'outbound', 'manual'] as const;
 
+/** Origem/discador da ligação. Ligações via WhatsApp gravam
+ *  `metadata.provider = 'whatsapp'`; as demais (API4COM) não têm provider. */
+export const callProviderValues = ['api4com', 'whatsapp'] as const;
+export type CallProvider = (typeof callProviderValues)[number];
+
 export const callStatusSchema = z.enum(callStatusValues);
 export const callTypeSchema = z.enum(callTypeValues);
 
@@ -31,6 +36,7 @@ export const updateCallStatusSchema = z.object({
 export const callFiltersSchema = z.object({
   search: z.string().max(100).optional(),
   status: callStatusSchema.optional(),
+  provider: z.enum(callProviderValues).optional(),
   user_id: z.string().uuid().optional(),
   period: z.enum(['today', 'week', 'month', 'all']).default('all'),
   favorites_only: z.coerce.boolean().default(false),
