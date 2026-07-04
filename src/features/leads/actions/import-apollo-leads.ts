@@ -293,7 +293,10 @@ function mapApolloToLead(
     org_id: orgId,
     cnpj: null,
     status: 'new',
+    // Apollo leads arrive already enriched — mark status + timestamp so the n8n/
+    // APIFY automation skips them (it must NOT re-enrich what came pre-enriched).
     enrichment_status: 'enriched',
+    enriched_at: new Date().toISOString(),
     first_name: person.first_name ?? null,
     last_name: person.last_name ?? null,
     razao_social: org?.name ?? searchOrgName ?? null,
