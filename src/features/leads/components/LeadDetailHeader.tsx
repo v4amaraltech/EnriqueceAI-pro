@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Calendar,
   CalendarX,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   Loader2,
@@ -110,6 +111,13 @@ export function LeadDetailHeader({
   const isWon = lead.status === 'won';
   const isLost = lead.status === 'unqualified';
   const isClosed = isWon || isLost;
+
+  // Mirror the n8n "Filtro Outbound" gate: the automation only enriches leads
+  // that are still 'new' and have no enriched_at. Re-running on an already
+  // enriched (or already worked) lead is a silent no-op, so disable the action
+  // instead of letting the SDR wait ~3min on a poll that never resolves.
+  const isEnriched = lead.enrichment_status === 'enriched' || lead.enriched_at != null;
+  const canEnrich = !isEnriched && lead.status === 'new';
 
   const handleReopen = useCallback(() => {
     // Reopen: determine the right status to return to
@@ -258,13 +266,15 @@ export function LeadDetailHeader({
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEnrich} disabled={isEnriching}>
+            <DropdownMenuItem onClick={onEnrich} disabled={isEnriching || !canEnrich}>
               {isEnriching ? (
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              ) : isEnriched ? (
+                <CheckCircle2 className="mr-2 h-3.5 w-3.5 text-green-600" />
               ) : (
                 <Sparkles className="mr-2 h-3.5 w-3.5" />
               )}
-              {isEnriching ? 'Enriquecendo...' : 'Enriquecer'}
+              {isEnriching ? 'Enriquecendo...' : isEnriched ? 'Já enriquecido' : 'Enriquecer'}
             </DropdownMenuItem>
             {isWon && (
               <>
