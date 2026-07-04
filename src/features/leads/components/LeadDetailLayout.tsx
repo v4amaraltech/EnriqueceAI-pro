@@ -38,7 +38,7 @@ import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { updateLead } from '../actions/update-lead';
 import type { MissingRequiredField } from '../utils/required-field-validation';
 import { getMissingRequiredFields } from '../utils/required-field-validation';
-import { enrichLeadWithApollo } from '../actions/enrich-lead-apollo';
+import { triggerLeadEnrichment, getLeadEnrichmentStatus } from '../actions/trigger-lead-enrichment';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
 import { fetchCrmPipelines, fetchKommoUsers, fetchPipelineStages, markLeadAsWon, type CrmPipelinesEntry } from '../actions/lead-crm';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
@@ -86,6 +86,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [canWhatsAppCall, setCanWhatsAppCall] = useState(false);
   const [showWhatsAppCall, setShowWhatsAppCall] = useState(false);
   // Synchronous guard: setIsCalling only flips on next render, so a fast
@@ -271,29 +272,50 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     }
   }, [lead.id, lead.telefone, lead.phones]);
 
-  const handleEnrichApollo = useCallback(() => {
-    startTransition(async () => {
-      const result = await enrichLeadWithApollo(lead.id);
-      if (result.success) {
-        toast.success('Lead enriquecido com Apollo');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }, [lead.id, router]);
+  // Enrichment via the n8n automation (Receita + Maps + Meta/Google Ads + Apollo
+  // + phone). It's async (~40-120s): dispatch, then poll enrichment_status until
+  // it flips to 'enriched'. Not a useTransition — the poll outlives a transition.
+  const handleEnrich = useCallback(() => {
+    // Anchor pre-check mirrors the backend so the SDR gets instant feedback.
+    if (!lead.cnpj && !lead.website) {
+      toast.warning('Cadastre o CNPJ ou o site do lead para enriquecer.');
+      return;
+    }
+    if (isEnriching) return;
+    setIsEnriching(true);
+    (async () => {
+      try {
+        const dispatch = await triggerLeadEnrichment(lead.id);
+        if (!dispatch.success) {
+          toast.error(dispatch.error);
+          return;
+        }
+        toast('Enriquecimento iniciado — leva de 1 a 2 minutos.', { icon: '✨', duration: 5000 });
 
-  const handleReenrichApollo = useCallback(() => {
-    startTransition(async () => {
-      const result = await enrichLeadWithApollo(lead.id, true);
-      if (result.success) {
-        toast.success('Lead re-enriquecido com Apollo');
+        // Poll until enriched (40 × 4s ≈ 2.7min ceiling).
+        let enriched = false;
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          const statusResult = await getLeadEnrichmentStatus(lead.id);
+          if (statusResult.success && statusResult.data.status === 'enriched') {
+            enriched = true;
+            break;
+          }
+        }
+
         router.refresh();
-      } else {
-        toast.error(result.error);
+        if (enriched) {
+          toast.success('Lead enriquecido!');
+        } else {
+          toast.info('Enriquecimento em processamento — atualize a página em instantes.');
+        }
+      } catch {
+        toast.error('Falha ao enriquecer o lead.');
+      } finally {
+        setIsEnriching(false);
       }
-    });
-  }, [lead.id, router]);
+    })();
+  }, [lead.id, lead.cnpj, lead.website, isEnriching, router]);
 
   const handleOpenLostDialog = useCallback(() => {
     setShowLostDialog(true);
@@ -450,12 +472,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         onShowMeeting={() => setShowMeeting(true)}
         onShowLost={handleOpenLostDialog}
         onShowWon={handleOpenWonDialog}
-        onEnrichApollo={handleEnrichApollo}
-        onReenrichApollo={handleReenrichApollo}
+        onEnrich={handleEnrich}
         onCall={handleCall}
         onWhatsAppCall={() => setShowWhatsAppCall(true)}
         canWhatsAppCall={canWhatsAppCall}
-        isEnriching={isPending}
+        isEnriching={isEnriching}
         isCalling={isCalling}
       />
 

@@ -7,12 +7,13 @@ import {
   CalendarX,
   ChevronDown,
   ChevronLeft,
-  Globe,
+  Loader2,
   Mail,
   MoreHorizontal,
   Phone,
   RefreshCw,
   RotateCw,
+  Sparkles,
   ThumbsDown,
   ThumbsUp,
   Zap,
@@ -42,8 +43,7 @@ interface LeadDetailHeaderProps {
   onShowMeeting: () => void;
   onShowLost: () => void;
   onShowWon: () => void;
-  onEnrichApollo: () => void;
-  onReenrichApollo: () => void;
+  onEnrich: () => void;
   onCall?: () => void;
   onWhatsAppCall?: () => void;
   canWhatsAppCall?: boolean;
@@ -58,8 +58,7 @@ export function LeadDetailHeader({
   onShowMeeting,
   onShowLost,
   onShowWon,
-  onEnrichApollo,
-  onReenrichApollo,
+  onEnrich,
   onCall,
   onWhatsAppCall,
   canWhatsAppCall,
@@ -259,17 +258,14 @@ export function LeadDetailHeader({
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            {lead.source_id ? (
-              <DropdownMenuItem onClick={onReenrichApollo} disabled={isEnriching}>
-                <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-                {isEnriching ? 'Enriquecendo...' : 'Re-enriquecer (Apollo)'}
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={onEnrichApollo} disabled={isEnriching}>
-                <Globe className={`mr-2 h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-                {isEnriching ? 'Enriquecendo...' : 'Enriquecer com Apollo'}
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem onClick={onEnrich} disabled={isEnriching}>
+              {isEnriching ? (
+                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-3.5 w-3.5" />
+              )}
+              {isEnriching ? 'Enriquecendo...' : 'Enriquecer'}
+            </DropdownMenuItem>
             {isWon && (
               <>
                 <DropdownMenuSeparator />
