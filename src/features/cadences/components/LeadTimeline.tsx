@@ -282,6 +282,8 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   prospection_scheduled: 'Prospecção agendada',
                   prospection_reactivated: 'Prospecção reativada',
                   status_changed: 'Status alterado',
+                  enriched: 'Lead enriquecido',
+                  auto_enriched: 'Lead Enriquecido pela Automação',
                   lead_assigned: 'Lead atribuído',
                   lead_archived: 'Lead arquivado',
                   meeting_invite_sent: 'Convite de reunião enviado',
