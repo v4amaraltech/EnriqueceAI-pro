@@ -15,6 +15,10 @@ interface EvolutionState {
 }
 
 const POLL_INTERVAL_MS = 5000;
+/** Client-side backstop for the create-instance call. The edge fetches are now
+ *  individually timed out, but this guards against the whole invoke hanging so
+ *  the spinner can never stay up forever — it flips to a friendly error state. */
+const CONNECT_TIMEOUT_MS = 90_000;
 
 /**
  * Turn whatever the edge function / Evolution API returned into a short,
@@ -123,7 +127,29 @@ export function useEvolutionWhatsApp() {
 
     const supabase = createClient();
 
-    const { data, error } = await supabase.functions.invoke<EvolutionCreateResponse>('evolution-create-instance');
+    // Backstop timeout: never let the create call hang the spinner forever.
+    let data: EvolutionCreateResponse | null = null;
+    let error:
+      | { message: string; context?: { json?: () => Promise<{ error?: string; message?: string }> } }
+      | null = null;
+    try {
+      const result = await Promise.race([
+        supabase.functions.invoke<EvolutionCreateResponse>('evolution-create-instance'),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), CONNECT_TIMEOUT_MS),
+        ),
+      ]);
+      data = result.data;
+      error = result.error;
+    } catch {
+      if (!mountedRef.current) return;
+      setState((prev) => ({
+        ...prev,
+        step: 'error',
+        error: friendlyEvolutionError('timeout'),
+      }));
+      return;
+    }
 
     if (!mountedRef.current) return;
 
