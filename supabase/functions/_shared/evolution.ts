@@ -19,11 +19,24 @@ function headers(): Record<string, string> {
  *  single call while keeping a stuck server from blocking the user. */
 const EVOLUTION_TIMEOUT_MS = 8000;
 
+/** Logout/delete need more headroom on the shared server — aborting at 8s was
+ *  leaving zombie instances that the Evolution manager (and our purge) could
+ *  not remove without a manual DB wipe. */
+const EVOLUTION_LIFECYCLE_TIMEOUT_MS = 30_000;
+
+/** Fingerprint for instances created by this app (ea_<org>[_<user>][_<suffix>]). */
+export const APP_INSTANCE_NAME_RE =
+  /^ea_[0-9a-f]{8}(?:_[0-9a-f]{8})?(?:_[0-9a-z]{1,8})?$/;
+
 /** fetch() wrapped with an abort timeout so no single Evolution call can hang.
  *  On timeout, AbortSignal.timeout throws → the caller's try/catch turns it into
  *  a normal { ok: false } result (or [] / false for the tolerant helpers). */
-function evoFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(url, { ...init, signal: AbortSignal.timeout(EVOLUTION_TIMEOUT_MS) });
+function evoFetch(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = EVOLUTION_TIMEOUT_MS,
+): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
 }
 
 /** Generate an instance name from an org ID and optional user ID.
@@ -201,10 +214,11 @@ export async function deleteInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
-      method: 'DELETE',
-      headers: headers(),
-    });
+    const res = await evoFetch(
+      `${EVOLUTION_API_URL}/instance/delete/${instanceName}`,
+      { method: 'DELETE', headers: headers() },
+      EVOLUTION_LIFECYCLE_TIMEOUT_MS,
+    );
 
     if (!res.ok) {
       const body = await res.text();
@@ -223,10 +237,11 @@ export async function logoutInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
-      method: 'DELETE',
-      headers: headers(),
-    });
+    const res = await evoFetch(
+      `${EVOLUTION_API_URL}/instance/logout/${instanceName}`,
+      { method: 'DELETE', headers: headers() },
+      EVOLUTION_LIFECYCLE_TIMEOUT_MS,
+    );
 
     if (!res.ok) {
       const body = await res.text();
@@ -245,7 +260,7 @@ export async function logoutInstance(
  *  instance keeps lingering (and CONNECTED) in the manager, so a single delete
  *  call is not trustworthy. Retries up to `attempts` times with a short pause.
  *  Returns true only when absence is confirmed. */
-export async function purgeInstance(instanceName: string, attempts = 2): Promise<boolean> {
+export async function purgeInstance(instanceName: string, attempts = 3): Promise<boolean> {
   const stillPresent = async (): Promise<boolean> => {
     const check = await fetchInstance(instanceName);
     if (!check.ok) return false; // can't fetch → assume our delete took effect
@@ -254,10 +269,12 @@ export async function purgeInstance(instanceName: string, attempts = 2): Promise
   };
 
   for (let i = 0; i < attempts; i++) {
+    // Always run both steps even if logout fails — Evolution's delete handler
+    // used to abort when logout threw, leaving zombies in waInstances memory.
     await logoutInstance(instanceName);
     await deleteInstance(instanceName);
     if (!(await stillPresent())) return true;
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 1500));
   }
   return !(await stillPresent());
 }

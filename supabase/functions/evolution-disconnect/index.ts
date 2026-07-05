@@ -2,18 +2,18 @@
  * Edge Function: evolution-disconnect
  *
  * Desconecta a instância WhatsApp da organização:
- * 1. Faz logout na Evolution API
+ * 1. Remove a instância na Evolution API (logout + delete, com retries)
  * 2. Deleta o registro do banco
  *
  * Requer autenticação (qualquer membro da organização).
  *
  * POST /evolution-disconnect
- * Response: { success: true }
+ * Response: { success: true, evolution_purged?: boolean }
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
-import { logoutInstance } from "../_shared/evolution.ts";
+import { purgeInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 
 serve(async (req) => {
@@ -37,20 +37,24 @@ serve(async (req) => {
       return jsonResponse({ success: true, message: "No instance to disconnect" });
     }
 
-    // Logout from Evolution API (best-effort)
-    console.log("[disconnect] Logging out instance:", instance.instance_name);
+    const instanceName = instance.instance_name as string;
+    console.log("[disconnect] Purging Evolution instance:", instanceName);
+
+    let evolutionPurged = false;
     try {
-      await logoutInstance(instance.instance_name);
-      console.log("[disconnect] Logout OK");
+      evolutionPurged = await purgeInstance(instanceName, 3);
+      console.log("[disconnect] Evolution purge:", evolutionPurged ? "confirmed gone" : "still present");
     } catch (err) {
-      console.warn("[disconnect] Logout failed (continuing with DB delete):", err);
+      console.warn("[disconnect] Evolution purge failed (continuing with DB delete):", err);
     }
 
-    // Delete from DB
     await deleteWhatsAppInstance(instance.id);
     console.log("[disconnect] DB record deleted");
 
-    return jsonResponse({ success: true });
+    return jsonResponse({
+      success: true,
+      evolution_purged: evolutionPurged,
+    });
   } catch (error) {
     console.error("[disconnect] Exception:", error);
     const message = error instanceof Error ? error.message : "Unknown error";

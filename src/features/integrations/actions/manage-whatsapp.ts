@@ -90,7 +90,7 @@ export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disc
   if (!auth.success) return auth;
   const { supabase } = auth.data;
 
-  // Call edge function that handles Evolution API logout + DB delete
+  // Call edge function that purges Evolution instance + deletes DB row
   const { error } = await supabase.functions.invoke('evolution-disconnect', {
     method: 'POST',
   });

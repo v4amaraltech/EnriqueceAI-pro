@@ -11,7 +11,12 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { deleteInstance, logoutInstance, fetchInstance, listInstanceNames, purgeInstance } from '../_shared/evolution.ts';
+import {
+  APP_INSTANCE_NAME_RE,
+  fetchInstance,
+  listInstanceNames,
+  purgeInstance,
+} from '../_shared/evolution.ts';
 import { getStaleInstances, deleteWhatsAppInstance, getAllTrackedInstanceNames } from '../_shared/supabase.ts';
 
 const STALE_THRESHOLD_MINUTES = 10;
@@ -64,16 +69,11 @@ serve(async (req) => {
             continue;
           }
 
-          // Tentar logout primeiro (desconectar sessão WhatsApp)
-          await logoutInstance(instanceName);
-          // Depois deletar a instância da Evolution
-          const deleteResult = await deleteInstance(instanceName);
-          evolutionDeleted = deleteResult.ok;
+          evolutionDeleted = await purgeInstance(instanceName, 3);
 
-          if (!deleteResult.ok) {
-            error = deleteResult.error;
-            console.warn(`Failed to delete ${instanceName} from Evolution: ${deleteResult.error}`);
-            // Do NOT delete from DB if Evolution delete failed — prevents orphaned instances
+          if (!evolutionDeleted) {
+            error = 'Evolution purge did not confirm removal';
+            console.warn(`Failed to purge ${instanceName} from Evolution`);
             results.push({ instance_name: instanceName, status: instanceStatus, evolution_deleted: false, db_deleted: false, error });
             continue;
           }
@@ -105,37 +105,37 @@ serve(async (req) => {
     // -----------------------------------------------------------------------
     // Evolution-side orphan reaper
     // -----------------------------------------------------------------------
-    // The per-user sweep in evolution-create-instance is best-effort; on the
-    // shared Evolution server, suffixed fallback instances
-    // (ea_<org>_<user>_xxxx) from past reconnects can linger CONNECTED in the
-    // manager while our DB only tracks the current one. Those orphans are
-    // invisible to the DB-based cleanup above (they were never persisted).
-    // Here we enumerate Evolution directly and reap any instance that:
-    //   1. matches our app naming fingerprint (so we never touch another
-    //      client's instance on the shared server), AND
-    //   2. is NOT the tracked keeper for its user, AND
-    //   3. DOES have a tracked sibling for the same user/org identity — so a
-    //      mid-connect instance (no DB row yet during the create swap window)
-    //      is left alone, and only true duplicates get removed.
-    const APP_NAME_RE = /^ea_[0-9a-f]{8}(?:_[0-9a-f]{8})?(?:_[0-9a-z]{1,8})?$/;
-    const canonicalBase = (name: string): string => {
-      const userMatch = name.match(/^(ea_[0-9a-f]{8}_[0-9a-f]{8})(?:_[0-9a-z]{1,8})?$/);
-      if (userMatch && userMatch[1]) return userMatch[1];
-      const orgMatch = name.match(/^(ea_[0-9a-f]{8})(?:_[0-9a-z]{1,8})?$/);
-      if (orgMatch && orgMatch[1]) return orgMatch[1];
-      return name;
-    };
+    // Enumerate Evolution directly and purge any ea_* instance that is NOT the
+    // tracked keeper in our DB. Skips:
+    //   - instances connected (open) in Evolution — still in use
+    //   - canonical names mid-connect (create-instance drops the DB row while
+    //     pairing a fresh QR; suffixed duplicates are always safe to reap)
+    const SUFFIXED_INSTANCE_RE = /^ea_[0-9a-f]{8}_[0-9a-f]{8}_[0-9a-z]{1,8}$/;
 
     const evoNames = await listInstanceNames();
     const trackedNames = new Set(await getAllTrackedInstanceNames());
-    const trackedBases = new Set([...trackedNames].map(canonicalBase));
 
-    const reaped: Array<{ instance_name: string; gone: boolean }> = [];
+    const reaped: Array<{ instance_name: string; gone: boolean; skipped?: string }> = [];
     for (const name of evoNames) {
-      if (!APP_NAME_RE.test(name)) continue; // not created by our app
-      if (trackedNames.has(name)) continue; // the current keeper for some user
-      if (!trackedBases.has(canonicalBase(name))) continue; // no current sibling → skip (mid-connect / unmanaged)
-      const gone = await purgeInstance(name);
+      if (!APP_INSTANCE_NAME_RE.test(name)) continue;
+      if (trackedNames.has(name)) continue;
+
+      const fetchResult = await fetchInstance(name);
+      if (fetchResult.ok) {
+        const connStatus = (fetchResult.data as { connectionStatus?: string }).connectionStatus;
+        if (connStatus === 'open') {
+          console.log(`[reaper] Skipping ${name} — connected in Evolution`);
+          reaped.push({ instance_name: name, gone: false, skipped: 'connected in Evolution' });
+          continue;
+        }
+        if (connStatus === 'connecting' && !SUFFIXED_INSTANCE_RE.test(name)) {
+          console.log(`[reaper] Skipping ${name} — mid-connect canonical`);
+          reaped.push({ instance_name: name, gone: false, skipped: 'mid-connect canonical' });
+          continue;
+        }
+      }
+
+      const gone = await purgeInstance(name, 3);
       console.log(`[reaper] Orphan ${name} → ${gone ? 'removed' : 'still present'}`);
       reaped.push({ instance_name: name, gone });
     }
