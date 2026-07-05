@@ -13,6 +13,19 @@ function headers(): Record<string, string> {
   };
 }
 
+/** Per-request timeout for Evolution API calls. The shared Evolution server is
+ *  frequently overloaded and can hang indefinitely; without a bound, the whole
+ *  connect chain (and the client's spinner) hangs forever. 8s is generous for a
+ *  single call while keeping a stuck server from blocking the user. */
+const EVOLUTION_TIMEOUT_MS = 8000;
+
+/** fetch() wrapped with an abort timeout so no single Evolution call can hang.
+ *  On timeout, AbortSignal.timeout throws → the caller's try/catch turns it into
+ *  a normal { ok: false } result (or [] / false for the tolerant helpers). */
+function evoFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(EVOLUTION_TIMEOUT_MS) });
+}
+
 /** Generate an instance name from an org ID and optional user ID.
  *  When retry=true, appends a short timestamp suffix to avoid "already in use" conflicts.
  */
@@ -37,7 +50,7 @@ export async function createInstance(
   webhookSecret: string,
 ): Promise<ApiResult<{ instance: Record<string, unknown>; qrcode?: { base64?: string } }>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/create`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({
@@ -76,7 +89,7 @@ export async function connectInstance(
   instanceName: string,
 ): Promise<ApiResult<{ base64?: string; code?: string }>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
       method: 'GET',
       headers: headers(),
     });
@@ -98,7 +111,7 @@ export async function getConnectionState(
   instanceName: string,
 ): Promise<ApiResult<{ instance: { state: string; [key: string]: unknown } }>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
       method: 'GET',
       headers: headers(),
     });
@@ -120,7 +133,7 @@ export async function fetchInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${instanceName}`, {
       method: 'GET',
       headers: headers(),
     });
@@ -143,7 +156,7 @@ export async function fetchInstance(
  *  Returns an empty array on any failure so callers can degrade gracefully. */
 export async function listInstanceNames(): Promise<string[]> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
       method: 'GET',
       headers: headers(),
     });
@@ -166,7 +179,7 @@ export async function restartInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/restart/${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/restart/${instanceName}`, {
       method: 'PUT',
       headers: headers(),
     });
@@ -188,7 +201,7 @@ export async function deleteInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
       method: 'DELETE',
       headers: headers(),
     });
@@ -210,7 +223,7 @@ export async function logoutInstance(
   instanceName: string,
 ): Promise<ApiResult<Record<string, unknown>>> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
       method: 'DELETE',
       headers: headers(),
     });
@@ -252,7 +265,7 @@ export async function purgeInstance(instanceName: string, attempts = 2): Promise
 /** Check if Evolution API is healthy */
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+    const res = await evoFetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
       method: 'GET',
       headers: headers(),
     });

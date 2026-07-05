@@ -11,7 +11,7 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getAuthContext } from "../_shared/auth.ts";
 import { generateInstanceName, createInstance, connectInstance, getConnectionState, normalizeConnectionState, extractPhoneFromPayload, fetchInstance, logoutInstance, deleteInstance, listInstanceNames, purgeInstance, restartInstance } from "../_shared/evolution.ts";
-import { getWhatsAppInstance, createWhatsAppInstance, updateWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
+import { getWhatsAppInstance, createWhatsAppInstance, deleteWhatsAppInstance } from "../_shared/supabase.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
 serve(async (req)=>{
@@ -118,23 +118,44 @@ serve(async (req)=>{
     //     hard-block the SDR — create under a suffixed name this once; the reaper
     //     removes it later once the server recovers. Should now be rare.
     if (!qrBase64) {
-      const fallbackName = generateInstanceName(organizationId, userId, true);
-      console.warn("[create-instance] Canonical unusable (reserved-zombie) — last-resort suffixed name:", fallbackName);
-      const fb = await createInstance(fallbackName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
-      if (!fb.ok) {
-        return errorResponse(`Failed to create Evolution instance: ${fb.error}`, 500);
+      // Before minting yet ANOTHER suffixed instance, try to REUSE a suffixed
+      // orphan that survived the sweep. The shared server won't delete zombies,
+      // so reusing one (for a fresh QR) instead of creating a new one is what
+      // stops the manager from filling with duplicates for the same number.
+      // Cap the probe so a user with many survivors doesn't blow the latency.
+      const survivors = (await listInstanceNames())
+        .filter((n) => n.startsWith(`${instanceName}_`))
+        .slice(0, 3);
+      let fallbackName: string | null = null;
+      let fbQr: string | null = null;
+      for (const name of survivors) {
+        const c = await connectInstance(name);
+        if (c.ok && c.data.base64) {
+          fallbackName = name;
+          fbQr = c.data.base64;
+          console.warn("[create-instance] Reusing surviving suffixed orphan instead of minting a new one:", name);
+          break;
+        }
       }
-      const savedFb = await createWhatsAppInstance(organizationId, fallbackName, fb.data.qrcode?.base64 || undefined, userId);
+
+      // No reusable survivor → mint a fresh suffixed name (previous behavior).
+      if (!fallbackName) {
+        fallbackName = generateInstanceName(organizationId, userId, true);
+        console.warn("[create-instance] Canonical unusable (reserved-zombie) — last-resort suffixed name:", fallbackName);
+        const fb = await createInstance(fallbackName, webhookUrl, EVOLUTION_WEBHOOK_SECRET);
+        if (!fb.ok) {
+          return errorResponse(`Failed to create Evolution instance: ${fb.error}`, 500);
+        }
+        fbQr = fb.data.qrcode?.base64 || null;
+        if (!fbQr) {
+          const c = await connectInstance(fallbackName);
+          if (c.ok && c.data.base64) fbQr = c.data.base64;
+        }
+      }
+
+      const savedFb = await createWhatsAppInstance(organizationId, fallbackName, fbQr || undefined, userId);
       if (!savedFb) {
         return errorResponse("Failed to save instance to database", 500);
-      }
-      let fbQr = fb.data.qrcode?.base64 || null;
-      if (!fbQr) {
-        const c = await connectInstance(fallbackName);
-        if (c.ok && c.data.base64) {
-          fbQr = c.data.base64;
-          await updateWhatsAppInstance(savedFb.id, { qr_base64: fbQr });
-        }
       }
       return jsonResponse({ instance_name: fallbackName, qr_base64: fbQr, status: "connecting" });
     }
