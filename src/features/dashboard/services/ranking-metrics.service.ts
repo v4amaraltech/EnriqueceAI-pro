@@ -745,21 +745,30 @@ export async function fetchOverdueActivitiesRanking(
       }> | null;
     };
 
-  const counts = new Map<string, number>();
-  let total = 0;
+  // Count DISTINCT leads per SDR (unit = lead, not enrollment). A lead in more
+  // than one overdue cadence must count once — otherwise the card over-reports
+  // vs the "atrasadas" the manager expects (one row per lead). Dedupe by
+  // lead_id via a Set per owner.
+  const leadsBySdr = new Map<string, Set<string>>();
   for (const e of enrollments ?? []) {
     const lead = e.lead;
     if (!lead || lead.deleted_at) continue;
     if (lead.status === 'won' || lead.status === 'unqualified' || lead.status === 'archived') continue;
     if (!lead.assigned_to || !sdrIds.has(lead.assigned_to)) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(lead.assigned_to)) continue;
-    counts.set(lead.assigned_to, (counts.get(lead.assigned_to) ?? 0) + 1);
-    total++;
+    let set = leadsBySdr.get(lead.assigned_to);
+    if (!set) {
+      set = new Set<string>();
+      leadsBySdr.set(lead.assigned_to, set);
+    }
+    set.add(e.lead_id);
   }
 
+  let total = 0;
   const entries: SdrRankingEntry[] = [];
-  for (const [userId, value] of counts) {
-    entries.push({ userId, userName: '', value });
+  for (const [userId, leadSet] of leadsBySdr) {
+    entries.push({ userId, userName: '', value: leadSet.size });
+    total += leadSet.size;
   }
 
   const sdrCount = entries.length || 1;
