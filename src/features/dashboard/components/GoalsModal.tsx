@@ -77,7 +77,6 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   const monthName = getMonthName(month);
   const prevMonthName = getPreviousMonthName(month);
-  const currentMonthLabel = `meta ${monthName.toLowerCase()}`;
 
   /* eslint-disable react-hooks/set-state-in-effect -- fetch-on-open pattern */
   useEffect(() => {
@@ -118,9 +117,13 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
     setVisibleUserIds((prev) => new Set([...prev, userId]));
   }
 
-  function updateUserGoal(userId: string, value: number) {
+  function updateUserGoalField(
+    userId: string,
+    field: 'opportunityTarget' | 'meetingsScheduledTarget' | 'meetingsHeldTarget',
+    value: number,
+  ) {
     setUserGoals((prev) =>
-      prev.map((ug) => (ug.userId === userId ? { ...ug, opportunityTarget: value } : ug)),
+      prev.map((ug) => (ug.userId === userId ? { ...ug, [field]: value } : ug)),
     );
   }
 
@@ -137,6 +140,8 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
           opportunityTarget: ug.opportunityTarget,
+          meetingsScheduledTarget: ug.meetingsScheduledTarget,
+          meetingsHeldTarget: ug.meetingsHeldTarget,
         })),
       });
 
@@ -379,9 +384,9 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                       </Avatar>
 
                       {/* Nome */}
-                      <span className="flex-1 text-sm font-medium">{ug.userName}</span>
+                      <span className="flex-1 truncate text-sm font-medium">{ug.userName}</span>
 
-                      {/* Mês anterior */}
+                      {/* Mês anterior (referência de oportunidades) */}
                       <div className="text-center">
                         <p className="text-xs text-[var(--foreground)] opacity-70">{prevMonthName}</p>
                         <p className="text-sm text-[var(--foreground)] opacity-70">
@@ -389,18 +394,48 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                         </p>
                       </div>
 
-                      {/* Meta atual */}
+                      {/* Meta de oportunidades */}
                       <div className="text-center">
-                        <p className="text-xs text-[var(--foreground)] opacity-70">{currentMonthLabel}</p>
+                        <p className="text-xs text-[var(--foreground)] opacity-70">oportunidades</p>
                         <Input
                           type="number"
                           min={0}
                           className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           value={ug.opportunityTarget}
                           onChange={(e) =>
-                            updateUserGoal(ug.userId, Number(e.target.value) || 0)
+                            updateUserGoalField(ug.userId, 'opportunityTarget', Number(e.target.value) || 0)
                           }
-                          aria-label={`Meta de ${ug.userName}`}
+                          aria-label={`Meta de oportunidades de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Meta de reuniões marcadas */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">marcadas</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={ug.meetingsScheduledTarget}
+                          onChange={(e) =>
+                            updateUserGoalField(ug.userId, 'meetingsScheduledTarget', Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de reuniões marcadas de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Meta de reuniões realizadas */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">realizadas</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={ug.meetingsHeldTarget}
+                          onChange={(e) =>
+                            updateUserGoalField(ug.userId, 'meetingsHeldTarget', Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de reuniões realizadas de ${ug.userName}`}
                         />
                       </div>
 

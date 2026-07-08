@@ -810,6 +810,8 @@ export type Database = {
           conversion_target: number
           created_at: string
           id: string
+          meetings_held_target: number
+          meetings_scheduled_target: number
           month: string
           opportunity_target: number
           org_id: string
@@ -821,6 +823,8 @@ export type Database = {
           conversion_target?: number
           created_at?: string
           id?: string
+          meetings_held_target?: number
+          meetings_scheduled_target?: number
           month: string
           opportunity_target?: number
           org_id: string
@@ -832,6 +836,8 @@ export type Database = {
           conversion_target?: number
           created_at?: string
           id?: string
+          meetings_held_target?: number
+          meetings_scheduled_target?: number
           month?: string
           opportunity_target?: number
           org_id?: string

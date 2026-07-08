@@ -3,6 +3,10 @@ import { z } from 'zod';
 const userGoalSchema = z.object({
   userId: z.string().uuid(),
   opportunityTarget: z.number().int().min(0),
+  // opcionais com default: clientes antigos (deployment skew) não enviam esses
+  // campos; o upsert grava 0 nesse caso, sem quebrar a validação.
+  meetingsScheduledTarget: z.number().int().min(0).optional().default(0),
+  meetingsHeldTarget: z.number().int().min(0).optional().default(0),
 });
 
 export const saveGoalsSchema = z.object({
@@ -19,4 +23,7 @@ export const saveGoalsSchema = z.object({
   userGoals: z.array(userGoalSchema).min(1, 'Pelo menos 1 vendedor'),
 });
 
-export type SaveGoalsInput = z.infer<typeof saveGoalsSchema>;
+// z.input (não z.infer): a action recebe o payload cru, onde os campos com
+// `.default(0)` (metas individuais de reuniões) são opcionais — clientes antigos
+// (deployment skew) podem omiti-los.
+export type SaveGoalsInput = z.input<typeof saveGoalsSchema>;

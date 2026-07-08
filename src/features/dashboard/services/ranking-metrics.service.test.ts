@@ -284,6 +284,51 @@ describe('fetchMeetingsHeldRanking — idealToDate (divisor por meta individual)
     // Fallback: divisor = 2 SDRs ativos → 100 / 2 = 50.
     expect(result.idealToDate).toBe(50);
   });
+
+  it('uses each SDR individual meetings target for per-SDR idealToDate (fallback to shared)', async () => {
+    // Mês passado (2026-01) → pace cheio, ideal = meta (sem paceamento parcial).
+    // u1 tem meta individual de reuniões (16) → ideal próprio = 16.
+    // u2 tem meta individual = 0 → cai no ideal compartilhado (100 / 3 = 33).
+    const sdrsChain = createChainMock({
+      data: [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u2' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { meetings_held_target: 100 } });
+    // Mesmo chain serve countSdrsForIdeal (opportunity_target) e
+    // fetchIndividualMeetingTargets (meetings_held_target) — inclui ambos os campos.
+    const goalsPerUserChain = createChainMock({
+      data: [
+        { user_id: 'u1', opportunity_target: 10, meetings_held_target: 16 },
+        { user_id: 'u2', opportunity_target: 10, meetings_held_target: 0 },
+        { user_id: 'u3', opportunity_target: 10, meetings_held_target: 30 },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'goals') return goalsChain;
+      if (table === 'goals_per_user') return goalsPerUserChain;
+      return createChainMock();
+    });
+
+    const result = await fetchMeetingsHeldRanking(supabase as never, ORG, baseFilters);
+
+    const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
+    const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
+    // u1: meta individual 16 (mês cheio) → ideal próprio 16, diferente dos demais.
+    expect(u1?.idealToDate).toBe(16);
+    // u2: sem meta individual → fallback compartilhado = 100 / 3 SDRs ≈ 33.
+    expect(u2?.idealToDate).toBe(33);
+    // u3 tem meta individual (30) mas 0 reuniões → não aparece no breakdown.
+    expect(result.sdrBreakdown.find((s) => s.userId === 'u3')).toBeUndefined();
+  });
 });
 
 describe('fetchRankingData', () => {

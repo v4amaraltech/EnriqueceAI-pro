@@ -44,6 +44,13 @@ export interface SdrRankingEntry {
   avatarUrl?: string;
   value: number;
   secondaryValue?: number; // e.g., "prospecting" count for leads card
+  /**
+   * Ideal até hoje ESPECÍFICO deste SDR (pace por dia útil). Preenchido nos
+   * cards de reuniões quando o SDR tem meta individual em `goals_per_user`.
+   * Quando ausente, o card cai no `RankingCardData.idealToDate` compartilhado
+   * (fatia da meta org ÷ nº de SDRs) — comportamento dos demais cards.
+   */
+  idealToDate?: number;
 }
 
 export interface RankingCardData {
@@ -53,11 +60,11 @@ export interface RankingCardData {
   averagePerSdr: number;
   sdrBreakdown: SdrRankingEntry[];
   /**
-   * Ideal por SDR acumulado até hoje: fatia da meta que cada SDR deveria ter
-   * atingido no ritmo de dias úteis (sem feriados) — meta org ÷ nº de SDRs com
-   * meta individual definida (fallback: SDRs ativos), paceada até o dia de hoje
-   * (BRT). É o mesmo para todos os SDRs do card (a meta é org-level).
-   * `undefined` quando não há meta ou nº de SDRs.
+   * Ideal COMPARTILHADO acumulado até hoje: fatia da meta org ÷ nº de SDRs
+   * (fallback: SDRs ativos), paceada por dia útil (sem feriados) até hoje (BRT).
+   * Usado por padrão em todos os cards e como fallback para SDR sem meta
+   * individual. Nos cards de reuniões, cada SDR pode ter seu próprio ideal em
+   * `SdrRankingEntry.idealToDate`. `undefined` quando não há meta ou SDRs.
    */
   idealToDate?: number;
   /** Daily cumulative actual vs target — populated for cards that want a chart. */
@@ -103,6 +110,8 @@ export interface UserGoalRow {
   avatarUrl?: string;
   opportunityTarget: number;
   previousTarget: number | null; // previous month reference
+  meetingsScheduledTarget: number; // meta individual de reuniões marcadas
+  meetingsHeldTarget: number; // meta individual de reuniões realizadas
 }
 
 export interface GoalsData {

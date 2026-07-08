@@ -96,23 +96,71 @@ async function countSdrsForIdeal(
   return withGoal > 0 ? withGoal : sdrIds.size;
 }
 
+/**
+ * Metas individuais de reuniões por SDR (marcadas ou realizadas) no mês.
+ * Retorna apenas quem tem meta > 0 — SDR sem meta individual cai no ideal
+ * compartilhado (fatia da meta org ÷ nº de SDRs).
+ */
+async function fetchIndividualMeetingTargets(
+  supabase: SupabaseClient,
+  orgId: string,
+  month: string,
+  column: 'meetings_scheduled_target' | 'meetings_held_target',
+): Promise<Map<string, number>> {
+  const monthStart = `${month}-01`;
+  const { data } = (await from(supabase, 'goals_per_user')
+    .select(`user_id, ${column}`)
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .gt(column, 0)) as { data: Array<Record<string, unknown>> | null };
+  const map = new Map<string, number>();
+  for (const row of data ?? []) {
+    const userId = row.user_id as string;
+    const target = Number(row[column] ?? 0);
+    if (userId && target > 0) map.set(userId, target);
+  }
+  return map;
+}
+
 function buildRankingCardData(
   entries: SdrRankingEntry[],
   total: number,
   monthTarget: number,
   month: string,
   activeSdrCount?: number,
+  individualTargets?: Map<string, number>,
 ): RankingCardData {
   const days = getDaysInMonth(month);
   const sdrCount = entries.length || 1;
+  // Ideal compartilhado: fatia da meta org ÷ nº de SDRs (comportamento padrão
+  // dos cards e fallback pra SDR sem meta individual de reuniões).
+  const sharedIdeal =
+    activeSdrCount != null ? computeIdealToDate(monthTarget, activeSdrCount, month) : undefined;
+
+  const sorted = entries.sort((a, b) => b.value - a.value);
+  let sdrBreakdown = sorted;
+  if (individualTargets) {
+    const [yr, mo] = month.split('-').map(Number) as [number, number];
+    const currentDay = currentDayOfMonthBrt(month);
+    sdrBreakdown = sorted.map((e) => {
+      const indiv = individualTargets.get(e.userId);
+      return {
+        ...e,
+        idealToDate:
+          indiv && indiv > 0
+            ? Math.round(expectedByBusinessDay(indiv, yr, mo, currentDay))
+            : sharedIdeal,
+      };
+    });
+  }
+
   return {
     total,
     monthTarget,
     percentOfTarget: computePercentOfTarget(total, monthTarget, days, month),
     averagePerSdr: Math.round(total / sdrCount),
-    sdrBreakdown: entries.sort((a, b) => b.value - a.value),
-    idealToDate:
-      activeSdrCount != null ? computeIdealToDate(monthTarget, activeSdrCount, month) : undefined,
+    sdrBreakdown,
+    idealToDate: sharedIdeal,
   };
 }
 
@@ -498,7 +546,20 @@ export async function fetchMeetingsScheduledRanking(
     entries.push({ userId, userName: '', value });
   }
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
-  const card = buildRankingCardData(entries, total, monthTarget, filters.month, idealSdrCount);
+  const individualTargets = await fetchIndividualMeetingTargets(
+    supabase,
+    orgId,
+    filters.month,
+    'meetings_scheduled_target',
+  );
+  const card = buildRankingCardData(
+    entries,
+    total,
+    monthTarget,
+    filters.month,
+    idealSdrCount,
+    individualTargets,
+  );
 
   // Daily cumulative for the KPI chart
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
@@ -569,7 +630,20 @@ export async function fetchMeetingsHeldRanking(
     entries.push({ userId, userName: '', value });
   }
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
-  return buildRankingCardData(entries, total, goal?.meetings_held_target ?? 0, filters.month, idealSdrCount);
+  const individualTargets = await fetchIndividualMeetingTargets(
+    supabase,
+    orgId,
+    filters.month,
+    'meetings_held_target',
+  );
+  return buildRankingCardData(
+    entries,
+    total,
+    goal?.meetings_held_target ?? 0,
+    filters.month,
+    idealSdrCount,
+    individualTargets,
+  );
 }
 
 /**
