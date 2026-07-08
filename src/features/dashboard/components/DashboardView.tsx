@@ -171,7 +171,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.meetingsScheduled}
             primaryColumnLabel="marcadas"
             idealColumnLabel="ideal dia"
-            idealColumnTooltip="Onde cada SDR deveria estar hoje: meta do mês ÷ SDRs com meta individual definida, no ritmo de dias úteis (sem feriados)."
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: a meta individual de reuniões marcadas do SDR (em Editar metas) no ritmo de dias úteis (sem feriados). Sem meta individual, usa a fatia da meta do time ÷ SDRs."
             averageLabel="média reuniões marcadas/vendedor"
             onSdrClick={handleSdrClick}
           />
@@ -187,7 +187,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             data={ranking.meetingsHeld}
             primaryColumnLabel="realizadas"
             idealColumnLabel="ideal dia"
-            idealColumnTooltip="Onde cada SDR deveria estar hoje: meta do mês ÷ SDRs com meta individual definida, no ritmo de dias úteis (sem feriados)."
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: a meta individual de reuniões realizadas do SDR (em Editar metas) no ritmo de dias úteis (sem feriados). Sem meta individual, usa a fatia da meta do time ÷ SDRs."
             averageLabel="média reuniões realizadas/vendedor"
             onSdrClick={handleSdrClick}
           />

@@ -30,8 +30,8 @@ const goalsData: GoalsData = {
   meetingsScheduledTarget: 100,
   meetingsHeldTarget: 80,
   userGoals: [
-    { userId: 'u1', userName: 'alice', opportunityTarget: 20, previousTarget: 15 },
-    { userId: 'u2', userName: 'bob', opportunityTarget: 30, previousTarget: null },
+    { userId: 'u1', userName: 'alice', opportunityTarget: 20, previousTarget: 15, meetingsScheduledTarget: 16, meetingsHeldTarget: 10 },
+    { userId: 'u2', userName: 'bob', opportunityTarget: 30, previousTarget: null, meetingsScheduledTarget: 9, meetingsHeldTarget: 7 },
   ],
 };
 
@@ -97,8 +97,8 @@ describe('GoalsModal', () => {
         meetingsScheduledTarget: 100,
         meetingsHeldTarget: 80,
         userGoals: [
-          { userId: 'u1', opportunityTarget: 20 },
-          { userId: 'u2', opportunityTarget: 30 },
+          { userId: 'u1', opportunityTarget: 20, meetingsScheduledTarget: 16, meetingsHeldTarget: 10 },
+          { userId: 'u2', opportunityTarget: 30, meetingsScheduledTarget: 9, meetingsHeldTarget: 7 },
         ],
       });
     });

@@ -79,8 +79,12 @@ function RankingContent({
 }: RankingContentProps) {
   const isAbove = data.percentOfTarget >= 0;
   const absPercent = Math.abs(data.percentOfTarget);
-  // Só mostra a coluna "ideal dia" quando há valor calculado (meta + SDRs).
-  const showIdeal = Boolean(idealColumnLabel) && data.idealToDate != null;
+  // Só mostra a coluna "ideal dia" quando há valor calculado — seja o
+  // compartilhado (meta org ÷ SDRs) ou um ideal individual por SDR (cards de
+  // reuniões, meta em goals_per_user).
+  const showIdeal =
+    Boolean(idealColumnLabel) &&
+    (data.idealToDate != null || data.sdrBreakdown.some((s) => s.idealToDate != null));
 
   return (
     <>
@@ -198,8 +202,10 @@ function RankingContent({
                   )}
                   {showIdeal && (
                     <span className="w-20 text-center text-sm text-muted-foreground">
-                      {data.idealToDate}
-                      {unit}
+                      {(() => {
+                        const ideal = sdr.idealToDate ?? data.idealToDate;
+                        return ideal != null ? `${ideal}${unit}` : '—';
+                      })()}
                     </span>
                   )}
                   {primaryColumnLabel && (
