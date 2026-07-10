@@ -20,6 +20,9 @@ export interface ReminderDueRow {
   channel: 'email' | 'whatsapp';
   message_template_id: string | null;
   fire_at: string;
+  /** Número WhatsApp resolvido (55DDDXXXXXXXXX) da ligação conectada mais recente,
+   *  ou null quando não há opt-in/telefone. Preenchido pela view. */
+  whatsapp_phone: string | null;
 }
 
 export type ReminderOutcome = 'sent' | 'failed' | 'skipped';

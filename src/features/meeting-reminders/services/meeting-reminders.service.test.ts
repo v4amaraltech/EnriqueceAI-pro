@@ -4,9 +4,12 @@ import type { ReminderDueRow } from '../types';
 import {
   buildLinkLine,
   buildReminderContent,
+  buildWhatsAppContent,
+  buildWhatsAppLinkLine,
   escapeHtmlValue,
   formatMeetingDateBRT,
   formatMeetingTimeBRT,
+  isPhoneBlacklisted,
   isQuietHoursBRT,
 } from './meeting-reminders.service';
 
@@ -30,6 +33,7 @@ function makeRow(overrides: Partial<ReminderDueRow> = {}): ReminderDueRow {
     channel: 'email',
     message_template_id: 'tpl-1',
     fire_at: '2026-07-10T12:00:00Z',
+    whatsapp_phone: '5511981425946',
     ...overrides,
   };
 }
@@ -109,5 +113,52 @@ describe('buildReminderContent', () => {
     const { htmlBody } = buildReminderContent(makeRow({ meet_link: null }), template, 'Ismael');
     expect(htmlBody).not.toContain('Google Meet');
     expect(htmlBody).not.toContain('{{link_reuniao_linha}}');
+  });
+});
+
+describe('buildWhatsAppLinkLine', () => {
+  it('monta a linha em texto puro com URL https', () => {
+    expect(buildWhatsAppLinkLine('https://meet.google.com/abc')).toBe(
+      '🔗 Link da reunião: https://meet.google.com/abc',
+    );
+  });
+  it('retorna vazio sem link ou esquema inválido', () => {
+    expect(buildWhatsAppLinkLine(null)).toBe('');
+    expect(buildWhatsAppLinkLine('javascript:alert(1)')).toBe('');
+  });
+});
+
+describe('buildWhatsAppContent', () => {
+  const template = {
+    body: 'Oi {{primeiro_nome}}, é {{nome_vendedor}} — {{data_reuniao}} às {{hora_reuniao}}.\n{{link_reuniao_linha}}',
+  };
+
+  it('renderiza texto puro com link e sem placeholder órfão', () => {
+    const body = buildWhatsAppContent(makeRow(), template, 'Ismael');
+    expect(body).toContain('Oi Maria, é Ismael');
+    expect(body).toContain('09:15');
+    expect(body).toContain('🔗 Link da reunião: https://meet.google.com/abc-defg-hij');
+    expect(body).not.toContain('{{');
+  });
+
+  it('omite a linha do link quando não há Meet', () => {
+    const body = buildWhatsAppContent(makeRow({ meet_link: null }), template, 'Ismael');
+    expect(body).not.toContain('Link da reunião');
+    expect(body).not.toContain('{{link_reuniao_linha}}');
+  });
+});
+
+describe('isPhoneBlacklisted', () => {
+  it('casa padrão com wildcard por prefixo', () => {
+    expect(isPhoneBlacklisted('5511981425946', ['+5511*'])).toBe(true);
+    expect(isPhoneBlacklisted('5511981425946', ['+5521*'])).toBe(false);
+  });
+  it('casa padrão exato', () => {
+    expect(isPhoneBlacklisted('5511981425946', ['5511981425946'])).toBe(true);
+    expect(isPhoneBlacklisted('5511981425946', ['5511981425000'])).toBe(false);
+  });
+  it('ignora padrões vazios e lista vazia', () => {
+    expect(isPhoneBlacklisted('5511981425946', [])).toBe(false);
+    expect(isPhoneBlacklisted('5511981425946', ['', '   '])).toBe(false);
   });
 });
