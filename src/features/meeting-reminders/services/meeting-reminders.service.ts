@@ -2,11 +2,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { renderTemplate } from '@/features/cadences/utils/render-template';
 import { EmailService } from '@/features/integrations/services/email.service';
+import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { from } from '@/lib/supabase/from';
 
 import type { ReminderDueRow, ReminderRunSummary } from '../types';
 
 const TIMEZONE = 'America/Sao_Paulo';
+/** Espaçamento anti-ban entre disparos de WhatsApp na mesma execução (ms). */
+const WHATSAPP_GAP_MS = 4000;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Quiet hours: nada entre 21h e 8h (BRT). O toque fica na fila e reenvia no
  *  próximo tick dentro da janela — por isso NÃO gravamos log ao adiar. */
@@ -100,6 +105,44 @@ export function buildReminderContent(
   return { subject, htmlBody };
 }
 
+/** Linha do link em texto puro (WhatsApp), ou '' quando não há Meet. */
+export function buildWhatsAppLinkLine(meetLink: string | null | undefined): string {
+  if (!meetLink || !/^https:\/\/[^\s"'<>]+$/i.test(meetLink)) return '';
+  return `🔗 Link da reunião: ${meetLink}`;
+}
+
+/**
+ * Corpo do lembrete WhatsApp (texto puro). Sem escape de HTML (é texto) e link
+ * injetado como URL. Duas passadas por consistência com o render de email.
+ */
+export function buildWhatsAppContent(
+  row: ReminderDueRow,
+  template: { body: string },
+  sdrName: string,
+): string {
+  const vars: Record<string, string> = {
+    primeiro_nome: firstName(row),
+    empresa: companyName(row),
+    nome_vendedor: sdrName,
+    data_reuniao: formatMeetingDateBRT(row.meeting_starts_at),
+    hora_reuniao: formatMeetingTimeBRT(row.meeting_starts_at),
+  };
+  let body = renderTemplate(template.body, vars);
+  body = renderTemplate(body, { link_reuniao_linha: buildWhatsAppLinkLine(row.meet_link) });
+  return body;
+}
+
+/** Match glob simples do phone_blacklist (padrões tipo '+5511999*' ou exatos)
+ *  contra o número normalizado (55DDDXXXXXXXXX). */
+export function isPhoneBlacklisted(phone: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => {
+    const hasWildcard = pattern.includes('*');
+    const digits = pattern.replace(/\D/g, '');
+    if (!digits) return false;
+    return hasWildcard ? phone.startsWith(digits) : phone === digits;
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 interface RunOptions {
@@ -138,8 +181,8 @@ export async function runMeetingReminders(
   if (error) throw new Error(`v_reminders_due: ${error.message}`);
 
   let rows = rowsRaw ?? [];
-  // Entrega 1: só email (whatsapp entra na F2).
-  rows = rows.filter((r) => r.channel === 'email');
+  // A view só devolve linhas whatsapp quando há reminder_steps whatsapp ativos +
+  // telefone/opt-in resolvido — então email e whatsapp coexistem com segurança.
   // Filtros de piloto (F5) — puro env, sem deploy.
   if (options.pilotUserIds?.length) {
     rows = rows.filter((r) => options.pilotUserIds!.includes(r.sdr_user_id));
@@ -192,8 +235,36 @@ export async function runMeetingReminders(
     for (const c of conns ?? []) gmailReady.add(`${c.org_id}:${c.user_id}`);
   }
 
+  // 4b. Prontidão de WhatsApp (instância Evolution conectada: do SDR ou default
+  //     da org) + phone_blacklist — só quando há linhas whatsapp no lote.
+  const hasWhatsApp = rows.some((r) => r.channel === 'whatsapp');
+  const waUserReady = new Set<string>(); // `${org}:${user}`
+  const waOrgReady = new Set<string>(); // `${org}` (instância default org-level)
+  const phoneBlacklist = new Map<string, string[]>(); // org -> patterns
+  if (hasWhatsApp) {
+    const { data: insts } = (await from(supabase, 'whatsapp_instances')
+      .select('org_id, user_id, status')
+      .in('org_id', orgIds)
+      .eq('status', 'connected')) as {
+      data: Array<{ org_id: string; user_id: string | null }> | null;
+    };
+    for (const i of insts ?? []) {
+      if (i.user_id) waUserReady.add(`${i.org_id}:${i.user_id}`);
+      else waOrgReady.add(i.org_id);
+    }
+    const { data: pb } = (await from(supabase, 'phone_blacklist')
+      .select('org_id, phone_pattern')
+      .in('org_id', orgIds)) as { data: Array<{ org_id: string; phone_pattern: string }> | null };
+    for (const r of pb ?? []) {
+      const arr = phoneBlacklist.get(r.org_id) ?? [];
+      arr.push(r.phone_pattern);
+      phoneBlacklist.set(r.org_id, arr);
+    }
+  }
+
   // 5. Nomes dos SDRs (via auth.users — organization_members não tem nome).
   const sdrNames = await resolveSdrNames(supabase, sdrIds);
+  let whatsAppSent = 0; // p/ espaçamento anti-ban entre disparos
 
   // 6. Processar linha a linha.
   for (const row of rows) {
@@ -222,27 +293,53 @@ export async function runMeetingReminders(
       continue;
     }
 
-    // Compliance.
-    const emailLc = row.email?.toLowerCase() ?? '';
-    if (!emailLc) {
-      await recordLog(supabase, row, 'skipped', 'sem_email');
-      log('skipped', 'sem_email');
-      continue;
-    }
-    if (suppressedEmails.has(`${row.org_id}:${emailLc}`)) {
-      await recordLog(supabase, row, 'skipped', 'email_suprimido');
-      log('skipped', 'email_suprimido');
-      continue;
-    }
-    const domain = emailLc.split('@')[1] ?? '';
-    if (domain && blacklistedDomains.has(`${row.org_id}:${domain}`)) {
-      await recordLog(supabase, row, 'skipped', 'dominio_blacklist');
-      log('skipped', 'dominio_blacklist');
-      continue;
-    }
-    if (!gmailReady.has(`${row.org_id}:${row.sdr_user_id}`)) {
-      await recordLog(supabase, row, 'skipped', 'sdr_sem_gmail');
-      log('skipped', 'sdr_sem_gmail');
+    // Gates por canal.
+    if (row.channel === 'email') {
+      const emailLc = row.email?.toLowerCase() ?? '';
+      if (!emailLc) {
+        await recordLog(supabase, row, 'skipped', 'sem_email');
+        log('skipped', 'sem_email');
+        continue;
+      }
+      if (suppressedEmails.has(`${row.org_id}:${emailLc}`)) {
+        await recordLog(supabase, row, 'skipped', 'email_suprimido');
+        log('skipped', 'email_suprimido');
+        continue;
+      }
+      const domain = emailLc.split('@')[1] ?? '';
+      if (domain && blacklistedDomains.has(`${row.org_id}:${domain}`)) {
+        await recordLog(supabase, row, 'skipped', 'dominio_blacklist');
+        log('skipped', 'dominio_blacklist');
+        continue;
+      }
+      if (!gmailReady.has(`${row.org_id}:${row.sdr_user_id}`)) {
+        await recordLog(supabase, row, 'skipped', 'sdr_sem_gmail');
+        log('skipped', 'sdr_sem_gmail');
+        continue;
+      }
+    } else if (row.channel === 'whatsapp') {
+      const phone = row.whatsapp_phone ?? '';
+      if (!phone) {
+        // a view já garante isso; guarda defensiva
+        await recordLog(supabase, row, 'skipped', 'sem_whatsapp');
+        log('skipped', 'sem_whatsapp');
+        continue;
+      }
+      if (isPhoneBlacklisted(phone, phoneBlacklist.get(row.org_id) ?? [])) {
+        await recordLog(supabase, row, 'skipped', 'phone_blacklist');
+        log('skipped', 'phone_blacklist');
+        continue;
+      }
+      const waReady =
+        waUserReady.has(`${row.org_id}:${row.sdr_user_id}`) || waOrgReady.has(row.org_id);
+      if (!waReady) {
+        await recordLog(supabase, row, 'skipped', 'sem_instancia_whatsapp');
+        log('skipped', 'sem_instancia_whatsapp');
+        continue;
+      }
+    } else {
+      await recordLog(supabase, row, 'skipped', 'canal_desconhecido');
+      log('skipped', 'canal_desconhecido');
       continue;
     }
 
@@ -261,25 +358,42 @@ export async function runMeetingReminders(
       continue;
     }
 
+    const sdrName = sdrNames.get(row.sdr_user_id) ?? '';
     try {
-      const { subject, htmlBody } = buildReminderContent(
-        row,
-        template,
-        sdrNames.get(row.sdr_user_id) ?? '',
-      );
-      const result = await EmailService.sendEmail(
-        row.sdr_user_id,
-        row.org_id,
-        { to: row.email!, subject, htmlBody, leadId: row.lead_id, trackOpens: false, trackClicks: false },
-        undefined,
-        supabase,
-      );
-      if (result.success) {
-        await updateLog(supabase, row, 'sent');
-        log('sent');
+      if (row.channel === 'email') {
+        const { subject, htmlBody } = buildReminderContent(row, template, sdrName);
+        const result = await EmailService.sendEmail(
+          row.sdr_user_id,
+          row.org_id,
+          { to: row.email!, subject, htmlBody, leadId: row.lead_id, trackOpens: false, trackClicks: false },
+          undefined,
+          supabase,
+        );
+        if (result.success) {
+          await updateLog(supabase, row, 'sent');
+          log('sent');
+        } else {
+          await updateLog(supabase, row, 'failed', result.error ?? 'send_failed');
+          log('failed', result.error ?? 'send_failed');
+        }
       } else {
-        await updateLog(supabase, row, 'failed', result.error ?? 'send_failed');
-        log('failed', result.error ?? 'send_failed');
+        // WhatsApp — espaçamento anti-ban entre disparos consecutivos.
+        if (whatsAppSent > 0) await sleep(WHATSAPP_GAP_MS);
+        whatsAppSent += 1;
+        const body = buildWhatsAppContent(row, template, sdrName);
+        const result = await EvolutionWhatsAppService.sendMessage(
+          row.org_id,
+          { to: row.whatsapp_phone!, body },
+          supabase,
+          row.sdr_user_id,
+        );
+        if (result.success) {
+          await updateLog(supabase, row, 'sent');
+          log('sent');
+        } else {
+          await updateLog(supabase, row, 'failed', result.error ?? 'send_failed');
+          log('failed', result.error ?? 'send_failed');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'exception';
