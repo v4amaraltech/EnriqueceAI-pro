@@ -768,11 +768,14 @@ export async function fetchLeadsToOpenRanking(
 }
 
 /**
- * Snapshot: enrollments active cujo `next_step_due` venceu há mais que o
- * threshold compartilhado (OVERDUE_THRESHOLD_HOURS — atualmente 4h),
- * agrupados pelo SDR responsável (leads.assigned_to). É a mesma definição
- * de "atrasada" que a fila de Execução (/atividades) usa pro badge vermelho
- * — fonte única de verdade. Não tem meta (snapshot atual).
+ * Snapshot: TAREFAS (passos de cadência) atrasadas por SDR, contando uma linha
+ * por passo vencido — a MESMA unidade da fila de Execução (/atividades),
+ * "Atividades das Cadências (N)" com o filtro "Atrasada". Deriva do RPC
+ * list_overdue_activities_brt, que espelha fetch-pending-activities (expansão
+ * dos passos na janela de 24h + supressões) e aplica o threshold compartilhado
+ * (OVERDUE_THRESHOLD_HOURS — atualmente 4h, via effective_due_brt). Um lead com
+ * 3 passos vencidos conta 3 aqui — o card bate 1:1 com a tela do SDR. Sem meta
+ * (snapshot atual).
  *
  * Trigger `skip_weekend_brt` no `calculate_next_step_due` empurra sáb/dom
  * pra segunda 9h BRT, então sex 18h não vira atrasada na seg 8h.
@@ -791,58 +794,38 @@ export async function fetchOverdueActivitiesRanking(
 
   const cutoffIso = new Date(Date.now() - OVERDUE_THRESHOLD_MS).toISOString();
 
-  // Pull enrollments active whose next step is overdue beyond the threshold,
-  // already clamping next_step_due via effective_due_brt RPC so the cutoff
-  // reflects business hours (sex 18h+ não conta como atrasada na seg 9h).
-  // The RPC returns IDs of enrollments matching the business-hours window;
-  // we then re-fetch with the lead join to filter terminal statuses.
-  const { data: enrollmentIds } = (await (supabase.rpc as never as (fn: string, args: object) => Promise<{
-    data: Array<{ id: string }> | null;
+  // Count overdue TASKS (cadence steps), not leads — matching what the SDR sees
+  // on the execution screen ("Atividades das Cadências (N)" com filtro "Atrasada").
+  // list_overdue_activities_brt mirrors fetch-pending-activities: it expands each
+  // active enrollment into every step within the 24h window and flags each step
+  // overdue past the 4h business-hours threshold (effective_due_brt < cutoff),
+  // applying the same suppressions (auto_email, WhatsApp/Ligação-WhatsApp inválido,
+  // passo já executado). A lead with 3 overdue steps counts 3 here — one row per
+  // task — so the card reconciles 1:1 with the SDR queue. The RPC already returns
+  // assigned_to, so no second lead query is needed.
+  const { data: rows } = (await (supabase.rpc as never as (fn: string, args: object) => Promise<{
+    data: Array<{ assigned_to: string | null }> | null;
     error: { message: string } | null;
-  }>)('list_overdue_enrollments_brt', {
+  }>)('list_overdue_activities_brt', {
     p_org_id: orgId,
     p_cutoff: cutoffIso,
   }));
 
-  const idList = (enrollmentIds ?? []).map((r) => r.id);
-  if (idList.length === 0) {
-    return buildRankingCardData([], 0, 0, filters.month);
-  }
-
-  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('lead_id, lead:leads!inner(assigned_to, status, deleted_at, org_id)')
-    .in('id', idList)
-    .limit(20000)) as {
-      data: Array<{
-        lead_id: string;
-        lead: { assigned_to: string | null; status: string; deleted_at: string | null; org_id: string };
-      }> | null;
-    };
-
-  // Count DISTINCT leads per SDR (unit = lead, not enrollment). A lead in more
-  // than one overdue cadence must count once — otherwise the card over-reports
-  // vs the "atrasadas" the manager expects (one row per lead). Dedupe by
-  // lead_id via a Set per owner.
-  const leadsBySdr = new Map<string, Set<string>>();
-  for (const e of enrollments ?? []) {
-    const lead = e.lead;
-    if (!lead || lead.deleted_at) continue;
-    if (lead.status === 'won' || lead.status === 'unqualified' || lead.status === 'archived') continue;
-    if (!lead.assigned_to || !sdrIds.has(lead.assigned_to)) continue;
-    if (filters.userIds.length > 0 && !filters.userIds.includes(lead.assigned_to)) continue;
-    let set = leadsBySdr.get(lead.assigned_to);
-    if (!set) {
-      set = new Set<string>();
-      leadsBySdr.set(lead.assigned_to, set);
-    }
-    set.add(e.lead_id);
+  // Tally tasks per SDR (role='sdr' active/invited only, matching the queue's
+  // per-SDR filter). No dedupe — the unit is the task/step.
+  const tasksBySdr = new Map<string, number>();
+  for (const r of rows ?? []) {
+    const owner = r.assigned_to;
+    if (!owner || !sdrIds.has(owner)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(owner)) continue;
+    tasksBySdr.set(owner, (tasksBySdr.get(owner) ?? 0) + 1);
   }
 
   let total = 0;
   const entries: SdrRankingEntry[] = [];
-  for (const [userId, leadSet] of leadsBySdr) {
-    entries.push({ userId, userName: '', value: leadSet.size });
-    total += leadSet.size;
+  for (const [userId, count] of tasksBySdr) {
+    entries.push({ userId, userName: '', value: count });
+    total += count;
   }
 
   const sdrCount = entries.length || 1;
