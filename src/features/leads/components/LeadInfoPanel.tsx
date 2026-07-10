@@ -56,7 +56,7 @@ import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
 import { LeadTimelineTab } from './LeadTimelineTab';
 import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
-import { GenerateSpicedDialog } from './GenerateSpicedDialog';
+import { GenerateBantDialog } from './GenerateBantDialog';
 
 /**
  * Normaliza uma entrada do array `phones`. A coluna JSONB armazena objetos
@@ -208,11 +208,11 @@ export function LeadInfoPanel({
     emailEntries: LeadEmail[];
     customFieldValues: Record<string, string>;
   } | null>(null);
-  const [isSpicedDialogOpen, setIsSpicedDialogOpen] = useState(false);
+  const [isBantDialogOpen, setIsBantDialogOpen] = useState(false);
 
-  // Detect if org has any SPICED-style custom fields configured
-  const hasSpicedFields = (customFieldDefs ?? []).some((cf) =>
-    /^(S|P|I|CE|E|D)\s*\(/.test(cf.field_name) ||
+  // Detect if org has any BANT-style custom fields configured
+  const hasBantFields = (customFieldDefs ?? []).some((cf) =>
+    /^(B|A|N|T)\s*\(/.test(cf.field_name) ||
     cf.field_name === 'Oportunidades' ||
     cf.field_name === 'Gaps da ligação' ||
     cf.field_name === 'Observação Decisor',
@@ -1087,16 +1087,16 @@ export function LeadInfoPanel({
               <>
                 <hr className="border-t-2 border-[var(--border)]" />
                 <CollapsibleSection title="Campos personalizados">
-                  {hasSpicedFields && !isEditing && (
+                  {hasBantFields && !isEditing && (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setIsSpicedDialogOpen(true)}
+                      onClick={() => setIsBantDialogOpen(true)}
                       className="w-full justify-center gap-2 border-red-200 bg-red-50/50 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
-                      Gerar SPICED via IA
+                      Gerar BANT via IA
                     </Button>
                   )}
                   {isEditing ? (
@@ -1247,9 +1247,9 @@ export function LeadInfoPanel({
         </div>
       )}
 
-      <GenerateSpicedDialog
-        open={isSpicedDialogOpen}
-        onOpenChange={setIsSpicedDialogOpen}
+      <GenerateBantDialog
+        open={isBantDialogOpen}
+        onOpenChange={setIsBantDialogOpen}
         leadId={data.id}
       />
     </div>

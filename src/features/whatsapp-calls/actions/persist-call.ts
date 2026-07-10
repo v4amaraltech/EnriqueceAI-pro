@@ -13,7 +13,7 @@ import { toE164BR } from '../phone';
 const persistSchema = z.object({
   // Opcionais: uma Ligação via WhatsApp avulsa (disparada da tela do lead, fora
   // da fila de atividades) não tem passo/cadência. A linha em `calls` continua
-  // alimentando o BI + o pipeline de gravação→transcrição→SPICED do mesmo jeito.
+  // alimentando o BI + o pipeline de gravação→transcrição→BANT do mesmo jeito.
   stepId: z.string().uuid().optional(),
   cadenceId: z.string().uuid().optional(),
   leadId: z.string().uuid(),

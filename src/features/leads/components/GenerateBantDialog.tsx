@@ -15,15 +15,15 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 
-import { generateSpicedFromText } from '@/features/calls/actions/generate-spiced-from-text';
+import { generateBantFromText } from '@/features/calls/actions/generate-bant-from-text';
 
-interface GenerateSpicedDialogProps {
+interface GenerateBantDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadId: string;
 }
 
-export function GenerateSpicedDialog({ open, onOpenChange, leadId }: GenerateSpicedDialogProps) {
+export function GenerateBantDialog({ open, onOpenChange, leadId }: GenerateBantDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [text, setText] = useState('');
@@ -35,9 +35,9 @@ export function GenerateSpicedDialog({ open, onOpenChange, leadId }: GenerateSpi
       return;
     }
     startTransition(async () => {
-      const result = await generateSpicedFromText({ leadId, text: trimmed });
+      const result = await generateBantFromText({ leadId, text: trimmed });
       if (result.success) {
-        toast.success('SPICED gerado com sucesso');
+        toast.success('BANT gerado com sucesso');
         setText('');
         onOpenChange(false);
         router.refresh();
@@ -53,11 +53,11 @@ export function GenerateSpicedDialog({ open, onOpenChange, leadId }: GenerateSpi
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-red-500" />
-            Gerar SPICED via IA
+            Gerar BANT via IA
           </DialogTitle>
           <DialogDescription>
             Cole o resumo da conversa (transcrição, anotações da ligação, troca de mensagens, etc.).
-            A IA preencherá automaticamente os campos S, P, I, CE, E, D, Oportunidades, Gaps e Observação Decisor.
+            A IA preencherá automaticamente os campos B, A, N, T, Oportunidades, Gaps e Observação Decisor.
           </DialogDescription>
         </DialogHeader>
 
@@ -91,7 +91,7 @@ export function GenerateSpicedDialog({ open, onOpenChange, leadId }: GenerateSpi
             ) : (
               <>
                 <Sparkles className="h-4 w-4 mr-2" />
-                Gerar SPICED
+                Gerar BANT
               </>
             )}
           </Button>
