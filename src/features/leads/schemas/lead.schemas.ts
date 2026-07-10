@@ -132,6 +132,21 @@ export const createLeadSchema = z.object({
   scheduled_start: z.string().datetime({ offset: true }).optional(),
 });
 
+// Filtros que viram cláusula uuid no banco (`assigned_to`, `cadence_id`).
+// Um param-lixo vindo da URL como `?assigned_to=undefined` chegava intacto ao
+// `.eq()` e o Postgres estourava no cast pra uuid ("invalid input syntax for
+// type uuid: undefined") → a tela inteira de Leads quebrava com "Erro ao buscar
+// leads". Aqui saneamos: só passam adiante um uuid válido ou a sentinela do
+// campo; qualquer outra coisa (undefined/null/vazio/lixo) vira "sem filtro".
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuidFilter = (sentinel: string) =>
+  z
+    .string()
+    .optional()
+    .transform((v) =>
+      v == null || v === sentinel || UUID_RE.test(v) ? v ?? undefined : undefined,
+    );
+
 export const leadFiltersSchema = z.object({
   status: leadStatusSchema.optional(),
   enrichment_status: enrichmentStatusSchema.optional(),
@@ -141,8 +156,8 @@ export const leadFiltersSchema = z.object({
   lead_source: z.string().optional(),
   canal: z.string().optional(),
   search: z.string().optional(),
-  assigned_to: z.string().optional(),
-  cadence_id: z.string().optional(),
+  assigned_to: uuidFilter('__unassigned__'),
+  cadence_id: uuidFilter('__none__'),
   sort_by: z.enum(['created_at', 'fit_score', 'nome_fantasia', 'status', 'engagement_score']).default('created_at'),
   sort_dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),

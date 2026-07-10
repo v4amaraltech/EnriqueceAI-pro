@@ -30,24 +30,31 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
   const router = useRouter();
   const [goalsOpen, setGoalsOpen] = useState(false);
 
-  const handleSdrClick = useCallback((userId: string) => {
-    router.push(`/leads?assigned_to=${userId}`);
+  // Guarda contra userId vazio: sem isto, um `undefined` interpolado virava
+  // `/leads?assigned_to=undefined` e a tela de Leads quebrava no cast pra uuid.
+  const goToSdrLeads = useCallback((userId: string, extra = '') => {
+    if (!userId) return;
+    router.push(`/leads?assigned_to=${encodeURIComponent(userId)}${extra}`);
   }, [router]);
+
+  const handleSdrClick = useCallback((userId: string) => {
+    goToSdrLeads(userId);
+  }, [goToSdrLeads]);
 
   const handleActivitySdrClick = useCallback((userId: string) => {
-    router.push(`/leads?assigned_to=${userId}`);
-  }, [router]);
+    goToSdrLeads(userId);
+  }, [goToSdrLeads]);
 
   const handleLeadsToOpenSdrClick = useCallback((userId: string) => {
-    router.push(`/leads?assigned_to=${userId}&status=new`);
-  }, [router]);
+    goToSdrLeads(userId, '&status=new');
+  }, [goToSdrLeads]);
 
   const handleOverdueSdrClick = useCallback((userId: string) => {
     // Não temos filtro "overdue" na lista de leads ainda — abre o pipe do SDR
     // e deixa o gestor inspecionar manualmente. Pode evoluir pra
     // /atividades?assigned_to=X&status=overdue quando a queue aceitar param.
-    router.push(`/leads?assigned_to=${userId}`);
-  }, [router]);
+    goToSdrLeads(userId);
+  }, [goToSdrLeads]);
 
   // Calculate business days in the filter period for daily average (BRT-aware)
   const businessDays = useMemo(() => {

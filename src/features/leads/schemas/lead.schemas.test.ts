@@ -187,5 +187,27 @@ describe('lead schemas', () => {
       const result = leadFiltersSchema.safeParse({ per_page: 200 });
       expect(result.success).toBe(false);
     });
+
+    it('should drop junk uuid filters (?assigned_to=undefined) instead of crashing the query', () => {
+      const result = leadFiltersSchema.safeParse({ assigned_to: 'undefined', cadence_id: 'undefined' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.assigned_to).toBeUndefined();
+        expect(result.data.cadence_id).toBeUndefined();
+      }
+    });
+
+    it('should keep valid uuid and sentinel values for uuid filters', () => {
+      const uuid = '11111111-2222-3333-4444-555555555555';
+      const result = leadFiltersSchema.safeParse({ assigned_to: uuid, cadence_id: '__none__' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.assigned_to).toBe(uuid);
+        expect(result.data.cadence_id).toBe('__none__');
+      }
+      const unassigned = leadFiltersSchema.safeParse({ assigned_to: '__unassigned__' });
+      expect(unassigned.success).toBe(true);
+      if (unassigned.success) expect(unassigned.data.assigned_to).toBe('__unassigned__');
+    });
   });
 });
