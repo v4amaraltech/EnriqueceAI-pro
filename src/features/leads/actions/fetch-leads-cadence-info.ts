@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type { LeadCadenceInfo } from '../types';
@@ -51,22 +52,15 @@ export async function fetchLeadsCadenceInfo(
     }
   }
 
-  // Resolve enrolled_by user IDs to emails
+  // Resolve enrolled_by user IDs to emails via auth.users (organization_members
+  // has no user_email column).
   const userIds = [...new Set(Object.values(result).map((r) => r.responsible_email).filter(Boolean))] as string[];
 
   if (userIds.length > 0) {
-    const { data: members } = await from(supabase, 'organization_members')
-      .select('user_id, user_email')
-      .in('user_id', userIds);
-
-    if (members) {
-      const emailMap = new Map(
-        (members as unknown as Array<{ user_id: string; user_email: string | null }>).map((m) => [m.user_id, m.user_email]),
-      );
-      for (const info of Object.values(result)) {
-        if (info.responsible_email) {
-          info.responsible_email = emailMap.get(info.responsible_email) ?? info.responsible_email;
-        }
+    const emailMap = await resolveUserEmails(userIds);
+    for (const info of Object.values(result)) {
+      if (info.responsible_email) {
+        info.responsible_email = emailMap.get(info.responsible_email) ?? info.responsible_email;
       }
     }
   }

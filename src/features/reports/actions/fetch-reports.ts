@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type {
@@ -92,18 +93,24 @@ export async function fetchReportData(
         .eq('org_id', orgId)
         .is('deleted_at', null) as unknown as Promise<{ data: RawLead[] | null }>,
 
-      // Org members (SDRs)
+      // Org members (SDRs) — email resolved from auth.users below
+      // (organization_members has no user_email column)
       from(supabase, 'organization_members')
-        .select('user_id, user_email')
+        .select('user_id')
         .eq('org_id', orgId)
-        .eq('status', 'active') as unknown as Promise<{ data: RawMember[] | null }>,
+        .eq('status', 'active') as unknown as Promise<{ data: Array<{ user_id: string }> | null }>,
     ]);
 
   const cadences = cadencesResult.data ?? [];
   const enrollments = enrollmentsResult.data ?? [];
   const interactions = interactionsResult.data ?? [];
   const leads = leadsResult.data ?? [];
-  const members = membersResult.data ?? [];
+  const memberRows = membersResult.data ?? [];
+  const memberEmailMap = await resolveUserEmails(memberRows.map((m) => m.user_id));
+  const members: RawMember[] = memberRows.map((m) => ({
+    user_id: m.user_id,
+    user_email: memberEmailMap.get(m.user_id) ?? m.user_id.slice(0, 8),
+  }));
 
   return {
     success: true,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type { ChannelType } from '@/features/cadences/types';
@@ -74,16 +75,11 @@ export async function fetchLeadEnrollment(
   const rows = (enrollmentRows ?? []) as unknown as EnrollmentRow[];
 
   // Collect unique enrolled_by user IDs
+  // Resolve enrolled_by user IDs to emails via auth.users (organization_members
+  // has no user_email column).
   const enrolledByIds = [...new Set(rows.map((r) => r.enrolled_by).filter(Boolean))] as string[];
-  const emailMap = new Map<string, string>();
-  if (enrolledByIds.length > 0) {
-    const { data: members } = (await from(supabase, 'organization_members')
-      .select('user_id, user_email')
-      .in('user_id', enrolledByIds)) as { data: Array<{ user_id: string; user_email: string | null }> | null };
-    for (const m of members ?? []) {
-      if (m.user_email) emailMap.set(m.user_id, m.user_email);
-    }
-  }
+  const emailMap =
+    enrolledByIds.length > 0 ? await resolveUserEmails(enrolledByIds) : new Map<string, string>();
 
   // Fetch steps for all cadences in parallel
   const cadenceIds = [...new Set(rows.map((r) => r.cadence_id))];
