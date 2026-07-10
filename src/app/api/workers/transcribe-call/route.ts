@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { processCallTranscription } from '@/features/calls/services/transcription.service';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 
-// Allow up to 5 minutes for transcription + SPICED analysis
+// Allow up to 5 minutes for transcription + BANT analysis
 export const maxDuration = 300;
 
 export async function POST(request: Request) {

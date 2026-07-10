@@ -1,13 +1,13 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-import { buildSpicedAnalysisPrompt, mapSpicedResponseToDbNames, SPICED_FIELD_NAMES, type SpicedLeadContext } from '@/features/ai/prompts/spiced-analysis';
+import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, type BantLeadContext } from '@/features/ai/prompts/bant-analysis';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const WHISPER_MODEL = 'whisper-1';
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-// 2048 truncated SPICED responses on long calls (~13min, transcription >11k chars).
-// 8192 fits the 6-field JSON output for any realistic call length.
+// 2048 truncated BANT responses on long calls (~13min, transcription >11k chars).
+// 8192 fits the multi-field JSON output for any realistic call length.
 const CLAUDE_MAX_TOKENS = 8192;
 
 interface CallForTranscription {
@@ -20,7 +20,7 @@ interface CallForTranscription {
 }
 
 /**
- * Main orchestrator: download audio → transcribe → SPICED analysis → save
+ * Main orchestrator: download audio → transcribe → BANT analysis → save
  */
 export async function processCallTranscription(callId: string): Promise<void> {
   const supabase = createServiceRoleClient();
@@ -71,17 +71,17 @@ export async function processCallTranscription(callId: string): Promise<void> {
       } as Record<string, unknown>)
       .eq('id', callId);
 
-    // Step 4: SPICED analysis (only if lead exists)
+    // Step 4: BANT analysis (only if lead exists)
     if (call.lead_id) {
       try {
-        await analyzeAndSaveSpiced(supabase, call.org_id, call.lead_id, transcription);
-      } catch (spicedErr) {
-        // Partial success: transcription saved, SPICED failed
-        const errMsg = spicedErr instanceof Error ? spicedErr.message : String(spicedErr);
-        console.error(`[transcription] SPICED analysis failed for lead ${call.lead_id}: ${errMsg}`);
+        await analyzeAndSaveBant(supabase, call.org_id, call.lead_id, transcription);
+      } catch (bantErr) {
+        // Partial success: transcription saved, BANT failed
+        const errMsg = bantErr instanceof Error ? bantErr.message : String(bantErr);
+        console.error(`[transcription] BANT analysis failed for lead ${call.lead_id}: ${errMsg}`);
         // Persist error in call metadata for debugging (Vercel truncates logs)
         await from(supabase, 'calls')
-          .update({ metadata: { spiced_error: errMsg.slice(0, 500), spiced_failed_at: new Date().toISOString() } } as Record<string, unknown>)
+          .update({ metadata: { bant_error: errMsg.slice(0, 500), bant_failed_at: new Date().toISOString() } } as Record<string, unknown>)
           .eq('id', callId);
       }
     }
@@ -150,20 +150,20 @@ async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
   throw lastError ?? new Error('whisper_unknown_error');
 }
 
-export async function analyzeAndSaveSpiced(
+export async function analyzeAndSaveBant(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
   leadId: string,
   transcription: string,
 ): Promise<void> {
-  // Find SPICED custom fields for this org
+  // Find BANT custom fields for this org
   const { data: customFields } = (await from(supabase, 'custom_fields')
     .select('id, field_name')
     .eq('org_id', orgId)
-    .in('field_name', SPICED_FIELD_NAMES)) as { data: { id: string; field_name: string }[] | null };
+    .in('field_name', BANT_FIELD_NAMES)) as { data: { id: string; field_name: string }[] | null };
 
   if (!customFields || customFields.length === 0) {
-    console.warn('[transcription] No SPICED fields found for org:', orgId);
+    console.warn('[transcription] No BANT fields found for org:', orgId);
     return;
   }
 
@@ -191,7 +191,7 @@ export async function analyzeAndSaveSpiced(
     } | null;
   };
 
-  const leadContext: SpicedLeadContext | undefined = leadInfo
+  const leadContext: BantLeadContext | undefined = leadInfo
     ? {
         decisorNome: [leadInfo.first_name, leadInfo.last_name].filter(Boolean).join(' ') || null,
         decisorCargo: leadInfo.job_title,
@@ -207,21 +207,21 @@ export async function analyzeAndSaveSpiced(
       }
     : undefined;
 
-  // Call Claude for SPICED analysis
-  const prompt = buildSpicedAnalysisPrompt(transcription, leadContext);
-  const spicedJson = await callClaudeForSpiced(prompt);
+  // Call Claude for BANT analysis
+  const prompt = buildBantAnalysisPrompt(transcription, leadContext);
+  const bantJson = await callClaudeForBant(prompt);
 
   // Map prompt response keys → database field names → field IDs
-  const dbMapped = mapSpicedResponseToDbNames(spicedJson);
-  const spicedValues: Record<string, string> = {};
+  const dbMapped = mapBantResponseToDbNames(bantJson);
+  const bantValues: Record<string, string> = {};
   for (const [dbFieldName, value] of Object.entries(dbMapped)) {
     const fieldId = fieldNameToId.get(dbFieldName);
     if (fieldId && value) {
-      spicedValues[fieldId] = value;
+      bantValues[fieldId] = value;
     }
   }
 
-  if (Object.keys(spicedValues).length === 0) return;
+  if (Object.keys(bantValues).length === 0) return;
 
   // Merge with existing custom_field_values
   const { data: lead } = (await from(supabase, 'leads')
@@ -229,13 +229,13 @@ export async function analyzeAndSaveSpiced(
     .eq('id', leadId)
     .single()) as { data: { custom_field_values: Record<string, string> | null } | null };
 
-  const merged = { ...(lead?.custom_field_values ?? {}), ...spicedValues };
+  const merged = { ...(lead?.custom_field_values ?? {}), ...bantValues };
 
   await from(supabase, 'leads')
     .update({ custom_field_values: merged } as Record<string, unknown>)
     .eq('id', leadId);
 
-  // Log SPICED analysis to lead timeline
+  // Log BANT analysis to lead timeline
   const filledFields = Object.entries(dbMapped)
     .filter(([, v]) => v?.trim())
     .map(([name, value]) => `${name}:\n${value}`)
@@ -250,14 +250,14 @@ export async function analyzeAndSaveSpiced(
         type: 'sent',
         message_content: filledFields,
         metadata: {
-          system_event: 'spiced_analysis',
+          system_event: 'bant_analysis',
           fields_filled: Object.keys(dbMapped).filter((k) => dbMapped[k]?.trim()),
         },
       } as Record<string, unknown>);
   }
 }
 
-async function callClaudeForSpiced(prompt: string): Promise<Record<string, string>> {
+async function callClaudeForBant(prompt: string): Promise<Record<string, string>> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY não configurada');

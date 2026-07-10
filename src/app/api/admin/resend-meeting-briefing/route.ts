@@ -15,7 +15,7 @@ export const maxDuration = 60;
  * the Next.js Server Action runtime killed the fire-and-forget
  * promise (fixed in 381e43d via `after()`). Useful generally for any
  * meeting whose closer was changed, briefing was missed, or whose
- * lead enriched with SPICED data after the original send.
+ * lead enriched with BANT data after the original send.
  *
  * Auth: service role bearer. Body: { leadId }.
  */

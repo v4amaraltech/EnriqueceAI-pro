@@ -434,7 +434,7 @@ async function updateCallFromWebhook(
     triggerPersistRecording(callId);
   }
 
-  // Trigger automatic transcription + SPICED analysis if recording available
+  // Trigger automatic transcription + BANT analysis if recording available
   if (payload.recordUrl && payload.duration >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
     triggerTranscription(callId);
   }

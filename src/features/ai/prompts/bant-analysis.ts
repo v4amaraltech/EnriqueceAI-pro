@@ -1,50 +1,40 @@
 /**
- * Prompt for SPICED qualification analysis from call transcription.
+ * Prompt for BANT qualification analysis from call transcription.
  * Field names MUST match the custom_fields.field_name values in the database.
+ *
+ * BANT = Budget, Autoridade, Necessidade, Timing. Substitui o antigo SPICED.
+ * Mantém 3 campos auxiliares úteis pro closer: Oportunidades, Gaps da ligação,
+ * Observação Decisor.
  */
 
-const SPICED_FIELDS: Array<{ dbName: string; promptName: string; description: string; maxChars: number }> = [
+const BANT_FIELDS: Array<{ dbName: string; promptName: string; description: string; maxChars: number }> = [
   {
-    dbName: 'S (Situação da Empresa - Operacional)',
-    promptName: 'S - Situation',
+    dbName: 'B (Budget)',
+    promptName: 'B - Budget',
     maxChars: 800,
     description:
-      'Contexto atual do lead: modelo de negócio, estrutura, canais ativos, investimento em marketing, faturamento, ticket, volume, time, momento do negócio, presença digital. Use bullets com hífen (-).',
+      'Capacidade e disposição de investimento: faturamento atual, ticket médio, quanto já investe hoje em marketing/vendas/tráfego, verba disponível, sensibilidade a preço, saúde financeira. Quantifique sempre que possível com base no que foi dito. Use bullets com hífen (-).',
   },
   {
-    dbName: 'P (Problemas Identificados - Prioridade)',
-    promptName: 'P - Problem',
+    dbName: 'A (Autoridade)',
+    promptName: 'A - Autoridade',
     maxChars: 800,
     description:
-      'Dores reais identificadas — não superficiais. O que está travando crescimento ou gerando perda. Seja crítico e direto. Use bullets com hífen (-).',
+      'Quem decide e como: papel do contato (decisor, influenciador ou usuário), demais pessoas envolvidas na decisão, existência de sócios/conselho, alçada, processo e critérios de aprovação. Use bullets com hífen (-).',
   },
   {
-    dbName: 'I (Impacto do problema descoberto)',
-    promptName: 'I - Implication',
+    dbName: 'N (Necessidade)',
+    promptName: 'N - Necessidade',
     maxChars: 800,
     description:
-      'Impacto financeiro e operacional das dores. Quantifique sempre que possível com base nos dados da call. Mostre o custo de não resolver. Use bullets com hífen (-).',
+      'Dores e necessidades prioritárias + impacto: o que precisa resolver, por que agora, o que trava crescimento ou gera perda, e o custo/impacto financeiro e operacional de não resolver. Seja crítico e quantifique quando possível. Use bullets com hífen (-).',
   },
   {
-    dbName: 'CE (Evento Crítico)',
-    promptName: 'C - Critical Event',
+    dbName: 'T (Timing)',
+    promptName: 'T - Timing',
     maxChars: 800,
     description:
-      'O que motivou a conversa agora. Gatilhos de urgência. Eventos que criam janela de oportunidade. Use bullets com hífen (-).',
-  },
-  {
-    dbName: 'E (Decisão)',
-    promptName: 'E - Decision',
-    maxChars: 800,
-    description:
-      'Quem decide, timeline, critérios de decisão, objeções levantadas na call, reunião agendada. Use bullets com hífen (-).',
-  },
-  {
-    dbName: 'D (Qual é o Processo de tomada de decisão)',
-    promptName: 'D - Decision Process',
-    maxChars: 800,
-    description:
-      'Como funciona a tomada de decisão, quem influencia, critérios técnicos ou financeiros, prazo mínimo para avaliar resultado. Use bullets com hífen (-).',
+      'Urgência e prazo: evento crítico/gatilho que motivou a conversa agora, janela de decisão, quando pretende começar/implementar, prazos internos, o que acelera ou atrasa a decisão. Use bullets com hífen (-).',
   },
   {
     dbName: 'Oportunidades',
@@ -69,13 +59,13 @@ const SPICED_FIELDS: Array<{ dbName: string; promptName: string; description: st
   },
 ];
 
-/** Known SPICED field names for matching against custom_fields table */
-export const SPICED_FIELD_NAMES = SPICED_FIELDS.map((f) => f.dbName);
+/** Known BANT field names for matching against custom_fields table */
+export const BANT_FIELD_NAMES = BANT_FIELDS.map((f) => f.dbName);
 
 /** Map from prompt response key → database field name */
-const PROMPT_TO_DB = new Map(SPICED_FIELDS.map((f) => [f.promptName, f.dbName]));
+const PROMPT_TO_DB = new Map(BANT_FIELDS.map((f) => [f.promptName, f.dbName]));
 
-export function mapSpicedResponseToDbNames(response: Record<string, string>): Record<string, string> {
+export function mapBantResponseToDbNames(response: Record<string, string>): Record<string, string> {
   const mapped: Record<string, string> = {};
   for (const [key, value] of Object.entries(response)) {
     const dbName = PROMPT_TO_DB.get(key);
@@ -87,7 +77,7 @@ export function mapSpicedResponseToDbNames(response: Record<string, string>): Re
 }
 
 /** Lead context passed to the prompt as cabeçalho */
-export interface SpicedLeadContext {
+export interface BantLeadContext {
   decisorNome?: string | null;
   decisorCargo?: string | null;
   empresa?: string | null;
@@ -102,7 +92,7 @@ export interface SpicedLeadContext {
   outrosCanais?: string | null;
 }
 
-function formatLeadContext(ctx: SpicedLeadContext | undefined): string {
+function formatLeadContext(ctx: BantLeadContext | undefined): string {
   if (!ctx) return 'Não fornecido.';
   const parts: string[] = [];
   if (ctx.decisorNome) parts.push(`Decisor: ${ctx.decisorNome}${ctx.decisorCargo ? ` — ${ctx.decisorCargo}` : ''}`);
@@ -119,17 +109,17 @@ function formatLeadContext(ctx: SpicedLeadContext | undefined): string {
   return parts.length > 0 ? parts.join('\n') : 'Não fornecido.';
 }
 
-export function buildSpicedAnalysisPrompt(
+export function buildBantAnalysisPrompt(
   transcription: string,
-  leadContext?: SpicedLeadContext,
+  leadContext?: BantLeadContext,
 ): string {
-  const fieldDescriptions = SPICED_FIELDS
+  const fieldDescriptions = BANT_FIELDS
     .map((f) => `${f.promptName} (máximo ${f.maxChars} caracteres):\n${f.description}`)
     .join('\n\n');
 
-  const jsonKeys = SPICED_FIELDS.map((f) => `"${f.promptName}": "..."`).join(', ');
+  const jsonKeys = BANT_FIELDS.map((f) => `"${f.promptName}": "..."`).join(', ');
 
-  return `Você é um especialista sênior em diagnóstico comercial e marketing, com foco em geração de demanda, tráfego pago, funil de vendas e análise estratégica. Sua função é transformar transcrições brutas de ligações de BDR/SDR em uma análise SPICED completa, estruturada e crítica, pronta para ser usada em reuniões comerciais consultivas.
+  return `Você é um especialista sênior em diagnóstico comercial e marketing, com foco em geração de demanda, tráfego pago, funil de vendas e análise estratégica. Sua função é transformar transcrições brutas de ligações de BDR/SDR em uma análise BANT completa, estruturada e crítica, pronta para ser usada em reuniões comerciais consultivas.
 
 DIRETRIZES DE ANÁLISE
 - Foque em diagnóstico, leitura de cenário e identificação de gaps.

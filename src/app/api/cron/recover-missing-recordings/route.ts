@@ -23,7 +23,7 @@ const MAX_AGE_DAYS = 45; // API4COM keeps records ~90d; cap at 45 to stay safely
  * so the rest fall back to this cron, which queries the API4COM REST API directly.
  *
  * Pairs with /api/cron/process-pending-transcriptions: once recording_url is set,
- * that cron picks the call up and runs Whisper + SPICED.
+ * that cron picks the call up and runs Whisper + BANT.
  */
 export async function POST(request: Request) {
   if (!verifyServiceRole(request) && !verifyCronSecret(request)) {

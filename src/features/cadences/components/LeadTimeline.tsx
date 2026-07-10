@@ -289,7 +289,8 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   meeting_invite_sent: 'Convite de reunião enviado',
                   meeting_cancelled: 'Reunião cancelada',
                   meeting_rescheduled: 'Reunião remarcada',
-                  spiced_analysis: 'Análise SPICED (IA)',
+                  bant_analysis: 'Análise BANT (IA)',
+                  spiced_analysis: 'Análise SPICED (IA)', // legado (interações antigas)
                   cadence_enrolled: 'Inscrito em cadência',
                 };
                 const title = isSystem

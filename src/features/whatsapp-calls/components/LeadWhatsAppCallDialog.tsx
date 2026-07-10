@@ -19,7 +19,7 @@ import { ActivityWhatsAppCallPanel } from './ActivityWhatsAppCallPanel';
  * Ligação via WhatsApp avulsa, disparada pelo botão "Ligar" da tela do lead
  * (fora da fila de atividades). Reusa o discador validado da cadência sem o
  * contexto de enrollment/step — o painel só registra a ligação (calls + BI +
- * gravação→transcrição→SPICED). Ver ActivityWhatsAppCallPanel.
+ * gravação→transcrição→BANT). Ver ActivityWhatsAppCallPanel.
  */
 export function LeadWhatsAppCallDialog({
   lead,
