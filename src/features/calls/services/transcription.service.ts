@@ -5,10 +5,10 @@ import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, ty
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
 const WHISPER_MODEL = 'whisper-1';
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-// 2048 truncated BANT responses on long calls (~13min, transcription >11k chars).
-// 8192 fits the multi-field JSON output for any realistic call length.
-const CLAUDE_MAX_TOKENS = 8192;
+// Análise BANT via OpenAI (mesma OPENAI_API_KEY do Whisper — provedor único).
+const ANALYSIS_MODEL = 'gpt-4.1';
+// Cap de saída: 8192 acomoda o JSON dos 7 campos em qualquer call realista.
+const ANALYSIS_MAX_TOKENS = 8192;
 
 interface CallForTranscription {
   id: string;
@@ -207,9 +207,9 @@ export async function analyzeAndSaveBant(
       }
     : undefined;
 
-  // Call Claude for BANT analysis
+  // Call OpenAI for BANT analysis
   const prompt = buildBantAnalysisPrompt(transcription, leadContext);
-  const bantJson = await callClaudeForBant(prompt);
+  const bantJson = await callOpenAIForBant(prompt);
 
   // Map prompt response keys → database field names → field IDs
   const dbMapped = mapBantResponseToDbNames(bantJson);
@@ -257,37 +257,41 @@ export async function analyzeAndSaveBant(
   }
 }
 
-async function callClaudeForBant(prompt: string): Promise<Record<string, string>> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+async function callOpenAIForBant(prompt: string): Promise<Record<string, string>> {
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY não configurada');
+    throw new Error('OPENAI_API_KEY não configurada');
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     signal: AbortSignal.timeout(90_000),
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: CLAUDE_MAX_TOKENS,
+      model: ANALYSIS_MODEL,
+      max_tokens: ANALYSIS_MAX_TOKENS,
+      // Um pouco de temperatura pro tom de "anotação de SDR" soar natural, mas
+      // baixo o bastante pra não inventar (o prompt proíbe invenção).
+      temperature: 0.4,
+      // JSON mode: garante JSON válido (o prompt já contém a palavra "JSON").
+      response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: prompt }],
     }),
   });
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => 'no body');
-    throw new Error(`claude_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
+    throw new Error(`openai_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    choices?: Array<{ message?: { content?: string } }>;
   };
 
-  const text = data.content.find((c) => c.type === 'text')?.text ?? '';
+  const text = data.choices?.[0]?.message?.content ?? '';
 
   // Parse JSON — extract object from response (handles code fences, extra text, etc.)
   // Most robust: find the first { and last } in the entire response
@@ -295,10 +299,10 @@ async function callClaudeForBant(prompt: string): Promise<Record<string, string>
   const lastBrace = text.lastIndexOf('}');
 
   if (firstBrace === -1) {
-    throw new Error(`claude_response_no_json: ${text.substring(0, 200)}`);
+    throw new Error(`openai_response_no_json: ${text.substring(0, 200)}`);
   }
 
-  // Claude sometimes hits max_tokens mid-response, so the closing brace never
+  // The model sometimes hits max_tokens mid-response, so the closing brace never
   // arrives. Recover by closing any unterminated string and matching open
   // braces with synthetic close braces from where the truncation happened.
   if (lastBrace <= firstBrace) {
@@ -315,7 +319,7 @@ async function callClaudeForBant(prompt: string): Promise<Record<string, string>
       else if (ch === '}') depth--;
     }
     if (depth <= 0) {
-      throw new Error(`claude_response_no_json: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
+      throw new Error(`openai_response_no_json: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
     }
     const repaired = head + (inString ? '"' : '') + '}'.repeat(depth);
     try {
@@ -329,7 +333,7 @@ async function callClaudeForBant(prompt: string): Promise<Record<string, string>
       try {
         return JSON.parse(escaped) as Record<string, string>;
       } catch {
-        throw new Error(`claude_response_parse_failed_truncated: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
+        throw new Error(`openai_response_parse_failed_truncated: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
       }
     }
   }
@@ -339,7 +343,7 @@ async function callClaudeForBant(prompt: string): Promise<Record<string, string>
   try {
     return JSON.parse(cleaned) as Record<string, string>;
   } catch {
-    // Step 2: Claude returns literal newlines inside JSON string values.
+    // Step 2: the model returns literal newlines inside JSON string values.
     // Escape newlines only INSIDE quoted strings, not structural ones.
     cleaned = cleaned.replace(/"([^"]*?)"/g, (_match, value: string) => {
       const escaped = value.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
@@ -348,7 +352,7 @@ async function callClaudeForBant(prompt: string): Promise<Record<string, string>
     try {
       return JSON.parse(cleaned) as Record<string, string>;
     } catch {
-      throw new Error(`claude_response_parse_failed: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
+      throw new Error(`openai_response_parse_failed: head=${text.substring(0, 200)} tail=${text.slice(-200)}`);
     }
   }
 }
