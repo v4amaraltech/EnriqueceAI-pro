@@ -194,10 +194,14 @@ function buildBriefingHtml(data: {
     phonesHtml = lead.telefone;
   }
 
-  // Custom fields
+  // Custom fields — o briefing do closer usa BANT. Os campos SPICED legados
+  // (S/P/I/CE/D/E) são filtrados aqui para não poluir o email, mesmo em leads
+  // antigos que ainda têm SPICED preenchido (continuam visíveis na tela do lead).
+  const LEGACY_SPICED_RE = /^(S|P|I|CE|D|E)\s*\(/;
   let customFieldsHtml = '';
   if (lead.custom_field_values && customFields.length > 0) {
     const cfRows = customFields
+      .filter((cf) => !LEGACY_SPICED_RE.test(cf.field_name))
       .map((cf) => {
         const val = lead.custom_field_values?.[cf.id];
         if (!val) return '';
