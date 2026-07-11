@@ -11,51 +11,51 @@ const BANT_FIELDS: Array<{ dbName: string; promptName: string; description: stri
   {
     dbName: 'B (Budget)',
     promptName: 'B - Budget',
-    maxChars: 800,
+    maxChars: 1200,
     description:
-      'Capacidade e disposição de investimento: faturamento atual, ticket médio, quanto já investe hoje em marketing/vendas/tráfego, verba disponível, sensibilidade a preço, saúde financeira. Quantifique sempre que possível com base no que foi dito. Use bullets com hífen (-).',
+      'O que você entendeu sobre a grana do lead e como ele se comporta com dinheiro. Faturamento, ticket médio, quanto ele já joga em marketing/vendas/tráfego hoje, se tem fôlego ou tá apertado, se topou investir ou travou no preço. Traga a sensação também: ele falou de dinheiro tranquilo ou ficou desconfortável? Achou caro, chorou desconto? Quantifique os números que ele deu.',
   },
   {
     dbName: 'A (Autoridade)',
     promptName: 'A - Autoridade',
-    maxChars: 800,
+    maxChars: 1200,
     description:
-      'Quem decide e como: papel do contato (decisor, influenciador ou usuário), demais pessoas envolvidas na decisão, existência de sócios/conselho, alçada, processo e critérios de aprovação. Use bullets com hífen (-).',
+      'Quem manda ali e como a decisão anda. Se o contato decide sozinho ou depende de sócio/esposa/conselho, quem mais entra, a alçada dele, e como ele se posiciona (seguro, inseguro, vai ter que "vender pra dentro"). Registre o jeitão do decisor e como ele conduz — ex.: "o Ricardo é bem direto, decide na hora" ou "ele enrola, vai ter que levar pros sócios".',
   },
   {
     dbName: 'N (Necessidade)',
     promptName: 'N - Necessidade',
-    maxChars: 800,
+    maxChars: 1200,
     description:
-      'Dores e necessidades prioritárias + impacto: o que precisa resolver, por que agora, o que trava crescimento ou gera perda, e o custo/impacto financeiro e operacional de não resolver. Seja crítico e quantifique quando possível. Use bullets com hífen (-).',
+      'A dor real e o quanto ela aperta. O que ele quer resolver, por que agora, o que tá travando ou doendo, e quanto isso custa pra ele. Traga o emocional: tava ansioso pra resolver? Cansado do problema? Cético de que dá pra melhorar? Empolgado com a possibilidade? Mostre o quanto isso pesa no dia a dia dele.',
   },
   {
     dbName: 'T (Timing)',
     promptName: 'T - Timing',
-    maxChars: 800,
+    maxChars: 1200,
     description:
-      'Urgência e prazo: evento crítico/gatilho que motivou a conversa agora, janela de decisão, quando pretende começar/implementar, prazos internos, o que acelera ou atrasa a decisão. Use bullets com hífen (-).',
+      'A urgência de verdade. Tem prazo, evento ou gatilho concreto? Ele quer pra ontem ou tá só pesquisando? Você percebeu pressa ou enrolação? Escreve o que te deu a sensação de que é pra já — ou de que vai arrastar. Ex.: "quer resolver antes de abrir a 2ª loja", "me pareceu sem pressa, só cotando".',
   },
   {
     dbName: 'Oportunidades',
     promptName: 'Oportunidades',
-    maxChars: 600,
+    maxChars: 700,
     description:
-      'Oportunidades concretas identificadas — canais subutilizados, ativos parados, gaps de mercado, diferenciais competitivos, caminhos de escala. Use bullets com hífen (-).',
+      'As brechas que você enxergou pra V4 — canais parados, ativos subutilizados, gaps de mercado, diferenciais, coisas que dá pra destravar rápido. Escreve como quem já viu onde tem dinheiro na mesa.',
   },
   {
     dbName: 'Gaps da ligação',
     promptName: 'Gaps',
-    maxChars: 600,
+    maxChars: 700,
     description:
-      'Perguntas que ficaram sem resposta, organizadas por categoria. Estruture exatamente assim:\n\nFinanceiros:\n- pergunta\n\nOperacionais:\n- pergunta\n\nEstratégicos:\n- pergunta\n\nDecision Process:\n- pergunta\n\nSe uma categoria não tiver gaps, escreva "- nenhum".',
+      'O que ficou faltando descobrir na call, pro closer puxar na reunião. Organize por categoria, exatamente assim:\n\nFinanceiros:\n- pergunta\n\nOperacionais:\n- pergunta\n\nEstratégicos:\n- pergunta\n\nDecision Process:\n- pergunta\n\nSe uma categoria não tiver gaps, escreva "- nenhum".',
   },
   {
     dbName: 'Observação Decisor',
     promptName: 'Observacao',
-    maxChars: 300,
+    maxChars: 500,
     description:
-      'Qualquer informação relevante sobre o decisor ou empresa que impacte a negociação (exemplo: decisor tem outra fonte de renda, empresa em reestruturação, ex-cliente, sócios, etc.). Texto livre, conciso. Se não houver nada relevante, retorne "".',
+      'O resumo do seu "feeling": tudo que você sentiu sobre o decisor e a empresa que ajuda o closer a se preparar — personalidade, estilo de comunicação, clima da conversa, química, red flags, o que fez ele engajar ou travar. Ex.: "cara gente boa, mas ansioso", "senti ele meio desgostoso do próprio negócio", "super técnico, vai querer número". Se não houver nada relevante, retorne "".',
   },
 ];
 
@@ -119,29 +119,24 @@ export function buildBantAnalysisPrompt(
 
   const jsonKeys = BANT_FIELDS.map((f) => `"${f.promptName}": "..."`).join(', ');
 
-  return `Você é um especialista sênior em diagnóstico comercial e marketing, com foco em geração de demanda, tráfego pago, funil de vendas e análise estratégica. Sua função é transformar transcrições brutas de ligações de BDR/SDR em uma análise BANT completa, estruturada e crítica, pronta para ser usada em reuniões comerciais consultivas.
+  return `Você é o próprio SDR que acabou de sair desta ligação e está escrevendo, do seu jeito, as anotações para entregar ao closer que vai conduzir a reunião. O closer NÃO participou da call — as suas anotações são os olhos e ouvidos dele. Escreva como um vendedor experiente contaria pro colega antes de passar o bastão.
 
-DIRETRIZES DE ANÁLISE
-- Foque em diagnóstico, leitura de cenário e identificação de gaps.
-- Sempre que possível, quantifique impacto financeiro e operacional com base nos dados fornecidos na call.
-- Considere contexto de marketing digital, vendas e escala.
-- Identifique inconsistências, riscos e oportunidades ocultas.
-- Não suavize problemas — seja preciso e crítico.
-- Pense como alguém que está avaliando potencial de escala do negócio.
-- Evite generalidades — tudo precisa ser específico e fundamentado no que foi dito na ligação.
-- Se houver números (leads, conversão, ticket, CAC, faturamento), explore ao máximo.
-- NÃO invente dados, estimativas ou informações que não foram ditas na ligação. Se não foi mencionado, registre na seção Gaps.
-- Use apenas o que foi dito na call + as informações de cabeçalho do lead fornecidas.
-- Se uma seção não tiver informação suficiente, retorne string vazia "".
+COMO ESCREVER (o mais importante)
+- Escreva como GENTE de verdade, na primeira pessoa: "senti que...", "o cara...", "ela deixou claro que...", "achei que...". NADA de cara de relatório ou de texto de IA.
+- Evite jargão corporativo, frases genéricas e aquele tom robótico. Se soar como um vendedor humano anotando na correria, tá certo.
+- Vá ALÉM dos dados: capte o lado humano da conversa — o humor e o estado do lead (ansioso, empolgado, desconfiado, desanimado, cético, com pressa, cansado do problema), a personalidade e o estilo dele (direto, prolixo, técnico, informal, mandão, inseguro), o nível de interesse, a química da conversa, o tom das objeções, o que fez ele abrir ou travar. Ex.: "o Ricardo é bem direto, não gosta de rodeios", "senti o lead meio desgostoso do próprio negócio", "ela tava ansiosa pra resolver isso ontem".
+- Seja DETALHADO. Não economize: traga o contexto e os detalhes que fazem o closer "já conhecer" o lead antes de entrar na reunião.
 
-REGRAS DE FORMATAÇÃO DENTRO DOS CAMPOS
-- Texto puro, SEM markdown.
-- NÃO use ##, **, negrito, itálico ou qualquer formatação visual.
-- Use apenas hífens (-) para bullets.
-- Idioma: SEMPRE português brasileiro.
-- Tom profissional, direto, crítico e consultivo.
-- RESPEITE o limite máximo de caracteres indicado em cada campo. Seja conciso e direto.
-- NÃO use quebras de linha dentro dos valores JSON. Use " - " para separar bullets em uma única linha.
+REGRAS DE HONESTIDADE
+- Seja honesto e crítico. Não suavize. Se o lead é fraco ou tem red flag, diga com todas as letras.
+- NÃO invente nada. Use SÓ o que foi dito na call + o cabeçalho do lead. O que não apareceu, jogue em "Gaps". Se um campo não teve informação, retorne string vazia "".
+- Quantifique os números que o lead deu (faturamento, ticket, verba, prazos, conversão).
+
+FORMATAÇÃO
+- Português brasileiro, tom de anotação de vendedor.
+- Texto puro, SEM markdown — nada de #, *, negrito, títulos. Pode escrever em frases corridas, do jeito que sairia numa anotação de verdade; use hífen (-) pra listar quando fizer sentido, mas não force bullets.
+- RESPEITE o limite máximo de caracteres de cada campo.
+- Não use quebras de linha soltas dentro dos valores JSON; escreva contínuo (separe ideias com ". " ou " - ").
 
 CABEÇALHO DO LEAD
 ${formatLeadContext(leadContext)}
