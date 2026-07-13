@@ -84,6 +84,9 @@ export async function fetchLeads(
   if (!hasSearch && filters.canal) {
     query = query.eq('canal', filters.canal);
   }
+  if (!hasSearch && filters.loss_reason_id && filters.loss_reason_id.length > 0) {
+    query = query.in('loss_reason_id', filters.loss_reason_id);
+  }
 
   // Filter by cadence enrollment (skipped when searching).
   // The "__none__" case is handled at the source-table level (view above), so
@@ -229,6 +232,9 @@ export async function fetchFilteredLeadIds(
   if (filters.canal) {
     query = query.eq('canal', filters.canal);
   }
+  if (filters.loss_reason_id && filters.loss_reason_id.length > 0) {
+    query = query.in('loss_reason_id', filters.loss_reason_id);
+  }
   if (filters.search) {
     const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
     const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
@@ -296,4 +302,51 @@ export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
   const fromSettings = settings?.options ?? [];
   const unique = [...new Set([...fromSettings, ...fromLeads])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return { success: true, data: unique };
+}
+
+export interface LossReasonFilterOption {
+  id: string;
+  name: string;
+  count: number;
+}
+
+// Motivos de perda da org + quantos leads têm cada motivo (para o filtro
+// "Motivo de Perda"). O count vem do RPC count_leads_by_loss_reason e reflete
+// exatamente o que o filtro retorna (leads com loss_reason_id, não deletados).
+// Motivos sem nenhum lead ainda aparecem com count 0.
+export async function fetchLossReasonsForFilter(): Promise<ActionResult<LossReasonFilterOption[]>> {
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, supabase } = auth.data;
+
+  const [reasonsRes, countsRes] = await Promise.all([
+    from(supabase, 'loss_reasons')
+      .select('id, name, sort_order')
+      .eq('org_id', orgId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+    (supabase.rpc as any)('count_leads_by_loss_reason', { p_org_id: orgId }),
+  ]);
+
+  const { data: reasons, error } = reasonsRes as {
+    data: Array<{ id: string; name: string; sort_order: number }> | null;
+    error: { message: string } | null;
+  };
+  if (error) {
+    return { success: false, error: 'Erro ao buscar motivos de perda' };
+  }
+
+  const { data: counts } = countsRes as {
+    data: Array<{ loss_reason_id: string; cnt: number }> | null;
+  };
+  const countMap = new Map((counts ?? []).map((c) => [c.loss_reason_id, Number(c.cnt)]));
+
+  return {
+    success: true,
+    data: (reasons ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      count: countMap.get(r.id) ?? 0,
+    })),
+  };
 }

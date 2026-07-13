@@ -147,6 +147,20 @@ const uuidFilter = (sentinel: string) =>
       v == null || v === sentinel || UUID_RE.test(v) ? v ?? undefined : undefined,
     );
 
+// Filtro multi-valor por uuid (usado no "Motivo de Perda"). Aceita a URL como
+// lista separada por vírgula (`?loss_reason_id=uuid1,uuid2`) ou como array de
+// params repetidos; sanea igual ao uuidFilter — só uuids válidos passam. Vazio
+// (nenhum válido) vira `undefined` = sem filtro.
+const uuidListFilter = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((v) => {
+    if (v == null) return undefined;
+    const raw = Array.isArray(v) ? v : v.split(',');
+    const valid = raw.map((s) => s.trim()).filter((s) => UUID_RE.test(s));
+    return valid.length > 0 ? valid : undefined;
+  });
+
 export const leadFiltersSchema = z.object({
   status: leadStatusSchema.optional(),
   enrichment_status: enrichmentStatusSchema.optional(),
@@ -158,6 +172,7 @@ export const leadFiltersSchema = z.object({
   search: z.string().optional(),
   assigned_to: uuidFilter('__unassigned__'),
   cadence_id: uuidFilter('__none__'),
+  loss_reason_id: uuidListFilter,
   sort_by: z.enum(['created_at', 'fit_score', 'nome_fantasia', 'status', 'engagement_score']).default('created_at'),
   sort_dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),
