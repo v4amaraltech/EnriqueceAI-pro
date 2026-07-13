@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, User, X } from 'lucide-react';
+import { ChevronDown, ListX, Search, User, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -14,6 +22,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import type { LossReasonFilterOption } from '../actions/fetch-leads';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
 
@@ -34,10 +43,11 @@ interface LeadFiltersProps {
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
   canalOptions?: string[];
+  lossReasons?: LossReasonFilterOption[];
   currentUserId?: string;
 }
 
-export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOptions, canalOptions, currentUserId }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOptions, canalOptions, lossReasons, currentUserId }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -86,6 +96,9 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
   const activeCanal = overrides.canal ?? (currentCanal || ALL_VALUE);
   const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
   const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);
+  const currentLoss = searchParams.get('loss_reason_id') ?? '';
+  const activeLoss = overrides.loss_reason_id ?? currentLoss;
+  const selectedLossIds = activeLoss ? activeLoss.split(',').filter(Boolean) : [];
 
   const flushFilterParams = useCallback(() => {
     const pending = pendingParamsRef.current;
@@ -111,7 +124,17 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
     filterDebounceRef.current = setTimeout(flushFilterParams, 300);
   }
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentCanal || currentSearch || currentAssigned || currentCadence || currentCnae;
+  // Toggle one loss reason in/out of the multi-select. Rebuilds the comma-list
+  // and reuses the same batched navigation as the other filters (empty → param
+  // removed).
+  function toggleLossReason(id: string) {
+    const set = new Set(selectedLossIds);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    handleFilterChange('loss_reason_id', [...set].join(','));
+  }
+
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentCanal || currentSearch || currentAssigned || currentCadence || currentCnae || currentLoss;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -246,6 +269,53 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+
+        {/* Motivo de Perda (multi-seleção) — isola os leads perdidos por motivo
+            para re-inscrever numa cadência e reativar */}
+        {lossReasons && lossReasons.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">Motivo de Perda</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-9 w-[200px] justify-between font-normal">
+                  <span className="truncate">
+                    {selectedLossIds.length === 0
+                      ? 'Todos'
+                      : `${selectedLossIds.length} selecionado${selectedLossIds.length > 1 ? 's' : ''}`}
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-[340px] w-[280px] overflow-y-auto">
+                <DropdownMenuLabel className="flex items-center justify-between">
+                  <span>Motivo de Perda</span>
+                  {selectedLossIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-xs font-normal text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                      onClick={() => handleFilterChange('loss_reason_id', '')}
+                    >
+                      <ListX className="h-3.5 w-3.5" />
+                      Limpar
+                    </button>
+                  )}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {lossReasons.map((r) => (
+                  <DropdownMenuCheckboxItem
+                    key={r.id}
+                    checked={selectedLossIds.includes(r.id)}
+                    onCheckedChange={() => toggleLossReason(r.id)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="flex-1 truncate">{r.name}</span>
+                    <span className="ml-2 text-xs tabular-nums text-[var(--muted-foreground)]">{r.count}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
 

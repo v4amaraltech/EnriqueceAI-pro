@@ -9,7 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
-import type { LeadStatusCounts } from '../actions/fetch-leads';
+import type { LeadStatusCounts, LossReasonFilterOption } from '../actions/fetch-leads';
 import type { LeadListResult } from '../leads.contract';
 import type { LeadCadenceInfo } from '../types';
 import { CreateLeadDialog } from './CreateLeadDialog';
@@ -38,9 +38,10 @@ interface LeadListViewProps {
   cnaes?: string[];
   leadSourceOptions?: LeadSourceOption[];
   canalOptions?: string[];
+  lossReasons?: LossReasonFilterOption[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions, lossReasons }: LeadListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -147,7 +148,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} currentUserId={currentUserId} />
+        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} lossReasons={lossReasons} currentUserId={currentUserId} />
       </Suspense>
 
       {/* Table or filtered empty */}

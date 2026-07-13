@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import { fetchActiveCadences } from '@/features/leads/actions/fetch-active-cadences';
-import { fetchDistinctCanais, fetchDistinctCnaes, fetchLeads, fetchLeadStatusCounts } from '@/features/leads/actions/fetch-leads';
+import { fetchDistinctCanais, fetchDistinctCnaes, fetchLeads, fetchLeadStatusCounts, fetchLossReasonsForFilter } from '@/features/leads/actions/fetch-leads';
 import { getLeadSourceOptions } from '@/features/leads/actions/get-lead-source-options';
 import { fetchLeadsCadenceInfo } from '@/features/leads/actions/fetch-leads-cadence-info';
 import { fetchOrgMembersAuth } from '@/features/leads/actions/fetch-org-members';
@@ -32,13 +32,14 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.assigned_to) filters.assigned_to = params.assigned_to;
   if (params.cadence_id) filters.cadence_id = params.cadence_id;
   if (params.canal) filters.canal = params.canal;
+  if (params.loss_reason_id) filters.loss_reason_id = params.loss_reason_id;
   if (params.search) filters.search = params.search;
   if (params.page) filters.page = params.page;
   if (params.per_page) filters.per_page = params.per_page;
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
-  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.search);
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.loss_reason_id || params.search);
 
   const result = await fetchLeads(filters);
 
@@ -60,7 +61,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       .filter((id): id is string => id !== null && id !== undefined),
   )];
 
-  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions, canaisResult] = await Promise.all([
+  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions, canaisResult, lossReasonsResult] = await Promise.all([
     fetchLeadsCadenceInfo(leadIds),
     fetchUserMap(uniqueUserIds),
     fetchOrgMembersAuth(),
@@ -69,6 +70,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
     fetchDistinctCnaes(),
     getLeadSourceOptions(),
     fetchDistinctCanais(),
+    fetchLossReasonsForFilter(),
   ]);
   const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
   const userMap = userMapResult.success ? userMapResult.data : {};
@@ -77,6 +79,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const cadences = cadencesResult.success ? cadencesResult.data : [];
   const cnaes = cnaesResult.success ? cnaesResult.data : [];
   const canalOptions = canaisResult.success ? canaisResult.data : [];
+  const lossReasons = lossReasonsResult.success ? lossReasonsResult.data : [];
 
   return (
     <LeadListView
@@ -91,6 +94,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       cnaes={cnaes}
       leadSourceOptions={leadSourceOptions}
       canalOptions={canalOptions}
+      lossReasons={lossReasons}
     />
   );
 }
