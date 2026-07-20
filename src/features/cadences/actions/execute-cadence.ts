@@ -146,7 +146,7 @@ interface EnrollmentWithLead {
     municipio: string | null;
     uf: string | null;
     porte: string | null;
-    primeiro_nome: string | null;
+    first_name: string | null;
     assigned_to: string | null;
     email_bounced_at: string | null;
     socios: Array<{ nome: string; qualificacao?: string }> | null;
@@ -446,7 +446,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         if (template) {
           // Build variables: lead data + vendor data
           const variables: Record<string, string | null> = {
-            ...buildLeadTemplateVariables(enrollment.lead, enrollment.lead.socios?.[0]?.nome),
+            ...buildLeadTemplateVariables(
+              enrollment.lead,
+              enrollment.lead.first_name ?? enrollment.lead.socios?.[0]?.nome,
+            ),
             nome_vendedor: null,
             email_vendedor: null,
           };
