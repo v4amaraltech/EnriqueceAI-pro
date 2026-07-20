@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useTransition } from 'react';
+import { useEffect } from 'react';
 
 import { ChevronLeft, ChevronRight, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -30,6 +30,7 @@ interface ActivityExecutionSheetProps {
   onClose: () => void;
   onNavigate: (key: string) => void;
   onActivityDone: (enrollmentId: string, stepId: string) => void;
+  onActivityRestore: (activity: PendingActivity) => void;
   onLeadLost?: (activity: PendingActivity) => void;
   dialerProvider?: DialerProvider;
   quickMode?: boolean;
@@ -43,11 +44,11 @@ export function ActivityExecutionSheet({
   onClose,
   onNavigate,
   onActivityDone,
+  onActivityRestore,
   onLeadLost,
   dialerProvider,
   quickMode = false,
 }: ActivityExecutionSheetProps) {
-  const [isSending, startSendTransition] = useTransition();
 
   const selectedIndex = selectedKey !== null
     ? activities.findIndex((a) => keyOf(a) === selectedKey)
@@ -94,118 +95,126 @@ export function ActivityExecutionSheet({
     }
   }
 
+  // Optimistic completion: the caller advances the UI immediately, then hands
+  // the server work here to run in the background. The persistence (create
+  // interaction + advance enrollment) is idempotent, so moving on before it
+  // finishes is safe. If it fails, put the activity back on the queue with a
+  // clear error so the SDR never silently loses a step.
+  function persistInBackground(
+    act: PendingActivity,
+    persist: () => Promise<{ success: boolean; error?: string }>,
+    onSuccess?: () => void,
+  ) {
+    void persist()
+      .then((result) => {
+        if (result.success) {
+          onSuccess?.();
+        } else {
+          onActivityRestore(act);
+          toast.error(result.error ?? 'Não foi possível registrar — atividade devolvida à fila');
+        }
+      })
+      .catch((err) => {
+        console.error('[ActivityExecutionSheet] background persist failed:', err);
+        onActivityRestore(act);
+        toast.error('Não foi possível registrar — atividade devolvida à fila');
+      });
+  }
+
   const isScheduled = activity?.enrollmentId.startsWith('scheduled:') ?? false;
 
   const handleSend = (subject: string, body: string, aiGenerated: boolean, phone?: string) => {
     if (!activity) return;
+    const act = activity;
 
-    const isWhatsApp = activity.channel === 'whatsapp';
-    const resolvedEmail = (activity.lead.socios ?? [])
+    const isWhatsApp = act.channel === 'whatsapp';
+    const resolvedEmail = (act.lead.socios ?? [])
       .flatMap((s) => s.emails ?? [])
       .sort((a, b) => a.ranking - b.ranking)[0]?.email
-      ?? activity.lead.email
+      ?? act.lead.email
       ?? '';
     const to = phone
       ?? (isWhatsApp
-        ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
+        ? (resolveWhatsAppPhone(act.lead)?.formatted ?? '')
         : resolvedEmail);
 
-    if (isScheduled) {
-      startSendTransition(async () => {
-        const result = await executeScheduledActivity({
-          scheduledActivityId: activity.stepId,
-          leadId: activity.lead.id,
-          channel: activity.channel,
-          to,
-          subject,
-          body,
-          aiGenerated,
-        });
-        if (result.success) {
-          toast.success(isWhatsApp ? 'WhatsApp enviado!' : 'Email enviado!', { icon: isWhatsApp ? '💬' : '📧' });
-          advanceOrClose(activity.enrollmentId, activity.stepId);
-        } else {
-          toast.error(result.error);
-        }
-      });
-      return;
-    }
-
-    if (!activity.cadenceCreatedBy) {
+    // Hard precondition — block before advancing, since without a creator we
+    // can't attribute the send.
+    if (!isScheduled && !act.cadenceCreatedBy) {
       toast.error('Cadência sem usuário criador — não é possível enviar');
       return;
     }
 
-    startSendTransition(async () => {
-      const result = await executeActivity({
-        enrollmentId: activity.enrollmentId,
-        cadenceId: activity.cadenceId,
-        stepId: activity.stepId,
-        leadId: activity.lead.id,
-        orgId: activity.lead.org_id,
-        cadenceCreatedBy: activity.cadenceCreatedBy!,
-        channel: activity.channel,
-        to,
-        subject,
-        body,
-        aiGenerated,
-        templateId: activity.templateId,
-      });
+    // Advance immediately; the actual send confirms/rolls back in the background.
+    // The "enviado" toast fires on success (a real send can fail — no credit,
+    // bounce), so we don't claim it sent before it did.
+    advanceOrClose(act.enrollmentId, act.stepId);
 
-      if (result.success) {
-        toast.success(isWhatsApp ? 'WhatsApp enviado!' : 'Email enviado!', { icon: isWhatsApp ? '💬' : '📧' });
-        advanceOrClose(activity.enrollmentId, activity.stepId);
-      } else {
-        toast.error(result.error);
-      }
-    });
+    const persist = isScheduled
+      ? () => executeScheduledActivity({
+          scheduledActivityId: act.stepId,
+          leadId: act.lead.id,
+          channel: act.channel,
+          to,
+          subject,
+          body,
+          aiGenerated,
+        })
+      : () => executeActivity({
+          enrollmentId: act.enrollmentId,
+          cadenceId: act.cadenceId,
+          stepId: act.stepId,
+          leadId: act.lead.id,
+          orgId: act.lead.org_id,
+          cadenceCreatedBy: act.cadenceCreatedBy!,
+          channel: act.channel,
+          to,
+          subject,
+          body,
+          aiGenerated,
+          templateId: act.templateId,
+        });
+
+    persistInBackground(act, persist, () =>
+      toast.success(isWhatsApp ? 'WhatsApp enviado!' : 'Email enviado!', { icon: isWhatsApp ? '💬' : '📧' }),
+    );
   };
 
   const handleMarkDone = (notes: string) => {
     if (!activity) return;
+    const act = activity;
 
-    startSendTransition(async () => {
-      if (isScheduled) {
-        const result = await executeScheduledActivity({
-          scheduledActivityId: activity.stepId,
-          leadId: activity.lead.id,
-          channel: activity.channel,
+    // Manual conclude (phone/research/task) just logs + advances the enrollment —
+    // near-zero failure and idempotent — so we confirm and advance immediately.
+    toast.success('Atividade concluída!', { icon: '✅' });
+    advanceOrClose(act.enrollmentId, act.stepId);
+
+    const persist = isScheduled
+      ? () => executeScheduledActivity({
+          scheduledActivityId: act.stepId,
+          leadId: act.lead.id,
+          channel: act.channel,
           to: '',
           subject: '',
           body: notes,
           aiGenerated: false,
+        })
+      : () => executeActivity({
+          enrollmentId: act.enrollmentId,
+          cadenceId: act.cadenceId,
+          stepId: act.stepId,
+          leadId: act.lead.id,
+          orgId: act.lead.org_id,
+          cadenceCreatedBy: act.cadenceCreatedBy ?? '',
+          channel: act.channel,
+          to: '',
+          subject: '',
+          body: notes,
+          aiGenerated: false,
+          templateId: null,
         });
-        if (result.success) {
-          toast.success('Atividade concluída!', { icon: '✅' });
-          advanceOrClose(activity.enrollmentId, activity.stepId);
-        } else {
-          toast.error(result.error);
-        }
-        return;
-      }
 
-      const result = await executeActivity({
-        enrollmentId: activity.enrollmentId,
-        cadenceId: activity.cadenceId,
-        stepId: activity.stepId,
-        leadId: activity.lead.id,
-        orgId: activity.lead.org_id,
-        cadenceCreatedBy: activity.cadenceCreatedBy ?? '',
-        channel: activity.channel,
-        to: '',
-        subject: '',
-        body: notes,
-        aiGenerated: false,
-        templateId: null,
-      });
-
-      if (result.success) {
-        toast.success('Atividade concluída!', { icon: '✅' });
-        advanceOrClose(activity.enrollmentId, activity.stepId);
-      } else {
-        toast.error(result.error);
-      }
-    });
+    persistInBackground(act, persist);
   };
 
   // Ligação via WhatsApp: a disposition (7.6) já avançou/reagendou a cadência,
@@ -217,56 +226,41 @@ export function ActivityExecutionSheet({
 
   const handleReportWhatsAppInvalid = () => {
     if (!activity) return;
+    const act = activity;
     if (isScheduled) {
       toast.error('Atividades agendadas não suportam essa ação ainda');
       return;
     }
 
-    startSendTransition(async () => {
-      const result = await reportWhatsAppInvalid({
-        enrollmentId: activity.enrollmentId,
-        cadenceId: activity.cadenceId,
-        stepId: activity.stepId,
-        leadId: activity.lead.id,
-        orgId: activity.lead.org_id,
-      });
+    toast.success('Lead marcado como sem WhatsApp', { icon: '🚫' });
+    advanceOrClose(act.enrollmentId, act.stepId);
 
-      if (result.success) {
-        toast.success('Lead marcado como sem WhatsApp', { icon: '🚫' });
-        advanceOrClose(activity.enrollmentId, activity.stepId);
-      } else {
-        toast.error(result.error);
-      }
-    });
+    persistInBackground(act, () =>
+      reportWhatsAppInvalid({
+        enrollmentId: act.enrollmentId,
+        cadenceId: act.cadenceId,
+        stepId: act.stepId,
+        leadId: act.lead.id,
+        orgId: act.lead.org_id,
+      }),
+    );
   };
 
   const handleSkip = () => {
     if (!activity) return;
+    const act = activity;
 
-    if (isScheduled) {
-      startSendTransition(async () => {
-        const { postponeScheduledActivity } = await import('../actions/complete-scheduled-activity');
-        const result = await postponeScheduledActivity(activity.stepId);
-        if (result.success) {
-          toast.success('Atividade adiada em 2 horas');
-          advanceOrClose(activity.enrollmentId, activity.stepId);
-        } else {
-          toast.error(result.error);
+    toast.success('Atividade adiada em 2 horas');
+    advanceOrClose(act.enrollmentId, act.stepId);
+
+    const persist = isScheduled
+      ? async () => {
+          const { postponeScheduledActivity } = await import('../actions/complete-scheduled-activity');
+          return postponeScheduledActivity(act.stepId);
         }
-      });
-      return;
-    }
+      : () => skipActivity(act.enrollmentId);
 
-    startSendTransition(async () => {
-      const result = await skipActivity(activity.enrollmentId);
-
-      if (result.success) {
-        toast.success('Atividade adiada em 2 horas');
-        advanceOrClose(activity.enrollmentId, activity.stepId);
-      } else {
-        toast.error(result.error);
-      }
-    });
+    persistInBackground(act, persist);
   };
 
   const hasPrev = selectedIndex > 0;
@@ -369,7 +363,7 @@ export function ActivityExecutionSheet({
               <ActivityExecutionSheetContent
                 key={`${activity.enrollmentId}:${activity.stepId}`}
                 activity={activity}
-                isSending={isSending}
+                isSending={false}
                 onSend={handleSend}
                 onSkip={handleSkip}
                 onMarkDone={handleMarkDone}

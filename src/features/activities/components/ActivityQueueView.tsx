@@ -147,6 +147,17 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
     );
   }, []);
 
+  // Rollback for optimistic advance: if the background persist of a concluded
+  // activity fails, put it back on the queue (at the top, so it's visible) so
+  // nothing is silently lost. No-op if it's somehow already present.
+  const handleActivityRestore = useCallback((activity: PendingActivity) => {
+    setActivities((prev) =>
+      prev.some((a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId)
+        ? prev
+        : [activity, ...prev],
+    );
+  }, []);
+
   const handleIgnore = useCallback((activity: PendingActivity) => {
     handleActivityDone(activity.enrollmentId, activity.stepId);
     if (activity.enrollmentId.startsWith('scheduled:')) {
@@ -443,6 +454,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
+            onActivityRestore={handleActivityRestore}
             onLeadLost={handleLeadLost}
             dialerProvider={dialerProvider}
             quickMode={false}
@@ -566,6 +578,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onClose={handleClose}
             onNavigate={handleNavigate}
             onActivityDone={handleActivityDone}
+            onActivityRestore={handleActivityRestore}
             onLeadLost={handleLeadLost}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
