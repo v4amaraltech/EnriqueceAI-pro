@@ -144,6 +144,16 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
     });
   }, []);
 
+  // Rollback for optimistic advance: restore an activity to the top of the list
+  // if its background persist failed (no-op if already present).
+  const handleActivityRestore = useCallback((activity: PendingActivity) => {
+    setActivities((prev) =>
+      prev.some((a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId)
+        ? prev
+        : [activity, ...prev],
+    );
+  }, []);
+
   const handleIgnore = useCallback((activity: PendingActivity) => {
     handleActivityDone(activity.enrollmentId, activity.stepId);
     import('../actions/ignore-activity').then(({ ignoreActivity }) =>
@@ -376,6 +386,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         onClose={handleClose}
         onNavigate={handleNavigate}
         onActivityDone={handleActivityDone}
+        onActivityRestore={handleActivityRestore}
         onLeadLost={handleLeadLost}
       />
 
