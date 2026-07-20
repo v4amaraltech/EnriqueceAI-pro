@@ -327,7 +327,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                       {isSystem ? (
                         <div className="mt-2 rounded-lg border border-[var(--border)] p-3">
                           <p className="text-sm font-semibold text-[var(--foreground)]">{entry.subject}</p>
-                          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                          <p className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-[var(--muted-foreground)]">
                             {localizedFieldsUpdatedContent(entry) ?? entry.message_content}
                           </p>
                         </div>
