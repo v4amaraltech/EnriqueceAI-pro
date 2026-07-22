@@ -7,7 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 
 import { rescheduleCurrentStep } from '@/features/activities/actions/reschedule-current-step';
 
-import { mapDispositionToAction } from '../disposition';
+import { mapDispositionToAction } from '@/features/calls/disposition';
 
 const dispositionSchema = z.object({
   enrollmentId: z.string().uuid(),

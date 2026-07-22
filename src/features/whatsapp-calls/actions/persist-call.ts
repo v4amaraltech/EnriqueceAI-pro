@@ -21,7 +21,14 @@ const persistSchema = z.object({
   callId: z.string().optional().default(''),
   // Número discado (lead).
   destination: z.string().min(1),
+  // Sinal TÉCNICO da chamada — vira `calls.status` (atendeu / não conectou).
   disposition: z.enum(['significant', 'not_significant', 'no_contact', 'busy', 'not_connected']),
+  // Desfecho informado pelo SDR no modal de resultado — vira `calls.sdr_outcome`,
+  // SEM tocar em `calls.status`. Os dois convivem de propósito (ver a migration
+  // 20260722120000 e o comentário em classify-webphone-call.ts).
+  sdrOutcome: z
+    .enum(['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'])
+    .optional(),
   connected: z.boolean(),
   durationSeconds: z.number().int().min(0),
   startedAt: z.string().datetime(),
@@ -99,6 +106,7 @@ export async function persistWhatsAppCall(
       started_at: p.startedAt,
       duration_seconds: p.durationSeconds,
       status: p.disposition,
+      sdr_outcome: p.sdrOutcome ?? null,
       type: 'outbound',
       connected: p.connected,
       answered_at: p.answeredAt ?? null,

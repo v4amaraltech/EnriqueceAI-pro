@@ -8,17 +8,22 @@ import { from } from '@/lib/supabase/from';
 
 import { callStatusSchema } from '../schemas/call.schemas';
 
-// `status` is accepted for backwards compatibility with existing callers
-// (PostCallClassificationDialog, ActivityPhonePanel) but is
-// no longer written to the calls table. Single source of truth for call
-// status is the API4COM webhook (/api/webhooks/api4com), which classifies
-// significant / no_contact / not_connected from hangup_cause + duration.
-// The manual SDR input was overwriting the objective measurement with a
-// subjective one, producing the divergence the BI team complained about
-// in May/2026.
+// `calls.status` continua sendo escrito EXCLUSIVAMENTE pelo webhook do API4COM
+// (/api/webhooks/api4com), que classifica significant / no_contact /
+// not_connected a partir de hangup_cause + duração. O input manual do SDR já
+// sobrescreveu essa medição objetiva com uma subjetiva e produziu a divergência
+// que o time de BI reclamou em maio/2026 — por isso nunca mais tocamos em
+// `status` aqui.
+//
+// O que o SDR informa agora vai para `calls.sdr_outcome` (coluna separada,
+// migration 20260722120000): a telefonia sabe SE conectou, só o SDR sabe O QUE
+// aconteceu na conversa. Os dois convivem, ninguém sobrescreve ninguém.
 const classifyInputSchema = z.object({
   callId: z.string().uuid(),
-  status: callStatusSchema.optional(), // accepted, no longer applied
+  /** Legado: alguns callers ainda mandam. Nunca aplicado em `calls.status`. */
+  status: callStatusSchema.optional(),
+  /** Desfecho informado pelo SDR → gravado em `calls.sdr_outcome`. */
+  sdrOutcome: callStatusSchema.optional(),
   clientDurationSeconds: z.number().int().min(0),
   notes: z.string().optional(),
   leadId: z.string().uuid().optional(),
@@ -36,7 +41,7 @@ export async function classifyWebphoneCall(
     return { success: false, error: 'Dados inválidos' };
   }
 
-  const { callId, clientDurationSeconds, notes, leadId } = parsed.data;
+  const { callId, sdrOutcome, clientDurationSeconds, notes, leadId } = parsed.data;
 
   // Fetch current call to check ownership and current state
   const { data: call } = (await from(supabase, 'calls')
@@ -49,13 +54,18 @@ export async function classifyWebphoneCall(
     return { success: false, error: 'Ligação não encontrada' };
   }
 
-  // Status DELIBERATELY omitted — let the API4COM webhook own it.
+  // `status` DELIBERADAMENTE omitido — quem manda nele é o webhook do API4COM.
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
 
   if (notes) {
     updates.notes = notes;
+  }
+
+  // O desfecho do SDR vai para a coluna própria, ao lado do status técnico.
+  if (sdrOutcome) {
+    updates.sdr_outcome = sdrOutcome;
   }
 
   // Use client-side duration as fallback if webhook hasn't set it
