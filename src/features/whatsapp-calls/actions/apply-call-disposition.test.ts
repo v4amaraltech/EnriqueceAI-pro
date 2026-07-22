@@ -58,9 +58,17 @@ describe('applyCallDisposition', () => {
   });
 
   it('requires a callback time when the disposition reschedules', async () => {
-    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'no_contact' });
+    // `busy` = "Pediu para ligar depois" — o único desfecho que reagenda.
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'busy' });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toContain('horário');
+    expect(reschedule.rescheduleCurrentStep).not.toHaveBeenCalled();
+  });
+
+  it('avança (não reagenda) quando o lead não atendeu — a cadência cuida da retentativa', async () => {
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'no_contact' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.action).toBe('advanced');
     expect(reschedule.rescheduleCurrentStep).not.toHaveBeenCalled();
   });
 

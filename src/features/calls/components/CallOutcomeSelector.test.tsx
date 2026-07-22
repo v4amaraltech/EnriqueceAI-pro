@@ -14,9 +14,9 @@ describe('CallOutcomeSelector', () => {
 
   it('mostra a consequência (hint) de cada desfecho — o SDR precisa ver antes de escolher', () => {
     render(<CallOutcomeSelector value="significant" onChange={vi.fn()} />);
-    // "Avança a cadência" aparece em 2 opções; "Reagenda" em 2; "Volta para a fila" em 1.
     expect(screen.getAllByText('Avança a cadência')).toHaveLength(2);
-    expect(screen.getAllByText('Reagenda (ligar de novo)')).toHaveLength(2);
+    expect(screen.getByText('Agenda o retorno combinado')).toBeInTheDocument();
+    expect(screen.getByText('Segue a cadência')).toBeInTheDocument();
     expect(screen.getByText('Volta para a fila')).toBeInTheDocument();
   });
 
