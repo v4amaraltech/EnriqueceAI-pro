@@ -16,6 +16,7 @@ import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
 import { persistWhatsAppCall } from '../actions/persist-call';
 import { INITIAL_CALL_STATE, callReducer } from '../call-machine';
 import { RECORDING_CONSENT_NOTICE } from '../constants';
+import { startRingback, type Ringback } from '../ringback';
 import { acquireMic, openCall, releaseMic, subscribeCallEvents, type OpenCall } from '../voice-call-media';
 import { WhatsAppGlyph } from './WhatsAppGlyph';
 
@@ -69,6 +70,7 @@ export function ActivityWhatsAppCallPanel({
   const connRef = useRef<OpenCall | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ringbackRef = useRef<Ringback | null>(null);
   // Metadados da chamada para persistir ao encerrar (story 7.7).
   const callStartedAtRef = useRef<string | null>(null);
   const answeredAtRef = useRef<string | null>(null);
@@ -84,6 +86,21 @@ export function ActivityWhatsAppCallPanel({
     if (state.status !== 'active') return undefined;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
+  }, [state.status]);
+
+  // Tom de chamada local enquanto aguarda o lead atender. O WhatsApp NÃO envia
+  // ringback pela perna WebRTC (as trilhas remotas chegam `muted` até alguém
+  // atender), então sem isso o SDR fica em silêncio absoluto no "Chamando..." —
+  // sem saber se está tocando, travou ou caiu. Para sozinho ao sair de
+  // 'ringing' (atendeu, encerrou ou deu erro) e no unmount.
+  useEffect(() => {
+    if (state.status !== 'ringing') return undefined;
+    const rb = startRingback();
+    ringbackRef.current = rb;
+    return () => {
+      rb.stop();
+      ringbackRef.current = null;
+    };
   }, [state.status]);
 
   // Liga o áudio remoto no <audio> assim que o track chega.
@@ -113,6 +130,10 @@ export function ActivityWhatsAppCallPanel({
     state.status === 'active' ? Math.max(0, Math.floor((now - state.startedAt) / 1000)) : 0;
 
   function teardown() {
+    // Corta o tom na hora — esperar o re-render do efeito deixaria o toque
+    // sobrando por um instante depois de desligar.
+    ringbackRef.current?.stop();
+    ringbackRef.current = null;
     durationRef.current = answeredAtRef.current
       ? Math.max(0, Math.floor((Date.now() - Date.parse(answeredAtRef.current)) / 1000))
       : 0;
