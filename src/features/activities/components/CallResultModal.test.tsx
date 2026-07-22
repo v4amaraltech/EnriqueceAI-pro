@@ -51,30 +51,39 @@ describe('CallResultModal', () => {
     });
   });
 
-  describe('bloco de retorno condicional ao desfecho', () => {
-    it('aparece para desfecho que reagenda (pré-selecionado "Não atendeu")', () => {
-      renderModal({ connected: false });
-      expect(screen.getByText('Quando ligar de novo')).toBeInTheDocument();
+  describe('bloco de retorno — só quando o lead pediu retorno', () => {
+    it('NÃO aparece em "Não atendeu": ninguém falou com ninguém, a cadência segue', () => {
+      renderModal({ connected: false }); // pré-seleciona no_contact
+      expect(screen.queryByText('Quando ligar de novo')).not.toBeInTheDocument();
     });
 
-    it('some para desfecho que avança a cadência', () => {
+    it('não aparece para desfecho que avança a cadência', () => {
       renderModal({ connected: true });
       expect(screen.queryByText('Quando ligar de novo')).not.toBeInTheDocument();
     });
 
-    it('aparece ao trocar para um desfecho que reagenda', async () => {
+    it('aparece ao escolher "Pediu para ligar depois"', async () => {
       const user = userEvent.setup();
       renderModal({ connected: true });
       expect(screen.queryByText('Quando ligar de novo')).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('radio', { name: /Ocupado/ }));
+      await user.click(screen.getByRole('radio', { name: /Pediu para ligar depois/ }));
       expect(screen.getByText('Quando ligar de novo')).toBeInTheDocument();
     });
   });
 
   describe('conclusão', () => {
-    it('bloqueia concluir enquanto o retorno não tem data', () => {
-      renderModal({ connected: false }); // pré-seleciona no_contact → exige data
+    it('permite concluir direto em "Não atendeu" — o caso mais comum é 1 clique', () => {
+      renderModal({ connected: false });
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeEnabled();
+      expect(screen.queryByText('Escolha a data para concluir.')).not.toBeInTheDocument();
+    });
+
+    it('bloqueia concluir sem data quando o lead pediu retorno', async () => {
+      const user = userEvent.setup();
+      renderModal({ connected: true });
+      await user.click(screen.getByRole('radio', { name: /Pediu para ligar depois/ }));
+
       expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeDisabled();
       expect(screen.getByText('Escolha a data para concluir.')).toBeInTheDocument();
     });

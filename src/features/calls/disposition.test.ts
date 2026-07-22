@@ -8,9 +8,15 @@ describe('mapDispositionToAction', () => {
     expect(mapDispositionToAction('not_significant')).toBe('advance');
   });
 
-  it('reschedules on busy / no answer', () => {
+  it('reschedules only when the lead asked for a callback', () => {
+    // `busy` = o lead ATENDEU e pediu para ligar depois — há horário combinado.
     expect(mapDispositionToAction('busy')).toBe('reschedule');
-    expect(mapDispositionToAction('no_contact')).toBe('reschedule');
+  });
+
+  it('advances on no answer — a cadência cuida da retentativa', () => {
+    // Regressão: reagendar aqui obrigava o SDR a escolher uma data no caso mais
+    // comum do dia. Ninguém falou com ninguém, então não há retorno combinado.
+    expect(mapDispositionToAction('no_contact')).toBe('advance');
   });
 
   it('does nothing on a technical failure', () => {
