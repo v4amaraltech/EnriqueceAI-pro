@@ -15,8 +15,13 @@
 const RINGBACK_FREQ_HZ = 425;
 const TONE_ON_SECONDS = 1;
 const CYCLE_SECONDS = 5; // 1s de tom + 4s de silêncio
-/** Volume discreto — o tom é feedback, não pode competir com a voz do lead. */
-const PEAK_GAIN = 0.12;
+/**
+ * Volume do tom. Calibrado em teste com o time (0.12 ficou baixo demais; 0.32
+ * estoura no fone). O tom toca no headset do SDR e a voz do lead entra logo em
+ * seguida — alto demais obrigaria a baixar o volume geral e atrapalharia ouvir
+ * o lead.
+ */
+const PEAK_GAIN = 0.2;
 
 export interface Ringback {
   /** Para o tom e libera o AudioContext. Idempotente. */
