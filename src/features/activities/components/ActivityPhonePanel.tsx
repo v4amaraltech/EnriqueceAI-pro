@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import type { CallStatus } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
@@ -198,15 +199,20 @@ export function ActivityPhonePanel({
     setCallDuration(0);
   }
 
-  function handleSubmitResult(resultNotes: string, returnSchedule: CallReturnSchedule | null) {
+  function handleSubmitResult(
+    resultNotes: string,
+    returnSchedule: CallReturnSchedule | null,
+    outcome: CallStatus,
+  ) {
     const allAttempts = [...attempts, buildCurrentAttempt(resultNotes)];
     const aggregatedNotes = formatAggregatedNotes(allAttempts);
 
-    // Persist notes + duration. Call status (significant/not_connected/etc)
-    // is owned by the API4COM webhook now — we don't pass it here.
+    // `calls.status` continua sendo do webhook do API4COM (medição objetiva).
+    // O desfecho do SDR vai para `calls.sdr_outcome`, em coluna separada.
     if (callId) {
       classifyWebphoneCall({
         callId,
+        sdrOutcome: outcome,
         clientDurationSeconds: callDuration,
         notes: resultNotes || undefined,
         leadId,
@@ -450,6 +456,7 @@ export function ActivityPhonePanel({
         leadFirstName={leadFirstName}
         phoneLabel={selectedPhone}
         durationSeconds={callDuration}
+        connected={callDuration > 0}
         isSending={isSending || isPending}
         onRetry={canRetry ? handleRetryAttempt : undefined}
         onMarkNoShow={canMarkNoShow ? handleMarkNoShow : undefined}
@@ -461,7 +468,9 @@ export function ActivityPhonePanel({
               }
             : undefined
         }
-        onConclude={({ notes, returnSchedule }) => handleSubmitResult(notes, returnSchedule)}
+        onConclude={({ notes, returnSchedule, outcome }) =>
+          handleSubmitResult(notes, returnSchedule, outcome)
+        }
       />
     </div>
   );

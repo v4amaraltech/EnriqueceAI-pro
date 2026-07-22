@@ -11,6 +11,8 @@ import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { CallResultModal } from '@/features/activities/components/CallResultModal';
 
+import { mapDispositionToAction } from '@/features/calls/disposition';
+
 import { applyCallDisposition } from '../actions/apply-call-disposition';
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
 import { persistWhatsAppCall } from '../actions/persist-call';
@@ -63,6 +65,9 @@ export function ActivityWhatsAppCallPanel({
   // Duração final em state (não ref) para o render do modal de resultado —
   // ler durationRef.current durante o render viola react-hooks/refs.
   const [endedDuration, setEndedDuration] = useState(0);
+  // Se a chamada chegou a ser atendida — alimenta o resumo e a pré-seleção do
+  // desfecho no modal de resultado.
+  const [wasAnswered, setWasAnswered] = useState(false);
 
   const sidRef = useRef<string | null>(null);
   const callIdRef = useRef<string | null>(null);
@@ -138,6 +143,11 @@ export function ActivityWhatsAppCallPanel({
       ? Math.max(0, Math.floor((Date.now() - Date.parse(answeredAtRef.current)) / 1000))
       : 0;
     setEndedDuration(durationRef.current);
+    // Espelha o atendimento em state: o modal de resultado precisa disso no
+    // render (ler o ref direto ali seria valor não-reativo e potencialmente
+    // defasado). Duração não serve como proxy — atender e desligar em menos de
+    // 1s daria 0 e passaria por "não atendida".
+    setWasAnswered(!!answeredAtRef.current);
     unsubRef.current?.();
     unsubRef.current = null;
     connRef.current?.close();
@@ -151,6 +161,7 @@ export function ActivityWhatsAppCallPanel({
       toast.error('Selecione um número');
       return;
     }
+    setWasAnswered(false);
     dispatch({ type: 'DIAL' });
     startTransition(async () => {
       try {
@@ -226,16 +237,16 @@ export function ActivityWhatsAppCallPanel({
         leadFirstName={leadFirstName}
         phoneLabel={displayNumber}
         durationSeconds={endedDuration}
+        connected={wasAnswered}
         isSending={isPending}
         onRetry={() => dispatch({ type: 'RESET' })}
         onLeadLost={onLeadLost}
-        onConclude={({ notes, returnSchedule }) => {
+        onConclude={({ notes, returnSchedule, outcome }) => {
           startTransition(async () => {
-            const persistDisposition = returnSchedule
-              ? 'no_contact'
-              : answeredAtRef.current
-                ? 'significant'
-                : 'not_connected';
+            // `status` da ligação = SINAL TÉCNICO (atendeu ou não). O que o SDR
+            // informou vai separado em `sdrOutcome` — sobrescrever o status com
+            // leitura subjetiva foi o que gerou a divergência de BI em mai/2026.
+            const persistDisposition = answeredAtRef.current ? 'significant' : 'not_connected';
             const persisted = await persistWhatsAppCall({
               stepId,
               cadenceId,
@@ -244,6 +255,7 @@ export function ActivityWhatsAppCallPanel({
               callId: callIdRef.current ?? '',
               destination: selectedPhone,
               disposition: persistDisposition,
+              sdrOutcome: outcome,
               connected: !!answeredAtRef.current,
               durationSeconds: durationRef.current,
               startedAt: callStartedAtRef.current ?? new Date().toISOString(),
@@ -272,12 +284,20 @@ export function ActivityWhatsAppCallPanel({
               }
               toast.success('Retorno agendado');
             } else if (enrollmentId && stepId) {
-              const r = await applyCallDisposition({ enrollmentId, stepId, disposition: 'significant' });
+              // O desfecho do SDR comanda a cadência (antes era 'significant'
+              // fixo, então até ligação não atendida avançava). Quando o desfecho
+              // reagenda, o `returnSchedule` acima já cuidou — aqui só sobram os
+              // que avançam ou os que devolvem a atividade para a fila.
+              const r = await applyCallDisposition({ enrollmentId, stepId, disposition: outcome });
               if (!r.success) {
                 toast.error(r.error);
                 return;
               }
-              toast.success('Atividade concluída');
+              toast.success(
+                mapDispositionToAction(outcome) === 'none'
+                  ? 'Ligação registrada — atividade segue na fila'
+                  : 'Atividade concluída',
+              );
             } else {
               // Ligação avulsa: nada de cadência para avançar — só registramos.
               toast.success('Ligação registrada');

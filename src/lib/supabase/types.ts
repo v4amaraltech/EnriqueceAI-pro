@@ -367,6 +367,7 @@ export type Database = {
           org_id: string
           origin: string
           recording_url: string | null
+          sdr_outcome: Database["public"]["Enums"]["call_status"] | null
           started_at: string
           status: Database["public"]["Enums"]["call_status"]
           type: Database["public"]["Enums"]["call_type"]
@@ -388,6 +389,7 @@ export type Database = {
           org_id: string
           origin: string
           recording_url?: string | null
+          sdr_outcome?: Database["public"]["Enums"]["call_status"] | null
           started_at?: string
           status?: Database["public"]["Enums"]["call_status"]
           type?: Database["public"]["Enums"]["call_type"]
@@ -409,6 +411,7 @@ export type Database = {
           org_id?: string
           origin?: string
           recording_url?: string | null
+          sdr_outcome?: Database["public"]["Enums"]["call_status"] | null
           started_at?: string
           status?: Database["public"]["Enums"]["call_status"]
           type?: Database["public"]["Enums"]["call_type"]

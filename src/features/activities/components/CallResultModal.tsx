@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  PhoneMissed,
+  PhoneCall,
   RotateCcw,
   ThumbsDown,
 } from 'lucide-react';
@@ -19,6 +21,7 @@ import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -33,10 +36,13 @@ import {
 } from '@/shared/components/ui/select';
 import { Calendar } from '@/shared/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
-import { Switch } from '@/shared/components/ui/switch';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
+
+import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
+import { mapDispositionToAction } from '@/features/calls/disposition';
+import type { CallStatus } from '@/features/calls/types';
 
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 
@@ -60,6 +66,15 @@ const RETURN_CHANNEL_MAP: Record<
   email: { channel: 'email', callProvider: null },
 };
 
+/**
+ * Desfecho pré-selecionado a partir do sinal técnico — não perguntamos o que o
+ * sistema já sabe. Atendeu → assume conversa; não atendeu → "Não atendeu".
+ * O SDR só confirma (ou corrige) em 1 clique.
+ */
+function defaultOutcome(connected: boolean): CallStatus {
+  return connected ? 'significant' : 'no_contact';
+}
+
 export interface CallResultModalProps {
   open: boolean;
   onClose: () => void;
@@ -70,6 +85,8 @@ export interface CallResultModalProps {
   /** Número exibido no cabeçalho. */
   phoneLabel: string;
   durationSeconds: number;
+  /** Sinal técnico de atendimento — pré-seleciona o desfecho e o pill do topo. */
+  connected: boolean;
   isSending?: boolean;
   /** Quando presente, mostra "Tentar novamente". Recebe as anotações atuais (o
    *  fluxo de ligação normal registra a tentativa com elas antes de re-discar). */
@@ -79,17 +96,22 @@ export interface CallResultModalProps {
   /** Quando presente, mostra "No-show". */
   onMarkNoShow?: () => void;
   /**
-   * Conclui a atividade. `returnSchedule` != null quando "Agendar retorno" está
-   * ativo — o consumidor decide encerrar a cadência e criar a atividade de retorno.
+   * Conclui a atividade. `returnSchedule` != null quando o desfecho reagenda
+   * (ocupado / não atendeu) — o consumidor decide encerrar a cadência e criar a
+   * atividade de retorno. `outcome` é o desfecho informado pelo SDR.
    */
-  onConclude: (args: { notes: string; returnSchedule: CallReturnSchedule | null }) => void;
+  onConclude: (args: {
+    notes: string;
+    returnSchedule: CallReturnSchedule | null;
+    outcome: CallStatus;
+  }) => void;
 }
 
 /**
- * Modal "Resultado da Ligação" — compartilhado entre a ligação normal e a Ligação
- * via WhatsApp. Encapsula anotações, agendar retorno e os desfechos (Perdido /
- * Agendar Reunião / Concluir). A lógica de avanço/persistência fica no consumidor,
- * que fornece os callbacks.
+ * Modal "Resultado da Ligação" — compartilhado entre a ligação normal (API4COM) e
+ * a Ligação via WhatsApp. Captura o desfecho do SDR, anotações e o retorno, e
+ * expõe os desfechos de negócio (Perdido / Agendar Reunião / Concluir). A lógica
+ * de avanço/persistência fica no consumidor, que fornece os callbacks.
  */
 export function CallResultModal({
   open,
@@ -100,6 +122,7 @@ export function CallResultModal({
   leadFirstName,
   phoneLabel,
   durationSeconds,
+  connected,
   isSending = false,
   onRetry,
   onLeadLost,
@@ -107,14 +130,36 @@ export function CallResultModal({
   onConclude,
 }: CallResultModalProps) {
   const [notes, setNotes] = useState('');
-  const [scheduleReturn, setScheduleReturn] = useState(false);
+  const [outcome, setOutcome] = useState<CallStatus>(() => defaultOutcome(connected));
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [returnTime, setReturnTime] = useState('09:00');
   const [returnChannel, setReturnChannel] = useState<ReturnChannelOption>('phone');
   const [scheduleMeetingOpen, setScheduleMeetingOpen] = useState(false);
 
+  // O modal não é remontado entre ligações — sem este reset, as anotações e o
+  // desfecho da chamada anterior vazariam para a próxima.
+  //
+  // Ajuste durante o render (padrão oficial do React para "resetar estado quando
+  // uma prop muda") em vez de useEffect: o React reexecuta o componente na hora,
+  // sem pintar o estado velho e sem render em cascata.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setNotes('');
+      setOutcome(defaultOutcome(connected));
+      setReturnDate(undefined);
+      setReturnTime('09:00');
+      setReturnChannel('phone');
+    }
+  }
+
+  const action = mapDispositionToAction(outcome);
+  const needsReturn = action === 'reschedule';
+  const missingReturnDate = needsReturn && !returnDate;
+
   function buildReturnSchedule(): CallReturnSchedule | null {
-    if (!scheduleReturn || !returnDate) return null;
+    if (!needsReturn || !returnDate) return null;
     const [hours, minutes] = returnTime.split(':').map(Number);
     const scheduledAt = new Date(returnDate);
     scheduledAt.setHours(hours ?? 9, minutes ?? 0, 0, 0);
@@ -123,29 +168,139 @@ export function CallResultModal({
 
   function handleConclude(extraNote?: string) {
     const finalNotes = extraNote ? (notes ? `${notes}\n\n${extraNote}` : extraNote) : notes;
-    onConclude({ notes: finalNotes, returnSchedule: buildReturnSchedule() });
+    onConclude({ notes: finalNotes, returnSchedule: buildReturnSchedule(), outcome });
   }
 
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resultado da Ligação</DialogTitle>
+            {/* Descrição obrigatória para leitores de tela — sem ela o Radix
+                avisa e o usuário de leitor de tela abre o modal sem contexto. */}
+            <DialogDescription>
+              Registre o que aconteceu na ligação para {leadName} e conclua a atividade.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Resumo da ligação */}
-            <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">{leadName}</p>
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{phoneLabel}</p>
+          <div className="space-y-4 py-1">
+            {/* Resumo — a duração ganha significado no pill de status */}
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--muted)] px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{leadName}</p>
+                <p className="truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                  {phoneLabel}
+                </p>
               </div>
-              <div className="text-right">
-                <p className="font-mono text-sm tabular-nums">{formatDuration(durationSeconds)}</p>
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Duração</p>
+              <div
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
+                  connected
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                )}
+              >
+                {connected ? (
+                  <PhoneCall className="h-3.5 w-3.5" />
+                ) : (
+                  <PhoneMissed className="h-3.5 w-3.5" />
+                )}
+                <span>{connected ? 'Atendida' : 'Não atendida'}</span>
+                <span aria-hidden>·</span>
+                <span className="font-mono tabular-nums">{formatDuration(durationSeconds)}</span>
               </div>
             </div>
+
+            {/* Desfecho — o coração do modal */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                O que aconteceu?
+              </Label>
+              <CallOutcomeSelector value={outcome} onChange={setOutcome} disabled={isSending} />
+            </div>
+
+            {/* Retorno — aparece sozinho quando o desfecho reagenda */}
+            {needsReturn && (
+              <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
+                <div className="flex items-center gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    Quando ligar de novo
+                  </Label>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Canal</Label>
+                    <Select
+                      value={returnChannel}
+                      onValueChange={(v) => setReturnChannel(v as ReturnChannelOption)}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="phone">Ligação</SelectItem>
+                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                        <SelectItem value="whatsapp_call">WhatsApp Ligação</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Data</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            'h-8 w-full justify-start text-xs font-normal',
+                            !returnDate && 'text-muted-foreground',
+                          )}
+                        >
+                          <CalendarIcon className="mr-1 h-3 w-3" />
+                          {returnDate ? format(returnDate, 'dd/MM', { locale: ptBR }) : 'Data'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={returnDate}
+                          onSelect={setReturnDate}
+                          locale={ptBR}
+                          disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Horário</Label>
+                    <Select value={returnTime} onValueChange={setReturnTime}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 8)
+                          .flatMap((h) => [
+                            `${h.toString().padStart(2, '0')}:00`,
+                            `${h.toString().padStart(2, '0')}:30`,
+                          ])
+                          .map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {missingReturnDate
+                    ? 'Escolha a data para concluir.'
+                    : 'A cadência será encerrada e a atividade de retorno criada.'}
+                </p>
+              </div>
+            )}
 
             {/* Anotações */}
             <div className="space-y-1.5">
@@ -159,127 +314,58 @@ export function CallResultModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Faça anotações sobre a ligação..."
-                className="min-h-[100px] resize-y"
+                className="min-h-[80px] resize-y"
               />
-            </div>
-
-            {/* Agendar retorno */}
-            <div className="space-y-3 rounded-lg border border-[var(--border)] p-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Agendar retorno</Label>
-                <Switch checked={scheduleReturn} onCheckedChange={setScheduleReturn} />
-              </div>
-              {scheduleReturn && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Canal</Label>
-                      <Select value={returnChannel} onValueChange={(v) => setReturnChannel(v as ReturnChannelOption)}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="phone">Ligação</SelectItem>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          <SelectItem value="whatsapp_call">WhatsApp Ligação</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Data</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn('h-8 w-full justify-start text-xs font-normal', !returnDate && 'text-muted-foreground')}
-                          >
-                            <CalendarIcon className="mr-1 h-3 w-3" />
-                            {returnDate ? format(returnDate, 'dd/MM', { locale: ptBR }) : 'Data'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={returnDate}
-                            onSelect={setReturnDate}
-                            locale={ptBR}
-                            disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Horário</Label>
-                      <Select value={returnTime} onValueChange={setReturnTime}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 8)
-                            .flatMap((h) => [
-                              `${h.toString().padStart(2, '0')}:00`,
-                              `${h.toString().padStart(2, '0')}:30`,
-                            ])
-                            .map((t) => (
-                              <SelectItem key={t} value={t}>
-                                {t}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    A cadência será encerrada e a atividade de retorno criada.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
 
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* Esquerda: sair / repetir */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={onClose} disabled={isSending}>
+            {/* Esquerda: ações discretas — não competem com a primária */}
+            <div className="flex flex-wrap gap-1">
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={isSending}>
                 Cancelar
               </Button>
               {onRetry && (
-                <Button variant="secondary" onClick={() => onRetry(notes)} disabled={isSending}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
+                <Button variant="ghost" size="sm" onClick={() => onRetry(notes)} disabled={isSending}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                   Tentar novamente
                 </Button>
               )}
-            </div>
-            {/* Direita: desfechos */}
-            <div className="flex flex-wrap gap-2 sm:justify-end">
               {onMarkNoShow && (
-                <Button
-                  onClick={onMarkNoShow}
-                  disabled={isSending}
-                  className="bg-amber-500 text-white hover:bg-amber-600"
-                >
-                  <CalendarX className="mr-2 h-4 w-4" />
+                <Button variant="ghost" size="sm" onClick={onMarkNoShow} disabled={isSending}>
+                  <CalendarX className="mr-1.5 h-3.5 w-3.5" />
                   No-show
                 </Button>
               )}
               {onLeadLost && (
-                <Button variant="destructive" onClick={onLeadLost} disabled={isSending}>
-                  <ThumbsDown className="mr-2 h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onLeadLost}
+                  disabled={isSending}
+                  className="text-[var(--destructive)] hover:text-[var(--destructive)]"
+                >
+                  <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
                   Perdido
                 </Button>
               )}
+            </div>
+            {/* Direita: uma primária clara + a alternativa de alto valor */}
+            <div className="flex flex-wrap gap-2 sm:justify-end">
               <Button
-                variant="default"
+                variant="outline"
                 onClick={() => setScheduleMeetingOpen(true)}
                 disabled={isSending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <CalendarPlus className="mr-2 h-4 w-4" />
                 Agendar Reunião
               </Button>
-              <Button onClick={() => handleConclude()} disabled={isSending}>
-                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              <Button onClick={() => handleConclude()} disabled={isSending || missingReturnDate}>
+                {isSending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
                 Concluir atividade
               </Button>
             </div>

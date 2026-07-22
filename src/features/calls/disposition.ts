@@ -4,7 +4,10 @@
 //
 // Decisão (plano §E + decisão #3): conversa real avança; ocupado/não-atendeu
 // reagenda (callback no horário escolhido pelo SDR); erro técnico não fecha.
-import type { CallStatus } from '@/features/calls/types';
+//
+// Mora em `features/calls` (e não em `whatsapp-calls`) porque o desfecho passou
+// a ser capturado nos DOIS discadores — API4COM e Ligação via WhatsApp.
+import type { CallStatus } from './types';
 
 export type DispositionAction = 'advance' | 'reschedule' | 'none';
 
@@ -33,5 +36,5 @@ export const DISPOSITION_OPTIONS: DispositionOption[] = [
   { value: 'not_significant', label: 'Atendeu, sem avanço', hint: 'Avança a cadência' },
   { value: 'busy', label: 'Ocupado', hint: 'Reagenda (ligar de novo)' },
   { value: 'no_contact', label: 'Não atendeu', hint: 'Reagenda (ligar de novo)' },
-  { value: 'not_connected', label: 'Não conectou (erro técnico)', hint: 'Volta para a fila' },
+  { value: 'not_connected', label: 'Falha técnica', hint: 'Volta para a fila' },
 ];
