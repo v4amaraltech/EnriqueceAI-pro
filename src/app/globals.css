@@ -1,5 +1,17 @@
 @import 'tailwindcss';
 
+/*
+ * A variante `dark:` segue a CLASSE `.dark`, não o `prefers-color-scheme` do SO.
+ *
+ * O Tailwind v4 usa `@media (prefers-color-scheme: dark)` por padrão, mas o app
+ * troca o tema pelo `next-themes` com `attribute="class"` (ver (app)/layout.tsx).
+ * Sem esta diretiva, as ~800 utilities `dark:` seguiam o SO enquanto as
+ * superfícies baseadas em `var(--...)` (redefinidas em `.dark` abaixo) seguiam a
+ * classe — os dois divergiam quando o usuário forçava um tema diferente do SO.
+ * Equivale ao `darkMode: 'class'` do Tailwind v3, que se perdeu na migração v4.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   /* shadcn/ui CSS variable → Tailwind v4 color mapping */
   --color-background: var(--background);
