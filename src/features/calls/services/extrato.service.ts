@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isConnectedCall } from '@/features/calls/connection';
 import type { CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { safeRate } from '@/features/statistics/types/shared';
@@ -17,6 +18,7 @@ interface CallRow {
   user_id: string;
   status: CallStatus;
   duration_seconds: number;
+  answered_at: string | null;
   cost: number | null;
   started_at: string;
 }
@@ -29,7 +31,7 @@ export async function fetchExtratoData(
   userIds?: string[],
 ): Promise<ExtratoData> {
   let callsQuery = from(supabase, 'calls')
-    .select('id, user_id, status, duration_seconds, cost, started_at')
+    .select('id, user_id, status, duration_seconds, answered_at, cost, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)
@@ -102,7 +104,8 @@ function calculateSdrBreakdown(
 
   for (const call of calls) {
     const existing = sdrMap.get(call.user_id);
-    const isConnected = call.status === 'significant' || call.status === 'not_significant';
+    // Definição canônica — ver `features/calls/connection.ts`.
+    const isConnected = isConnectedCall(call);
     if (existing) {
       existing.calls += 1;
       existing.totalDuration += call.duration_seconds;

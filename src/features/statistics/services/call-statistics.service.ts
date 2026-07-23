@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isConnectedCall } from '@/features/calls/connection';
 import type { CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
@@ -31,6 +32,7 @@ interface CallRow {
   user_id: string;
   status: CallStatus;
   duration_seconds: number;
+  answered_at: string | null;
   started_at: string;
 }
 
@@ -42,7 +44,7 @@ export async function fetchCallStatisticsData(
   userIds?: string[],
 ): Promise<CallStatisticsData> {
   let query = from(supabase, 'calls')
-    .select('id, user_id, status, duration_seconds, started_at')
+    .select('id, user_id, status, duration_seconds, answered_at, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd);
@@ -183,7 +185,9 @@ function calculateCallsBySdr(
   for (const call of calls) {
     const entry = sdrMap.get(call.user_id) ?? { total: 0, connected: 0 };
     entry.total++;
-    if (call.status === 'significant' || call.status === 'not_significant') {
+    // Definição canônica — ver `features/calls/connection.ts`. Antes daqui
+    // `not_significant` contava sozinha como conectada, inflando a taxa.
+    if (isConnectedCall(call)) {
       entry.connected++;
     }
     sdrMap.set(call.user_id, entry);

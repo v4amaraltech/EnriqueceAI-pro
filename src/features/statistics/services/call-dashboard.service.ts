@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isConnectedCall, isSignificantCall } from '@/features/calls/connection';
 import type { CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
@@ -19,6 +20,7 @@ interface CallRow {
   destination: string;
   status: CallStatus;
   duration_seconds: number;
+  answered_at: string | null;
   started_at: string;
 }
 
@@ -31,7 +33,7 @@ export async function fetchCallDashboardData(
 ): Promise<CallDashboardData> {
   // Fetch calls
   let callsQuery = from(supabase, 'calls')
-    .select('id, user_id, destination, status, duration_seconds, started_at')
+    .select('id, user_id, destination, status, duration_seconds, answered_at, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)
@@ -68,9 +70,11 @@ function calculateKpis(calls: CallRow[]): CallDashboardKpis {
   const totalDuration = calls.reduce((sum, c) => sum + c.duration_seconds, 0);
   const avgDurationSeconds = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
 
-  const CONNECTED_THRESHOLD = 50; // seconds — >= 50s = Conectada
-  const connected = calls.filter((c) => c.duration_seconds >= CONNECTED_THRESHOLD).length;
-  const significant = connected;
+  // Definição canônica compartilhada com Estatísticas e Extrato — ver
+  // `features/calls/connection.ts`. Antes daqui saía `duration >= 50s` e
+  // `significant = connected` (dois cards com o mesmo número).
+  const connected = calls.filter(isConnectedCall).length;
+  const significant = calls.filter(isSignificantCall).length;
 
   return {
     totalCalls,
