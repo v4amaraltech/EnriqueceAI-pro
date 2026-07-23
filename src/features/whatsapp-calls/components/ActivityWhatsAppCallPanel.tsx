@@ -188,9 +188,24 @@ export function ActivityWhatsAppCallPanel({
           callId: started.data.callId,
           micStream: micRef.current,
         });
-      } catch {
+      } catch (err) {
         teardown();
-        dispatch({ type: 'SERVICE_ERROR', message: 'Falha ao estabelecer o áudio (WebRTC).' });
+        // A causa REAL vinha sendo descartada por um `catch` vazio, então toda
+        // falha (serviço fora do ar, SDP recusado, sessão morta no WhatsApp)
+        // aparecia como a mesma frase genérica — impossível diagnosticar em
+        // produção. `openCall` já propaga a mensagem do serviço em `Error`.
+        const detail = err instanceof Error ? err.message.trim() : '';
+        console.error('[whatsapp-call] falha no handshake WebRTC', {
+          callId: callIdRef.current,
+          sid: sidRef.current,
+          error: detail || err,
+        });
+        dispatch({
+          type: 'SERVICE_ERROR',
+          message: detail
+            ? `Falha ao estabelecer o áudio: ${detail}`
+            : 'Falha ao estabelecer o áudio (WebRTC).',
+        });
         return;
       }
 
