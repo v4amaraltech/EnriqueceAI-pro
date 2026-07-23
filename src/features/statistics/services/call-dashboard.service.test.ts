@@ -73,8 +73,28 @@ describe('call-dashboard.service', () => {
 
     expect(result.kpis.totalCalls).toBe(3);
     expect(result.kpis.avgDurationSeconds).toBe(60); // (120+0+60)/3
-    expect(result.kpis.connectionRate).toBe(66.7); // 2/3 connected
-    expect(result.kpis.significantRate).toBe(66.7); // 2/3 — significant == connected (duration >= 50s)
+    expect(result.kpis.connectionRate).toBe(66.7); // 2/3 — significant + not_significant de 60s (>= 30s)
+    // Significativas é um SUBCONJUNTO de conectadas: só a de status
+    // 'significant'. Antes os dois cards exibiam o mesmo número.
+    expect(result.kpis.significantRate).toBe(33.3); // 1/3
+  });
+
+  it('não conta como conectada a not_significant curta sem answered_at', async () => {
+    // Regressão do bug de escrita do pipeline API4COM — linhas com
+    // hangup_cause de não-atendimento herdam status 'not_significant'.
+    const calls = [
+      { id: '1', user_id: 'u1', destination: '1234', status: 'not_significant' as CallStatus, duration_seconds: 0, answered_at: null, started_at: '2024-06-15T10:00:00Z' },
+      { id: '2', user_id: 'u1', destination: '5678', status: 'not_significant' as CallStatus, duration_seconds: 2, answered_at: null, started_at: '2024-06-15T11:00:00Z' },
+      { id: '3', user_id: 'u2', destination: '9012', status: 'not_significant' as CallStatus, duration_seconds: 8, answered_at: '2024-06-15T14:00:05Z', started_at: '2024-06-15T14:00:00Z' },
+    ];
+    const members = [{ user_id: 'u1', user_email: 'alice@test.com' }, { user_id: 'u2', user_email: 'bob@test.com' }];
+
+    const supabase = createMockSupabase(calls, members);
+    const result = await fetchCallDashboardData(supabase, 'org-1', '2024-06-01T00:00:00Z', '2024-06-30T23:59:59Z');
+
+    // Só a #3 conecta — tem answered_at comprovando o atendimento.
+    expect(result.kpis.connectionRate).toBe(33.3);
+    expect(result.kpis.significantRate).toBe(0);
   });
 
   it('calculates outcomes distribution', async () => {
