@@ -65,12 +65,33 @@ export async function openCall(opts: {
   await pc.setLocalDescription(offer);
   await waitIceComplete(pc);
 
-  const result = await exchangeCallSdp({ sid, callId, sdpOffer: pc.localDescription?.sdp ?? '' });
+  const sdpOffer = pc.localDescription?.sdp ?? '';
+  if (!sdpOffer) {
+    pc.close();
+    throw new Error('o browser não gerou a oferta de áudio (SDP vazio)');
+  }
+
+  const result = await exchangeCallSdp({ sid, callId, sdpOffer });
   if (!result.success) {
     pc.close();
+    // Mensagem do serviço de voz, já normalizada por `mapVoiceError`.
     throw new Error(result.error);
   }
-  await pc.setRemoteDescription({ type: 'answer', sdp: result.data.sdpAnswer });
+  if (!result.data.sdpAnswer) {
+    pc.close();
+    throw new Error('o serviço de voz devolveu uma resposta de áudio vazia');
+  }
+
+  try {
+    await pc.setRemoteDescription({ type: 'answer', sdp: result.data.sdpAnswer });
+  } catch (err) {
+    // Distingue "o serviço recusou" de "o serviço respondeu algo que o browser
+    // não aceita" — sem isso as duas falhas eram indistinguíveis no suporte.
+    pc.close();
+    throw new Error(
+      `o browser recusou a resposta do serviço (${err instanceof Error ? err.message : 'SDP inválido'})`,
+    );
+  }
 
   return {
     getRemoteStream: () => remote,
