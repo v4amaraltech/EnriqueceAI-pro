@@ -563,16 +563,19 @@ export class KommoAdapter implements CRMAdapter {
     const subdomain = credentials.subdomain;
     if (!subdomain) throw new Error('Kommo subdomain missing');
 
-    const result = await kommoFetch<KommoListResponse<{ id: number; name: string; sort: number }>>(
-      subdomain,
-      '/leads/pipelines',
-      credentials.access_token,
-    );
+    const result = await kommoFetch<
+      KommoListResponse<{ id: number; name: string; sort: number; is_archive?: boolean }>
+    >(subdomain, '/leads/pipelines', credentials.access_token);
 
-    return (result._embedded?.pipelines ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-    }));
+    // Excluir um funil que tem leads no Kommo o ARQUIVA em vez de apagar, e a API
+    // segue devolvendo o arquivado (campo `is_archive`). Sem este filtro, o seletor
+    // de "enviar ao CRM" oferecia como destino funis que o time não usa mais.
+    return (result._embedded?.pipelines ?? [])
+      .filter((p) => p.is_archive !== true)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+      }));
   }
 
   async fetchStages(
