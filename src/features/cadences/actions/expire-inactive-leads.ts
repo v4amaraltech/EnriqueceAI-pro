@@ -15,6 +15,13 @@ import { scheduleInboundRecovery } from '@/features/leads/services/inbound-recov
  *
  * Inactivity = days since the most recent interaction on the lead, falling
  * back to enrolled_at when the lead has never had any interactions logged.
+ *
+ * Duas origens de candidato (RPC chamado com p_include_completed => true):
+ * - 'active': enrollment em andamento — comportamento histórico do job.
+ * - 'completed': o lead TERMINOU a cadência e ficou 'contacted' sem cadência
+ *   nenhuma. Antes esses leads nunca eram avaliados (o RPC só olhava
+ *   'active'), então o prazo da cadência parava junto com ela e o lead ficava
+ *   em limbo para sempre. Ver docs/stories/cadence-end-auto-loss.story.md.
  */
 interface CandidateRow {
   enrollment_id: string;
@@ -24,7 +31,21 @@ interface CandidateRow {
   auto_loss_reason_id: string;
   auto_loss_after_days: number;
   inactive_days: number;
+  enrollment_status: 'active' | 'completed';
 }
+
+/**
+ * Teto por org e por execução para os candidatos vindos de cadência concluída.
+ *
+ * Sem ele o passivo acumulado sai todo de uma vez: na V4 Amaral, 64 leads
+ * vencem no mesmo dia e os 64 são inbound, ou seja, iriam para a Recovery
+ * juntos com a mesma data de início — a onda que em 04/set precisou ser
+ * espalhada na mão. Com o teto a fila drena em alguns dias, sozinha.
+ *
+ * Candidatos de enrollment ativo NÃO são limitados: o comportamento que já
+ * existia continua igual.
+ */
+const MAX_COMPLETED_CANDIDATES_PER_ORG_PER_RUN = 25;
 
 export async function expireInactiveLeads(): Promise<ActionResult<{
   cadences_scanned: number;
@@ -57,11 +78,14 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
   // RPC does the heavy join (enrollment ↔ cadence ↔ last interaction) in one
   // round-trip. Returns one row per stale enrollment.
   const { data: candidates, error: rpcError } = (await (
-    supabase.rpc as never as (fn: string) => Promise<{
+    supabase.rpc as never as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{
       data: CandidateRow[] | null;
       error: { message: string } | null;
     }>
-  )('fetch_inactive_enrollment_candidates'));
+  )('fetch_inactive_enrollment_candidates', { p_include_completed: true }));
 
   if (rpcError) {
     console.error('[expire-inactive] RPC failed:', rpcError.message);
@@ -75,10 +99,29 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
     };
   }
 
+  // Candidatos de cadência concluída entram com teto por org (o RPC já
+  // devolve no máximo um por lead). Os mais parados primeiro — quem está há
+  // mais tempo em limbo sai antes.
+  const fromActive = candidates.filter((c) => c.enrollment_status !== 'completed');
+  const fromCompletedByOrg = new Map<string, CandidateRow[]>();
+  for (const row of candidates) {
+    if (row.enrollment_status !== 'completed') continue;
+    const list = fromCompletedByOrg.get(row.org_id) ?? [];
+    list.push(row);
+    fromCompletedByOrg.set(row.org_id, list);
+  }
+  const fromCompleted: CandidateRow[] = [];
+  for (const list of fromCompletedByOrg.values()) {
+    list.sort((a, b) => b.inactive_days - a.inactive_days);
+    fromCompleted.push(...list.slice(0, MAX_COMPLETED_CANDIDATES_PER_ORG_PER_RUN));
+  }
+
+  const selected = [...fromActive, ...fromCompleted];
+
   // Dedup leads: a single lead can be active in multiple cadences with auto_loss
   // — we want to mark the lead 'unqualified' once.
   const leadFirstHit = new Map<string, CandidateRow>();
-  for (const row of candidates) {
+  for (const row of selected) {
     if (!leadFirstHit.has(row.lead_id)) leadFirstHit.set(row.lead_id, row);
   }
 
@@ -91,15 +134,31 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
 
   // Stamp the enrollment side first so the cadence completion auto-fires
   // before we mutate the lead.
-  for (const row of candidates) {
-    const { error: enrollError } = await from(supabase, 'cadence_enrollments')
-      .update({
-        status: 'completed',
-        completed_at: nowIso,
-        loss_reason_id: row.auto_loss_reason_id,
-        loss_notes: `Auto-perda por inatividade (${row.inactive_days}d sem atividade)`,
-      } as Record<string, unknown>)
+  //
+  // Enrollment que JÁ estava 'completed' (fim natural da cadência) não é
+  // reencerrado: sobrescrever status/completed_at apagaria a data real do fim
+  // da cadência e estragaria as métricas de cadência. Nesses casos só o motivo
+  // da perda é carimbado, e apenas se ainda estiver vazio.
+  for (const row of selected) {
+    const alreadyClosed = row.enrollment_status === 'completed';
+    const lossNotes = `Auto-perda por inatividade (${row.inactive_days}d sem atividade)`;
+
+    let query = from(supabase, 'cadence_enrollments')
+      .update(
+        (alreadyClosed
+          ? { loss_reason_id: row.auto_loss_reason_id, loss_notes: lossNotes }
+          : {
+              status: 'completed',
+              completed_at: nowIso,
+              loss_reason_id: row.auto_loss_reason_id,
+              loss_notes: lossNotes,
+            }) as Record<string, unknown>,
+      )
       .eq('id', row.enrollment_id);
+
+    if (alreadyClosed) query = query.is('loss_reason_id', null);
+
+    const { error: enrollError } = await query;
     if (enrollError) {
       console.error(`[expire-inactive] enrollment=${row.enrollment_id} update failed:`, enrollError.message);
       continue;
@@ -145,6 +204,9 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
           reason: 'auto_loss_inactivity',
           loss_reason_id: row.auto_loss_reason_id,
           inactive_days: row.inactive_days,
+          // Permite medir depois quanto da perda veio do buraco do fim de
+          // cadência (novo) e quanto do auto-loss que já existia.
+          source: row.enrollment_status === 'completed' ? 'cadence_completed' : 'cadence_active',
         },
       } as Record<string, unknown>);
       if (interactionError) {
@@ -174,9 +236,14 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
 
   // Recuperação automática de inbound: auto-loss com motivo reativável (ex.:
   // "Nunca respondeu" nas cadências de Inbound) também redistribui o lead e
-  // agenda a Recovery — mesma regra do perdido manual. Sem loop: o RPC acima
-  // só considera enrollments 'active' de leads não-terminais, então o
-  // enrollment pausado criado aqui nunca vira candidato a auto-loss.
+  // agenda a Recovery — mesma regra do perdido manual.
+  //
+  // Sem loop, em duas camadas: (1) o enrollment que a Recovery cria nasce
+  // 'paused', e nem a parte A (só 'active') nem a parte B (que exige nenhum
+  // enrollment 'active'/'paused' no lead) o alcançam; (2) quando a própria
+  // Recovery conclui e o lead volta ao limbo, ele vira candidato da parte B —
+  // mas o motivo de auto-loss da Recovery ("Deixou de responder") não está em
+  // reasonNames, então nenhuma Recovery nova é agendada.
   if (lostForRecovery.length > 0) {
     const reasonIds = [...new Set(lostForRecovery.map((l) => l.reasonId))];
     const { data: reasons } = (await from(supabase, 'loss_reasons')
@@ -204,8 +271,11 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
     }
   }
 
+  const completedSkipped = candidates.filter((c) => c.enrollment_status === 'completed').length - fromCompleted.length;
   console.warn(
-    `[expire-inactive] Complete: cadences_scanned=${cadences.length} enrollments_expired=${enrollmentsExpired} leads_lost=${leadsLost}`,
+    `[expire-inactive] Complete: cadences_scanned=${cadences.length} ` +
+      `enrollments_expired=${enrollmentsExpired} leads_lost=${leadsLost} ` +
+      `(ativos=${fromActive.length} concluídos=${fromCompleted.length} adiados_pelo_teto=${completedSkipped})`,
   );
 
   return {
