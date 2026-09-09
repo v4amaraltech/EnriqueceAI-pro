@@ -37,6 +37,9 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
   // Presença do decisor na call — obrigatório quando Realizada. Fonte da métrica
   // "Decisor na Call %" do Sales Hub. null = não respondido.
   const [decisorPresente, setDecisorPresente] = useState<boolean | null>(null);
+  // SAO — aceite comercial da oportunidade pelo closer. Obrigatório quando
+  // Realizada. ≠ "a qualificação bateu?" (aderência da info do pré-vendas).
+  const [oportunidadeQualificada, setOportunidadeQualificada] = useState<boolean | null>(null);
   const [comment, setComment] = useState('');
   // Leitura subjetiva do closer (chance de fechar). Reaproveita a coluna `rating`,
   // sem peso na avaliação do pré-vendas. 0 = não avaliado.
@@ -57,11 +60,12 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
   function handleResultChange(value: string) {
     setResult(value);
-    // Sair de "Realizada" limpa qualificação, divergências e decisor do estado.
+    // Sair de "Realizada" limpa qualificação, divergências, decisor e SAO.
     if (value !== 'meeting_done') {
       setQualificacao('');
       setDivergencias([]);
       setDecisorPresente(null);
+      setOportunidadeQualificada(null);
     }
     setError('');
   }
@@ -78,6 +82,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     if (!result) return;
     if (isMeetingDone && !qualificacao) return;
     if (isMeetingDone && decisorPresente === null) return;
+    if (isMeetingDone && oportunidadeQualificada === null) return;
     // Replica o constraint closer_feedback_divergencias_obrigatorias no cliente,
     // para erro amigável em vez de 500 do banco.
     if (isDivergiu && divergencias.length === 0) {
@@ -105,6 +110,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
           divergencias: isDivergiu ? divergencias : null,
           // Presença do decisor — só em Realizada; fonte da métrica do Sales Hub.
           decisor_presente: isMeetingDone ? decisorPresente : null,
+          // SAO (aceite da oportunidade) — só em Realizada.
+          oportunidade_qualificada: isMeetingDone ? oportunidadeQualificada : null,
           rating: isMeetingDone && rating > 0 ? rating : null,
           comment: comment.trim() || null,
         }),
@@ -133,7 +140,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     );
   }
 
-  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null || !comment.trim()));
+  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null || oportunidadeQualificada === null || !comment.trim()));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -246,7 +253,41 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       )}
 
-      {/* 5. Observações — obrigatória quando Realizada (descreve a call);
+      {/* 5. Oportunidade Qualificada (SAO) — só quando Realizada, obrigatória.
+          Aceite comercial da oportunidade pelo closer. Diferente de "a
+          qualificação bateu?": lá se mede se a informação do pré-vendas
+          conferiu; aqui, se a oportunidade é de fato uma oportunidade. */}
+      {isMeetingDone && (
+        <div>
+          <label className="block text-sm font-semibold text-[var(--foreground)] mb-1">
+            Oportunidade Qualificada (SAO) <span className="text-primary">*</span>
+          </label>
+          <p className="text-[var(--muted-foreground)] mb-3" style={{ fontSize: '13px' }}>
+            Você aceita esta oportunidade como oportunidade de venda?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: true, label: 'Qualificada' },
+              { value: false, label: 'Não qualificada' },
+            ].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => { setOportunidadeQualificada(option.value); setError(''); }}
+                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
+                  oportunidadeQualificada === option.value
+                    ? 'border-primary bg-primary/5 text-[var(--foreground)]'
+                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--muted-foreground)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Observações — obrigatória quando Realizada (descreve a call);
           opcional em No-show/Remarcada. */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
@@ -266,7 +307,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         />
       </div>
 
-      {/* 5. Chance de fechar — leitura subjetiva, opcional, no rodapé */}
+      {/* 7. Chance de fechar — leitura subjetiva, opcional, no rodapé */}
       <div className="border-t border-[var(--border)] pt-6">
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-1">
           Chance de fechar <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>

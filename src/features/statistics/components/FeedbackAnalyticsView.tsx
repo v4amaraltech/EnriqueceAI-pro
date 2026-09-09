@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Clock, MessageSquare, Star, Send, Users, ThumbsUp } from 'lucide-react';
+import { Clock, MessageSquare, Star, Send, Users, ThumbsUp, BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -51,6 +51,18 @@ function RatingStars({ rating }: { rating: number | null }) {
       ))}
       <span className="ml-1 text-xs text-[var(--muted-foreground)]">{rating}</span>
     </div>
+  );
+}
+
+/** SAO — aceite comercial da oportunidade pelo closer. null = não respondido. */
+function SaoBadge({ value }: { value: boolean | null }) {
+  if (value === null) return <span className="text-xs text-[var(--muted-foreground)]">—</span>;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+      value ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-500'
+    }`}>
+      {value ? 'Qualificada' : 'Não qualificada'}
+    </span>
   );
 }
 
@@ -152,13 +164,19 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard label="Enviados" value={String(kpis.totalSent)} icon={Send} />
         <KpiCard
           label="Taxa de Resposta"
           value={`${kpis.responseRate}%`}
           icon={ThumbsUp}
           subtitle={`${kpis.totalResponded} respondidos · ${kpis.pendingCount} pendentes`}
+        />
+        <KpiCard
+          label="Oportunidades qualificadas (SAO)"
+          value={kpis.saoRate != null ? `${kpis.saoRate}%` : '—'}
+          icon={BadgeCheck}
+          subtitle={kpis.saoAnswered > 0 ? `${kpis.saoQualified} de ${kpis.saoAnswered} avaliadas` : 'sem respostas no período'}
         />
         <KpiCard
           label="Chance de fechar"
@@ -190,6 +208,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
                     <p className="text-sm font-medium">{c.closerName}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">
                       {c.totalReceived} recebidos · {c.responseRate}% respondidos
+                      {c.saoRate != null ? ` · ${c.saoRate}% SAO` : ''}
                     </p>
                   </div>
                   <RatingStars rating={c.averageRating} />
@@ -240,6 +259,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
               <tr className="border-b border-[var(--border)] text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 <th className="px-5 py-3">Lead</th>
                 <th className="px-5 py-3">Closer</th>
+                <th className="px-5 py-3">SAO</th>
                 <th className="px-5 py-3">Chance de fechar</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Enviado</th>
@@ -249,7 +269,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
             <tbody>
               {filteredFeedbacks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-[var(--muted-foreground)]">
+                  <td colSpan={7} className="px-5 py-8 text-center text-[var(--muted-foreground)]">
                     Nenhum feedback encontrado no período.
                   </td>
                 </tr>
@@ -262,6 +282,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
                       </Link>
                     </td>
                     <td className="px-5 py-3">{f.closerName}</td>
+                    <td className="px-5 py-3"><SaoBadge value={f.oportunidadeQualificada} /></td>
                     <td className="px-5 py-3"><RatingStars rating={f.rating} /></td>
                     <td className="px-5 py-3"><StatusBadge status={f.status} /></td>
                     <td className="px-5 py-3 text-[var(--muted-foreground)]">

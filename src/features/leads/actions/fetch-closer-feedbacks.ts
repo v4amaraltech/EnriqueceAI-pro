@@ -11,6 +11,8 @@ export interface CloserFeedbackRow {
   closer_email: string;
   result: string | null;
   rating: number | null;
+  // SAO — aceite comercial da oportunidade pelo closer (só em meeting_done).
+  oportunidade_qualificada: boolean | null;
   comment: string | null;
   sent_at: string;
   responded_at: string | null;
@@ -47,7 +49,7 @@ export async function fetchCloserFeedbacks(
   const { orgId, supabase } = auth.data;
 
   let query = from(supabase, 'closer_feedback_requests')
-    .select('id, result, rating, comment, sent_at, responded_at, expires_at, lead_id, closer_id')
+    .select('id, result, rating, oportunidade_qualificada, comment, sent_at, responded_at, expires_at, lead_id, closer_id')
     .eq('org_id', orgId)
     .order('sent_at', { ascending: false })
     .limit(200);
@@ -60,6 +62,7 @@ export async function fetchCloserFeedbacks(
       id: string;
       result: string | null;
       rating: number | null;
+      oportunidade_qualificada: boolean | null;
       comment: string | null;
       sent_at: string;
       responded_at: string | null;
@@ -107,6 +110,7 @@ export async function fetchCloserFeedbacks(
       closer_email: closerMap.get(d.closer_id)?.email ?? '',
       result: d.result,
       rating: d.rating,
+      oportunidade_qualificada: d.oportunidade_qualificada,
       comment: d.comment,
       sent_at: d.sent_at,
       responded_at: d.responded_at,

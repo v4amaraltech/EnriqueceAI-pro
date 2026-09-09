@@ -5,6 +5,11 @@ export interface FeedbackKpis {
   averageRating: number | null;
   averageResponseTimeHours: number | null;
   pendingCount: number;
+  /** % de oportunidades aceitas pelo closer (SAO) entre as que ele avaliou. */
+  saoRate: number | null;
+  /** Feedbacks com SAO respondido — denominador de `saoRate`. */
+  saoAnswered: number;
+  saoQualified: number;
 }
 
 export interface FeedbackRow {
@@ -15,6 +20,8 @@ export interface FeedbackRow {
   closerName: string;
   result: string | null;
   rating: number | null;
+  /** SAO — true qualificada, false não qualificada, null não respondido. */
+  oportunidadeQualificada: boolean | null;
   comment: string | null;
   sentAt: string;
   respondedAt: string | null;
@@ -29,6 +36,8 @@ export interface CloserRankingEntry {
   totalResponded: number;
   responseRate: number;
   averageRating: number | null;
+  saoRate: number | null;
+  saoAnswered: number;
 }
 
 export interface FeedbackAnalyticsData {
