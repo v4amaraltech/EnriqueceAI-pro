@@ -370,7 +370,10 @@ export async function enrollLeads(
       errors.push(`Lead ${leadId}: ${error.message ?? 'já inscrito ou erro'}`);
     } else {
       enrolled++;
-      logLeadEvent(supabase, {
+      // Awaited de propósito: como fire-and-forget o insert podia ser
+      // descartado quando a Server Action retornava antes, e a inscrição
+      // sumia do histórico do lead.
+      await logLeadEvent(supabase, {
         orgId,
         leadId,
         userId,

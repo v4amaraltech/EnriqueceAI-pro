@@ -347,11 +347,11 @@ async function enrollInCadence(
 ): Promise<{ enrolled: boolean; error?: string }> {
   // Validate cadence exists and is active
   const { data: cadence } = await from(supabase, 'cadences')
-    .select('id, status')
+    .select('id, name, status')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .single() as { data: { id: string; status: string } | null };
+    .single() as { data: { id: string; name: string; status: string } | null };
 
   if (!cadence) return { enrolled: false, error: 'Cadência não encontrada' };
   if (cadence.status !== 'active') return { enrolled: false, error: 'Cadência não está ativa' };
@@ -371,6 +371,24 @@ async function enrollInCadence(
     // no assigned_to. Surface it instead of swallowing.
     return { enrolled: false, error: error.message };
   }
+
+  // Timeline trace: sem isso a entrada na cadência via API/webhook inbound não
+  // aparecia no histórico do lead (só as inscrições feitas pela UI logavam).
+  await logLeadEvent(supabase, {
+    orgId,
+    leadId,
+    // Entrada automática via API — não é ação de um SDR
+    userId: null,
+    event: 'cadence_enrolled',
+    message: `Inscrito na cadência: ${cadence.name}`,
+    metadata: {
+      cadence_id: cadenceId,
+      cadence_name: cadence.name,
+      source: 'inbound_api',
+      assigned_to: assignedTo,
+    },
+  });
+
   return { enrolled: true };
 }
 

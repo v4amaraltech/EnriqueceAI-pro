@@ -24,6 +24,9 @@ const CADENCE_LIFECYCLE_EVENTS = [
   'cadence_resumed',
   'enrollment_removed',
   'cadence_limbo_triaged',
+  'prospection_scheduled',
+  'prospection_reactivated',
+  'inbound_recovery_scheduled',
 ] as const;
 
 export async function fetchLeadTimeline(
