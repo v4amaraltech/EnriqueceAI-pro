@@ -1665,6 +1665,7 @@ export type Database = {
           expires_at: string;
           id: string;
           lead_id: string;
+          oportunidade_qualificada: boolean | null;
           org_id: string;
           qualificacao_aderente:
             | Database['public']['Enums']['closer_qualificacao_aderencia']
@@ -1687,6 +1688,7 @@ export type Database = {
           expires_at?: string;
           id?: string;
           lead_id: string;
+          oportunidade_qualificada?: boolean | null;
           org_id: string;
           qualificacao_aderente?:
             | Database['public']['Enums']['closer_qualificacao_aderencia']
@@ -1709,6 +1711,7 @@ export type Database = {
           expires_at?: string;
           id?: string;
           lead_id?: string;
+          oportunidade_qualificada?: boolean | null;
           org_id?: string;
           qualificacao_aderente?:
             | Database['public']['Enums']['closer_qualificacao_aderencia']

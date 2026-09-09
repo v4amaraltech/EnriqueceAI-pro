@@ -21,6 +21,21 @@ const RESULT_BADGE: Record<string, string> = {
   rescheduled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
 };
 
+/** SAO — aceite comercial da oportunidade. null = não respondido / não se aplica. */
+function SaoBadge({ value }: { value: boolean | null }) {
+  if (value === null) return <span className="text-[var(--muted-foreground)]">—</span>;
+  return (
+    <Badge
+      variant="outline"
+      className={value
+        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}
+    >
+      {value ? 'Qualificada' : 'Não qualificada'}
+    </Badge>
+  );
+}
+
 function StarRating({ rating }: { rating: number | null }) {
   if (rating === null) return <span className="text-[var(--muted-foreground)]">—</span>;
   return (
@@ -51,6 +66,7 @@ export function CloserFeedbackTable({ feedbacks }: CloserFeedbackTableProps) {
             <th className="p-3 text-left font-medium">Lead</th>
             <th className="p-3 text-left font-medium">Closer</th>
             <th className="p-3 text-left font-medium">Resultado</th>
+            <th className="p-3 text-center font-medium">SAO</th>
             <th className="p-3 text-center font-medium">Chance de fechar</th>
             <th className="p-3 text-left font-medium">Comentário</th>
             <th className="p-3 text-left font-medium">Status</th>
@@ -75,6 +91,9 @@ export function CloserFeedbackTable({ feedbacks }: CloserFeedbackTableProps) {
                   ) : (
                     <span className="text-[var(--muted-foreground)]">—</span>
                   )}
+                </td>
+                <td className="p-3 text-center">
+                  <SaoBadge value={fb.oportunidade_qualificada} />
                 </td>
                 <td className="p-3 text-center">
                   <StarRating rating={fb.rating} />

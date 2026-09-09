@@ -102,6 +102,40 @@ describe('fetchFeedbackAnalyticsData', () => {
     expect(result.closerRanking[1]?.totalReceived).toBe(1);
   });
 
+  it('computes SAO rate over answered feedbacks only', async () => {
+    // 2 qualificadas, 1 não qualificada, 1 sem resposta de SAO (histórico /
+    // no-show) e 1 não respondido — o denominador é 3, não 5.
+    const feedbacks = [
+      { id: '1', lead_id: 'l1', closer_id: 'c1', result: 'meeting_done', rating: null, oportunidade_qualificada: true, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: '2026-04-10T14:00:00Z', expires_at: null },
+      { id: '2', lead_id: 'l2', closer_id: 'c1', result: 'meeting_done', rating: null, oportunidade_qualificada: true, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: '2026-04-10T14:00:00Z', expires_at: null },
+      { id: '3', lead_id: 'l3', closer_id: 'c1', result: 'meeting_done', rating: null, oportunidade_qualificada: false, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: '2026-04-10T14:00:00Z', expires_at: null },
+      { id: '4', lead_id: 'l4', closer_id: 'c1', result: 'no_show', rating: null, oportunidade_qualificada: null, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: '2026-04-10T14:00:00Z', expires_at: null },
+      { id: '5', lead_id: 'l5', closer_id: 'c1', result: null, rating: null, oportunidade_qualificada: null, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: null, expires_at: null },
+    ];
+    const leads = feedbacks.map((f) => ({ id: f.lead_id, nome_fantasia: 'Lead', razao_social: null, first_name: null, last_name: null }));
+
+    const { client } = createMockSupabase(feedbacks, [{ id: 'c1', name: 'Closer' }], leads);
+    const result = await fetchFeedbackAnalyticsData(client, 'org-1', '2026-04-01', '2026-04-23');
+
+    expect(result.kpis.saoAnswered).toBe(3);
+    expect(result.kpis.saoQualified).toBe(2);
+    expect(result.kpis.saoRate).toBe(66.7); // 2/3
+    expect(result.closerRanking[0]?.saoRate).toBe(66.7);
+    expect(result.closerRanking[0]?.saoAnswered).toBe(3);
+  });
+
+  it('leaves SAO rate null when nobody answered it', async () => {
+    const feedbacks = [
+      { id: '1', lead_id: 'l1', closer_id: 'c1', result: 'no_show', rating: null, oportunidade_qualificada: null, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: '2026-04-10T14:00:00Z', expires_at: null },
+    ];
+    const { client } = createMockSupabase(feedbacks, [{ id: 'c1', name: 'Closer' }], [{ id: 'l1', nome_fantasia: 'Lead', razao_social: null, first_name: null, last_name: null }]);
+    const result = await fetchFeedbackAnalyticsData(client, 'org-1', '2026-04-01', '2026-04-23');
+
+    expect(result.kpis.saoRate).toBeNull();
+    expect(result.kpis.saoAnswered).toBe(0);
+    expect(result.closerRanking[0]?.saoRate).toBeNull();
+  });
+
   it('resolves lead names with fallback', async () => {
     const feedbacks = [
       { id: '1', lead_id: 'l1', closer_id: 'c1', result: null, rating: null, comment: null, sent_at: '2026-04-10T10:00:00Z', responded_at: null, expires_at: null },

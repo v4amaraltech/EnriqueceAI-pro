@@ -69,6 +69,7 @@ interface FeedbackDetails {
   qualificacaoAderente: string | null;
   divergencias: string[] | null;
   decisorPresente: boolean | null;
+  oportunidadeQualificada: boolean | null;
   rating: number;
   comment: string | null;
   meetingDate: string | null;
@@ -105,6 +106,10 @@ function buildFeedbackDetailsHtml(d: FeedbackDetails): string {
   if (isMeetingDone && d.decisorPresente !== null) {
     rowsHtml.push(row('O decisor estava na call?',
       `<strong style="color:${d.decisorPresente ? '#166534' : '#b91c1c'};font-size:15px;">${d.decisorPresente ? 'Sim' : 'Não'}</strong>`));
+  }
+  if (isMeetingDone && d.oportunidadeQualificada !== null) {
+    rowsHtml.push(row('Oportunidade Qualificada (SAO)',
+      `<strong style="color:${d.oportunidadeQualificada ? '#166534' : '#b91c1c'};font-size:15px;">${d.oportunidadeQualificada ? 'Qualificada' : 'Não qualificada'}</strong>`));
   }
   if (isMeetingDone && safeRating > 0) {
     rowsHtml.push(row('Chance de fechar <span style="font-weight:normal;">(leitura do closer)</span>',
@@ -150,7 +155,7 @@ function nextBusinessDayAt9hBRT(now: Date): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { token, result, rating, comment, qualificacao_aderente, divergencias, decisor_presente } = body;
+    const { token, result, rating, comment, qualificacao_aderente, divergencias, decisor_presente, oportunidade_qualificada } = body;
 
     // Validate input
     if (!token || !isUuid(token)) {
@@ -176,6 +181,13 @@ export async function POST(request: Request) {
     // "Decisor na Call %" do Sales Hub.
     if (needsMeetingFields && typeof decisor_presente !== 'boolean') {
       return NextResponse.json({ error: 'Informe se o decisor estava na call' }, { status: 400 });
+    }
+
+    // SAO (aceite comercial da oportunidade) é obrigatório em meeting_done.
+    // Distinto de qualificacao_aderente: aqui o closer aceita ou não a
+    // oportunidade; lá ele diz se a informação do pré-vendas conferiu.
+    if (needsMeetingFields && typeof oportunidade_qualificada !== 'boolean') {
+      return NextResponse.json({ error: 'Informe se a oportunidade é qualificada (SAO)' }, { status: 400 });
     }
 
     // Observações são obrigatórias quando a reunião aconteceu — o closer descreve
@@ -236,6 +248,8 @@ export async function POST(request: Request) {
         // Presença do decisor na call — só em meeting_done; nula nos demais.
         // Fonte direta da métrica "Decisor na Call %" do Sales Hub.
         decisor_presente: needsMeetingFields ? decisor_presente : null,
+        // SAO — só em meeting_done (constraint closer_feedback_sao_somente_se_realizada).
+        oportunidade_qualificada: needsMeetingFields ? oportunidade_qualificada : null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', feedbackReq.id)
@@ -336,25 +350,27 @@ export async function POST(request: Request) {
     // Qualificação/divergências/decisor só se aplicam a meeting_done.
     const qualForNotify = needsMeetingFields ? qualificacao_aderente : null;
     const decisorForNotify = needsMeetingFields ? decisor_presente : null;
+    const saoForNotify = needsMeetingFields ? oportunidade_qualificada : null;
 
     // Notify SDR in background after response is sent
     after(() =>
-      notifySdr(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify).catch((err) =>
+      notifySdr(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify, saoForNotify).catch((err) =>
         console.error('[api/feedback] SDR notification error:', err),
       ),
     );
 
     // O gestor é notificado em TODO feedback respondido (in-app + e-mail).
-    // `isActionable` (no-show / remarcada / qualificação divergida) só muda a
-    // moldura: alerta destacado vs informativo. Rating ("chance de fechar") é
-    // leitura subjetiva do closer e não influencia.
+    // `isActionable` (no-show / remarcada / qualificação divergida / oportunidade
+    // recusada pelo closer) só muda a moldura: alerta destacado vs informativo.
+    // Rating ("chance de fechar") é leitura subjetiva do closer e não influencia.
     const isActionable =
       result === 'no_show'
       || result === 'rescheduled'
-      || (needsMeetingFields && qualificacao_aderente === 'divergiu');
+      || (needsMeetingFields && qualificacao_aderente === 'divergiu')
+      || (needsMeetingFields && oportunidade_qualificada === false);
 
     after(() =>
-      notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify, isActionable).catch((err) =>
+      notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify, saoForNotify, isActionable).catch((err) =>
         console.error('[api/feedback] Manager notification error:', err),
       ),
     );
@@ -430,6 +446,7 @@ async function notifySdr(
   qualificacaoAderente: string | null,
   divergencias: string[] | null,
   decisorPresente: boolean | null,
+  oportunidadeQualificada: boolean | null,
 ) {
   // Get lead info + who marked as won (SDR)
   const { data: lead } = (await from(supabase, 'leads')
@@ -470,8 +487,11 @@ async function notifySdr(
     const divTxt = qualificacaoAderente === 'divergiu' && divergencias?.length
       ? ` (${divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')})`
       : '';
+    const saoTxt = oportunidadeQualificada === null
+      ? ''
+      : `. SAO: ${oportunidadeQualificada ? 'qualificada' : 'não qualificada'}`;
     notifTitle = `${closerName} respondeu o feedback`;
-    notifBody = `${leadName} — ${resultLabel}${qualLabel ? `: qualificação ${qualLabel.toLowerCase()}${divTxt}` : ''}${comment ? `. ${comment}` : ''}`;
+    notifBody = `${leadName} — ${resultLabel}${qualLabel ? `: qualificação ${qualLabel.toLowerCase()}${divTxt}` : ''}${saoTxt}${comment ? `. ${comment}` : ''}`;
   }
 
   // Create in-app notification for the SDR (triggers Realtime)
@@ -484,7 +504,7 @@ async function notifySdr(
       body: notifBody,
       resource_type: 'lead',
       resource_id: feedbackReq.lead_id,
-      metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment },
+      metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, oportunidade_qualificada: oportunidadeQualificada, rating, comment },
     });
   } catch (err) {
     console.error('[api/feedback] Failed to create notification:', err);
@@ -524,7 +544,7 @@ async function notifySdr(
                 <strong>${closerName}</strong> respondeu o feedback sobre a reunião com <strong>${leadName}</strong>.
               </p>
 
-              ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, rating, comment, meetingDate })}
+              ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, oportunidadeQualificada, rating, comment, meetingDate })}
 
               ${ctaLine ? `
               <p style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.5;">
@@ -563,7 +583,8 @@ async function notifySdr(
 
 /**
  * Notify managers for EVERY responded feedback (in-app + e-mail).
- * `isActionable` (no_show / rescheduled / qualificacao_aderente = 'divergiu')
+ * `isActionable` (no_show / rescheduled / qualificacao_aderente = 'divergiu' /
+ * oportunidade_qualificada = false)
  * only changes the framing: an alert ("⚠️ exige atenção", with a reason box)
  * vs an informational notice for healthy feedbacks (bateu / não validado).
  * Rating ("chance de fechar") is subjective and never affects the framing.
@@ -577,6 +598,7 @@ async function notifyManagers(
   qualificacaoAderente: string | null,
   divergencias: string[] | null,
   decisorPresente: boolean | null,
+  oportunidadeQualificada: boolean | null,
   isActionable: boolean,
 ) {
   // Pull lead, closer, sdr names for context
@@ -619,6 +641,9 @@ async function notifyManagers(
   if (result === 'meeting_done' && qualificacaoAderente === 'divergiu') {
     reasons.push(`a qualificação do pré-vendas divergiu na reunião${divergenciasTxt ? ` (${divergenciasTxt})` : ''}`);
   }
+  if (result === 'meeting_done' && oportunidadeQualificada === false) {
+    reasons.push('o closer não aceitou a oportunidade (SAO: não qualificada)');
+  }
   const reasonLine = reasons.join(' • ');
 
   // List active managers in the org
@@ -636,9 +661,13 @@ async function notifyManagers(
   const inAppTitle = isActionable
     ? `⚠️ Feedback exige atenção — ${leadName}`
     : `Feedback do closer — ${leadName}`;
-  const qualSummary = result === 'meeting_done' && qualificacaoAderente
-    ? `qualificação ${qualLabelHtml.toLowerCase()}`
+  const saoSummary = result === 'meeting_done' && oportunidadeQualificada !== null
+    ? `SAO ${oportunidadeQualificada ? 'qualificada' : 'não qualificada'}`
     : '';
+  const qualSummary = [
+    result === 'meeting_done' && qualificacaoAderente ? `qualificação ${qualLabelHtml.toLowerCase()}` : '',
+    saoSummary,
+  ].filter(Boolean).join(' · ');
   const inAppInfo = isActionable ? reasonLine : qualSummary;
   const inAppBody = `${closerName} → ${resultLabel}${inAppInfo ? `. ${inAppInfo}` : ''}${comment ? `. "${comment}"` : ''}`;
 
@@ -650,7 +679,7 @@ async function notifyManagers(
     body: inAppBody,
     resourceType: 'lead',
     resourceId: feedbackReq.lead_id,
-    metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment, actionable: isActionable },
+    metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, oportunidade_qualificada: oportunidadeQualificada, rating, comment, actionable: isActionable },
     roleFilter: 'manager',
   }).catch((err) => console.error('[api/feedback/notifyManagers] in-app failed:', err));
 
@@ -678,12 +707,12 @@ async function notifyManagers(
             <strong>Motivo do alerta:</strong> ${reasonLine}
           </p>
           ` : ''}
-          ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, rating, comment, meetingDate })}
+          ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, oportunidadeQualificada, rating, comment, meetingDate })}
           ${buildLeadButtonHtml(feedbackReq.lead_id)}
         </td></tr>
         <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-            Você recebe este email porque é manager da organização — todos os feedbacks respondidos dos closers. Casos que exigem atenção (no-show, reagendamento ou qualificação divergente) vêm destacados.
+            Você recebe este email porque é manager da organização — todos os feedbacks respondidos dos closers. Casos que exigem atenção (no-show, reagendamento, qualificação divergente ou oportunidade não qualificada) vêm destacados.
           </p>
         </td></tr>
       </table>

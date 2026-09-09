@@ -636,6 +636,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               </p>
             </div>
           ) : null}
+          {closerFeedback.result === 'meeting_done' && closerFeedback.oportunidade_qualificada !== null ? (
+            <div className="mt-3 pt-3 border-t border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-1">Oportunidade Qualificada (SAO)</p>
+              <p className={`font-medium ${closerFeedback.oportunidade_qualificada ? '' : 'text-red-600 dark:text-red-400'}`}>
+                {closerFeedback.oportunidade_qualificada ? 'Qualificada' : 'Não qualificada'}
+              </p>
+            </div>
+          ) : null}
           {closerFeedback.result === 'meeting_done' && closerFeedback.rating ? (
             <div className="mt-3 pt-3 border-t border-[var(--border)]">
               <p className="text-xs text-[var(--muted-foreground)] mb-1">Chance de fechar <span className="font-normal">(leitura do closer)</span></p>
