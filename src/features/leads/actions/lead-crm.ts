@@ -12,6 +12,7 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 
 import { pushLeadToCrm, pushLeadToCrmWithDefaults } from '../services/crm-push.service';
 import { resyncCrmDealFields } from '../services/crm-resync.service';
+import { resolveMeetingHeldAt } from '../utils/meeting-held-at';
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
   CrmConnectionRow,
@@ -333,11 +334,16 @@ export async function markLeadAsWon(
     // graded twice. We still upsert status='won' (a no-op) so the legitimate
     // reopen→re-win path (status='qualified' at that point) stamps fresh.
     const { data: currentLead } = (await from(supabase, 'leads')
-      .select('status, custom_field_values, assigned_to')
+      .select('status, custom_field_values, assigned_to, meeting_starts_at')
       .eq('id', leadId)
       .eq('org_id', orgId)
-      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null; assigned_to: string | null } | null };
+      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null; assigned_to: string | null; meeting_starts_at: string | null } | null };
     const wasAlreadyWon = currentLead?.status === 'won';
+
+    // O carimbo herda a data da REUNIÃO (meeting_starts_at), não a do clique —
+    // ver resolveMeetingHeldAt. `won_at` continua sendo o instante do clique:
+    // ele marca o handoff SDR→Closer, que é outro fato.
+    const meetingHeldAt = resolveMeetingHeldAt(currentLead?.meeting_starts_at, new Date(nowIso));
 
     let customFieldUpdate: Record<string, unknown> | null = null;
     if (mhCustomField) {
@@ -346,9 +352,10 @@ export async function markLeadAsWon(
       if (existingValue === undefined || existingValue === null || existingValue === '') {
         // Custom field is type='date' — store as YYYY-MM-DD in the org's
         // local timezone (BRT), matching what the SDR would type in the UI.
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        // Mesma data do carimbo (dia da reunião), não a de hoje.
+        const heldDate = new Date(meetingHeldAt).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
         customFieldUpdate = {
-          custom_field_values: { ...currentValues, [mhCustomField.id]: today },
+          custom_field_values: { ...currentValues, [mhCustomField.id]: heldDate },
         };
       }
     }
@@ -356,7 +363,7 @@ export async function markLeadAsWon(
     // Preserve the original win timestamps when the lead was already won.
     const wonStamps = wasAlreadyWon
       ? {}
-      : { won_by: userId, won_at: nowIso, meeting_held_at: nowIso, qualified_at: nowIso };
+      : { won_by: userId, won_at: nowIso, meeting_held_at: meetingHeldAt, qualified_at: nowIso };
 
     const { error: leadError } = await from(supabase, 'leads')
       .update({
