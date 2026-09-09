@@ -1,0 +1,130 @@
+{
+  "$comment": [
+    "Funções SECURITY DEFINER do schema `public` que PODEM ter EXECUTE para anon e/ou authenticated.",
+    "Qualquer outra função prosecdef executável por esses roles é um achado de auditoria.",
+    "",
+    "Como conferir contra produção: scripts/audits/definer-exec-audit.sql",
+    "Contexto e classificação: docs/stories/security-definer-execute-audit.story.md",
+    "",
+    "Ao adicionar uma entrada aqui, escreva o `reason` como se fosse para quem vai auditar daqui a um ano:",
+    "por que esta função pode ser chamada pelo cliente sem vazar dados de outra org."
+  ],
+  "generated_from": "produção dhkmonctyoaenejemkrt, levantamento de 2026-09-09",
+  "functions": [
+    {
+      "name": "user_org_id",
+      "signature": "user_org_id()",
+      "roles": ["anon", "authenticated", "authenticator", "supabase_realtime_admin"],
+      "category": "rls-helper",
+      "reason": "Usada dentro de 166 policies RLS. Revogar EXECUTE derruba a aplicação inteira; revogar de authenticator/supabase_realtime_admin derruba o Realtime (incidente realtime-rls-helper-execute-revoked). Não retorna dado de outra org: resolve a org do próprio auth.uid()."
+    },
+    {
+      "name": "is_manager",
+      "signature": "is_manager()",
+      "roles": ["anon", "authenticated", "authenticator", "supabase_realtime_admin"],
+      "category": "rls-helper",
+      "reason": "Usada dentro de 63 policies RLS. Retorna apenas o papel do próprio chamador."
+    },
+    {
+      "name": "lead_visibility_mode",
+      "signature": "lead_visibility_mode()",
+      "roles": ["anon", "authenticated", "authenticator", "supabase_realtime_admin"],
+      "category": "rls-helper",
+      "reason": "Usada nas policies leads_org_read e leads_org_update. Retorna apenas a configuração da org do chamador."
+    },
+
+    {
+      "name": "count_leads_by_status",
+      "signature": "count_leads_by_status(p_org_id uuid)",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Chamada por fetchLeadStatusCounts (Server Action, role authenticated). Recusa com 42501 quando p_org_id difere de user_org_id()."
+    },
+    {
+      "name": "count_leads_by_loss_reason",
+      "signature": "count_leads_by_loss_reason(p_org_id uuid)",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Chamada pela lista de leads (Server Action). Recusa com 42501 quando p_org_id difere de user_org_id()."
+    },
+    {
+      "name": "get_distinct_lead_canais",
+      "signature": "get_distinct_lead_canais()",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Filtros da lista de leads. O corpo filtra por org_id = user_org_id(); não aceita org por parâmetro."
+    },
+    {
+      "name": "get_distinct_lead_cnaes",
+      "signature": "get_distinct_lead_cnaes()",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Filtros da lista de leads. O corpo filtra por org_id = user_org_id(); não aceita org por parâmetro."
+    },
+    {
+      "name": "get_executed_steps",
+      "signature": "get_executed_steps(p_cadence_ids uuid[], p_step_ids uuid[], p_lead_ids uuid[])",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Fila de atividades. O corpo filtra por org_id = user_org_id(), então os ids passados só resolvem dentro da própria org."
+    },
+    {
+      "name": "set_primary_lead_contact",
+      "signature": "set_primary_lead_contact(p_contact_id uuid)",
+      "roles": ["authenticated"],
+      "category": "client-rpc",
+      "reason": "Promove um contato a principal. Compara a org do contato com user_org_id() e levanta 'not authorized' se divergir."
+    },
+
+    {
+      "name": "get_leads_for_v4sales",
+      "signature": "get_leads_for_v4sales(p_api_token text, p_from_date text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Consumida pelo Sales Hub com a anon key. Guarda: caller de outra org, sem service_role e sem o token v4sales_public_rpc → 42501. Decisão de 20260516161116."
+    },
+    {
+      "name": "get_indicacoes_ranking",
+      "signature": "get_indicacoes_ranking(p_year integer, p_month integer, p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Página de ranking de indicações do Sales Hub. Mesma guarda de shared secret."
+    },
+    {
+      "name": "get_indicacoes_reunioes_realizadas",
+      "signature": "get_indicacoes_reunioes_realizadas(p_year integer, p_month integer, p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Detalhe do ranking de indicações. Mesma guarda de shared secret."
+    },
+    {
+      "name": "get_indicacoes_leads_lookup",
+      "signature": "get_indicacoes_leads_lookup(p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Lookup de CNPJ/investidor usado pelo Sales Hub. Mesma guarda de shared secret."
+    },
+
+    {
+      "name": "get_sdr_leads_abertos",
+      "signature": "get_sdr_leads_abertos(p_year integer, p_month integer, p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Sales Hub. Ganhou a guarda de shared secret em 20260909210100 — antes disso era anon sem qualquer validação. Só válida DEPOIS que essa migration for aplicada."
+    },
+    {
+      "name": "get_sdr_atividades_atrasadas_v3",
+      "signature": "get_sdr_atividades_atrasadas_v3(p_org_id uuid, p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Sales Hub. Desde 20260909210100 valida p_org_id contra user_org_id(), e o token só libera a org V4. Só válida DEPOIS que essa migration for aplicada."
+    },
+    {
+      "name": "get_sdr_leads_para_abrir_v2",
+      "signature": "get_sdr_leads_para_abrir_v2(p_org_id uuid, p_api_token text)",
+      "roles": ["anon", "authenticated"],
+      "category": "public-shared-secret",
+      "reason": "Sales Hub. Desde 20260909210100 valida p_org_id contra user_org_id(), e o token só libera a org V4. Só válida DEPOIS que essa migration for aplicada."
+    }
+  ]
+}

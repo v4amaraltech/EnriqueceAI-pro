@@ -73,8 +73,47 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON {plural_table_name}
 - Trigger function is `update_updated_at()`, trigger name is `set_updated_at`
 - RLS uses `public.user_org_id()` and `public.is_manager()`
 - Table has standard columns (id, org_id, created_at, updated_at)
+- **Todo `DROP` + `CREATE` de função `SECURITY DEFINER` traz `REVOKE ... FROM anon, authenticated, PUBLIC` no mesmo arquivo** (ver seção abaixo)
 
 **On failure:** STOP, fix the SQL draft, re-check before writing the file.
+
+#### DROP + CREATE de SECURITY DEFINER — regra obrigatória
+
+O `DROP` **descarta a ACL da função**. O `CREATE` seguinte a recria com o default
+privilege do schema `public`, que concede **EXECUTE a `PUBLIC`** — ou seja, a `anon` e
+`authenticated`. Um `REVOKE` feito numa migration antiga **NÃO sobrevive**: ele agiu
+sobre o objeto, não sobre o nome. Foi assim que `20260909184311` reabriu
+`fetch_inactive_enrollment_candidates` (varre `leads`/`cadence_enrollments` de todas as
+orgs) para qualquer usuário logado.
+
+Atenção: acrescentar um parâmetro com `DEFAULT` **muda a assinatura**. `CREATE OR REPLACE`
+nesse caso cria uma **sobrecarga** e deixa a função antiga no ar, ainda exposta — use
+`DROP` + `CREATE` e trate a ACL.
+
+Padrão obrigatório, no mesmo arquivo, logo após o `CREATE`:
+
+```sql
+DROP FUNCTION IF EXISTS public.minha_funcao(uuid);
+CREATE FUNCTION public.minha_funcao(p_org_id uuid, p_api_token text DEFAULT NULL)
+  RETURNS ... LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$ ... $function$;
+
+REVOKE EXECUTE ON FUNCTION public.minha_funcao(uuid, text) FROM anon, authenticated, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.minha_funcao(uuid, text) TO service_role;  -- só quem precisa
+```
+
+- **Antes de revogar**, cheque `pg_policies`: helper usado dentro de policy RLS
+  (`user_org_id()`, `is_manager()`, `lead_visibility_mode()`) **nunca** perde EXECUTE — nem
+  de `authenticator`/`supabase_realtime_admin`, sob pena de derrubar o Realtime.
+- **Antes de revogar**, cheque o tráfego real por role nos logs do PostgREST. Uma função
+  que parece órfã pode estar em uso por `anon` (foi o caso das 3 RPCs do Sales Hub).
+- Se a função pode mesmo ser chamada pelo cliente, registre-a em
+  `supabase/security/definer-exec-allowlist.json` com a justificativa.
+- **Depois de aplicar**, releia `proacl` — `{"success": true}` do MCP não prova que a
+  permissão ficou correta. Script pronto: `scripts/audits/definer-exec-audit.sql`.
+
+O CI cobre o lado do repositório em `tests/security/definer-acl.test.ts`.
+Contexto completo: `docs/stories/security-definer-execute-audit.story.md`.
 
 ### Checkpoint 2: Post-Implementation QA
 
