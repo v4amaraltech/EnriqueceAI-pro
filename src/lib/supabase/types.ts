@@ -5329,12 +5329,13 @@ export type Database = {
         }[];
       };
       fetch_inactive_enrollment_candidates: {
-        Args: never;
+        Args: { p_include_completed?: boolean };
         Returns: {
           auto_loss_after_days: number;
           auto_loss_reason_id: string;
           cadence_id: string;
           enrollment_id: string;
+          enrollment_status: string;
           inactive_days: number;
           lead_id: string;
           org_id: string;
