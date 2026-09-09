@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { from } from '@/lib/supabase/from';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { ingestInboundLeads } from './inbound-lead.service';
 
@@ -86,5 +87,37 @@ describe('ingestInboundLeads — concurrent race (unique violation)', () => {
     expect(result.duplicates).toBe(1);
     expect(result.errors).toBe(0);
     expect(result.results[0]).toMatchObject({ status: 'duplicate', existing_lead_id: 'raced-1' });
+  });
+});
+
+describe('ingestInboundLeads — histórico da inscrição em cadência', () => {
+  it('registra cadence_enrolled na timeline quando o lead entra na cadência', async () => {
+    fromMock
+      // checkLeadLimitForOrg → allowed
+      .mockReturnValueOnce(makeBuilder({ data: null }) as never)
+      // findExistingLeadId → not found
+      .mockReturnValueOnce(makeBuilder({ data: null }) as never)
+      // insert lead → created
+      .mockReturnValueOnce(makeBuilder({ data: { id: 'lead-9' }, error: null }) as never)
+      // enrollInCadence: cadence lookup → ativa
+      .mockReturnValueOnce(makeBuilder({ data: { id: '11111111-1111-4111-8111-111111111111', name: 'Inbound 2.0', status: 'active' } }) as never)
+      // enrollInCadence: insert enrollment → ok
+      .mockReturnValueOnce(makeBuilder({ error: null }) as never);
+
+    const result = await ingestInboundLeads(
+      [{ ...baseLead, cadence_id: '11111111-1111-4111-8111-111111111111', assigned_to: '22222222-2222-4222-8222-222222222222' }],
+      options,
+    );
+
+    expect(result.created).toBe(1);
+    expect(result.results[0]).toMatchObject({ enrolled: true });
+    expect(vi.mocked(logLeadEvent)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        leadId: 'lead-9',
+        event: 'cadence_enrolled',
+        message: 'Inscrito na cadência: Inbound 2.0',
+      }),
+    );
   });
 });

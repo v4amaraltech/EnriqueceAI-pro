@@ -299,6 +299,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   bant_analysis: 'Análise BANT (IA)',
                   spiced_analysis: 'Análise SPICED (IA)', // legado (interações antigas)
                   cadence_enrolled: 'Inscrito em cadência',
+                  inbound_recovery_scheduled: 'Agendado na Recovery',
                 };
                 const title = isSystem
                   ? (entry.performed_by_name
