@@ -604,8 +604,11 @@ export async function fetchMeetingsScheduledRanking(
 }
 
 /**
- * Card 6: Reuniões Realizadas — leads que viraram won no período (status='won'
- * e won_at ∈ período). Atribuição via leads.assigned_to (SDR responsável).
+ * Card 6: Reuniões Realizadas — reuniões que ACONTECERAM no período, contadas
+ * pelo horário do evento (`meeting_starts_at` ∈ período) e provadas pelo carimbo
+ * (`meeting_held_at` não nulo). Sem filtro de status: reunião que aconteceu e
+ * depois foi desqualificada continua contando pro SDR.
+ * Atribuição via leads.assigned_to (SDR responsável) — mesma regra do KPI.
  */
 export async function fetchMeetingsHeldRanking(
   supabase: SupabaseClient,
@@ -625,10 +628,10 @@ export async function fetchMeetingsHeldRanking(
     .select('id, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .eq('status', 'won')
-    .not('won_at', 'is', null)
-    .gte('won_at', start)
-    .lt('won_at', end)
+    .not('meeting_held_at', 'is', null)
+    .not('meeting_starts_at', 'is', null)
+    .gte('meeting_starts_at', start)
+    .lt('meeting_starts_at', end)
     .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
 
   const counts = new Map<string, number>();

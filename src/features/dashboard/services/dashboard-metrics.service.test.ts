@@ -51,11 +51,11 @@ describe('fetchOpportunityKpi', () => {
     expect(result.dailyData).toHaveLength(31); // January has 31 days
   });
 
-  it('should count won leads as opportunities', async () => {
+  it('conta reuniões realizadas pelo horário do evento', async () => {
     const leads = [
-      { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null },
-      { id: 'l2', won_at: '2026-01-10T10:00:00Z', assigned_to: null },
-      { id: 'l3', won_at: '2026-01-10T14:00:00Z', assigned_to: null },
+      { id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', assigned_to: null },
+      { id: 'l2', meeting_starts_at: '2026-01-10T10:00:00Z', assigned_to: null },
+      { id: 'l3', meeting_starts_at: '2026-01-10T14:00:00Z', assigned_to: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -77,9 +77,9 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute cumulative daily data correctly', async () => {
     const leads = [
-      { id: 'l1', won_at: '2026-02-01T10:00:00Z', assigned_to: null },
-      { id: 'l2', won_at: '2026-02-01T14:00:00Z', assigned_to: null },
-      { id: 'l3', won_at: '2026-02-03T10:00:00Z', assigned_to: null },
+      { id: 'l1', meeting_starts_at: '2026-02-01T10:00:00Z', assigned_to: null },
+      { id: 'l2', meeting_starts_at: '2026-02-01T14:00:00Z', assigned_to: null },
+      { id: 'l3', meeting_starts_at: '2026-02-03T10:00:00Z', assigned_to: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -130,8 +130,8 @@ describe('fetchOpportunityKpi', () => {
     // Two won leads; only l1 is enrolled in the filtered cadence.
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null },
-        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: null },
+        { id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', assigned_to: null },
+        { id: 'l2', meeting_starts_at: '2026-01-06T10:00:00Z', assigned_to: null },
       ],
     });
     const enrollmentChain = createChainMock({ data: [{ lead_id: 'l1' }] });
@@ -158,9 +158,9 @@ describe('fetchOpportunityKpi', () => {
     // Mesma regra do ranking "Reuniões Realizadas" — não usa won_by.
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: 'sdr-a' },
-        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: 'sdr-b' },
-        { id: 'l3', won_at: '2026-01-07T10:00:00Z', assigned_to: null },
+        { id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', assigned_to: 'sdr-a' },
+        { id: 'l2', meeting_starts_at: '2026-01-06T10:00:00Z', assigned_to: 'sdr-b' },
+        { id: 'l3', meeting_starts_at: '2026-01-07T10:00:00Z', assigned_to: null },
       ],
     });
     const goalsChain = createChainMock({ data: null });
@@ -198,7 +198,7 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute percentOfTarget as 0 when no target set', async () => {
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null }],
+      data: [{ id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', assigned_to: null }],
     });
     const goalsChain = createChainMock({ data: null });
 
@@ -221,9 +221,9 @@ describe('fetchOpportunityKpi', () => {
     vi.setSystemTime(new Date('2026-08-13T12:00:00Z')); // 09:00 BRT do dia 13
     try {
       const leads = [
-        { id: 'a', won_at: '2026-08-05T10:00:00Z', assigned_to: null },
-        { id: 'b', won_at: '2026-08-12T10:00:00Z', assigned_to: null },
-        { id: 'c', won_at: '2026-08-13T10:00:00Z', assigned_to: null }, // hoje
+        { id: 'a', meeting_starts_at: '2026-08-05T10:00:00Z', assigned_to: null },
+        { id: 'b', meeting_starts_at: '2026-08-12T10:00:00Z', assigned_to: null },
+        { id: 'c', meeting_starts_at: '2026-08-13T10:00:00Z', assigned_to: null }, // hoje
       ];
       const leadsChain = createChainMock({ data: leads });
       const goalsChain = createChainMock({
@@ -241,10 +241,10 @@ describe('fetchOpportunityKpi', () => {
         userIds: [],
       });
 
-      // A query de won leads vai até o fim do MÊS (conta até hoje: won_at nunca é futuro).
+      // A query vai até o fim do MÊS (conta até hoje: reunião já realizada nunca é futura).
       const ltCalls = (leadsChain.lt as ReturnType<typeof vi.fn>).mock.calls;
-      const wonAtLt = ltCalls.find((c: unknown[]) => c[0] === 'won_at');
-      expect(wonAtLt?.[1]).toBe('2026-08-31T23:59:59-03:00');
+      const startsAtLt = ltCalls.find((c: unknown[]) => c[0] === 'meeting_starts_at');
+      expect(startsAtLt?.[1]).toBe('2026-08-31T23:59:59-03:00');
 
       // Número grande inclui o evento de hoje.
       expect(result.totalOpportunities).toBe(3);
