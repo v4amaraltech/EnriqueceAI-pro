@@ -109,17 +109,43 @@ describe('FeedbackForm — Oportunidade Qualificada (SAO)', () => {
     expect(lastPayload(fetchMock).oportunidade_qualificada).toBeNull();
   });
 
-  it('zera a SAO ao trocar de "Realizada" para No-show', async () => {
+  it('não manda SAO no payload quando o resultado final é No-show', async () => {
     const fetchMock = mockFetchOk();
     render(<FeedbackForm token={TOKEN} />);
 
     // Responde como Realizada...
     await userEvent.click(screen.getByRole('button', { name: 'Realizada' }));
     await userEvent.click(screen.getByRole('button', { name: 'Qualificada' }));
-    // ...e volta atrás: o valor não pode vazar no payload (constraint do banco).
+    // ...e volta atrás.
     await userEvent.click(screen.getByRole('button', { name: 'No-show' }));
     await userEvent.click(screen.getByRole('button', { name: /Enviar feedback/ }));
 
     expect(lastPayload(fetchMock).oportunidade_qualificada).toBeNull();
+  });
+
+  // O teste acima NÃO prova que handleResultChange limpa o estado: o payload já
+  // manda null por construção (`isMeetingDone ? oportunidadeQualificada : null`),
+  // então ele passaria mesmo sem a limpeza. Quem cobre a limpeza é o teste
+  // abaixo — o caso que dói de verdade é o closer VOLTAR para "Realizada".
+  it('exige responder a SAO de novo ao voltar para "Realizada"', async () => {
+    render(<FeedbackForm token={TOKEN} />);
+
+    // Responde tudo como Realizada — envio liberado.
+    await userEvent.click(screen.getByRole('button', { name: 'Realizada' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bateu' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sim' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Qualificada' }));
+    await userEvent.type(screen.getByRole('textbox'), 'call tranquila');
+    expect(screen.getByRole('button', { name: /Enviar feedback/ })).toBeEnabled();
+
+    // Troca para No-show e volta atrás, repondo TUDO menos a SAO.
+    await userEvent.click(screen.getByRole('button', { name: 'No-show' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Realizada' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Bateu' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sim' }));
+
+    // Se a SAO não tivesse sido zerada, a resposta anterior continuaria
+    // marcada e o closer enviaria um SAO que não revisou.
+    expect(screen.getByRole('button', { name: /Enviar feedback/ })).toBeDisabled();
   });
 });
