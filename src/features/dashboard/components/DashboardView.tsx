@@ -48,7 +48,8 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
   }, [goToSdrLeads]);
 
   const handleLeadsToOpenSdrClick = useCallback((userId: string) => {
-    goToSdrLeads(userId, '&status=new');
+    // Mesmos filtros do card: "Novo" + "Sem cadência" — o número da lista bate.
+    goToSdrLeads(userId, '&status=new&cadence_id=__none__');
   }, [goToSdrLeads]);
 
   const handleOverdueSdrClick = useCallback((userId: string) => {
@@ -243,7 +244,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
             titleTooltip={
               'Snapshot agora: quantos leads novos cada SDR tem na fila para colocar em cadência.\n\n' +
               '• Leads com status "Novo" atribuídos ao SDR\n' +
-              '• Que ainda NÃO têm cadência ativa\n\n' +
+              '• Que NÃO estão em cadência agora (nem ativa, nem pausada)\n' +
+              '• Inclui leads que já passaram por cadência e voltaram para "Novo"\n\n' +
+              'Mesmo número da tela de Leads com os filtros "Novo" + "Sem cadência".\n\n' +
               'Filtro de período não afeta este card — é a fila atual.'
             }
             icon={Inbox}

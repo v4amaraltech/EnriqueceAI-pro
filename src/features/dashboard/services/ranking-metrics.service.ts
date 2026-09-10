@@ -723,11 +723,18 @@ export function fetchHitRateRanking(
 
 /**
  * Card 8: Leads para Abrir — snapshot da fila de cada SDR. Conta leads
- * com status='new' (não arquivados, não deletados) atribuídos ao SDR
- * que NUNCA foram adicionados a nenhuma cadência (sem QUALQUER enrollment,
- * mesmo pausado/concluído). É o lead importado que o SDR ainda não colocou
- * em cadência. Definição canônica alinhada com a RPC
- * get_sdr_leads_para_abrir_v2 consumida pelo Sales Hub. Não tem meta.
+ * status='new' (não deletados) atribuídos ao SDR que NÃO estão em cadência
+ * agora (sem enrollment ativo nem pausado). Entra também o lead que já passou
+ * por uma cadência e voltou para "Novo" (Recovery, redistribuição) — o SDR
+ * precisa abri-lo de novo.
+ *
+ * Fonte única: a view `leads_no_active_enrollment`, a MESMA do filtro
+ * "Sem cadência" da tela de Leads e da RPC get_sdr_leads_para_abrir_v2
+ * (Sales Hub). Os três números batem. Decisão do gestor em 10/set/2026
+ * (antes contava só lead que NUNCA teve cadência).
+ *
+ * Uma contagem `head` por SDR: número exato, sem baixar linhas nem esbarrar
+ * no teto de linhas do PostgREST. Não tem meta.
  */
 export async function fetchLeadsToOpenRanking(
   supabase: SupabaseClient,
@@ -739,48 +746,29 @@ export async function fetchLeadsToOpenRanking(
     .eq('org_id', orgId)
     .eq('role', 'sdr')
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
-  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  const { data: leads } = (await from(supabase, 'leads')
-    .select('id, assigned_to')
-    .eq('org_id', orgId)
-    .eq('status', 'new')
-    .is('deleted_at', null)
-    .not('assigned_to', 'is', null)
-    .limit(20000)) as { data: Array<{ id: string; assigned_to: string }> | null };
+  const sdrIds = (sdrs ?? [])
+    .map((s) => s.user_id)
+    .filter((id) => filters.userIds.length === 0 || filters.userIds.includes(id));
 
-  const rows = (leads ?? []).filter((l) => sdrIds.has(l.assigned_to));
-  if (rows.length === 0) {
-    return buildRankingCardData([], 0, 0, filters.month);
-  }
-
-  const leadIds = rows.map((l) => l.id);
-  // Qualquer enrollment (qualquer status) exclui o lead da fila "para abrir":
-  // uma vez colocado em cadência, ele já foi "aberto" — mesmo que a cadência
-  // tenha pausado/concluído depois. Casa com get_sdr_leads_para_abrir_v2.
-  const everEnrolled = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
-    from(supabase, 'cadence_enrollments')
-      .select('lead_id')
-      .in('lead_id', chunk) as unknown as PromiseLike<{
-      data: Array<{ lead_id: string }> | null;
-      error: unknown;
-    }>,
+  const counts = await Promise.all(
+    sdrIds.map(async (userId) => {
+      const { count, error } = (await from(supabase, 'leads_no_active_enrollment')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .eq('assigned_to', userId)
+        .eq('status', 'new')
+        .is('deleted_at', null)) as { count: number | null; error: { message: string } | null };
+      // Não derruba os outros 8 cards (rodam no mesmo Promise.all): registra e segue.
+      if (error) console.error(`fetchLeadsToOpenRanking(${userId}):`, error.message);
+      return { userId, value: count ?? 0 };
+    }),
   );
-  const enrolledIds = new Set(everEnrolled.map((e) => e.lead_id));
 
-  const counts = new Map<string, number>();
-  let total = 0;
-  for (const lead of rows) {
-    if (enrolledIds.has(lead.id)) continue;
-    if (filters.userIds.length > 0 && !filters.userIds.includes(lead.assigned_to)) continue;
-    counts.set(lead.assigned_to, (counts.get(lead.assigned_to) ?? 0) + 1);
-    total++;
-  }
-
-  const entries: SdrRankingEntry[] = [];
-  for (const [userId, value] of counts) {
-    entries.push({ userId, userName: '', value });
-  }
+  const entries: SdrRankingEntry[] = counts
+    .filter((c) => c.value > 0)
+    .map((c) => ({ userId: c.userId, userName: '', value: c.value }));
+  const total = entries.reduce((s, e) => s + e.value, 0);
 
   // Sem meta — é snapshot da fila atual. percentOfTarget = 0.
   const sdrCount = entries.length || 1;
