@@ -44,6 +44,13 @@ export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
         <AnalyticsFilters basePath="/statistics/calls" members={members} />
       </div>
 
+      {data.isTruncated && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-sm">
+          Período muito longo: os números abaixo consideram só parte das ligações. Escolha um período
+          menor para ver o total exato.
+        </div>
+      )}
+
       {/* KPI Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
@@ -95,7 +102,12 @@ export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
           title="Sem desfecho marcado"
           value={eff.withoutDispositionCalls}
           icon={CircleHelp}
-          description={`${eff.withoutDispositionRate}% das ligações — o SDR não informou o resultado`}
+          description={
+            `${eff.withoutDispositionRate}% das ligações do discador — o SDR não informou o resultado` +
+            (eff.externalCalls > 0
+              ? ` · outras ${eff.externalCalls} foram feitas fora do discador (sem desfecho possível)`
+              : '')
+          }
         />
       </div>
 

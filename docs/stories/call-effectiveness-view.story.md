@@ -6,6 +6,7 @@ Ready for Review
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-10 | @dev (Dex) | **Precisão da tela (itens 1 e 2 aprovados pelo Vini):** (1) **teto de 10.000 linhas removido** — a consulta tinha `.limit(10000)` e a V4 Amaral faz 10–11 mil ligações/mês → períodos ≥30 dias mostravam um subconjunto arbitrário. Novo `lib/supabase/fetch-all-rows.ts` (páginas de 5.000, avança pelo que chegou, ordem `started_at,id`, teto de segurança 200 mil com aviso na tela). Implementado por **paginação**, não por agregação em SQL como eu tinha dito, para manter as regras de conexão/atendida num lugar só (TS). Conferido contra prod: agosto/Amaral = 10.578/10.578 linhas, 0 repetidas. (2) **"Sem desfecho" separado**: só cobra ligação do discador (`isDialerCall`: gateway `flux-*` ou WhatsApp); feitas fora (Callface, softphone/Kommo, reconcile) viram linha própria "Feita fora do discador". Taxa sobre as ligações do discador. |
 | 2026-09-10 | @dev (Dex) | **PR #375 mergeado** 20:29 UTC (squash `305669ea`), com autorização do Vini. 1ª rodada de CI caiu no flaky conhecido ("Closing rpc while fetch was pending", 238/238 arquivos de teste OK); após `update-branch` com #374/#376 o CI passou. Quality gate (@architect) ainda não rodado. |
 | 2026-09-10 | @dev (Dex) | **Diagnóstico API4COM (opção 1 aprovada pelo Vini):** `/api/admin/check-api4com-config` passa a devolver, por ramal, o resumo da integração (gateway, webhook ligado, gateway do filtro, host/path do webhook, tipos, versão) + `dialerPassesConstraint` (o filtro deixa passar `flux-{orgId}`?) + gateway gravado nas 5 últimas ligações. Body opcional `{orgId}`. Só leitura; nunca devolve api key nem token. Helper puro `api4com-diagnostics.ts` (+6 testes). typecheck ✅ lint ✅ 1.919 testes ✅ build ✅. Precisa de deploy para ler a conta do Julio Cesar. |
 | 2026-09-10 | @dev (Dex) | **Escopo ampliado a pedido do Vini:** tabela "Resultado das ligações" (desfecho marcado pelo SDR: 6 opções + "Sem desfecho", ligações e % do total) ao lado do funil; "Distribuição de Duração" desceu para linha própria. `DISPOSITION_REPORT_LABELS` em `disposition.ts` (caixa postal = "Caixa postal" no relatório). typecheck ✅ lint ✅ testes ✅ (+1). Re-registro do webhook rodado com autorização do Vini: 10/10 OK na API4COM, mas a ligação do Julio Cesar feita depois continuou sem aviso — ver Nota 3. |
@@ -84,6 +85,12 @@ Investigação de 10/set/2026 (prod, 01–10/set BRT):
 - `src/features/calls/disposition.ts` — `DISPOSITION_REPORT_LABELS`
 - `src/features/integrations/services/api4com-diagnostics.ts` (novo) + `api4com-diagnostics.test.ts` (novo, 6 testes)
 - `src/app/api/admin/check-api4com-config/route.ts` — devolve o resumo da integração; filtro por `orgId`
+- `src/lib/supabase/fetch-all-rows.ts` (novo) + `.test.ts` (novo, 6 testes)
+- `src/features/calls/effectiveness.ts` — `isDialerCall` (+2 testes)
+- `src/features/statistics/services/call-statistics.service.ts` — paginação, `dialerCalls`/`externalCalls`, linha "Feita fora do discador" (+1 teste)
+- `src/features/statistics/types/call-statistics.types.ts` — `isTruncated`, `key` na linha de desfecho
+- `src/features/statistics/components/CallStatisticsView.tsx`, `CallDispositionTable.tsx`, `CallEffectivenessBySdrTable.tsx`
+- `src/features/statistics/components/ConversionFunnelChart.tsx` — barra nunca menor que o texto (número e % encostavam em barra estreita; componente compartilhado com Conversão)
 
 ### Notas
 1. **Números esperados em prod (01–10/set):** Julio Cesar = 1.065 discadas → 76 atendidas → 8 relevantes; taxa de conexão 0% com o aviso de telefonia muda; 668 sem desfecho (62,7%). V4 Amaral ≈ 343 atendidas → 7 relevantes, 70% sem desfecho.

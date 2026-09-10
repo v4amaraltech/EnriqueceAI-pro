@@ -46,7 +46,11 @@ export interface CallEffectivenessCounts {
   answeredCalls: number;
   /** SDR marcou "Conversa relevante". */
   relevantCalls: number;
-  /** Nenhum desfecho marcado pelo SDR. */
+  /** Passaram pelo discador do app — onde o SDR informa o desfecho (`isDialerCall`). */
+  dialerCalls: number;
+  /** Feitas fora do discador (Callface, softphone/Kommo, reconcile) — sem desfecho possível. */
+  externalCalls: number;
+  /** Ligações DO DISCADOR sem desfecho marcado — o que o SDR deixou de informar. */
   withoutDispositionCalls: number;
   /** Atendidas sem desfecho — não dá para saber se foram relevantes. */
   answeredWithoutDispositionCalls: number;
@@ -57,6 +61,7 @@ export interface CallEffectivenessSummary extends CallEffectivenessCounts {
   connectedCalls: number;
   connectionRate: number;
   relevantRate: number;
+  /** Sobre as ligações do discador (não sobre o total). */
   withoutDispositionRate: number;
   /** Alguma ligação do período teve `answered_at`? Se não, a telefonia está muda. */
   hasTelephonyAnswerSignal: boolean;
@@ -66,12 +71,13 @@ export interface SdrEffectivenessRow extends CallEffectivenessCounts {
   userId: string;
   userName: string;
   relevantRate: number;
+  /** Sobre as ligações do discador do SDR. */
   withoutDispositionRate: number;
 }
 
 export interface DispositionBreakdownRow {
-  /** `null` = sem desfecho marcado. */
-  disposition: CallDisposition | null;
+  /** `none` = feita no discador sem desfecho; `external` = feita fora do discador. */
+  key: CallDisposition | 'none' | 'external';
   label: string;
   count: number;
   percentage: number;
@@ -80,12 +86,17 @@ export interface DispositionBreakdownRow {
 export interface CallEffectivenessData {
   summary: CallEffectivenessSummary;
   funnel: FunnelStage[];
-  /** Desfecho marcado pelo SDR — todas as opções + "Sem desfecho", sempre na mesma ordem. */
+  /**
+   * Desfecho marcado pelo SDR — todas as opções + "Sem desfecho (discador)" +
+   * "Feita fora do discador", sempre na mesma ordem; soma = total.
+   */
   dispositions: DispositionBreakdownRow[];
   bySdr: SdrEffectivenessRow[];
 }
 
 export interface CallStatisticsData {
+  /** Período passou do teto de segurança de leitura — números parciais. */
+  isTruncated: boolean;
   kpis: CallStatisticsKpis;
   effectiveness: CallEffectivenessData;
   durationDistribution: DurationBucket[];

@@ -10,12 +10,12 @@ function row(overrides: Partial<Row> = {}): Row {
   return {
     id: crypto.randomUUID(),
     user_id: 'sdr-a',
+    origin: '1024',
+    gateway: 'flux-org', // discador do app (padrão dos testes)
     status: 'not_connected',
     duration_seconds: 0,
     answered_at: null,
     sdr_disposition: null,
-    hangup_cause: null,
-    recording_url: null,
     started_at: ANSWERED,
     ...overrides,
   };
@@ -91,26 +91,47 @@ describe('calculateEffectiveness', () => {
     expect(bySdr[1]).toMatchObject({ totalCalls: 1, withoutDispositionCalls: 1, withoutDispositionRate: 100 });
   });
 
-  it('tabela de desfechos: todas as opções na ordem fixa + "Sem desfecho", somando o total', () => {
+  it('tabela de desfechos: opções na ordem fixa + sem desfecho (discador) + fora do discador, somando o total', () => {
     const calls = [
       row({ sdr_disposition: 'relevant_conversation' }),
       row({ sdr_disposition: 'voicemail' }),
       row({ sdr_disposition: 'voicemail' }),
       row(),
+      row({ origin: 'callface', gateway: null }),
     ];
 
     const { dispositions } = calculateEffectiveness(calls, members);
 
     expect(dispositions.map((d) => [d.label, d.count, d.percentage])).toEqual([
-      ['Conversa relevante', 1, 25],
+      ['Conversa relevante', 1, 20],
       ['Atendeu, sem avanço', 0, 0],
       ['Pediu para ligar depois', 0, 0],
-      ['Caixa postal', 2, 50],
+      ['Caixa postal', 2, 40],
       ['Não atendeu', 0, 0],
       ['Falha técnica', 0, 0],
-      ['Sem desfecho marcado', 1, 25],
+      ['Sem desfecho (feita no discador)', 1, 20],
+      ['Feita fora do discador', 1, 20],
     ]);
     expect(dispositions.reduce((s, d) => s + d.count, 0)).toBe(calls.length);
+  });
+
+  it('"Sem desfecho" só cobra ligação do discador; Callface/webhook/reconcile ficam à parte', () => {
+    const calls = [
+      row(), // discador, sem desfecho → cobra
+      row({ sdr_disposition: 'answered_no_progress' }), // discador, marcado
+      row({ origin: 'callface', gateway: null }), // Callface
+      row({ origin: '1029', gateway: 'mars-voip' }), // softphone/outro gateway
+      row({ origin: 'whatsapp', gateway: null }), // Ligação via WhatsApp = discador
+    ];
+
+    const { summary, bySdr } = calculateEffectiveness(calls, members);
+
+    expect(summary.dialerCalls).toBe(3);
+    expect(summary.externalCalls).toBe(2);
+    expect(summary.withoutDispositionCalls).toBe(2);
+    // taxa sobre as 3 do discador, não sobre as 5
+    expect(summary.withoutDispositionRate).toBe(66.7);
+    expect(bySdr[0]).toMatchObject({ dialerCalls: 3, externalCalls: 2, withoutDispositionRate: 66.7 });
   });
 
   it('período vazio: tudo zero, sem divisão por zero', () => {

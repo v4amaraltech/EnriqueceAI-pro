@@ -2,8 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isConnectedCall } from '@/features/calls/connection';
 import { DISPOSITION_REPORT_LABELS } from '@/features/calls/disposition';
-import { isAnsweredByPersonCall, isRelevantConversationCall } from '@/features/calls/effectiveness';
+import {
+  isAnsweredByPersonCall,
+  isDialerCall,
+  isRelevantConversationCall,
+} from '@/features/calls/effectiveness';
 import type { CallDisposition, CallStatus } from '@/features/calls/types';
+import { fetchAllRows } from '@/lib/supabase/fetch-all-rows';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
 import { CALL_EFFECTIVENESS_COLORS } from '@/shared/constants/chart-colors';
@@ -34,12 +39,13 @@ const DURATION_BUCKETS = [
 interface CallRow {
   id: string;
   user_id: string;
+  origin: string | null;
+  /** `metadata->>gateway` — `flux-*` = discador do app (ver `isDialerCall`). */
+  gateway: string | null;
   status: CallStatus;
   duration_seconds: number;
   answered_at: string | null;
   sdr_disposition: CallDisposition | null;
-  hangup_cause: string | null;
-  recording_url: string | null;
   started_at: string;
 }
 
@@ -50,21 +56,24 @@ export async function fetchCallStatisticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<CallStatisticsData> {
-  let query = from(supabase, 'calls')
-    .select(
-      'id, user_id, status, duration_seconds, answered_at, sdr_disposition, hangup_cause, recording_url, started_at',
-    )
-    .eq('org_id', orgId)
-    .gte('started_at', periodStart)
-    .lte('started_at', periodEnd);
-
   const validUserIds = (userIds ?? []).filter(isUuid);
-  if (validUserIds.length > 0) {
-    query = query.in('user_id', validUserIds);
-  }
 
-  const { data: rawCalls } = (await query.limit(10000)) as { data: CallRow[] | null };
-  const calls = rawCalls ?? [];
+  // Lê TODAS as ligações do período, em páginas. Antes era `.limit(10000)`: a
+  // V4 Amaral faz 10–11 mil ligações/mês, então qualquer período de 30 dias ou
+  // mais mostrava números de um subconjunto arbitrário (set/2026).
+  const buildQuery = () => {
+    let query = from(supabase, 'calls')
+      .select(
+        'id, user_id, origin, gateway:metadata->>gateway, status, duration_seconds, answered_at, sdr_disposition, started_at',
+      )
+      .eq('org_id', orgId)
+      .gte('started_at', periodStart)
+      .lte('started_at', periodEnd);
+    if (validUserIds.length > 0) query = query.in('user_id', validUserIds);
+    return query.order('started_at', { ascending: true }).order('id', { ascending: true });
+  };
+
+  const { rows: calls, truncated } = await fetchAllRows<CallRow>(buildQuery);
 
   // Fetch members for name mapping (via admin client — org_members has no email column)
   const memberMap = await buildMemberNameMap(supabase, orgId);
@@ -75,7 +84,7 @@ export async function fetchCallStatisticsData(
   const heatmap = calculateHeatmap(calls);
   const callsBySdr = calculateCallsBySdr(calls, memberMap);
 
-  return { kpis, effectiveness, durationDistribution, heatmap, callsBySdr };
+  return { isTruncated: truncated, kpis, effectiveness, durationDistribution, heatmap, callsBySdr };
 }
 
 function calculateKpis(calls: CallRow[]): CallStatisticsKpis {
@@ -128,6 +137,8 @@ function emptyCounts(): CallEffectivenessCounts {
     answeredCalls: 0,
     relevantCalls: 0,
     withoutDispositionCalls: 0,
+    dialerCalls: 0,
+    externalCalls: 0,
     answeredWithoutDispositionCalls: 0,
   };
 }
@@ -135,10 +146,14 @@ function emptyCounts(): CallEffectivenessCounts {
 function addToCounts(counts: CallEffectivenessCounts, call: CallRow): void {
   const answered = isAnsweredByPersonCall(call);
   const withoutDisposition = call.sdr_disposition == null;
+  const dialer = isDialerCall(call);
   counts.totalCalls++;
   if (answered) counts.answeredCalls++;
   if (isRelevantConversationCall(call)) counts.relevantCalls++;
-  if (withoutDisposition) counts.withoutDispositionCalls++;
+  if (dialer) counts.dialerCalls++;
+  else counts.externalCalls++;
+  // "Sem desfecho" só cobra o que o SDR PODERIA ter marcado (discador).
+  if (dialer && withoutDisposition) counts.withoutDispositionCalls++;
   if (answered && withoutDisposition) counts.answeredWithoutDispositionCalls++;
 }
 
@@ -152,6 +167,7 @@ export function calculateEffectiveness(
   const total = emptyCounts();
   const bySdr = new Map<string, CallEffectivenessCounts>();
   const byDisposition = new Map<CallDisposition, number>();
+  let externalWithoutDisposition = 0;
   let connectedCalls = 0;
   let hasTelephonyAnswerSignal = false;
 
@@ -159,6 +175,8 @@ export function calculateEffectiveness(
     addToCounts(total, call);
     if (call.sdr_disposition) {
       byDisposition.set(call.sdr_disposition, (byDisposition.get(call.sdr_disposition) ?? 0) + 1);
+    } else if (!isDialerCall(call)) {
+      externalWithoutDisposition++;
     }
     const sdr = bySdr.get(call.user_id) ?? emptyCounts();
     addToCounts(sdr, call);
@@ -175,7 +193,7 @@ export function calculateEffectiveness(
       connectedCalls,
       connectionRate: safeRate(connectedCalls, t),
       relevantRate: safeRate(total.relevantCalls, t),
-      withoutDispositionRate: safeRate(total.withoutDispositionCalls, t),
+      withoutDispositionRate: safeRate(total.withoutDispositionCalls, total.dialerCalls),
       hasTelephonyAnswerSignal,
     },
     funnel: [
@@ -195,16 +213,22 @@ export function calculateEffectiveness(
     ],
     dispositions: [
       ...(Object.entries(DISPOSITION_REPORT_LABELS) as Array<[CallDisposition, string]>).map(
-        ([disposition, label]) => {
-          const count = byDisposition.get(disposition) ?? 0;
-          return { disposition, label, count, percentage: safeRate(count, t) };
+        ([key, label]) => {
+          const count = byDisposition.get(key) ?? 0;
+          return { key, label, count, percentage: safeRate(count, t) };
         },
       ),
       {
-        disposition: null,
-        label: 'Sem desfecho marcado',
+        key: 'none' as const,
+        label: 'Sem desfecho (feita no discador)',
         count: total.withoutDispositionCalls,
         percentage: safeRate(total.withoutDispositionCalls, t),
+      },
+      {
+        key: 'external' as const,
+        label: 'Feita fora do discador',
+        count: externalWithoutDisposition,
+        percentage: safeRate(externalWithoutDisposition, t),
       },
     ],
     bySdr: Array.from(bySdr.entries())
@@ -213,7 +237,7 @@ export function calculateEffectiveness(
         userId,
         userName: memberMap.get(userId) ?? 'Desconhecido',
         relevantRate: safeRate(c.relevantCalls, c.totalCalls),
-        withoutDispositionRate: safeRate(c.withoutDispositionCalls, c.totalCalls),
+        withoutDispositionRate: safeRate(c.withoutDispositionCalls, c.dialerCalls),
       }))
       .sort((a, b) => b.totalCalls - a.totalCalls),
   };
