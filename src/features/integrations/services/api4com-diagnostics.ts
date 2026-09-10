@@ -27,6 +27,12 @@ export interface Api4ComIntegrationSummary {
   webhookUrl: WebhookUrlSummary | null;
   webhookTypes: unknown;
   webhookVersion: unknown;
+  /**
+   * Domínio da conta (`metadata.domain`, vem na integração `sippulse`). É o
+   * `domain` dos eventos de webhook e o valor de `api4com_connections.sip_domain`
+   * que separa as orgs — ver `api4com-org-scope.ts`. Hostname, não é segredo.
+   */
+  accountDomain: string | null;
   /** Só os NOMES das chaves de metadata, para ver o que mais existe lá. */
   metadataKeys: string[];
 }
@@ -76,6 +82,7 @@ export function summarizeIntegration(raw: unknown): Api4ComIntegrationSummary {
     webhookUrl: describeWebhookUrl(metadata.webhookUrl),
     webhookTypes: metadata.webhookTypes ?? null,
     webhookVersion: metadata.webhookVersion ?? null,
+    accountDomain: asString(metadata.domain),
     metadataKeys: Object.keys(metadata).sort(),
   };
 }
