@@ -6,6 +6,9 @@ Ready for Review
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-10 | @dev (Dex) | **Ligar o aviso do Julio (autorizado pelo Vini: "liga o aviso do Julio"):** a chave da API4COM só descriptografa em prod → nova rota `POST /api/admin/configure-api4com-call-webhook` ({orgId, webhookUrl https, webhookVersion?, dryRun padrão TRUE}). Cria/atualiza SÓ a integração gateway `webhook` (sem filtro) de cada credencial da org, com releitura de verificação; não toca nas outras. Formato confirmado na doc oficial (`PATCH /integrations`: sem `id` cria, com `id` atualiza). Alvo = o mesmo da Amaral: `https://webhook-n8n.v4companyamaral.com/webhook/api4com-call-event`, `v1.4`. Helper puro `api4com-call-webhook.ts` (+6 testes). |
+| 2026-09-10 | @dev (Dex) | **`sip_domain` do Julio cadastrado** 22:35 UTC (autorizado pelo Vini): 1000/1023/1025 = `mendezco.api4com.com` (antes: vazio — reverter = voltar para NULL). Conferido no banco. Sem aviso da API4COM desde o deploy (última ligação da Amaral 21:22 UTC, fim do expediente) → **conferir 11/set de manhã** que os avisos da Amaral seguem `processed`. |
+| 2026-09-10 | @dev (Dex) | **PR #377 mergeado** 22:05 UTC (squash `7983390a`), no ar (`/api/version`). CI: 1ª rodada caiu no flaky "Closing rpc" (241/241 arquivos OK), re-run verde. Diagnóstico em prod: **Julio Cesar = `mendezco.api4com.com`** (1000/1023/1025), **Amaral = `v4amaral.api4com.com`** (7 ramais) → contas separadas confirmadas. Julio sem senha SIP (preencher domínio não liga webphone). Próximo: cadastrar `sip_domain` do Julio (aguarda OK do Vini). |
 | 2026-09-10 | @dev (Dex) | Draft → InProgress → **Ready for Review**. Implementado sem migration (reusa `api4com_connections.sip_domain`). typecheck ✅ lint ✅ testes ✅ (+8). Nada commitado (regra git manual). |
 | 2026-09-10 | Vini + Claude | Story criada. Pré-requisito para ligar o webhook da org V4 Company Julio Cesar (ver `call-effectiveness-view.story.md`, Nota 3). Opção aprovada pelo Vini: "corrige pelo domínio". |
 
@@ -77,6 +80,8 @@ O payload traz `domain` (`v4amaral.api4com.com` em 100% dos eventos de 2 dias), 
 - `src/app/api/webhooks/api4com/route.ts`
 - `src/app/api/workers/back-associate-api4com-webhooks/route.ts`
 - `src/features/integrations/services/api4com-diagnostics.ts` + `.test.ts` — `accountDomain`
+- `src/features/integrations/services/api4com-call-webhook.ts` (novo) + `.test.ts` (novo, 6 testes)
+- `src/app/api/admin/configure-api4com-call-webhook/route.ts` (novo)
 
 ### Próximos passos (depois do deploy)
 1. `POST /api/admin/check-api4com-config {orgId: Julio}` → ler `accountDomain`.
