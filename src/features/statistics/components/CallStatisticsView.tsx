@@ -1,14 +1,24 @@
 'use client';
 
-import { Calendar, Clock, Phone, TrendingUp } from 'lucide-react';
+import {
+  Calendar,
+  CircleHelp,
+  Clock,
+  MessageSquareText,
+  Phone,
+  PhoneCall,
+  TrendingUp,
+} from 'lucide-react';
 
 import { MetricCard } from '@/features/dashboard/components/MetricCard';
 
 import type { CallStatisticsData } from '../types/call-statistics.types';
 import type { OrgMember } from '../types/shared';
 import { formatDuration, formatDurationLong } from '../types/shared';
-import { CallOutcomeBarChart } from './CallOutcomeBarChart';
+import { CallDispositionTable } from './CallDispositionTable';
+import { CallEffectivenessBySdrTable } from './CallEffectivenessBySdrTable';
 import { CallsPerSdrChart } from './CallsPerSdrChart';
+import { ConversionFunnelChart } from './ConversionFunnelChart';
 import { DurationDistributionChart } from './DurationDistributionChart';
 import { AnalyticsFilters } from '@/shared/components/AnalyticsFilters';
 import { TimeHeatmapGrid } from './TimeHeatmapGrid';
@@ -19,6 +29,8 @@ interface CallStatisticsViewProps {
 }
 
 export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
+  const eff = data.effectiveness.summary;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -61,23 +73,84 @@ export function CallStatisticsView({ data, members }: CallStatisticsViewProps) {
         />
       </div>
 
+      {/* Effectiveness KPI Row */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          title="Conversas relevantes"
+          value={eff.relevantCalls}
+          icon={MessageSquareText}
+          description={`${eff.relevantRate}% das ligações — marcadas pelo SDR`}
+        />
+        <MetricCard
+          title="Taxa de conexão"
+          value={`${eff.connectionRate}%`}
+          icon={PhoneCall}
+          description={
+            eff.totalCalls > 0 && !eff.hasTelephonyAnswerSignal
+              ? 'A telefonia não confirmou nenhum atendimento no período — verifique a integração'
+              : `${eff.connectedCalls} atendidas com 50s ou mais`
+          }
+        />
+        <MetricCard
+          title="Sem desfecho marcado"
+          value={eff.withoutDispositionCalls}
+          icon={CircleHelp}
+          description={`${eff.withoutDispositionRate}% das ligações — o SDR não informou o resultado`}
+        />
+      </div>
+
       {/* Charts row */}
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-          <h2 className="mb-4 text-lg font-semibold">Outcomes por Status</h2>
-          <CallOutcomeBarChart data={data.outcomes} />
+          <h2 className="mb-4 text-lg font-semibold">Efetividade das ligações</h2>
+          {eff.totalCalls === 0 ? (
+            <div className="flex h-64 items-center justify-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Nenhuma ligação no período.
+            </div>
+          ) : (
+            <>
+              <ConversionFunnelChart stages={data.effectiveness.funnel} />
+              <ul className="mt-4 space-y-1 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                <li>
+                  <strong>Atendidas:</strong> a telefonia confirmou conversa de 50s ou mais, ou o SDR
+                  marcou que alguém atendeu. Caixa postal não conta.
+                </li>
+                <li>
+                  <strong>Conversa relevante:</strong> o SDR marcou &quot;Conversa relevante&quot; ao
+                  encerrar a ligação.
+                </li>
+                {eff.answeredWithoutDispositionCalls > 0 && (
+                  <li>
+                    {eff.answeredWithoutDispositionCalls} atendidas estão sem desfecho — não dá para
+                    saber se foram relevantes.
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
         </div>
 
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-          <h2 className="mb-4 text-lg font-semibold">Distribuição de Duração</h2>
-          <DurationDistributionChart data={data.durationDistribution} />
+          <h2 className="mb-4 text-lg font-semibold">Resultado das ligações</h2>
+          <CallDispositionTable data={data.effectiveness.dispositions} />
         </div>
+      </div>
+
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+        <h2 className="mb-4 text-lg font-semibold">Distribuição de Duração</h2>
+        <DurationDistributionChart data={data.durationDistribution} />
       </div>
 
       {/* Heatmap */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <h2 className="mb-4 text-lg font-semibold">Mapa de Calor — Dia × Horário</h2>
         <TimeHeatmapGrid data={data.heatmap} />
+      </div>
+
+      {/* Effectiveness by SDR */}
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+        <h2 className="mb-4 text-lg font-semibold">Efetividade por SDR</h2>
+        <CallEffectivenessBySdrTable data={data.effectiveness.bySdr} />
       </div>
 
       {/* Calls by SDR */}

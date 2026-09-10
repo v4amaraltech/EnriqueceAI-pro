@@ -78,6 +78,13 @@ export const CHART_SERIES_COLORS = [
 ] as const;
 
 /** Conversion funnel stage colors */
+/** Funil de efetividade das ligações (Estatísticas › Ligações) */
+export const CALL_EFFECTIVENESS_COLORS = {
+  dialed: '#6366f1',
+  answered: '#3b82f6',
+  relevant: '#22c55e',
+} as const;
+
 export const CONVERSION_COLORS = {
   totalLeads: '#6366f1',
   contacted: '#3b82f6',
