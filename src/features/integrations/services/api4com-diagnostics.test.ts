@@ -33,6 +33,7 @@ describe('summarizeIntegration', () => {
       webhookTypes: ['channel-hangup', 'channel-answer'],
       webhookVersion: 'v1.4',
       apiKey: 'NAO-PODE-VAZAR',
+      domain: 'v4amaral.api4com.com',
     },
   };
 
@@ -45,7 +46,8 @@ describe('summarizeIntegration', () => {
       constraintGateway: 'enriqueceai',
       webhookTypes: ['channel-hangup', 'channel-answer'],
       webhookVersion: 'v1.4',
-      metadataKeys: ['apiKey', 'webhookTypes', 'webhookUrl', 'webhookVersion'],
+      accountDomain: 'v4amaral.api4com.com',
+      metadataKeys: ['apiKey', 'domain', 'webhookTypes', 'webhookUrl', 'webhookVersion'],
     });
     const serialized = JSON.stringify(out);
     expect(serialized).not.toContain('SEGREDO123');

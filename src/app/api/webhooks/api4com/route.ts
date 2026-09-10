@@ -22,6 +22,11 @@ import {
 } from '@/features/calls/services/api4com-classification';
 import { computeCallCostBrl } from '@/features/calls/services/call-cost';
 import {
+  type Api4ComConnectionScopeRow,
+  pickApi4ComConnectionForRamal,
+  resolveApi4ComOrgScope,
+} from '@/features/integrations/services/api4com-org-scope';
+import {
   findLeadByPhoneService,
   createExternalCallInteraction,
   advanceExternalCallCadence,
@@ -39,12 +44,29 @@ interface MatchedCall {
   metadata: Record<string, unknown> | null;
 }
 
+interface ScopeConnectionRow extends Api4ComConnectionScopeRow {
+  status: string;
+}
+
+/** Todas as conexões (qualquer status) — o mapa domínio→org usa todas; a
+ *  criação automática só usa as `connected`. São poucas linhas. */
+async function loadScopeConnections(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+): Promise<ScopeConnectionRow[]> {
+  const { data } = (await from(supabase, 'api4com_connections' as never)
+    .select('org_id, user_id, ramal, sip_domain, status')) as { data: ScopeConnectionRow[] | null };
+  return data ?? [];
+}
+
 /** Find a matching call record by api4com_call_id, alt_api4com_ids[], or
  *  caller+phone fallback. When matched via fallback or alt match, persists
- *  the new id in alt_api4com_ids[] so future lookups by either id hit. */
+ *  the new id in alt_api4com_ids[] so future lookups by either id hit.
+ *  O fallback por ramal fica restrito a `orgScope` (orgs do `domain` do
+ *  evento) — ramal se repete entre contas API4COM. Ver `api4com-org-scope.ts`. */
 async function findMatchingCall(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
+  orgScope: string[],
 ): Promise<MatchedCall | null> {
   // 1a) Primary id match
   const { data: call } = (await from(supabase, 'calls')
@@ -65,6 +87,12 @@ async function findMatchingCall(
 
   if (altMatchCall) return altMatchCall;
 
+  // Domínio desconhecido com todas as orgs já mapeadas → não casar por ramal.
+  if (orgScope.length === 0) {
+    logger.warn('Fallback skipped: no org for event domain', { api4comId: body.id, domain: body.domain });
+    return null;
+  }
+
   // 2) Fallback: caller (ramal) + called (phone) within last 2 hours.
   //
   // Important: only candidates that have NOT already been linked to a
@@ -81,6 +109,7 @@ async function findMatchingCall(
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: fallbackCall } = (await from(supabase, 'calls')
     .select('id, org_id, status, recording_url, metadata')
+    .in('org_id', orgScope)
     .eq('origin', body.caller)
     .like('destination', `%${calledNormalized.slice(-8)}`)
     .gte('created_at', twoHoursAgo)
@@ -127,16 +156,22 @@ async function findMatchingCall(
 async function createCallFromWebhook(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
+  connections: ScopeConnectionRow[],
+  orgScope: string[],
 ): Promise<{ call: { id: string } | null; leadId: string | null; userId: string; orgId: string } | null> {
-  // Resolve user_id and org_id from the caller ramal
-  const { data: conn } = (await from(supabase, 'api4com_connections' as never)
-    .select('user_id, org_id')
-    .eq('ramal', body.caller)
-    .eq('status', 'connected')
-    .maybeSingle()) as { data: { user_id: string; org_id: string } | null };
+  // Resolve user_id and org_id from the caller ramal — só dentro das orgs do
+  // domínio do evento (ramal se repete entre contas API4COM).
+  const conn = pickApi4ComConnectionForRamal(
+    connections.filter((c) => c.status === 'connected'),
+    orgScope,
+    body.caller,
+  );
 
   if (!conn) {
-    logger.warn('Cannot auto-create call: no api4com_connection for ramal', { ramal: body.caller });
+    logger.warn('Cannot auto-create call: no api4com_connection for ramal in event domain', {
+      ramal: body.caller,
+      domain: body.domain,
+    });
     return null;
   }
 
@@ -192,12 +227,14 @@ async function processApi4ComEvent(
   body: Api4ComWebhookPayload,
   supabase: ReturnType<typeof createServiceRoleClient>,
 ): Promise<void> {
-  const call = await findMatchingCall(supabase, body);
+  const connections = await loadScopeConnections(supabase);
+  const orgScope = resolveApi4ComOrgScope(connections, body.domain);
+  const call = await findMatchingCall(supabase, body, orgScope);
 
   if (!call) {
     // No matching call — auto-create from webhook for calls made outside EnriqueceAI
     if (body.eventType === 'channel-hangup') {
-      const result = await createCallFromWebhook(supabase, body);
+      const result = await createCallFromWebhook(supabase, body, connections, orgScope);
       if (result?.call) {
         logger.info('Auto-created external call', { callId: result.call.id, api4comId: body.id, leadId: result.leadId });
 

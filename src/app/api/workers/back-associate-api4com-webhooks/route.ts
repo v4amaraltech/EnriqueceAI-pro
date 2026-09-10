@@ -4,6 +4,10 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import {
+  type Api4ComConnectionScopeRow,
+  resolveApi4ComOrgScope,
+} from '@/features/integrations/services/api4com-org-scope';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 300;
@@ -32,6 +36,7 @@ interface WebhookRow {
 
 interface Api4ComHangupPayload {
   id: string;
+  domain?: string;
   caller: string;
   called: string;
   startedAt?: string;
@@ -107,6 +112,11 @@ async function handle(request: Request) {
     return NextResponse.json({ job: JOB_NAME, sinceHours, processed: 0, results: [] });
   }
 
+  // Ramal se repete entre contas API4COM — o casamento por ramal fica restrito
+  // às orgs do `domain` do evento. Ver `api4com-org-scope.ts`.
+  const { data: scopeConnections } = (await from(supabase, 'api4com_connections' as never)
+    .select('org_id, user_id, ramal, sip_domain')) as { data: Api4ComConnectionScopeRow[] | null };
+
   // 2. For each event, try to find a single matching call by ramal + dest
   //    + time window (±5 min around startedAt). Skip events whose payload.id
   //    already lives in some call.metadata.api4com_call_id.
@@ -144,8 +154,15 @@ async function handle(request: Request) {
     const lo = new Date(startedAt.getTime() - 5 * 60 * 1000).toISOString();
     const hi = new Date(startedAt.getTime() + 5 * 60 * 1000).toISOString();
 
+    const orgScope = resolveApi4ComOrgScope(scopeConnections ?? [], p.domain);
+    if (orgScope.length === 0) {
+      totalUnmatched++;
+      continue;
+    }
+
     const { data: candidates } = (await from(supabase, 'calls')
       .select('id, status, recording_url, metadata, org_id')
+      .in('org_id', orgScope)
       .eq('origin', p.caller)
       .like('destination', `%${suffix}`)
       .gte('started_at', lo)
