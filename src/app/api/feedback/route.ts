@@ -6,6 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
 import { isUuid } from '@/shared/utils/uuid';
+import { resolveMeetingHeldAt } from '@/features/leads/utils/meeting-held-at';
 
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
 
@@ -275,7 +276,15 @@ export async function POST(request: Request) {
     // covers the edge case where the SDR never clicked Ganho but the closer
     // somehow received and answered the feedback link (legacy data).
     if (result === 'meeting_done') {
-      const heldAt = new Date().toISOString();
+      // Carimbo herda a data da REUNIÃO, não a do momento em que o closer
+      // respondeu o feedback (que costuma ser dias depois) — ver
+      // resolveMeetingHeldAt.
+      const { data: heldLead } = (await from(supabase, 'leads')
+        .select('meeting_starts_at')
+        .eq('id', feedbackReq.lead_id)
+        .eq('org_id', feedbackReq.org_id)
+        .maybeSingle()) as { data: { meeting_starts_at: string | null } | null };
+      const heldAt = resolveMeetingHeldAt(heldLead?.meeting_starts_at);
       await from(supabase, 'leads')
         .update({ meeting_held_at: heldAt } as Record<string, unknown>)
         .eq('id', feedbackReq.lead_id)

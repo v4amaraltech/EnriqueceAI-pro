@@ -7,6 +7,7 @@ import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
 
 import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
+import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
 import type {
   DailyDataPoint,
   DashboardFilters,
@@ -604,8 +605,12 @@ export async function fetchMeetingsScheduledRanking(
 }
 
 /**
- * Card 6: Reuniões Realizadas — leads que viraram won no período (status='won'
- * e won_at ∈ período). Atribuição via leads.assigned_to (SDR responsável).
+ * Card 6: Reuniões Realizadas — reuniões que ACONTECERAM no período, contadas
+ * pelo horário do evento (ou pelo carimbo, quando não há evento registrado) e
+ * provadas pelo carimbo (`meeting_held_at` não nulo). Mesma janela do KPI —
+ * ver meetingsHeldWindowFilter. Sem filtro de status: reunião que aconteceu e
+ * depois foi desqualificada continua contando pro SDR.
+ * Atribuição via leads.assigned_to (SDR responsável) — mesma regra do KPI.
  */
 export async function fetchMeetingsHeldRanking(
   supabase: SupabaseClient,
@@ -625,10 +630,8 @@ export async function fetchMeetingsHeldRanking(
     .select('id, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .eq('status', 'won')
-    .not('won_at', 'is', null)
-    .gte('won_at', start)
-    .lt('won_at', end)
+    .not('meeting_held_at', 'is', null)
+    .or(meetingsHeldWindowFilter(start, end, new Date().toISOString()))
     .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
 
   const counts = new Map<string, number>();

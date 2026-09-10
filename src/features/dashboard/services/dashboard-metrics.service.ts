@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 
 import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
+import { meetingHeldAnchor, meetingsHeldWindowFilter } from '../utils/meetings-held-window';
 import type {
   CadenceOption,
   DailyDataPoint,
@@ -15,10 +16,12 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
-  // Janela de CONTAGEM = mês inteiro → o total e a série contam até HOJE (as datas
-  // de evento — won_at, meeting_scheduled_at — são sempre <= agora, nunca futuras,
-  // então "mês inteiro" == "até hoje"). Assim o número grande e o último ponto do
-  // gráfico batem entre si e com o Sales Hub (que também conta até hoje).
+  // Janela de CONTAGEM = mês inteiro → o total e a série contam até HOJE. As datas
+  // de evento contadas nunca são futuras: meeting_scheduled_at é sempre <= agora, e
+  // as reuniões realizadas têm teto explícito em "agora" (meetingsHeldWindowFilter —
+  // um ganho adiantado carimba antes do evento). Assim "mês inteiro" == "até hoje" e
+  // o número grande e o último ponto do gráfico batem entre si e com o Sales Hub
+  // (que também conta até hoje).
   // ⚠️ NÃO recuar esta janela para "ontem": o PACING ("esperado até…"/%) é que usa a
   // régua do dia fechado (`currentDayOfMonthBrt` = ontem) — contagem e pacing são
   // réguas DIFERENTES de propósito, espelhando o Sales Hub (nº hoje × meta ontem).
@@ -95,20 +98,35 @@ export async function fetchOpportunityKpi(
   const { start, end } = getDateRange(filters);
   const days = getDaysInMonth(filters.month);
 
-  // Query won leads in the month (status='won' is set by the trigger when
-  // meeting_held_at is stamped, i.e. closer confirmed result=meeting_done).
+  // Reunião realizada = a reunião ACONTECEU, contada no mês em que ela ocorreu.
+  // Âncora = `meeting_starts_at` (horário do evento), com fallback no carimbo
+  // quando não há evento registrado; `meeting_held_at` é a PROVA de que
+  // aconteceu — sem ele é reunião marcada, não realizada. Regra completa (e o
+  // porquê do teto em "agora") em meetingsHeldWindowFilter — o ranking usa a
+  // MESMA função.
+  // (Até 09/set/2026 esta query contava por `won_at` + status='won', ou seja,
+  // pelo CARIMBO do ganho. Um ganho dado no dia seguinte jogava a reunião pro
+  // mês errado — 2 casos em set/2026 — e era a causa do painel mostrar 17
+  // enquanto o Sales Hub, já ancorado no evento, mostrava 15.)
+  //
+  // Sem filtro de status de propósito: reunião que aconteceu e depois teve o
+  // lead desqualificado continua sendo produção do SDR. Filtrar por 'won' aqui
+  // subnotificava o time.
   let leadsQuery = from(supabase, 'leads')
-    .select('id, won_at, assigned_to')
+    .select('id, meeting_starts_at, meeting_held_at, assigned_to')
     .eq('org_id', orgId)
-    .eq('status', 'won')
     .is('deleted_at', null)
-    .not('won_at', 'is', null)
-    .gte('won_at', start)
-    .lt('won_at', end)
+    .not('meeting_held_at', 'is', null)
+    .or(meetingsHeldWindowFilter(start, end, new Date().toISOString()))
     .limit(10000);
 
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; won_at: string; assigned_to: string | null }> | null;
+    data: Array<{
+      id: string;
+      meeting_starts_at: string | null;
+      meeting_held_at: string;
+      assigned_to: string | null;
+    }> | null;
   };
 
   let qualifiedLeads = leads ?? [];
@@ -189,7 +207,7 @@ export async function fetchOpportunityKpi(
   }
 
   const dailyData = computeDailyData(
-    qualifiedLeads.map((l) => l.won_at),
+    qualifiedLeads.map(meetingHeldAnchor),
     seriesMonth,
     monthTarget,
     maxDayOverride,
