@@ -9,7 +9,10 @@ import {
   classifyApi4ComCall,
   getSignificantThreshold,
 } from '@/features/calls/services/api4com-classification';
-import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import {
+  parseApi4ComTimestamp,
+  toApi4ComFilterTimestamp,
+} from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 800;
 
@@ -217,11 +220,13 @@ export async function POST(request: Request) {
     // missing causes) hiding past the MAX_PAGES horizon. With the filter
     // honoured by the server, paginação enumera SÓ a janela e não a domain
     // inteira em reverse-chrono.
+    // The bounds must be in API4COM's BRT-disguised-as-Z clock, not real
+    // UTC — otherwise the window lands 3h in the future and comes back empty.
     const filterPayload = JSON.stringify({
       where: {
         started_at: {
-          gte: since.toISOString(),
-          lte: now.toISOString(),
+          gte: toApi4ComFilterTimestamp(since),
+          lte: toApi4ComFilterTimestamp(now),
         },
       },
     });
