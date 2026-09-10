@@ -9,7 +9,15 @@ import {
   classifyApi4ComCall,
   getSignificantThreshold,
 } from '@/features/calls/services/api4com-classification';
-import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import {
+  parseApi4ComTimestamp,
+  toApi4ComFilterTimestamp,
+} from '@/features/integrations/services/api4com-time';
+import {
+  destinationSuffix,
+  groupCallsForReconcile,
+  pickFallbackCandidate,
+} from '@/features/integrations/services/api4com-reconcile-matching';
 
 export const maxDuration = 800;
 
@@ -32,6 +40,9 @@ const PAGE_DELAY_MS = 500;
 // proportionally speed up since each upsert is dominated by a single round
 // trip to PostgREST.
 const UPSERT_CONCURRENCY = 10;
+// Rows fetched per fallback lookup. SDRs rarely redial the same number more
+// than a handful of times within ±10min; 25 leaves plenty of headroom.
+const FALLBACK_CANDIDATE_LIMIT = 25;
 const RATE_LIMIT_RETRY_MS = 12_000; // exponential-ish backoff per retry
 // 3 retries covers transient rate-limit spikes during long backfills; with
 // 1 retry the worker bailed after a single 429 burst on page 16 of a 60d
@@ -217,11 +228,13 @@ export async function POST(request: Request) {
     // missing causes) hiding past the MAX_PAGES horizon. With the filter
     // honoured by the server, paginação enumera SÓ a janela e não a domain
     // inteira em reverse-chrono.
+    // The bounds must be in API4COM's BRT-disguised-as-Z clock, not real
+    // UTC — otherwise the window lands 3h in the future and comes back empty.
     const filterPayload = JSON.stringify({
       where: {
         started_at: {
-          gte: since.toISOString(),
-          lte: now.toISOString(),
+          gte: toApi4ComFilterTimestamp(since),
+          lte: toApi4ComFilterTimestamp(now),
         },
       },
     });
@@ -440,13 +453,15 @@ export async function POST(request: Request) {
         // REST's started_at is the channel-actually-rang time — can differ by
         // 6-9min on long-rang scenarios). Hangup_cause gate prevents
         // collapsing distinct voicemail vs connected-call events into one.
+        // Redials of the same number fall in the same window, so link to the
+        // CLOSEST row not linked to another API4COM call yet — see
+        // api4com-reconcile-matching.ts for the 2026-09-10 incident.
         if (!existing && c.from && c.to && c.started_at) {
-          const destDigits = c.to.replace(/\D/g, '');
-          const suffix = destDigits.slice(-8);
+          const suffix = destinationSuffix(c.to);
           const startedMs = Date.parse(c.started_at);
           const lo = new Date(startedMs - 10 * 60 * 1000).toISOString();
           const hi = new Date(startedMs + 10 * 60 * 1000).toISOString();
-          const { data: fallback } = (await from(supabase, 'calls')
+          const { data: candidates } = (await from(supabase, 'calls')
             .select(SELECT_COLS)
             .eq('org_id', orgId)
             .eq('origin', c.from)
@@ -454,11 +469,8 @@ export async function POST(request: Request) {
             .gte('started_at', lo)
             .lte('started_at', hi)
             .order('started_at', { ascending: true })
-            .limit(1)
-            .maybeSingle()) as { data: CallLookupRow | null };
-          if (fallback && hangupCompatible(fallback.hangup_cause)) {
-            existing = fallback;
-          }
+            .limit(FALLBACK_CANDIDATE_LIMIT)) as { data: CallLookupRow[] | null };
+          existing = pickFallbackCandidate(candidates ?? [], startedMs, c.hangup_cause);
         }
 
         const duration = Number(c.duration) || 0;
@@ -559,10 +571,19 @@ export async function POST(request: Request) {
     }
 
     // Drive the parallel processing in batches, accumulating into orgResult.
-    for (let i = 0; i < calls.length; i += UPSERT_CONCURRENCY) {
-      const batch = calls.slice(i, i + UPSERT_CONCURRENCY);
-      const outcomes = await Promise.all(batch.map(processOneCall));
-      for (const outcome of outcomes) {
+    // Parallelism is across ramal+number groups; calls inside a group run in
+    // time order so redials never race for the same dialer row.
+    const groups = groupCallsForReconcile(calls);
+    for (let i = 0; i < groups.length; i += UPSERT_CONCURRENCY) {
+      const batch = groups.slice(i, i + UPSERT_CONCURRENCY);
+      const outcomesPerGroup = await Promise.all(
+        batch.map(async (group) => {
+          const groupOutcomes: CallOutcome[] = [];
+          for (const c of group) groupOutcomes.push(await processOneCall(c));
+          return groupOutcomes;
+        }),
+      );
+      for (const outcome of outcomesPerGroup.flat()) {
         switch (outcome.kind) {
           case 'inserted_new':
             orgResult.inserted_new++;

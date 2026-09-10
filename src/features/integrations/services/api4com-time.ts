@@ -30,3 +30,16 @@ export function parseApi4ComTimestamp(value: string | null | undefined): Date | 
   if (Number.isNaN(raw)) return null;
   return new Date(raw + SAO_PAULO_TO_UTC_OFFSET_MS);
 }
+
+/**
+ * Inverse of parseApi4ComTimestamp: turn a real-UTC Date into the
+ * BRT-disguised-as-Z string API4COM compares against in REST filters
+ * (`?filter={"where":{"started_at":{...}}}`).
+ *
+ * Sending real UTC there shifts the window 3h into the future — any window
+ * shorter than 3h comes back empty. That kept the hourly reconcile at
+ * `fetched: 0` from 2026-05-19 (Loopback filter rollout) to 2026-09-10.
+ */
+export function toApi4ComFilterTimestamp(date: Date): string {
+  return new Date(date.getTime() - SAO_PAULO_TO_UTC_OFFSET_MS).toISOString();
+}
