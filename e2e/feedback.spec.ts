@@ -51,11 +51,34 @@ test.describe('Closer Feedback Flow', () => {
     expect(response4.status()).toBe(400);
   });
 
-  test('feedback API should return 404 for non-existent token', async ({ request }) => {
+  test('feedback API should reject meeting_done without SAO', async ({ request }) => {
+    // Payload completo EXCETO oportunidade_qualificada — deve parar na validação
+    // (400), sem chegar na busca do token.
     const response = await request.post('/api/feedback', {
       data: {
         token: '00000000-0000-0000-0000-000000000000',
         result: 'meeting_done',
+        qualificacao_aderente: 'bateu',
+        decisor_presente: true,
+        comment: 'teste',
+      },
+    });
+    expect(response.status()).toBe(400);
+    expect((await response.json()).error).toContain('SAO');
+  });
+
+  test('feedback API should return 404 for non-existent token', async ({ request }) => {
+    // Payload COMPLETO e válido — só assim as validações passam e a requisição
+    // chega na busca do token, que é o que este teste quer exercitar.
+    // (Antes mandava só result+rating e recebia 400 na validação, nunca 404.)
+    const response = await request.post('/api/feedback', {
+      data: {
+        token: '00000000-0000-0000-0000-000000000000',
+        result: 'meeting_done',
+        qualificacao_aderente: 'bateu',
+        decisor_presente: true,
+        oportunidade_qualificada: true,
+        comment: 'teste de token inexistente',
         rating: 5,
       },
     });
