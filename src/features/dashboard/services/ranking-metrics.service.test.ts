@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   fetchActivitiesRanking,
@@ -9,6 +9,7 @@ import {
   fetchRankingData,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
+import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
 
 // --- Chainable + thenable mock builder ---
 function createChainMock(finalResult: unknown = { data: null }) {
@@ -17,7 +18,7 @@ function createChainMock(finalResult: unknown = { data: null }) {
   chain.then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve(finalResult).then(resolve);
 
-  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
+  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'or', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
     chain[method] = vi.fn(() => chain);
   }
 
@@ -329,6 +330,33 @@ describe('fetchMeetingsHeldRanking — idealToDate (divisor por meta individual)
     expect(u2?.idealToDate).toBe(33);
     // u3 tem meta individual (30) mas 0 reuniões → não aparece no breakdown.
     expect(result.sdrBreakdown.find((s) => s.userId === 'u3')).toBeUndefined();
+  });
+});
+
+describe('fetchMeetingsHeldRanking — mesma janela do KPI', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('usa a mesma janela de realizadas do KPI (fallback no carimbo + teto em agora)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-10T15:00:00.000Z'));
+    const leadsChain = createChainMock({ data: [] });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') return leadsChain;
+      return createChainMock({ data: [] });
+    });
+
+    await fetchMeetingsHeldRanking(supabase as never, ORG, baseFilters);
+
+    expect(leadsChain.not).toHaveBeenCalledWith('meeting_held_at', 'is', null);
+    expect(leadsChain.or).toHaveBeenCalledWith(
+      meetingsHeldWindowFilter(
+        '2026-01-01T03:00:00Z',
+        '2026-01-31T23:59:59-03:00',
+        '2026-01-10T15:00:00.000Z',
+      ),
+    );
   });
 });
 

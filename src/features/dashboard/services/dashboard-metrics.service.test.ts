@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchAvailableCadences, fetchOpportunityKpi } from './dashboard-metrics.service';
 import { expectedByBusinessDay } from '../utils/pacing';
+import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
 
 // --- Chainable + thenable mock builder (Supabase queries are PromiseLike) ---
 function createChainMock(finalResult: unknown = { data: null }) {
@@ -12,7 +13,7 @@ function createChainMock(finalResult: unknown = { data: null }) {
     Promise.resolve(finalResult).then(resolve);
 
   // Chainable methods
-  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
+  for (const method of ['select', 'eq', 'neq', 'is', 'not', 'or', 'in', 'gte', 'gt', 'lte', 'lt', 'order', 'limit']) {
     chain[method] = vi.fn(() => chain);
   }
 
@@ -73,6 +74,55 @@ describe('fetchOpportunityKpi', () => {
     expect(result.totalOpportunities).toBe(3);
     expect(result.monthTarget).toBe(50);
     expect(result.conversionTarget).toBe(10);
+  });
+
+  it('conta ganho sem reunião registrada pelo carimbo, no dia do carimbo', async () => {
+    // Ganho sem agendamento pelo app: meeting_starts_at nulo, só o carimbo.
+    // Antes esses ganhos sumiam de todos os meses (abril/2026: 54 → 10).
+    const leads = [
+      { id: 'l1', meeting_starts_at: '2026-01-05T13:00:00Z', meeting_held_at: '2026-01-05T15:00:00Z', assigned_to: null },
+      { id: 'l2', meeting_starts_at: null, meeting_held_at: '2026-01-07T13:00:00Z', assigned_to: null },
+    ];
+    const leadsChain = createChainMock({ data: leads });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') return leadsChain;
+      return createChainMock({ data: null });
+    });
+
+    const result = await fetchOpportunityKpi(supabase as never, ORG_ID, baseFilters);
+
+    expect(result.totalOpportunities).toBe(2);
+    expect(result.dailyData[5]?.actual).toBe(1); // dia 6: só o l1
+    expect(result.dailyData[6]?.actual).toBe(2); // dia 7: entra o l2, pelo carimbo
+  });
+
+  describe('janela de reuniões realizadas', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('exige o carimbo e aplica a janela com teto em "agora"', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-10T15:00:00.000Z'));
+      const leadsChain = createChainMock({ data: [] });
+      const supabase = createMockSupabase((table) => {
+        if (table === 'leads') return leadsChain;
+        return createChainMock({ data: null });
+      });
+
+      await fetchOpportunityKpi(supabase as never, ORG_ID, baseFilters);
+
+      expect(leadsChain.not).toHaveBeenCalledWith('meeting_held_at', 'is', null);
+      // Mesma função do ranking, com o instante atual como teto — uma reunião
+      // agendada para depois de hoje não entra, mesmo já carimbada.
+      expect(leadsChain.or).toHaveBeenCalledWith(
+        meetingsHeldWindowFilter(
+          '2026-01-01T03:00:00Z',
+          '2026-01-31T23:59:59-03:00',
+          '2026-01-10T15:00:00.000Z',
+        ),
+      );
+    });
   });
 
   it('should compute cumulative daily data correctly', async () => {
@@ -241,10 +291,11 @@ describe('fetchOpportunityKpi', () => {
         userIds: [],
       });
 
-      // A query vai até o fim do MÊS (conta até hoje: reunião já realizada nunca é futura).
-      const ltCalls = (leadsChain.lt as ReturnType<typeof vi.fn>).mock.calls;
-      const startsAtLt = ltCalls.find((c: unknown[]) => c[0] === 'meeting_starts_at');
-      expect(startsAtLt?.[1]).toBe('2026-08-31T23:59:59-03:00');
+      // A janela vai até o fim do MÊS, com teto explícito em "agora" — é o teto que
+      // garante que nenhuma reunião futura entre no número grande.
+      const orFilter = (leadsChain.or as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+      expect(orFilter).toContain('meeting_starts_at.lt.2026-08-31T23:59:59-03:00');
+      expect(orFilter).toContain('meeting_starts_at.lte.2026-08-13T12:00:00.000Z');
 
       // Número grande inclui o evento de hoje.
       expect(result.totalOpportunities).toBe(3);
