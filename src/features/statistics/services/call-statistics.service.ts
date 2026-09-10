@@ -1,13 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isConnectedCall } from '@/features/calls/connection';
+import { DISPOSITION_REPORT_LABELS } from '@/features/calls/disposition';
+import { isAnsweredByPersonCall, isRelevantConversationCall } from '@/features/calls/effectiveness';
 import type { CallDisposition, CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
-import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
+import { CALL_EFFECTIVENESS_COLORS } from '@/shared/constants/chart-colors';
 
 import type {
-  CallOutcomeBarEntry,
+  CallEffectivenessCounts,
+  CallEffectivenessData,
   CallStatisticsData,
   CallStatisticsKpis,
   DurationBucket,
@@ -67,12 +70,12 @@ export async function fetchCallStatisticsData(
   const memberMap = await buildMemberNameMap(supabase, orgId);
 
   const kpis = calculateKpis(calls);
-  const outcomes = calculateOutcomes(calls);
+  const effectiveness = calculateEffectiveness(calls, memberMap);
   const durationDistribution = calculateDurationDistribution(calls);
   const heatmap = calculateHeatmap(calls);
   const callsBySdr = calculateCallsBySdr(calls, memberMap);
 
-  return { kpis, outcomes, durationDistribution, heatmap, callsBySdr };
+  return { kpis, effectiveness, durationDistribution, heatmap, callsBySdr };
 }
 
 function calculateKpis(calls: CallRow[]): CallStatisticsKpis {
@@ -119,28 +122,101 @@ function calculateKpis(calls: CallRow[]): CallStatisticsKpis {
   };
 }
 
-function calculateOutcomes(calls: CallRow[]): CallOutcomeBarEntry[] {
-  const total = calls.length;
-  const counts = new Map<CallStatus, number>();
+function emptyCounts(): CallEffectivenessCounts {
+  return {
+    totalCalls: 0,
+    answeredCalls: 0,
+    relevantCalls: 0,
+    withoutDispositionCalls: 0,
+    answeredWithoutDispositionCalls: 0,
+  };
+}
+
+function addToCounts(counts: CallEffectivenessCounts, call: CallRow): void {
+  const answered = isAnsweredByPersonCall(call);
+  const withoutDisposition = call.sdr_disposition == null;
+  counts.totalCalls++;
+  if (answered) counts.answeredCalls++;
+  if (isRelevantConversationCall(call)) counts.relevantCalls++;
+  if (withoutDisposition) counts.withoutDispositionCalls++;
+  if (answered && withoutDisposition) counts.answeredWithoutDispositionCalls++;
+}
+
+// Substitui o antigo "Outcomes por Status" (lia só `calls.status`). Org sem
+// sinal de telefonia (ex.: webhook API4COM não entregue) aparecia 100% "Não
+// Conectada" mesmo com conversas marcadas pelo SDR — ver `features/calls/effectiveness.ts`.
+export function calculateEffectiveness(
+  calls: CallRow[],
+  memberMap: Map<string, string>,
+): CallEffectivenessData {
+  const total = emptyCounts();
+  const bySdr = new Map<string, CallEffectivenessCounts>();
+  const byDisposition = new Map<CallDisposition, number>();
+  let connectedCalls = 0;
+  let hasTelephonyAnswerSignal = false;
+
   for (const call of calls) {
-    counts.set(call.status, (counts.get(call.status) ?? 0) + 1);
+    addToCounts(total, call);
+    if (call.sdr_disposition) {
+      byDisposition.set(call.sdr_disposition, (byDisposition.get(call.sdr_disposition) ?? 0) + 1);
+    }
+    const sdr = bySdr.get(call.user_id) ?? emptyCounts();
+    addToCounts(sdr, call);
+    bySdr.set(call.user_id, sdr);
+    if (isConnectedCall(call)) connectedCalls++;
+    if (call.answered_at) hasTelephonyAnswerSignal = true;
   }
 
-  const allStatuses: CallStatus[] = [
-    'significant',
-    'not_significant',
-    'no_contact',
-    'busy',
-    'not_connected',
-  ];
+  const t = total.totalCalls;
 
-  return allStatuses.map((status) => ({
-    status,
-    label: CALL_STATUS_LABELS[status],
-    count: counts.get(status) ?? 0,
-    percentage: safeRate(counts.get(status) ?? 0, total),
-    color: CALL_STATUS_COLORS[status],
-  }));
+  return {
+    summary: {
+      ...total,
+      connectedCalls,
+      connectionRate: safeRate(connectedCalls, t),
+      relevantRate: safeRate(total.relevantCalls, t),
+      withoutDispositionRate: safeRate(total.withoutDispositionCalls, t),
+      hasTelephonyAnswerSignal,
+    },
+    funnel: [
+      { label: 'Discadas', count: t, percentage: t > 0 ? 100 : 0, color: CALL_EFFECTIVENESS_COLORS.dialed },
+      {
+        label: 'Atendidas',
+        count: total.answeredCalls,
+        percentage: safeRate(total.answeredCalls, t),
+        color: CALL_EFFECTIVENESS_COLORS.answered,
+      },
+      {
+        label: 'Conversa relevante',
+        count: total.relevantCalls,
+        percentage: safeRate(total.relevantCalls, t),
+        color: CALL_EFFECTIVENESS_COLORS.relevant,
+      },
+    ],
+    dispositions: [
+      ...(Object.entries(DISPOSITION_REPORT_LABELS) as Array<[CallDisposition, string]>).map(
+        ([disposition, label]) => {
+          const count = byDisposition.get(disposition) ?? 0;
+          return { disposition, label, count, percentage: safeRate(count, t) };
+        },
+      ),
+      {
+        disposition: null,
+        label: 'Sem desfecho marcado',
+        count: total.withoutDispositionCalls,
+        percentage: safeRate(total.withoutDispositionCalls, t),
+      },
+    ],
+    bySdr: Array.from(bySdr.entries())
+      .map(([userId, c]) => ({
+        ...c,
+        userId,
+        userName: memberMap.get(userId) ?? 'Desconhecido',
+        relevantRate: safeRate(c.relevantCalls, c.totalCalls),
+        withoutDispositionRate: safeRate(c.withoutDispositionCalls, c.totalCalls),
+      }))
+      .sort((a, b) => b.totalCalls - a.totalCalls),
+  };
 }
 
 function calculateDurationDistribution(calls: CallRow[]): DurationBucket[] {

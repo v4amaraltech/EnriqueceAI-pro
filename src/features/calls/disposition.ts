@@ -68,6 +68,17 @@ export const DISPOSITION_OPTIONS: DispositionOption[] = [
   { value: 'technical_failure', label: 'Falha técnica', hint: 'Volta para a fila' },
 ];
 
+// Rótulos para RELATÓRIOS, na ordem de exibição. Diferem do seletor num ponto:
+// `voicemail` aparece como "Caixa postal" (o preciso), não como "Não atendeu".
+export const DISPOSITION_REPORT_LABELS: Record<CallDisposition, string> = {
+  relevant_conversation: 'Conversa relevante',
+  answered_no_progress: 'Atendeu, sem avanço',
+  callback_requested: 'Pediu para ligar depois',
+  voicemail: 'Caixa postal',
+  no_answer: 'Não atendeu',
+  technical_failure: 'Falha técnica',
+};
+
 // Desfechos que PRESSUPÕEM que a LINHA atendeu — só fazem sentido quando a
 // telemetria diz que houve atendimento. `callback_requested` entra porque
 // "Pediu para ligar depois" só existe se o lead atendeu; `voicemail` entra
