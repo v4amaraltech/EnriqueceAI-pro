@@ -25,7 +25,7 @@ export function CallEffectivenessBySdrTable({ data }: CallEffectivenessBySdrTabl
             <th className="pb-3 pr-4 text-right">Atendidas</th>
             <th className="pb-3 pr-4 text-right">Conversas relevantes</th>
             <th className="pb-3 pr-4 text-right">% relevantes</th>
-            <th className="pb-3 text-right">Sem desfecho</th>
+            <th className="pb-3 text-right">Sem desfecho (discador)</th>
           </tr>
         </thead>
         <tbody>

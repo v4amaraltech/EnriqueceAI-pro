@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CallConnectionSignals } from './connection';
-import { isAnsweredByPersonCall, isRelevantConversationCall } from './effectiveness';
+import { isAnsweredByPersonCall, isDialerCall, isRelevantConversationCall } from './effectiveness';
 import type { CallDisposition } from './types';
 
 const ANSWERED = '2026-09-10T12:00:00Z';
@@ -40,6 +40,19 @@ describe('isAnsweredByPersonCall', () => {
 
   it('não conta atendimento curto sem desfecho (< 50s = máquina)', () => {
     expect(isAnsweredByPersonCall(call({ duration_seconds: 10, answered_at: ANSWERED }))).toBe(false);
+  });
+});
+
+describe('isDialerCall', () => {
+  it('discador API4COM (gateway flux-*) e Ligação via WhatsApp contam como discador', () => {
+    expect(isDialerCall({ origin: '1024', gateway: 'flux-c2727473' })).toBe(true);
+    expect(isDialerCall({ origin: 'whatsapp', gateway: null })).toBe(true);
+  });
+
+  it('Callface, softphone/Kommo (webhook) e reconcile NÃO — lá não existe desfecho', () => {
+    expect(isDialerCall({ origin: 'callface', gateway: null })).toBe(false);
+    expect(isDialerCall({ origin: '1024', gateway: null })).toBe(false);
+    expect(isDialerCall({ origin: '1029', gateway: 'mars-voip' })).toBe(false);
   });
 });
 

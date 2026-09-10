@@ -27,11 +27,12 @@ export function CallDispositionTable({ data }: CallDispositionTableProps) {
         </thead>
         <tbody>
           {data.map((row) => {
-            const isMissing = row.disposition === null;
+            const isMissing = row.key === 'none';
+            const isExternal = row.key === 'external';
             return (
               <tr
-                key={row.disposition ?? 'none'}
-                className={`border-b border-[var(--border)] last:border-0 ${isMissing ? 'font-semibold' : ''}`}
+                key={row.key}
+                className={`border-b border-[var(--border)] last:border-0 ${isMissing ? 'font-semibold' : ''} ${isExternal ? 'text-[var(--muted-foreground)] dark:text-[var(--foreground)]' : ''}`}
               >
                 <td className="py-2.5 pr-4">{row.label}</td>
                 <td className="py-2.5 pr-4 text-right">{row.count}</td>

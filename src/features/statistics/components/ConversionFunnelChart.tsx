@@ -36,11 +36,12 @@ export function ConversionFunnelChart({ stages, onStageClick }: ConversionFunnel
             </div>
             <div className="flex-1">
               <div
-                className="flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium text-white transition-all"
+                className="flex h-10 items-center justify-between gap-3 rounded-md px-3 text-sm font-medium text-white transition-all"
                 style={{
                   width: `${widthPct}%`,
                   backgroundColor: stage.color,
-                  minWidth: '80px',
+                  // Nunca menor que o texto: com barra estreita, número e % encostavam ("3728.4%").
+                  minWidth: 'max-content',
                 }}
               >
                 <span style={{ color: 'white' }}>{stage.count}</span>

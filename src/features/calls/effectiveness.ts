@@ -32,6 +32,19 @@ export function isAnsweredByPersonCall(call: CallConnectionSignals): boolean {
 }
 
 /**
+ * A ligação passou pelo discador do app — o único lugar que pede o desfecho ao
+ * SDR (modal pós-ligação, nos dois discadores). Ligações feitas por fora
+ * (softphone/Kommo criadas pelo webhook, inseridas pelo reconcile, Callface)
+ * NUNCA têm desfecho, e não podem contar como "o SDR não informou".
+ *
+ * Discador API4COM grava `metadata.gateway = 'flux-{orgId}'`
+ * (`initiate-api4com-call.ts`); Ligação via WhatsApp grava `origin = 'whatsapp'`.
+ */
+export function isDialerCall(call: { origin: string | null; gateway: string | null }): boolean {
+  return Boolean(call.gateway?.startsWith('flux-')) || call.origin === 'whatsapp';
+}
+
+/**
  * Conversa relevante: só o SDR julga relevância. Todo `relevant_conversation`
  * também é `isAnsweredByPersonCall`, então o funil nunca inverte.
  */
