@@ -1,11 +1,12 @@
 # Story: "Leads para Abrir" conta lead sem cadência agora (igual à tela de Leads)
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "pode marcar a story como concluída"). **PR #380 mergeado** 03:14 UTC (squash `56f35778`), **no ar** 03:17 UTC (`/api/version` = `56f3577`). Conferido no banco após o deploy: Sales Hub (RPC v2) = tela de Leads por SDR — Matheus 349, Giovanni 262, Guilherme 258, João 156, Ismael 108 (total 1.133); o card lê a mesma view. Pendente fora da story: atualizar o corpo da RPC na migration de hardening `20260909210100` antes de aplicá-la (ver Risks). |
 | 2026-09-10 | @dev (Dex) | **Migration aplicada em prod** 23:35 UTC (autorizado pelo Vini: "commita, abre o PR e aplica no banco"), versão `20260910233502`. Conferido: RPC devolve 349/262/258/156/108 (= tela de Leads), ACL igual ao anterior, corpo usa a view. Sales Hub já mostra a regra nova; o card do app muda no merge. |
 | 2026-09-10 | @dev (Dex) | Implementado: card lê a view `leads_no_active_enrollment` (contagem exata por SDR); clique abre `/leads` com "Novo" + "Sem cadência"; RPC `get_sdr_leads_para_abrir_v2` usa a mesma view (Sales Hub). Migration testada em transação com ROLLBACK (números iguais aos da tela, ACL preservado). typecheck ✅ lint ✅ testes ✅ (+2). Commit + PR autorizados pelo Vini. |
 | 2026-09-10 | Vini + Claude | Story criada. Opção 1 aprovada pelo Vini: "vai na 1, ajusta o Sales Hub junto". |
@@ -54,7 +55,7 @@ A diferença (~770 leads) são leads que já passaram por cadência (Prospecçã
 - [x] Migration `20260910233502_leads_para_abrir_no_active_cadence.sql` (CREATE OR REPLACE, mesma assinatura)
 - [x] Testes (+2 em `ranking-metrics.service.test.ts`)
 - [x] Aplicar migration em prod (10/set 23:35 UTC, `20260910233502`)
-- [ ] Conferir após o deploy: card = Sales Hub = tela de Leads
+- [x] Conferir após o deploy: card = Sales Hub = tela de Leads (11/set 03:17 UTC; card via mesma view, sem login para ver a tela)
 
 ## Dev Notes
 - `types.ts` não muda: assinatura e retorno da RPC são os mesmos.
