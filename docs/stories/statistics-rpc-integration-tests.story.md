@@ -1,11 +1,14 @@
 # Story: Teste de integração das RPCs de estatística num banco local (e no CI)
 
 ## Status
-Ready
+Ready for Review
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Correção aplicada em prod com autorização do Vini (versão `20260911111939`, arquivo renomeado; md5 do corpo em prod = arquivo `c04925b1…`; ACL intacta: anon ✗, authenticated/service_role ✓, sem DEFINER). **Mesmo snapshot: função antiga × nova idênticas sem filtro** (3.456 linhas); com filtro de SDR/cadência e Julio, impressões iguais às de antes. typecheck ✅ lint ✅ 2.020 testes ✅ integração 12/12 (local) ✅ build ✅. AC5/AC6 dependem do push (fase @devops). Nada commitado. |
+| 2026-09-11 | @dev (Dex) | T4, T5 e T7 feitos; T6 escrito. Teste de integração **12/12** no Postgres local; suíte 2.020 ✅; typecheck/lint/build ✅. O teste **achou um defeito** em `get_conversion_universe` (`for_velocity` = null em vez de false com filtro de SDR e inscrição sem `enrolled_by`) → correção na migration nova `20260911111939_…_for_velocity_false.sql` (**ainda não aplicada em prod**). Nada commitado. |
+| 2026-09-11 | @po (Pax) | **Escopo +1 (decisão do Vini):** corrigir o `for_velocity` null→false em `get_conversion_universe` nesta story (1 linha, `CREATE OR REPLACE`, sem efeito na tela). O item OUT "Mudar as funções" passa a ter essa exceção. |
 | 2026-09-11 | @po (Pax) | **Revalidação por mudança de escopo → GO → Ready** (nota 8/10). T1 mostrou que o repo não recria o banco do zero; Vini escolheu o **banco de teste enxuto**: Postgres puro + schema mínimo copiado de prod + os 2 arquivos de migration do repo (verbatim), testes como gestor via SQL. Escopo, ACs e tarefas reescritos abaixo; o escopo anterior (Supabase local completo) fica registrado em "Escopo anterior". Sem dependência nova: `psql` (runner/containers) em vez de cliente `pg`. |
 | 2026-09-11 | @dev (Dex) | Ready → **InProgress**. T2 e T3 feitos (trava de URL local + referências JS compartilhadas; referência nova da Conversão = função real em prod, md5 4/4). **T1 BLOQUEADO:** as migrations do repo não sobem do zero (2 quebras nas primeiras 108 de 277; prod tem ~330 migrations e várias nunca entraram no repo). Parado para decisão do Vini, como manda a story. Nada commitado. |
 | 2026-09-11 | @po (Pax) | `*validate-story-draft`: **GO → Ready** (nota 8/10). Vini escolheu a **opção A**. Correções: gate `@qa` → `@architect` (regra de executor); origem das chaves locais (`supabase status -o env`); job **não obrigatório** na proteção de branch (filtro de caminhos + check obrigatório = PR preso); workflow inclui o próprio arquivo nos caminhos; conferência única da referência nova da Conversão contra prod; T1 também roda o `rls-policies` existente. |
@@ -73,7 +76,7 @@ O teste existe e o dev roda com `supabase start` quando mexer nas funções. Bar
 - Fazer as 277 migrations subirem do zero / versionar o que só existe em prod → **story própria** (registrar no backlog).
 - Rodar o `rls-policies.test.ts` no CI (precisa do Supabase completo → depende da story acima).
 - Testar a chamada pelo PostgREST (paginação/ordem/parâmetros omitidos) — já coberta pelos testes com o PostgREST de mentira.
-- Mudar as funções ou as regras das telas.
+- Mudar as funções ou as regras das telas — **exceção (11/set, decisão do Vini):** correção `for_velocity` null→false em `get_conversion_universe`, achada por este teste.
 
 ### Escopo anterior (11/set, substituído)
 <details><summary>Supabase local completo (`supabase start` + `db reset`)</summary>
@@ -110,10 +113,10 @@ O teste existe e o dev roda com `supabase start` quando mexer nas funções. Bar
 - [x] T1 — Pré-voo: `supabase db reset` local → **bloqueou** (migrations 57 e 108; ver Dev Agent Record). Decisão do Vini: banco de teste enxuto.
 - [x] T2 — Trava de URL local em `tests/helpers/supabase-test-client.ts` + `rls-policies.test.ts` (AC4).
 - [x] T3 — Referências JS em `tests/helpers/` (interaction counts movida; conversion universe nova, conferida contra prod).
-- [ ] T4 — Schema mínimo copiado de prod (só leitura) + conferência md5 (AC7).
-- [ ] T5 — `tests/integration/statistics-rpcs.test.ts` com banco descartável via `psql` (AC1–AC3); rodar local contra o Postgres do container `supabase_db_flux` (banco próprio, não o de dev).
+- [x] T4 — Schema mínimo copiado de prod (só leitura) + conferência md5 (AC7).
+- [x] T5 — `tests/integration/statistics-rpcs.test.ts` com banco descartável via `psql` (AC1–AC3); rodar local contra o Postgres do container `supabase_db_flux` (banco próprio, não o de dev).
 - [ ] T6 — @devops: `.github/workflows/integration.yml` (AC5, AC6) e medir o tempo do job.
-- [ ] T7 — Registrar no backlog a story "migrations do repo sobem do zero"; typecheck, lint, testes, build.
+- [x] T7 — Registrar no backlog a story "migrations do repo sobem do zero"; typecheck, lint, testes, build.
 
 ## Complexity
 **M** — sem mudança de produto; schema mínimo, 1 teste de integração, 1 workflow. (T1 já resolvido pela mudança de escopo.)
@@ -172,10 +175,30 @@ Claude Opus 5 (@dev Dex)
   - Amostra de 12 migrations que existem em prod (subsistema LDR, limpezas de 30/ago): **0 no repo**. Prod: ~330 registradas; repo: 277. Conclusão: **o repo não reproduz o banco de prod do zero**; o número de quebras depois da 108 é desconhecido.
   - Banco local ficou migrado até a 107 (só local). Docker e Supabase local continuam ligados.
 
-### File List (até aqui, sem commit)
+### File List (sem commit)
 - `tests/helpers/supabase-test-client.ts` — trava de URL local
 - `tests/helpers/supabase-test-client.test.ts` (novo, 4 testes)
 - `tests/helpers/statistics-references.ts` (novo)
 - `tests/integration/rls-policies.test.ts` — usa a trava
 - `src/features/statistics/services/interaction-counts.equivalence.test.ts` — usa a referência compartilhada
 - `tests/mocks/postgrest-table.ts` — tipo do handler de RPC
+- `tests/integration/fixtures/statistics-schema.sql` (novo) — schema mínimo copiado de prod
+- `tests/integration/statistics-rpcs.test.ts` (novo, 12 testes)
+- `supabase/migrations/20260911111939_get_conversion_universe_for_velocity_false.sql` (novo — **já aplicada em prod** 11/set)
+- `.github/workflows/integration.yml` (novo)
+- `docs/improvements-backlog.md` — atualização do item "Drift de migrations"
+
+### Debug Log — T4 a T7 (11/set)
+- **T4 (schema mínimo):** copiado de prod via MCP (só leitura): valores/ordem dos 5 enums, colunas usadas das 6 tabelas, `pg_get_functiondef` de `user_org_id`/`is_manager`/`lead_visibility_mode`/`auth.uid`, as 6 políticas de SELECT. Aplicado num banco descartável do Postgres local + as migrations das funções: sobe limpo; **md5 das 3 funções e das 6 políticas = prod**; `anon` sem EXECUTE nas duas funções.
+- **T5 (teste):** `tests/integration/statistics-rpcs.test.ts` — banco `stats_it_<aleatório>` criado/apagado por execução; aplica o schema mínimo + **todas as migrations do repo que definem as duas funções** (descoberta pelo conteúdo, em ordem). 2 orgs, gestor/SDR/ex-membro, 575 interações, 75 leads, 105 inscrições, cadência excluída, horários 00–03h UTC. Casos: 4× `get_interaction_counts` e 4× `get_conversion_universe` vs referência JS; isolamento org B; `anon` barrado; md5 do schema = prod (AC7). Local: `STATS_TEST_PG_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres STATS_TEST_PSQL='docker exec -i supabase_db_flux psql' pnpm exec vitest run tests/integration/statistics-rpcs.test.ts` (~3 s).
+- **Defeito achado pelo teste:** `get_conversion_universe` com filtro de SDR devolvia `for_velocity: null` para inscrição sem `enrolled_by` (`NULL = ANY(...)`). Sem efeito na tela (TS filtra por verdadeiro). Correção `coalesce(…, false)` em `20260911111939_get_conversion_universe_for_velocity_false.sql`; sem ela o caso "filtro de SDR" fica vermelho (prova local de que o teste pega regressão da SQL).
+- **T6 (workflow):** `.github/workflows/integration.yml` — serviço `postgres:17`, `psql` do runner, `paths` da story, não obrigatório. AC5/AC6 dependem de push (fase @devops).
+- **T7:** item existente "Drift de migrations local ↔ produção" em `docs/improvements-backlog.md` atualizado com as quebras de hoje (não criei item duplicado; já há 2 planos de baseline).
+
+### Debug Log — correção em prod e fechamento (11/set)
+- Antes de aplicar: em prod, 16 de 7.526 inscrições da V4 não têm `enrolled_by`; nenhum recorte medido (365 dias com filtro de todos os membros) produzia `null` → defeito real, raro, **sem efeito histórico na tela**.
+- Aplicada `20260911111939_get_conversion_universe_for_velocity_false` (MCP); md5 do corpo em prod = arquivo; permissões intactas.
+- Conferência: impressões digitais dos 4 recortes da Conversão — `v4_30d_sdrs`, `v4_30d_recovery` e `julio_30d` idênticas às de antes; `v4_30d` mudou por **dado vivo** (leads/inscrições alterados entre as medições). Prova: função antiga recriada em `pg_temp` × função nova, **na mesma transação** → `0d70b5fc…` nas duas.
+- `pnpm gen:types`: a correção não muda a assinatura; o diff que apareceu (`goals_per_user.calls_target`/`calls_connected_target`) é de **outra mudança aplicada em prod por outra frente** — desfeito aqui para não misturar PRs (quem aplicou deve regenerar no PR dela).
+- Pendente p/ @devops: AC5 (vermelho provocado no CI) e AC6 (filtro de caminhos) — exigem push.
+- Docker e Supabase local continuam ligados (`supabase stop` para desligar).

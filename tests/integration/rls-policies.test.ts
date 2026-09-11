@@ -5,14 +5,13 @@ import {
   createAdminClient,
   createAuthenticatedClient,
   createTestUser,
+  shouldRunIntegration,
 } from '../helpers/supabase-test-client';
 
-// Run only against a REAL local Supabase. A real service-role key is a JWT
-// (starts with "eyJ"); the dummy placeholder injected by tests/setup.ts for unit
-// tests must not trip this gate, otherwise these tests try to reach a Supabase
-// that isn't running and fail instead of skipping.
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_RUNNING = !!serviceRoleKey && serviceRoleKey.startsWith('eyJ');
+// Só contra um Supabase LOCAL (SUPABASE_URL 127.0.0.1/localhost) com chave real.
+// Antes a trava olhava só o formato da chave: com a chave de prod no ambiente,
+// este teste criaria e apagaria usuários em produção.
+const SUPABASE_RUNNING = shouldRunIntegration();
 
 describe.skipIf(!SUPABASE_RUNNING)('RLS Policies - Integration', () => {
   let adminClient: SupabaseClient;

@@ -1,0 +1,74 @@
+name: Integração
+
+# Testa as funções SQL de estatística (get_conversion_universe,
+# get_interaction_counts) num Postgres de verdade: schema mínimo copiado de
+# prod + as migrations do repo que definem as funções. Story
+# statistics-rpc-integration-tests.
+#
+# Só roda quando o PR mexe no que pode mudar esses números. NÃO marcar como
+# check obrigatório na proteção da main: com filtro de caminhos, um check
+# obrigatório que não roda deixa o PR preso em "pendente".
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'src/features/statistics/**'
+      - 'tests/**'
+      - '.github/workflows/integration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'src/features/statistics/**'
+      - 'tests/**'
+      - '.github/workflows/integration.yml'
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  statistics-rpcs:
+    name: Integração · funções de estatística
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: America/Sao_Paulo
+      # Postgres descartável do job (serviço abaixo). O teste recusa host não local.
+      STATS_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.18.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: psql disponível
+        run: psql --version
+
+      - name: Teste de integração
+        run: pnpm exec vitest run tests/integration/statistics-rpcs.test.ts
