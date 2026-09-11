@@ -14,6 +14,7 @@ import type {
 } from '../types/call-dashboard.types';
 import { safeRate } from '../types/shared';
 import { buildMemberNameMap } from './member-lookup';
+import { readAllRows } from './read-all-rows';
 
 interface CallRow {
   id: string;
@@ -35,24 +36,20 @@ export async function fetchCallDashboardData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<CallDashboardData> {
-  // Fetch calls
-  let callsQuery = from(supabase, 'calls')
-    .select(
-      'id, user_id, destination, status, duration_seconds, answered_at, sdr_disposition, hangup_cause, recording_url, started_at',
-    )
-    .eq('org_id', orgId)
-    .gte('started_at', periodStart)
-    .lte('started_at', periodEnd)
-    .order('started_at', { ascending: false })
-    .limit(10000);
-
+  // Lê TODAS as ligações do período, em páginas (antes `.limit(10000)`: ~12 mil
+  // em 30 dias na V4 Amaral — set/2026). Mais recentes primeiro (recentCalls).
   const validUserIds = (userIds ?? []).filter(isUuid);
-  if (validUserIds.length > 0) {
-    callsQuery = callsQuery.in('user_id', validUserIds);
-  }
-
-  const { data: rawCalls } = (await callsQuery) as { data: CallRow[] | null };
-  const calls = rawCalls ?? [];
+  const calls = await readAllRows<CallRow>('painel de ligações: ligações', () => {
+    let q = from(supabase, 'calls')
+      .select(
+        'id, user_id, destination, status, duration_seconds, answered_at, sdr_disposition, hangup_cause, recording_url, started_at',
+      )
+      .eq('org_id', orgId)
+      .gte('started_at', periodStart)
+      .lte('started_at', periodEnd);
+    if (validUserIds.length > 0) q = q.in('user_id', validUserIds);
+    return q.order('started_at', { ascending: false }).order('id', { ascending: false });
+  });
 
   // Fetch members for name mapping (via admin client — org_members has no email column)
   const memberMap = await buildMemberNameMap(supabase, orgId);

@@ -26,6 +26,7 @@ import type {
 import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
 import { buildMemberInfoMap } from './member-lookup';
+import { readAllRows } from './read-all-rows';
 
 export async function fetchActivityAnalyticsData(
   supabase: SupabaseClient,
@@ -34,26 +35,27 @@ export async function fetchActivityAnalyticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<ActivityAnalyticsData> {
-  let query = from(supabase, 'interactions')
-    .select('id, type, channel, lead_id, created_at, performed_by')
-    .eq('org_id', orgId)
-    .not('channel', 'in', '(system,calendar)')
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
-
-  if (userIds && userIds.length > 0) {
-    query = query.in('performed_by', userIds);
-  }
+  // Lê TODAS as interações do período, em páginas (antes `.limit(10000)`: a
+  // V4 Amaral tem ~13 mil em 30 dias e ~35 mil em 90 — set/2026).
+  const buildInteractionsQuery = () => {
+    let query = from(supabase, 'interactions')
+      .select('id, type, channel, lead_id, created_at, performed_by')
+      .eq('org_id', orgId)
+      .not('channel', 'in', '(system,calendar)')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+    if (userIds && userIds.length > 0) query = query.in('performed_by', userIds);
+    return query.order('created_at', { ascending: true }).order('id', { ascending: true });
+  };
 
   // userId não depende das interações — calculado antes do fetch paralelo.
   const userId = userIds && userIds.length === 1 ? userIds[0] : undefined;
 
   // Interações e meta (goal) são independentes → buscadas em paralelo.
-  const [interactionsRes, target] = await Promise.all([
-    query.limit(10000),
+  const [interactions, target] = await Promise.all([
+    readAllRows<InteractionQueryRow>('atividades: interações', buildInteractionsQuery),
     fetchGoalTarget(supabase, orgId, userId),
   ]);
-  const interactions = (interactionsRes as { data: InteractionQueryRow[] | null }).data ?? [];
 
   const kpis = calculateKpis(interactions, periodStart, periodEnd, target);
   const channelVolume = calculateChannelVolume(interactions);
@@ -63,45 +65,40 @@ export async function fetchActivityAnalyticsData(
 
   // Leads em 4 recortes (won/lost no período por timestamp, ativos no período,
   // e total por SDR all-time). As 4 queries são independentes → paralelas.
-  const [wonRes, lostRes, activeRes, allLeadsRes] = await Promise.all([
-    from(supabase, 'leads')
-      .select('id, status, assigned_to')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .eq('status', 'won')
-      .not('won_at', 'is', null)
-      .gte('won_at', periodStart)
-      .lte('won_at', periodEnd)
-      .limit(10000),
-    from(supabase, 'leads')
-      .select('id, status, assigned_to')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .eq('status', 'unqualified')
-      .not('lost_at', 'is', null)
-      .gte('lost_at', periodStart)
-      .lte('lost_at', periodEnd)
-      .limit(10000),
-    from(supabase, 'leads')
-      .select('id, assigned_to, status, created_at')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd)
-      .limit(10000),
-    from(supabase, 'leads')
-      .select('id, assigned_to')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .limit(10000),
+  // Todas paginadas; a de "todos os leads" não tem período e só cresce.
+  type StatusLead = { id: string; status: string; assigned_to: string | null };
+  type PeriodLead = { id: string; assigned_to: string | null; status: string; created_at: string };
+  const leadsBase = (columns: string) =>
+    from(supabase, 'leads').select(columns).eq('org_id', orgId).is('deleted_at', null);
+  const [wonLeadsRaw, lostLeadsRaw, allActiveLeads, allLeadsForCount] = await Promise.all([
+    readAllRows<StatusLead>('atividades: leads ganhos', () =>
+      leadsBase('id, status, assigned_to')
+        .eq('status', 'won')
+        .not('won_at', 'is', null)
+        .gte('won_at', periodStart)
+        .lte('won_at', periodEnd)
+        .order('id', { ascending: true }),
+    ),
+    readAllRows<StatusLead>('atividades: leads perdidos', () =>
+      leadsBase('id, status, assigned_to')
+        .eq('status', 'unqualified')
+        .not('lost_at', 'is', null)
+        .gte('lost_at', periodStart)
+        .lte('lost_at', periodEnd)
+        .order('id', { ascending: true }),
+    ),
+    readAllRows<PeriodLead>('atividades: leads do período', () =>
+      leadsBase('id, assigned_to, status, created_at')
+        .gte('created_at', periodStart)
+        .lte('created_at', periodEnd)
+        .order('id', { ascending: true }),
+    ),
+    readAllRows<{ id: string; assigned_to: string | null }>('atividades: todos os leads', () =>
+      leadsBase('id, assigned_to').order('id', { ascending: true }),
+    ),
   ]);
-  const wonLeadsRaw = (wonRes as { data: Array<{ id: string; status: string; assigned_to: string | null }> | null }).data;
-  const lostLeadsRaw = (lostRes as { data: Array<{ id: string; status: string; assigned_to: string | null }> | null }).data;
-  const leads = [...(wonLeadsRaw ?? []), ...(lostLeadsRaw ?? [])];
-  const activeLeads = (activeRes as { data: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }> | null }).data;
-  const allLeadsForCount = (allLeadsRes as { data: Array<{ id: string; assigned_to: string | null }> | null }).data;
+  const leads = [...wonLeadsRaw, ...lostLeadsRaw];
 
-  const allActiveLeads = activeLeads ?? [];
   const leadsInPeriod = allActiveLeads.length;
 
   // Merge both lead sources for accurate won/lost totals
@@ -124,7 +121,7 @@ export async function fetchActivityAnalyticsData(
 
   // Total de leads por SDR (allLeadsForCount) já veio no batch paralelo acima.
   const totalLeadsByUser = new Map<string, number>();
-  for (const l of allLeadsForCount ?? []) {
+  for (const l of allLeadsForCount) {
     if (l.assigned_to) {
       totalLeadsByUser.set(l.assigned_to, (totalLeadsByUser.get(l.assigned_to) ?? 0) + 1);
     }

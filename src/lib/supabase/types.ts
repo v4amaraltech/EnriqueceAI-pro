@@ -8,6 +8,30 @@ export type Database = {
   };
   public: {
     Tables: {
+      _bkp_cadence_enrolled_backfill_20260909: {
+        Row: {
+          created_at_backfilled: string | null;
+          enrollment_id: string | null;
+          inserted_at: string;
+          interaction_id: string;
+          lead_id: string | null;
+        };
+        Insert: {
+          created_at_backfilled?: string | null;
+          enrollment_id?: string | null;
+          inserted_at?: string;
+          interaction_id: string;
+          lead_id?: string | null;
+        };
+        Update: {
+          created_at_backfilled?: string | null;
+          enrollment_id?: string | null;
+          inserted_at?: string;
+          interaction_id?: string;
+          lead_id?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_cadence_limbo_triage_20260812: {
         Row: {
           batch: string | null;
@@ -188,6 +212,129 @@ export type Database = {
         };
         Relationships: [];
       };
+      _bkp_ismael_redistrib_20260910: {
+        Row: {
+          engagement_score: number | null;
+          lead_id: string | null;
+          moved_at: string | null;
+          new_assigned_to: string | null;
+          new_nome: string | null;
+          old_assigned_to: string | null;
+          old_status: Database['public']['Enums']['lead_status'] | null;
+          org_id: string | null;
+        };
+        Insert: {
+          engagement_score?: number | null;
+          lead_id?: string | null;
+          moved_at?: string | null;
+          new_assigned_to?: string | null;
+          new_nome?: string | null;
+          old_assigned_to?: string | null;
+          old_status?: Database['public']['Enums']['lead_status'] | null;
+          org_id?: string | null;
+        };
+        Update: {
+          engagement_score?: number | null;
+          lead_id?: string | null;
+          moved_at?: string | null;
+          new_assigned_to?: string | null;
+          new_nome?: string | null;
+          old_assigned_to?: string | null;
+          old_status?: Database['public']['Enums']['lead_status'] | null;
+          org_id?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_julio_calls_reconcile_20260910: {
+        Row: {
+          answered_at: string | null;
+          connected: boolean | null;
+          contact_id: string | null;
+          cost: number | null;
+          created_at: string | null;
+          destination: string | null;
+          duration_seconds: number | null;
+          hangup_cause: string | null;
+          id: string | null;
+          is_important: boolean | null;
+          lead_id: string | null;
+          metadata: Json | null;
+          notes: string | null;
+          org_id: string | null;
+          origin: string | null;
+          recording_storage_path: string | null;
+          recording_url: string | null;
+          sdr_disposition: Database['public']['Enums']['call_disposition'] | null;
+          sdr_outcome: Database['public']['Enums']['call_status'] | null;
+          started_at: string | null;
+          status: Database['public']['Enums']['call_status'] | null;
+          transcription: string | null;
+          transcription_error: string | null;
+          transcription_status: string | null;
+          type: Database['public']['Enums']['call_type'] | null;
+          updated_at: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          answered_at?: string | null;
+          connected?: boolean | null;
+          contact_id?: string | null;
+          cost?: number | null;
+          created_at?: string | null;
+          destination?: string | null;
+          duration_seconds?: number | null;
+          hangup_cause?: string | null;
+          id?: string | null;
+          is_important?: boolean | null;
+          lead_id?: string | null;
+          metadata?: Json | null;
+          notes?: string | null;
+          org_id?: string | null;
+          origin?: string | null;
+          recording_storage_path?: string | null;
+          recording_url?: string | null;
+          sdr_disposition?: Database['public']['Enums']['call_disposition'] | null;
+          sdr_outcome?: Database['public']['Enums']['call_status'] | null;
+          started_at?: string | null;
+          status?: Database['public']['Enums']['call_status'] | null;
+          transcription?: string | null;
+          transcription_error?: string | null;
+          transcription_status?: string | null;
+          type?: Database['public']['Enums']['call_type'] | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          answered_at?: string | null;
+          connected?: boolean | null;
+          contact_id?: string | null;
+          cost?: number | null;
+          created_at?: string | null;
+          destination?: string | null;
+          duration_seconds?: number | null;
+          hangup_cause?: string | null;
+          id?: string | null;
+          is_important?: boolean | null;
+          lead_id?: string | null;
+          metadata?: Json | null;
+          notes?: string | null;
+          org_id?: string | null;
+          origin?: string | null;
+          recording_storage_path?: string | null;
+          recording_url?: string | null;
+          sdr_disposition?: Database['public']['Enums']['call_disposition'] | null;
+          sdr_outcome?: Database['public']['Enums']['call_status'] | null;
+          started_at?: string | null;
+          status?: Database['public']['Enums']['call_status'] | null;
+          transcription?: string | null;
+          transcription_error?: string | null;
+          transcription_status?: string | null;
+          type?: Database['public']['Enums']['call_type'] | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_lead_contacts_backfill_allchannels_20260813: {
         Row: {
           contact_id: string;
@@ -251,6 +398,69 @@ export type Database = {
           lead_id?: string | null;
           new_next_step_due?: string | null;
           old_next_step_due?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_pensenova_meeting_starts_20260909: {
+        Row: {
+          ai_generated: boolean | null;
+          backup_em: string | null;
+          cadence_id: string | null;
+          channel: Database['public']['Enums']['channel_type'] | null;
+          contact_id: string | null;
+          created_at: string | null;
+          external_id: string | null;
+          id: string | null;
+          lead_id: string | null;
+          lead_meeting_held_at_antes: string | null;
+          lead_meeting_starts_at_antes: string | null;
+          message_content: string | null;
+          metadata: Json | null;
+          org_id: string | null;
+          original_template_id: string | null;
+          performed_by: string | null;
+          step_id: string | null;
+          type: Database['public']['Enums']['interaction_type'] | null;
+        };
+        Insert: {
+          ai_generated?: boolean | null;
+          backup_em?: string | null;
+          cadence_id?: string | null;
+          channel?: Database['public']['Enums']['channel_type'] | null;
+          contact_id?: string | null;
+          created_at?: string | null;
+          external_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lead_meeting_held_at_antes?: string | null;
+          lead_meeting_starts_at_antes?: string | null;
+          message_content?: string | null;
+          metadata?: Json | null;
+          org_id?: string | null;
+          original_template_id?: string | null;
+          performed_by?: string | null;
+          step_id?: string | null;
+          type?: Database['public']['Enums']['interaction_type'] | null;
+        };
+        Update: {
+          ai_generated?: boolean | null;
+          backup_em?: string | null;
+          cadence_id?: string | null;
+          channel?: Database['public']['Enums']['channel_type'] | null;
+          contact_id?: string | null;
+          created_at?: string | null;
+          external_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lead_meeting_held_at_antes?: string | null;
+          lead_meeting_starts_at_antes?: string | null;
+          message_content?: string | null;
+          metadata?: Json | null;
+          org_id?: string | null;
+          original_template_id?: string | null;
+          performed_by?: string | null;
+          step_id?: string | null;
+          type?: Database['public']['Enums']['interaction_type'] | null;
         };
         Relationships: [];
       };
@@ -5393,6 +5603,24 @@ export type Database = {
         | { Args: { p_from_date?: string; p_limit?: number }; Returns: Json }
         | { Args: { p_month?: number; p_year?: number }; Returns: Json };
       get_calls_for_v4sales_by_ids: { Args: { p_ids: string[] }; Returns: Json };
+      get_conversion_universe: {
+        Args: {
+          p_cadence_id?: string;
+          p_end: string;
+          p_start: string;
+          p_user_ids?: string[];
+        };
+        Returns: {
+          created_by: string;
+          enrollments: Json;
+          has_meeting_scheduled: boolean;
+          has_replied: boolean;
+          has_sent: boolean;
+          lead_id: string;
+          status: Database['public']['Enums']['lead_status'];
+          won_at: string;
+        }[];
+      };
       get_distinct_lead_canais: {
         Args: never;
         Returns: {

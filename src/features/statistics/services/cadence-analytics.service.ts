@@ -13,6 +13,7 @@ import type {
 } from '../types/cadence-analytics.types';
 import type { EnrollmentQueryRow, InteractionQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
+import { readAllRows } from './read-all-rows';
 
 interface CadenceRow {
   id: string;
@@ -55,28 +56,29 @@ export async function fetchCadenceAnalyticsData(
   const cadenceIds = cadences.map((c) => c.id);
 
   // Fetch all enrollments for these cadences (org isolation via cadenceIds which are already org-filtered)
-  let enrQuery = from(supabase, 'cadence_enrollments')
-    .select('cadence_id, lead_id, current_step, status, enrolled_by')
-    .in('cadence_id', cadenceIds);
-
-  if (userIds && userIds.length > 0) {
-    enrQuery = enrQuery.in('enrolled_by', userIds);
-  }
-
-  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
-  const enrollments = rawEnrollments ?? [];
+  // Todas as consultas abaixo são paginadas (antes `.limit(10000)`, que cortava
+  // em silêncio: ~13 mil interações de engajamento em 30 dias na V4 Amaral e os
+  // enrollments, sem período, só crescem — set/2026).
+  const enrollments = await readAllRows<EnrollmentQueryRow>('cadências: enrollments', () => {
+    let q = from(supabase, 'cadence_enrollments')
+      .select('cadence_id, lead_id, current_step, status, enrolled_by')
+      .in('cadence_id', cadenceIds);
+    if (userIds && userIds.length > 0) q = q.in('enrolled_by', userIds);
+    return q.order('id', { ascending: true });
+  });
 
   // Fetch interactions for reply/meeting counts
-  let intQuery = from(supabase, 'interactions')
-    .select('type, cadence_id')
-    .eq('org_id', orgId)
-    .in('cadence_id', cadenceIds)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .in('type', ['replied', 'meeting_scheduled']);
-
-  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
+  const interactions = await readAllRows<InteractionQueryRow>('cadências: respostas/reuniões', () =>
+    from(supabase, 'interactions')
+      .select('type, cadence_id')
+      .eq('org_id', orgId)
+      .in('cadence_id', cadenceIds)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .in('type', ['replied', 'meeting_scheduled'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }),
+  );
 
   // Fetch cadence steps for progression
   const { data: rawSteps } = (await from(supabase, 'cadence_steps')
@@ -86,15 +88,17 @@ export async function fetchCadenceAnalyticsData(
   const steps = rawSteps ?? [];
 
   // Fetch engagement interactions (sent + opened + clicked + replied + meeting_scheduled) with lead_id
-  const { data: rawEngagement } = (await from(supabase, 'interactions')
-    .select('type, lead_id')
-    .eq('org_id', orgId)
-    .in('cadence_id', cadenceIds)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])
-    .limit(10000)) as { data: InteractionQueryRow[] | null };
-  const engagementInteractions = rawEngagement ?? [];
+  const engagementInteractions = await readAllRows<InteractionQueryRow>('cadências: engajamento', () =>
+    from(supabase, 'interactions')
+      .select('type, lead_id')
+      .eq('org_id', orgId)
+      .in('cadence_id', cadenceIds)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }),
+  );
 
   const activeCadences = cadences.filter((c) => c.status === 'active').length;
   const totalEnrolled = enrollments.length;

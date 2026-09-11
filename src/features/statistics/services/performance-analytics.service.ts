@@ -13,6 +13,7 @@ import type {
 import type { InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 import { buildMemberInfoMap, type MemberInfo } from './member-lookup';
+import { readAllRows } from './read-all-rows';
 
 export async function fetchPerformanceAnalyticsData(
   supabase: SupabaseClient,
@@ -46,31 +47,29 @@ export async function fetchPerformanceAnalyticsData(
   // diário já as excluem; sem este filtro o Controle Diário contava "Pular esta
   // atividade" como atividade concluída. `calendar` (reunião agendada) fica —
   // `completed` conta meeting_scheduled de propósito.
-  let intQuery = from(supabase, 'interactions')
-    .select('type, channel, lead_id, performed_by, cadence_id, created_at')
-    .eq('org_id', orgId)
-    .neq('channel', 'system')
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd)
-    .in('performed_by', filteredIds);
-
-  if (isUuid(cadenceId)) {
-    intQuery = intQuery.eq('cadence_id', cadenceId);
-  }
-
-  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const interactions = rawInteractions ?? [];
+  // Paginado (antes `.limit(10000)`: ~12 mil em 30 dias na V4 Amaral — set/2026).
+  const interactions = await readAllRows<InteractionQueryRow>('performance: interações', () => {
+    let q = from(supabase, 'interactions')
+      .select('type, channel, lead_id, performed_by, cadence_id, created_at')
+      .eq('org_id', orgId)
+      .neq('channel', 'system')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .in('performed_by', filteredIds);
+    if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
+    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
+  });
 
   // Fetch leads in period (don't filter by assigned_to here — won_by may differ)
-  const leadsQuery = from(supabase, 'leads')
-    .select('id, status, created_by, assigned_to, won_by')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
-
-  const { data: rawLeads } = (await leadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
-  const leads = rawLeads ?? [];
+  const leads = await readAllRows<LeadQueryRow>('performance: leads do período', () =>
+    from(supabase, 'leads')
+      .select('id, status, created_by, assigned_to, won_by')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
+      .order('id', { ascending: true }),
+  );
 
   // memberLookup: user_id → name for display; memberInfoLookup: user_id → full info
   const memberLookup = new Map(
