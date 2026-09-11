@@ -10,9 +10,15 @@ import type {
   SdrActivityComparisonEntry,
   SdrPerformanceRow,
 } from '../types/performance-analytics.types';
-import type { InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
+import type { LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
-import { buildMemberInfoMap, type MemberInfo } from './member-lookup';
+import {
+  type InteractionCell,
+  type PerformerSummary,
+  fetchInteractionCounts,
+  sumCells,
+} from './interaction-counts';
+import { type MemberInfo, buildMemberInfoMap } from './member-lookup';
 import { readAllRows } from './read-all-rows';
 
 export async function fetchPerformanceAnalyticsData(
@@ -37,27 +43,20 @@ export async function fetchPerformanceAnalyticsData(
     return emptyData();
   }
 
-  const filteredIds = userIds && userIds.length > 0
-    ? userIds
-    : memberIds.map((m) => m.user_id);
+  const filteredIds = userIds && userIds.length > 0 ? userIds : memberIds.map((m) => m.user_id);
 
-  // Fetch interactions.
+  // Contagens de interações já agrupadas no banco (RPC get_interaction_counts).
   // `channel='system'` são linhas de auditoria (passo pulado, cadência encerrada,
   // avanço automático) gravadas como type='sent'. O Dashboard e o Progresso
   // diário já as excluem; sem este filtro o Controle Diário contava "Pular esta
   // atividade" como atividade concluída. `calendar` (reunião agendada) fica —
   // `completed` conta meeting_scheduled de propósito.
-  // Paginado (antes `.limit(10000)`: ~12 mil em 30 dias na V4 Amaral — set/2026).
-  const interactions = await readAllRows<InteractionQueryRow>('performance: interações', () => {
-    let q = from(supabase, 'interactions')
-      .select('type, channel, lead_id, performed_by, cadence_id, created_at')
-      .eq('org_id', orgId)
-      .neq('channel', 'system')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd)
-      .in('performed_by', filteredIds);
-    if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
-    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
+  const { cells, performers } = await fetchInteractionCounts(supabase, {
+    periodStart,
+    periodEnd,
+    excludeChannels: ['system'],
+    userIds: filteredIds,
+    cadenceId: isUuid(cadenceId) ? cadenceId : undefined,
   });
 
   // Fetch leads in period (don't filter by assigned_to here — won_by may differ)
@@ -75,11 +74,9 @@ export async function fetchPerformanceAnalyticsData(
   const memberLookup = new Map(
     memberIds.map((m) => [m.user_id, infoMap.get(m.user_id)?.name ?? m.user_id.slice(0, 8)]),
   );
-  const memberInfoLookup = new Map(
-    memberIds.map((m) => [m.user_id, infoMap.get(m.user_id)]),
-  );
+  const memberInfoLookup = new Map(memberIds.map((m) => [m.user_id, infoMap.get(m.user_id)]));
 
-  const totalActivities = interactions.length;
+  const totalActivities = sumCells(cells);
   // Filter leads belonging to filtered SDRs (by assigned_to)
   const filteredLeads = leads.filter((l) => l.assigned_to && filteredIds.includes(l.assigned_to));
   const totalLeadsCreated = filteredLeads.length;
@@ -94,14 +91,21 @@ export async function fetchPerformanceAnalyticsData(
   ).length;
 
   // Build lookup maps once — O(n) instead of O(n×m) per member
-  const interactionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
+  const cellsByUser = groupBy(cells, (c) => c.performed_by ?? '');
   const leadsByAssignee = groupBy(leads, (l) => l.assigned_to ?? '');
 
-  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactionsByUser, leadsByAssignee);
+  const sdrTable = buildSdrTable(filteredIds, memberLookup, cellsByUser, leadsByAssignee);
   const sdrComparison = buildSdrComparison(sdrTable);
-  const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
+  const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(cells, memberLookup);
 
-  const dailyControl = buildDailyControl(filteredIds, memberLookup, memberInfoLookup, interactionsByUser, leadsByAssignee);
+  const dailyControl = buildDailyControl(
+    filteredIds,
+    memberLookup,
+    memberInfoLookup,
+    cellsByUser,
+    performers,
+    leadsByAssignee,
+  );
 
   return {
     totalActivities,
@@ -119,13 +123,13 @@ export async function fetchPerformanceAnalyticsData(
 function buildSdrTable(
   memberIds: string[],
   memberLookup: Map<string, string>,
-  interactionsByUser: Map<string, InteractionQueryRow[]>,
+  cellsByUser: Map<string, InteractionCell[]>,
   leadsByAssignee: Map<string, LeadQueryRow[]>,
 ): SdrPerformanceRow[] {
   return memberIds
     .map((userId) => {
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
-      const userInteractions = interactionsByUser.get(userId) ?? [];
+      const userCells = cellsByUser.get(userId) ?? [];
       const userLeads = leadsByAssignee.get(userId) ?? [];
       // Qualified counts the user's OWN leads (assigned_to === userId, i.e.
       // userLeads) that reached qualified/won — same population as the
@@ -135,12 +139,12 @@ function buildSdrTable(
       const qualified = userLeads.filter(
         (l) => l.status === 'qualified' || l.status === 'won',
       ).length;
-      const meetings = userInteractions.filter((i) => i.type === 'meeting_scheduled').length;
+      const meetings = sumCells(userCells, (c) => c.type === 'meeting_scheduled');
 
       return {
         userId,
         userEmail,
-        activities: userInteractions.length,
+        activities: sumCells(userCells),
         leadsCreated: userLeads.length,
         qualified,
         qualificationRate: safeRate(qualified, userLeads.length),
@@ -159,33 +163,29 @@ function buildSdrComparison(sdrTable: SdrPerformanceRow[]): SdrActivityCompariso
 }
 
 function buildDailySdrTrend(
-  interactions: InteractionQueryRow[],
+  cells: InteractionCell[],
   memberLookup: Map<string, string>,
 ): { dailySdrTrend: DailySdrPerformanceEntry[]; dailySdrKeys: string[] } {
   // Count activities per SDR per day
   const sdrDayMap = new Map<string, Map<string, number>>();
   const sdrTotals = new Map<string, number>();
 
-  for (const interaction of interactions) {
-    if (!interaction.performed_by) continue;
-    const displayName = memberLookup.get(interaction.performed_by);
+  for (const cell of cells) {
+    if (!cell.performed_by) continue;
+    const displayName = memberLookup.get(cell.performed_by);
     if (!displayName) continue;
 
-    // Group by BRT day, not raw UTC. A 22h-BRT activity has a next-day UTC
-    // timestamp; `.slice(0,10)` on the raw ISO string would bucket it a day
-    // ahead, misaligning this trend from "Atividades por dia" (which shifts
-    // -3h). Match that shift here.
-    const dateStr = new Date(new Date(interaction.created_at).getTime() - 3 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    // Dia de Brasília (created_at − 3h), calculado no banco — o mesmo de
+    // "Atividades por dia". Uma atividade às 22h BRT cai no dia certo.
+    const dateStr = cell.day_brt;
 
-    sdrTotals.set(displayName, (sdrTotals.get(displayName) ?? 0) + 1);
+    sdrTotals.set(displayName, (sdrTotals.get(displayName) ?? 0) + cell.n);
 
     if (!sdrDayMap.has(dateStr)) {
       sdrDayMap.set(dateStr, new Map());
     }
     const dayMap = sdrDayMap.get(dateStr)!;
-    dayMap.set(displayName, (dayMap.get(displayName) ?? 0) + 1);
+    dayMap.set(displayName, (dayMap.get(displayName) ?? 0) + cell.n);
   }
 
   // Get top 5 SDRs by total activity
@@ -229,46 +229,53 @@ function buildDailyControl(
   memberIds: string[],
   memberLookup: Map<string, string>,
   memberInfoLookup: Map<string, MemberInfo | undefined>,
-  interactionsByUser: Map<string, InteractionQueryRow[]>,
+  cellsByUser: Map<string, InteractionCell[]>,
+  performers: Map<string | null, PerformerSummary>,
   leadsByAssignee: Map<string, LeadQueryRow[]>,
 ): DailyControlRow[] {
-  return memberIds.map((userId) => {
-    const userInteractions = interactionsByUser.get(userId) ?? [];
-    const userLeads = leadsByAssignee.get(userId) ?? [];
-    const prospecting = userLeads.filter((l) => l.status === 'contacted' || l.status === 'new').length;
-    const available = userLeads.filter((l) => l.status === 'new').length;
-    const won = userLeads.filter((l) => l.status === 'won').length;
-    const lost = userLeads.filter((l) => l.status === 'unqualified').length;
+  return memberIds
+    .map((userId) => {
+      const userCells = cellsByUser.get(userId) ?? [];
+      const userLeads = leadsByAssignee.get(userId) ?? [];
+      const prospecting = userLeads.filter(
+        (l) => l.status === 'contacted' || l.status === 'new',
+      ).length;
+      const available = userLeads.filter((l) => l.status === 'new').length;
+      const won = userLeads.filter((l) => l.status === 'won').length;
+      const lost = userLeads.filter((l) => l.status === 'unqualified').length;
 
-    const completed = userInteractions.filter((i) => ['sent', 'delivered', 'meeting_scheduled'].includes(i.type)).length;
-    const calls = userInteractions.filter((i) => i.channel === 'phone').length;
-    const emails = userInteractions.filter((i) => i.channel === 'email').length;
-    const research = userInteractions.filter((i) => i.channel === 'research' || i.type === 'research').length;
+      const total = sumCells(userCells);
+      const completed = sumCells(userCells, (c) =>
+        ['sent', 'delivered', 'meeting_scheduled'].includes(c.type),
+      );
+      const calls = sumCells(userCells, (c) => c.channel === 'phone');
+      const emails = sumCells(userCells, (c) => c.channel === 'email');
+      const research = sumCells(
+        userCells,
+        (c) => c.channel === 'research' || c.type === 'research',
+      );
 
-    // Find last activity timestamp
-    let lastActivityAt: string | undefined;
-    if (userInteractions.length > 0) {
-      lastActivityAt = userInteractions.reduce((latest, i) =>
-        i.created_at > latest ? i.created_at : latest, userInteractions[0]?.created_at ?? '');
-    }
+      // Última atividade = maior created_at do SDR (vem pronto do banco)
+      const lastActivityAt = total > 0 ? performers.get(userId)?.lastAt : undefined;
 
-    const info = memberInfoLookup.get(userId);
+      const info = memberInfoLookup.get(userId);
 
-    return {
-      userId,
-      userName: memberLookup.get(userId) ?? userId.slice(0, 8),
-      avatarUrl: info?.avatarUrl,
-      lastActivityAt,
-      prospecting,
-      available,
-      won,
-      lost,
-      pending: userInteractions.length - completed,
-      completed,
-      ignored: 0,
-      calls,
-      emails,
-      research,
-    };
-  }).sort((a, b) => b.completed - a.completed);
+      return {
+        userId,
+        userName: memberLookup.get(userId) ?? userId.slice(0, 8),
+        avatarUrl: info?.avatarUrl,
+        lastActivityAt,
+        prospecting,
+        available,
+        won,
+        lost,
+        pending: total - completed,
+        completed,
+        ignored: 0,
+        calls,
+        emails,
+        research,
+      };
+    })
+    .sort((a, b) => b.completed - a.completed);
 }
