@@ -1,11 +1,12 @@
 # Story: Conversão calculada no banco (RPC) em vez de ler todas as interações
 
 ## Status
-Draft
+Ready
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-10 | @po (Pax) | `*validate-story-draft`: **GO condicional → Ready** (nota 8,5/10). Vini escolheu a **opção B**. Correções aplicadas: decisão registrada; "funções ficam como estão" corrigido (a entrada muda, precisa de adaptador); risco de RLS por linha detalhado com regra de decisão; contrato de retorno e Definição de Pronto adicionados. |
 | 2026-09-10 | Vini + Claude | Story criada a partir da avaliação "paginar × agregar" da story `statistics-fetch-all-rows` (commit `64de0d57`). Aguarda @po validar e o Vini escolher a opção (A ou B). |
 
 ## Executor Assignment
@@ -45,13 +46,13 @@ Depois de `statistics-fetch-all-rows`, a tela Estatísticas › Conversão mostr
 - **Conversão por cadência:** para cada cadência não excluída (qualquer status) e leads do universo inscritos nela **em qualquer época**: inscritos, em contato (`contacted`/`qualified`/`won`), qualificados, ganhos, com `replied` no período, com `meeting_scheduled` no período.
 - **Por origem:** `created_by` nulo = "Import", senão "SDR"; qualificados = status `qualified`/`won`.
 
-## Opções
+## Opções (decidido: **B**, pelo Vini em 10/set)
 
 **A — RPC devolve os números prontos (um JSON com funil, velocidade, cadências e origem).**
 Menos dados trafegados (poucos KB). Mas a regra inteira muda para SQL e passa a existir em dois lugares enquanto os testes de TS não forem reescritos.
 
-**B — RPC devolve 1 linha por lead do universo, com marcadores (recomendada).**
-`lead_id, status, created_by, won_at, has_sent, has_meeting_scheduled, has_replied` + as inscrições que o cálculo usa. O banco faz só o trabalho pesado: juntar 58 mil interações em "sim/não" por lead. Continua limitado ao total de leads da org (hoje ≤ 6,3 mil linhas, qualquer período), e as funções `calculateFunnel`, `calculateVelocity`, `calculateCadenceConversion` e `calculateConversionByOrigin` ficam **como estão**, com os testes atuais.
+**B — RPC devolve 1 linha por lead do universo, com marcadores. ✅ ESCOLHIDA**
+`lead_id, status, created_by, won_at, has_sent, has_meeting_scheduled, has_replied` + as inscrições que o cálculo usa. O banco faz só o trabalho pesado: juntar 58 mil interações em "sim/não" por lead. Continua limitado ao total de leads da org (hoje ≤ 6,3 mil linhas, qualquer período). A **regra** de `calculateFunnel`, `calculateVelocity`, `calculateCadenceConversion` e `calculateConversionByOrigin` fica igual, mas `calculateFunnel` e `calculateCadenceConversion` hoje recebem a **lista de interações** — vão passar a receber os marcadores (trocar a assinatura ou um adaptador fino; os testes atuais continuam valendo).
 
 ## Scope
 
@@ -60,6 +61,7 @@ Menos dados trafegados (poucos KB). Mas a regra inteira muda para SQL e passa a 
    - `SECURITY INVOKER`, `STABLE`, org via `public.user_org_id()` (sem parâmetro de org) — a RLS de `leads`/`interactions` continua valendo e não entra na lista de funções `SECURITY DEFINER`.
    - `GRANT EXECUTE` só para `authenticated` e `service_role`; `REVOKE` de `anon`/`PUBLIC`.
    - Devolve 1 linha por lead do universo com os marcadores acima.
+   - **Contrato mínimo** (o que o TS usa hoje): universo → `lead_id uuid, status lead_status, created_by uuid, won_at timestamptz, has_sent bool, has_meeting_scheduled bool, has_replied bool`; inscrições → velocidade (`lead_id, enrolled_at, updated_at`, recorte do período + filtros) e vínculo lead↔cadência de **qualquer época** (`cadence_id, lead_id`, só leads do universo e cadências não excluídas ou a filtrada).
 2. Leitura das inscrições (velocidade + vínculo lead↔cadência) pelo mesmo RPC ou por uma 2ª função irmã — decidir no Checkpoint 1. `cadence_enrollments` **tem** `org_id` (o comentário "has no org_id column" no service está desatualizado) (conferido em prod: 0 linhas com `org_id` nulo) → dá para filtrar direto, sem os lotes de 300 ids de hoje.
 3. `conversion-analytics.service.ts` passa a chamar o RPC (paginado com `fetchAllRows` por segurança, ordem `lead_id`) em vez de ler `leads` + `interactions` + `cadence_enrollments`.
 4. `pnpm gen:types` no mesmo PR (regra do projeto).
@@ -89,11 +91,35 @@ Menos dados trafegados (poucos KB). Mas a regra inteira muda para SQL e passa a 
 
 ## Risks
 - **Número divergente por detalhe de regra** (ex.: interação de lead excluído, filtro de cadência só nas interações, `created_by` no filtro de SDR). Mitigação: AC1 com comparação automática em vários recortes antes do merge.
-- **RLS lenta dentro da função** (`SECURITY INVOKER` roda as políticas por linha). Mitigação: AC5; lembrar do padrão `(SELECT fn())` nas políticas.
+- **RLS lenta dentro da função** — conferido em prod (10/set): `interactions_org_read` e `enrollments_org_read` usam `org_id = user_org_id()` **sem** `(SELECT …)`, então a função pode ser chamada linha a linha nas ~58 mil interações (`leads_org_read` já usa o padrão bom). Regra de decisão no Checkpoint 1, medindo com `EXPLAIN ANALYZE` como gestor: se AC5 passar, segue; se não, **parar e mostrar ao Vini** as saídas — (1) migration separada trocando essas 2 políticas para `(SELECT user_org_id())` (melhora o app todo, mas mexe em RLS) ou (2) `SECURITY DEFINER` com checagem explícita de gestor + org, entrando na allowlist de funções DEFINER. Não escolher sozinho.
 - **`DROP` + `CREATE` de função reconcede `EXECUTE`** a `authenticated`/`PUBLIC` — conferir ACL depois de aplicar (lição de set/2026).
+
+## Definição de Pronto
+- AC1–AC6 marcados, com o resultado da comparação (AC1) e do `EXPLAIN ANALYZE` (AC5) colados no Dev Agent Record.
+- Migration aplicada em prod via MCP e ACL conferida depois de aplicar.
+- typecheck, lint, testes e build verdes; quality gate do @architect.
+- Nada de push/PR sem pedido explícito do Vini.
 
 ## Business Value
 Tela de Conversão confiável para qualquer período (trimestre/ano), abrindo em menos tempo e sem gastar ~7 MB por abertura. Serve de molde para tirar o mesmo peso de Atividades e Performance.
 
 ## Dependencies
-- `statistics-fetch-all-rows` (commit `64de0d57`) — é a base de comparação do AC1.
+- `statistics-fetch-all-rows` (commit `64de0d57`) — é a base de comparação do AC1. Precisa estar **no ar** antes, senão a comparação é contra o código antigo (cortado).
+- Índices usados (conferidos em prod 10/set): `idx_interactions_org`, `idx_interactions_type`, `idx_interactions_org_type_channel`, `idx_interactions_lead`, `idx_cadence_enrollments_org_id`, `idx_enrollments_lead`.
+- A tela é só de gestor (`getManagerOrgId`) e usa a sessão do usuário → `SECURITY INVOKER` enxerga todos os leads da org (`leads_org_read` libera gestor).
+
+## PO Validation (10/set/2026 — Pax)
+| # | Item | Resultado |
+|---|---|---|
+| 1 | Título claro | ✅ |
+| 2 | Descrição completa | ✅ medição de prod + regra atual |
+| 3 | AC testáveis | ✅ (AC1 com comparação automática) |
+| 4 | Escopo IN/OUT | ✅ |
+| 5 | Dependências | ✅ (após ajuste) |
+| 6 | Complexidade | ✅ M |
+| 7 | Valor de negócio | ✅ |
+| 8 | Riscos | ✅ (RLS concretizado) |
+| 9 | Definição de pronto | ✅ (adicionada) |
+| 10 | Alinhamento | ⚠️ sem epic/PRD — é continuação da `statistics-fetch-all-rows` |
+
+**Decisão: GO** — nota 8,5/10, confiança Média-Alta (a incerteza é o desempenho da RLS, tratado no Checkpoint 1). Executor @dev + @data-engineer (migration), gate @architect ✅ (diferentes). CodeRabbit: N/A (sem `coderabbit_integration` no core-config).
