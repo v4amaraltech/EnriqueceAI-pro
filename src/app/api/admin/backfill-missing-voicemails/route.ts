@@ -5,7 +5,10 @@ import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { classifyApi4ComCall, getSignificantThreshold } from '@/features/calls/services/api4com-classification';
-import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import {
+  parseApi4ComTimestamp,
+  toApi4ComFilterTimestamp,
+} from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 300;
 
@@ -20,6 +23,11 @@ export const maxDuration = 300;
  * Insert-only: existing rows (matched by primary api4com_call_id, alt_ids,
  * or fallback) are skipped. Use the regular reconcile worker for top-up
  * updates.
+ *
+ * `sinceIso` / `untilIso` are REAL UTC instants. They are converted to
+ * API4COM's BRT-disguised-as-Z clock before going into the filter — sent raw,
+ * the window landed 3h off (same bug that kept the hourly reconcile at
+ * `fetched: 0` until 2026-09-10).
  *
  * curl -X POST .../api/admin/backfill-missing-voicemails \
  *   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
@@ -59,6 +67,13 @@ export async function POST(request: Request) {
   if (!body.orgId || !body.ramals?.length || !body.hangupCause || !body.sinceIso || !body.untilIso) {
     return NextResponse.json({ error: 'orgId, ramals, hangupCause, sinceIso, untilIso required' }, { status: 400 });
   }
+
+  const since = new Date(body.sinceIso);
+  const until = new Date(body.untilIso);
+  if (Number.isNaN(since.getTime()) || Number.isNaN(until.getTime()) || since > until) {
+    return NextResponse.json({ error: 'sinceIso/untilIso must be valid ISO dates with sinceIso <= untilIso' }, { status: 400 });
+  }
+  const startedAtFilter = { gte: toApi4ComFilterTimestamp(since), lte: toApi4ComFilterTimestamp(until) };
 
   const supabase = createServiceRoleClient();
 
@@ -100,7 +115,7 @@ export async function POST(request: Request) {
       where: {
         from: ramal,
         hangup_cause: body.hangupCause,
-        started_at: { gte: body.sinceIso, lte: body.untilIso },
+        started_at: startedAtFilter,
       },
     });
 
