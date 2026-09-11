@@ -168,3 +168,57 @@ Claude Opus 5 (@dev Dex)
 - A função já está em prod e o app atual não a usa → o deploy do app pode ir a qualquer momento.
 - Depois do deploy: abrir Estatísticas › Conversão (30 e 90 dias) e comparar com os números acima.
 - Próximas candidatas no mesmo molde: Atividades e Performance (story nova).
+
+## QA Results
+
+### Review Date: 2026-09-11
+
+### Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+Mudança bem delimitada: o service ficou com uma chamada ao RPC + parte pura (`buildConversionAnalytics`) testável sem banco. A regra de negócio não mudou — só a fonte dos dados (marcadores por lead em vez de lista de interações). Migration limpa: `SECURITY INVOKER`, `STABLE`, `search_path = ''`, sem SQL dinâmico, org via `user_org_id()`.
+
+### Verificação independente (feita nesta revisão)
+- **Sem drift:** md5 do corpo da função em prod = md5 do corpo no arquivo `20260911030704_get_conversion_universe.sql` (`620fbcb2…`, 2.229 bytes); `prosecdef=false`, `provolatile=s`, `search_path=""`.
+- **Quem chama:** só `statistics/conversion` e `statistics/prospecting/conversion` via action com a sessão do gestor — nenhum chamador com service role (que receberia vazio, pois `user_org_id()` seria nulo).
+- **Org consistente:** `getManagerOrgId` e `user_org_id()` leem a mesma `organization_members` ativa; hoje 0 usuários com mais de uma org ativa.
+- **SDR chamando o RPC direto:** recebe só os leads que a RLS de `leads` já libera; interações/inscrições são lidas só para leads visíveis → nada além do que ele já lê nas tabelas.
+- Testes relacionados: 103/103 ✅ (20 arquivos).
+
+### Rastreabilidade (AC → evidência)
+| AC | Given / When / Then | Evidência |
+|---|---|---|
+| AC1 | Dado 6 recortes de prod, quando a Conversão usa o RPC, então os números são iguais aos do código anterior | Comparação manual em prod (funil/velocidade/origem 6/6, cadências 39/39) + unit `buildConversionAnalytics` (5) |
+| AC2 | Quando a tela carrega, não lê `interactions` | Código: service só lê `cadences` + RPC |
+| AC3 | Dado 1 ano, então sem truncar | 704 ms em prod; teste de paginação do RPC (3.000 linhas, teto 1.000) |
+| AC4 | Quando `anon` chama, então nega | `has_function_privilege` + chamada real "permission denied" |
+| AC5 | Dado 90 dias como gestor, então < 1 s | 149–233 ms |
+| AC6 | Tipos regenerados | commit `41ea1e53` |
+
+### Compliance Check
+- Coding Standards: ✓
+- Project Structure: ✓ (migration 14 dígitos = versão gravada em prod; tipos em commit separado)
+- Testing Strategy: ✓ (unit + fake PostgREST); ⚠️ SQL sem teste automatizado (ver TEST-001)
+- All ACs Met: ✓
+
+### Improvements Checklist
+- [ ] TEST-001 (low) — regra do universo vive agora em SQL sem teste no CI; considerar caso em `tests/integration/` (roda com Supabase local) numa story futura.
+- [ ] REL-001 (low) — erro na leitura de `cadences` segue silencioso (tabela por cadência some) — comportamento anterior, fora do escopo.
+- [ ] PERF-001 (info) — o RPC roda 2× por abertura (2ª página vazia confirma o fim); ~2×150 ms em 90d, aceitável.
+- [ ] DOC-001 (low) — CodeRabbit não rodou (CLI sem login).
+- [ ] REQ-001 (low) — conferir a tela depois do deploy (V4 30d: 3.456 / 3.381 / 106 / 81).
+
+### Security Review
+PASS — sem `SECURITY DEFINER`, `anon` sem EXECUTE, parâmetros tipados, sem exposição além da RLS existente.
+
+### Performance Considerations
+PASS — 90d de ~1,3 s + ~7 MB para ~0,2 s + ~1,5 MB.
+
+### Files Modified During Review
+Nenhum arquivo de código. Só esta seção e `docs/qa/gates/conversion-analytics-rpc.yml`.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/conversion-analytics-rpc.yml
+
+### Recommended Status
+✓ Ready for Done — depois do deploy e da conferência da tela (REQ-001). Decisão final do Vini.

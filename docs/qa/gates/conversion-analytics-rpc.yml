@@ -1,0 +1,53 @@
+schema: 1
+story: 'conversion-analytics-rpc'
+story_title: 'Conversão calculada no banco (RPC) em vez de ler todas as interações'
+gate: PASS
+status_reason: 'Números idênticos ao código anterior em 6 recortes de prod, função em prod sem drift e sem acesso de anon, 90 dias em ~0,2 s. Restam só itens low (teste SQL no CI, CodeRabbit sem login, conferência da tela após deploy).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-09-11T04:00:00Z'
+quality_score: 100
+expires: '2026-09-25T04:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'A regra do universo (get_conversion_universe) não tem teste automatizado de SQL; a paridade foi provada à mão contra prod.'
+    suggested_action: 'Caso em tests/integration/ com Supabase local numa story futura.'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'CodeRabbit não rodou — CLI instalada sem login.'
+    suggested_action: 'Vini: `coderabbit auth login` numa sessão interativa; depois `coderabbit --prompt-only -t committed --base main`.'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'Tela não conferida no navegador (sem login de gestor no ambiente local).'
+    suggested_action: 'Após o deploy, abrir Estatísticas › Conversão 30d na V4 Amaral: 3.456 / 3.381 / 106 / 81.'
+waiver: { active: false }
+evidence:
+  tests_reviewed: 8
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'SECURITY INVOKER, search_path vazio, anon sem EXECUTE (has_function_privilege + chamada real negada), sem SQL dinâmico.'
+  performance:
+    status: PASS
+    notes: '90d 149–233 ms como gestor; 1 ano 704 ms; payload ~1,5 MB (antes ~7 MB).'
+  reliability:
+    status: PASS
+    notes: 'Erro do RPC vira erro da tela (fetchAllRows lança). Função em prod idêntica ao arquivo (md5).'
+  maintainability:
+    status: PASS
+    notes: 'Regra de negócio continua em TS (buildConversionAnalytics, testada); SQL só agrega marcadores.'
+recommendations:
+  immediate: []
+  future:
+    - action: 'Teste de integração da função com Supabase local'
+      refs: ['supabase/migrations/20260911030704_get_conversion_universe.sql']
+    - action: 'Mesmo molde para Atividades e Performance'
+      refs: ['src/features/statistics/services/activity-analytics.service.ts', 'src/features/statistics/services/performance-analytics.service.ts']
+deploy_order:
+  - 'Migration já aplicada em prod (20260911030704) — app atual não depende dela.'
+  - 'Push/PR/merge (@devops, só com pedido do Vini) → deploy Coolify → conferir /api/version.'
+  - 'Conferir a tela (REQ-001).'
