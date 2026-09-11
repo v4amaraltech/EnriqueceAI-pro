@@ -5,6 +5,7 @@ import {
   fetchAttendanceRateRanking,
   fetchLeadsFinishedRanking,
   fetchLeadsOpenedRanking,
+  fetchLeadsToOpenRanking,
   fetchMeetingsHeldRanking,
   fetchRankingData,
 } from './ranking-metrics.service';
@@ -428,5 +429,72 @@ describe('fetchRankingData', () => {
     expect(result).toHaveProperty('activitiesDone');
     expect(result).toHaveProperty('attendanceRate');
     expect(result.leadsFinished.total).toBe(0);
+  });
+});
+
+describe('fetchLeadsToOpenRanking — mesma fonte do filtro "Sem cadência" de /leads', () => {
+  // Chain que responde { count } conforme o SDR passado em .eq('assigned_to', X).
+  function createCountChain(countBySdr: Record<string, number>) {
+    let sdr = '';
+    const chain: Record<string, unknown> = {};
+    chain.select = vi.fn(() => chain);
+    chain.is = vi.fn(() => chain);
+    chain.eq = vi.fn((col: string, val: string) => {
+      if (col === 'assigned_to') sdr = val;
+      return chain;
+    });
+    chain.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ count: countBySdr[sdr] ?? 0, error: null }).then(resolve);
+    return chain;
+  }
+
+  function setup(countBySdr: Record<string, number>) {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }] });
+    const tables: string[] = [];
+    const countChains: Array<Record<string, unknown>> = [];
+    const supabase = createMockSupabase((table) => {
+      tables.push(table);
+      if (table === 'organization_members') return sdrsChain;
+      const c = createCountChain(countBySdr);
+      countChains.push(c);
+      return c;
+    });
+    return { supabase, tables, countChains };
+  }
+
+  it('conta por SDR na view leads_no_active_enrollment (status new, não deletado)', async () => {
+    const { supabase, tables, countChains } = setup({ u1: 350, u2: 12, u3: 0 });
+
+    const result = await fetchLeadsToOpenRanking(supabase as never, ORG, baseFilters);
+
+    expect(tables.filter((t) => t !== 'organization_members')).toEqual([
+      'leads_no_active_enrollment',
+      'leads_no_active_enrollment',
+      'leads_no_active_enrollment',
+    ]);
+    const first = countChains[0]!;
+    expect(first.select).toHaveBeenCalledWith('id', { count: 'exact', head: true });
+    expect(first.eq).toHaveBeenCalledWith('org_id', ORG);
+    expect(first.eq).toHaveBeenCalledWith('status', 'new');
+    expect(first.is).toHaveBeenCalledWith('deleted_at', null);
+
+    expect(result.total).toBe(362);
+    // SDR com fila zerada não aparece na lista.
+    expect(result.sdrBreakdown.map((e) => [e.userId, e.value])).toEqual([
+      ['u1', 350],
+      ['u2', 12],
+    ]);
+    expect(result.averagePerSdr).toBe(181);
+    expect(result.monthTarget).toBe(0);
+  });
+
+  it('respeita o filtro de SDR do dashboard', async () => {
+    const { supabase, countChains } = setup({ u1: 350, u2: 12, u3: 5 });
+
+    const result = await fetchLeadsToOpenRanking(supabase as never, ORG, { ...baseFilters, userIds: ['u2'] });
+
+    expect(countChains).toHaveLength(1);
+    expect(result.total).toBe(12);
+    expect(result.sdrBreakdown).toEqual([{ userId: 'u2', userName: '', value: 12 }]);
   });
 });
