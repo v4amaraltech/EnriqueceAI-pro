@@ -1,11 +1,12 @@
 # Story: Estatísticas leem todas as linhas do período (fim do `.limit(10000)`)
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @devops (Gage) | Ready for Review → **Done**. PR #385 mergeado 11/set 09:18 UTC (squash `54274a25`, com autorização do Vini), ✅ **no ar** 09:22 UTC (`/api/version` = `54274a2`). CI verde (4m44s). Todas as leituras das estatísticas e do CSV de ligações paginadas em prod. Tela de Conversão conferida no Chrome do Vini (01–11/set) = banco. |
 | 2026-09-10 | @dev (Dex) | Implementado. typecheck ✅ lint ✅ 1.977 testes ✅ (+6 novos) build ✅. Os 6 testes novos falham contra o código antigo (conferido). Nada commitado (regra git manual). |
 | 2026-09-10 | Vini + Claude | Story criada a partir da descoberta em `call-effectiveness-view` (`content-range: 0-9999/15033`). |
 

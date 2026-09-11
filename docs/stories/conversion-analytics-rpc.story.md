@@ -1,11 +1,12 @@
 # Story: Conversão calculada no banco (RPC) em vez de ler todas as interações
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @devops (Gage) | Ready for Review → **Done**. PR #385 mergeado 11/set 09:18 UTC (squash `54274a25`, com autorização do Vini), ✅ **no ar** 09:22 UTC (`/api/version` = `54274a2`). CI verde (4m44s). Tela Estatísticas › Conversão conferida no Chrome do Vini como V4 Company Amaral (período 01–11/set): **1.863 / 1.863 / 34 / 19** = `get_conversion_universe` no banco como gestor; tabela por cadência e velocidade renderizadas; sem erro no console. Migration `20260911030704` já estava em prod desde 11/set 03:07 UTC. |
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Migration aplicada em prod com autorização do Vini (versão `20260911030704`, arquivo renomeado); ACL conferida; função real conferida como gestor (30d = 3456/3381/106/81, 91 ms; 90d 233 ms); `pnpm gen:types`; typecheck ✅ lint ✅ 1.983 testes ✅ build ✅. CodeRabbit não rodou (CLI sem login). Nada commitado. |
 | 2026-09-11 | @dev (Dex) | Ready → **InProgress**. T1–T4 feitas (SQL validada em prod, só leitura). typecheck ✅ lint ✅ 1.982 testes ✅. **Parado antes de aplicar a migration em prod** — aguarda autorização do Vini; depois: `pnpm gen:types`, build, AC4/AC6. |
 | 2026-09-10 | @po (Pax) | `*validate-story-draft`: **GO condicional → Ready** (nota 8,5/10). Vini escolheu a **opção B**. Correções aplicadas: decisão registrada; "funções ficam como estão" corrigido (a entrada muda, precisa de adaptador); risco de RLS por linha detalhado com regra de decisão; contrato de retorno e Definição de Pronto adicionados. |
