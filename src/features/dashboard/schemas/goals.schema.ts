@@ -7,6 +7,8 @@ const userGoalSchema = z.object({
   leadsOpenedTarget: z.number().int().min(0).optional().default(0),
   meetingsScheduledTarget: z.number().int().min(0).optional().default(0),
   meetingsHeldTarget: z.number().int().min(0).optional().default(0),
+  callsTarget: z.number().int().min(0).optional().default(0),
+  callsConnectedTarget: z.number().int().min(0).optional().default(0),
   // legado (deployment skew): clientes antigos ainda enviam "oportunidades".
   // Aceito e ignorado — a coluna opportunity_target virou vestigial.
   opportunityTarget: z.number().int().min(0).optional(),

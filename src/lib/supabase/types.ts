@@ -2870,6 +2870,8 @@ export type Database = {
       goals_per_user: {
         Row: {
           activities_target: number;
+          calls_connected_target: number;
+          calls_target: number;
           conversion_target: number;
           created_at: string;
           id: string;
@@ -2884,6 +2886,8 @@ export type Database = {
         };
         Insert: {
           activities_target?: number;
+          calls_connected_target?: number;
+          calls_target?: number;
           conversion_target?: number;
           created_at?: string;
           id?: string;
@@ -2898,6 +2902,8 @@ export type Database = {
         };
         Update: {
           activities_target?: number;
+          calls_connected_target?: number;
+          calls_target?: number;
           conversion_target?: number;
           created_at?: string;
           id?: string;

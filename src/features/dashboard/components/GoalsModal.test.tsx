@@ -30,8 +30,8 @@ const goalsData: GoalsData = {
   meetingsScheduledTarget: 100,
   meetingsHeldTarget: 80,
   userGoals: [
-    { userId: 'u1', userName: 'alice', leadsOpenedTarget: 20, previousTarget: 15, meetingsScheduledTarget: 16, meetingsHeldTarget: 10 },
-    { userId: 'u2', userName: 'bob', leadsOpenedTarget: 30, previousTarget: null, meetingsScheduledTarget: 9, meetingsHeldTarget: 7 },
+    { userId: 'u1', userName: 'alice', leadsOpenedTarget: 20, previousTarget: 15, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176 },
+    { userId: 'u2', userName: 'bob', leadsOpenedTarget: 30, previousTarget: null, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0 },
   ],
 };
 
@@ -97,10 +97,29 @@ describe('GoalsModal', () => {
         meetingsScheduledTarget: 100,
         meetingsHeldTarget: 80,
         userGoals: [
-          { userId: 'u1', leadsOpenedTarget: 20, meetingsScheduledTarget: 16, meetingsHeldTarget: 10 },
-          { userId: 'u2', leadsOpenedTarget: 30, meetingsScheduledTarget: 9, meetingsHeldTarget: 7 },
+          { userId: 'u1', leadsOpenedTarget: 20, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176 },
+          { userId: 'u2', leadsOpenedTarget: 30, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0 },
         ],
       });
+    });
+  });
+
+  it('edits and saves the per-SDR calls targets', async () => {
+    const user = userEvent.setup();
+    render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
+
+    await screen.findByText('bob');
+    const calls = screen.getByLabelText('Meta de ligações de bob');
+    const connected = screen.getByLabelText('Meta de ligações conectadas de bob');
+    await user.clear(calls);
+    await user.type(calls, '1800');
+    await user.clear(connected);
+    await user.type(connected, '140');
+    await user.click(screen.getByRole('button', { name: 'Salvar metas' }));
+
+    await waitFor(() => {
+      const payload = mockSaveGoals.mock.calls[0]?.[0] as { userGoals: Array<Record<string, unknown>> };
+      expect(payload.userGoals[1]).toMatchObject({ userId: 'u2', callsTarget: 1800, callsConnectedTarget: 140 });
     });
   });
 

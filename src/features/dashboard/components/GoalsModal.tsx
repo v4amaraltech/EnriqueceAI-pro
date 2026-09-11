@@ -119,7 +119,12 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   function updateUserGoalField(
     userId: string,
-    field: 'leadsOpenedTarget' | 'meetingsScheduledTarget' | 'meetingsHeldTarget',
+    field:
+      | 'leadsOpenedTarget'
+      | 'meetingsScheduledTarget'
+      | 'meetingsHeldTarget'
+      | 'callsTarget'
+      | 'callsConnectedTarget',
     value: number,
   ) {
     setUserGoals((prev) =>
@@ -142,6 +147,8 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
           leadsOpenedTarget: ug.leadsOpenedTarget,
           meetingsScheduledTarget: ug.meetingsScheduledTarget,
           meetingsHeldTarget: ug.meetingsHeldTarget,
+          callsTarget: ug.callsTarget,
+          callsConnectedTarget: ug.callsConnectedTarget,
         })),
       });
 
@@ -436,6 +443,36 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                             updateUserGoalField(ug.userId, 'meetingsHeldTarget', Number(e.target.value) || 0)
                           }
                           aria-label={`Meta de reuniões realizadas de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Meta de ligações */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">ligações</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={ug.callsTarget}
+                          onChange={(e) =>
+                            updateUserGoalField(ug.userId, 'callsTarget', Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de ligações de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Meta de ligações conectadas */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">conectadas</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={ug.callsConnectedTarget}
+                          onChange={(e) =>
+                            updateUserGoalField(ug.userId, 'callsConnectedTarget', Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de ligações conectadas de ${ug.userName}`}
                         />
                       </div>
 

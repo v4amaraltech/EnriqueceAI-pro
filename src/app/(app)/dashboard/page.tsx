@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 
 import { requireAuth } from '@/lib/auth/require-auth';
+import { isUuid } from '@/lib/utils/uuid';
 
 import { EmptyState } from '@/shared/components/EmptyState';
 
@@ -11,6 +12,7 @@ import { getDashboardData } from '@/features/dashboard/actions/get-dashboard-dat
 import { getInsightsData } from '@/features/dashboard/actions/get-insights-data';
 import { getRankingData } from '@/features/dashboard/actions/get-ranking-data';
 import { getResponseTimeData } from '@/features/dashboard/actions/get-response-time';
+import { getSdrPaceData } from '@/features/dashboard/actions/get-sdr-pace-data';
 import { DashboardView } from '@/features/dashboard/components/DashboardView';
 import type { DashboardFilters } from '@/features/dashboard/types';
 import { brtNowParts, currentMonthBrt } from '@/features/dashboard/utils/brt-now';
@@ -56,11 +58,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const safe = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
     p.catch((err) => { console.error('[dashboard] Query failed:', err); return fallback; });
 
-  const [result, rankingResult, insightsResult, responseTimeResult] = await Promise.all([
+  // SDR da seção "SDR selecionado" — inválido/ausente cai no padrão da action.
+  const sdrParam = typeof params.sdr === 'string' && isUuid(params.sdr) ? params.sdr : undefined;
+
+  const [result, rankingResult, insightsResult, responseTimeResult, sdrPaceResult] = await Promise.all([
     safe(getDashboardData(filters), { success: false as const, error: 'Erro ao carregar métricas' }),
     safe(getRankingData(filters), { success: false as const, error: 'Erro ao carregar ranking' }),
     safe(getInsightsData(filters), { success: false as const, error: 'Erro ao carregar insights' }),
     safe(getResponseTimeData(30, { from: dateFrom, to: dateTo }), { success: false as const, error: 'Erro ao carregar tempo de resposta' }),
+    safe(getSdrPaceData({ month, userId: sdrParam }), { success: false as const, error: 'Erro ao carregar SDR selecionado' }),
   ]);
 
   if (!result.success) {
@@ -84,6 +90,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ranking={rankingResult.success ? rankingResult.data : undefined}
         insights={insightsResult.success ? insightsResult.data : undefined}
         responseTime={responseTimeResult.success ? responseTimeResult.data : undefined}
+        sdrPace={sdrPaceResult.success ? sdrPaceResult.data : undefined}
       />
     </div>
   );

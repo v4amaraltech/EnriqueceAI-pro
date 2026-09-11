@@ -112,6 +112,8 @@ export interface UserGoalRow {
   previousTarget: number | null; // referência do mês anterior (leads abertos)
   meetingsScheduledTarget: number; // meta individual de reuniões marcadas
   meetingsHeldTarget: number; // meta individual de reuniões realizadas
+  callsTarget: number; // meta individual de ligações (outbound) no mês
+  callsConnectedTarget: number; // meta individual de ligações conectadas no mês
 }
 
 export interface GoalsData {
@@ -123,6 +125,36 @@ export interface GoalsData {
   meetingsScheduledTarget: number;
   meetingsHeldTarget: number;
   userGoals: UserGoalRow[];
+}
+
+// Seção "SDR selecionado" — realizado × meta individual do mês
+
+export interface SdrPaceVolumes {
+  leadsOpened: number;
+  meetingsScheduled: number;
+  meetingsHeld: number;
+  calls: number;
+  callsConnected: number;
+}
+
+export interface SdrPaceMetrics {
+  actual: SdrPaceVolumes;
+  /** Metas individuais (`goals_per_user`) do SDR no mês; 0 = sem meta. */
+  target: SdrPaceVolumes;
+}
+
+export interface SdrOption {
+  userId: string;
+  userName: string;
+  avatarUrl?: string;
+}
+
+export interface SdrPaceData {
+  month: string; // YYYY-MM
+  sdrs: SdrOption[];
+  /** `null` quando a org não tem SDR ativo. */
+  selectedUserId: string | null;
+  metrics: SdrPaceMetrics | null;
 }
 
 export interface ResponseTimeByUser {
