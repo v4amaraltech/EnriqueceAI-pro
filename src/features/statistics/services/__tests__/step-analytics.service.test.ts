@@ -14,6 +14,9 @@ function createMockSupabase(
     in: () => interactionsChain,
     not: () => interactionsChain,
     limit: () => interactionsChain,
+    order: () => interactionsChain,
+    range: (from: number, to: number) =>
+      Promise.resolve({ data: interactions.slice(from, to + 1), error: null }),
     then: (resolve: (v: { data: unknown[] }) => void) => resolve({ data: interactions }),
   };
 

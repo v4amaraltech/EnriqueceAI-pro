@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
 import { CONVERSION_COLORS } from '@/shared/constants/chart-colors';
@@ -14,6 +15,7 @@ import type {
 } from '../types/conversion-analytics.types';
 import type { EnrollmentQueryRow, InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
+import { readAllRows } from './read-all-rows';
 
 interface CadenceRow {
   id: string;
@@ -31,53 +33,42 @@ export async function fetchConversionAnalyticsData(
   // Universe = leads created in the period ∪ leads touched by any interaction
   // in the period. Without this, "Contactados" could count interactions on
   // leads from previous periods, producing >100% conversion ratios.
-  let periodLeadsQuery = from(supabase, 'leads')
-    .select('id, status, created_at, created_by, won_at')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
+  //
+  // Todas as leituras são paginadas (antes `.limit(10000)`/`.limit(5000)`: a
+  // V4 Amaral tem ~24 mil interações em 30 dias e ~58 mil em 90 — set/2026).
+  const leadsBase = () => {
+    const q = from(supabase, 'leads')
+      .select('id, status, created_at, created_by, won_at')
+      .eq('org_id', orgId)
+      .is('deleted_at', null);
+    return userIds && userIds.length > 0 ? q.in('created_by', userIds) : q;
+  };
 
-  if (userIds && userIds.length > 0) {
-    periodLeadsQuery = periodLeadsQuery.in('created_by', userIds);
-  }
+  const periodLeads = await readAllRows<LeadQueryRow>('conversão: leads do período', () =>
+    leadsBase().gte('created_at', periodStart).lte('created_at', periodEnd).order('id', { ascending: true }),
+  );
 
-  const { data: rawPeriodLeads } = (await periodLeadsQuery.limit(10000)) as { data: LeadQueryRow[] | null };
-  const periodLeads = rawPeriodLeads ?? [];
-
-  let intQuery = from(supabase, 'interactions')
-    .select('type, lead_id, cadence_id, created_at')
-    .eq('org_id', orgId)
-    .gte('created_at', periodStart)
-    .lte('created_at', periodEnd);
-
-  if (isUuid(cadenceId)) {
-    intQuery = intQuery.eq('cadence_id', cadenceId);
-  }
-
-  const { data: rawInteractions } = (await intQuery.limit(10000)) as { data: InteractionQueryRow[] | null };
-  const allInteractions = rawInteractions ?? [];
+  const allInteractions = await readAllRows<InteractionQueryRow>('conversão: interações', () => {
+    let q = from(supabase, 'interactions')
+      .select('type, lead_id, cadence_id, created_at')
+      .eq('org_id', orgId)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+    if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
+    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
+  });
 
   const periodLeadIds = new Set(periodLeads.map((l) => l.id));
   const touchedOnlyIds = Array.from(
     new Set(allInteractions.map((i) => i.lead_id).filter((id) => !periodLeadIds.has(id))),
   );
 
-  let touchedLeads: LeadQueryRow[] = [];
-  if (touchedOnlyIds.length > 0) {
-    let touchedQuery = from(supabase, 'leads')
-      .select('id, status, created_at, created_by, won_at')
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .in('id', touchedOnlyIds);
-
-    if (userIds && userIds.length > 0) {
-      touchedQuery = touchedQuery.in('created_by', userIds);
-    }
-
-    const { data: rawTouched } = (await touchedQuery.limit(10000)) as { data: LeadQueryRow[] | null };
-    touchedLeads = rawTouched ?? [];
-  }
+  // Em lotes: com um `.in()` só, ~2.400 ids (30 dias, V4 Amaral) passavam do
+  // limite de URL do PostgREST (HTTP 414) e a lista voltava VAZIA em silêncio.
+  const touchedLeads = await chunkedIn<LeadQueryRow>(
+    touchedOnlyIds,
+    (chunk) => leadsBase().in('id', chunk) as unknown as PromiseLike<{ data: LeadQueryRow[] | null; error: unknown }>,
+  );
 
   // Status-transition leads: ganhos/perdidos/reuniões realizadas no período.
   // Sem este passo perdemos leads que o closer fecha sem nenhum 'sent' nem
@@ -86,20 +77,13 @@ export async function fetchConversionAnalyticsData(
   // As 3 queries (uma por coluna de transição) são independentes e o resultado
   // é deduplicado por id adiante → buscadas em paralelo.
   const transitionResults = await Promise.all(
-    transitionDateCols.map((col) => {
-      let q = from(supabase, 'leads')
-        .select('id, status, created_at, created_by, won_at')
-        .eq('org_id', orgId)
-        .is('deleted_at', null)
-        .gte(col, periodStart)
-        .lte(col, periodEnd);
-      if (userIds && userIds.length > 0) q = q.in('created_by', userIds);
-      return q.limit(5000);
-    }),
+    transitionDateCols.map((col) =>
+      readAllRows<LeadQueryRow>(`conversão: leads por ${col}`, () =>
+        leadsBase().gte(col, periodStart).lte(col, periodEnd).order('id', { ascending: true }),
+      ),
+    ),
   );
-  const transitionLeads: LeadQueryRow[] = transitionResults.flatMap(
-    (res) => (res as { data: LeadQueryRow[] | null }).data ?? [],
-  );
+  const transitionLeads: LeadQueryRow[] = transitionResults.flat();
 
   const leadsMap = new Map<string, LeadQueryRow>();
   for (const l of periodLeads) leadsMap.set(l.id, l);
@@ -122,18 +106,15 @@ export async function fetchConversionAnalyticsData(
   // Period-filtered: used by velocity calculation, which needs enrolled_at/updated_at
   // duration on enrollments started in the period.
   const cadenceIds = isUuid(cadenceId) ? [cadenceId] : cadences.map((c) => c.id);
-  let enrQuery = from(supabase, 'cadence_enrollments')
-    .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
-    .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
-    .gte('enrolled_at', periodStart)
-    .lte('enrolled_at', periodEnd);
-
-  if (userIds && userIds.length > 0) {
-    enrQuery = enrQuery.in('enrolled_by', userIds);
-  }
-
-  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
-  const enrollments = rawEnrollments ?? [];
+  const enrollments = await readAllRows<EnrollmentQueryRow>('conversão: enrollments', () => {
+    let q = from(supabase, 'cadence_enrollments')
+      .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
+      .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
+      .gte('enrolled_at', periodStart)
+      .lte('enrolled_at', periodEnd);
+    if (userIds && userIds.length > 0) q = q.in('enrolled_by', userIds);
+    return q.order('id', { ascending: true });
+  });
 
   // Cadence membership for every universe lead, regardless of when they enrolled.
   // Without this, leads enrolled before the period but qualified/won inside it

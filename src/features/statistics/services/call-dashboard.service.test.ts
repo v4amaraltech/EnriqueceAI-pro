@@ -16,6 +16,7 @@ function createMockSupabase(calls: Record<string, unknown>[], members: Record<st
     in: () => callsChain,
     order: () => callsChain,
     limit: () => callsChain,
+    range: (from: number, to: number) => Promise.resolve({ data: calls.slice(from, to + 1), error: null }),
     then: (resolve: (v: { data: unknown[] }) => void) => resolve({ data: calls }),
   };
 

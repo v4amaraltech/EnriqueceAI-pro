@@ -14,6 +14,7 @@ import type {
 } from '../types/email-analytics.types';
 import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
+import { readAllRows } from './read-all-rows';
 
 export async function fetchEmailAnalyticsData(
   supabase: SupabaseClient,
@@ -44,7 +45,8 @@ export async function fetchEmailAnalyticsData(
     }
   }
 
-  const buildBaseQuery = () => {
+  // Paginado (antes `.limit(10000)`, que cortava em silêncio — set/2026).
+  const buildBaseQuery = (leadChunk?: string[]) => {
     let q = from(supabase, 'interactions')
       .select('type, lead_id, cadence_id, created_at')
       .eq('org_id', orgId)
@@ -52,19 +54,18 @@ export async function fetchEmailAnalyticsData(
       .gte('created_at', periodStart)
       .lte('created_at', periodEnd);
     if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
-    return q;
+    if (leadChunk) q = q.in('lead_id', leadChunk);
+    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
   };
 
   let interactions: InteractionQueryRow[];
   if (leadIdFilter && leadIdFilter.length > 0) {
-    interactions = await chunkedIn<InteractionQueryRow>(leadIdFilter, (chunk) =>
-      buildBaseQuery()
-        .in('lead_id', chunk)
-        .limit(10000) as unknown as PromiseLike<{ data: InteractionQueryRow[] | null; error: unknown }>,
-    );
+    interactions = await chunkedIn<InteractionQueryRow>(leadIdFilter, async (chunk) => ({
+      data: await readAllRows<InteractionQueryRow>('e-mail: interações', () => buildBaseQuery(chunk)),
+      error: null,
+    }));
   } else {
-    const { data } = (await buildBaseQuery().limit(10000)) as { data: InteractionQueryRow[] | null };
-    interactions = data ?? [];
+    interactions = await readAllRows<InteractionQueryRow>('e-mail: interações', () => buildBaseQuery());
   }
 
   if (interactions.length === 0) {

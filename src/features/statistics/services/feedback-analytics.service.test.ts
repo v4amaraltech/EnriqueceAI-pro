@@ -14,6 +14,9 @@ function createMockSupabase(feedbacks: unknown[] = [], closers: unknown[] = [], 
     chain.in = vi.fn().mockReturnValue(chain);
     chain.order = vi.fn().mockReturnValue(chain);
     chain.limit = vi.fn().mockReturnValue(chain);
+    chain.range = vi.fn((from: number, to: number) =>
+      Promise.resolve({ data: returnData.slice(from, to + 1), error: null }),
+    );
     // Terminal — resolve to data
     chain.then = (resolve: (v: unknown) => void) => resolve({ data: returnData });
     chains[tableName] = chain;

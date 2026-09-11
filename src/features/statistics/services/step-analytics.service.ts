@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 
 import type { CadenceStepAnalyticsData, CadenceStepMetrics } from '../types/step-analytics';
 import { safeRate } from '../types/shared';
+import { readAllRows } from './read-all-rows';
 
 interface StepInteractionRow {
   step_id: string | null;
@@ -41,9 +42,9 @@ export async function fetchStepAnalyticsData(
     }
   }
 
-  // Build interactions query
-  const buildIntQuery = () =>
-    from(supabase, 'interactions')
+  // Build interactions query — paginada (antes `.limit(10000)`, set/2026).
+  const buildIntQuery = (leadChunk?: string[]) => {
+    let q = from(supabase, 'interactions')
       .select('step_id, type, lead_id')
       .eq('org_id', orgId)
       .eq('cadence_id', cadenceId)
@@ -51,6 +52,9 @@ export async function fetchStepAnalyticsData(
       .lte('created_at', periodEnd)
       .not('step_id', 'is', null)
       .in('type', ['sent', 'opened', 'clicked', 'replied', 'meeting_scheduled']);
+    if (leadChunk) q = q.in('lead_id', leadChunk);
+    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
+  };
 
   // Steps structure (always all steps for zero-fill)
   const stepsQuery = from(supabase, 'cadence_steps')
@@ -60,14 +64,11 @@ export async function fetchStepAnalyticsData(
 
   const interactionsPromise: Promise<StepInteractionRow[]> =
     leadIdFilter && leadIdFilter.length > 0
-      ? chunkedIn<StepInteractionRow>(leadIdFilter, (chunk) =>
-          buildIntQuery()
-            .in('lead_id', chunk)
-            .limit(10000) as unknown as PromiseLike<{ data: StepInteractionRow[] | null; error: unknown }>,
-        )
-      : (buildIntQuery().limit(10000) as unknown as Promise<{ data: StepInteractionRow[] | null }>).then(
-          (r) => r.data ?? [],
-        );
+      ? chunkedIn<StepInteractionRow>(leadIdFilter, async (chunk) => ({
+          data: await readAllRows<StepInteractionRow>('passos: interações', () => buildIntQuery(chunk)),
+          error: null,
+        }))
+      : readAllRows<StepInteractionRow>('passos: interações', () => buildIntQuery());
 
   const [interactions, { data: rawSteps }] = await Promise.all([
     interactionsPromise,

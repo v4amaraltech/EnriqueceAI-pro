@@ -14,6 +14,7 @@ import type {
 import type { EnrollmentQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 import { buildMemberInfoMap } from './member-lookup';
+import { readAllRows } from './read-all-rows';
 
 interface LossReasonRow {
   id: string;
@@ -46,18 +47,16 @@ export async function fetchLossReasonAnalyticsData(
   // Fetch enrollments scoped to org cadences (cadence_enrollments has no org_id column)
   const cadenceIds = isUuid(cadenceId) ? [cadenceId] : cadences.map((c) => c.id);
 
-  let enrQuery = from(supabase, 'cadence_enrollments')
-    .select('cadence_id, lead_id, status, loss_reason_id, enrolled_by')
-    .in('cadence_id', cadenceIds)
-    .gte('enrolled_at', periodStart)
-    .lte('enrolled_at', periodEnd);
-
-  if (userIds && userIds.length > 0) {
-    enrQuery = enrQuery.in('enrolled_by', userIds);
-  }
-
-  const { data: rawEnrollments } = (await enrQuery.limit(10000)) as { data: EnrollmentQueryRow[] | null };
-  const enrollments = rawEnrollments ?? [];
+  // Paginado (antes `.limit(10000)` — set/2026).
+  const enrollments = await readAllRows<EnrollmentQueryRow>('perdas: enrollments', () => {
+    let q = from(supabase, 'cadence_enrollments')
+      .select('cadence_id, lead_id, status, loss_reason_id, enrolled_by')
+      .in('cadence_id', cadenceIds)
+      .gte('enrolled_at', periodStart)
+      .lte('enrolled_at', periodEnd);
+    if (userIds && userIds.length > 0) q = q.in('enrolled_by', userIds);
+    return q.order('id', { ascending: true });
+  });
 
   // NÃO retornamos cedo em "0 enrollments": no modo org-wide o ranking vem de
   // leads (um lead perdido sem cadência ativa não tem enrollment, mas conta).
@@ -132,20 +131,22 @@ async function fetchLostLeadRows(
   periodEnd: string,
   userIds?: string[],
 ): Promise<Array<{ loss_reason_id: string | null; assigned_to: string | null }>> {
-  let q = from(supabase, 'leads')
-    .select('loss_reason_id, loss_notes, assigned_to')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .not('loss_reason_id', 'is', null)
-    .gte('lost_at', periodStart)
-    .lte('lost_at', periodEnd);
   const validUserIds = (userIds ?? []).filter(isUuid);
-  if (validUserIds.length > 0) q = q.in('assigned_to', validUserIds);
-
-  const { data } = (await q.limit(10000)) as {
-    data: Array<{ loss_reason_id: string | null; loss_notes: string | null; assigned_to: string | null }> | null;
-  };
-  return (data ?? []).filter((l) => !(l.loss_notes ?? '').startsWith('Auto-perda por inatividade'));
+  const data = await readAllRows<{ loss_reason_id: string | null; loss_notes: string | null; assigned_to: string | null }>(
+    'perdas: leads perdidos',
+    () => {
+      let q = from(supabase, 'leads')
+        .select('loss_reason_id, loss_notes, assigned_to')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .not('loss_reason_id', 'is', null)
+        .gte('lost_at', periodStart)
+        .lte('lost_at', periodEnd);
+      if (validUserIds.length > 0) q = q.in('assigned_to', validUserIds);
+      return q.order('id', { ascending: true });
+    },
+  );
+  return data.filter((l) => !(l.loss_notes ?? '').startsWith('Auto-perda por inatividade'));
 }
 
 /** Por-SDR (nível lead, por assigned_to) — espelha buildLossByUserStacked. */

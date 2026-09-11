@@ -13,6 +13,9 @@ const CHAIN = ['select', 'eq', 'is', 'in', 'gte', 'lte', 'not', 'limit', 'order'
 function makeBuilder(result: unknown) {
   const b: Record<string, unknown> = {};
   for (const m of CHAIN) b[m] = vi.fn(() => b);
+  b.range = vi.fn((from: number, to: number) =>
+    Promise.resolve({ data: Array.isArray(result) ? result.slice(from, to + 1) : result, error: null }),
+  );
   b.then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: result, error: null }).then(resolve);
   return b;

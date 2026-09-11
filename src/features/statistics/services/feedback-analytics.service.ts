@@ -10,6 +10,7 @@ import type {
   FeedbackRow,
   CloserRankingEntry,
 } from '../types/feedback-analytics.types';
+import { readAllRows } from './read-all-rows';
 
 interface RawFeedback {
   id: string;
@@ -46,21 +47,16 @@ export async function fetchFeedbackAnalyticsData(
   periodEnd: string,
   closerId?: string,
 ): Promise<FeedbackAnalyticsData> {
-  // Fetch feedbacks
-  let query = from(supabase, 'closer_feedback_requests')
-    .select('id, lead_id, closer_id, result, rating, oportunidade_qualificada, comment, sent_at, responded_at, expires_at')
-    .eq('org_id', orgId)
-    .gte('sent_at', periodStart)
-    .lte('sent_at', periodEnd)
-    .order('sent_at', { ascending: false })
-    .limit(10000);
-
-  if (isUuid(closerId)) {
-    query = query.eq('closer_id', closerId);
-  }
-
-  const { data: rawFeedbacks } = (await query) as { data: RawFeedback[] | null };
-  const feedbacks = rawFeedbacks ?? [];
+  // Fetch feedbacks — paginado (antes `.limit(10000)`, set/2026).
+  const feedbacks = await readAllRows<RawFeedback>('feedback: pedidos', () => {
+    let query = from(supabase, 'closer_feedback_requests')
+      .select('id, lead_id, closer_id, result, rating, oportunidade_qualificada, comment, sent_at, responded_at, expires_at')
+      .eq('org_id', orgId)
+      .gte('sent_at', periodStart)
+      .lte('sent_at', periodEnd);
+    if (isUuid(closerId)) query = query.eq('closer_id', closerId);
+    return query.order('sent_at', { ascending: false }).order('id', { ascending: false });
+  });
 
   // Fetch closer names
   const closerIds = [...new Set(feedbacks.map((f) => f.closer_id))];
