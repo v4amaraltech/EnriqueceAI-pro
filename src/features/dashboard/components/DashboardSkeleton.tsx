@@ -61,6 +61,24 @@ export function DashboardSkeleton() {
         </div>
       </div>
 
+      {/* SDR selecionado: seletor + 7 cards */}
+      <div className="space-y-4">
+        <div className="rounded-lg border bg-card p-4 space-y-2">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-16" />
+              <Skeleton className="h-2 w-full rounded-full" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* KPI row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCardSkeleton />

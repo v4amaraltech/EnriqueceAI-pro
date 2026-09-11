@@ -78,6 +78,32 @@ describe('saveGoals', () => {
     expect(userGoalsChain.upsert).toHaveBeenCalledTimes(1);
   });
 
+  it('grava as metas de ligações por SDR (0 quando o cliente não envia)', async () => {
+    const orgChain = createChainMock({ data: { org_id: 'org-1' } });
+    const goalsChain = createChainMock();
+    const userGoalsChain = createChainMock();
+
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return orgChain;
+      if (callCount === 2) return goalsChain;
+      return userGoalsChain;
+    });
+
+    await saveGoals({
+      ...validInput,
+      userGoals: [
+        { userId: '00000000-0000-0000-0000-000000000001', callsTarget: 2200, callsConnectedTarget: 176 },
+        { userId: '00000000-0000-0000-0000-000000000002' },
+      ],
+    });
+
+    const rows = (userGoalsChain.upsert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ calls_target: 2200, calls_connected_target: 176 });
+    expect(rows[1]).toMatchObject({ calls_target: 0, calls_connected_target: 0 });
+  });
+
   it('returns error when goals upsert fails', async () => {
     const orgChain = createChainMock({ data: { org_id: 'org-1' } });
     const goalsChain = {

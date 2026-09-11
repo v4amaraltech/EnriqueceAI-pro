@@ -16,7 +16,7 @@ import type {
   SdrRankingEntry,
 } from '../types';
 
-function getMonthRange(month: string): { start: string; end: string } {
+export function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
   // Janela de CONTAGEM = mês inteiro → total, ranking por SDR e série contam até HOJE

@@ -8,7 +8,7 @@ import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, P
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData } from '../types';
+import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData, SdrPaceData } from '../types';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import { buildMeetingsByDay } from '../utils/meetings-by-day';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
@@ -19,6 +19,7 @@ import { MeetingsByDayChart } from './MeetingsByDayChart';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
 import { ResponseTimeCard } from './ResponseTimeCard';
+import { SdrPaceSection } from './SdrPaceSection';
 
 interface DashboardViewProps {
   data: DashboardData;
@@ -26,9 +27,10 @@ interface DashboardViewProps {
   ranking?: RankingData;
   insights?: InsightsData;
   responseTime?: DashboardResponseTimeData;
+  sdrPace?: SdrPaceData;
 }
 
-export function DashboardView({ data, filters, ranking, insights, responseTime }: DashboardViewProps) {
+export function DashboardView({ data, filters, ranking, insights, responseTime, sdrPace }: DashboardViewProps) {
   const router = useRouter();
   const [goalsOpen, setGoalsOpen] = useState(false);
 
@@ -106,6 +108,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
       </div>
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
+
+      {/* SDR selecionado — realizado × meta individual do mês, com o ritmo do dia */}
+      {sdrPace && <SdrPaceSection data={sdrPace} />}
 
       {/* Leads Abertos — primeiro do funil */}
       {ranking?.leadsOpened?.dailyData && (

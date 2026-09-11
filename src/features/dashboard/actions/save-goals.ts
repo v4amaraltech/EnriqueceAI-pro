@@ -69,6 +69,8 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     leads_opened_target: ug.leadsOpenedTarget ?? 0,
     meetings_scheduled_target: ug.meetingsScheduledTarget,
     meetings_held_target: ug.meetingsHeldTarget,
+    calls_target: ug.callsTarget,
+    calls_connected_target: ug.callsConnectedTarget,
   }));
 
   const { error: userGoalError } = await from(supabase, 'goals_per_user')
