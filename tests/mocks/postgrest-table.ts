@@ -26,7 +26,7 @@ export interface FakeSupabaseOptions {
   serverCap?: number;
   maxInValues?: number;
   /** Linhas devolvidas por um RPC em função dos argumentos. */
-  rpc?: Record<string, (args: Record<string, unknown>) => Row[]>;
+  rpc?: Record<string, (args: Record<string, unknown>) => readonly object[]>;
 }
 
 type Row = Record<string, unknown>;
@@ -142,7 +142,7 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
     rpc: vi.fn((name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
       const handler = opts.rpc?.[name];
-      return builder(`rpc:${name}`, handler ? handler(args) : undefined);
+      return builder(`rpc:${name}`, handler ? (handler(args) as Row[]) : undefined);
     }),
   };
   return { client: client as never, orders, rangeCalls, rpcCalls };

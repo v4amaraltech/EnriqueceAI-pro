@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { interactionCountsReference } from '@tests/helpers/statistics-references';
 import { createFakeSupabase } from '@tests/mocks/postgrest-table';
 
 import { fetchActivityAnalyticsData } from './activity-analytics.service';
@@ -20,9 +21,10 @@ vi.mock('./member-lookup', () => ({
  *
  * O retrato (`__snapshots__`) foi gerado pelo código ANTERIOR, que lia as
  * interações linha a linha. O código novo lê as contagens do RPC
- * `get_interaction_counts` — aqui simulado por `referenceCounts`, que faz em
- * JS exatamente o que a SQL da migration faz. Se as telas mudarem qualquer
- * número com os mesmos dados, este teste quebra.
+ * `get_interaction_counts` — aqui simulado por `interactionCountsReference`
+ * (tests/helpers), a mesma referência que o teste de integração compara com a
+ * SQL de verdade. Se as telas mudarem qualquer número com os mesmos dados,
+ * este teste quebra.
  */
 
 // ── Dados sintéticos determinísticos ────────────────────────────────────────
@@ -106,80 +108,13 @@ const leads = Array.from({ length: 120 }, (_, i) => ({
 
 const members = ['u1', 'u2', 'u3'].map((user_id) => ({ user_id, status: 'active' }));
 
-// ── Referência em JS da SQL de get_interaction_counts ───────────────────────
-const dayBrt = (iso: string) =>
-  new Date(Date.parse(iso) - 3 * 3_600_000).toISOString().slice(0, 10);
-
-function referenceCounts(args: Record<string, unknown>) {
-  const start = String(args.p_start);
-  const end = String(args.p_end);
-  const exclude = new Set((args.p_exclude_channels as string[] | undefined) ?? []);
-  const users = (args.p_user_ids as string[] | undefined) ?? [];
-  const cadence = args.p_cadence_id as string | undefined;
-  const rows = interactions.filter(
-    (i) =>
-      Date.parse(i.created_at) >= Date.parse(start) &&
-      Date.parse(i.created_at) <= Date.parse(end) &&
-      !exclude.has(i.channel) &&
-      (users.length === 0 || (i.performed_by !== null && users.includes(i.performed_by))) &&
-      (!cadence || i.cadence_id === cadence),
-  );
-
-  const cells = new Map<string, Record<string, unknown>>();
-  const performers = new Map<
-    string,
-    { leads: Set<string>; first: string; last: string; performed_by: string | null }
-  >();
-  for (const i of rows) {
-    const key = [i.performed_by, i.channel, i.type, dayBrt(i.created_at)].join('|');
-    const cell = cells.get(key) ?? {
-      row_kind: 'cell',
-      performed_by: i.performed_by,
-      channel: i.channel,
-      type: i.type,
-      day_brt: dayBrt(i.created_at),
-      n: 0,
-      distinct_leads: null,
-      first_at: i.created_at,
-      last_at: i.created_at,
-    };
-    cell.n = (cell.n as number) + 1;
-    if (i.created_at < (cell.first_at as string)) cell.first_at = i.created_at;
-    if (i.created_at > (cell.last_at as string)) cell.last_at = i.created_at;
-    cells.set(key, cell);
-
-    const pk = String(i.performed_by);
-    const p = performers.get(pk) ?? {
-      leads: new Set<string>(),
-      first: i.created_at,
-      last: i.created_at,
-      performed_by: i.performed_by,
-    };
-    p.leads.add(i.lead_id);
-    if (i.created_at < p.first) p.first = i.created_at;
-    if (i.created_at > p.last) p.last = i.created_at;
-    performers.set(pk, p);
-  }
-  return [
-    ...cells.values(),
-    ...[...performers.values()].map((p) => ({
-      row_kind: 'performer',
-      performed_by: p.performed_by,
-      channel: null,
-      type: null,
-      day_brt: null,
-      n: null,
-      distinct_leads: p.leads.size,
-      first_at: p.first,
-      last_at: p.last,
-    })),
-  ];
-}
-
 function supabase() {
   return createFakeSupabase(
     { interactions, leads, organization_members: members, daily_activity_goals: [] },
-    { rpc: { get_interaction_counts: referenceCounts }, serverCap: 100 },
+    {
+      rpc: { get_interaction_counts: (args) => interactionCountsReference(interactions, args) },
+      serverCap: 100,
+    },
   );
 }
 
