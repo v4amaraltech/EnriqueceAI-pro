@@ -2,32 +2,26 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { getAppUrl } from '@/lib/utils/app-url';
 
-import { registerWebhook } from '../services/api4com.service';
+import { ensureCallWebhook } from '../services/api4com.service';
 
 /**
- * Register a webhook on API4COM so we receive channel-hangup events.
- * Called automatically after saving API4COM config.
+ * Garante que a conta API4COM do usuário entregue os eventos de ligação
+ * (integração `webhook` sem filtro — ver `ensureCallWebhook`). Chamada
+ * automaticamente depois de salvar a config API4COM. Não mexe em integrações
+ * de CRM.
  */
 export async function registerApi4ComWebhook(): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId } = auth.data;
-
-  const appUrl = getAppUrl();
-  const webhookSecret = process.env.API4COM_WEBHOOK_SECRET;
-  const webhookUrl = webhookSecret
-    ? `${appUrl}/api/webhooks/api4com?token=${webhookSecret}`
-    : `${appUrl}/api/webhooks/api4com`;
-  const gateway = `flux-${orgId}`;
+  const { userId } = auth.data;
 
   try {
-    await registerWebhook(userId, webhookUrl, gateway);
+    await ensureCallWebhook(userId);
     return { success: true, data: undefined };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erro ao registrar webhook';
-    console.error('[api4com] registerWebhook failed:', message);
+    const message = err instanceof Error ? err.message : 'Erro ao configurar eventos da API4COM';
+    console.error('[api4com] ensureCallWebhook failed:', message);
     return { success: false, error: message };
   }
 }
