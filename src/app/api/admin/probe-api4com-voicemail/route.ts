@@ -4,6 +4,7 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
+import { toApi4ComFilterTimestamp } from '@/features/integrations/services/api4com-time';
 
 export const maxDuration = 60;
 
@@ -66,9 +67,11 @@ export async function POST(request: Request) {
   // "different from normal voicemail" suggesting a separate event path.
   const buildFilter = (where: Record<string, unknown>): string =>
     `filter=${encodeURIComponent(JSON.stringify({ where }))}`;
-  // V4 Amaral target window: Mai/2026 (01-17) — same window as gap analysis.
-  const sinceIso = '2026-05-01T00:00:00.000Z';
-  const untilIso = '2026-05-17T23:59:59.000Z';
+  // V4 Amaral target window: Mai/2026 (01-17, Brasília days) — same window as
+  // gap analysis. Declared in real UTC and converted to API4COM's
+  // BRT-disguised-as-Z clock, like every other started_at filter we send.
+  const sinceIso = toApi4ComFilterTimestamp(new Date('2026-05-01T03:00:00.000Z'));
+  const untilIso = toApi4ComFilterTimestamp(new Date('2026-05-18T02:59:59.000Z'));
 
   const candidates = [
     // 1. Baseline: explicit NUMBER_CHANGED filter, no window. Will it return ANY rows?
