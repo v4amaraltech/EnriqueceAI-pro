@@ -1,11 +1,12 @@
 # Story: Atividades e Performance calculadas a partir de contagens agrupadas no banco (RPC)
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @devops (Gage) | Ready for Review → **Done**. PR #392 mergeado 11/set 10:11 UTC (squash `1f621031`, com autorização do Vini), CI verde de primeira (3m56s); ✅ **no ar** 10:15 UTC (`/api/version` = `1f62103`). Telas Estatísticas › Atividades e › Performance (01–11/set, V4 Company Amaral) conferidas no Chrome do Vini **iguais, número a número, à foto tirada antes do deploy** (Atividades: 551 leads, 408 perdas, 19 ganhos, conclusão por canal e tabela dos 6 SDRs; Performance: controle diário dos 6 usuários, incl. "Visto às"). `pg_stat_statements`: 4 chamadas PostgREST ao RPC (~23 ms cada) — telas rodando no código novo. |
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Migration aplicada em prod com autorização do Vini (versão `20260911095436`, arquivo renomeado; md5 do corpo em prod = arquivo); ACL conferida (anon negado na chamada real); função real como gestor = impressão digital esperada (Atividades V4 30d `a9ac0c54…`, 479 linhas), 30d 70 ms / 90d 158 ms; `pnpm gen:types` (+ só a função); typecheck ✅ lint ✅ 1.998 testes ✅ build ✅. CodeRabbit não rodou (CLI sem login). Nada commitado. |
 | 2026-09-11 | @dev (Dex) | Ready → **InProgress**. T1–T4 feitas; T5 parcial (paridade provada; falta aplicar a migration — aguarda autorização do Vini — e `gen:types`). typecheck ✅ lint ✅ 1.998 testes ✅. Nada commitado. |
 | 2026-09-11 | @po (Pax) | `*validate-story-draft`: **GO → Ready** (nota 8,5/10). Vini escolheu a **opção A**. Correções aplicadas: decisão registrada; contrato de retorno exato (tipo de linha, colunas, ordem única para paginar); formato de `last_at`; T3 detalhado (datas fixas, relógio e nomes de SDR fora da comparação); nota das 2 execuções por página. |
