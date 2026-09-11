@@ -12,6 +12,12 @@ vi.mock('@/features/leads/actions/log-lead-event', () => ({ logLeadEvent: vi.fn(
 vi.mock('@/features/cadences/services/webhook-dispatch.service', () => ({
   dispatchWebhookEvent: vi.fn(() => Promise.resolve()),
 }));
+// O serviço faz `import()` fire-and-forget deste módulo quando o lead tem dono.
+// Sem o mock, o import real (cliente service role do Supabase) ficava pendente
+// quando o worker do Vitest fechava — "Closing rpc while fetch was pending" no CI.
+vi.mock('@/features/notifications/services/notification.service', () => ({
+  createNotification: vi.fn(() => Promise.resolve()),
+}));
 
 const CHAINABLE = [
   'select', 'insert', 'update', 'upsert', 'delete',
