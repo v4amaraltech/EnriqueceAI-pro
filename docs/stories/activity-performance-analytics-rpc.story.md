@@ -1,11 +1,13 @@
 # Story: Atividades e Performance calculadas a partir de contagens agrupadas no banco (RPC)
 
 ## Status
-Ready
+Ready for Review
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Migration aplicada em prod com autorização do Vini (versão `20260911095436`, arquivo renomeado; md5 do corpo em prod = arquivo); ACL conferida (anon negado na chamada real); função real como gestor = impressão digital esperada (Atividades V4 30d `a9ac0c54…`, 479 linhas), 30d 70 ms / 90d 158 ms; `pnpm gen:types` (+ só a função); typecheck ✅ lint ✅ 1.998 testes ✅ build ✅. CodeRabbit não rodou (CLI sem login). Nada commitado. |
+| 2026-09-11 | @dev (Dex) | Ready → **InProgress**. T1–T4 feitas; T5 parcial (paridade provada; falta aplicar a migration — aguarda autorização do Vini — e `gen:types`). typecheck ✅ lint ✅ 1.998 testes ✅. Nada commitado. |
 | 2026-09-11 | @po (Pax) | `*validate-story-draft`: **GO → Ready** (nota 8,5/10). Vini escolheu a **opção A**. Correções aplicadas: decisão registrada; contrato de retorno exato (tipo de linha, colunas, ordem única para paginar); formato de `last_at`; T3 detalhado (datas fixas, relógio e nomes de SDR fora da comparação); nota das 2 execuções por página. |
 | 2026-09-11 | Vini + Claude | Story criada, próxima da fila da avaliação "paginar × agregar" (`statistics-fetch-all-rows`), no molde da `conversion-analytics-rpc` (Done, PR #385). Aguarda o Vini escolher a opção (A, B ou C) e a validação do @po. |
 
@@ -88,11 +90,11 @@ Zero risco de número diferente, mas não resolve o peso (35 mil linhas em 90 di
 - [ ] AC6 — `types.ts` regenerado no mesmo PR.
 
 ## Tasks
-- [ ] T1 — @data-engineer: Checkpoint 1 (pré-voo de migration) + desenho da SQL (grouping sets ou união das duas agregações).
-- [ ] T2 — Medir a função no formato final como gestor (função em `pg_temp` dentro de transação desfeita, `set local role authenticated` + `request.jwt.claims`).
-- [ ] T3 — Guardar a saída atual das duas telas (service role, prod) para o AC1, antes de mexer no código: **datas fixas no passado** + **um recorte que inclui hoje rodado no mesmo minuto dos dois lados** ("hoje" e média por dia útil dependem do relógio); `buildMemberInfoMap` mockado para `user_id → user_id` nos dois lados (os nomes vêm do Auth e não mudam o número, mas a tendência da Performance agrupa pelo nome).
-- [ ] T4 — Adaptar os dois services + testes (fake PostgREST com `.rpc()`, já existe em `tests/mocks/postgrest-table.ts`).
-- [ ] T5 — Comparação antes × depois (AC1); aplicar a migration em prod **só com autorização do Vini**; `pnpm gen:types`, typecheck, lint, testes, build.
+- [x] T1 — @data-engineer: Checkpoint 1 (pré-voo de migration) + desenho da SQL (grouping sets ou união das duas agregações).
+- [x] T2 — Medir a função no formato final como gestor (função em `pg_temp` dentro de transação desfeita, `set local role authenticated` + `request.jwt.claims`).
+- [x] T3 — Guardar a saída atual das duas telas (service role, prod) para o AC1, antes de mexer no código: **datas fixas no passado** + **um recorte que inclui hoje rodado no mesmo minuto dos dois lados** ("hoje" e média por dia útil dependem do relógio); `buildMemberInfoMap` mockado para `user_id → user_id` nos dois lados (os nomes vêm do Auth e não mudam o número, mas a tendência da Performance agrupa pelo nome).
+- [x] T4 — Adaptar os dois services + testes (fake PostgREST com `.rpc()`, já existe em `tests/mocks/postgrest-table.ts`).
+- [x] T5 — Comparação antes × depois (AC1); aplicar a migration em prod **só com autorização do Vini**; `pnpm gen:types`, typecheck, lint, testes, build.
 
 ## Complexity
 **M** — 1 função só de leitura (sem tabela), 2 services, testes. Sem mudança de tela.
@@ -134,3 +136,50 @@ Atividades e Performance confiáveis e rápidas para qualquer período, sem traf
 - `statistics-fetch-all-rows` (no ar, `54274a2`) — base de comparação do AC1.
 - `conversion-analytics-rpc` (Done) — mesmo molde: função `SECURITY INVOKER`, teste como gestor em `pg_temp`, fake PostgREST com `.rpc()`.
 - Índices existentes (conferidos em prod 10/set): `idx_interactions_org (org_id, created_at DESC)`, `idx_interactions_org_type_channel (org_id, type, channel, created_at)`, `idx_interactions_performed_by_org`.
+
+## Dev Agent Record
+
+### Agent Model Used
+Claude Opus 5 (@dev Dex)
+
+### Debug Log / Decisões
+- **Checkpoint 1 (pré-voo):** `20260911095436_get_interaction_counts.sql` — 14 dígitos, sem colisão (último em prod: `20260911030704`); só `CREATE OR REPLACE FUNCTION` (sem tabela/enum/trigger); `BEGIN/COMMIT`; enums conferidos (`channel_type` inclui `calendar`/`system`); org via `(SELECT public.user_org_id())`; `REVOKE` de `PUBLIC`/`anon`. ⚠️ Renomear o arquivo para a versão que o MCP gravar.
+- **Desvio do contrato (a registrar pelo @po):** coluna extra **`first_at`** (menor `created_at` do grupo) nas linhas `cell` e `performer`. Motivo: nas duas telas, quando canais/tipos/SDRs empatam, a ordem vinha da **primeira atividade** de cada um (as interações eram lidas por `created_at`). O TS ordena os grupos por `first_at` (em µs, `atMicros`) antes de somar → mesma ordem de desempate. Sem isso, gráficos com valores iguais poderiam trocar de ordem.
+- **SQL:** uma CTE `base` (lida uma vez) + `UNION ALL` de dois `GROUP BY` (célula e autor). Filtro de canal `channel <> ALL(p_exclude_channels)`; `channel` é `NOT NULL`.
+- **AC5 (como gestor da V4 Amaral, função no formato final em `pg_temp`, RLS valendo):** 7d 11–26 ms · 30d 44–48 ms · **90d 112–117 ms** (1.068–1.211 linhas, contra ~35 mil interações).
+- **AC1 — paridade, 3 camadas:**
+  1. **SQL = referência JS, em prod:** md5 das linhas agrupadas (ordem byte a byte) calculado pela função (`pg_temp`, como gestor) × calculado em Node a partir das interações brutas (service role) — **11/11 recortes idênticos** (Atividades V4 7/30/90d, 30d com 2 SDRs, Julio 30d; Performance os mesmos + 30d só Recovery).
+  2. **Código novo = código antigo, dados sintéticos:** `interaction-counts.equivalence.test.ts` — retrato (`__snapshots__`) gerado pelo código **antigo** (1.500 interações com `system`/`calendar`, sem autor, ex-membro `u4`, horários 00–03h UTC, "hoje"); código novo + referência JS reproduz os 4 cenários. Fica no CI como trava.
+  3. **Código novo = código antigo, dados reais:** saída das duas telas no código antigo guardada (service role, datas fixas, `now` fixo, nomes = user_id) × código novo com leads/membros/metas reais e contagens da referência JS — **JSON idêntico nos 6 recortes** (inclui "última atividade" e ordem de empates). Arquivos temporários apagados.
+- Interações sem autor (2.352 em 90d na V4): continuam nos totais de Atividades e fora das tabelas por SDR (coberto pela camada 2 e 3).
+
+### File List
+- `supabase/migrations/20260911095436_get_interaction_counts.sql` (novo — **já aplicada em prod** 11/set)
+- `src/lib/supabase/types.ts` — regenerado (`pnpm gen:types`): só `get_interaction_counts`
+- `src/features/statistics/services/interaction-counts.ts` (novo) — `fetchInteractionCounts`, `sumCells`, `atMicros`
+- `src/features/statistics/services/interaction-counts.test.ts` (novo, 2 testes)
+- `src/features/statistics/services/interaction-counts.equivalence.test.ts` (novo, 4 testes) + `__snapshots__/interaction-counts.equivalence.test.ts.snap` (retrato do código antigo)
+- `src/features/statistics/services/activity-analytics.service.ts` — contagens do RPC em vez de linhas
+- `src/features/statistics/services/performance-analytics.service.ts` — idem
+- `src/features/statistics/services/fetch-all-rows.statistics.test.ts` — testes de volume de Atividades/Performance no formato novo
+- `tests/mocks/postgrest-table.ts` — `neq`/`is`/`not` filtram; `rpc` com handler por argumentos
+
+### Evidência por AC
+| AC | Resultado |
+|---|---|
+| AC1 — mesmos números | ✅ 3 camadas: md5 SQL = JS 11/11 (prod); snapshot do código antigo reproduzido (sintético, fica no CI); JSON idêntico nas duas telas em 6 recortes reais (V4 7/30/90d, 30d 2 SDRs, 30d Recovery, Julio 30d) |
+| AC2 — sem `from('interactions')` | ✅ as duas telas só leem `leads`, metas, membros e o RPC |
+| AC3 — sem autor | ✅ totais incluem `performed_by` nulo; tabela por SDR não (camadas 2 e 3) |
+| AC4 — INVOKER, sem `anon` | ✅ `prosecdef=false`; `has_function_privilege` anon **false**; chamada real como anon → "permission denied" |
+| AC5 — < 1 s em 90d | ✅ 112–158 ms como gestor; ~1,1 mil linhas em vez de ~35 mil |
+| AC6 — tipos | ✅ `pnpm gen:types` |
+
+### DoD (story-dod-checklist)
+- ✅ Requisitos, ACs, padrões, sem segredo, lint/typecheck/testes/build, tarefas marcadas, decisões registradas, sem dependência nem env nova.
+- ⚠️ **Tela no navegador:** conferir depois do deploy (Atividades e Performance, 30 dias).
+- ⚠️ **CodeRabbit:** CLI sem login (`coderabbit auth login` pelo Vini).
+- ℹ️ **Teste instável não relacionado:** `features/reports/components/StatisticsView.test.tsx` falhou 1× na suíte completa, passou 3/3 isolado e na suíte seguinte (nenhum arquivo de `reports` mudou).
+
+### Notas para o deploy
+- A função já está em prod e o app atual não a usa → deploy do app a qualquer momento.
+- Depois do deploy: abrir Estatísticas › Atividades e › Performance (30 dias) — os números devem ser os mesmos de antes do deploy.

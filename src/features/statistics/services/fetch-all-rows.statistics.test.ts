@@ -26,6 +26,39 @@ const N = 12_000;
 
 const at = (i: number) => new Date(Date.parse(START) + i * 60_000).toISOString();
 
+/**
+ * Linhas no formato do RPC get_interaction_counts: `cells` grupos de 4
+ * interações (canal/tipo/dia variando) + 1 linha por SDR com 500 leads.
+ */
+function countCells(cells: number, performer: string) {
+  const channels = ['email', 'phone', 'whatsapp'];
+  const types = ['sent', 'delivered', 'replied', 'opened'];
+  return [
+    ...Array.from({ length: cells }, (_, i) => ({
+      row_kind: 'cell',
+      performed_by: performer,
+      channel: channels[i % 3],
+      type: types[Math.floor(i / 3) % 4],
+      day_brt: at(i * 60 * 4).slice(0, 10),
+      n: 4,
+      distinct_leads: null,
+      first_at: at(i),
+      last_at: at(i),
+    })),
+    {
+      row_kind: 'performer',
+      performed_by: performer,
+      channel: null,
+      type: null,
+      day_brt: null,
+      n: null,
+      distinct_leads: 500,
+      first_at: at(0),
+      last_at: at(N),
+    },
+  ];
+}
+
 /** Toda leitura paginada precisa desempatar por coluna única no fim. */
 function expectDeterministicOrder(orders: string[][] | undefined) {
   expect(orders?.length).toBeGreaterThan(0);
@@ -33,16 +66,10 @@ function expectDeterministicOrder(orders: string[][] | undefined) {
 }
 
 describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () => {
-  it('Atividades: conta as 12.000 interações e os 10.500 leads', async () => {
-    const { client, orders, rangeCalls } = createFakeSupabase({
-      interactions: makeRows(N, (i, id) => ({
-        id,
-        type: 'sent',
-        channel: 'phone',
-        lead_id: `lead-${i % 500}`,
-        created_at: at(i),
-        performed_by: 'u1',
-      })),
+  it('Atividades: soma as contagens do RPC em todas as páginas e lê os 10.500 leads', async () => {
+    // 3.000 grupos de 4 interações = 12.000 atividades; teto do servidor 1.000.
+    const { client, orders, rangeCalls, rpcCalls } = createFakeSupabase({
+      'rpc:get_interaction_counts': countCells(3_000, 'u1'),
       leads: makeRows(10_500, (i, id) => ({
         id,
         status: 'new',
@@ -56,9 +83,10 @@ describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () 
     expect(data.kpis.totalActivities).toBe(N);
     expect(data.leadsInPeriod).toBe(10_500);
     expect(data.userBreakdown[0]?.activitiesTotal).toBe(N);
+    expect(data.userBreakdown[0]?.leadsWithFirstActivity).toBe(500);
     expect(data.userBreakdown[0]?.totalLeads).toBe(10_500); // "todos os leads", sem período
-    expect(rangeCalls.interactions).toBeGreaterThan(1);
-    expectDeterministicOrder(orders.interactions);
+    expect(rangeCalls['rpc:get_interaction_counts']).toBeGreaterThan(1);
+    expect(rpcCalls[0]?.args).toMatchObject({ p_exclude_channels: ['system', 'calendar'] });
     expectDeterministicOrder(orders.leads);
   });
 
@@ -91,18 +119,10 @@ describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () 
     expectDeterministicOrder(orders.interactions);
   });
 
-  it('Performance: conta as 12.000 atividades do SDR', async () => {
-    const { client, orders } = createFakeSupabase({
+  it('Performance: soma as contagens do RPC em todas as páginas', async () => {
+    const { client, rangeCalls, rpcCalls } = createFakeSupabase({
       organization_members: [{ user_id: 'u1', status: 'active' }],
-      interactions: makeRows(N, (i, id) => ({
-        id,
-        type: 'sent',
-        channel: 'phone',
-        lead_id: `lead-${i % 500}`,
-        performed_by: 'u1',
-        cadence_id: null,
-        created_at: at(i),
-      })),
+      'rpc:get_interaction_counts': countCells(3_000, 'u1'),
       leads: makeRows(10_500, (i, id) => ({
         id,
         status: 'new',
@@ -117,8 +137,10 @@ describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () 
 
     expect(data.totalActivities).toBe(N);
     expect(data.totalLeadsCreated).toBe(10_500);
-    expectDeterministicOrder(orders.interactions);
-    expectDeterministicOrder(orders.leads);
+    expect(data.dailyControl[0]?.lastActivityAt).toBe(at(N));
+    expect(rangeCalls['rpc:get_interaction_counts']).toBeGreaterThan(1);
+    // Performance tira só `system`; o SDR vai como filtro.
+    expect(rpcCalls[0]?.args).toMatchObject({ p_exclude_channels: ['system'], p_user_ids: ['u1'] });
   });
 
   it('Painel de Ligações: conta as 12.000 ligações e lista as mais recentes primeiro', async () => {

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { businessDaysBetween } from '@/features/dashboard/utils/pacing';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
-import { businessDaysBetween } from '@/features/dashboard/utils/pacing';
 import {
   CHANNEL_COLORS,
   CHANNEL_LABELS,
@@ -23,8 +23,13 @@ import type {
   UserChannelProgress,
   UserQuartileData,
 } from '../types/activity-analytics.types';
-import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
+import {
+  type InteractionCell,
+  type PerformerSummary,
+  fetchInteractionCounts,
+  sumCells,
+} from './interaction-counts';
 import { buildMemberInfoMap } from './member-lookup';
 import { readAllRows } from './read-all-rows';
 
@@ -35,33 +40,28 @@ export async function fetchActivityAnalyticsData(
   periodEnd: string,
   userIds?: string[],
 ): Promise<ActivityAnalyticsData> {
-  // Lê TODAS as interações do período, em páginas (antes `.limit(10000)`: a
-  // V4 Amaral tem ~13 mil em 30 dias e ~35 mil em 90 — set/2026).
-  const buildInteractionsQuery = () => {
-    let query = from(supabase, 'interactions')
-      .select('id, type, channel, lead_id, created_at, performed_by')
-      .eq('org_id', orgId)
-      .not('channel', 'in', '(system,calendar)')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
-    if (userIds && userIds.length > 0) query = query.in('performed_by', userIds);
-    return query.order('created_at', { ascending: true }).order('id', { ascending: true });
-  };
-
+  // Contagens de interações já agrupadas no banco (RPC get_interaction_counts).
+  // Antes: todas as interações do período, linha a linha (~35 mil em 90 dias
+  // na V4 Amaral). Canais `system` (auditoria) e `calendar` ficam de fora.
   // userId não depende das interações — calculado antes do fetch paralelo.
   const userId = userIds && userIds.length === 1 ? userIds[0] : undefined;
 
-  // Interações e meta (goal) são independentes → buscadas em paralelo.
-  const [interactions, target] = await Promise.all([
-    readAllRows<InteractionQueryRow>('atividades: interações', buildInteractionsQuery),
+  // Contagens e meta (goal) são independentes → buscadas em paralelo.
+  const [{ cells, performers }, target] = await Promise.all([
+    fetchInteractionCounts(supabase, {
+      periodStart,
+      periodEnd,
+      excludeChannels: ['system', 'calendar'],
+      userIds,
+    }),
     fetchGoalTarget(supabase, orgId, userId),
   ]);
 
-  const kpis = calculateKpis(interactions, periodStart, periodEnd, target);
-  const channelVolume = calculateChannelVolume(interactions);
-  const dailyTrend = calculateDailyTrend(interactions, periodStart, periodEnd, target);
-  const activityTypes = calculateActivityTypes(interactions);
-  const goal = calculateGoal(interactions, target);
+  const kpis = calculateKpis(cells, periodStart, periodEnd, target);
+  const channelVolume = calculateChannelVolume(cells);
+  const dailyTrend = calculateDailyTrend(cells, periodStart, periodEnd, target);
+  const activityTypes = calculateActivityTypes(cells);
+  const goal = calculateGoal(cells, target);
 
   // Leads em 4 recortes (won/lost no período por timestamp, ativos no período,
   // e total por SDR all-time). As 4 queries são independentes → paralelas.
@@ -117,7 +117,7 @@ export async function fetchActivityAnalyticsData(
   }
 
   // Channel completion (% of steps completed vs total per channel)
-  const channelCompletion = calculateChannelCompletion(interactions);
+  const channelCompletion = calculateChannelCompletion(cells);
 
   // Total de leads por SDR (allLeadsForCount) já veio no batch paralelo acima.
   const totalLeadsByUser = new Map<string, number>();
@@ -128,9 +128,28 @@ export async function fetchActivityAnalyticsData(
   }
 
   // User breakdown — fetch user names via admin
-  const userBreakdown = await calculateUserBreakdown(supabase, orgId, interactions, leads, allActiveLeads, totalLeadsByUser);
+  const userBreakdown = await calculateUserBreakdown(
+    supabase,
+    orgId,
+    cells,
+    performers,
+    leads,
+    allActiveLeads,
+    totalLeadsByUser,
+  );
 
-  return { kpis, channelVolume, dailyTrend, activityTypes, goal, leadsInPeriod, totalLost, totalWon, channelCompletion, userBreakdown };
+  return {
+    kpis,
+    channelVolume,
+    dailyTrend,
+    activityTypes,
+    goal,
+    leadsInPeriod,
+    totalLost,
+    totalWon,
+    channelCompletion,
+    userBreakdown,
+  };
 }
 
 async function fetchGoalTarget(
@@ -157,20 +176,24 @@ async function fetchGoalTarget(
   return orgGoal?.target ?? 20;
 }
 
+/**
+ * Dia de hoje em Brasília (`YYYY-MM-DD`). `created_at >= meia-noite de hoje em
+ * Brasília` ⇔ `day_brt >= hoje`, pois `day_brt` = data de `created_at − 3h`.
+ */
+function todayBrtKey(): string {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function calculateKpis(
-  interactions: InteractionQueryRow[],
+  cells: InteractionCell[],
   periodStart: string,
   periodEnd: string,
   target: number,
 ): ActivityAnalyticsKpis {
-  const total = interactions.length;
+  const total = sumCells(cells);
 
-  // BRT midnight: shift "now" by -3h then truncate to UTC midnight
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
-  const activitiesToday = interactions.filter(
-    (i) => new Date(i.created_at) >= todayStart,
-  ).length;
+  const today = todayBrtKey();
+  const activitiesToday = sumCells(cells, (c) => c.day_brt >= today);
 
   // Average per BUSINESS day (Mon–Fri, BRT) — SDRs don't work weekends, so
   // dividing by calendar days deflated the rate against a per-working-day goal.
@@ -184,12 +207,12 @@ function calculateKpis(
   return { totalActivities: total, activitiesToday, avgPerDay, goalAchievement };
 }
 
-function calculateChannelVolume(interactions: InteractionQueryRow[]): ChannelVolumeEntry[] {
+function calculateChannelVolume(cells: InteractionCell[]): ChannelVolumeEntry[] {
   const counts = new Map<string, number>();
 
-  for (const interaction of interactions) {
-    const channel = interaction.channel ?? 'email';
-    counts.set(channel, (counts.get(channel) ?? 0) + 1);
+  for (const cell of cells) {
+    const channel = cell.channel || 'email';
+    counts.set(channel, (counts.get(channel) ?? 0) + cell.n);
   }
 
   return Array.from(counts.entries())
@@ -203,7 +226,7 @@ function calculateChannelVolume(interactions: InteractionQueryRow[]): ChannelVol
 }
 
 function calculateDailyTrend(
-  interactions: InteractionQueryRow[],
+  cells: InteractionCell[],
   periodStart: string,
   periodEnd: string,
   target: number,
@@ -212,11 +235,9 @@ function calculateDailyTrend(
   const end = new Date(periodEnd);
   const dayMap = new Map<string, number>();
 
-  for (const interaction of interactions) {
-    // Convert UTC timestamp to BRT (UTC-3) for correct date grouping
-    const brt = new Date(new Date(interaction.created_at).getTime() - 3 * 60 * 60 * 1000);
-    const day = brt.toISOString().split('T')[0] ?? '';
-    dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+  // day_brt já vem no dia de Brasília (UTC−3) do banco.
+  for (const cell of cells) {
+    dayMap.set(cell.day_brt, (dayMap.get(cell.day_brt) ?? 0) + cell.n);
   }
 
   const result: DailyActivityEntry[] = [];
@@ -239,12 +260,12 @@ function calculateDailyTrend(
   return result;
 }
 
-function calculateActivityTypes(interactions: InteractionQueryRow[]): ActivityTypeEntry[] {
-  const total = interactions.length;
+function calculateActivityTypes(cells: InteractionCell[]): ActivityTypeEntry[] {
+  const total = sumCells(cells);
   const counts = new Map<string, number>();
 
-  for (const interaction of interactions) {
-    counts.set(interaction.type, (counts.get(interaction.type) ?? 0) + 1);
+  for (const cell of cells) {
+    counts.set(cell.type, (counts.get(cell.type) ?? 0) + cell.n);
   }
 
   return Array.from(counts.entries())
@@ -259,13 +280,10 @@ function calculateActivityTypes(interactions: InteractionQueryRow[]): ActivityTy
     .sort((a, b) => b.count - a.count);
 }
 
-function calculateGoal(interactions: InteractionQueryRow[], target: number): GoalData {
-  // BRT midnight: shift "now" by -3h then truncate to UTC midnight, shift back
+function calculateGoal(cells: InteractionCell[], target: number): GoalData {
   const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
-  const actual = interactions.filter(
-    (i) => new Date(i.created_at) >= todayStart,
-  ).length;
+  const today = todayBrtKey();
+  const actual = sumCells(cells, (c) => c.day_brt >= today);
   const percentage = safeRate(actual, target);
   // Weekend (BRT): no daily goal — SDRs don't work Sat/Sun, so the card should
   // not show a red "0% da meta" on those days. Mirrors the business-day pacing
@@ -276,21 +294,30 @@ function calculateGoal(interactions: InteractionQueryRow[], target: number): Goa
   return { target, actual, percentage, isWeekend };
 }
 
-function calculateChannelCompletion(interactions: InteractionQueryRow[]): ChannelCompletionEntry[] {
+function calculateChannelCompletion(cells: InteractionCell[]): ChannelCompletionEntry[] {
   const channelMap = new Map<string, { total: number; completed: number }>();
 
-  for (const i of interactions) {
-    const ch = i.channel ?? 'other';
+  for (const c of cells) {
+    const ch = c.channel || 'other';
     const entry = channelMap.get(ch) ?? { total: 0, completed: 0 };
-    entry.total++;
+    entry.total += c.n;
     // "completed" = sent, delivered, opened, clicked, replied, meeting_scheduled
-    if (['sent', 'delivered', 'opened', 'clicked', 'replied', 'meeting_scheduled'].includes(i.type)) {
-      entry.completed++;
+    if (
+      ['sent', 'delivered', 'opened', 'clicked', 'replied', 'meeting_scheduled'].includes(c.type)
+    ) {
+      entry.completed += c.n;
     }
     channelMap.set(ch, entry);
   }
 
-  const labelMap: Record<string, string> = { email: 'E-mail', whatsapp: 'WhatsApp', phone: 'Telefone', research: 'Pesquisa', linkedin: 'LinkedIn', calendar: 'Agenda' };
+  const labelMap: Record<string, string> = {
+    email: 'E-mail',
+    whatsapp: 'WhatsApp',
+    phone: 'Telefone',
+    research: 'Pesquisa',
+    linkedin: 'LinkedIn',
+    calendar: 'Agenda',
+  };
 
   return Array.from(channelMap.entries())
     .map(([channel, { total, completed }]) => ({
@@ -308,9 +335,10 @@ const QUARTILE_RANGES = [
   { max: Infinity, label: 'Quartil 4' },
 ];
 
-function computeQuartiles(
-  userLeads: Array<{ created_at: string; status: string }>,
-): { leadsInProspection: number; quartiles: UserQuartileData[] } {
+function computeQuartiles(userLeads: Array<{ created_at: string; status: string }>): {
+  leadsInProspection: number;
+  quartiles: UserQuartileData[];
+} {
   const now = Date.now();
   const prospectionLeads = userLeads.filter(
     (l) => !['qualified', 'won', 'unqualified', 'archived'].includes(l.status),
@@ -344,18 +372,24 @@ function computeQuartiles(
 async function calculateUserBreakdown(
   supabase: SupabaseClient,
   orgId: string,
-  interactions: InteractionQueryRow[],
+  cells: InteractionCell[],
+  performers: Map<string | null, PerformerSummary>,
   statusLeads: Array<{ id: string; status: string; assigned_to: string | null }>,
-  activeLeads: Array<{ id: string; assigned_to: string | null; status: string; created_at: string }>,
+  activeLeads: Array<{
+    id: string;
+    assigned_to: string | null;
+    status: string;
+    created_at: string;
+  }>,
   totalLeadsByUser: Map<string, number>,
 ): Promise<UserActivityRow[]> {
-  // Group interactions by performed_by
-  const userMap = new Map<string, InteractionQueryRow[]>();
-  for (const i of interactions) {
-    if (!i.performed_by) continue;
-    const arr = userMap.get(i.performed_by) ?? [];
-    arr.push(i);
-    userMap.set(i.performed_by, arr);
+  // Group counts by performed_by (sem autor fica fora da tabela por SDR)
+  const userMap = new Map<string, InteractionCell[]>();
+  for (const c of cells) {
+    if (!c.performed_by) continue;
+    const arr = userMap.get(c.performed_by) ?? [];
+    arr.push(c);
+    userMap.set(c.performed_by, arr);
   }
 
   // Also include users with leads but no interactions
@@ -387,39 +421,42 @@ async function calculateUserBreakdown(
     if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
     seenLeadIds.add(l.id);
     if (l.status === 'won') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
-    if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
+    if (l.status === 'unqualified')
+      userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
 
   for (const l of activeLeads) {
     if (!l.assigned_to || seenLeadIds.has(l.id)) continue;
     seenLeadIds.add(l.id);
     if (l.status === 'won') userWon.set(l.assigned_to, (userWon.get(l.assigned_to) ?? 0) + 1);
-    if (l.status === 'unqualified') userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
+    if (l.status === 'unqualified')
+      userLost.set(l.assigned_to, (userLost.get(l.assigned_to) ?? 0) + 1);
   }
 
   const completedTypes = new Set(['sent', 'delivered', 'meeting_scheduled']);
 
   const rows: UserActivityRow[] = [];
-  for (const [userId, userInteractions] of userMap) {
+  for (const [userId, userCells] of userMap) {
     const leads = userLeadCount.get(userId) ?? 0;
-    const completed = userInteractions.filter((i) => completedTypes.has(i.type)).length;
-    const total = userInteractions.length;
+    const completed = sumCells(userCells, (c) => completedTypes.has(c.type));
+    const total = sumCells(userCells);
     const won = userWon.get(userId) ?? 0;
     const lost = userLost.get(userId) ?? 0;
     const wonLostTotal = won + lost;
 
     // Extra detail fields
-    const leadsWithFirstActivity = new Set(userInteractions.map((i) => i.lead_id)).size;
-    const inboundReplies = userInteractions.filter((i) => i.type === 'replied').length;
-    const phoneCalls = userInteractions.filter((i) => i.channel === 'phone').length;
+    // Leads distintos não saem da soma das células (um lead aparece em várias).
+    const leadsWithFirstActivity = performers.get(userId)?.distinctLeads ?? 0;
+    const inboundReplies = sumCells(userCells, (c) => c.type === 'replied');
+    const phoneCalls = sumCells(userCells, (c) => c.channel === 'phone');
 
     // Channel progress breakdown
     const channelMap = new Map<string, { completed: number; total: number }>();
-    for (const i of userInteractions) {
-      const ch = i.channel ?? 'email';
+    for (const c of userCells) {
+      const ch = c.channel || 'email';
       const entry = channelMap.get(ch) ?? { completed: 0, total: 0 };
-      entry.total++;
-      if (completedTypes.has(i.type)) entry.completed++;
+      entry.total += c.n;
+      if (completedTypes.has(c.type)) entry.completed += c.n;
       channelMap.set(ch, entry);
     }
     const channelProgress: UserChannelProgress[] = Array.from(channelMap.entries())

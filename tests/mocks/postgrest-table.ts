@@ -14,20 +14,31 @@ import { vi } from 'vitest';
  *   a coluna existe na linha de teste (colunas ausentes, como `org_id`, são
  *   ignoradas; `null` nunca passa numa comparação, como no SQL).
  * - `.order()` ordena de verdade (útil para "mais recentes primeiro").
- * - `.rpc(nome, args)` lê as linhas de `tables['rpc:nome']` (mesmo teto e
- *   `.range()`) e guarda os argumentos em `rpcCalls`.
+ * - `.rpc(nome, args)` lê as linhas de `opts.rpc[nome](args)` ou, sem handler,
+ *   de `tables['rpc:nome']` (mesmo teto e `.range()`); guarda os argumentos em
+ *   `rpcCalls`.
+ * - `.neq()`, `.is(col, null)` e `.not(col, 'in' | 'is', …)` também filtram.
  *
- * Os outros filtros (`not`, `is`, `or`…) são aceitos e ignorados: os
- * testes montam só linhas que já passariam por eles.
+ * Os outros filtros (`or`, `like`…) são aceitos e ignorados: os testes montam
+ * só linhas que já passariam por eles.
  */
 export interface FakeSupabaseOptions {
   serverCap?: number;
   maxInValues?: number;
+  /** Linhas devolvidas por um RPC em função dos argumentos. */
+  rpc?: Record<string, (args: Record<string, unknown>) => Row[]>;
 }
 
 type Row = Record<string, unknown>;
 
-const PASS_THROUGH = ['select', 'neq', 'is', 'not', 'or', 'filter', 'like', 'ilike'];
+const PASS_THROUGH = ['select', 'or', 'filter', 'like', 'ilike'];
+
+/** `'(a,b)'` → `['a', 'b']` (formato do PostgREST para `not.in`). */
+const parseList = (v: unknown) =>
+  String(v)
+    .replace(/^\(|\)$/g, '')
+    .split(',')
+    .map((x) => x.trim().replace(/^"|"$/g, ''));
 const COMPARE: Record<string, (x: string, y: string) => boolean> = {
   gte: (x, y) => x >= y,
   lte: (x, y) => x <= y,
@@ -43,8 +54,8 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
   const rangeCalls: Record<string, number> = {};
   const rpcCalls: Array<{ name: string; args: unknown }> = [];
 
-  function builder(table: string) {
-    const rows = tables[table] ?? [];
+  function builder(table: string, rowsOverride?: Row[]) {
+    const rows = rowsOverride ?? tables[table] ?? [];
     const filters: Array<(r: Row) => boolean> = [];
     const order: Array<{ col: string; asc: boolean }> = [];
     let limit = Infinity;
@@ -76,6 +87,23 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
     for (const m of PASS_THROUGH) b[m] = vi.fn(() => b);
     b.eq = vi.fn((col: string, value: unknown) => {
       filters.push((r) => !(col in r) || r[col] === value);
+      return b;
+    });
+    b.neq = vi.fn((col: string, value: unknown) => {
+      filters.push((r) => !(col in r) || (r[col] != null && r[col] !== value));
+      return b;
+    });
+    b.is = vi.fn((col: string, value: unknown) => {
+      filters.push((r) => !(col in r) || (value === null ? r[col] == null : r[col] === value));
+      return b;
+    });
+    b.not = vi.fn((col: string, op: string, value: unknown) => {
+      if (op === 'in') {
+        const list = new Set(parseList(value));
+        filters.push((r) => !(col in r) || (r[col] != null && !list.has(String(r[col]))));
+      } else if (op === 'is' && value === null) {
+        filters.push((r) => !(col in r) || r[col] != null);
+      }
       return b;
     });
     for (const [op, cmp] of Object.entries(COMPARE)) {
@@ -111,9 +139,10 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
 
   const client = {
     from: vi.fn((table: string) => builder(table)),
-    rpc: vi.fn((name: string, args: unknown) => {
+    rpc: vi.fn((name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
-      return builder(`rpc:${name}`);
+      const handler = opts.rpc?.[name];
+      return builder(`rpc:${name}`, handler ? handler(args) : undefined);
     }),
   };
   return { client: client as never, orders, rangeCalls, rpcCalls };
