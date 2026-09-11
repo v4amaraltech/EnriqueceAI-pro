@@ -22,6 +22,7 @@ import { withTimeout } from '@/lib/utils/with-timeout';
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { markLeadLostOnCadenceEnd } from '@/features/cadences/services/cadence-end-loss.service';
 
 import type { ExecuteActivityInput } from '../types';
 
@@ -310,6 +311,9 @@ async function advanceEnrollment(
       message: 'Cadência concluída — todos os passos foram executados',
       metadata: { cadence_id: cadenceId, enrollment_id: enrollmentId },
     });
+
+    // Fim da cadência sem resposta → Perdido "Nunca respondeu" na hora.
+    await markLeadLostOnCadenceEnd({ orgId, leadId, cadenceId, enrollmentId });
 
     const leadDisplay = to || leadId.slice(0, 8);
     createNotification({
