@@ -2870,6 +2870,8 @@ export type Database = {
       goals_per_user: {
         Row: {
           activities_target: number;
+          calls_connected_target: number;
+          calls_target: number;
           conversion_target: number;
           created_at: string;
           id: string;
@@ -2884,6 +2886,8 @@ export type Database = {
         };
         Insert: {
           activities_target?: number;
+          calls_connected_target?: number;
+          calls_target?: number;
           conversion_target?: number;
           created_at?: string;
           id?: string;
@@ -2898,6 +2902,8 @@ export type Database = {
         };
         Update: {
           activities_target?: number;
+          calls_connected_target?: number;
+          calls_target?: number;
           conversion_target?: number;
           created_at?: string;
           id?: string;
@@ -5656,6 +5662,26 @@ export type Database = {
       get_indicacoes_reunioes_realizadas: {
         Args: { p_api_token?: string; p_month: number; p_year: number };
         Returns: Json;
+      };
+      get_interaction_counts: {
+        Args: {
+          p_cadence_id?: string;
+          p_end: string;
+          p_exclude_channels: Database['public']['Enums']['channel_type'][];
+          p_start: string;
+          p_user_ids?: string[];
+        };
+        Returns: {
+          channel: Database['public']['Enums']['channel_type'];
+          day_brt: string;
+          distinct_leads: number;
+          first_at: string;
+          last_at: string;
+          n: number;
+          performed_by: string;
+          row_kind: string;
+          type: Database['public']['Enums']['interaction_type'];
+        }[];
       };
       get_leads_for_v4sales: {
         Args: { p_api_token: string; p_from_date?: string };
