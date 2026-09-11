@@ -1,11 +1,12 @@
 # Story: Perdido "Nunca respondeu" na hora em que a cadência termina
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @devops (Gage) | Ready for Review → **Done** a pedido do Vini. PR #390 mergeado (squash `17d727c7`, 10:00 UTC) e **no ar** às 10:03 UTC (`/api/version` = `17d727c`). CI verde (1ª rodada caiu no flaky conhecido "Closing rpc while fetch was pending" em `inbound-lead.service.test.ts`, 2010 testes passando; re-run verde). Teste manual em prod ainda não feito. |
 | 2026-09-11 | @dev (Dex) | Implementado + testado. typecheck ✅ lint ✅ 2010 testes ✅ (+18 novos) build ✅. Nada commitado (regra git manual). |
 | 2026-09-11 | Vini + Claude | Story criada a pedido do Vini. Decisões: Recovery → "Deixou de responder"; inbound segue a regra da Recovery (igual ao perdido manual); só vale daqui pra frente (sem correção retroativa). |
 
@@ -58,4 +59,4 @@ Antes: ao concluir a cadência só ficava o evento "Cadência concluída — tod
 - `docs/stories/cadence-end-immediate-loss.story.md` (novo)
 
 ## QA Results
-_(pendente)_
+Sem gate formal. Evidências: 18 testes novos cobrindo os AC1–AC5, suíte completa verde no CI, simulação em prod (leitura) nos últimos 30 dias, deploy verificado por `/api/version`. Pendente: teste manual em prod (executar o último passo de um lead de teste em Contatado, sem outra cadência aberta).
