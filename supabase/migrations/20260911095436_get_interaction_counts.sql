@@ -60,13 +60,13 @@ AS $$
          b.performed_by,
          b.channel,
          b.type,
-         ((b.created_at AT TIME ZONE 'UTC') - interval '2 hours')::date,
+         ((b.created_at AT TIME ZONE 'UTC') - interval '3 hours')::date,
          count(*),
          NULL::bigint,
          min(b.created_at),
          max(b.created_at)
   FROM base b
-  GROUP BY b.performed_by, b.channel, b.type, ((b.created_at AT TIME ZONE 'UTC') - interval '2 hours')::date
+  GROUP BY b.performed_by, b.channel, b.type, ((b.created_at AT TIME ZONE 'UTC') - interval '3 hours')::date
   UNION ALL
   SELECT 'performer'::text,
          b.performed_by,
