@@ -6,6 +6,7 @@ Done
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @qa (Quinn) | **Teste manual em prod OK** (10:18 UTC, Chrome logado como Vini). Lead de teste `51fa8081` criado via SQL na Prospecção Fria, passo 15/15, executado com "Enviado manualmente" → lead Perdido "Nunca respondeu". Lead de teste soft-deletado às 10:20 UTC. Detalhes em QA Results. |
 | 2026-09-11 | @devops (Gage) | Ready for Review → **Done** a pedido do Vini. PR #390 mergeado (squash `17d727c7`, 10:00 UTC) e **no ar** às 10:03 UTC (`/api/version` = `17d727c`). CI verde (1ª rodada caiu no flaky conhecido "Closing rpc while fetch was pending" em `inbound-lead.service.test.ts`, 2010 testes passando; re-run verde). Teste manual em prod ainda não feito. |
 | 2026-09-11 | @dev (Dex) | Implementado + testado. typecheck ✅ lint ✅ 2010 testes ✅ (+18 novos) build ✅. Nada commitado (regra git manual). |
 | 2026-09-11 | Vini + Claude | Story criada a pedido do Vini. Decisões: Recovery → "Deixou de responder"; inbound segue a regra da Recovery (igual ao perdido manual); só vale daqui pra frente (sem correção retroativa). |
@@ -59,4 +60,22 @@ Antes: ao concluir a cadência só ficava o evento "Cadência concluída — tod
 - `docs/stories/cadence-end-immediate-loss.story.md` (novo)
 
 ## QA Results
-Sem gate formal. Evidências: 18 testes novos cobrindo os AC1–AC5, suíte completa verde no CI, simulação em prod (leitura) nos últimos 30 dias, deploy verificado por `/api/version`. Pendente: teste manual em prod (executar o último passo de um lead de teste em Contatado, sem outra cadência aberta).
+Sem gate formal. Evidências: 18 testes novos cobrindo os AC1–AC5, suíte completa verde no CI, simulação em prod (leitura) nos últimos 30 dias, deploy verificado por `/api/version`.
+
+### Teste manual em prod — 2026-09-11 10:18 UTC ✅
+
+**Roteiro:** lead de teste `51fa8081` "TESTE QA Perdido fim de cadência (pode apagar)" criado via SQL — status Contatado, sem origem inbound, responsável Vini, inscrito na **Prospecção Fria** no passo 15/15 (último, WhatsApp). Na tela de Atividades (Chrome logado como Vini): Executar → mensagem de teste → **Enviado manualmente** (nada foi enviado de verdade).
+
+| Verificação | Resultado |
+|---|---|
+| Status do lead | `unqualified` (Perdido; botão "Reabrir" aparece) ✅ |
+| Motivo / observação no lead | "Nunca respondeu" / "Cadência concluída sem resposta" ✅ |
+| Enrollment | `completed`, mesmo motivo e observação ✅ |
+| Timeline | WhatsApp 15 (Manual) → "Cadência concluída — todos os passos foram executados" → "Lead marcado como perdido — Motivo: Nunca respondeu \| Cadência concluída sem resposta" (evento do sistema, `performed_by` vazio) ✅ |
+| Recuperação de inbound | Não agendou (lead não é inbound), como esperado ✅ |
+
+**Limpeza:** lead de teste soft-deletado (`deleted_at` 10:20 UTC); sem enrollment aberto nem retorno pendente. As interactions do teste ficam — contam 1 atividade e 1 perdido para o Vini só em 11/set.
+
+**Não testado em prod** (coberto só por teste unitário): fim da Recovery com "Deixou de responder", lead inbound indo para a Recovery, e as proteções de outra cadência aberta / retorno agendado.
+
+**Observação de UX:** depois do "Enviado manualmente", a tela avança sozinha para o próximo lead real da fila.
