@@ -14,6 +14,8 @@ import { vi } from 'vitest';
  *   a coluna existe na linha de teste (colunas ausentes, como `org_id`, são
  *   ignoradas; `null` nunca passa numa comparação, como no SQL).
  * - `.order()` ordena de verdade (útil para "mais recentes primeiro").
+ * - `.rpc(nome, args)` lê as linhas de `tables['rpc:nome']` (mesmo teto e
+ *   `.range()`) e guarda os argumentos em `rpcCalls`.
  *
  * Os outros filtros (`not`, `is`, `or`…) são aceitos e ignorados: os
  * testes montam só linhas que já passariam por eles.
@@ -39,6 +41,7 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
   /** Todas as ordenações pedidas, por tabela — para conferir o desempate por coluna única. */
   const orders: Record<string, string[][]> = {};
   const rangeCalls: Record<string, number> = {};
+  const rpcCalls: Array<{ name: string; args: unknown }> = [];
 
   function builder(table: string) {
     const rows = tables[table] ?? [];
@@ -106,8 +109,14 @@ export function createFakeSupabase(tables: Record<string, Row[]>, opts: FakeSupa
     return b;
   }
 
-  const client = { from: vi.fn((table: string) => builder(table)) };
-  return { client: client as never, orders, rangeCalls };
+  const client = {
+    from: vi.fn((table: string) => builder(table)),
+    rpc: vi.fn((name: string, args: unknown) => {
+      rpcCalls.push({ name, args });
+      return builder(`rpc:${name}`);
+    }),
+  };
+  return { client: client as never, orders, rangeCalls, rpcCalls };
 }
 
 /** Linhas numeradas `0..n-1` com campos em comum — ids em ordem lexicográfica. */

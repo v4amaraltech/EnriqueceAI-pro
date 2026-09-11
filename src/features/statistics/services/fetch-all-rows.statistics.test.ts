@@ -2,16 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeSupabase, makeRows } from '@tests/mocks/postgrest-table';
 
-vi.mock('./member-lookup', () => ({
-  buildMemberInfoMap: vi.fn(async () => new Map([['u1', { name: 'Ana' }]])),
-  buildMemberNameMap: vi.fn(async () => new Map([['u1', 'Ana']])),
-}));
-
 import { fetchActivityAnalyticsData } from './activity-analytics.service';
 import { fetchCadenceAnalyticsData } from './cadence-analytics.service';
 import { fetchCallDashboardData } from './call-dashboard.service';
 import { fetchConversionAnalyticsData } from './conversion-analytics.service';
 import { fetchPerformanceAnalyticsData } from './performance-analytics.service';
+
+vi.mock('./member-lookup', () => ({
+  buildMemberInfoMap: vi.fn(async () => new Map([['u1', { name: 'Ana' }]])),
+  buildMemberNameMap: vi.fn(async () => new Map([['u1', 'Ana']])),
+}));
 
 /**
  * Volumes reais da V4 Amaral em 30 dias (medidos em prod, 10/set/2026):
@@ -43,7 +43,12 @@ describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () 
         created_at: at(i),
         performed_by: 'u1',
       })),
-      leads: makeRows(10_500, (i, id) => ({ id, status: 'new', assigned_to: 'u1', created_at: at(i) })),
+      leads: makeRows(10_500, (i, id) => ({
+        id,
+        status: 'new',
+        assigned_to: 'u1',
+        created_at: at(i),
+      })),
     });
 
     const data = await fetchActivityAnalyticsData(client, 'org-1', START, END);
@@ -139,45 +144,55 @@ describe('estatísticas leem TODAS as linhas do período (acima de 10.000)', () 
     expectDeterministicOrder(orders.calls);
   });
 
-  it('Conversão: 12.000 interações e os leads antigos tocados no período (antes: HTTP 414 → sumiam)', async () => {
-    const inPeriod = makeRows(500, (i, id) => ({
-      id: `new-${id}`,
-      status: 'new',
-      created_at: at(i),
-      created_by: 'u1',
-      won_at: null,
-      lost_at: null,
-      meeting_held_at: null,
-    }));
-    // Criados ANTES do período, mas com interação dentro dele: 2.500 ids num
-    // `.in()` só estouravam a URL do PostgREST (caso real: ~2.400 em 30 dias).
-    const touchedOld = makeRows(2_500, (_i, id) => ({
-      id: `old-${id}`,
+  it('Conversão: lê o universo inteiro do RPC em páginas, ordenado por lead', async () => {
+    // O servidor corta em 1.000 por resposta; o universo tem 3.000 leads.
+    const universe = makeRows(3_000, (i, id) => ({
+      lead_id: id,
       status: 'contacted',
-      created_at: '2026-05-01T12:00:00.000Z',
-      created_by: 'u1',
+      created_by: null,
       won_at: null,
-      lost_at: null,
-      meeting_held_at: null,
+      has_sent: i % 3 !== 0,
+      has_meeting_scheduled: i % 100 === 0,
+      has_replied: false,
+      enrollments: [],
     }));
-    const leads = [...inPeriod, ...touchedOld];
-    const { client, orders } = createFakeSupabase({
-      leads,
-      interactions: makeRows(N, (i, id) => ({
-        id,
-        type: 'sent',
-        lead_id: leads[i % leads.length]!.id,
-        cadence_id: null,
-        created_at: at(i),
-      })),
+    const { client, orders, rangeCalls, rpcCalls } = createFakeSupabase({
+      'rpc:get_conversion_universe': universe,
       cadences: [],
     });
 
-    const data = await fetchConversionAnalyticsData(client, 'org-1', START, END);
+    const data = await fetchConversionAnalyticsData(client, 'org-1', START, END, [], 'nao-e-uuid');
 
     const stage = (label: string) => data.funnel.find((s) => s.label === label)?.count;
     expect(stage('Total Leads')).toBe(3_000);
-    expect(stage('Contactados')).toBe(3_000);
-    expectDeterministicOrder(orders.interactions);
+    expect(stage('Contactados')).toBe(2_000);
+    expect(stage('Qualificados')).toBe(30);
+    expect(rangeCalls['rpc:get_conversion_universe']).toBeGreaterThan(1);
+    // `lead_id` é único no universo → ordem determinística entre páginas.
+    expect(orders['rpc:get_conversion_universe']?.every((cols) => cols.join() === 'lead_id')).toBe(
+      true,
+    );
+    // Filtro vazio e cadência inválida não vão para o banco (DEFAULT NULL).
+    expect(rpcCalls[0]).toEqual({
+      name: 'get_conversion_universe',
+      args: { p_start: START, p_end: END },
+    });
+  });
+
+  it('Conversão: filtros de SDR e de cadência vão como parâmetros do RPC', async () => {
+    const { client, rpcCalls } = createFakeSupabase({
+      'rpc:get_conversion_universe': [],
+      cadences: [],
+    });
+    const cad = '15a05299-1627-40d1-be81-80150a4f1308';
+
+    await fetchConversionAnalyticsData(client, 'org-1', START, END, ['u1', 'u2'], cad);
+
+    expect(rpcCalls[0]?.args).toEqual({
+      p_start: START,
+      p_end: END,
+      p_user_ids: ['u1', 'u2'],
+      p_cadence_id: cad,
+    });
   });
 });

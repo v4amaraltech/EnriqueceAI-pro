@@ -1,4 +1,4 @@
-import { fetchAllRows, type RangeableQuery } from '@/lib/supabase/fetch-all-rows';
+import { type RangeableQuery, fetchAllRows } from '@/lib/supabase/fetch-all-rows';
 
 /**
  * `fetchAllRows` para as telas de estatística: devolve só as linhas e deixa
@@ -10,10 +10,16 @@ import { fetchAllRows, type RangeableQuery } from '@/lib/supabase/fetch-all-rows
  * `T` é o formato da linha — mesmo papel do `as { data: T[] }` que estas
  * consultas já usavam (o builder de `from()` é tipado de forma solta).
  */
-export async function readAllRows<T>(label: string, buildQuery: () => RangeableQuery<unknown>): Promise<T[]> {
-  const { rows, truncated } = await fetchAllRows<unknown>(buildQuery);
+export async function readAllRows<T>(
+  label: string,
+  buildQuery: () => RangeableQuery<unknown>,
+  opts?: { pageSize?: number },
+): Promise<T[]> {
+  const { rows, truncated } = await fetchAllRows<unknown>(buildQuery, opts);
   if (truncated) {
-    console.warn(`[statistics] ${label}: parou em ${rows.length} linhas (teto de segurança) — número parcial`);
+    console.warn(
+      `[statistics] ${label}: parou em ${rows.length} linhas (teto de segurança) — número parcial`,
+    );
   }
   return rows as T[];
 }

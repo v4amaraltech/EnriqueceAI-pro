@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
 import { CONVERSION_COLORS } from '@/shared/constants/chart-colors';
@@ -13,7 +12,7 @@ import type {
   PipelineVelocity,
   StageConversion,
 } from '../types/conversion-analytics.types';
-import type { EnrollmentQueryRow, InteractionQueryRow, LeadQueryRow } from '../types/query-rows';
+import type { EnrollmentQueryRow, LeadQueryRow } from '../types/query-rows';
 import { groupBy, safeRate } from '../types/shared';
 import { readAllRows } from './read-all-rows';
 
@@ -21,6 +20,43 @@ interface CadenceRow {
   id: string;
   name: string;
 }
+
+/**
+ * 1 linha por lead do universo, vinda do RPC `get_conversion_universe`
+ * (migration `20260911030704`). O banco junta as interações do período em
+ * marcadores por lead — antes a tela baixava todas (~58 mil em 90 dias na V4
+ * Amaral). Story conversion-analytics-rpc.
+ */
+export interface ConversionUniverseRow {
+  lead_id: string;
+  status: string;
+  created_by: string | null;
+  won_at: string | null;
+  has_sent: boolean;
+  has_meeting_scheduled: boolean;
+  has_replied: boolean;
+  /** Inscrições do lead nas cadências consideradas, de qualquer época. */
+  enrollments: Array<{
+    cadence_id: string;
+    enrolled_at: string;
+    updated_at: string;
+    for_velocity: boolean;
+  }>;
+}
+
+/** Lead do universo como o cálculo usa. */
+export interface UniverseLead {
+  id: string;
+  status: string;
+  created_by: string | null;
+  won_at: string | null;
+  has_sent: boolean;
+  has_meeting_scheduled: boolean;
+  has_replied: boolean;
+}
+
+/** O RPC roda inteiro a cada página: página do tamanho do teto do servidor (20 mil). */
+const UNIVERSE_PAGE_SIZE = 20_000;
 
 export async function fetchConversionAnalyticsData(
   supabase: SupabaseClient,
@@ -31,123 +67,73 @@ export async function fetchConversionAnalyticsData(
   cadenceId?: string,
 ): Promise<ConversionAnalyticsData> {
   // Universe = leads created in the period ∪ leads touched by any interaction
-  // in the period. Without this, "Contactados" could count interactions on
-  // leads from previous periods, producing >100% conversion ratios.
-  //
-  // Todas as leituras são paginadas (antes `.limit(10000)`/`.limit(5000)`: a
-  // V4 Amaral tem ~24 mil interações em 30 dias e ~58 mil em 90 — set/2026).
-  const leadsBase = () => {
-    const q = from(supabase, 'leads')
-      .select('id, status, created_at, created_by, won_at')
-      .eq('org_id', orgId)
-      .is('deleted_at', null);
-    return userIds && userIds.length > 0 ? q.in('created_by', userIds) : q;
-  };
-
-  const periodLeads = await readAllRows<LeadQueryRow>('conversão: leads do período', () =>
-    leadsBase().gte('created_at', periodStart).lte('created_at', periodEnd).order('id', { ascending: true }),
-  );
-
-  const allInteractions = await readAllRows<InteractionQueryRow>('conversão: interações', () => {
-    let q = from(supabase, 'interactions')
-      .select('type, lead_id, cadence_id, created_at')
-      .eq('org_id', orgId)
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
-    if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
-    return q.order('created_at', { ascending: true }).order('id', { ascending: true });
-  });
-
-  const periodLeadIds = new Set(periodLeads.map((l) => l.id));
-  const touchedOnlyIds = Array.from(
-    new Set(allInteractions.map((i) => i.lead_id).filter((id) => !periodLeadIds.has(id))),
-  );
-
-  // Em lotes: com um `.in()` só, ~2.400 ids (30 dias, V4 Amaral) passavam do
-  // limite de URL do PostgREST (HTTP 414) e a lista voltava VAZIA em silêncio.
-  const touchedLeads = await chunkedIn<LeadQueryRow>(
-    touchedOnlyIds,
-    (chunk) => leadsBase().in('id', chunk) as unknown as PromiseLike<{ data: LeadQueryRow[] | null; error: unknown }>,
-  );
-
-  // Status-transition leads: ganhos/perdidos/reuniões realizadas no período.
-  // Sem este passo perdemos leads que o closer fecha sem nenhum 'sent' nem
-  // criação no período (ex.: fechamento via WhatsApp fora do app).
-  const transitionDateCols = ['won_at', 'lost_at', 'meeting_held_at'] as const;
-  // As 3 queries (uma por coluna de transição) são independentes e o resultado
-  // é deduplicado por id adiante → buscadas em paralelo.
-  const transitionResults = await Promise.all(
-    transitionDateCols.map((col) =>
-      readAllRows<LeadQueryRow>(`conversão: leads por ${col}`, () =>
-        leadsBase().gte(col, periodStart).lte(col, periodEnd).order('id', { ascending: true }),
-      ),
+  // in the period ∪ leads won/lost/meeting held in the period — calculado no
+  // banco (org vem da sessão, via RLS). Ver a migration para a regra completa.
+  const [rows, { data: rawCadences }] = await Promise.all([
+    readAllRows<ConversionUniverseRow>(
+      'conversão: universo',
+      () =>
+        supabase
+          .rpc('get_conversion_universe', {
+            p_start: periodStart,
+            p_end: periodEnd,
+            // Filtro ausente = parâmetro omitido (DEFAULT NULL na função).
+            ...(userIds && userIds.length > 0 ? { p_user_ids: userIds } : {}),
+            ...(isUuid(cadenceId) ? { p_cadence_id: cadenceId } : {}),
+          })
+          .order('lead_id', { ascending: true }),
+      { pageSize: UNIVERSE_PAGE_SIZE },
     ),
+    from(supabase, 'cadences')
+      .select('id, name')
+      .eq('org_id', orgId)
+      .is('deleted_at', null) as unknown as Promise<{
+      data: CadenceRow[] | null;
+    }>,
+  ]);
+
+  return buildConversionAnalytics(rows, rawCadences ?? [], periodStart, periodEnd);
+}
+
+/** Parte pura: do resultado do RPC aos números da tela. */
+export function buildConversionAnalytics(
+  rows: ConversionUniverseRow[],
+  cadences: CadenceRow[],
+  periodStart: string,
+  periodEnd: string,
+): ConversionAnalyticsData {
+  const leads: UniverseLead[] = rows.map((r) => ({
+    id: r.lead_id,
+    status: r.status,
+    created_by: r.created_by,
+    won_at: r.won_at,
+    has_sent: r.has_sent,
+    has_meeting_scheduled: r.has_meeting_scheduled,
+    has_replied: r.has_replied,
+  }));
+  // Vínculo lead↔cadência de qualquer época: um lead inscrito antes do período
+  // que qualificou/ganhou dentro dele conta na cadência certa.
+  const memberships = rows.flatMap((r) =>
+    r.enrollments.map((e) => ({ cadence_id: e.cadence_id, lead_id: r.lead_id })),
   );
-  const transitionLeads: LeadQueryRow[] = transitionResults.flat();
+  // Velocidade: inscrições que começaram no período (e do SDR filtrado).
+  const enrollments = rows.flatMap((r) =>
+    r.enrollments
+      .filter((e) => e.for_velocity)
+      .map((e) => ({ lead_id: r.lead_id, enrolled_at: e.enrolled_at, updated_at: e.updated_at })),
+  );
 
-  const leadsMap = new Map<string, LeadQueryRow>();
-  for (const l of periodLeads) leadsMap.set(l.id, l);
-  for (const l of touchedLeads) leadsMap.set(l.id, l);
-  for (const l of transitionLeads) leadsMap.set(l.id, l);
-  const leads = Array.from(leadsMap.values());
-
-  // Drop interactions whose leads were filtered out (SDR filter, deleted, etc.)
-  const universeIds = new Set(leads.map((l) => l.id));
-  const interactions = allInteractions.filter((i) => universeIds.has(i.lead_id));
-
-  // Fetch cadences first (for org isolation of enrollments)
-  const { data: rawCadences } = (await from(supabase, 'cadences')
-    .select('id, name')
-    .eq('org_id', orgId)
-    .is('deleted_at', null)) as { data: CadenceRow[] | null };
-  const cadences = rawCadences ?? [];
-
-  // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column).
-  // Period-filtered: used by velocity calculation, which needs enrolled_at/updated_at
-  // duration on enrollments started in the period.
-  const cadenceIds = isUuid(cadenceId) ? [cadenceId] : cadences.map((c) => c.id);
-  const enrollments = await readAllRows<EnrollmentQueryRow>('conversão: enrollments', () => {
-    let q = from(supabase, 'cadence_enrollments')
-      .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
-      .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
-      .gte('enrolled_at', periodStart)
-      .lte('enrolled_at', periodEnd);
-    if (userIds && userIds.length > 0) q = q.in('enrolled_by', userIds);
-    return q.order('id', { ascending: true });
-  });
-
-  // Cadence membership for every universe lead, regardless of when they enrolled.
-  // Without this, leads enrolled before the period but qualified/won inside it
-  // wouldn't be attributed to their cadence in the "Conversão por Cadência" table.
-  // Chunked because PostgREST URL caps at ~32kb and 2000+ UUIDs in a single
-  // `.in()` blows past that, silently returning 0 rows.
-  const universeLeadIdsList = Array.from(universeIds);
-  const memberships: Array<{ cadence_id: string; lead_id: string }> = [];
-  const MEMBERSHIP_CHUNK = 300;
-  if (universeLeadIdsList.length > 0 && cadenceIds.length > 0) {
-    for (let i = 0; i < universeLeadIdsList.length; i += MEMBERSHIP_CHUNK) {
-      const chunk = universeLeadIdsList.slice(i, i + MEMBERSHIP_CHUNK);
-      const { data: rawMembership } = (await from(supabase, 'cadence_enrollments')
-        .select('cadence_id, lead_id')
-        .in('cadence_id', cadenceIds)
-        .in('lead_id', chunk)
-        .limit(20000)) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
-      if (rawMembership) memberships.push(...rawMembership);
-    }
-  }
-
-  const funnel = calculateFunnel(leads, interactions, periodStart, periodEnd);
+  const funnel = calculateFunnel(leads, periodStart, periodEnd);
   const stageConversions = calculateStageConversions(funnel);
   const velocity = calculateVelocity(enrollments, leads);
-  const cadenceConversion = calculateCadenceConversion(cadences, memberships, interactions, leads);
+  const cadenceConversion = calculateCadenceConversion(cadences, memberships, leads);
   const conversionByOrigin = calculateConversionByOrigin(leads);
 
   return { funnel, stageConversions, velocity, cadenceConversion, conversionByOrigin };
 }
 
 function calculateFunnel(
-  leads: LeadQueryRow[],
-  interactions: InteractionQueryRow[],
+  leads: UniverseLead[],
   periodStart: string,
   periodEnd: string,
 ): FunnelStage[] {
@@ -155,12 +141,8 @@ function calculateFunnel(
   // so the funnel reads consistently as "what happened in this period?".
   const totalLeads = leads.length;
 
-  const contactedSet = new Set(
-    interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id),
-  );
-  const qualifiedSet = new Set(
-    interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
-  );
+  const contactedSet = new Set(leads.filter((l) => l.has_sent).map((l) => l.id));
+  const qualifiedSet = new Set(leads.filter((l) => l.has_meeting_scheduled).map((l) => l.id));
   const salSet = new Set(
     leads
       .filter((l) => l.won_at && l.won_at >= periodStart && l.won_at <= periodEnd)
@@ -168,10 +150,30 @@ function calculateFunnel(
   );
 
   return [
-    { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
-    { label: 'Contactados', count: contactedSet.size, percentage: safeRate(contactedSet.size, totalLeads), color: CONVERSION_COLORS.contacted },
-    { label: 'Qualificados', count: qualifiedSet.size, percentage: safeRate(qualifiedSet.size, totalLeads), color: CONVERSION_COLORS.qualified },
-    { label: 'SAL', count: salSet.size, percentage: safeRate(salSet.size, totalLeads), color: CONVERSION_COLORS.sal },
+    {
+      label: 'Total Leads',
+      count: totalLeads,
+      percentage: 100,
+      color: CONVERSION_COLORS.totalLeads,
+    },
+    {
+      label: 'Contactados',
+      count: contactedSet.size,
+      percentage: safeRate(contactedSet.size, totalLeads),
+      color: CONVERSION_COLORS.contacted,
+    },
+    {
+      label: 'Qualificados',
+      count: qualifiedSet.size,
+      percentage: safeRate(qualifiedSet.size, totalLeads),
+      color: CONVERSION_COLORS.qualified,
+    },
+    {
+      label: 'SAL',
+      count: salSet.size,
+      percentage: safeRate(salSet.size, totalLeads),
+      color: CONVERSION_COLORS.sal,
+    },
   ];
 }
 
@@ -191,7 +193,10 @@ function calculateStageConversions(funnel: FunnelStage[]): StageConversion[] {
   return result;
 }
 
-export function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRow[]): PipelineVelocity {
+export function calculateVelocity(
+  enrollments: Array<Pick<EnrollmentQueryRow, 'lead_id' | 'enrolled_at' | 'updated_at'>>,
+  leads: Array<Pick<LeadQueryRow, 'id' | 'status'>>,
+): PipelineVelocity {
   const qualifiedLeadIds = new Set(
     leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
   );
@@ -213,9 +218,10 @@ export function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: Lead
   durations.sort((a, b) => a - b);
   const avg = Math.round((durations.reduce((s, d) => s + d, 0) / durations.length) * 10) / 10;
   const mid = Math.floor(durations.length / 2);
-  const median = durations.length % 2 === 0
-    ? Math.round(((durations[mid - 1]! + durations[mid]!) / 2) * 10) / 10
-    : Math.round(durations[mid]! * 10) / 10;
+  const median =
+    durations.length % 2 === 0
+      ? Math.round(((durations[mid - 1]! + durations[mid]!) / 2) * 10) / 10
+      : Math.round(durations[mid]! * 10) / 10;
 
   return {
     avgDaysToQualification: avg,
@@ -227,8 +233,7 @@ export function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: Lead
 function calculateCadenceConversion(
   cadences: CadenceRow[],
   memberships: Array<{ cadence_id: string; lead_id: string }>,
-  interactions: InteractionQueryRow[],
-  leads: LeadQueryRow[],
+  leads: UniverseLead[],
 ): CadenceConversionRow[] {
   // All counts are attributed by universe ∩ cadence membership (at any time),
   // so a lead enrolled before the period that became qualified/won during it
@@ -240,16 +245,10 @@ function calculateCadenceConversion(
   const qualifiedLeadIds = new Set(
     leads.filter((l) => ['qualified', 'won'].includes(l.status)).map((l) => l.id),
   );
-  const wonLeadIds = new Set(
-    leads.filter((l) => l.status === 'won').map((l) => l.id),
-  );
+  const wonLeadIds = new Set(leads.filter((l) => l.status === 'won').map((l) => l.id));
 
-  const meetingLeadIds = new Set(
-    interactions.filter((i) => i.type === 'meeting_scheduled').map((i) => i.lead_id),
-  );
-  const repliedLeadIds = new Set(
-    interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id),
-  );
+  const meetingLeadIds = new Set(leads.filter((l) => l.has_meeting_scheduled).map((l) => l.id));
+  const repliedLeadIds = new Set(leads.filter((l) => l.has_replied).map((l) => l.id));
 
   const membershipsByCadence = groupBy(memberships, (m) => m.cadence_id);
 
@@ -281,11 +280,13 @@ function calculateCadenceConversion(
     .sort((a, b) => b.conversionRate - a.conversionRate);
 }
 
-function calculateConversionByOrigin(leads: LeadQueryRow[]): ConversionByOriginEntry[] {
+function calculateConversionByOrigin(
+  leads: Array<Pick<UniverseLead, 'status' | 'created_by'>>,
+): ConversionByOriginEntry[] {
   const originMap = new Map<string, { qualified: number; total: number }>();
 
   for (const lead of leads) {
-    const origin = (lead.created_by ? 'SDR' : 'Import');
+    const origin = lead.created_by ? 'SDR' : 'Import';
     const entry = originMap.get(origin) ?? { qualified: 0, total: 0 };
     entry.total++;
     if (lead.status === 'qualified' || lead.status === 'won') entry.qualified++;
