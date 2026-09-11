@@ -202,3 +202,54 @@ Claude Opus 5 (@dev Dex)
 - `pnpm gen:types`: a correção não muda a assinatura; o diff que apareceu (`goals_per_user.calls_target`/`calls_connected_target`) é de **outra mudança aplicada em prod por outra frente** — desfeito aqui para não misturar PRs (quem aplicou deve regenerar no PR dela).
 - Pendente p/ @devops: AC5 (vermelho provocado no CI) e AC6 (filtro de caminhos) — exigem push.
 - Docker e Supabase local continuam ligados (`supabase stop` para desligar).
+
+## QA Results
+
+### Review Date: 2026-09-11
+
+### Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+Infra de teste enxuta e bem isolada: banco descartável por execução, trava de host local, `psql` via argv (sem shell), schema mínimo rastreável a prod com md5 conferido no próprio teste, migrations descobertas pelo conteúdo (uma correção futura entra sozinha). O teste já provou valor achando o `for_velocity` null.
+
+### Verificação independente (feita nesta revisão)
+- **Teste de mutação da SQL** (mudança temporária nas migrations, restauradas pelo git): 10 mutações — dia de Brasília −2h, sem exclusão de canais, sem filtro de cadência (contagens e marcadores), `count` sem `DISTINCT`, leads excluídos no universo, cadências excluídas no vínculo, e tirar cada uma das 4 regras de entrada no universo (created/won/lost/meeting_held).
+  - **Achado:** as 4 regras de entrada no universo **passavam despercebidas** (o teste seguia 12/12): nos dados aleatórios quase todo lead tem interação no período, então nenhuma regra era o único motivo de entrada.
+  - **Corrigido nesta revisão (active refactoring):** 6 leads "de borda" (cada um entra por um único motivo; 2 não entram) + teste explícito. Depois disso: **10/10 mutações pegas** (2–5 testes vermelhos cada); original 13/13.
+- **Correção em prod sem drift:** md5 do corpo em prod = arquivo `20260911111939_…` (`c04925b1…`); `prosecdef=false`; `anon` sem EXECUTE.
+- **Workflow:** YAML válido (1 job, 4 caminhos); no job normal do CI os testes de integração ficam pulados (sem `STATS_TEST_PG_URL`).
+- typecheck ✅ · lint ✅ · testes de `tests/` + estatísticas ✅.
+
+### Rastreabilidade (AC → evidência)
+| AC | Evidência |
+|---|---|
+| AC1 | 4 casos por função vs referência JS (sem filtro / SDR / cadência / cadência excluída) + teste de mutação |
+| AC2 | "isolamento: o gestor da org B só vê a org B" |
+| AC3 | "anon não executa as funções" |
+| AC4 | `supabase-test-client.test.ts` (4 testes) + gate `isLocalSupabaseUrl` no teste novo |
+| AC5 | Provado **localmente** por mutação (10/10) e pelo defeito real achado; falta ver o job vermelho **no CI** (depende de push) |
+| AC6 | Declarativo (`paths` no workflow); falta observar no GitHub (depende de push) |
+| AC7 | "schema mínimo continua igual a prod (md5…)" |
+
+### Improvements Checklist
+- [x] TEST-GAP-001 (medium → resolvido na revisão) — regras de entrada do universo sem cobertura; leads de borda adicionados.
+- [ ] REQ-001 (low) — AC5/AC6 no CI: @devops mostra um run vermelho provocado (commit de teste descartado) e um PR fora dos caminhos sem o job.
+- [ ] DRIFT-001 (low) — schema mínimo pode desatualizar se a RLS dessas tabelas mudar em prod; o teste de md5 só compara com o snapshot de 11/set. Regra de DoD registrada na story.
+- [ ] MNT-001 (info) — `rls-policies.test.ts` segue sem rodar no CI (depende do drift de migrations — backlog).
+- [ ] DOC-001 (low) — CodeRabbit não rodou (CLI sem login).
+
+### Security Review
+PASS — trava contra host não local (fecha o risco de o teste de RLS mexer em usuários de prod); `psql` sem shell; dados de teste só em banco descartável; correção em prod mantém ACL.
+
+### Performance Considerations
+PASS — teste de integração ~3 s local; job novo só nos caminhos relevantes e fora do caminho crítico (não obrigatório).
+
+### Files Modified During Review
+- `tests/integration/statistics-rpcs.test.ts` — leads de borda + teste "cada regra de entrada conta sozinha" (**não commitado — QA não commita; @dev deve commitar junto**).
+- Esta seção e `docs/qa/gates/statistics-rpc-integration-tests.yml`.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/statistics-rpc-integration-tests.yml
+
+### Recommended Status
+✓ Ready for Done — depois de REQ-001 (AC5/AC6 observados no CI). Decisão final do Vini.

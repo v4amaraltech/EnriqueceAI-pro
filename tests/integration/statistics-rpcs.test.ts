@@ -254,6 +254,36 @@ const enrollmentsA = makeEnrollments(
 );
 const enrollmentsB = makeEnrollments(ORG_B, 31, 15, leadsB, [MGR_B], [CAD_B1]);
 
+/**
+ * Leads "de borda" (revisão de QA): cada um entra no universo da Conversão por
+ * UM único motivo — sem interação, criado antes do período — e um não entra
+ * por nenhum. Sem eles, tirar uma regra do universo passava despercebido
+ * (quase todo lead aleatório tem interação no período).
+ */
+const OUTSIDE = ts(-20, 12);
+const edge = (n: number, over: Partial<Lead>): Lead => ({
+  id: id(12, n),
+  org_id: ORG_A,
+  status: 'contacted',
+  created_by: SDR_A,
+  assigned_to: SDR_A,
+  created_at: OUTSIDE,
+  won_at: null,
+  lost_at: null,
+  meeting_held_at: null,
+  deleted_at: null,
+  ...over,
+});
+const edgeLeadsA: Lead[] = [
+  edge(1, { created_at: ts(5, 12) }), // só criado no período
+  edge(2, { status: 'won', won_at: ts(6, 12) }), // só ganho no período
+  edge(3, { status: 'unqualified', lost_at: ts(7, 12) }), // só perdido no período
+  edge(4, { meeting_held_at: ts(8, 12) }), // só reunião realizada no período
+  edge(5, {}), // nenhum motivo → fora do universo
+  edge(6, { won_at: ts(-5, 12), lost_at: ts(40, 12) }), // datas fora do período → fora
+];
+const allLeadsA = [...leadsA, ...edgeLeadsA];
+
 // ── Normalização (o banco devolve timestamptz com offset; a referência, ISO) ──
 const ms = (x: unknown) => (x == null ? null : Date.parse(String(x)));
 type CountRow = Record<string, unknown>;
@@ -316,7 +346,7 @@ describe.skipIf(!RUN)('funções de estatística num Postgres de verdade', () =>
         insert('organizations', organizations),
         insert('organization_members', members),
         insert('cadences', cadences),
-        insert('leads', [...leadsA, ...leadsB]),
+        insert('leads', [...allLeadsA, ...leadsB]),
         insert('interactions', [...interactionsA, ...interactionsB]),
         insert('cadence_enrollments', [...enrollmentsA, ...enrollmentsB]),
       ].join('\n'),
@@ -384,7 +414,7 @@ describe.skipIf(!RUN)('funções de estatística num Postgres de verdade', () =>
     const got = universe(MGR_A, users ? [...users] : null, cadence);
     const want = conversionUniverseReference(
       {
-        leads: leadsA,
+        leads: allLeadsA,
         interactions: interactionsA,
         cadences: cadences.filter((c) => c.org_id === ORG_A),
         enrollments: enrollmentsA,
@@ -397,8 +427,14 @@ describe.skipIf(!RUN)('funções de estatística num Postgres de verdade', () =>
     );
   });
 
+  it('universo da Conversão: cada regra de entrada conta sozinha (leads de borda)', () => {
+    const ids = new Set(universe(MGR_A, null, null).map((r) => String(r.lead_id)));
+    expect(edgeLeadsA.slice(0, 4).map((l) => ids.has(l.id))).toEqual([true, true, true, true]);
+    expect(edgeLeadsA.slice(4).map((l) => ids.has(l.id))).toEqual([false, false]);
+  });
+
   it('isolamento: o gestor da org B só vê a org B', () => {
-    const aLeads = new Set(leadsA.map((l) => l.id));
+    const aLeads = new Set(allLeadsA.map((l) => l.id));
     const aPeople = new Set([MGR_A, SDR_A, EX_A]);
     const u = universe(MGR_B, null, null);
     expect(u.length).toBeGreaterThan(0);

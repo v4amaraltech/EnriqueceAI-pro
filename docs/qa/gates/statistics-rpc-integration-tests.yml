@@ -1,0 +1,55 @@
+schema: 1
+story: 'statistics-rpc-integration-tests'
+story_title: 'Teste de integração das RPCs de estatística num banco local (e no CI)'
+gate: PASS
+status_reason: 'Teste de mutação da SQL: 10/10 pegas após corrigir na revisão uma lacuna nas regras de entrada do universo (leads de borda). Correção em prod sem drift. Resta observar AC5/AC6 no CI (depende de push).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-09-11T12:30:00Z'
+quality_score: 90
+expires: '2026-09-25T12:30:00Z'
+resolved_issues:
+  - id: 'TEST-GAP-001'
+    resolution: 'Mutação "universo sem meeting_held_at" passava (12/12). Adicionados 6 leads de borda (1 motivo de entrada cada; 2 fora) + teste explícito. Depois: 10/10 mutações pegas; original 13/13. Arquivo tests/integration/statistics-rpcs.test.ts (não commitado pela QA).'
+top_issues:
+  - id: 'REQ-001'
+    severity: low
+    finding: 'AC5 (job vermelho no CI) e AC6 (filtro de caminhos) só podem ser observados depois do push.'
+    suggested_action: '@devops: PR normal (job verde) + commit descartável que quebra a SQL (job vermelho) + checar que PR fora dos caminhos não dispara.'
+  - id: 'DRIFT-001'
+    severity: low
+    finding: 'Schema mínimo é snapshot de 11/set; mudança de RLS/helpers em prod não é detectada automaticamente.'
+    suggested_action: 'Regra de DoD (já na story): quem mexer em RLS/user_org_id/is_manager/lead_visibility_mode dessas tabelas atualiza o fixture e os md5 no mesmo PR.'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'CodeRabbit não rodou (CLI sem login).'
+    suggested_action: 'Vini: coderabbit auth login.'
+waiver: { active: false }
+evidence:
+  tests_reviewed: 18
+  risks_identified: 4
+  mutation_testing:
+    mutants: 10
+    killed: 10
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 7]
+    ac_gaps: [6]
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Trava de host local nos testes de integração; psql via argv; banco descartável.'
+  performance:
+    status: PASS
+    notes: '~3 s local; job só nos caminhos relevantes.'
+  reliability:
+    status: PASS
+    notes: 'Mutação 10/10; md5 do schema e da correção em prod conferidos.'
+  maintainability:
+    status: PASS
+    notes: 'Migrations descobertas pelo conteúdo; referência JS única para unit e integração.'
+recommendations:
+  immediate:
+    - action: 'Commitar o ajuste da QA em tests/integration/statistics-rpcs.test.ts junto com o gate'
+      refs: ['tests/integration/statistics-rpcs.test.ts']
+  future:
+    - action: 'Reconciliar migrations (backlog) para ligar o rls-policies.test.ts no CI'
+      refs: ['docs/improvements-backlog.md']
