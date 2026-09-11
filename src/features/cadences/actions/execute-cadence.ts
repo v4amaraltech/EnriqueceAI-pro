@@ -16,6 +16,7 @@ import { EmailService } from '@/features/integrations/services/email.service';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
+import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
@@ -790,6 +791,13 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           event: 'cadence_completed',
           message: 'Cadência concluída — todos os passos foram executados',
           metadata: { cadence_id: enrollment.cadence_id, enrollment_id: enrollment.id },
+        });
+        // Fim da cadência sem resposta → Perdido "Nunca respondeu" na hora.
+        await markLeadLostOnCadenceEnd({
+          orgId: enrollment.lead.org_id,
+          leadId: enrollment.lead_id,
+          cadenceId: enrollment.cadence_id,
+          enrollmentId: enrollment.id,
         });
         dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'enrollment.completed', {
           lead_id: enrollment.lead_id,

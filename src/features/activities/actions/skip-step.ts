@@ -10,6 +10,7 @@ import { from } from '@/lib/supabase/from';
 
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
+import { markLeadLostOnCadenceEnd } from '@/features/cadences/services/cadence-end-loss.service';
 
 import { SKIP_NOTE_MAX, SKIP_REASON_VALUES, reasonLabel } from '../constants/skip-reasons';
 
@@ -130,6 +131,14 @@ export async function skipStep(
       event: 'cadence_completed',
       message: 'Cadência concluída — último passo pulado pelo SDR',
       metadata: { cadence_id: enrollment.cadence_id, enrollment_id: enrollmentId },
+    });
+
+    // Fim da cadência sem resposta → Perdido "Nunca respondeu" na hora.
+    await markLeadLostOnCadenceEnd({
+      orgId: enrollment.org_id,
+      leadId: enrollment.lead_id,
+      cadenceId: enrollment.cadence_id,
+      enrollmentId,
     });
 
     createNotification({

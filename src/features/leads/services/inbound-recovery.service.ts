@@ -53,6 +53,11 @@ const RULES: Record<string, InboundRecoveryRule> = {
   },
 };
 
+/** Cadência Recovery configurada para a org (null se a org não tem regra). */
+export function getInboundRecoveryCadenceId(orgId: string): string | null {
+  return RULES[orgId]?.cadenceId ?? null;
+}
+
 export function isRecoverableLossReason(reasonName: string | null | undefined, rule: InboundRecoveryRule): boolean {
   if (!reasonName) return false;
   const normalized = reasonName.trim().toLowerCase();
