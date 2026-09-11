@@ -7,6 +7,12 @@ import type {
   Api4ComHangupResponse,
   Api4ComOriginateResponse,
 } from '../types/api4com';
+import {
+  CALL_WEBHOOK_DEFAULT_URL,
+  CALL_WEBHOOK_DEFAULT_VERSION,
+  findCallWebhookIntegration,
+  planCallWebhookRepair,
+} from './api4com-call-webhook';
 
 interface Api4ComCredentials {
   apiKey: string;
@@ -166,78 +172,44 @@ export async function listCalls(
   return api4comFetch<Api4ComCallListResponse>(creds, 'GET', `/calls?${params.toString()}`);
 }
 
-interface Api4ComIntegration {
-  id: number;
-  gateway: string;
-  webhook: boolean;
-  webhookConstraint: unknown;
-  metadata: Record<string, unknown> | null;
-}
-
 /**
- * Enable the webhook on the user's existing API4COM integration.
+ * Garante que a conta API4COM do usuário entregue os eventos de ligação:
+ * integração gateway `webhook` SEM filtro (cria se faltar; liga/tira filtro se
+ * precisar). NUNCA toca em outra integração — ver `planCallWebhookRepair`.
  *
- * API4COM creates one integration per credential at signup, tied to a
- * gateway that depends on the CRM the customer integrates with (we
- * observed `amocrm`, `salesforce`, `sippulse`, `enriqueceai`). The old
- * code tried to create a brand-new integration with `gateway:
- * flux-{orgId}` — that gateway does not exist, the API returned 500,
- * and the webhook config never landed. Net effect: any ramal we
- * connected after 2026-04 had zero channel-hangup events delivered.
+ * Histórico: de mai a set/2026 esta função fazia PATCH na PRIMEIRA integração
+ * da conta, trocando a `webhookUrl` dela pela nossa e filtrando por gateway. Em
+ * vários ramais essa era a integração do CRM (amoCRM, Salesforce) — a entrega
+ * de eventos do CRM era sobrescrita — e mesmo assim não funcionava para nós: o
+ * filtro barrava as ligações do discador (`gateway: flux-{orgId}`). O que
+ * entrega de fato é a integração `webhook` sem filtro (diagnóstico de 10/set).
  *
- * Fix: GET /integrations to learn the actual integration id + gateway,
- * then PATCH that record with `id` set (the API requires the id;
- * without it returns 422 "User integration already exists").
- *
- * The `gateway` parameter is kept in the signature for backwards
- * compatibility but no longer used — the real gateway comes from the
- * GET response so we don't fight whatever the customer's CRM picked.
+ * Verificação + retry mantidos (caso do ramal 1045, ago/2026: PATCH que "não
+ * pegou"). O cron `reregister-api4com-webhooks` é a rede de segurança diária.
  */
 const WEBHOOK_REGISTER_MAX_ATTEMPTS = 3;
 
-export async function registerWebhook(
-  userId: string,
-  webhookUrl: string,
-  _gateway: string,
-): Promise<void> {
+export async function ensureCallWebhook(userId: string): Promise<void> {
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
-  // Registro com VERIFICAÇÃO + RETRY. Antes era GET+PATCH "dispara e esquece":
-  // se o PATCH falhasse (rede transitória, 5xx) ou não "pegasse", o ramal ficava
-  // SEM channel-answer/channel-hangup e ninguém percebia até faltar dado no BI.
-  // Foi o que aconteceu com o ramal 1045 (João, ago/2026). Agora: após o PATCH,
-  // relemos a integração e confirmamos `webhook === true`; se não bater, tentamos
-  // de novo. O cron `reregister-api4com-webhooks` é a rede de segurança adicional.
+  const target = { webhookUrl: CALL_WEBHOOK_DEFAULT_URL, webhookVersion: CALL_WEBHOOK_DEFAULT_VERSION };
+
   let lastError: unknown;
   for (let attempt = 1; attempt <= WEBHOOK_REGISTER_MAX_ATTEMPTS; attempt++) {
     try {
-      const integrations = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
-      if (!Array.isArray(integrations) || integrations.length === 0) {
-        throw new Error('Integração API4COM não encontrada para este usuário');
-      }
-      const integration = integrations[0]!;
+      const integrations = await api4comFetch<unknown[]>(creds, 'GET', '/integrations');
+      const plan = planCallWebhookRepair(Array.isArray(integrations) ? integrations : [], target);
+      if (plan.action === 'noop') return;
 
-      await api4comFetch(creds, 'PATCH', '/integrations', {
-        id: integration.id,
-        webhook: true,
-        webhookConstraint: { metadata: { gateway: integration.gateway } },
-        metadata: {
-          ...(integration.metadata ?? {}),
-          webhookUrl,
-          webhookVersion: 'v1.4',
-          webhookTypes: ['channel-hangup', 'channel-answer'],
-        },
-      });
+      await api4comFetch(creds, 'PATCH', '/integrations', plan.body);
 
-      // Verificação: relê e confirma que o webhook ficou de fato habilitado.
-      const verify = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
-      const updated = Array.isArray(verify)
-        ? (verify.find((i) => i.id === integration.id) ?? verify[0])
-        : undefined;
-      if (updated?.webhook === true) return;
+      // Verificação: relê e confirma que a `webhook` ficou ligada e sem filtro.
+      const verify = await api4comFetch<unknown[]>(creds, 'GET', '/integrations');
+      const after = findCallWebhookIntegration(Array.isArray(verify) ? verify : []);
+      if (after && planCallWebhookRepair([after], target).action === 'noop') return;
 
-      throw new Error('Webhook não confirmado após PATCH (webhook !== true na releitura)');
+      throw new Error('Integração webhook não confirmada após PATCH');
     } catch (err) {
       lastError = err;
       if (attempt < WEBHOOK_REGISTER_MAX_ATTEMPTS) {
@@ -248,5 +220,5 @@ export async function registerWebhook(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error('Falha ao registrar webhook API4COM após múltiplas tentativas');
+    : new Error('Falha ao configurar a entrega de eventos da API4COM após múltiplas tentativas');
 }

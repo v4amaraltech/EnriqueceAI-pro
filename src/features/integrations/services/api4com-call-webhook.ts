@@ -17,6 +17,11 @@ export const CALL_WEBHOOK_GATEWAY = 'webhook';
 export const CALL_WEBHOOK_TYPES = ['channel-hangup', 'channel-answer'] as const;
 /** Versão usada por 5 das 6 integrações `webhook` da Amaral (payload que o handler lê). */
 export const CALL_WEBHOOK_DEFAULT_VERSION = 'v1.4';
+/**
+ * Destino das integrações `webhook` que funcionam hoje (todas as da Amaral e,
+ * desde 10/set, as do Julio): o n8n repassa para `/api/webhooks/api4com`.
+ */
+export const CALL_WEBHOOK_DEFAULT_URL = 'https://webhook-n8n.v4companyamaral.com/webhook/api4com-call-event';
 
 export interface CallWebhookTarget {
   webhookUrl: string;
@@ -94,6 +99,62 @@ export function planCallWebhookIntegration(
       webhook: true,
       ...(hasConstraint ? { webhookConstraint: {} } : {}),
       metadata: { ...metadata, ...metadataPatch },
+    },
+  };
+}
+
+export type CallWebhookRepairPlan =
+  | { action: 'noop'; integrationId: unknown; urlIsDefault: boolean }
+  | { action: 'repair'; integrationId: unknown; body: Record<string, unknown>; urlIsDefault: boolean }
+  | { action: 'create'; body: Record<string, unknown> };
+
+/**
+ * Modo REPARO — usado pelo cron diário `reregister-api4com-webhooks` e ao
+ * cadastrar um ramal. Mais conservador que `planCallWebhookIntegration`:
+ *  - sem integração `webhook` → cria apontando para `defaults`;
+ *  - com integração `webhook` → só LIGA, tira o filtro e completa os tipos de
+ *    evento se precisar; NUNCA troca URL nem versão de uma que já existe
+ *    (`urlIsDefault: false` só sinaliza para correção manual pela rota admin).
+ *
+ * Substitui o comportamento antigo (mai–set/2026) que fazia PATCH na PRIMEIRA
+ * integração da conta — às vezes a do CRM (amoCRM no 1024, Salesforce no 1033)
+ * — trocando a URL dela pela nossa e filtrando por gateway.
+ */
+export function planCallWebhookRepair(
+  integrations: unknown[],
+  defaults: CallWebhookTarget,
+): CallWebhookRepairPlan {
+  const existing = findCallWebhookIntegration(integrations);
+  if (!existing) {
+    const plan = planCallWebhookIntegration([], defaults);
+    return { action: 'create', body: (plan as { body: Record<string, unknown> }).body };
+  }
+
+  const metadata = asRecord(existing.metadata) ?? {};
+  const constraint = asRecord(existing.webhookConstraint);
+  const hasConstraint = constraint !== null && Object.keys(constraint).length > 0;
+  const urlIsDefault = metadata.webhookUrl === defaults.webhookUrl;
+
+  if (existing.webhook === true && !hasConstraint && sameTypes(metadata.webhookTypes)) {
+    return { action: 'noop', integrationId: existing.id ?? null, urlIsDefault };
+  }
+
+  return {
+    action: 'repair',
+    integrationId: existing.id ?? null,
+    urlIsDefault,
+    body: {
+      id: existing.id,
+      gateway: CALL_WEBHOOK_GATEWAY,
+      webhook: true,
+      ...(hasConstraint ? { webhookConstraint: {} } : {}),
+      metadata: {
+        ...metadata,
+        webhookUrl: typeof metadata.webhookUrl === 'string' ? metadata.webhookUrl : defaults.webhookUrl,
+        webhookVersion:
+          typeof metadata.webhookVersion === 'string' ? metadata.webhookVersion : defaults.webhookVersion,
+        webhookTypes: [...CALL_WEBHOOK_TYPES],
+      },
     },
   };
 }

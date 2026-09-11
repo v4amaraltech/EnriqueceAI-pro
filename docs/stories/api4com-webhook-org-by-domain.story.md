@@ -6,6 +6,7 @@ Ready for Review
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-10 | @dev (Dex) | **Cron reregister para de sobrescrever integração de CRM (pedido do Vini).** Desde 15/mai (cadastro de ramal) e todo dia desde 12/ago (cron jobid 57), `registerWebhook` e a rota `reregister-api4com-webhooks` faziam PATCH na **primeira** integração da conta trocando a `webhookUrl` pela nossa + filtro de gateway — em prod isso atingiu `amocrm` (1024), `salesforce` (1033, integração da franqueadora), `enriqueceai` (1014) e `sippulse` (1040/1042/1028/1045 e os 3 do Julio). Agora os dois usam `planCallWebhookRepair`: só a integração gateway `webhook` sem filtro (cria se faltar; liga/tira filtro/completa tipos se precisar; **nunca troca URL/versão de uma existente** — só sinaliza). `registerWebhook` → `ensureCallWebhook(userId)`. Rota ganhou `dryRun`/`orgId`. +4 testes. **Não restaura** as URLs originais das integrações de CRM já sobrescritas (desconhecidas) — decisão pendente do Vini. |
 | 2026-09-10 | @dev (Dex) | **Aviso do Julio LIGADO** (~23:10 UTC, autorizado pelo Vini). PR #378 mergeado (`56826eda`, CI: flaky + re-run verde), no ar. dryRun → aplicado: credencial 1000/1023 = **criada** integração `webhook` id 164043; ramal 1025 = integração 163813 **atualizada** (URL do editor do n8n → `webhook-n8n.v4companyamaral.com/webhook/api4com-call-event`, v1.8→v1.4). Ambas `verified: true`, sem filtro. sippulse (67917/154641) e mars-voip (154527) intactas (conferido no diagnóstico). ⏳ Conferir 11/set de manhã: eventos com `domain = mendezco.api4com.com` chegando e caindo na org do Julio; `answered_at` preenchendo. Reverter = PATCH na 163813 com a URL antiga / desligar a 164043. |
 | 2026-09-10 | @dev (Dex) | **Ligar o aviso do Julio (autorizado pelo Vini: "liga o aviso do Julio"):** a chave da API4COM só descriptografa em prod → nova rota `POST /api/admin/configure-api4com-call-webhook` ({orgId, webhookUrl https, webhookVersion?, dryRun padrão TRUE}). Cria/atualiza SÓ a integração gateway `webhook` (sem filtro) de cada credencial da org, com releitura de verificação; não toca nas outras. Formato confirmado na doc oficial (`PATCH /integrations`: sem `id` cria, com `id` atualiza). Alvo = o mesmo da Amaral: `https://webhook-n8n.v4companyamaral.com/webhook/api4com-call-event`, `v1.4`. Helper puro `api4com-call-webhook.ts` (+6 testes). |
 | 2026-09-10 | @dev (Dex) | **`sip_domain` do Julio cadastrado** 22:35 UTC (autorizado pelo Vini): 1000/1023/1025 = `mendezco.api4com.com` (antes: vazio — reverter = voltar para NULL). Conferido no banco. Sem aviso da API4COM desde o deploy (última ligação da Amaral 21:22 UTC, fim do expediente) → **conferir 11/set de manhã** que os avisos da Amaral seguem `processed`. |
@@ -83,6 +84,9 @@ O payload traz `domain` (`v4amaral.api4com.com` em 100% dos eventos de 2 dias), 
 - `src/features/integrations/services/api4com-diagnostics.ts` + `.test.ts` — `accountDomain`
 - `src/features/integrations/services/api4com-call-webhook.ts` (novo) + `.test.ts` (novo, 6 testes)
 - `src/app/api/admin/configure-api4com-call-webhook/route.ts` (novo)
+- `src/app/api/admin/reregister-api4com-webhooks/route.ts` — reescrita (modo reparo, dryRun, dedupe por credencial)
+- `src/features/integrations/services/api4com.service.ts` — `registerWebhook` → `ensureCallWebhook`
+- `src/features/integrations/actions/register-api4com-webhook.ts`
 
 ### Próximos passos (depois do deploy)
 1. `POST /api/admin/check-api4com-config {orgId: Julio}` → ler `accountDomain`.
