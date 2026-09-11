@@ -1,7 +1,7 @@
 # Story: Seção "SDR selecionado" no Dashboard — 7 cards de meta individual
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
@@ -11,6 +11,7 @@ Ready for Review
 | 2026-09-11 | @dev (Dex) | Implementado no worktree `worktree-dashboard-sdr-pace` (base `origin/main` `0004c295`). typecheck ✅ lint ✅ testes ✅ (2.024; +27 novos) build ✅. Conferência visual por HTML estático com o CSS do build (claro, escuro, tablet): números e cores iguais ao `/sdrs`. **Pendente:** aplicar a migration em prod (a aplicação pelo MCP foi bloqueada pela permissão da sessão) e depois `pnpm gen:types`. Sem commit/push/PR (aguarda pedido do Vini). |
 | 2026-09-11 | @dev (Dex) | **Migration aplicada em prod** via MCP (pedido do Vini: "aplica a migration"), versão `20260911100515` — arquivo renomeado para a mesma versão. Conferido: 2 colunas `integer NOT NULL DEFAULT 0`, 44 linhas existentes com 0. `pnpm gen:types` rodado (traz também `get_interaction_counts`, de outra migration já em prod às 09:54 UTC, fora desta story). typecheck ✅ testes ✅. |
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Commit + PR autorizados pelo Vini ("commita e abre o PR"). Branch `feat/dashboard-sdr-pace-cards` rebaseada na `origin/main` (`17d727c7`). |
+| 2026-09-11 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). **PR #393 mergeado** 10:27 UTC (squash `bfe6f89e`), **no ar** 10:31 UTC (`/api/version` = `bfe6f89`). CI do PR falhou 2× no flaky "Closing rpc while fetch was pending" (`inbound-lead.service.test.ts`, alheio à story) e passou na 3ª; causa corrigida no **PR #396** (`376cf961`). Fica com o Vini: conferir a seção logado e o gestor preencher as metas de ligação de setembro no "Editar metas". |
 
 ## Executor Assignment
 executor: "@dev"
@@ -62,7 +63,8 @@ Paridade conferida no banco antes de começar (Matheus, set/2026): Leads Abertos
 - [x] Componentes `PaceKpiCard` e `SdrPaceSection`; inserir no `DashboardView`; esqueleto
 - [x] `pnpm typecheck && pnpm lint && pnpm test:run && pnpm build`
 - [x] Paridade com SQL (Matheus, set/2026: 91 / 4 / 3 / 832 / 46) e verificação visual (claro/escuro/tablet)
-- [ ] Verificar no app logado após a migration (trocar SDR, mês passado, salvar metas de ligações)
+- [x] Deploy conferido (`/api/version` = `bfe6f89`, 11/set 10:31 UTC)
+- [ ] Verificar no app logado (trocar SDR, mês passado, salvar metas de ligações) — com o Vini
 
 ## Dev Notes
 - Ritmo portado de `v4-sales-hub/src/components/PaceKpiCard.tsx`, `src/lib/pace.ts` e `src/pages/SDRs.tsx` (`buildTeamKPIs`). Os dias úteis usam `utils/pacing.ts` do Enriquece (feriados nacionais fixos e móveis).
