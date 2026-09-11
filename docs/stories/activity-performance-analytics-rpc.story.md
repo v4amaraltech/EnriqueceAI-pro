@@ -183,3 +183,54 @@ Claude Opus 5 (@dev Dex)
 ### Notas para o deploy
 - A função já está em prod e o app atual não a usa → deploy do app a qualquer momento.
 - Depois do deploy: abrir Estatísticas › Atividades e › Performance (30 dias) — os números devem ser os mesmos de antes do deploy.
+
+## QA Results
+
+### Review Date: 2026-09-11
+
+### Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+Troca mecânica e bem delimitada: cada conta que fazia `interactions.filter(...).length` passou a `sumCells(cells, ...)`; "leads distintos" e "última atividade" vêm da linha por autor. Nenhuma regra de negócio mudou. Módulo `interaction-counts.ts` pequeno e testado; migration limpa (`SECURITY INVOKER`, `STABLE`, `search_path = ''`, sem SQL dinâmico, org via `(SELECT user_org_id())`).
+
+### Verificação independente (feita nesta revisão)
+- **Função real em prod, recorte que o dev não testou com ela** (Performance V4 90d, membros ativos): md5 das contagens = `3d7aaccaaa50fd63ba95ae7112962430` / 1.068 linhas — **igual** à referência JS calculada pelo dev a partir das interações brutas.
+- **Sem drift:** md5 do corpo em prod = arquivo `20260911095436_get_interaction_counts.sql` (`5e63acc9…`); `prosecdef=false`; `anon` sem EXECUTE.
+- **Quem chama:** só as páginas `statistics/activities`, `statistics/prospecting/activities` e `statistics/prospecting/performance`, via actions com `getManagerOrgId` + sessão do usuário → nenhum chamador com service role (que receberia vazio).
+- **Fuso do retrato:** CI roda com `TZ=America/Sao_Paulo` (`.github/workflows/ci.yml`), igual à máquina que gerou o snapshot.
+- **Fake PostgREST:** `neq`/`not in` descartam nulos como o SQL/PostgREST; `is(col, null)`; nenhum teste antigo passou a passar "no vazio" (suíte inteira verde).
+
+### Rastreabilidade (AC → evidência)
+| AC | Given / When / Then | Evidência |
+|---|---|---|
+| AC1 | Dado os mesmos dados, quando as telas usam as contagens, então os números e a ordem são iguais | `interaction-counts.equivalence.test.ts` (retrato do código antigo, 4 cenários) + md5 SQL=JS 11/11 + JSON idêntico 6 recortes reais + checagem independente acima |
+| AC2 | Telas não leem `interactions` | Diff: só `leads`, metas, membros e RPC |
+| AC3 | Sem autor nos totais, fora da tabela por SDR | Cenários do retrato (autor nulo + ex-membro `u4`) |
+| AC4 | `anon` não executa | `has_function_privilege` + chamada real negada |
+| AC5 | 90d < 1 s | 112–158 ms como gestor |
+| AC6 | Tipos no mesmo PR | commit `782cdcfd` (só a função) |
+
+### Compliance Check
+- Coding Standards: ✓ · Project Structure: ✓ (migration = versão gravada; tipos em commit separado) · Testing Strategy: ✓ · All ACs Met: ✓
+
+### Improvements Checklist
+- [ ] TEST-001 (low) — a SQL não roda no CI; a referência JS do teste é a "especificação". Se alguém mudar a função sem mudar a referência, só a conferência manual pega. Sugestão: teste em `tests/integration/` com Supabase local (mesma dívida da Conversão).
+- [ ] MNT-001 (info) — retrato com ~1,5 mil linhas: mudança intencional nas telas exige `vitest -u` consciente (revisar o diff do snapshot no PR).
+- [ ] FLK-001 (info) — `features/reports/components/StatisticsView.test.tsx` instável sob carga (falhou 1×, passou isolado e na rodada seguinte); não relacionado a esta story.
+- [ ] DOC-001 (low) — CodeRabbit não rodou (CLI sem login).
+- [ ] REQ-001 (low) — conferir Atividades e Performance (30d) no navegador após o deploy.
+
+### Security Review
+PASS — sem `SECURITY DEFINER`, `anon` sem EXECUTE, parâmetros tipados (enum `channel_type[]`), sem exposição além da RLS existente (`interactions_org_read` já libera a org inteira a quem é da org).
+
+### Performance Considerations
+PASS — 90d: ~35 mil linhas → ~1,1 mil; ~0,1–0,16 s por execução (2 por abertura; Atividades com "comparar" = 4).
+
+### Files Modified During Review
+Nenhum arquivo de código. Só esta seção e `docs/qa/gates/activity-performance-analytics-rpc.yml`.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/activity-performance-analytics-rpc.yml
+
+### Recommended Status
+✓ Ready for Done — depois do deploy e da conferência das telas (REQ-001). Decisão final do Vini.

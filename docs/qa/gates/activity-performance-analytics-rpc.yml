@@ -1,0 +1,53 @@
+schema: 1
+story: 'activity-performance-analytics-rpc'
+story_title: 'Atividades e Performance calculadas a partir de contagens agrupadas no banco (RPC)'
+gate: PASS
+status_reason: 'Paridade provada em 3 camadas e confirmada de forma independente com a função real em prod (Performance 90d, md5 igual); sem drift, sem acesso de anon, 90 dias em ~0,15 s. Só itens low/info.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-09-11T10:30:00Z'
+quality_score: 100
+expires: '2026-09-25T10:30:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'A SQL de get_interaction_counts não roda no CI; a referência JS do teste de equivalência faz o papel de especificação.'
+    suggested_action: 'Teste em tests/integration/ com Supabase local (junto com get_conversion_universe).'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'CodeRabbit não rodou — CLI sem login.'
+    suggested_action: 'Vini: `coderabbit auth login`; depois `coderabbit --prompt-only -t committed --base main`.'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'Telas não conferidas no navegador.'
+    suggested_action: 'Após o deploy, abrir Estatísticas › Atividades e › Performance (30 dias) e comparar com antes.'
+waiver: { active: false }
+evidence:
+  tests_reviewed: 12
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'SECURITY INVOKER, search_path vazio, anon sem EXECUTE, sem SQL dinâmico.'
+  performance:
+    status: PASS
+    notes: '90d 112–158 ms como gestor; ~1,1 mil linhas em vez de ~35 mil.'
+  reliability:
+    status: PASS
+    notes: 'Erro do RPC vira erro da tela; md5 do corpo em prod = arquivo; ordem de paginação por chave única.'
+  maintainability:
+    status: PASS
+    notes: 'Regras continuam em TS; retrato do código antigo trava regressão (atualizar snapshot só com revisão).'
+recommendations:
+  immediate: []
+  future:
+    - action: 'Teste de integração das duas funções RPC com Supabase local'
+      refs: ['supabase/migrations/20260911095436_get_interaction_counts.sql', 'supabase/migrations/20260911030704_get_conversion_universe.sql']
+    - action: 'Investigar instabilidade de StatisticsView.test.tsx sob carga'
+      refs: ['src/features/reports/components/StatisticsView.test.tsx']
+deploy_order:
+  - 'Migration já aplicada em prod (20260911095436) — app atual não depende dela.'
+  - 'Push/PR/merge (@devops, só com pedido do Vini) → deploy Coolify → conferir /api/version.'
+  - 'Conferir as telas (REQ-001).'
