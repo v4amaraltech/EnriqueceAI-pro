@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { BarChart3, CalendarDays, HelpCircle, Maximize2, TrendingDown, TrendingUp } from 'lucide-react';
 import {
@@ -151,6 +151,11 @@ interface OpportunityKpiCardProps {
   labelTooltip?: string;
   /** Color for the line/area (defaults to emerald). */
   seriesColor?: 'emerald' | 'sky';
+  /**
+   * Linha extra de contexto logo abaixo do subtítulo (ex.: "4 avaliadas de 21
+   * realizadas"). Só o card de SAO usa; os demais ficam iguais.
+   */
+  subtitleExtra?: ReactNode;
 }
 
 export function OpportunityKpiCard({
@@ -159,10 +164,14 @@ export function OpportunityKpiCard({
   label = 'Oportunidades',
   labelTooltip = 'Leads convertidos em oportunidades no mês',
   seriesColor: _seriesColor = 'emerald',
+  subtitleExtra,
 }: OpportunityKpiCardProps) {
   const [expanded, setExpanded] = useState(false);
   const monthName = getMonthName(month);
   const monthNameLower = monthName.toLowerCase();
+  // Sigla (ex.: "SAO") fica em maiúsculas na frase da meta; rótulo comum vai
+  // em minúsculas ("reuniões realizadas").
+  const labelInSentence = label === label.toUpperCase() ? label : label.toLowerCase();
   const monthAbbr = getMonthAbbr(month);
   const isAbove = kpi.percentOfTarget >= 0;
   const absPercent = Math.abs(kpi.percentOfTarget);
@@ -206,6 +215,11 @@ export function OpportunityKpiCard({
                 <HelpCircle className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
               </span>
             </p>
+            {subtitleExtra && (
+              <p className="mt-1 text-xs text-muted-foreground" data-slot="kpi-subtitle-extra">
+                {subtitleExtra}
+              </p>
+            )}
 
             {kpi.monthTarget > 0 && (
               <div className="mt-6 flex items-start gap-3">
@@ -213,7 +227,7 @@ export function OpportunityKpiCard({
                   <CalendarDays className="h-4 w-4 text-emerald-500" />
                 </div>
                 <p className="text-sm leading-relaxed">
-                  Meta de {label.toLowerCase()} para {monthNameLower}:{' '}
+                  Meta de {labelInSentence} para {monthNameLower}:{' '}
                   <span className="font-semibold text-emerald-600">{kpi.monthTarget}</span>
                 </p>
               </div>

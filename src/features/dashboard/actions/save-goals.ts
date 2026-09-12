@@ -19,7 +19,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { month, leadsFinishedTarget, activitiesTarget, conversionTarget, leadsOpenedTarget, meetingsScheduledTarget, meetingsHeldTarget, userGoals } = parsed.data;
+  const { month, leadsFinishedTarget, activitiesTarget, conversionTarget, leadsOpenedTarget, meetingsScheduledTarget, meetingsHeldTarget, saoTarget, userGoals } = parsed.data;
   const monthDate = `${month}-01`;
 
   // Get user's org
@@ -49,6 +49,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
         leads_opened_target: leadsOpenedTarget,
         meetings_scheduled_target: meetingsScheduledTarget,
         meetings_held_target: meetingsHeldTarget,
+        sao_target: saoTarget,
         created_by: user.id,
       },
       { onConflict: 'org_id,month' },
@@ -71,6 +72,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     meetings_held_target: ug.meetingsHeldTarget,
     calls_target: ug.callsTarget,
     calls_connected_target: ug.callsConnectedTarget,
+    sao_target: ug.saoTarget,
   }));
 
   const { error: userGoalError } = await from(supabase, 'goals_per_user')

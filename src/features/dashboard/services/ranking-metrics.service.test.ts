@@ -6,8 +6,11 @@ import {
   fetchLeadsFinishedRanking,
   fetchLeadsOpenedRanking,
   fetchLeadsToOpenRanking,
+  fetchHeldLeadsForRanking,
   fetchMeetingsHeldRanking,
   fetchRankingData,
+  fetchSaoRanking,
+  fetchSaoRateRanking,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
@@ -412,6 +415,176 @@ describe('fetchLeadsOpenedRanking — idealToDate por meta individual de leads',
   });
 });
 
+describe('fetchSaoRanking', () => {
+  it('conta só realizadas com SAO=true, atribuídas a SDR ativo, e lê a meta sao_target', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u2' },
+        { id: 'l4', assigned_to: 'manager-x' }, // não é SDR
+        { id: 'l5', assigned_to: null },
+      ],
+    });
+    const feedbackChain = createChainMock({
+      data: [
+        { lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+        { lead_id: 'l2', oportunidade_qualificada: false, responded_at: '2026-01-10T10:00:00Z' },
+        { lead_id: 'l3', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+        { lead_id: 'l4', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { sao_target: 50 } });
+    const goalsPerUserChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      if (table === 'goals') return goalsChain;
+      if (table === 'goals_per_user') return goalsPerUserChain;
+      return createChainMock();
+    });
+
+    const result = await fetchSaoRanking(supabase as never, ORG, baseFilters);
+
+    expect(result.total).toBe(2);
+    expect(result.monthTarget).toBe(50);
+    expect(result.sdrBreakdown.find((s) => s.userId === 'u1')?.value).toBe(1);
+    expect(result.sdrBreakdown.find((s) => s.userId === 'u2')?.value).toBe(1);
+    // só leads de SDR entram na consulta de feedback
+    expect(feedbackChain.in).toHaveBeenCalledWith('lead_id', ['l1', 'l2', 'l3']);
+    expect(goalsPerUserChain.select).toHaveBeenCalledWith('user_id, sao_target');
+  });
+
+  it('respeita o filtro de vendedor', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u2' },
+      ],
+    });
+    const feedbackChain = createChainMock({
+      data: [
+        { lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+        { lead_id: 'l3', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+      ],
+    });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      return createChainMock({ data: null });
+    });
+
+    const result = await fetchSaoRanking(supabase as never, ORG, { ...baseFilters, userIds: ['u2'] });
+
+    expect(result.total).toBe(1);
+    expect(result.sdrBreakdown).toHaveLength(1);
+    expect(result.sdrBreakdown[0]?.userId).toBe('u2');
+  });
+
+  it('usa a meta individual sao_target no ideal, com fallback compartilhado', async () => {
+    // Mês passado (2026-01) → ritmo cheio: ideal individual = meta individual.
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
+    const leadsChain = createChainMock({ data: [{ id: 'l1', assigned_to: 'u1' }, { id: 'l2', assigned_to: 'u2' }] });
+    const feedbackChain = createChainMock({
+      data: [
+        { lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+        { lead_id: 'l2', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { sao_target: 20 } });
+    // Mesmo chain serve countSdrsForIdeal (opportunity_target) e fetchIndividualTargets (sao_target)
+    const goalsPerUserChain = createChainMock({
+      data: [
+        { user_id: 'u1', opportunity_target: 10, sao_target: 12 },
+        { user_id: 'u2', opportunity_target: 10, sao_target: 0 },
+      ],
+    });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      if (table === 'goals') return goalsChain;
+      if (table === 'goals_per_user') return goalsPerUserChain;
+      return createChainMock();
+    });
+
+    const result = await fetchSaoRanking(supabase as never, ORG, baseFilters);
+
+    const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
+    const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
+    expect(u1?.idealToDate).toBe(12); // meta individual
+    expect(u2?.idealToDate).toBe(10); // cai no compartilhado (20 ÷ 2 = 10)
+    expect(result.idealToDate).toBe(10);
+  });
+
+  it('reaproveita o universo de realizadas quando fornecido (leads consultada 1 vez para held + SAO)', async () => {
+    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }] });
+    const leadsChain = createChainMock({ data: [{ id: 'l1', assigned_to: 'u1' }, { id: 'l2', assigned_to: 'u1' }] });
+    const feedbackChain = createChainMock({
+      data: [{ lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-10T10:00:00Z' }],
+    });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      return createChainMock({ data: null });
+    });
+
+    const held = fetchHeldLeadsForRanking(supabase as never, ORG, baseFilters);
+    const [heldCard, saoCard] = await Promise.all([
+      fetchMeetingsHeldRanking(supabase as never, ORG, baseFilters, held),
+      fetchSaoRanking(supabase as never, ORG, baseFilters, held),
+    ]);
+
+    expect(heldCard.total).toBe(2);
+    expect(saoCard.total).toBe(1);
+    const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
+    expect(fromMock.mock.calls.filter((c) => c[0] === 'leads')).toHaveLength(1);
+  });
+});
+
+describe('fetchSaoRateRanking', () => {
+  const card = (
+    total: number,
+    monthTarget: number,
+    sdrBreakdown: RankingCardData['sdrBreakdown'],
+  ): RankingCardData => ({ total, monthTarget, percentOfTarget: 0, averagePerSdr: 0, sdrBreakdown });
+
+  it('0% sem reuniões', () => {
+    const result = fetchSaoRateRanking(card(0, 0, []), card(0, 0, []));
+    expect(result.total).toBe(0);
+    expect(result.monthTarget).toBe(0);
+    expect(result.sdrBreakdown).toHaveLength(0);
+  });
+
+  it('taxa por SDR = SAO ÷ realizadas; meta derivada = sao_target ÷ meetings_held_target', () => {
+    // Realizadas: u1=4, u2=2. SAO: u1=2, u2=0 (u2 nem aparece no card de SAO).
+    const held = card(6, 10, [
+      { userId: 'u1', userName: '', value: 4 },
+      { userId: 'u2', userName: '', value: 2 },
+    ]);
+    const sao = card(2, 5, [{ userId: 'u1', userName: '', value: 2 }]);
+
+    const result = fetchSaoRateRanking(held, sao);
+
+    expect(result.total).toBe(33); // 2/6
+    expect(result.monthTarget).toBe(50); // 5/10
+    expect(result.sdrBreakdown).toHaveLength(2);
+    const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
+    expect(u1?.value).toBe(50);
+    expect(u1?.secondaryValue).toBe(2);
+    const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
+    expect(u2?.value).toBe(0);
+    expect(u2?.secondaryValue).toBe(0);
+    expect(result.sdrBreakdown[0]?.userId).toBe('u1'); // ordenado desc
+  });
+});
+
 describe('fetchRankingData', () => {
   it('should return all 3 cards', async () => {
     // Minimal mocks — all return empty data
@@ -428,7 +601,17 @@ describe('fetchRankingData', () => {
     expect(result).toHaveProperty('leadsFinished');
     expect(result).toHaveProperty('activitiesDone');
     expect(result).toHaveProperty('attendanceRate');
+    expect(result).toHaveProperty('sao');
+    expect(result).toHaveProperty('saoRate');
     expect(result.leadsFinished.total).toBe(0);
+    expect(result.sao.total).toBe(0);
+    expect(result.saoRate.total).toBe(0);
+    // Realizadas buscadas UMA vez para os cards "Reuniões Realizadas" e "SAO"
+    const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
+    const leadsCalls = fromMock.mock.calls.filter((c) => c[0] === 'leads').length;
+    // meetingsScheduled + held (compartilhado por Realizadas e SAO) = 2; sem o
+    // compartilhamento seriam 3. (leadsFinished não consulta leads sem enrollments.)
+    expect(leadsCalls).toBe(2);
   });
 });
 

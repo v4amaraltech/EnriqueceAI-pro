@@ -6,11 +6,13 @@ import { from } from '@/lib/supabase/from';
 import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import { meetingHeldAnchor, meetingsHeldWindowFilter } from '../utils/meetings-held-window';
+import { fetchSaoByLead } from './sao-feedback.service';
 import type {
   CadenceOption,
   DailyDataPoint,
   DashboardFilters,
   OpportunityKpiData,
+  SaoKpiData,
 } from '../types';
 
 function getMonthRange(month: string): { start: string; end: string } {
@@ -90,13 +92,25 @@ function computeDailyData(
   return result;
 }
 
-export async function fetchOpportunityKpi(
+export interface HeldLead {
+  id: string;
+  meeting_starts_at: string | null;
+  meeting_held_at: string;
+  assigned_to: string | null;
+}
+
+/**
+ * Universo de "reuniões realizadas" do Dashboard na janela do filtro, já com
+ * os filtros de cadência e de vendedor aplicados. Fonte ÚNICA para o KPI de
+ * realizadas e para o KPI de SAO (que é um subconjunto deste) — a página cria
+ * a promise uma vez e passa aos dois, evitando repetir a query.
+ */
+export async function fetchHeldLeadsForKpi(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
-): Promise<OpportunityKpiData> {
+): Promise<HeldLead[]> {
   const { start, end } = getDateRange(filters);
-  const days = getDaysInMonth(filters.month);
 
   // Reunião realizada = a reunião ACONTECEU, contada no mês em que ela ocorreu.
   // Âncora = `meeting_starts_at` (horário do evento), com fallback no carimbo
@@ -120,14 +134,7 @@ export async function fetchOpportunityKpi(
     .or(meetingsHeldWindowFilter(start, end, new Date().toISOString()))
     .limit(10000);
 
-  const { data: leads } = (await leadsQuery) as {
-    data: Array<{
-      id: string;
-      meeting_starts_at: string | null;
-      meeting_held_at: string;
-      assigned_to: string | null;
-    }> | null;
-  };
+  const { data: leads } = (await leadsQuery) as { data: HeldLead[] | null };
 
   let qualifiedLeads = leads ?? [];
 
@@ -158,22 +165,22 @@ export async function fetchOpportunityKpi(
       (l) => l.assigned_to !== null && filters.userIds.includes(l.assigned_to),
     );
   }
-  const totalOpportunities = qualifiedLeads.length;
 
-  // Query goal for the month
-  const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await from(supabase, 'goals')
-    .select('opportunity_target, meetings_held_target, conversion_target')
-    .eq('org_id', orgId)
-    .eq('month', monthStart)
-    .maybeSingle()) as {
-    data: { opportunity_target: number; meetings_held_target: number | null; conversion_target: number } | null;
-  };
+  return qualifiedLeads;
+}
 
-  // meetings_held_target é o nome canônico; opportunity_target é legacy
-  // mantido como fallback pra metas históricas antes da consolidação.
-  const monthTarget = goal?.meetings_held_target || goal?.opportunity_target || 0;
-  const conversionTarget = goal?.conversion_target ?? 0;
+/**
+ * Monta o KPI (número grande, % do ritmo, série diária) a partir das datas
+ * dos eventos contados e da meta do mês. Compartilhado por realizadas e SAO.
+ */
+function buildKpiData(
+  anchors: string[],
+  filters: DashboardFilters,
+  monthTarget: number,
+  conversionTarget: number,
+): OpportunityKpiData {
+  const days = getDaysInMonth(filters.month);
+  const totalOpportunities = anchors.length;
 
   // % de meta na projeção linear (BRT), paceado pelo último dia CONCLUÍDO
   // (currentDayOfMonthBrt = ontem no mês corrente) — fonte única do pace.
@@ -206,12 +213,7 @@ export async function fetchOpportunityKpi(
     }
   }
 
-  const dailyData = computeDailyData(
-    qualifiedLeads.map(meetingHeldAnchor),
-    seriesMonth,
-    monthTarget,
-    maxDayOverride,
-  );
+  const dailyData = computeDailyData(anchors, seriesMonth, monthTarget, maxDayOverride);
 
   return {
     totalOpportunities,
@@ -221,6 +223,77 @@ export async function fetchOpportunityKpi(
     currentDay,
     daysInMonth: days,
     dailyData,
+  };
+}
+
+export async function fetchOpportunityKpi(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  held?: PromiseLike<HeldLead[]>,
+): Promise<OpportunityKpiData> {
+  const qualifiedLeads = await (held ?? fetchHeldLeadsForKpi(supabase, orgId, filters));
+
+  // Query goal for the month
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('opportunity_target, meetings_held_target, conversion_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as {
+    data: { opportunity_target: number; meetings_held_target: number | null; conversion_target: number } | null;
+  };
+
+  // meetings_held_target é o nome canônico; opportunity_target é legacy
+  // mantido como fallback pra metas históricas antes da consolidação.
+  const monthTarget = goal?.meetings_held_target || goal?.opportunity_target || 0;
+  const conversionTarget = goal?.conversion_target ?? 0;
+
+  return buildKpiData(qualifiedLeads.map(meetingHeldAnchor), filters, monthTarget, conversionTarget);
+}
+
+/**
+ * KPI de SAO (Oportunidade Aceita por Vendas): das reuniões realizadas do mês
+ * (MESMO universo, janela e filtros do card de realizadas), quantas o closer
+ * aceitou como oportunidade qualificada no feedback (resposta mais recente
+ * com a pergunta preenchida — ver fetchSaoByLead).
+ *
+ * Ancora cada SAO na data da REUNIÃO (meetingHeldAnchor), não na data da
+ * resposta do closer: assim SAO ⊆ realizadas em todo ponto do gráfico e o
+ * card não sofre o "carimbo × evento" que desalinhou realizadas em set/2026.
+ * Reunião sem feedback (ou com feedback anterior a 09/set/2026, quando a
+ * pergunta não existia) não entra — nem como SAO nem como "não qualificada".
+ */
+export async function fetchSaoKpi(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  held?: PromiseLike<HeldLead[]>,
+): Promise<SaoKpiData> {
+  const heldLeads = await (held ?? fetchHeldLeadsForKpi(supabase, orgId, filters));
+  const saoByLead = await fetchSaoByLead(
+    supabase,
+    orgId,
+    heldLeads.map((l) => l.id),
+  );
+
+  const saoLeads = heldLeads.filter((l) => saoByLead.get(l.id) === true);
+  const evaluatedTotal = heldLeads.filter((l) => saoByLead.has(l.id)).length;
+
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('sao_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as { data: { sao_target: number | null } | null };
+
+  const kpi = buildKpiData(saoLeads.map(meetingHeldAnchor), filters, goal?.sao_target ?? 0, 0);
+
+  return {
+    ...kpi,
+    heldTotal: heldLeads.length,
+    evaluatedTotal,
+    qualifiedTotal: saoLeads.length,
   };
 }
 

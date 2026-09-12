@@ -29,9 +29,10 @@ const goalsData: GoalsData = {
   leadsOpenedTarget: 150,
   meetingsScheduledTarget: 100,
   meetingsHeldTarget: 80,
+  saoTarget: 60,
   userGoals: [
-    { userId: 'u1', userName: 'alice', leadsOpenedTarget: 20, previousTarget: 15, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176 },
-    { userId: 'u2', userName: 'bob', leadsOpenedTarget: 30, previousTarget: null, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0 },
+    { userId: 'u1', userName: 'alice', leadsOpenedTarget: 20, previousTarget: 15, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176, saoTarget: 8 },
+    { userId: 'u2', userName: 'bob', leadsOpenedTarget: 30, previousTarget: null, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0, saoTarget: 0 },
   ],
 };
 
@@ -96,9 +97,10 @@ describe('GoalsModal', () => {
         leadsOpenedTarget: 150,
         meetingsScheduledTarget: 100,
         meetingsHeldTarget: 80,
+        saoTarget: 60,
         userGoals: [
-          { userId: 'u1', leadsOpenedTarget: 20, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176 },
-          { userId: 'u2', leadsOpenedTarget: 30, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0 },
+          { userId: 'u1', leadsOpenedTarget: 20, meetingsScheduledTarget: 16, meetingsHeldTarget: 10, callsTarget: 2200, callsConnectedTarget: 176, saoTarget: 8 },
+          { userId: 'u2', leadsOpenedTarget: 30, meetingsScheduledTarget: 9, meetingsHeldTarget: 7, callsTarget: 0, callsConnectedTarget: 0, saoTarget: 0 },
         ],
       });
     });

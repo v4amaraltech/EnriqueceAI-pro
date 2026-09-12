@@ -21,10 +21,10 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
 
   // Fetch org-level goal for the selected month
   const { data: orgGoal } = (await from(supabase, 'goals')
-    .select('opportunity_target, leads_finished_target, activities_target, conversion_target, leads_opened_target, meetings_scheduled_target, meetings_held_target')
+    .select('opportunity_target, leads_finished_target, activities_target, conversion_target, leads_opened_target, meetings_scheduled_target, meetings_held_target, sao_target')
     .eq('org_id', orgId)
     .eq('month', monthDate)
-    .maybeSingle()) as { data: { opportunity_target: number | null; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null; meetings_scheduled_target: number | null; meetings_held_target: number | null } | null };
+    .maybeSingle()) as { data: { opportunity_target: number | null; leads_finished_target: number | null; activities_target: number | null; conversion_target: number; leads_opened_target: number | null; meetings_scheduled_target: number | null; meetings_held_target: number | null; sao_target: number | null } | null };
 
   // meetings_held_target é canônico; fallback no opportunity_target (legacy)
   // pra metas históricas que ainda não foram resalvas pela UI nova.
@@ -47,6 +47,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
         leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
         meetingsScheduledTarget: orgGoal?.meetings_scheduled_target ?? 0,
         meetingsHeldTarget: meetingsHeldTargetMerged,
+        saoTarget: orgGoal?.sao_target ?? 0,
         userGoals: [],
       },
     };
@@ -76,7 +77,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
 
   // Fetch user goals for current month
   const { data: currentUserGoals } = (await from(supabase, 'goals_per_user')
-    .select('user_id, leads_opened_target, meetings_scheduled_target, meetings_held_target, calls_target, calls_connected_target')
+    .select('user_id, leads_opened_target, meetings_scheduled_target, meetings_held_target, calls_target, calls_connected_target, sao_target')
     .eq('org_id', orgId)
     .eq('month', monthDate)) as {
     data:
@@ -87,6 +88,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
           meetings_held_target: number | null;
           calls_target: number | null;
           calls_connected_target: number | null;
+          sao_target: number | null;
         }[]
       | null;
   };
@@ -110,6 +112,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
       leadsOpenedTarget: orgGoal?.leads_opened_target ?? 0,
       meetingsScheduledTarget: orgGoal?.meetings_scheduled_target ?? 0,
       meetingsHeldTarget: meetingsHeldTargetMerged,
+      saoTarget: orgGoal?.sao_target ?? 0,
       userGoals: sdrs.map((sdr) => {
         const info = userInfoMap.get(sdr.user_id);
         const current = currentMap.get(sdr.user_id);
@@ -123,6 +126,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
           meetingsHeldTarget: current?.meetings_held_target ?? 0,
           callsTarget: current?.calls_target ?? 0,
           callsConnectedTarget: current?.calls_connected_target ?? 0,
+          saoTarget: current?.sao_target ?? 0,
         };
       }),
     },

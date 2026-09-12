@@ -26,6 +26,21 @@ export interface OpportunityKpiData {
   dailyData: DailyDataPoint[];
 }
 
+/**
+ * KPI de SAO (Oportunidade Aceita por Vendas): reuniões realizadas do mês em
+ * que o closer respondeu "Qualificada" no feedback. Mesma forma do KPI de
+ * realizadas (`OpportunityKpiData`) + os totais que dão contexto ao número —
+ * o SAO só existe desde 09/set/2026 e depende do closer responder.
+ */
+export interface SaoKpiData extends OpportunityKpiData {
+  /** Reuniões realizadas no mesmo universo/janela do card de realizadas. */
+  heldTotal: number;
+  /** Realizadas cujo feedback preencheu a pergunta de SAO (true ou false). */
+  evaluatedTotal: number;
+  /** Realizadas aceitas pelo closer (= `totalOpportunities`). */
+  qualifiedTotal: number;
+}
+
 export interface CadenceOption {
   id: string;
   name: string;
@@ -33,6 +48,7 @@ export interface CadenceOption {
 
 export interface DashboardData {
   kpi: OpportunityKpiData;
+  saoKpi: SaoKpiData;
   availableCadences: CadenceOption[];
 }
 
@@ -79,6 +95,8 @@ export interface RankingData {
   meetingsScheduled: RankingCardData;
   meetingsHeld: RankingCardData;
   hitRate: RankingCardData; // total is a percentage (0-100)
+  sao: RankingCardData; // reuniões realizadas aceitas pelo closer (SAO = true no feedback mais recente)
+  saoRate: RankingCardData; // total is a percentage (0-100) — SAO ÷ reuniões realizadas
   leadsToOpen: RankingCardData; // snapshot atual — leads novos sem cadência ativa por SDR
   overdueActivities: RankingCardData; // snapshot atual — atividades de cadência atrasadas (>= OVERDUE_THRESHOLD_HOURS, default 4h) por SDR
 }
@@ -114,6 +132,7 @@ export interface UserGoalRow {
   meetingsHeldTarget: number; // meta individual de reuniões realizadas
   callsTarget: number; // meta individual de ligações (outbound) no mês
   callsConnectedTarget: number; // meta individual de ligações conectadas no mês
+  saoTarget: number; // meta individual de SAO (reuniões realizadas aceitas pelo closer)
 }
 
 export interface GoalsData {
@@ -124,6 +143,7 @@ export interface GoalsData {
   leadsOpenedTarget: number;
   meetingsScheduledTarget: number;
   meetingsHeldTarget: number;
+  saoTarget: number;
   userGoals: UserGoalRow[];
 }
 

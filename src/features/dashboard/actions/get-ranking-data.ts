@@ -8,7 +8,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { fetchRankingData } from '../services/ranking-metrics.service';
-import type { DashboardFilters, RankingData, SdrRankingEntry } from '../types';
+import type { DashboardFilters, RankingCardData, RankingData, SdrRankingEntry } from '../types';
 
 const filtersSchema = z.object({
   month: z
@@ -39,8 +39,11 @@ export async function getRankingData(
     const ranking = await fetchRankingData(supabase, orgId, filters);
 
     // Resolve user IDs to display names
+    // Todos os cards do RankingData — iterar o objeto evita esquecer um card
+    // novo nesta lista (e no resolveNames abaixo).
+    const cards = Object.values(ranking) as RankingCardData[];
     const allUserIds = new Set<string>();
-    for (const card of [ranking.leadsFinished, ranking.activitiesDone, ranking.attendanceRate, ranking.leadsOpened, ranking.meetingsScheduled, ranking.meetingsHeld, ranking.hitRate, ranking.leadsToOpen, ranking.overdueActivities]) {
+    for (const card of cards) {
       for (const entry of card.sdrBreakdown) {
         allUserIds.add(entry.userId);
       }
@@ -78,15 +81,9 @@ export async function getRankingData(
       }));
     }
 
-    ranking.leadsFinished.sdrBreakdown = resolveNames(ranking.leadsFinished.sdrBreakdown);
-    ranking.activitiesDone.sdrBreakdown = resolveNames(ranking.activitiesDone.sdrBreakdown);
-    ranking.attendanceRate.sdrBreakdown = resolveNames(ranking.attendanceRate.sdrBreakdown);
-    ranking.leadsOpened.sdrBreakdown = resolveNames(ranking.leadsOpened.sdrBreakdown);
-    ranking.meetingsScheduled.sdrBreakdown = resolveNames(ranking.meetingsScheduled.sdrBreakdown);
-    ranking.meetingsHeld.sdrBreakdown = resolveNames(ranking.meetingsHeld.sdrBreakdown);
-    ranking.hitRate.sdrBreakdown = resolveNames(ranking.hitRate.sdrBreakdown);
-    ranking.leadsToOpen.sdrBreakdown = resolveNames(ranking.leadsToOpen.sdrBreakdown);
-    ranking.overdueActivities.sdrBreakdown = resolveNames(ranking.overdueActivities.sdrBreakdown);
+    for (const card of cards) {
+      card.sdrBreakdown = resolveNames(card.sdrBreakdown);
+    }
 
     return { success: true, data: ranking };
   } catch (error: unknown) {

@@ -8,6 +8,7 @@ import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
 import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
+import { fetchSaoByLead } from './sao-feedback.service';
 import type {
   DailyDataPoint,
   DashboardFilters,
@@ -109,7 +110,7 @@ async function fetchIndividualTargets(
   supabase: SupabaseClient,
   orgId: string,
   month: string,
-  column: 'leads_opened_target' | 'meetings_scheduled_target' | 'meetings_held_target',
+  column: 'leads_opened_target' | 'meetings_scheduled_target' | 'meetings_held_target' | 'sao_target',
 ): Promise<Map<string, number>> {
   const monthStart = `${month}-01`;
   const { data } = (await from(supabase, 'goals_per_user')
@@ -347,32 +348,48 @@ export function fetchAttendanceRateRanking(
   scheduled: RankingCardData,
   held: RankingCardData,
 ): RankingCardData {
-  const scheduledByUser = new Map<string, number>();
-  for (const e of scheduled.sdrBreakdown) scheduledByUser.set(e.userId, e.value);
-  const heldByUser = new Map<string, number>();
-  for (const e of held.sdrBreakdown) heldByUser.set(e.userId, e.value);
+  return buildRateRanking(held, scheduled);
+}
 
-  const allUserIds = new Set<string>([...scheduledByUser.keys(), ...heldByUser.keys()]);
+/**
+ * Card de TAXA derivado de dois cards de volume (numerador ÷ denominador por
+ * SDR, em %). Corpo único do Hit Rate, da Taxa de Comparecimento e da Taxa
+ * SAO — todos aproximações temporais (numerador e denominador contados dentro
+ * da janela, sem rastrear o mesmo lead nos dois), então podem passar de 100%.
+ *
+ * - `value` = taxa do SDR; `secondaryValue` = numerador do SDR.
+ * - SDR presente só no denominador aparece com 0%; só no numerador, com 0%
+ *   também (denominador 0) — mas continua listado.
+ * - Meta derivada das metas dos dois cards (numerador.meta ÷ denominador.meta),
+ *   evitando um número solto que não casa com os outros dois.
+ */
+function buildRateRanking(
+  numerator: RankingCardData,
+  denominator: RankingCardData,
+): RankingCardData {
+  const numByUser = new Map<string, number>();
+  for (const e of numerator.sdrBreakdown) numByUser.set(e.userId, e.value);
+  const denByUser = new Map<string, number>();
+  for (const e of denominator.sdrBreakdown) denByUser.set(e.userId, e.value);
+
+  const allUserIds = new Set<string>([...denByUser.keys(), ...numByUser.keys()]);
   const entries: SdrRankingEntry[] = [];
-  let totalScheduled = 0;
-  let totalHeld = 0;
+  let totalNum = 0;
+  let totalDen = 0;
   for (const userId of allUserIds) {
-    const sc = scheduledByUser.get(userId) ?? 0;
-    const hd = heldByUser.get(userId) ?? 0;
-    totalScheduled += sc;
-    totalHeld += hd;
-    const rate = sc > 0 ? Math.round((hd / sc) * 100) : 0;
-    entries.push({ userId, userName: '', value: rate, secondaryValue: hd });
+    const den = denByUser.get(userId) ?? 0;
+    const num = numByUser.get(userId) ?? 0;
+    totalDen += den;
+    totalNum += num;
+    const rate = den > 0 ? Math.round((num / den) * 100) : 0;
+    entries.push({ userId, userName: '', value: rate, secondaryValue: num });
   }
 
-  const overallRate = totalScheduled > 0 ? Math.round((totalHeld / totalScheduled) * 100) : 0;
+  const overallRate = totalDen > 0 ? Math.round((totalNum / totalDen) * 100) : 0;
   const sdrCount = entries.length || 1;
 
-  // Meta derivada das metas dos dois cards: se a empresa espera marcar N
-  // reuniões e realizar M, a taxa de comparecimento alvo é M/N. Mesma lógica
-  // do Hit Rate — evita o usuário definir um número solto e desalinhado.
-  const derivedTarget = scheduled.monthTarget > 0 && held.monthTarget > 0
-    ? Math.round((held.monthTarget / scheduled.monthTarget) * 100)
+  const derivedTarget = denominator.monthTarget > 0 && numerator.monthTarget > 0
+    ? Math.round((numerator.monthTarget / denominator.monthTarget) * 100)
     : 0;
   const percentOfTarget = derivedTarget > 0
     ? Math.round(((overallRate - derivedTarget) / derivedTarget) * 100)
@@ -612,11 +629,24 @@ export async function fetchMeetingsScheduledRanking(
  * depois foi desqualificada continua contando pro SDR.
  * Atribuição via leads.assigned_to (SDR responsável) — mesma regra do KPI.
  */
-export async function fetchMeetingsHeldRanking(
+export interface HeldLeadsForRanking {
+  /** SDRs ativos/invited da org — divisor do "ideal dia" e filtro de atribuição. */
+  sdrIds: Set<string>;
+  /** Reuniões realizadas na janela, já atribuídas a um SDR (e ao filtro de vendedor). */
+  leads: Array<{ id: string; sdr: string }>;
+}
+
+/**
+ * Universo de reuniões realizadas do ranking (sem filtro de cadência — o
+ * ranking nunca aplicou; o KPI aplica). Fonte única dos cards "Reuniões
+ * Realizadas" e "SAO": `fetchRankingData` cria a promise uma vez e passa às
+ * duas funções.
+ */
+export async function fetchHeldLeadsForRanking(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
-): Promise<RankingCardData> {
+): Promise<HeldLeadsForRanking> {
   const { start, end } = getDateRange(filters);
 
   const { data: sdrs } = (await from(supabase, 'organization_members')
@@ -634,15 +664,33 @@ export async function fetchMeetingsHeldRanking(
     .or(meetingsHeldWindowFilter(start, end, new Date().toISOString()))
     .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null }> | null };
 
-  const counts = new Map<string, number>();
-  let total = 0;
+  const leads: Array<{ id: string; sdr: string }> = [];
   for (const lead of rows ?? []) {
     const sdr = lead.assigned_to;
     if (!sdr || !sdrIds.has(sdr)) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
-    counts.set(sdr, (counts.get(sdr) ?? 0) + 1);
-    total++;
+    leads.push({ id: lead.id, sdr });
   }
+
+  return { sdrIds, leads };
+}
+
+function countBySdr(leads: ReadonlyArray<{ sdr: string }>): { entries: SdrRankingEntry[]; total: number } {
+  const counts = new Map<string, number>();
+  for (const lead of leads) counts.set(lead.sdr, (counts.get(lead.sdr) ?? 0) + 1);
+  const entries: SdrRankingEntry[] = [];
+  for (const [userId, value] of counts) entries.push({ userId, userName: '', value });
+  return { entries, total: leads.length };
+}
+
+export async function fetchMeetingsHeldRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  held?: PromiseLike<HeldLeadsForRanking>,
+): Promise<RankingCardData> {
+  const { sdrIds, leads } = await (held ?? fetchHeldLeadsForRanking(supabase, orgId, filters));
+  const { entries, total } = countBySdr(leads);
 
   const monthStart = `${filters.month}-01`;
   const { data: goal } = (await from(supabase, 'goals')
@@ -651,10 +699,6 @@ export async function fetchMeetingsHeldRanking(
     .eq('month', monthStart)
     .maybeSingle()) as { data: { meetings_held_target: number } | null };
 
-  const entries: SdrRankingEntry[] = [];
-  for (const [userId, value] of counts) {
-    entries.push({ userId, userName: '', value });
-  }
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
   const individualTargets = await fetchIndividualTargets(
     supabase,
@@ -673,6 +717,54 @@ export async function fetchMeetingsHeldRanking(
 }
 
 /**
+ * Card "SAO" (Oportunidade Aceita por Vendas): das reuniões realizadas do
+ * card 6 (mesmo universo), quantas o closer aceitou como oportunidade
+ * qualificada no feedback (resposta mais recente com a pergunta preenchida —
+ * fetchSaoByLead). Atribuição via leads.assigned_to, como as realizadas.
+ * Meta: goals.sao_target (org) e goals_per_user.sao_target (ideal por SDR).
+ */
+export async function fetchSaoRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+  held?: PromiseLike<HeldLeadsForRanking>,
+): Promise<RankingCardData> {
+  const { sdrIds, leads } = await (held ?? fetchHeldLeadsForRanking(supabase, orgId, filters));
+  const saoByLead = await fetchSaoByLead(supabase, orgId, leads.map((l) => l.id));
+  const { entries, total } = countBySdr(leads.filter((l) => saoByLead.get(l.id) === true));
+
+  const monthStart = `${filters.month}-01`;
+  const { data: goal } = (await from(supabase, 'goals')
+    .select('sao_target')
+    .eq('org_id', orgId)
+    .eq('month', monthStart)
+    .maybeSingle()) as { data: { sao_target: number | null } | null };
+
+  const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
+  const individualTargets = await fetchIndividualTargets(supabase, orgId, filters.month, 'sao_target');
+  return buildRankingCardData(
+    entries,
+    total,
+    goal?.sao_target ?? 0,
+    filters.month,
+    idealSdrCount,
+    individualTargets,
+  );
+}
+
+/**
+ * Card "Taxa SAO" (Realizada → SAO): numerador = SAO; denominador = reuniões
+ * realizadas, ambos por leads.assigned_to. Meta derivada = sao_target ÷
+ * meetings_held_target.
+ */
+export function fetchSaoRateRanking(
+  held: RankingCardData,
+  sao: RankingCardData,
+): RankingCardData {
+  return buildRateRanking(sao, held);
+}
+
+/**
  * Card 7: Hit Rate (Aberto → Realizada). Numerador = reuniões realizadas;
  * denominador = leads abertos no período (primeira interaction humana),
  * ambos atribuídos via leads.assigned_to.
@@ -681,44 +773,7 @@ export function fetchHitRateRanking(
   opened: RankingCardData,
   held: RankingCardData,
 ): RankingCardData {
-  const openedByUser = new Map<string, number>();
-  for (const e of opened.sdrBreakdown) openedByUser.set(e.userId, e.value);
-  const heldByUser = new Map<string, number>();
-  for (const e of held.sdrBreakdown) heldByUser.set(e.userId, e.value);
-
-  const allUserIds = new Set<string>([...openedByUser.keys(), ...heldByUser.keys()]);
-  const entries: SdrRankingEntry[] = [];
-  let totalOpened = 0;
-  let totalHeld = 0;
-  for (const userId of allUserIds) {
-    const op = openedByUser.get(userId) ?? 0;
-    const hd = heldByUser.get(userId) ?? 0;
-    totalOpened += op;
-    totalHeld += hd;
-    const rate = op > 0 ? Math.round((hd / op) * 100) : 0;
-    entries.push({ userId, userName: '', value: rate, secondaryValue: hd });
-  }
-
-  const overallRate = totalOpened > 0 ? Math.round((totalHeld / totalOpened) * 100) : 0;
-  const sdrCount = entries.length || 1;
-
-  // Meta derivada das metas dos outros dois cards: se a empresa espera
-  // abrir N leads e realizar M reuniões, a hit rate alvo é M/N. Evita o
-  // usuário definir um número solto que não casa com os outros dois.
-  const derivedTarget = opened.monthTarget > 0 && held.monthTarget > 0
-    ? Math.round((held.monthTarget / opened.monthTarget) * 100)
-    : 0;
-  const percentOfTarget = derivedTarget > 0
-    ? Math.round(((overallRate - derivedTarget) / derivedTarget) * 100)
-    : 0;
-
-  return {
-    total: overallRate,
-    monthTarget: derivedTarget,
-    percentOfTarget,
-    averagePerSdr: Math.round((entries.reduce((s, e) => s + e.value, 0) / sdrCount) * 10) / 10,
-    sdrBreakdown: entries.sort((a, b) => b.value - a.value),
-  };
+  return buildRateRanking(held, opened);
 }
 
 /**
@@ -853,19 +908,23 @@ export async function fetchOverdueActivitiesRanking(
 }
 
 /**
- * Fetch all 9 ranking cards in parallel
+ * Fetch all 11 ranking cards in parallel
  */
 export async function fetchRankingData(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
 ): Promise<RankingData> {
-  const [leadsFinished, activitiesDone, leadsOpened, meetingsScheduled, meetingsHeld, leadsToOpen, overdueActivities] = await Promise.all([
+  // Reuniões realizadas são buscadas UMA vez e compartilhadas pelos cards
+  // "Reuniões Realizadas" e "SAO" (subconjunto).
+  const heldLeads = fetchHeldLeadsForRanking(supabase, orgId, filters);
+  const [leadsFinished, activitiesDone, leadsOpened, meetingsScheduled, meetingsHeld, sao, leadsToOpen, overdueActivities] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchActivitiesRanking(supabase, orgId, filters),
     fetchLeadsOpenedRanking(supabase, orgId, filters),
     fetchMeetingsScheduledRanking(supabase, orgId, filters),
-    fetchMeetingsHeldRanking(supabase, orgId, filters),
+    fetchMeetingsHeldRanking(supabase, orgId, filters, heldLeads),
+    fetchSaoRanking(supabase, orgId, filters, heldLeads),
     fetchLeadsToOpenRanking(supabase, orgId, filters),
     fetchOverdueActivitiesRanking(supabase, orgId, filters),
   ]);
@@ -873,6 +932,7 @@ export async function fetchRankingData(
   // Derived in-memory from the cards above (no extra round-trip).
   const hitRate = fetchHitRateRanking(leadsOpened, meetingsHeld);
   const attendanceRate = fetchAttendanceRateRanking(meetingsScheduled, meetingsHeld);
+  const saoRate = fetchSaoRateRanking(meetingsHeld, sao);
 
-  return { leadsFinished, activitiesDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, leadsToOpen, overdueActivities };
+  return { leadsFinished, activitiesDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, sao, saoRate, leadsToOpen, overdueActivities };
 }

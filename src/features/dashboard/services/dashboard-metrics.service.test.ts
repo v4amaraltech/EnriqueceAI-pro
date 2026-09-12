@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchAvailableCadences, fetchOpportunityKpi } from './dashboard-metrics.service';
+import { fetchAvailableCadences, fetchHeldLeadsForKpi, fetchOpportunityKpi, fetchSaoKpi } from './dashboard-metrics.service';
 import { expectedByBusinessDay } from '../utils/pacing';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
 
@@ -316,6 +316,120 @@ describe('fetchOpportunityKpi', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('fetchSaoKpi', () => {
+  const baseFilters = { month: '2026-01', cadenceIds: [] as string[], userIds: [] as string[] };
+
+  it('conta só as realizadas com SAO=true, ancoradas na data da reunião (não na resposta)', async () => {
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', meeting_starts_at: '2026-01-05T13:00:00Z', meeting_held_at: '2026-01-05T15:00:00Z', assigned_to: null },
+        { id: 'l2', meeting_starts_at: '2026-01-07T13:00:00Z', meeting_held_at: '2026-01-07T15:00:00Z', assigned_to: null },
+        { id: 'l3', meeting_starts_at: '2026-01-09T13:00:00Z', meeting_held_at: '2026-01-09T15:00:00Z', assigned_to: null },
+        { id: 'l4', meeting_starts_at: null, meeting_held_at: '2026-01-12T13:00:00Z', assigned_to: null },
+      ],
+    });
+    const feedbackChain = createChainMock({
+      data: [
+        // l1 aceita (respondida dias depois — deve cair no dia 5, não no 20)
+        { lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-20T10:00:00Z' },
+        // l2 recusada: avaliada, mas não é SAO
+        { lead_id: 'l2', oportunidade_qualificada: false, responded_at: '2026-01-08T10:00:00Z' },
+        // l3 sem feedback; l4 aceita pelo carimbo (sem evento)
+        { lead_id: 'l4', oportunidade_qualificada: true, responded_at: '2026-01-13T10:00:00Z' },
+      ],
+    });
+    const goalsChain = createChainMock({ data: { sao_target: 40 } });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') return leadsChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      if (table === 'goals') return goalsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchSaoKpi(supabase as never, ORG_ID, baseFilters);
+
+    expect(result.totalOpportunities).toBe(2);
+    expect(result.qualifiedTotal).toBe(2);
+    expect(result.evaluatedTotal).toBe(3); // l1, l2, l4 (l3 sem feedback)
+    expect(result.heldTotal).toBe(4);
+    expect(result.monthTarget).toBe(40);
+    expect(result.conversionTarget).toBe(0);
+    expect(feedbackChain.in).toHaveBeenCalledWith('lead_id', ['l1', 'l2', 'l3', 'l4']);
+    // Série: l1 entra no dia 5 (data da reunião), l4 no dia 12
+    expect(result.dailyData[3]?.actual).toBe(0); // dia 4
+    expect(result.dailyData[4]?.actual).toBe(1); // dia 5
+    expect(result.dailyData[11]?.actual).toBe(2); // dia 12
+    expect(result.dailyData[19]?.actual).toBe(2); // dia 20: nada muda (resposta não é âncora)
+  });
+
+  it('herda os filtros de cadência e de vendedor do universo de realizadas', async () => {
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', meeting_held_at: '2026-01-05T10:00:00Z', assigned_to: 'sdr-a' },
+        { id: 'l2', meeting_starts_at: '2026-01-06T10:00:00Z', meeting_held_at: '2026-01-06T10:00:00Z', assigned_to: 'sdr-b' },
+        { id: 'l3', meeting_starts_at: '2026-01-07T10:00:00Z', meeting_held_at: '2026-01-07T10:00:00Z', assigned_to: 'sdr-a' },
+      ],
+    });
+    const enrollmentChain = createChainMock({ data: [{ lead_id: 'l1' }, { lead_id: 'l2' }] });
+    const feedbackChain = createChainMock({
+      data: [
+        { lead_id: 'l1', oportunidade_qualificada: true, responded_at: '2026-01-06T10:00:00Z' },
+        { lead_id: 'l2', oportunidade_qualificada: true, responded_at: '2026-01-07T10:00:00Z' },
+        { lead_id: 'l3', oportunidade_qualificada: true, responded_at: '2026-01-08T10:00:00Z' },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      return createChainMock({ data: null });
+    });
+
+    const filters = { ...baseFilters, cadenceIds: ['cad-1'], userIds: ['sdr-a'] };
+    const result = await fetchSaoKpi(supabase as never, ORG_ID, filters);
+
+    // Só l1 está na cadência E é do sdr-a
+    expect(result.heldTotal).toBe(1);
+    expect(result.totalOpportunities).toBe(1);
+    expect(feedbackChain.in).toHaveBeenCalledWith('lead_id', ['l1']);
+  });
+
+  it('reaproveita a promise de realizadas quando fornecida (não consulta leads de novo)', async () => {
+    const feedbackChain = createChainMock({ data: [] });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'closer_feedback_requests') return feedbackChain;
+      return createChainMock({ data: null });
+    });
+    const held = Promise.resolve([
+      { id: 'l1', meeting_starts_at: '2026-01-05T10:00:00Z', meeting_held_at: '2026-01-05T10:00:00Z', assigned_to: null },
+    ]);
+
+    const result = await fetchSaoKpi(supabase as never, ORG_ID, baseFilters, held);
+
+    expect(result.heldTotal).toBe(1);
+    expect(result.totalOpportunities).toBe(0);
+    expect(result.evaluatedTotal).toBe(0);
+    const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
+    expect(fromMock).not.toHaveBeenCalledWith('leads');
+  });
+
+  it('sem realizadas: zero em tudo e não consulta o feedback', async () => {
+    const supabase = createMockSupabase(() => createChainMock({ data: [] }));
+    const held = fetchHeldLeadsForKpi(supabase as never, ORG_ID, baseFilters);
+
+    const result = await fetchSaoKpi(supabase as never, ORG_ID, baseFilters, held);
+
+    expect(result.heldTotal).toBe(0);
+    expect(result.totalOpportunities).toBe(0);
+    expect(result.monthTarget).toBe(0);
+    expect(result.percentOfTarget).toBe(0);
+    const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
+    expect(fromMock).not.toHaveBeenCalledWith('closer_feedback_requests');
   });
 });
 

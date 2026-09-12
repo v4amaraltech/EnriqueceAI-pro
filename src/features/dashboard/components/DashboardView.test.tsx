@@ -78,6 +78,21 @@ function createData(overrides: Partial<DashboardData> = {}): DashboardData {
         { date: '2026-02-02', day: 2, actual: 5, target: 7 },
       ],
     },
+    saoKpi: {
+      totalOpportunities: 4,
+      monthTarget: 30,
+      conversionTarget: 0,
+      percentOfTarget: -50,
+      currentDay: 15,
+      daysInMonth: 28,
+      dailyData: [
+        { date: '2026-02-01', day: 1, actual: 1, target: 1 },
+        { date: '2026-02-02', day: 2, actual: 4, target: 2 },
+      ],
+      heldTotal: 21,
+      evaluatedTotal: 4,
+      qualifiedTotal: 4,
+    },
     availableCadences: [
       { id: 'cad-1', name: 'Cadência Inbound' },
       { id: 'cad-2', name: 'Cadência Outbound' },
@@ -135,7 +150,16 @@ describe('DashboardView', () => {
 
   it('should render chart section', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
-    expect(screen.getByTestId('composed-chart')).toBeInTheDocument();
+    // Reuniões realizadas + SAO (os dois cards grandes sempre renderizados)
+    expect(screen.getAllByTestId('composed-chart')).toHaveLength(2);
+  });
+
+  it('renderiza o card de SAO com o contexto de avaliadas × realizadas', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText('SAO em Fevereiro')).toBeInTheDocument();
+    expect(screen.getByText(/4 avaliadas de 21 realizadas/)).toBeInTheDocument();
+    expect(screen.getByText(/17 sem feedback do closer/)).toBeInTheDocument();
+    expect(screen.getByText(/Meta de SAO para fevereiro/)).toBeInTheDocument();
   });
 
   it('should render month selector with current month', () => {
@@ -245,6 +269,20 @@ describe('DashboardView', () => {
         averagePerSdr: 0,
         sdrBreakdown: [],
       },
+      sao: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
+      saoRate: {
+        total: 0,
+        monthTarget: 0,
+        percentOfTarget: 0,
+        averagePerSdr: 0,
+        sdrBreakdown: [],
+      },
       leadsToOpen: {
         total: 0,
         monthTarget: 0,
@@ -298,6 +336,8 @@ describe('DashboardView', () => {
       },
       meetingsHeld: base,
       hitRate: base,
+      sao: base,
+      saoRate: base,
       leadsToOpen: base,
       overdueActivities: base,
     };

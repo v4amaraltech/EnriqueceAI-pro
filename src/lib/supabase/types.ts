@@ -2825,6 +2825,7 @@ export type Database = {
           month: string;
           opportunity_target: number;
           org_id: string;
+          sao_target: number;
           updated_at: string;
         };
         Insert: {
@@ -2840,6 +2841,7 @@ export type Database = {
           month: string;
           opportunity_target?: number;
           org_id: string;
+          sao_target?: number;
           updated_at?: string;
         };
         Update: {
@@ -2855,6 +2857,7 @@ export type Database = {
           month?: string;
           opportunity_target?: number;
           org_id?: string;
+          sao_target?: number;
           updated_at?: string;
         };
         Relationships: [
@@ -2881,6 +2884,7 @@ export type Database = {
           month: string;
           opportunity_target: number;
           org_id: string;
+          sao_target: number;
           updated_at: string;
           user_id: string;
         };
@@ -2897,6 +2901,7 @@ export type Database = {
           month: string;
           opportunity_target?: number;
           org_id: string;
+          sao_target?: number;
           updated_at?: string;
           user_id: string;
         };
@@ -2913,6 +2918,7 @@ export type Database = {
           month?: string;
           opportunity_target?: number;
           org_id?: string;
+          sao_target?: number;
           updated_at?: string;
           user_id?: string;
         };
