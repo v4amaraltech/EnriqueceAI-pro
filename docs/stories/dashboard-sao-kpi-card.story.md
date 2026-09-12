@@ -1,7 +1,7 @@
 # Story: SAO (Oportunidades Aceitas por Vendas) no Dashboard — card, ranking e taxa
 
 ## Status
-InProgress
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
@@ -9,6 +9,8 @@ InProgress
 | 2026-09-12 | Vini + Claude | Story criada a partir do plano aprovado. Decisões do Vini: número grande = quantidade de SAO (não taxa); meta própria de SAO no "Editar metas" (org + por SDR); escopo = card grande + ranking "SAO" + ranking "Taxa SAO" + corrigir o tooltip desatualizado de "Reuniões realizadas". |
 | 2026-09-12 | @dev (Dex) | Implementado na `main` local (sem commit). typecheck ✅ lint ✅ testes ✅ (suíte completa 2.067; +19 novos) build ✅. Conferência visual em preview (claro/escuro) OK; handoff `docs/sessions/2026-09/2026-09-12-sao-no-dashboard.md`. **Pendente:** aplicar a migration em prod (aguarda pedido explícito do Vini) e depois `pnpm gen:types`; gestor preencher a meta de SAO de setembro. Sem commit/push/PR (aguarda pedido). |
 | 2026-09-12 | @dev (Dex) | **Migration aplicada em prod** via MCP (pedido do Vini), versão `20260912095504` — arquivo renomeado para a mesma versão. Conferido: `sao_target integer NOT NULL DEFAULT 0` nas 2 tabelas. `pnpm gen:types` rodado (6 linhas). typecheck ✅. Sem commit/push/PR (aguarda pedido). |
+| 2026-09-12 | @dev (Dex) | InProgress → **Ready for Review**. Commit + PR autorizados pelo Vini ("commita e abre o PR"): branch `feat/dashboard-sao-kpi-card` a partir de `origin/main` (`e3eb0ff4`), 2 commits (`a302e469` feat + `ce7f8242` types), **PR #404**. |
+| 2026-09-12 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). **PR #404 mergeado** 10:15 UTC (squash `1d46c38b`, pedido "mergeia o PR"). ⚠️ o `gh pr merge --auto --squash` mergeou com o job "Lint · Typecheck · Test · Build" ainda pendente (a proteção da branch não exige esse check) — CI local estava todo verde; CI da main acompanhado após o merge. Fica com o Vini: conferir o card logado e o gestor preencher a meta de SAO de setembro no "Editar metas". |
 
 ## Executor Assignment
 executor: "@dev"

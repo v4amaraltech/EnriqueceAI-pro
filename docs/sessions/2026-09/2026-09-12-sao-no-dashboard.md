@@ -2,7 +2,7 @@
 
 **Data:** 12/09/2026
 **Pedido de origem (Vini):** "Como agora estamos mapeando via feedback do closer se é uma oportunidade qualificada, conseguimos criar uma visualização dessa em anexo para SAO?", com o print do card grande "Reuniões realizadas em Setembro" (21 / meta 79 / 30% abaixo do ritmo).
-**Estado final:** implementado na `main` local, **sem commit/push/PR** (aguarda pedido). typecheck ✅ lint ✅ testes ✅ (2.067 no total; +19 novos) build ✅. **Migration aplicada em prod** às ~09:55 UTC (versão `20260912095504`, pedido do Vini) e `pnpm gen:types` rodado (diff de 6 linhas). Story `docs/stories/dashboard-sao-kpi-card.story.md` em InProgress.
+**Estado final:** **PR #404 mergeado** 10:15 UTC (squash `1d46c38b`); story **Done**. ⚠️ `gh pr merge --auto --squash` mergeou com o job "Lint · Typecheck · Test · Build" ainda pendente (a proteção da branch não exige esse check; `--auto` não espera) — lição: esperar o CI do PR terminar antes de mergear. Implementado originalmente na `main` local, **sem commit/push/PR** até o pedido. typecheck ✅ lint ✅ testes ✅ (2.067 no total; +19 novos) build ✅. **Migration aplicada em prod** às ~09:55 UTC (versão `20260912095504`, pedido do Vini) e `pnpm gen:types` rodado (diff de 6 linhas). Story `docs/stories/dashboard-sao-kpi-card.story.md` em InProgress.
 
 ---
 
@@ -39,7 +39,7 @@ Conferência visual: página temporária `src/app/docs/sao-check/page.tsx` (apag
 
 1. ~~Aplicar a migration em prod~~ ✅ feito 12/set (`20260912095504`; `sao_target integer NOT NULL DEFAULT 0` conferido nas 2 tabelas).
 2. ~~`pnpm gen:types`~~ ✅ feito (6 linhas). Commitar separado (`chore(types): regenerate`).
-3. Commit + PR (pedido explícito). Migration já em prod, então o deploy pode subir a qualquer momento.
+3. ~~Commit + PR~~ ✅ PR #404 mergeado (`1d46c38b`). Confirmar deploy pelo `/api/version` = `1d46c38`.
 4. Gestor preencher a **meta de SAO de setembro** (org e por SDR) no "Editar metas" — sem meta, card sem ritmo e rankings sem "ideal dia".
 5. Paridade pós-deploy (só leitura): card = 4 SAO de 21 realizadas em set (query de conferência na memória `dashboard-sao-kpi-card`).
 6. Fora de escopo, anotar como story futura: SAO no Sales Hub (`get_leads_for_v4sales` não expõe `oportunidade_qualificada`).
