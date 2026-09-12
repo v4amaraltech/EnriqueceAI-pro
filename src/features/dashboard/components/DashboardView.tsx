@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, UserCheck } from 'lucide-react';
+import { AlarmClock, BadgeCheck, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, UserCheck } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -160,7 +160,37 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
         kpi={data.kpi}
         month={filters.month}
         label="Reuniões realizadas"
-        labelTooltip="Reuniões realizadas no mês — leads marcados como ganho (status='won'). Com filtro de vendedor, cada lead conta para o SDR responsável (mesma regra do ranking)."
+        labelTooltip={
+          'Reuniões que aconteceram neste mês.\n\n' +
+          '• Conta pela data da reunião (não pela data em que o SDR marcou "Ganho").\n' +
+          '• A prova de que aconteceu é o carimbo de realizada (feedback do closer ou clique em "Ganho").\n' +
+          '• Continua contando mesmo se o lead for desqualificado depois.\n\n' +
+          'Com filtro de vendedor, cada lead conta para o SDR responsável (mesma regra do ranking).'
+        }
+      />
+
+      {/* SAO — oportunidades aceitas por vendas (closer respondeu "Qualificada") */}
+      <OpportunityKpiCard
+        kpi={data.saoKpi}
+        month={filters.month}
+        label="SAO"
+        labelTooltip={
+          'SAO = Oportunidade Aceita por Vendas.\n\n' +
+          'Reuniões realizadas neste mês em que o closer respondeu "Qualificada" na pergunta de oportunidade do feedback.\n\n' +
+          '• Conta pela data da reunião (mesma régua do card de Reuniões realizadas), não pela data da resposta.\n' +
+          '• Reunião sem feedback do closer ainda não entra — nem como aceita nem como recusada.\n' +
+          '• A pergunta existe desde 09/set/2026; reuniões anteriores não têm SAO.\n\n' +
+          'Com filtro de vendedor, cada lead conta para o SDR responsável.'
+        }
+        subtitleExtra={
+          <>
+            {data.saoKpi.evaluatedTotal} {data.saoKpi.evaluatedTotal === 1 ? 'avaliada' : 'avaliadas'} de{' '}
+            {data.saoKpi.heldTotal} {data.saoKpi.heldTotal === 1 ? 'realizada' : 'realizadas'}
+            {data.saoKpi.heldTotal - data.saoKpi.evaluatedTotal > 0 && (
+              <> · {data.saoKpi.heldTotal - data.saoKpi.evaluatedTotal} sem feedback do closer</>
+            )}
+          </>
+        }
       />
 
       {/* RM e RR por dia — detalhe diário dos dois cards de reunião acima */}
@@ -170,9 +200,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
         </div>
       )}
 
-      {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → Hit Rate */}
+      {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → SAO → Hit Rate → Taxa SAO */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards">
           <RankingCard
             title="Leads Abertos"
             titleTooltip={
@@ -208,7 +238,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
           <RankingCard
             title="Reuniões Realizadas"
             titleTooltip={
-              'Quantas reuniões realizadas (oportunidades) cada SDR teve no período. Conta leads marcados como ganhos.\n\n' +
+              'Quantas reuniões aconteceram no período para cada SDR, contadas pela data da reunião (não pela data do "Ganho").\n\n' +
               'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
             }
             icon={Handshake}
@@ -219,6 +249,22 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             idealColumnLabel="ideal dia"
             idealColumnTooltip="Onde cada SDR deveria estar hoje: a meta individual de reuniões realizadas do SDR (em Editar metas) no ritmo de dias úteis (sem feriados). Sem meta individual, usa a fatia da meta do time ÷ SDRs."
             averageLabel="média reuniões realizadas/vendedor"
+            onSdrClick={handleSdrClick}
+          />
+          <RankingCard
+            title="SAO"
+            titleTooltip={
+              'SAO = Oportunidade Aceita por Vendas. Quantas reuniões realizadas de cada SDR o closer marcou como "Qualificada" no feedback.\n\n' +
+              'Conta pela data da reunião. Reunião sem feedback não entra. Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={BadgeCheck}
+            iconColor="bg-violet-500/10"
+            iconTextColor="text-violet-500"
+            data={ranking.sao}
+            primaryColumnLabel="SAO"
+            idealColumnLabel="ideal dia"
+            idealColumnTooltip="Onde cada SDR deveria estar hoje: a meta individual de SAO do SDR (em Editar metas) no ritmo de dias úteis (sem feriados). Sem meta individual, usa a fatia da meta do time ÷ SDRs."
+            averageLabel="média SAO/vendedor"
             onSdrClick={handleSdrClick}
           />
           <RankingCard
@@ -236,6 +282,23 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             data={ranking.hitRate}
             primaryColumnLabel="realizadas"
             averageLabel="média hit rate/vendedor"
+            onSdrClick={handleSdrClick}
+          />
+          <RankingCard
+            title="Taxa SAO"
+            titleTooltip={
+              'Das reuniões realizadas de cada SDR, quantas o closer aceitou como oportunidade qualificada (SAO).\n\n' +
+              '• Numerador: SAO (closer respondeu "Qualificada")\n' +
+              '• Denominador: reuniões realizadas no período\n\n' +
+              'Reuniões ainda sem feedback ficam no denominador e puxam a taxa para baixo até o closer responder. Meta = meta de SAO ÷ meta de realizadas. Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+            }
+            icon={Percent}
+            iconColor="bg-violet-500/10"
+            iconTextColor="text-violet-500"
+            unit="%"
+            data={ranking.saoRate}
+            primaryColumnLabel="SAO"
+            averageLabel="média taxa SAO/vendedor"
             onSdrClick={handleSdrClick}
           />
         </div>

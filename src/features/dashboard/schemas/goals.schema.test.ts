@@ -28,6 +28,17 @@ describe('saveGoalsSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('meta de SAO é opcional com default 0 (deployment skew) e rejeita negativo', () => {
+    const withoutSao = saveGoalsSchema.safeParse(validInput);
+    expect(withoutSao.success).toBe(true);
+    if (withoutSao.success) {
+      expect(withoutSao.data.saoTarget).toBe(0);
+      expect(withoutSao.data.userGoals[0]?.saoTarget).toBe(0);
+    }
+    const negative = saveGoalsSchema.safeParse({ ...validInput, saoTarget: -1 });
+    expect(negative.success).toBe(false);
+  });
+
   it('rejects conversion target above 100', () => {
     const result = saveGoalsSchema.safeParse({ ...validInput, conversionTarget: 101 });
     expect(result.success).toBe(false);

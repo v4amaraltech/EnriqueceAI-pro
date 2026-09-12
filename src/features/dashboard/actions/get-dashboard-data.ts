@@ -8,7 +8,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import {
   fetchAvailableCadences,
+  fetchHeldLeadsForKpi,
   fetchOpportunityKpi,
+  fetchSaoKpi,
 } from '../services/dashboard-metrics.service';
 import type { DashboardData, DashboardFilters } from '../types';
 
@@ -39,14 +41,18 @@ export async function getDashboardData(
   // Dashboard shows global data for all roles to foster team competition
 
   try {
-    const [kpi, availableCadences] = await Promise.all([
-      fetchOpportunityKpi(supabase, orgId, filters),
+    // Reuniões realizadas são buscadas UMA vez e compartilhadas pelos KPIs de
+    // realizadas e de SAO (subconjunto).
+    const held = fetchHeldLeadsForKpi(supabase, orgId, filters);
+    const [kpi, saoKpi, availableCadences] = await Promise.all([
+      fetchOpportunityKpi(supabase, orgId, filters, held),
+      fetchSaoKpi(supabase, orgId, filters, held),
       fetchAvailableCadences(supabase, orgId),
     ]);
 
     return {
       success: true,
-      data: { kpi, availableCadences },
+      data: { kpi, saoKpi, availableCadences },
     };
   } catch (error: unknown) {
     if (

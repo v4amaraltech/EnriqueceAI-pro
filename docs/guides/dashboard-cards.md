@@ -18,17 +18,18 @@ período** (mês ou intervalo de datas), salvo os *snapshots* indicados.
 |---|---|---|
 | **Leads abertos** | Leads que tiveram o **1º contato humano** no mês | 1ª interação humana do lead (e-mail, WhatsApp, telefone, LinkedIn ou **pesquisa**) cai no período |
 | **Reuniões marcadas** | Leads com reunião **agendada** | `meeting_scheduled_at` cai no período |
-| **Reuniões realizadas** | Reuniões que **aconteceram** (= oportunidade/ganho) | `status = 'won'` e `won_at` no período. Com filtro de vendedor, conta para o **SDR responsável** (`assigned_to`), igual ao ranking |
+| **Reuniões realizadas** | Reuniões que **aconteceram** | A reunião tem carimbo de realizada (`meeting_held_at`, dado pelo feedback do closer ou pelo clique em "Ganho") e conta **na data da reunião** (`meeting_starts_at`; sem evento, no carimbo). Não olha o status: reunião realizada e lead desqualificado depois continua contando. Com filtro de vendedor, conta para o **SDR responsável** (`assigned_to`), igual ao ranking |
+| **SAO** (Oportunidade Aceita por Vendas) | Reuniões realizadas que o **closer aceitou** como oportunidade qualificada | Mesmo universo, janela e filtros de "Reuniões realizadas" **e** o feedback do closer mais recente com a pergunta preenchida tem `oportunidade_qualificada = true`. Conta **na data da reunião**, não na da resposta. Reunião sem feedback (ou com feedback anterior a 09/set/2026, quando a pergunta não existia) não entra — nem como aceita nem como recusada; o card mostra "N avaliadas de M realizadas · K sem feedback do closer". Meta própria: `goals.sao_target` |
 
 ### Gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia"
 
-Logo abaixo dos 3 KPIs. Barras lado a lado por dia + duas retas de tendência
+Logo abaixo do card de SAO. Barras lado a lado por dia + duas retas de tendência
 tracejadas (regressão linear sobre os dias já ocorridos).
 
 | Série | Conta no dia em que |
 |---|---|
 | **RM** (marcadas) | o SDR marcou a reunião (`meeting_scheduled_at`) |
-| **RR** (realizadas) | o lead virou Ganho (`won_at`). Some da barra se o closer marcar no-show depois |
+| **RR** (realizadas) | a reunião aconteceu (`meeting_starts_at`, ou o carimbo `meeting_held_at` sem evento). Some da barra se o closer marcar no-show depois |
 
 - É **derivado das séries diárias dos dois cards acima** (diferença do
   acumulado), então a soma das barras bate com o número grande de cada card e
@@ -40,14 +41,16 @@ tracejadas (regressão linear sobre os dias já ocorridos).
 
 ## 2) Grid do funil (ranking por SDR)
 
-Ordem do funil: **Abertos → Marcadas → Realizadas → Hit Rate**
+Ordem do funil (6 cards, 3 por linha): **Abertos → Marcadas → Realizadas → SAO → Hit Rate → Taxa SAO**
 
 | Card | Fórmula | Observações |
 |---|---|---|
 | **Leads Abertos** | contagem de leads abertos por SDR | 1x por lead, no mês do 1º contato. **Não conta:** notas importadas, arquivados, leads sem responsável, e eventos que não são envio (abertura, clique, resposta) |
 | **Reuniões Marcadas** | leads com `meeting_scheduled_at` no período | atribuído ao responsável do lead |
-| **Reuniões Realizadas** | leads `won` no período | atribuído ao responsável do lead |
+| **Reuniões Realizadas** | reuniões que aconteceram no período (data da reunião + carimbo de realizada) | atribuído ao responsável do lead; sem filtro de status |
+| **SAO** | realizadas do período cujo feedback do closer mais recente tem `oportunidade_qualificada = true` | atribuído ao responsável do lead; "ideal dia" pela meta individual `goals_per_user.sao_target` (fallback: meta do time ÷ SDRs) |
 | **Hit Rate** | **Realizadas ÷ Abertas** (%) | conversão Aberto→Realizada. Meta **derivada** das metas de Abertos e Realizadas |
+| **Taxa SAO** | **SAO ÷ Realizadas** (%) | reunião ainda sem feedback fica no denominador e puxa a taxa para baixo até o closer responder. Meta **derivada** = meta de SAO ÷ meta de Realizadas |
 
 ---
 

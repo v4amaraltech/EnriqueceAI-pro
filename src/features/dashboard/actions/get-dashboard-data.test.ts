@@ -17,10 +17,14 @@ vi.mock('@/lib/auth/require-auth-with-member', () => ({
 
 // Mock service functions
 const mockFetchKpi = vi.fn();
+const mockFetchSaoKpi = vi.fn();
+const mockFetchHeld = vi.fn();
 const mockFetchCadences = vi.fn();
 
 vi.mock('../services/dashboard-metrics.service', () => ({
+  fetchHeldLeadsForKpi: (...args: unknown[]) => mockFetchHeld(...args),
   fetchOpportunityKpi: (...args: unknown[]) => mockFetchKpi(...args),
+  fetchSaoKpi: (...args: unknown[]) => mockFetchSaoKpi(...args),
   fetchAvailableCadences: (...args: unknown[]) => mockFetchCadences(...args),
 }));
 
@@ -30,6 +34,9 @@ describe('getDashboardData', () => {
   beforeEach(() => {
     resetMocks();
     mockFetchKpi.mockReset();
+    mockFetchSaoKpi.mockReset();
+    mockFetchHeld.mockReset();
+    mockFetchHeld.mockResolvedValue([]);
     mockFetchCadences.mockReset();
     mockRequireAuthWithMember.mockResolvedValue({ userId: 'user-1', orgId: 'org-1', role: 'manager' });
   });
@@ -50,17 +57,24 @@ describe('getDashboardData', () => {
       daysInMonth: 28,
       dailyData: [],
     };
+    const saoKpiData = { ...kpiData, totalOpportunities: 3, monthTarget: 20, heldTotal: 10, evaluatedTotal: 4, qualifiedTotal: 3 };
     const cadences = [{ id: 'c1', name: 'Inbound' }];
 
     mockFetchKpi.mockResolvedValue(kpiData);
+    mockFetchSaoKpi.mockResolvedValue(saoKpiData);
     mockFetchCadences.mockResolvedValue(cadences);
 
     const result = await getDashboardData(validFilters);
 
     expect(result).toEqual({
       success: true,
-      data: { kpi: kpiData, availableCadences: cadences },
+      data: { kpi: kpiData, saoKpi: saoKpiData, availableCadences: cadences },
     });
+    // Reuniões realizadas buscadas UMA vez e compartilhadas pelos dois KPIs.
+    expect(mockFetchHeld).toHaveBeenCalledTimes(1);
+    const heldPromise = mockFetchHeld.mock.results[0]?.value;
+    expect(mockFetchKpi.mock.calls[0]?.[3]).toBe(heldPromise);
+    expect(mockFetchSaoKpi.mock.calls[0]?.[3]).toBe(heldPromise);
   });
 
   it('should return error for invalid month format', async () => {
@@ -126,6 +140,13 @@ describe('getDashboardData', () => {
       mockSupabase,
       'org-42',
       validFilters,
+      expect.anything(), // promise compartilhada de reuniões realizadas
+    );
+    expect(mockFetchSaoKpi).toHaveBeenCalledWith(
+      mockSupabase,
+      'org-42',
+      validFilters,
+      expect.anything(),
     );
     expect(mockFetchCadences).toHaveBeenCalledWith(mockSupabase, 'org-42');
   });

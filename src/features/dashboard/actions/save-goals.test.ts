@@ -104,6 +104,35 @@ describe('saveGoals', () => {
     expect(rows[1]).toMatchObject({ calls_target: 0, calls_connected_target: 0 });
   });
 
+  it('grava a meta de SAO na org e por SDR (0 quando o cliente não envia)', async () => {
+    const orgChain = createChainMock({ data: { org_id: 'org-1' } });
+    const goalsChain = createChainMock();
+    const userGoalsChain = createChainMock();
+
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return orgChain;
+      if (callCount === 2) return goalsChain;
+      return userGoalsChain;
+    });
+
+    await saveGoals({
+      ...validInput,
+      saoTarget: 60,
+      userGoals: [
+        { userId: '00000000-0000-0000-0000-000000000001', saoTarget: 8 },
+        { userId: '00000000-0000-0000-0000-000000000002' },
+      ],
+    });
+
+    const orgRow = (goalsChain.upsert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(orgRow).toMatchObject({ sao_target: 60 });
+    const rows = (userGoalsChain.upsert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ sao_target: 8 });
+    expect(rows[1]).toMatchObject({ sao_target: 0 });
+  });
+
   it('returns error when goals upsert fails', async () => {
     const orgChain = createChainMock({ data: { org_id: 'org-1' } });
     const goalsChain = {

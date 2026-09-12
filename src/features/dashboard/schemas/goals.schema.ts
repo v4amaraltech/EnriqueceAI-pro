@@ -9,6 +9,7 @@ const userGoalSchema = z.object({
   meetingsHeldTarget: z.number().int().min(0).optional().default(0),
   callsTarget: z.number().int().min(0).optional().default(0),
   callsConnectedTarget: z.number().int().min(0).optional().default(0),
+  saoTarget: z.number().int().min(0).optional().default(0),
   // legado (deployment skew): clientes antigos ainda enviam "oportunidades".
   // Aceito e ignorado — a coluna opportunity_target virou vestigial.
   opportunityTarget: z.number().int().min(0).optional(),
@@ -25,6 +26,8 @@ export const saveGoalsSchema = z.object({
   leadsOpenedTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
   meetingsScheduledTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
   meetingsHeldTarget: z.number().int().min(0, 'Meta deve ser >= 0'),
+  // opcional com default (deployment skew): clientes antigos não enviam SAO.
+  saoTarget: z.number().int().min(0, 'Meta deve ser >= 0').optional().default(0),
   userGoals: z.array(userGoalSchema).min(1, 'Pelo menos 1 vendedor'),
 });
 

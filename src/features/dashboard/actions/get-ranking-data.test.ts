@@ -56,6 +56,8 @@ describe('getRankingData', () => {
     meetingsScheduled: { ...emptyCard },
     meetingsHeld: { ...emptyCard },
     hitRate: { ...emptyCard },
+    sao: { ...emptyCard },
+    saoRate: { ...emptyCard },
     leadsToOpen: { ...emptyCard },
     overdueActivities: { ...emptyCard },
     ...overrides,

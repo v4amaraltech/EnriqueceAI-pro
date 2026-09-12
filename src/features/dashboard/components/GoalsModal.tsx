@@ -72,6 +72,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [leadsOpenedTarget, setLeadsOpenedTarget] = useState(0);
   const [meetingsScheduledTarget, setMeetingsScheduledTarget] = useState(0);
   const [meetingsHeldTarget, setMeetingsHeldTarget] = useState(0);
+  const [saoTarget, setSaoTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
   const [visibleUserIds, setVisibleUserIds] = useState<Set<string>>(new Set());
 
@@ -92,6 +93,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         setLeadsOpenedTarget(result.data.leadsOpenedTarget);
         setMeetingsScheduledTarget(result.data.meetingsScheduledTarget);
         setMeetingsHeldTarget(result.data.meetingsHeldTarget);
+        setSaoTarget(result.data.saoTarget);
         setUserGoals(result.data.userGoals);
 
         // Show SDRs that already have goals or had goals last month; fallback to all
@@ -124,7 +126,8 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
       | 'meetingsScheduledTarget'
       | 'meetingsHeldTarget'
       | 'callsTarget'
-      | 'callsConnectedTarget',
+      | 'callsConnectedTarget'
+      | 'saoTarget',
     value: number,
   ) {
     setUserGoals((prev) =>
@@ -142,6 +145,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         leadsOpenedTarget,
         meetingsScheduledTarget,
         meetingsHeldTarget,
+        saoTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
           leadsOpenedTarget: ug.leadsOpenedTarget,
@@ -149,6 +153,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
           meetingsHeldTarget: ug.meetingsHeldTarget,
           callsTarget: ug.callsTarget,
           callsConnectedTarget: ug.callsConnectedTarget,
+          saoTarget: ug.saoTarget,
         })),
       });
 
@@ -279,6 +284,29 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     value={meetingsHeldTarget}
                     onChange={(e) => setMeetingsHeldTarget(Number(e.target.value) || 0)}
                     aria-label="Meta de Reuniões Realizadas"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Meta de SAO */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de SAO</p>
+                  <p className="mt-1 text-sm text-[var(--foreground)] opacity-70">
+                    Oportunidades aceitas por vendas no mês: reuniões realizadas que o closer marcou como &quot;Qualificada&quot; no feedback
+                  </p>
+                </div>
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="sao-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={saoTarget}
+                    onChange={(e) => setSaoTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de SAO"
                   />
                 </div>
               </div>
@@ -443,6 +471,21 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                             updateUserGoalField(ug.userId, 'meetingsHeldTarget', Number(e.target.value) || 0)
                           }
                           aria-label={`Meta de reuniões realizadas de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Meta de SAO */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--foreground)] opacity-70">SAO</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={ug.saoTarget}
+                          onChange={(e) =>
+                            updateUserGoalField(ug.userId, 'saoTarget', Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de SAO de ${ug.userName}`}
                         />
                       </div>
 
