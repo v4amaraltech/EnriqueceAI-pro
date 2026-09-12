@@ -1,13 +1,15 @@
 # Story: SAO no Sales Hub — expor `oportunidade_qualificada` no sync e mostrar "% SAO" no funil por SDR
 
 ## Status
-Ready
+InProgress
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-09-12 | Vini + Claude | Story criada (pedido: "cria a story do SAO no Sales Hub"), como continuação da `dashboard-sao-kpi-card` (Done, PR #404/#405), que deixou o Sales Hub fora de escopo. Base levantada nos dois repos e conferida em prod: a RPC `get_leads_for_v4sales` no ar é a versão `20260815100000` do repo `v4-sales-hub` (tem `first_touch_at`), sem SAO; `anon` tem EXECUTE (o n8n chama como anon). |
 | 2026-09-12 | @po (Pax) | `*validate-story-draft`: **8/10 → GO condicional**, correções aplicadas: AC 5 apontava para `tests/security/definer-acl.test.ts`, que NÃO existe na `main` (vive na branch de hardening não mergeada) — reescrito como conferência SQL obrigatória + teste opcional; adicionadas as seções **Dependências** e **Definition of Done**. As 3 decisões abertas foram fechadas pelo Vini: migration **neste repo**; nome **`oportunidade_qualificada`** ponta a ponta; sem feedback = **nulo, conta só nas realizadas** (igual ao Dashboard). Draft → **Ready**. |
+| 2026-09-12 | @dev (Dex) | Ready → **InProgress** (pedido do Vini: "@dev implementa a story"). PR #407 (story Ready) mergeado `f6dfbe1c`. Task 1: corpo em prod = `20260815100000` do repo B (diff zero via `pg_get_functiondef`). Task 2: migration `20260912151440_get_leads_for_v4sales_oportunidade_qualificada.sql` (subselect + GRANT). Task 3 (AC 4): `EXPLAIN (ANALYZE, BUFFERS)` da query interna com `p_from_date=2026-09-01` (4.420 leads, 416 feedbacks): SubPlan do SAO ≈ 0,066 ms/lead × 4.420 ≈ 290 ms, contra ≈ 0,073 ms/lead do `decisor_presente` — não dobra o custo; índice dispensado. Sales Hub: 2 migrations (`20260912151522`, `20260912151658`), `tables.tsx`, `SDRs.tsx`, `taxonomia.md`; `tsc` ✅. **Pendente:** aplicar migrations em prod (Enriquece primeiro, depois Sales Hub — aguarda pedido explícito), ACL, gen:types, redeploy do Sales Hub, paridade. |
+| 2026-09-12 | @dev (Dex) | **Migrations aplicadas em prod** (pedido do Vini: "aplica as migrations"), na ordem: Enriquece `20260912151440` (ACL: `anon`/`authenticated`/`service_role` EXECUTE = true; RPC devolve `oportunidade_qualificada` em 4.422 leads de set, 4 true; `first_touch_at` preservado; `pnpm gen:types` sem diff) → Sales Hub `20260912151522` (coluna + upsert) e `20260912151658` (funil/view/team stats; grants conferidos nas 3 funções + view). Arquivos locais renomeados para as versões registradas. Aguardando ciclo do sync (último 15:07 UTC) para a paridade (AC 10). |
 
 ## Executor Assignment
 executor: "@dev"
@@ -83,25 +85,27 @@ Estado real em prod (12/set): set/2026 tem 21 realizadas, 4 avaliadas em SAO (4 
 
 ## Tasks
 ### Enriquece (este repo)
-- [ ] Copiar o corpo de `v4-sales-hub/supabase/migrations/20260815100000_...` e conferir contra `pg_get_functiondef` em prod (diff zero) antes de editar
-- [ ] Migration `YYYYMMDDHHMMSS_get_leads_for_v4sales_oportunidade_qualificada.sql`: subselect novo logo após `decisor_presente`, `CREATE OR REPLACE`, GRANT reafirmado, comentário de origem (Checkpoint 1)
-- [ ] `EXPLAIN (ANALYZE, BUFFERS)` antes/depois; índice parcial só se necessário
-- [ ] Aplicar em prod via MCP (pedido explícito) → conferir `has_function_privilege('anon', ...)` e uma chamada da RPC com `p_from_date` do mês devolvendo a chave
-- [ ] `pnpm gen:types` (esperado: sem diff) + conferência de ACL registrada (AC 5)
-- [ ] Docs: `docs/integrations/` (nota do campo novo no contrato do sync) + handoff
+- [x] Copiar o corpo de `v4-sales-hub/supabase/migrations/20260815100000_...` e conferir contra `pg_get_functiondef` em prod (diff zero) antes de editar
+- [x] Migration `20260912151440_get_leads_for_v4sales_oportunidade_qualificada.sql`: subselect novo logo após `decisor_presente`, `CREATE OR REPLACE`, GRANT reafirmado, comentário de origem (Checkpoint 1)
+- [x] `EXPLAIN (ANALYZE, BUFFERS)` antes/depois; índice parcial só se necessário — não necessário (ver Dev Notes)
+- [x] Aplicar em prod via MCP (pedido explícito) → conferir `has_function_privilege('anon', ...)` e uma chamada da RPC com `p_from_date` do mês devolvendo a chave — versão `20260912151440`; `anon`/`authenticated`/`service_role` = true; RPC (como service_role, `p_from_date=2026-09-01`) devolveu 4.422 leads, chave presente em todos, 4 com SAO (4 true), `first_touch_at` presente
+- [x] `pnpm gen:types` (sem diff, como esperado) + conferência de ACL registrada (AC 5) — ver Change Log
+- [x] Docs: `docs/integrations/saleshub-sync-leads-pv-contrato.md` (contrato do sync, onde a RPC é mantida, regras de GRANT) — handoff no fim
 ### Sales Hub (repo `v4-sales-hub`)
-- [ ] Migration: `leads_pv.oportunidade_qualificada` + `upsert_leads_pv` (INSERT, VALUES, `ON CONFLICT` sticky)
-- [ ] Migration: `get_sdr_funil_breakdown` (+`sao`, +`sao_conf`), `vw_mb_sdr_funil` (colunas no fim), `get_sdr_team_stats` (`pct_sao`)
-- [ ] UI: `tables.tsx` (coluna "% SAO", rótulo provisório, `conf N/M`, cores 60/40) e `SDRs.tsx` (`METRICS.pct_sao`)
-- [ ] `docs/taxonomia.md`: degrau SAO
-- [ ] Redeploy manual do Sales Hub (Coolify) e paridade (AC 10)
+- [x] Migration: `leads_pv.oportunidade_qualificada` + `upsert_leads_pv` (INSERT, VALUES, `ON CONFLICT` sticky) — `20260912151522_leads_pv_oportunidade_qualificada.sql` (corpo do upsert copiado de prod)
+- [x] Migration: `get_sdr_funil_breakdown` (+`sao`, +`sao_conf`), `vw_mb_sdr_funil` (colunas no fim), `get_sdr_team_stats` (`pct_sao`) — `20260912151658_sdr_funil_pct_sao.sql` (corpos copiados de prod; DROP+CREATE só no breakdown, GRANT em tudo)
+- [x] UI: `tables.tsx` (coluna "% SAO", rótulo provisório, `conf N/M`, cores 60/40) e `SDRs.tsx` (`pct_sao` com `fixedTarget: 0.60`; agregador generalizado por `ratioNumKey`)
+- [x] `docs/taxonomia.md`: degrau SAO (linha na tabela, seção própria, histórico de migrations, nota de que a RPC passa a ser mantida no repo Enriquece)
+- [ ] Redeploy manual do Sales Hub (Coolify) e paridade (AC 10) — migrations aplicadas em prod (`20260912151522`, `20260912151658`; grants das 3 funções e da view conferidos); falta sync + redeploy + paridade
 
 ## File List
-_(preencher na implementação)_
-- Enriquece: `supabase/migrations/<ts>_get_leads_for_v4sales_oportunidade_qualificada.sql`, `tests/security/definer-acl.test.ts`, `docs/integrations/…`
-- Sales Hub: `supabase/migrations/<ts>_leads_pv_oportunidade_qualificada.sql`, `<ts>_sdr_funil_pct_sao.sql`, `src/components/operacional/tables.tsx`, `src/pages/SDRs.tsx`, `docs/taxonomia.md`
+- Enriquece (`EnriqueceAI_Pro`): `supabase/migrations/20260912151440_get_leads_for_v4sales_oportunidade_qualificada.sql` (novo), `docs/integrations/saleshub-sync-leads-pv-contrato.md` (novo), `docs/stories/sao-sales-hub-sync.story.md`
+- Sales Hub (`v4-sales-hub`): `supabase/migrations/20260912151522_leads_pv_oportunidade_qualificada.sql` (novo), `supabase/migrations/20260912151658_sdr_funil_pct_sao.sql` (novo), `src/components/operacional/tables.tsx`, `src/pages/SDRs.tsx`, `docs/taxonomia.md`
 
 ## Dev Notes
+- **EXPLAIN (AC 4), 12/set, query interna da RPC com `p_from_date = 2026-09-01`** (4.420 leads do mês; `closer_feedback_requests` com 416 linhas, 17 páginas): antes 1.217 ms (cache frio no LATERAL de `interactions`, 31k buffers), depois 702 ms. SubPlan novo (`oportunidade_qualificada`): Seq Scan 0,066 ms × 4.420 loops, 75.140 buffers — igual ao SubPlan do `decisor_presente` (0,073 ms × 4.420, 75.140 buffers). Não dobra o custo → índice não criado. Se um dia doer, um índice simples `closer_feedback_requests (lead_id)` resolve os três subselects de uma vez (hoje só existe o parcial `idx_feedback_unique_pending`).
+- Corpos das funções do Sales Hub copiados de `pg_get_functiondef` em prod (`ejxlbbbjyexsoltsxiqq`) em 12/set, não dos arquivos do repo; `vw_mb_sdr_funil` de `pg_get_viewdef`. Grants conferidos antes: `anon`/`authenticated`/`service_role` com EXECUTE nas 3 funções e SELECT na view.
+- `get_sdr_funil_breakdown` muda o `RETURNS TABLE` → `DROP FUNCTION` + `CREATE` (sem CASCADE: se algo depender dela, a migration falha em vez de derrubar). Demais objetos: `CREATE OR REPLACE`.
 - Subselect a adicionar (espelha `latestSaoByLead` do Dashboard):
   ```sql
   (SELECT c.oportunidade_qualificada
