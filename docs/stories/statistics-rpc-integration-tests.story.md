@@ -1,11 +1,12 @@
 # Story: Teste de integração das RPCs de estatística num banco local (e no CI)
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-11 | @devops (Gage) | Ready for Review → **Done**. PR [#401](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/401) mergeado 12:45 UTC (squash `8ab75674`), no ar 12:51 UTC (`/api/version`); CI e Integração verdes na `main`. **AC5 provado no CI:** commit temporário `e7a41433` (fuso `3 hours`→`2 hours` em `get_interaction_counts`) deixou o job de integração vermelho (5 falhas \| 8 ok, [run 34599145197](https://github.com/v4amaraltech/EnriqueceAI-pro/actions/runs/34599145197)); revertido em `39b63d8c` → verde ([run 34599301020](https://github.com/v4amaraltech/EnriqueceAI-pro/actions/runs/34599301020)); os dois commits sumiram no squash. No PR original o job rodou 13/13 de verdade (nada pulado). **AC6** é provado por este PR de docs: só mexe em `docs/**`, fora dos `paths` do workflow, então o job de integração não deve aparecer nele. |
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Correção aplicada em prod com autorização do Vini (versão `20260911111939`, arquivo renomeado; md5 do corpo em prod = arquivo `c04925b1…`; ACL intacta: anon ✗, authenticated/service_role ✓, sem DEFINER). **Mesmo snapshot: função antiga × nova idênticas sem filtro** (3.456 linhas); com filtro de SDR/cadência e Julio, impressões iguais às de antes. typecheck ✅ lint ✅ 2.020 testes ✅ integração 12/12 (local) ✅ build ✅. AC5/AC6 dependem do push (fase @devops). Nada commitado. |
 | 2026-09-11 | @dev (Dex) | T4, T5 e T7 feitos; T6 escrito. Teste de integração **12/12** no Postgres local; suíte 2.020 ✅; typecheck/lint/build ✅. O teste **achou um defeito** em `get_conversion_universe` (`for_velocity` = null em vez de false com filtro de SDR e inscrição sem `enrolled_by`) → correção na migration nova `20260911111939_…_for_velocity_false.sql` (**ainda não aplicada em prod**). Nada commitado. |
 | 2026-09-11 | @po (Pax) | **Escopo +1 (decisão do Vini):** corrigir o `for_velocity` null→false em `get_conversion_universe` nesta story (1 linha, `CREATE OR REPLACE`, sem efeito na tela). O item OUT "Mudar as funções" passa a ter essa exceção. |
