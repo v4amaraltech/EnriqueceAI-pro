@@ -1,12 +1,13 @@
 # Story: SAO no Sales Hub — expor `oportunidade_qualificada` no sync e mostrar "% SAO" no funil por SDR
 
 ## Status
-Draft
+Ready
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-09-12 | Vini + Claude | Story criada (pedido: "cria a story do SAO no Sales Hub"), como continuação da `dashboard-sao-kpi-card` (Done, PR #404/#405), que deixou o Sales Hub fora de escopo. Base levantada nos dois repos e conferida em prod: a RPC `get_leads_for_v4sales` no ar é a versão `20260815100000` do repo `v4-sales-hub` (tem `first_touch_at`), sem SAO; `anon` tem EXECUTE (o n8n chama como anon). |
+| 2026-09-12 | @po (Pax) | `*validate-story-draft`: **8/10 → GO condicional**, correções aplicadas: AC 5 apontava para `tests/security/definer-acl.test.ts`, que NÃO existe na `main` (vive na branch de hardening não mergeada) — reescrito como conferência SQL obrigatória + teste opcional; adicionadas as seções **Dependências** e **Definition of Done**. As 3 decisões abertas foram fechadas pelo Vini: migration **neste repo**; nome **`oportunidade_qualificada`** ponta a ponta; sem feedback = **nulo, conta só nas realizadas** (igual ao Dashboard). Draft → **Ready**. |
 
 ## Executor Assignment
 executor: "@dev"
@@ -34,7 +35,7 @@ Estado real em prod (12/set): set/2026 tem 21 realizadas, 4 avaliadas em SAO (4 
 2. A migration parte do **corpo em produção** (= `v4-sales-hub/supabase/migrations/20260815100000_enriquece_get_leads_for_v4sales_propaga_first_touch_at.sql`), preservando `first_touch_at`, `decisor_presente`, `tem_feedback_closer`, a autenticação por `p_api_token`/`verify_api_secret` e o filtro de janela. Só `CREATE OR REPLACE` (retorno é `SETOF json`, assinatura não muda).
 3. A migration **re-GRANTa** `EXECUTE ... TO anon, authenticated, service_role` e a conferência pós-aplicação usa `has_function_privilege('anon', ...)` (o `proacl` mente). Recriar a função sem GRANT já parou o sync por 3 dias em mai/2026.
 4. `EXPLAIN (ANALYZE)` da RPC antes/depois com `p_from_date` do mês: o subselect novo não pode mais que dobrar o custo do subselect de `decisor_presente`. Se estourar, criar índice `closer_feedback_requests (lead_id, responded_at DESC) WHERE oportunidade_qualificada IS NOT NULL` na mesma migration.
-5. Teste em `tests/security/definer-acl.test.ts` (ou equivalente) garante que a RPC continua na allowlist de `anon`/`authenticated` após a migration.
+5. Conferência de ACL logo após aplicar a migration, registrada no Change Log com o resultado: `SELECT has_function_privilege('anon', 'public.get_leads_for_v4sales(text,text)', 'EXECUTE')` = true (idem `authenticated` e `service_role`) **e** uma chamada real da RPC com o token do n8n devolvendo a chave `oportunidade_qualificada`. Se a branch de hardening (`tests/security/definer-acl.test.ts`, commit `f48abfed`, ainda não mergeada) estiver na `main` até lá, incluir a RPC na allowlist do teste; se não, não criar o arquivo nesta story.
 
 ### Lado Sales Hub (repo `v4-sales-hub` — tarefas registradas aqui, executadas lá)
 6. `leads_pv.oportunidade_qualificada boolean` (nullable) + `upsert_leads_pv` lê `(v_lead->>'oportunidade_qualificada')::boolean` e no `ON CONFLICT` usa `COALESCE(EXCLUDED.oportunidade_qualificada, leads_pv.oportunidade_qualificada)` (**sticky**, igual ao `decisor_presente`: sync posterior com null não apaga resposta já recebida).
@@ -59,10 +60,26 @@ Estado real em prod (12/set): set/2026 tem 21 realizadas, 4 avaliadas em SAO (4 
 - **Nome da chave:** coordenar `oportunidade_qualificada` ponta a ponta antes de subir (decisão registrada abaixo; se o Sales Hub preferir `sao`, muda nos dois lados de uma vez).
 - **Ordem de deploy:** Enriquece primeiro (chave extra no JSON é ignorada pelo upsert atual, sem quebrar), depois Sales Hub. Na ordem inversa a coluna fica null até o Enriquece subir — inofensivo, mas confunde.
 
-## Decisões registradas (confirmar com o Vini antes de implementar)
-- Migration do Enriquece fica **neste repo** (dono do schema), com comentário apontando para a migration do repo B que serviu de base — para os dois repos pararem de divergir, o repo B deve passar a referenciar a versão daqui.
+## Decisões (confirmadas pelo Vini em 12/set/2026, na validação do @po)
+- Migration do Enriquece fica **neste repo** (dono do schema), com comentário apontando para a migration do repo B que serviu de base. O repo B passa a referenciar a versão daqui em vez de manter cópia (anotar no `docs/taxonomia.md` deles).
 - Chave no JSON e coluna em `leads_pv`: **`oportunidade_qualificada`** (mesmo nome ponta a ponta, como `decisor_presente`).
-- Sem proxy para SAO (diferente de `is_job_title_decisor`): quando não há resposta, é null e conta só em `realizadas`.
+- Sem proxy para SAO (diferente de `is_job_title_decisor`): quando não há resposta, é **null e conta só em `realizadas`** — mesma regra do Dashboard e da "Taxa SAO" por SDR. A coluna mostra `conf N/M` para deixar visível quantas ainda não foram avaliadas.
+
+## Dependências
+- **Pré-requisito (pronto):** story `dashboard-sao-kpi-card` Done e no ar (`1d46c38b`) — define a regra de SAO que esta story replica.
+- **Base da migration:** corpo da RPC em produção = `v4-sales-hub/supabase/migrations/20260815100000_...` (conferido em prod em 12/set: `first_touch_at` presente, `anon` com EXECUTE). Re-conferir com `pg_get_functiondef` no dia da implementação.
+- **Ordem de deploy obrigatória:** (1) migration do Enriquece em prod via MCP → (2) conferência de ACL (AC 5) → (3) migrations do Sales Hub → (4) redeploy manual do Sales Hub (Coolify) → (5) esperar 1 ciclo do sync (≤ 15 min) → (6) paridade (AC 10).
+- **Não depende** da migration pendente `20260909210100` (hardening de outras RPCs) nem do n8n (payload jsonb, chave nova passa sozinha).
+- **Acesso necessário:** MCP do Supabase do Enriquece (`dhkmonctyoaenejemkrt`) e do Sales Hub (`ejxlbbbjyexsoltsxiqq`), repo `v4-sales-hub` local, Coolify do Sales Hub.
+
+## Definition of Done
+- Todos os ACs 1–10 atendidos e a paridade do AC 10 registrada no Change Log (número do Sales Hub = número do card do Dashboard no mesmo instante).
+- `has_function_privilege('anon', ...)` = true conferido e registrado após a migration (AC 5).
+- `EXPLAIN` antes/depois anexado nos Dev Notes (AC 4).
+- Enriquece: `pnpm typecheck && pnpm lint && pnpm test:run` verdes; `pnpm gen:types` sem diff (ou diff explicado).
+- Sales Hub: build verde e telas `/operacional` e `/sdrs` conferidas com a coluna "% SAO".
+- Handoff em `docs/sessions/2026-09/` e `docs/taxonomia.md` (repo B) atualizados.
+- Sem commit/push/PR/merge sem pedido explícito, em cada um dos repos.
 
 ## Tasks
 ### Enriquece (este repo)
@@ -70,7 +87,7 @@ Estado real em prod (12/set): set/2026 tem 21 realizadas, 4 avaliadas em SAO (4 
 - [ ] Migration `YYYYMMDDHHMMSS_get_leads_for_v4sales_oportunidade_qualificada.sql`: subselect novo logo após `decisor_presente`, `CREATE OR REPLACE`, GRANT reafirmado, comentário de origem (Checkpoint 1)
 - [ ] `EXPLAIN (ANALYZE, BUFFERS)` antes/depois; índice parcial só se necessário
 - [ ] Aplicar em prod via MCP (pedido explícito) → conferir `has_function_privilege('anon', ...)` e uma chamada da RPC com `p_from_date` do mês devolvendo a chave
-- [ ] `pnpm gen:types` (esperado: sem diff) + teste de ACL
+- [ ] `pnpm gen:types` (esperado: sem diff) + conferência de ACL registrada (AC 5)
 - [ ] Docs: `docs/integrations/` (nota do campo novo no contrato do sync) + handoff
 ### Sales Hub (repo `v4-sales-hub`)
 - [ ] Migration: `leads_pv.oportunidade_qualificada` + `upsert_leads_pv` (INSERT, VALUES, `ON CONFLICT` sticky)
