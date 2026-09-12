@@ -90,7 +90,7 @@
     "jsdom": "^28.1.0",
     "msw": "^2.12.10",
     "prettier": "^3.8.1",
-    "supabase": "^2.76.10",
+    "supabase": "^2.117.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
