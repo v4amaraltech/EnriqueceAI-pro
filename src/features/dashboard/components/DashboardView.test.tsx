@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
+import type { DashboardData, DashboardFilters, InsightsData, RankingData, SdrPaceData } from '../types';
 import { DashboardView } from './DashboardView';
 
 // Mock next/navigation
@@ -364,5 +364,59 @@ describe('DashboardView', () => {
     expect(
       container.querySelector('[data-slot="ranking-cards"]'),
     ).not.toBeInTheDocument();
+  });
+
+  it('renderiza "SDR selecionado" depois dos rankings e antes dos insights', () => {
+    const base = {
+      total: 0,
+      monthTarget: 0,
+      percentOfTarget: 0,
+      averagePerSdr: 0,
+      sdrBreakdown: [],
+    };
+    const ranking: RankingData = {
+      leadsFinished: base,
+      activitiesDone: base,
+      attendanceRate: base,
+      leadsOpened: base,
+      meetingsScheduled: base,
+      meetingsHeld: base,
+      hitRate: base,
+      sao: base,
+      saoRate: base,
+      leadsToOpen: base,
+      overdueActivities: base,
+    };
+    const insights: InsightsData = {
+      lossReasons: [{ reason: 'Sem orçamento', count: 5, percent: 100 }],
+      conversionByOrigin: [{ origin: 'Inbound', converted: 3, lost: 1 }],
+    };
+    const sdrPace: SdrPaceData = {
+      month: '2026-02',
+      sdrs: [{ userId: '00000000-0000-0000-0000-000000000001', userName: 'Matheus Martins' }],
+      selectedUserId: '00000000-0000-0000-0000-000000000001',
+      metrics: {
+        actual: { leadsOpened: 1, meetingsScheduled: 1, meetingsHeld: 1, calls: 1, callsConnected: 1 },
+        target: { leadsOpened: 2, meetingsScheduled: 2, meetingsHeld: 2, calls: 2, callsConnected: 2 },
+      },
+    };
+    const { container } = render(
+      <DashboardView
+        data={createData()}
+        filters={defaultFilters}
+        ranking={ranking}
+        insights={insights}
+        sdrPace={sdrPace}
+      />,
+    );
+    const ops = container.querySelector('[data-slot="ranking-cards-ops"]');
+    const pace = container.querySelector('[data-slot="sdr-pace-section"]');
+    const charts = container.querySelector('[data-slot="insights-charts"]');
+    expect(ops).toBeInTheDocument();
+    expect(pace).toBeInTheDocument();
+    expect(charts).toBeInTheDocument();
+    // Node.DOCUMENT_POSITION_FOLLOWING = 4: o 2º nó vem depois do 1º no DOM
+    expect(ops!.compareDocumentPosition(pace!) & 4).toBeTruthy();
+    expect(pace!.compareDocumentPosition(charts!) & 4).toBeTruthy();
   });
 });

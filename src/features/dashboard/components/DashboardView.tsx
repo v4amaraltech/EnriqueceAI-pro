@@ -109,9 +109,6 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
 
-      {/* SDR selecionado — realizado × meta individual do mês, com o ritmo do dia */}
-      {sdrPace && <SdrPaceSection data={sdrPace} />}
-
       {/* Leads Abertos — primeiro do funil */}
       {ranking?.leadsOpened?.dailyData && (
         <OpportunityKpiCard
@@ -380,6 +377,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
           />
         </div>
       )}
+
+      {/* SDR selecionado — detalhe de um SDR (realizado × meta do mês, ritmo do dia), depois da visão do time e dos rankings */}
+      {sdrPace && <SdrPaceSection data={sdrPace} />}
 
       {/* Insights Charts (Story 3.4) */}
       {insights && (
