@@ -12,6 +12,7 @@ Done
 | 2026-09-11 | @dev (Dex) | **Migration aplicada em prod** via MCP (pedido do Vini: "aplica a migration"), versão `20260911100515` — arquivo renomeado para a mesma versão. Conferido: 2 colunas `integer NOT NULL DEFAULT 0`, 44 linhas existentes com 0. `pnpm gen:types` rodado (traz também `get_interaction_counts`, de outra migration já em prod às 09:54 UTC, fora desta story). typecheck ✅ testes ✅. |
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Commit + PR autorizados pelo Vini ("commita e abre o PR"). Branch `feat/dashboard-sdr-pace-cards` rebaseada na `origin/main` (`17d727c7`). |
 | 2026-09-11 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). **PR #393 mergeado** 10:27 UTC (squash `bfe6f89e`), **no ar** 10:31 UTC (`/api/version` = `bfe6f89`). CI do PR falhou 2× no flaky "Closing rpc while fetch was pending" (`inbound-lead.service.test.ts`, alheio à story) e passou na 3ª; causa corrigida no **PR #396** (`376cf961`). Fica com o Vini: conferir a seção logado e o gestor preencher as metas de ligação de setembro no "Editar metas". |
+| 2026-09-14 | Vini + Claude | Seção "SDR selecionado" **movida do topo para depois dos rankings** (entre os rankings operacionais e Insights), por decisão de produto: a visão do time (4 cards + gráfico + rankings) vem primeiro, o detalhe individual depois. AC 1 fica como registro histórico. Só posição no JSX (`DashboardView.tsx` + `DashboardSkeleton.tsx`); comportamento intacto. |
 
 ## Executor Assignment
 executor: "@dev"
