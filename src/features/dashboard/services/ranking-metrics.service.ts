@@ -110,7 +110,12 @@ async function fetchIndividualTargets(
   supabase: SupabaseClient,
   orgId: string,
   month: string,
-  column: 'leads_opened_target' | 'meetings_scheduled_target' | 'meetings_held_target' | 'sao_target',
+  column:
+    | 'leads_opened_target'
+    | 'meetings_scheduled_target'
+    | 'meetings_held_target'
+    | 'sao_target'
+    | 'calls_target',
 ): Promise<Map<string, number>> {
   const monthStart = `${month}-01`;
   const { data } = (await from(supabase, 'goals_per_user')
@@ -273,10 +278,19 @@ export async function fetchLeadsFinishedRanking(
 }
 
 /**
- * Card 2: Atividades Realizadas — interactions count by SDR (via performed_by)
- * Only counts users with role='sdr' — managers are excluded.
+ * Card 2: Ligações Realizadas — ligações do discador + Callface por SDR
+ * (`calls.user_id`, `type='outbound'`), mesma definição da seção "SDR
+ * selecionado" e do Sales Hub. Contagem exata por SDR (`head: true`), sem
+ * baixar linha nenhuma — a org faz 10–11 mil ligações/mês.
+ *
+ * A meta do mês é a SOMA das metas individuais (`goals_per_user.calls_target`)
+ * dos SDRs considerados: não existe meta de ligações no nível da org, e assim
+ * o card nunca desalinha da meta que cada SDR vê no seu card.
+ *
+ * O filtro de cadência não se aplica (ligação não pertence a uma cadência);
+ * o filtro de vendedor sim.
  */
-export async function fetchActivitiesRanking(
+export async function fetchCallsRanking(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
@@ -289,47 +303,48 @@ export async function fetchActivitiesRanking(
     .eq('org_id', orgId)
     .eq('role', 'sdr')
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
-  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+  const sdrIds = (sdrs ?? [])
+    .map((s) => s.user_id)
+    .filter((id) => filters.userIds.length === 0 || filters.userIds.includes(id));
 
-  // Get activity counts per performer using SQL GROUP BY (efficient at any scale)
-  const { data: activityCounts } = await (supabase.rpc as any)('count_activities_by_performer', {
-    p_org_id: orgId,
-    p_start: start,
-    p_end: end,
-    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
-  }) as { data: Array<{ performer_id: string; cnt: number }> | null };
-
-  const rows = activityCounts ?? [];
-
-  if (rows.length === 0) {
-    const monthStart = `${filters.month}-01`;
-    const { data: goal } = (await from(supabase, 'goals')
-      .select('activities_target')
-      .eq('org_id', orgId)
-      .eq('month', monthStart)
-      .maybeSingle()) as { data: { activities_target: number } | null };
-
-    return buildRankingCardData([], 0, goal?.activities_target ?? 0, filters.month);
-  }
+  const counts = await Promise.all(
+    sdrIds.map(async (userId) => {
+      const { count } = (await from(supabase, 'calls')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .eq('user_id', userId)
+        .eq('type', 'outbound')
+        .gte('started_at', start)
+        .lt('started_at', end)) as { count: number | null };
+      return { userId, value: count ?? 0 };
+    }),
+  );
 
   const entries: SdrRankingEntry[] = [];
-  let totalActivities = 0;
-  for (const row of rows) {
-    if (!sdrIds.has(row.performer_id)) continue; // Exclude managers
-    if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
-    totalActivities += row.cnt;
-    entries.push({ userId: row.performer_id, userName: '', value: row.cnt });
+  let totalCalls = 0;
+  for (const { userId, value } of counts) {
+    totalCalls += value;
+    entries.push({ userId, userName: '', value });
   }
 
-  // Get goal
-  const monthStart = `${filters.month}-01`;
-  const { data: goal } = (await from(supabase, 'goals')
-    .select('activities_target')
-    .eq('org_id', orgId)
-    .eq('month', monthStart)
-    .maybeSingle()) as { data: { activities_target: number } | null };
+  const individualTargets = await fetchIndividualTargets(
+    supabase,
+    orgId,
+    filters.month,
+    'calls_target',
+  );
+  // Meta do time = soma das metas dos SDRs que estão no card.
+  let monthTarget = 0;
+  for (const userId of sdrIds) monthTarget += individualTargets.get(userId) ?? 0;
 
-  return buildRankingCardData(entries, totalActivities, goal?.activities_target ?? 0, filters.month);
+  return buildRankingCardData(
+    entries,
+    totalCalls,
+    monthTarget,
+    filters.month,
+    sdrIds.length,
+    individualTargets,
+  );
 }
 
 /**
@@ -918,9 +933,9 @@ export async function fetchRankingData(
   // Reuniões realizadas são buscadas UMA vez e compartilhadas pelos cards
   // "Reuniões Realizadas" e "SAO" (subconjunto).
   const heldLeads = fetchHeldLeadsForRanking(supabase, orgId, filters);
-  const [leadsFinished, activitiesDone, leadsOpened, meetingsScheduled, meetingsHeld, sao, leadsToOpen, overdueActivities] = await Promise.all([
+  const [leadsFinished, callsDone, leadsOpened, meetingsScheduled, meetingsHeld, sao, leadsToOpen, overdueActivities] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
-    fetchActivitiesRanking(supabase, orgId, filters),
+    fetchCallsRanking(supabase, orgId, filters),
     fetchLeadsOpenedRanking(supabase, orgId, filters),
     fetchMeetingsScheduledRanking(supabase, orgId, filters),
     fetchMeetingsHeldRanking(supabase, orgId, filters, heldLeads),
@@ -934,5 +949,5 @@ export async function fetchRankingData(
   const attendanceRate = fetchAttendanceRateRanking(meetingsScheduled, meetingsHeld);
   const saoRate = fetchSaoRateRanking(meetingsHeld, sao);
 
-  return { leadsFinished, activitiesDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, sao, saoRate, leadsToOpen, overdueActivities };
+  return { leadsFinished, callsDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, sao, saoRate, leadsToOpen, overdueActivities };
 }

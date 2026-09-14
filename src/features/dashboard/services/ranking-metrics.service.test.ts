@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  fetchActivitiesRanking,
   fetchAttendanceRateRanking,
+  fetchCallsRanking,
   fetchLeadsFinishedRanking,
   fetchLeadsOpenedRanking,
   fetchLeadsToOpenRanking,
@@ -133,57 +133,84 @@ describe('fetchLeadsFinishedRanking', () => {
   });
 });
 
-describe('fetchActivitiesRanking', () => {
-  it('should return 0 when no interactions', async () => {
-    const sdrsChain = createChainMock({ data: [] });
-    const goalsChain = createChainMock({ data: null });
+describe('fetchCallsRanking', () => {
+  /** `calls` devolve uma contagem diferente por SDR, na ordem das chamadas. */
+  function createCallsSupabase(
+    sdrs: string[],
+    callCounts: number[],
+    goals: Array<Record<string, unknown>>,
+  ) {
+    const callChains: Array<Record<string, unknown>> = [];
+    let callIdx = 0;
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return createChainMock({ data: sdrs.map((user_id) => ({ user_id })) });
+      if (table === 'goals_per_user') return createChainMock({ data: goals });
+      if (table === 'calls') {
+        const chain = createChainMock({ count: callCounts[callIdx++] ?? 0 });
+        callChains.push(chain);
+        return chain;
+      }
+      return createChainMock();
+    });
+    return { supabase, callChains };
+  }
 
-    const supabase = createMockSupabase(
-      (table) => {
-        if (table === 'organization_members') return sdrsChain;
-        if (table === 'goals') return goalsChain;
-        return createChainMock();
-      },
-      () => Promise.resolve({ data: [] }),
+  it('conta ligações por SDR e soma as metas individuais como meta do time', async () => {
+    const { supabase } = createCallsSupabase(
+      ['u1', 'u2'],
+      [860, 892],
+      [
+        { user_id: 'u1', calls_target: 2200 },
+        { user_id: 'u2', calls_target: 2200 },
+      ],
     );
 
-    const result = await fetchActivitiesRanking(supabase as never, ORG, baseFilters);
+    const result = await fetchCallsRanking(supabase as never, ORG, baseFilters);
 
-    expect(result.total).toBe(0);
-    expect(result.sdrBreakdown).toHaveLength(0);
+    expect(result.total).toBe(1752);
+    expect(result.monthTarget).toBe(4400);
+    expect(result.sdrBreakdown.map((s) => [s.userId, s.value])).toEqual([
+      ['u2', 892],
+      ['u1', 860],
+    ]);
   });
 
-  it('should count activities per SDR from RPC performer counts', async () => {
-    const sdrsChain = createChainMock({ data: [{ user_id: 'u1' }, { user_id: 'u2' }] });
-    const goalsChain = createChainMock({ data: { activities_target: 100 } });
+  it('conta só outbound do SDR no período, sem baixar linhas', async () => {
+    const { supabase, callChains } = createCallsSupabase(['u1'], [10], []);
 
-    const supabase = createMockSupabase(
-      (table) => {
-        if (table === 'organization_members') return sdrsChain;
-        if (table === 'goals') return goalsChain;
-        return createChainMock();
-      },
-      (fn) => {
-        if (fn === 'count_activities_by_performer') {
-          return Promise.resolve({
-            data: [
-              { performer_id: 'u1', cnt: 2 },
-              { performer_id: 'u2', cnt: 1 },
-            ],
-          });
-        }
-        return Promise.resolve({ data: [] });
-      },
+    await fetchCallsRanking(supabase as never, ORG, baseFilters);
+
+    const chain = callChains[0]!;
+    expect(chain.select).toHaveBeenCalledWith('id', { count: 'exact', head: true });
+    expect(chain.eq).toHaveBeenCalledWith('user_id', 'u1');
+    expect(chain.eq).toHaveBeenCalledWith('type', 'outbound');
+    expect(chain.gte).toHaveBeenCalledWith('started_at', '2026-01-01T03:00:00Z');
+    expect(chain.lt).toHaveBeenCalledWith('started_at', '2026-01-31T23:59:59-03:00');
+  });
+
+  it('respeita o filtro de vendedor (SDR de fora não é consultado nem soma meta)', async () => {
+    const { supabase, callChains } = createCallsSupabase(
+      ['u1', 'u2'],
+      [860],
+      [
+        { user_id: 'u1', calls_target: 2200 },
+        { user_id: 'u2', calls_target: 2200 },
+      ],
     );
 
-    const result = await fetchActivitiesRanking(supabase as never, ORG, baseFilters);
+    const result = await fetchCallsRanking(supabase as never, ORG, { ...baseFilters, userIds: ['u1'] });
 
-    expect(result.total).toBe(3);
-    expect(result.monthTarget).toBe(100);
-    expect(result.sdrBreakdown).toHaveLength(2);
+    expect(callChains).toHaveLength(1);
+    expect(result.total).toBe(860);
+    expect(result.monthTarget).toBe(2200);
+    expect(result.sdrBreakdown).toHaveLength(1);
+  });
 
-    const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
-    expect(u1?.value).toBe(2);
+  it('sem meta individual → meta do time 0 e card neutro', async () => {
+    const { supabase } = createCallsSupabase(['u1'], [10], []);
+    const result = await fetchCallsRanking(supabase as never, ORG, baseFilters);
+    expect(result.monthTarget).toBe(0);
+    expect(result.total).toBe(10);
   });
 });
 
@@ -599,7 +626,7 @@ describe('fetchRankingData', () => {
     const result = await fetchRankingData(supabase as never, ORG, baseFilters);
 
     expect(result).toHaveProperty('leadsFinished');
-    expect(result).toHaveProperty('activitiesDone');
+    expect(result).toHaveProperty('callsDone');
     expect(result).toHaveProperty('attendanceRate');
     expect(result).toHaveProperty('sao');
     expect(result).toHaveProperty('saoRate');
