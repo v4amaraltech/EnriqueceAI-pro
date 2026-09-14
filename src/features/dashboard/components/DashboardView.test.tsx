@@ -376,7 +376,7 @@ describe('DashboardView', () => {
     };
     const ranking: RankingData = {
       leadsFinished: base,
-      activitiesDone: base,
+      callsDone: base,
       attendanceRate: base,
       leadsOpened: base,
       meetingsScheduled: base,
