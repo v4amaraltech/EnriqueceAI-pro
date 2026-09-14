@@ -89,7 +89,7 @@ export interface RankingCardData {
 
 export interface RankingData {
   leadsFinished: RankingCardData;
-  activitiesDone: RankingCardData;
+  callsDone: RankingCardData; // ligações outbound (discador + Callface) por SDR
   attendanceRate: RankingCardData; // total is a percentage (0-100) — reuniões realizadas ÷ marcadas (inverso do no-show)
   leadsOpened: RankingCardData;
   meetingsScheduled: RankingCardData;

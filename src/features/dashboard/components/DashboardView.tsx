@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, BadgeCheck, CalendarCheck2, CheckCircle2, DoorOpen, Handshake, Inbox, Percent, UserCheck } from 'lucide-react';
+import { AlarmClock, BadgeCheck, CalendarCheck2, DoorOpen, Handshake, Inbox, Percent, PhoneCall, UserCheck } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -326,19 +326,22 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             onSdrClick={handleLeadsToOpenSdrClick}
           />
           <RankingCard
-            title="Atividades Realizadas"
+            title="Ligações Realizadas"
             titleTooltip={
-              'Quantas atividades cada SDR executou no período (e-mails, WhatsApp, ligações, etc.).\n\n' +
-              'Conta apenas atividades feitas manualmente pelo SDR. Envios automáticos da cadência e eventos do sistema não entram.'
+              'Quantas ligações cada SDR fez no período (discador e Callface), atendidas ou não.\n\n' +
+              '• Mesma definição do card "Total de Ligações" do SDR selecionado e do Sales Hub\n' +
+              '• Só ligações feitas pelo SDR (saídas); recebidas não entram\n' +
+              '• Meta do mês = soma das metas de ligações dos SDRs (em Editar metas)\n\n' +
+              'O filtro de cadência não afeta este card — ligação não pertence a uma cadência. Gerentes não aparecem no ranking.'
             }
-            icon={CheckCircle2}
+            icon={PhoneCall}
             iconColor="bg-amber-500/10"
             iconTextColor="text-amber-500"
-            data={ranking.activitiesDone}
+            data={ranking.callsDone}
             primaryColumnLabel="média diária"
-            primaryColumnTooltip="Total de atividades dividido pelos dias úteis do período"
+            primaryColumnTooltip="Total de ligações dividido pelos dias úteis do período"
             primaryValueDivisor={businessDays}
-            averageLabel="média atividades/vendedor"
+            averageLabel="média ligações/vendedor"
             onSdrClick={handleActivitySdrClick}
           />
           <RankingCard

@@ -227,7 +227,7 @@ describe('DashboardView', () => {
         averagePerSdr: 5,
         sdrBreakdown: [],
       },
-      activitiesDone: {
+      callsDone: {
         total: 50,
         monthTarget: 100,
         percentOfTarget: -10,
@@ -310,7 +310,7 @@ describe('DashboardView', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Leads Abertos')).toBeInTheDocument();
     expect(screen.getByText('Reuniões Realizadas')).toBeInTheDocument();
-    expect(screen.getByText('Atividades Realizadas')).toBeInTheDocument();
+    expect(screen.getByText('Ligações Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Taxa de Comparecimento')).toBeInTheDocument();
   });
 
@@ -324,7 +324,7 @@ describe('DashboardView', () => {
     };
     const ranking: RankingData = {
       leadsFinished: base,
-      activitiesDone: base,
+      callsDone: base,
       attendanceRate: base,
       leadsOpened: base,
       meetingsScheduled: {
