@@ -2,7 +2,7 @@
 
 **Data:** 12/09/2026
 **Pedido de origem (Vini):** "cria a story do SAO no Sales Hub" → "@po valida" → "@dev implementa a story sao-sales-hub-sync".
-**Estado final:** implementado nos DOIS repos e **migrations aplicadas em prod** (Enriquece `20260912151440`; Sales Hub `20260912151522` + `20260912151658`), ACL e grants conferidos, `gen:types` sem diff. **Sem commit** nos dois repos (aguarda pedido). Story em InProgress (Ready mergeado na `main` pelo PR #407, `f6dfbe1c`).
+**Estado final:** implementado nos DOIS repos e **migrations aplicadas em prod** (Enriquece `20260912151440`; Sales Hub `20260912151522` + `20260912151658`), ACL e grants conferidos, `gen:types` sem diff. **PRs:** Enriquece #408 **mergeado** (`b035db98`) · Sales Hub v4amaraltech/v4-sales-hub#135 **mergeado** (`00d78a10`). **Paridade ✅** (AC 10): sync 15:22 UTC → `leads_pv` 4 SAO em set = Dashboard. Story Ready for Review.
 
 ---
 
@@ -21,7 +21,7 @@
 - `docs/taxonomia.md` — degrau SAO (tabela, seção, histórico), e nota de que a RPC passa a ser mantida no repo Enriquece.
 - `tsc` ✅, `vite build` ✅, eslint sem problemas novos (os erros de `no-explicit-any` já existiam nos dois arquivos).
 
-## 2. Ordem de deploy (passos 1 e 2 feitos em 12/set ~15:15–15:17 UTC)
+## 2. Ordem de deploy (passos 1–3 e 5 feitos em 12/set; falta só 4 = redeploy manual do Sales Hub)
 
 1. **Enriquece:** aplicar `20260912151440` via MCP → conferir `has_function_privilege('anon', 'public.get_leads_for_v4sales(text,text)', 'EXECUTE')` = true e chamar a RPC com o token do n8n devolvendo `oportunidade_qualificada` → `pnpm gen:types` (esperado sem diff).
 2. **Sales Hub:** aplicar `20260912151522` e depois `20260912151658` via MCP (projeto `ejxlbbbjyexsoltsxiqq`) → conferir grants das 3 funções e da view.

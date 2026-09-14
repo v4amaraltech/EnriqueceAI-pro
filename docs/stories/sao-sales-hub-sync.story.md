@@ -1,7 +1,7 @@
 # Story: SAO no Sales Hub — expor `oportunidade_qualificada` no sync e mostrar "% SAO" no funil por SDR
 
 ## Status
-InProgress
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
@@ -10,6 +10,9 @@ InProgress
 | 2026-09-12 | @po (Pax) | `*validate-story-draft`: **8/10 → GO condicional**, correções aplicadas: AC 5 apontava para `tests/security/definer-acl.test.ts`, que NÃO existe na `main` (vive na branch de hardening não mergeada) — reescrito como conferência SQL obrigatória + teste opcional; adicionadas as seções **Dependências** e **Definition of Done**. As 3 decisões abertas foram fechadas pelo Vini: migration **neste repo**; nome **`oportunidade_qualificada`** ponta a ponta; sem feedback = **nulo, conta só nas realizadas** (igual ao Dashboard). Draft → **Ready**. |
 | 2026-09-12 | @dev (Dex) | Ready → **InProgress** (pedido do Vini: "@dev implementa a story"). PR #407 (story Ready) mergeado `f6dfbe1c`. Task 1: corpo em prod = `20260815100000` do repo B (diff zero via `pg_get_functiondef`). Task 2: migration `20260912151440_get_leads_for_v4sales_oportunidade_qualificada.sql` (subselect + GRANT). Task 3 (AC 4): `EXPLAIN (ANALYZE, BUFFERS)` da query interna com `p_from_date=2026-09-01` (4.420 leads, 416 feedbacks): SubPlan do SAO ≈ 0,066 ms/lead × 4.420 ≈ 290 ms, contra ≈ 0,073 ms/lead do `decisor_presente` — não dobra o custo; índice dispensado. Sales Hub: 2 migrations (`20260912151522`, `20260912151658`), `tables.tsx`, `SDRs.tsx`, `taxonomia.md`; `tsc` ✅. **Pendente:** aplicar migrations em prod (Enriquece primeiro, depois Sales Hub — aguarda pedido explícito), ACL, gen:types, redeploy do Sales Hub, paridade. |
 | 2026-09-12 | @dev (Dex) | **Migrations aplicadas em prod** (pedido do Vini: "aplica as migrations"), na ordem: Enriquece `20260912151440` (ACL: `anon`/`authenticated`/`service_role` EXECUTE = true; RPC devolve `oportunidade_qualificada` em 4.422 leads de set, 4 true; `first_touch_at` preservado; `pnpm gen:types` sem diff) → Sales Hub `20260912151522` (coluna + upsert) e `20260912151658` (funil/view/team stats; grants conferidos nas 3 funções + view). Arquivos locais renomeados para as versões registradas. Aguardando ciclo do sync (último 15:07 UTC) para a paridade (AC 10). |
+| 2026-09-12 | @dev (Dex) | Commit + PRs autorizados ("commita e abre os PRs nos dois repos"): Enriquece **#408** (`feat/sao-sales-hub-sync`), Sales Hub **v4amaraltech/v4-sales-hub#135** (`feat/sao-pct-funil-sdr`). **Paridade (AC 10) ✅:** sync 15:22:06 UTC → `leads_pv` 4 SAO em set/2026 = Dashboard. **#135 mergeado** (`00d78a10`, sem CI no repo; tsc/build locais ok; autorização "pode mergear os dois assim que passar"). InProgress → **Ready for Review**. Pendente: merge do #408 (após CI), redeploy manual do Sales Hub (Coolify), story → Done. |
+| 2026-09-12 | @dev (Dex) | **#408 mergeado** (`b035db98`, CI verde nos 2 jobs). Pendente: redeploy manual do Sales Hub (Coolify) e story → Done. |
+| 2026-09-12 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). Entregue: RPC do Enriquece com SAO (em prod, #408 `b035db98`), Sales Hub com coluna/upsert/funil/UI (em prod, #135 `00d78a10`), paridade 4 SAO em set nos dois lados. Fica com o Vini: redeploy manual do Sales Hub no Coolify para as telas; conferir a coluna "% SAO" em `/operacional` e `/sdrs`. Observação fora de escopo: funil do Sales Hub soma 22 realizadas em set × 21 no Dashboard do Enriquece. |
 
 ## Executor Assignment
 executor: "@dev"
@@ -96,7 +99,8 @@ Estado real em prod (12/set): set/2026 tem 21 realizadas, 4 avaliadas em SAO (4 
 - [x] Migration: `get_sdr_funil_breakdown` (+`sao`, +`sao_conf`), `vw_mb_sdr_funil` (colunas no fim), `get_sdr_team_stats` (`pct_sao`) — `20260912151658_sdr_funil_pct_sao.sql` (corpos copiados de prod; DROP+CREATE só no breakdown, GRANT em tudo)
 - [x] UI: `tables.tsx` (coluna "% SAO", rótulo provisório, `conf N/M`, cores 60/40) e `SDRs.tsx` (`pct_sao` com `fixedTarget: 0.60`; agregador generalizado por `ratioNumKey`)
 - [x] `docs/taxonomia.md`: degrau SAO (linha na tabela, seção própria, histórico de migrations, nota de que a RPC passa a ser mantida no repo Enriquece)
-- [ ] Redeploy manual do Sales Hub (Coolify) e paridade (AC 10) — migrations aplicadas em prod (`20260912151522`, `20260912151658`; grants das 3 funções e da view conferidos); falta sync + redeploy + paridade
+- [x] Paridade (AC 10): sync das 15:22:06 UTC (12/set) gravou em `leads_pv` **4 SAO em set/2026 (4 avaliadas, 4 aceitas)** = card "SAO" do Dashboard (4). Migrations em prod (`20260912151522`, `20260912151658`; grants conferidos)
+- [ ] Redeploy manual do Sales Hub (Coolify) para as telas — fica com o Vini (operacional, fora do repo)
 
 ## File List
 - Enriquece (`EnriqueceAI_Pro`): `supabase/migrations/20260912151440_get_leads_for_v4sales_oportunidade_qualificada.sql` (novo), `docs/integrations/saleshub-sync-leads-pv-contrato.md` (novo), `docs/stories/sao-sales-hub-sync.story.md`
