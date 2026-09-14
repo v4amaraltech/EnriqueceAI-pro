@@ -1,13 +1,14 @@
 # Story: Card "Ligações Realizadas" no lugar de "Atividades Realizadas"
 
 ## Status
-InProgress
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-09-14 | Vini + Claude | Story criada. Pedido do Vini: "quero mudar esse componente: ao invés de Atividades Realizadas, coloca Ligações Realizadas" (print do card). Decisões: meta do mês = **soma das metas por SDR** (`goals_per_user.calls_target`); o card de Atividades sai do Dashboard, mas a **meta de atividades continua** no "Editar metas". |
 | 2026-09-14 | @dev (Dex) | Draft → InProgress. |
+| 2026-09-14 | @dev (Dex) | InProgress → **Done** (pedido do Vini: "marca a story como concluída"). **PR #411 mergeado** 09:44 UTC (squash `3b072a34`), **no ar** 09:47 UTC (`/api/version` = `3b072a3`); CI verde de primeira. Coluna "ideal dia" retirada antes do commit (ideal acumulado × média diária não se comparam). |
 
 ## Executor Assignment
 executor: "@dev"
@@ -51,8 +52,9 @@ O card "Atividades Realizadas" mostrava atividades manuais por SDR (média diár
 - [x] Card trocado no `DashboardView` (título, tooltip, ícone `PhoneCall`, labels)
 - [x] Testes (4 novos em `ranking-metrics.service.test.ts`; fixtures do `DashboardView.test`)
 - [x] `pnpm typecheck && pnpm lint && pnpm exec vitest run src/features/dashboard`
-- [ ] `pnpm test:run && pnpm build`
-- [ ] Conferência visual e paridade com o banco
+- [x] `pnpm test:run && pnpm build` (⭐ não rodar os dois ao mesmo tempo: 8 arquivos sem relação falharam por disputa de máquina e passaram sozinhos)
+- [x] Conferência visual (claro/escuro, HTML estático) e paridade com o banco (4.546 em 01–14/set)
+- [x] Deploy conferido (`/api/version` = `3b072a3`, 14/set 09:47 UTC)
 
 ## Dev Notes
 - Setembro (01–14) no banco: Giovanni 1.174 · Guilherme 890 · Matheus 858 · João 851 · Ismael 773 = **4.546** contra meta **11.000**. Nesse período todas as ligações são `outbound`, então o filtro não esconde nada.
