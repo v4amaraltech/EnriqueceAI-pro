@@ -13,6 +13,7 @@ Done
 | 2026-09-12 | @dev (Dex) | Commit + PRs autorizados ("commita e abre os PRs nos dois repos"): Enriquece **#408** (`feat/sao-sales-hub-sync`), Sales Hub **v4amaraltech/v4-sales-hub#135** (`feat/sao-pct-funil-sdr`). **Paridade (AC 10) ✅:** sync 15:22:06 UTC → `leads_pv` 4 SAO em set/2026 = Dashboard. **#135 mergeado** (`00d78a10`, sem CI no repo; tsc/build locais ok; autorização "pode mergear os dois assim que passar"). InProgress → **Ready for Review**. Pendente: merge do #408 (após CI), redeploy manual do Sales Hub (Coolify), story → Done. |
 | 2026-09-12 | @dev (Dex) | **#408 mergeado** (`b035db98`, CI verde nos 2 jobs). Pendente: redeploy manual do Sales Hub (Coolify) e story → Done. |
 | 2026-09-12 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). Entregue: RPC do Enriquece com SAO (em prod, #408 `b035db98`), Sales Hub com coluna/upsert/funil/UI (em prod, #135 `00d78a10`), paridade 4 SAO em set nos dois lados. Fica com o Vini: redeploy manual do Sales Hub no Coolify para as telas; conferir a coluna "% SAO" em `/operacional` e `/sdrs`. Observação fora de escopo: funil do Sales Hub soma 22 realizadas em set × 21 no Dashboard do Enriquece. |
+| 2026-09-14 | @dev (Dex) | "22 × 21" investigado: **não era divergência** — mesmos 22 leads nos dois bancos; a 22ª reunião (12/set 10:00 BRT) foi carimbada depois da leitura do Dashboard. Regra: comparar os dois lados no mesmo instante. Detalhe no handoff (seção 3). |
 
 ## Executor Assignment
 executor: "@dev"

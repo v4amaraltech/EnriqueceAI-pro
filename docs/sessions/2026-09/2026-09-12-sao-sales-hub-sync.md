@@ -2,7 +2,7 @@
 
 **Data:** 12/09/2026
 **Pedido de origem (Vini):** "cria a story do SAO no Sales Hub" → "@po valida" → "@dev implementa a story sao-sales-hub-sync".
-**Estado final:** implementado nos DOIS repos e **migrations aplicadas em prod** (Enriquece `20260912151440`; Sales Hub `20260912151522` + `20260912151658`), ACL e grants conferidos, `gen:types` sem diff. **PRs:** Enriquece #408 **mergeado** (`b035db98`) · Sales Hub v4amaraltech/v4-sales-hub#135 **mergeado** (`00d78a10`). **Paridade ✅** (AC 10): sync 15:22 UTC → `leads_pv` 4 SAO em set = Dashboard. Story Ready for Review.
+**Estado final:** implementado nos DOIS repos e **migrations aplicadas em prod** (Enriquece `20260912151440`; Sales Hub `20260912151522` + `20260912151658`), ACL e grants conferidos, `gen:types` sem diff. **PRs:** Enriquece #408 **mergeado** (`b035db98`, no ar) · Sales Hub v4amaraltech/v4-sales-hub#135 **mergeado** (`00d78a10`) · docs #409 **mergeado** (`130719d5`, 14/set). **Paridade ✅** (AC 10): sync 15:22 UTC → `leads_pv` 4 SAO em set = Dashboard. Story **Done**. Falta só o redeploy manual do Sales Hub (Coolify) para as telas.
 
 ---
 
@@ -30,7 +30,15 @@
 5. Paridade (AC 10): `SELECT count(*) FILTER (WHERE oportunidade_qualificada) FROM leads_pv WHERE year=2026 AND month=9` = card "SAO" do Dashboard (12/set: 4).
 6. Commits/PRs nos dois repos (pedido explícito, um por repo).
 
-## 3. Lições
+## 3. "22 × 21 realizadas" — investigado em 14/set: não era divergência
+
+Na sexta (12/set) o funil do Sales Hub somava **22** realizadas em setembro e o Dashboard do Enriquece mostrava **21**. Cruzamento lead a lead em 14/set: os dois bancos têm **os mesmos 22 leads**, com as mesmas datas de evento e de carimbo; nenhum deletado, nenhuma reunião futura, nenhum SDR sem mapeamento.
+
+A diferença era o **horário da medição**: a leitura "21" do Dashboard foi feita antes das 09:30 BRT de 12/set; a 22ª reunião (evento 12/set 10:00 BRT) foi carimbada como realizada às 10:00 BRT (13:00 UTC), e o funil do Sales Hub foi lido à tarde, já com ela. Conferido com corte de horário: `meeting_held_at <= 12/set 09:30 BRT` → 21; agora → 22.
+
+**Regra para as próximas comparações:** ler Dashboard e Sales Hub no mesmo instante, ou comparar com um corte de horário fixo. Sem isso, qualquer reunião carimbada entre as duas leituras vira "divergência" falsa.
+
+## 4. Lições
 
 - **Duas fontes da mesma RPC em dois repos**: a versão em produção era a do outro repo. Regra nova: conferir `pg_get_functiondef` antes de usar qualquer arquivo como base; a definição canônica volta a viver no Enriquece (dono do schema).
 - **MCP do Supabase alcança os dois projetos** (`dhkmonctyoaenejemkrt` e `ejxlbbbjyexsoltsxiqq`) — copiar corpos de função direto de prod evita usar migration desatualizada.
