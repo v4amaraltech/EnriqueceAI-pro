@@ -13,6 +13,7 @@ Done
 | 2026-09-11 | @dev (Dex) | InProgress → **Ready for Review**. Commit + PR autorizados pelo Vini ("commita e abre o PR"). Branch `feat/dashboard-sdr-pace-cards` rebaseada na `origin/main` (`17d727c7`). |
 | 2026-09-11 | @dev (Dex) | Ready for Review → **Done** (pedido do Vini: "marca a story como concluída"). **PR #393 mergeado** 10:27 UTC (squash `bfe6f89e`), **no ar** 10:31 UTC (`/api/version` = `bfe6f89`). CI do PR falhou 2× no flaky "Closing rpc while fetch was pending" (`inbound-lead.service.test.ts`, alheio à story) e passou na 3ª; causa corrigida no **PR #396** (`376cf961`). Fica com o Vini: conferir a seção logado e o gestor preencher as metas de ligação de setembro no "Editar metas". |
 | 2026-09-14 | Vini + Claude | Seção "SDR selecionado" **movida do topo para depois dos rankings** (entre os rankings operacionais e Insights), por decisão de produto: a visão do time (4 cards + gráfico + rankings) vem primeiro, o detalhe individual depois. AC 1 fica como registro histórico. Só posição no JSX (`DashboardView.tsx` + `DashboardSkeleton.tsx`); comportamento intacto. |
+| 2026-09-14 | @dev (Dex) | Reposição **no ar**: PR #412 (`27bf118f`) + PR #414 (`f4cf179f`, fix do teste — o #411 renomeou `activitiesDone`→`callsDone` no meio) mergeados; `/api/version` = `f4cf179` ~10:05 UTC; conferido logado em prod (rankings → SDR selecionado → Motivos de Perda). Story permanece **Done** (pedido do Vini: "marca a story como concluída"). |
 
 ## Executor Assignment
 executor: "@dev"
@@ -65,7 +66,7 @@ Paridade conferida no banco antes de começar (Matheus, set/2026): Leads Abertos
 - [x] `pnpm typecheck && pnpm lint && pnpm test:run && pnpm build`
 - [x] Paridade com SQL (Matheus, set/2026: 91 / 4 / 3 / 832 / 46) e verificação visual (claro/escuro/tablet)
 - [x] Deploy conferido (`/api/version` = `bfe6f89`, 11/set 10:31 UTC)
-- [ ] Verificar no app logado (trocar SDR, mês passado, salvar metas de ligações) — com o Vini
+- [x] Verificar no app logado — conferido em prod 14/set (Chrome do Vini): seção renderiza na posição nova com os dados do Giovanni (90/300, 5/20, 1.174/2.200). Troca de SDR, mês passado e metas de ligações ficam com o Vini no uso diário.
 
 ## Dev Notes
 - Ritmo portado de `v4-sales-hub/src/components/PaceKpiCard.tsx`, `src/lib/pace.ts` e `src/pages/SDRs.tsx` (`buildTeamKPIs`). Os dias úteis usam `utils/pacing.ts` do Enriquece (feriados nacionais fixos e móveis).
