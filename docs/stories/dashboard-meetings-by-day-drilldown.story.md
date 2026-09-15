@@ -10,6 +10,7 @@ Done
 | 2026-09-14 | @dev (Dex) | Draft → InProgress. Implementado e testado localmente (261 testes do dashboard verdes, typecheck e lint OK). |
 | 2026-09-14 | @dev (Dex) | InProgress → **InReview**. Commit `3627f963`, **PR #421** aberto (base `main` em `fb12f30c`). Suíte completa 2105 verdes, build OK, paridade com o banco conferida. |
 | 2026-09-14 | @dev (Dex) | InReview → **Done** (pedido do Vini: "marca a story como Done"). **PR #421 MERGEADO** (squash `0569881f`, CI verde 4m57s, branch apagada). Deploy no Coolify em andamento no momento desta anotação (`/api/version` ainda em `fb12f30`); conferência do SHA no ar fica registrada na memória da sessão. |
+| 2026-09-14 | Vini + @dev (Dex) | Deploy do #421 no ar 15/set 01:22 UTC. Ajuste pedido pelo Vini com print do painel em prod: na seção RM, trocar "Marcou às" (hora em que o SDR marcou) por **"Reunião em"** (data/hora da reunião marcada, `meeting_starts_at`). Coluna e ordenação iguais nas duas seções. |
 
 ## Executor Assignment
 executor: "@dev"
@@ -29,7 +30,7 @@ O gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia" (stories anterior
 ## Acceptance Criteria
 1. Clicar em qualquer barra (RM ou RR) de um dia abre um painel lateral **direito** (`Sheet`) com título "Reuniões de DD/MM" e subtítulo "N marcadas · M realizadas".
 2. O painel tem duas seções, **Marcadas (RM)** e **Realizadas (RR)**, com contagem no cabeçalho e a cor da série; a série clicada aparece primeiro.
-3. Cada lead mostra **Empresa** (nome fantasia com link para `/leads/{id}`, razão social como subtexto — mesma regra do painel do lead; em prod ~90% dos leads com reunião só têm nome fantasia), **SDR** responsável e **horário** — RM: hora em que marcou (`meeting_scheduled_at`, BRT); RR: dia/mês e hora da reunião (`meeting_starts_at`, fallback `meeting_held_at`, BRT).
+3. Cada lead mostra **Empresa** (nome fantasia com link para `/leads/{id}`, razão social como subtexto — mesma regra do painel do lead; em prod ~90% dos leads com reunião só têm nome fantasia), **SDR** responsável e **Reunião em** — a data/hora da reunião em BRT nas duas seções: RM usa `meeting_starts_at` (para quando ficou marcada; "—" se não houver), RR usa a âncora (`meeting_starts_at`, fallback `meeting_held_at`). Ordenação pela mesma coluna. *(Ajuste de 14/set: a RM mostrava a hora em que o SDR marcou; o Vini pediu "pra quando foi marcada a reunião".)*
 4. **A soma de cada lista é igual ao rótulo da barra**, com qualquer combinação de filtros da página (mês, cadência, vendedor). Para isso o painel reutiliza as mesmas funções que geram os cards: `fetchScheduledLeadsForRanking` (RM — sem filtro de cadência, como o card) e `fetchHeldLeadsForKpi` (RR), com o corte por dia no calendário BRT.
 5. Seção sem leads mostra "Nenhuma reunião marcada/realizada neste dia"; erro da action aparece no painel.
 6. O clique funciona também no gráfico do modal "Expandir".
@@ -59,7 +60,8 @@ O gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia" (stories anterior
 - [x] Conferência visual no preview (clique nas duas barras, modal expandido, tema escuro) — página temporária sob `/docs/`, apagada
 - [x] `pnpm test:run` (2105 verdes) e `pnpm build` OK (um de cada vez)
 - [x] Merge na main (PR #421, `0569881f`)
-- [ ] Deploy conferido pelo `/api/version` = `0569881`
+- [x] Deploy conferido pelo `/api/version` = `0569881` (15/set 01:22 UTC)
+- [ ] Ajuste "Reunião em" na RM (PR de follow-up) no ar
 - [x] Paridade com o banco (14/set, org V4): RR = 6 = barra; RM = 10 no banco × 9 no print do Vini — a 10ª foi marcada às 21:57 BRT, depois do print
 
 ## Dev Notes

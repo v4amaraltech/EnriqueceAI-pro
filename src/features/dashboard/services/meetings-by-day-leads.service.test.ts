@@ -39,21 +39,23 @@ describe('fetchMeetingsByDayLeads', () => {
     mockScheduled.mockResolvedValue({
       sdrIds: new Set(['s1']),
       leads: [
-        { id: 'a', razao_social: 'Acme', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-15T01:00:00Z' },
-        { id: 'b', razao_social: 'Beta', nome_fantasia: 'B', assigned_to: 's1', meeting_scheduled_at: '2026-09-15T03:00:00Z' },
-        { id: 'c', razao_social: 'Cia', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-14T12:00:00Z' },
+        { id: 'a', razao_social: 'Acme', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-15T01:00:00Z', meeting_starts_at: '2026-09-16T13:00:00Z' },
+        { id: 'b', razao_social: 'Beta', nome_fantasia: 'B', assigned_to: 's1', meeting_scheduled_at: '2026-09-15T03:00:00Z', meeting_starts_at: null },
+        { id: 'c', razao_social: 'Cia', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-14T12:00:00Z', meeting_starts_at: '2026-09-17T13:00:00Z' },
       ],
     });
 
     const result = await fetchMeetingsByDayLeads(supabase, ORG, filters, 14);
 
-    expect(result.scheduled.map((l) => l.leadId)).toEqual(['c', 'a']); // ordenado por horário
-    expect(result.scheduled[0]).toEqual({
+    // ordenado pela data/hora da REUNIÃO (a: 16/09, c: 17/09), não por quando marcou
+    expect(result.scheduled.map((l) => l.leadId)).toEqual(['a', 'c']);
+    expect(result.scheduled[1]).toEqual({
       leadId: 'c',
       razaoSocial: 'Cia',
       nomeFantasia: null,
       sdrId: 's1',
       at: '2026-09-14T12:00:00Z',
+      meetingAt: '2026-09-17T13:00:00Z',
     });
   });
 
@@ -72,6 +74,19 @@ describe('fetchMeetingsByDayLeads', () => {
     expect(result.held.map((l) => l.leadId)).toEqual(['h2', 'h1']);
     expect(result.held[0]?.sdrId).toBe('');
     expect(result.held[1]?.at).toBe('2026-09-14T14:00:00Z');
+    expect(result.held[1]?.meetingAt).toBe('2026-09-14T14:00:00Z');
+  });
+
+  it('RM sem horário de reunião ordena pelo instante em que marcou', async () => {
+    mockScheduled.mockResolvedValue({
+      sdrIds: new Set(['s1']),
+      leads: [
+        { id: 'x', razao_social: 'X', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-14T15:00:00Z', meeting_starts_at: null },
+        { id: 'y', razao_social: 'Y', nome_fantasia: null, assigned_to: 's1', meeting_scheduled_at: '2026-09-14T12:00:00Z', meeting_starts_at: '2026-09-14T20:00:00Z' },
+      ],
+    });
+    const result = await fetchMeetingsByDayLeads(supabase, ORG, filters, 14);
+    expect(result.scheduled.map((l) => [l.leadId, l.meetingAt])).toEqual([['x', null], ['y', '2026-09-14T20:00:00Z']]);
   });
 
   it('retorna listas vazias num dia sem reuniões', async () => {

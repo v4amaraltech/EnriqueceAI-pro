@@ -189,6 +189,8 @@ export interface MeetingDayLead {
   sdrId: string;
   /** Instante que colocou o lead nesta barra: `meeting_scheduled_at` (RM) ou a âncora da reunião (RR). */
   at: string;
+  /** Data/hora da REUNIÃO — `meeting_starts_at` (RM, pode ser nulo) ou a âncora (RR). É o que o painel mostra. */
+  meetingAt: string | null;
 }
 
 export interface MeetingsByDayLeads {

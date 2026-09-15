@@ -34,6 +34,7 @@ export async function fetchMeetingsByDayLeads(
       nomeFantasia: lead.nome_fantasia,
       sdrId: lead.assigned_to,
       at: lead.meeting_scheduled_at,
+      meetingAt: lead.meeting_starts_at,
     });
   }
 
@@ -49,12 +50,15 @@ export async function fetchMeetingsByDayLeads(
       nomeFantasia: lead.nome_fantasia ?? null,
       sdrId: lead.assigned_to ?? '',
       at,
+      meetingAt: at,
     });
   }
 
-  const byTime = (a: MeetingDayLead, b: MeetingDayLead) => a.at.localeCompare(b.at);
-  scheduled.sort(byTime);
-  held.sort(byTime);
+  // Ordem = coluna visível (data/hora da reunião); sem horário, cai no instante da barra.
+  const byMeeting = (a: MeetingDayLead, b: MeetingDayLead) =>
+    (a.meetingAt ?? a.at).localeCompare(b.meetingAt ?? b.at);
+  scheduled.sort(byMeeting);
+  held.sort(byMeeting);
 
   return { scheduled, held };
 }

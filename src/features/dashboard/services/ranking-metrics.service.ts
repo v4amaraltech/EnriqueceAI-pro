@@ -553,6 +553,8 @@ export interface ScheduledLead {
   nome_fantasia: string | null;
   assigned_to: string;
   meeting_scheduled_at: string;
+  /** Horário da reunião marcada (pode ser nulo em registros antigos). */
+  meeting_starts_at: string | null;
 }
 
 export interface ScheduledLeadsForRanking {
@@ -585,7 +587,7 @@ export async function fetchScheduledLeadsForRanking(
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   const { data: rows } = (await from(supabase, 'leads')
-    .select('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at')
+    .select('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at, meeting_starts_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .neq('status', 'archived')
@@ -599,6 +601,7 @@ export async function fetchScheduledLeadsForRanking(
       nome_fantasia?: string | null;
       assigned_to: string | null;
       meeting_scheduled_at: string;
+      meeting_starts_at?: string | null;
     }> | null;
   };
 
@@ -613,6 +616,7 @@ export async function fetchScheduledLeadsForRanking(
       nome_fantasia: lead.nome_fantasia ?? null,
       assigned_to: sdr,
       meeting_scheduled_at: lead.meeting_scheduled_at,
+      meeting_starts_at: lead.meeting_starts_at ?? null,
     });
   }
 
