@@ -8,7 +8,7 @@ import { AlarmClock, BadgeCheck, CalendarCheck2, DoorOpen, Handshake, Inbox, Per
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData, SdrPaceData } from '../types';
+import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, MeetingDaySeries, OpportunityKpiData, RankingData, SdrPaceData } from '../types';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import { buildMeetingsByDay } from '../utils/meetings-by-day';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
@@ -16,6 +16,7 @@ import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilter
 import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
 import { MeetingsByDayChart } from './MeetingsByDayChart';
+import { MeetingsByDayDrawer } from './MeetingsByDayDrawer';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
 import { ResponseTimeCard } from './ResponseTimeCard';
@@ -33,6 +34,8 @@ interface DashboardViewProps {
 export function DashboardView({ data, filters, ranking, insights, responseTime, sdrPace }: DashboardViewProps) {
   const router = useRouter();
   const [goalsOpen, setGoalsOpen] = useState(false);
+  // Painel lateral do gráfico RM/RR: dia clicado + série clicada (vem primeiro).
+  const [meetingsDay, setMeetingsDay] = useState<{ day: number; series: MeetingDaySeries } | null>(null);
 
   // Guarda contra userId vazio: sem isto, um `undefined` interpolado virava
   // `/leads?assigned_to=undefined` e a tela de Leads quebrava no cast pra uuid.
@@ -84,6 +87,22 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
     if (!scheduled || data.kpi.dailyData.length === 0) return null;
     return buildMeetingsByDay(scheduled, data.kpi.dailyData, filters.month);
   }, [ranking?.meetingsScheduled?.dailyData, data.kpi.dailyData, filters.month]);
+
+  // Nomes dos SDRs pro painel — todo lead listado pertence a um SDR presente
+  // nos rankings de marcadas/realizadas, então não precisa de outra consulta.
+  const sdrNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const card of [ranking?.meetingsScheduled, ranking?.meetingsHeld]) {
+      for (const e of card?.sdrBreakdown ?? []) {
+        if (e.userName) map.set(e.userId, e.userName);
+      }
+    }
+    return map;
+  }, [ranking?.meetingsScheduled, ranking?.meetingsHeld]);
+
+  const handleMeetingsBarClick = useCallback((day: number, series: MeetingDaySeries) => {
+    setMeetingsDay({ day, series });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -193,7 +212,16 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
       {/* RM e RR por dia — detalhe diário dos dois cards de reunião acima */}
       {meetingsByDay && meetingsByDay.length > 0 && (
         <div data-slot="meetings-by-day">
-          <MeetingsByDayChart data={meetingsByDay} />
+          <MeetingsByDayChart data={meetingsByDay} onBarClick={handleMeetingsBarClick} />
+          <MeetingsByDayDrawer
+            open={meetingsDay !== null}
+            onOpenChange={(open) => { if (!open) setMeetingsDay(null); }}
+            day={meetingsDay?.day ?? null}
+            series={meetingsDay?.series ?? 'scheduled'}
+            month={filters.month}
+            filters={filters}
+            sdrNames={sdrNames}
+          />
         </div>
       )}
 

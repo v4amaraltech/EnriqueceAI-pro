@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { MeetingsByDayPoint } from '../utils/meetings-by-day';
@@ -12,7 +12,20 @@ vi.mock('recharts', () => ({
   ComposedChart: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="composed-chart">{children}</div>
   ),
-  Bar: ({ children }: { children?: React.ReactNode }) => <div data-testid="bar">{children}</div>,
+  // Bar clicável: simula o Recharts entregando o ponto da série no onClick.
+  Bar: ({
+    children,
+    name,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    name?: string;
+    onClick?: (item: { payload: { day: number } }) => void;
+  }) => (
+    <div data-testid="bar" data-name={name} onClick={() => onClick?.({ payload: { day: 14 } })}>
+      {children}
+    </div>
+  ),
   Line: () => <div data-testid="line" />,
   LabelList: () => <div data-testid="label-list" />,
   XAxis: () => <div />,
@@ -65,5 +78,20 @@ describe('MeetingsByDayChart', () => {
   it('tem o botão de expandir quando há dados', () => {
     render(<MeetingsByDayChart data={[point(1, 1, 0)]} />);
     expect(screen.getByTitle('Expandir')).toBeInTheDocument();
+  });
+
+  it('clicar numa barra chama onBarClick com o dia e a série', () => {
+    const onBarClick = vi.fn();
+    render(<MeetingsByDayChart data={[point(14, 9, 6)]} onBarClick={onBarClick} />);
+    const [rm, rr] = screen.getAllByTestId('bar');
+    fireEvent.click(rm!);
+    expect(onBarClick).toHaveBeenCalledWith(14, 'scheduled');
+    fireEvent.click(rr!);
+    expect(onBarClick).toHaveBeenCalledWith(14, 'held');
+  });
+
+  it('sem onBarClick o clique não quebra', () => {
+    render(<MeetingsByDayChart data={[point(14, 9, 6)]} />);
+    expect(() => fireEvent.click(screen.getAllByTestId('bar')[0]!)).not.toThrow();
   });
 });

@@ -46,6 +46,11 @@ function getDaysInMonth(month: string): number {
   return new Date(year, mon, 0).getDate();
 }
 
+/** Dia do mês (1-31) de um instante ISO no calendário BRT (UTC-3 fixo). */
+export function brtDayOf(iso: string): number {
+  return new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).getUTCDate();
+}
+
 function computePercentOfTarget(actual: number, target: number, _days: number, month: string): number {
   if (target <= 0) return 0;
   const [yr, mo] = month.split('-').map(Number) as [number, number];
@@ -542,18 +547,35 @@ async function fetchLeadsOpenedDaily(
   return result;
 }
 
+export interface ScheduledLead {
+  id: string;
+  razao_social: string | null;
+  nome_fantasia: string | null;
+  assigned_to: string;
+  meeting_scheduled_at: string;
+}
+
+export interface ScheduledLeadsForRanking {
+  /** SDRs ativos/invited da org — divisor do "ideal dia" e filtro de atribuição. */
+  sdrIds: Set<string>;
+  /** Leads com reunião marcada na janela, já filtrados por SDR/vendedor. */
+  leads: ScheduledLead[];
+}
+
 /**
- * Card 5: Reuniões Marcadas — leads cujo meeting_scheduled_at caiu no período,
- * atribuídos pelo SDR responsável (leads.assigned_to). Arquivados excluídos.
- * Retorna também dailyData pra alimentar o KPI card no topo do dashboard.
+ * Universo de "reuniões marcadas" do Dashboard na janela do filtro: leads cujo
+ * `meeting_scheduled_at` caiu no período, atribuídos ao SDR responsável
+ * (`leads.assigned_to`, que precisa ser SDR ativo/invited), arquivados excluídos.
+ * Fonte ÚNICA do card/ranking "Reuniões Marcadas" e do painel de leads por dia
+ * do gráfico RM/RR — os dois têm que bater. Não filtra por cadência (o card
+ * nunca filtrou).
  */
-export async function fetchMeetingsScheduledRanking(
+export async function fetchScheduledLeadsForRanking(
   supabase: SupabaseClient,
   orgId: string,
   filters: DashboardFilters,
-): Promise<RankingCardData> {
+): Promise<ScheduledLeadsForRanking> {
   const { start, end } = getDateRange(filters);
-  const days = getDaysInMonth(filters.month);
 
   const { data: sdrs } = (await from(supabase, 'organization_members')
     .select('user_id')
@@ -563,26 +585,60 @@ export async function fetchMeetingsScheduledRanking(
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
   const { data: rows } = (await from(supabase, 'leads')
-    .select('id, assigned_to, meeting_scheduled_at')
+    .select('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .neq('status', 'archived')
     .not('meeting_scheduled_at', 'is', null)
     .gte('meeting_scheduled_at', start)
     .lt('meeting_scheduled_at', end)
-    .limit(10000)) as { data: Array<{ id: string; assigned_to: string | null; meeting_scheduled_at: string }> | null };
+    .limit(10000)) as {
+    data: Array<{
+      id: string;
+      razao_social?: string | null;
+      nome_fantasia?: string | null;
+      assigned_to: string | null;
+      meeting_scheduled_at: string;
+    }> | null;
+  };
 
-  const counts = new Map<string, number>();
-  const countByDay = new Map<number, number>();
-  let total = 0;
+  const leads: ScheduledLead[] = [];
   for (const lead of rows ?? []) {
     const sdr = lead.assigned_to;
     if (!sdr || !sdrIds.has(sdr)) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
-    counts.set(sdr, (counts.get(sdr) ?? 0) + 1);
+    leads.push({
+      id: lead.id,
+      razao_social: lead.razao_social ?? null,
+      nome_fantasia: lead.nome_fantasia ?? null,
+      assigned_to: sdr,
+      meeting_scheduled_at: lead.meeting_scheduled_at,
+    });
+  }
+
+  return { sdrIds, leads };
+}
+
+/**
+ * Card 5: Reuniões Marcadas — contagem por SDR e por dia sobre o universo de
+ * fetchScheduledLeadsForRanking. Retorna também dailyData pra alimentar o KPI
+ * card no topo do dashboard.
+ */
+export async function fetchMeetingsScheduledRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const days = getDaysInMonth(filters.month);
+  const { sdrIds, leads } = await fetchScheduledLeadsForRanking(supabase, orgId, filters);
+
+  const counts = new Map<string, number>();
+  const countByDay = new Map<number, number>();
+  let total = 0;
+  for (const lead of leads) {
+    counts.set(lead.assigned_to, (counts.get(lead.assigned_to) ?? 0) + 1);
     total++;
-    const brt = new Date(new Date(lead.meeting_scheduled_at).getTime() - 3 * 60 * 60 * 1000);
-    const day = brt.getUTCDate();
+    const day = brtDayOf(lead.meeting_scheduled_at);
     countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
   }
 

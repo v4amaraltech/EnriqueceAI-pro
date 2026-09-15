@@ -177,6 +177,25 @@ export interface SdrPaceData {
   metrics: SdrPaceMetrics | null;
 }
 
+// Painel de leads por dia do gráfico "RM e RR por dia"
+
+export type MeetingDaySeries = 'scheduled' | 'held';
+
+export interface MeetingDayLead {
+  leadId: string;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  /** SDR responsável (`leads.assigned_to`) — nome resolvido no cliente. */
+  sdrId: string;
+  /** Instante que colocou o lead nesta barra: `meeting_scheduled_at` (RM) ou a âncora da reunião (RR). */
+  at: string;
+}
+
+export interface MeetingsByDayLeads {
+  scheduled: MeetingDayLead[];
+  held: MeetingDayLead[];
+}
+
 export interface ResponseTimeByUser {
   userId: string;
   userName: string;
