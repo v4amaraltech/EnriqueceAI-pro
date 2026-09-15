@@ -15,11 +15,11 @@ const sdrNames = new Map([['s1', 'Giovanni'], ['s2', 'Matheus']]);
 
 const payload: MeetingsByDayLeads = {
   scheduled: [
-    { leadId: 'l1', razaoSocial: 'Acme LTDA', nomeFantasia: 'Acme', sdrId: 's1', at: '2026-09-14T13:05:00Z' },
+    { leadId: 'l1', razaoSocial: 'Acme LTDA', nomeFantasia: 'Acme', sdrId: 's1', at: '2026-09-14T13:05:00Z', meetingAt: '2026-09-16T17:00:00Z' },
   ],
   held: [
-    { leadId: 'l2', razaoSocial: 'Beta SA', nomeFantasia: null, sdrId: 's2', at: '2026-09-14T17:30:00Z' },
-    { leadId: 'l3', razaoSocial: null, nomeFantasia: 'Só Fantasia', sdrId: 'zzzzzzzz-desconhecido', at: '2026-09-14T18:00:00Z' },
+    { leadId: 'l2', razaoSocial: 'Beta SA', nomeFantasia: null, sdrId: 's2', at: '2026-09-14T17:30:00Z', meetingAt: '2026-09-14T17:30:00Z' },
+    { leadId: 'l3', razaoSocial: null, nomeFantasia: 'Só Fantasia', sdrId: 'zzzzzzzz-desconhecido', at: '2026-09-14T18:00:00Z', meetingAt: null },
   ],
 };
 
@@ -39,9 +39,10 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof MeetingsByD
 }
 
 describe('formatMeetingAt', () => {
-  it('RM mostra só a hora em BRT; RR mostra dia/mês e hora', () => {
-    expect(formatMeetingAt('2026-09-14T13:05:00Z', 'scheduled')).toBe('10:05');
-    expect(formatMeetingAt('2026-09-15T01:30:00Z', 'held')).toBe('14/09 22:30');
+  it('mostra dia/mês e hora em BRT; sem horário vira travessão', () => {
+    expect(formatMeetingAt('2026-09-14T13:05:00Z')).toBe('14/09 10:05');
+    expect(formatMeetingAt('2026-09-15T01:30:00Z')).toBe('14/09 22:30');
+    expect(formatMeetingAt(null)).toBe('—');
   });
 });
 
@@ -71,8 +72,12 @@ describe('MeetingsByDayDrawer', () => {
     expect(screen.getByText('Acme LTDA')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Beta SA' })).toHaveAttribute('href', '/leads/l2');
     expect(screen.getByText('Giovanni')).toBeInTheDocument();
-    expect(screen.getByText('10:05')).toBeInTheDocument();
+    // RM mostra a data/hora da REUNIÃO marcada (não a hora em que marcou)
+    expect(screen.getByText('16/09 14:00')).toBeInTheDocument();
+    expect(screen.queryByText('10:05')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Reunião em')).toHaveLength(2);
     expect(screen.getByText('14/09 14:30')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
     // sem razão social fica só o nome fantasia; SDR fora do ranking cai no id curto
     expect(screen.getByRole('link', { name: 'Só Fantasia' })).toHaveAttribute('href', '/leads/l3');
     expect(screen.getByText('zzzzzzzz')).toBeInTheDocument();

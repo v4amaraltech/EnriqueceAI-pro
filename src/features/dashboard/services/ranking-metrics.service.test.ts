@@ -616,7 +616,7 @@ describe('fetchSaoRateRanking', () => {
 
 describe('fetchScheduledLeadsForRanking — fonte única do card "Reuniões Marcadas" e do painel por dia', () => {
   const rows = [
-    { id: 'a', razao_social: 'Acme', nome_fantasia: 'A', assigned_to: 'sdr-1', meeting_scheduled_at: '2026-01-05T12:00:00Z' },
+    { id: 'a', razao_social: 'Acme', nome_fantasia: 'A', assigned_to: 'sdr-1', meeting_scheduled_at: '2026-01-05T12:00:00Z', meeting_starts_at: '2026-01-07T14:00:00Z' },
     { id: 'b', razao_social: 'Beta', nome_fantasia: null, assigned_to: 'sdr-2', meeting_scheduled_at: '2026-01-05T13:00:00Z' },
     { id: 'c', razao_social: 'Gestor', nome_fantasia: null, assigned_to: 'mgr-1', meeting_scheduled_at: '2026-01-06T13:00:00Z' },
     { id: 'd', razao_social: 'Sem dono', nome_fantasia: null, assigned_to: null, meeting_scheduled_at: '2026-01-06T13:00:00Z' },
@@ -647,8 +647,10 @@ describe('fetchScheduledLeadsForRanking — fonte única do card "Reuniões Marc
       nome_fantasia: 'A',
       assigned_to: 'sdr-1',
       meeting_scheduled_at: '2026-01-05T12:00:00Z',
+      meeting_starts_at: '2026-01-07T14:00:00Z',
     });
-    expect(leadsChain.select).toHaveBeenCalledWith('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at');
+    expect(result.leads[1]?.meeting_starts_at).toBeNull();
+    expect(leadsChain.select).toHaveBeenCalledWith('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at, meeting_starts_at');
     expect(leadsChain.neq).toHaveBeenCalledWith('status', 'archived');
   });
 

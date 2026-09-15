@@ -30,10 +30,11 @@ function brtParts(iso: string): { day: string; month: string; time: string } {
   };
 }
 
-/** RM: só a hora (o dia é o da barra). RR: data e hora da reunião. */
-export function formatMeetingAt(iso: string, series: MeetingDaySeries): string {
+/** Data e hora da reunião em BRT (`dd/MM HH:mm`); sem horário registrado, "—". */
+export function formatMeetingAt(iso: string | null): string {
+  if (!iso) return '—';
   const p = brtParts(iso);
-  return series === 'scheduled' ? p.time : `${p.day}/${p.month} ${p.time}`;
+  return `${p.day}/${p.month} ${p.time}`;
 }
 
 export interface MeetingsByDayDrawerProps {
@@ -53,38 +54,30 @@ export interface MeetingsByDayDrawerProps {
   load?: (input: GetMeetingsByDayLeadsInput) => Promise<ActionResult<MeetingsByDayLeads>>;
 }
 
-const SECTION_META: Record<MeetingDaySeries, { title: string; color: string; empty: string; timeLabel: string }> = {
+const SECTION_META: Record<MeetingDaySeries, { title: string; color: string; empty: string }> = {
   scheduled: {
     title: 'Marcadas (RM)',
     color: RM_COLOR,
     empty: 'Nenhuma reunião marcada neste dia',
-    timeLabel: 'Marcou às',
   },
   held: {
     title: 'Realizadas (RR)',
     color: RR_COLOR,
     empty: 'Nenhuma reunião realizada neste dia',
-    timeLabel: 'Reunião em',
   },
 };
 
-function LeadRows({
-  leads,
-  series,
-  sdrNames,
-}: {
-  leads: MeetingDayLead[];
-  series: MeetingDaySeries;
-  sdrNames: Map<string, string>;
-}) {
-  const meta = SECTION_META[series];
+function LeadRows({ leads, sdrNames }: { leads: MeetingDayLead[]; sdrNames: Map<string, string> }) {
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           <th className="pb-2 pr-3 font-medium">Empresa</th>
           <th className="pb-2 pr-3 font-medium">SDR</th>
-          <th className="pb-2 text-right font-medium">{meta.timeLabel}</th>
+          {/* Nas duas seções a coluna é a data/hora da REUNIÃO (pedido do Vini,
+              14/set): na RM, quando o SDR marcou não interessa — interessa
+              pra quando ficou marcada. */}
+          <th className="pb-2 text-right font-medium">Reunião em</th>
         </tr>
       </thead>
       <tbody>
@@ -104,7 +97,7 @@ function LeadRows({
             <td className="py-2 pr-3">
               {lead.sdrId ? (sdrNames.get(lead.sdrId) ?? lead.sdrId.slice(0, 8)) : '—'}
             </td>
-            <td className="py-2 text-right tabular-nums">{formatMeetingAt(lead.at, series)}</td>
+            <td className="py-2 text-right tabular-nums">{formatMeetingAt(lead.meetingAt)}</td>
           </tr>
         ))}
       </tbody>
@@ -132,7 +125,7 @@ function Section({
       {leads.length === 0 ? (
         <p className="py-3 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{meta.empty}</p>
       ) : (
-        <LeadRows leads={leads} series={series} sdrNames={sdrNames} />
+        <LeadRows leads={leads} sdrNames={sdrNames} />
       )}
     </section>
   );
