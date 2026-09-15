@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
+import type { MeetingDaySeries } from '../types';
 import type { MeetingsByDayPoint } from '../utils/meetings-by-day';
 
 // RM usa o vermelho da V4 (token --primary do tema: #d8151e claro / #e6443d
@@ -29,8 +30,8 @@ import type { MeetingsByDayPoint } from '../utils/meetings-by-day';
 // realizadas". Par validado para daltonismo nos dois temas pelo validador do
 // skill dataviz (ΔE deutan ≈ 8.9 claro / 8.8 escuro). Verdes mais escuros ou
 // mais claros que este falham contra o vermelho no tema escuro.
-const RM_COLOR = 'var(--primary)';
-const RR_COLOR = '#059669';
+export const RM_COLOR = 'var(--primary)';
+export const RR_COLOR = '#059669';
 
 const TITLE = 'Reuniões marcadas (RM) e realizadas (RR) por dia';
 const HELP =
@@ -38,10 +39,20 @@ const HELP =
   '• RM: dia em que o SDR marcou a reunião (meeting_scheduled_at).\n' +
   '• RR: dia em que o lead virou Ganho (reunião confirmada como realizada). Some da barra se o closer marcar no-show depois.\n' +
   '• Tendência: reta ajustada (regressão linear) sobre os dias de operação já ocorridos — fins de semana e dias sem nenhum movimento (feriado, parada) ficam de fora do cálculo.\n\n' +
-  'Segue o mesmo filtro dos cards acima; a soma das barras bate com o número grande de cada card.';
+  'Segue o mesmo filtro dos cards acima; a soma das barras bate com o número grande de cada card.\n\n' +
+  'Clique numa barra para ver os leads daquele dia.';
+
+export type MeetingsBarClickHandler = (day: number, series: MeetingDaySeries) => void;
 
 interface MeetingsByDayChartProps {
   data: MeetingsByDayPoint[];
+  /** Clique numa barra (RM ou RR) — recebe o dia do mês e a série clicada. */
+  onBarClick?: MeetingsBarClickHandler;
+}
+
+/** Payload que o Recharts entrega no onClick da barra: o ponto da série. */
+interface BarClickItem {
+  payload?: { day?: number };
 }
 
 interface TooltipEntry {
@@ -92,8 +103,21 @@ function yMax(data: MeetingsByDayPoint[]): number {
   return Math.max(6, Math.ceil((max * 1.2) / 2) * 2);
 }
 
-function MeetingsChart({ data, height }: { data: MeetingsByDayPoint[]; height: number }) {
+function MeetingsChart({
+  data,
+  height,
+  onBarClick,
+}: {
+  data: MeetingsByDayPoint[];
+  height: number;
+  onBarClick?: MeetingsBarClickHandler;
+}) {
   const labelStyle = { fontSize: 10, fill: 'var(--muted-foreground)' };
+  const clickable = Boolean(onBarClick);
+  const handleBarClick = (series: MeetingDaySeries) => (item: BarClickItem) => {
+    const day = item?.payload?.day;
+    if (typeof day === 'number') onBarClick?.(day, series);
+  };
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
@@ -125,6 +149,8 @@ function MeetingsChart({ data, height }: { data: MeetingsByDayPoint[]; height: n
           radius={[4, 4, 0, 0]}
           maxBarSize={28}
           isAnimationActive={false}
+          cursor={clickable ? 'pointer' : undefined}
+          onClick={handleBarClick('scheduled')}
         >
           <LabelList dataKey="scheduled" position="top" formatter={barLabel} style={labelStyle} />
         </Bar>
@@ -135,6 +161,8 @@ function MeetingsChart({ data, height }: { data: MeetingsByDayPoint[]; height: n
           radius={[4, 4, 0, 0]}
           maxBarSize={28}
           isAnimationActive={false}
+          cursor={clickable ? 'pointer' : undefined}
+          onClick={handleBarClick('held')}
         >
           <LabelList dataKey="held" position="top" formatter={barLabel} style={labelStyle} />
         </Bar>
@@ -219,7 +247,7 @@ function MeetingsTable({ data }: { data: MeetingsByDayPoint[] }) {
   );
 }
 
-export function MeetingsByDayChart({ data }: MeetingsByDayChartProps) {
+export function MeetingsByDayChart({ data, onBarClick }: MeetingsByDayChartProps) {
   const [expanded, setExpanded] = useState(false);
   const hasAny = data.some((p) => (p.scheduled ?? 0) > 0 || (p.held ?? 0) > 0);
 
@@ -247,7 +275,7 @@ export function MeetingsByDayChart({ data }: MeetingsByDayChartProps) {
 
         <div className="px-2 pt-2">
           {hasAny ? (
-            <MeetingsChart data={data} height={320} />
+            <MeetingsChart data={data} height={320} onBarClick={onBarClick} />
           ) : (
             <div className="flex h-[280px] items-center justify-center">
               <p className="text-sm text-muted-foreground">Sem reuniões no período</p>
@@ -268,7 +296,7 @@ export function MeetingsByDayChart({ data }: MeetingsByDayChartProps) {
             <DialogTitle>{TITLE}</DialogTitle>
           </DialogHeader>
           <div className="min-h-[500px]">
-            <MeetingsChart data={data} height={500} />
+            <MeetingsChart data={data} height={500} onBarClick={onBarClick} />
           </div>
           <ChartLegend />
           <MeetingsTable data={data} />

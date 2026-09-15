@@ -94,6 +94,8 @@ function computeDailyData(
 
 export interface HeldLead {
   id: string;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
   meeting_starts_at: string | null;
   meeting_held_at: string;
   assigned_to: string | null;
@@ -127,7 +129,7 @@ export async function fetchHeldLeadsForKpi(
   // lead desqualificado continua sendo produção do SDR. Filtrar por 'won' aqui
   // subnotificava o time.
   let leadsQuery = from(supabase, 'leads')
-    .select('id, meeting_starts_at, meeting_held_at, assigned_to')
+    .select('id, razao_social, nome_fantasia, meeting_starts_at, meeting_held_at, assigned_to')
     .eq('org_id', orgId)
     .is('deleted_at', null)
     .not('meeting_held_at', 'is', null)

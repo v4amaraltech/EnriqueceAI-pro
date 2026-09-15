@@ -11,6 +11,8 @@ import {
   fetchRankingData,
   fetchSaoRanking,
   fetchSaoRateRanking,
+  fetchScheduledLeadsForRanking,
+  fetchMeetingsScheduledRanking,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
@@ -609,6 +611,64 @@ describe('fetchSaoRateRanking', () => {
     expect(u2?.value).toBe(0);
     expect(u2?.secondaryValue).toBe(0);
     expect(result.sdrBreakdown[0]?.userId).toBe('u1'); // ordenado desc
+  });
+});
+
+describe('fetchScheduledLeadsForRanking — fonte única do card "Reuniões Marcadas" e do painel por dia', () => {
+  const rows = [
+    { id: 'a', razao_social: 'Acme', nome_fantasia: 'A', assigned_to: 'sdr-1', meeting_scheduled_at: '2026-01-05T12:00:00Z' },
+    { id: 'b', razao_social: 'Beta', nome_fantasia: null, assigned_to: 'sdr-2', meeting_scheduled_at: '2026-01-05T13:00:00Z' },
+    { id: 'c', razao_social: 'Gestor', nome_fantasia: null, assigned_to: 'mgr-1', meeting_scheduled_at: '2026-01-06T13:00:00Z' },
+    { id: 'd', razao_social: 'Sem dono', nome_fantasia: null, assigned_to: null, meeting_scheduled_at: '2026-01-06T13:00:00Z' },
+  ];
+
+  function build() {
+    const membersChain = createChainMock({ data: [{ user_id: 'sdr-1' }, { user_id: 'sdr-2' }] });
+    const leadsChain = createChainMock({ data: rows });
+    const goalsChain = createChainMock({ data: { meetings_scheduled_target: 10 } });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return membersChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'goals') return goalsChain;
+      return createChainMock({ data: [] });
+    });
+    return { supabase, leadsChain };
+  }
+
+  it('devolve os leads com empresa, só de SDRs ativos e com dono', async () => {
+    const { supabase, leadsChain } = build();
+    const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, baseFilters);
+
+    expect(result.sdrIds).toEqual(new Set(['sdr-1', 'sdr-2']));
+    expect(result.leads.map((l) => l.id)).toEqual(['a', 'b']);
+    expect(result.leads[0]).toEqual({
+      id: 'a',
+      razao_social: 'Acme',
+      nome_fantasia: 'A',
+      assigned_to: 'sdr-1',
+      meeting_scheduled_at: '2026-01-05T12:00:00Z',
+    });
+    expect(leadsChain.select).toHaveBeenCalledWith('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at');
+    expect(leadsChain.neq).toHaveBeenCalledWith('status', 'archived');
+  });
+
+  it('respeita o filtro de vendedor', async () => {
+    const { supabase } = build();
+    const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, { ...baseFilters, userIds: ['sdr-2'] });
+    expect(result.leads.map((l) => l.id)).toEqual(['b']);
+  });
+
+  it('o card conta exatamente o universo desta função (total, por SDR e por dia)', async () => {
+    const { supabase } = build();
+    const card = await fetchMeetingsScheduledRanking(supabase as never, ORG, baseFilters);
+    expect(card.total).toBe(2);
+    expect(card.sdrBreakdown.map((e) => [e.userId, e.value])).toEqual(
+      expect.arrayContaining([['sdr-1', 1], ['sdr-2', 1]]),
+    );
+    // dia 5 em BRT: 2 marcadas; acumulado segue 2 até o fim
+    expect(card.dailyData?.[3]?.actual).toBe(0);
+    expect(card.dailyData?.[4]?.actual).toBe(2);
+    expect(card.dailyData?.[5]?.actual).toBe(2);
   });
 });
 

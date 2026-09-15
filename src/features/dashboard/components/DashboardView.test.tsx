@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DashboardData, DashboardFilters, InsightsData, RankingData, SdrPaceData } from '../types';
@@ -41,7 +41,9 @@ vi.mock('recharts', () => ({
     <div data-testid="composed-chart">{children}</div>
   ),
   Line: () => <div data-testid="line" />,
-  Bar: () => <div data-testid="bar" />,
+  Bar: ({ onClick }: { onClick?: (item: { payload: { day: number } }) => void }) => (
+    <div data-testid="bar" onClick={() => onClick?.({ payload: { day: 2 } })} />
+  ),
   Area: () => <div data-testid="area" />,
   Scatter: () => <div data-testid="scatter" />,
   LabelList: () => <div data-testid="label-list" />,
@@ -56,6 +58,15 @@ vi.mock('recharts', () => ({
 // Mock GoalsModal to avoid action imports in DashboardView tests
 vi.mock('./GoalsModal', () => ({
   GoalsModal: () => <div data-testid="goals-modal" />,
+}));
+
+// Painel do gráfico RM/RR: só interessa se abre com o dia/série clicados.
+const mockDrawer = vi.fn();
+vi.mock('./MeetingsByDayDrawer', () => ({
+  MeetingsByDayDrawer: (props: Record<string, unknown>) => {
+    mockDrawer(props);
+    return props.open ? <div data-testid="meetings-by-day-drawer" /> : null;
+  },
 }));
 
 const defaultFilters: DashboardFilters = {
@@ -348,6 +359,50 @@ describe('DashboardView', () => {
     expect(
       screen.getByText('Reuniões marcadas (RM) e realizadas (RR) por dia'),
     ).toBeInTheDocument();
+  });
+
+  it('clicar numa barra abre o painel do dia com os filtros da página e os nomes dos SDRs', () => {
+    const base = {
+      total: 0,
+      monthTarget: 0,
+      percentOfTarget: 0,
+      averagePerSdr: 0,
+      sdrBreakdown: [],
+    };
+    const ranking: RankingData = {
+      leadsFinished: base,
+      callsDone: base,
+      attendanceRate: base,
+      leadsOpened: base,
+      meetingsScheduled: {
+        ...base,
+        sdrBreakdown: [{ userId: 'u-1', userName: 'Giovanni', value: 3 }],
+        dailyData: [
+          { date: '2026-02-01', day: 1, actual: 1, target: 0 },
+          { date: '2026-02-02', day: 2, actual: 3, target: 0 },
+        ],
+      },
+      meetingsHeld: { ...base, sdrBreakdown: [{ userId: 'u-2', userName: 'Matheus', value: 1 }] },
+      hitRate: base,
+      sao: base,
+      saoRate: base,
+      leadsToOpen: base,
+      overdueActivities: base,
+    };
+    mockDrawer.mockClear();
+    render(<DashboardView data={createData()} filters={defaultFilters} ranking={ranking} />);
+
+    expect(screen.queryByTestId('meetings-by-day-drawer')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId('bar')[0]!);
+
+    expect(screen.getByTestId('meetings-by-day-drawer')).toBeInTheDocument();
+    const props = mockDrawer.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(props.day).toBe(2);
+    expect(props.series).toBe('scheduled');
+    expect(props.month).toBe('2026-02');
+    expect(props.filters).toBe(defaultFilters);
+    expect((props.sdrNames as Map<string, string>).get('u-1')).toBe('Giovanni');
+    expect((props.sdrNames as Map<string, string>).get('u-2')).toBe('Matheus');
   });
 
   it('should not render meetings-by-day chart when ranking prop is absent', () => {
