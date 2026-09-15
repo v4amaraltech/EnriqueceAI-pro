@@ -1,13 +1,14 @@
 # Story: Painel lateral com os leads ao clicar numa barra do gráfico "RM e RR por dia"
 
 ## Status
-InProgress
+InReview
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-09-14 | Vini + Claude | Story criada. Pedido do Vini (print do gráfico): "menu lateral direito quando o usuário clicar em uma das barras do gráfico abrir e mostrar os leads que marcaram e realizaram reunião". Decisões: clicar em qualquer barra abre o **dia inteiro** em 2 seções (Marcadas / Realizadas), a série clicada primeiro; colunas Empresa (link) + SDR + horário. |
 | 2026-09-14 | @dev (Dex) | Draft → InProgress. Implementado e testado localmente (261 testes do dashboard verdes, typecheck e lint OK). |
+| 2026-09-14 | @dev (Dex) | InProgress → **InReview**. Commit `3627f963`, **PR #421** aberto (base `main` em `fb12f30c`). Suíte completa 2105 verdes, build OK, paridade com o banco conferida. |
 
 ## Executor Assignment
 executor: "@dev"
