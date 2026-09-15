@@ -1,7 +1,7 @@
 # Story: Painel lateral com os leads ao clicar numa barra do gráfico "RM e RR por dia"
 
 ## Status
-InReview
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
@@ -9,6 +9,7 @@ InReview
 | 2026-09-14 | Vini + Claude | Story criada. Pedido do Vini (print do gráfico): "menu lateral direito quando o usuário clicar em uma das barras do gráfico abrir e mostrar os leads que marcaram e realizaram reunião". Decisões: clicar em qualquer barra abre o **dia inteiro** em 2 seções (Marcadas / Realizadas), a série clicada primeiro; colunas Empresa (link) + SDR + horário. |
 | 2026-09-14 | @dev (Dex) | Draft → InProgress. Implementado e testado localmente (261 testes do dashboard verdes, typecheck e lint OK). |
 | 2026-09-14 | @dev (Dex) | InProgress → **InReview**. Commit `3627f963`, **PR #421** aberto (base `main` em `fb12f30c`). Suíte completa 2105 verdes, build OK, paridade com o banco conferida. |
+| 2026-09-14 | @dev (Dex) | InReview → **Done** (pedido do Vini: "marca a story como Done"). **PR #421 MERGEADO** (squash `0569881f`, CI verde 4m57s, branch apagada). Deploy no Coolify em andamento no momento desta anotação (`/api/version` ainda em `fb12f30`); conferência do SHA no ar fica registrada na memória da sessão. |
 
 ## Executor Assignment
 executor: "@dev"
@@ -57,6 +58,8 @@ O gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia" (stories anterior
 - [x] `pnpm typecheck && pnpm lint && pnpm exec vitest run src/features/dashboard`
 - [x] Conferência visual no preview (clique nas duas barras, modal expandido, tema escuro) — página temporária sob `/docs/`, apagada
 - [x] `pnpm test:run` (2105 verdes) e `pnpm build` OK (um de cada vez)
+- [x] Merge na main (PR #421, `0569881f`)
+- [ ] Deploy conferido pelo `/api/version` = `0569881`
 - [x] Paridade com o banco (14/set, org V4): RR = 6 = barra; RM = 10 no banco × 9 no print do Vini — a 10ª foi marcada às 21:57 BRT, depois do print
 
 ## Dev Notes
