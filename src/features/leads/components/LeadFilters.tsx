@@ -188,9 +188,9 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-end gap-3">
         {/* Search (debounced) */}
-        <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+        <div className="flex min-w-[200px] flex-1 flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Buscar</span>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
@@ -222,7 +222,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
             value={activeStatus}
             onValueChange={(v) => handleFilterChange('status', v)}
           >
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
@@ -243,7 +243,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
             value={activeSource}
             onValueChange={(v) => handleFilterChange('lead_source', v)}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
@@ -265,7 +265,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
               value={activeCanal}
               onValueChange={(v) => handleFilterChange('canal', v)}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -283,9 +283,9 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
         {/* Criado em — separa os leads que entraram hoje dos antigos */}
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--muted-foreground)]">Criado em</span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={activeCreatedPeriod} onValueChange={handleCreatedPeriodChange}>
-              <SelectTrigger className="w-[160px]" aria-label="Criado em">
+              <SelectTrigger className="w-[140px]" aria-label="Criado em">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -303,7 +303,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
                 <Input
                   type="date"
                   aria-label="Criado de"
-                  className="w-[150px]"
+                  className="w-[140px]"
                   value={activeCreatedFrom}
                   max={activeCreatedTo || undefined}
                   onChange={(e) => handleCreatedDateChange('created_from', e.target.value)}
@@ -312,7 +312,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
                 <Input
                   type="date"
                   aria-label="Criado até"
-                  className="w-[150px]"
+                  className="w-[140px]"
                   value={activeCreatedTo}
                   min={activeCreatedFrom || undefined}
                   onChange={(e) => handleCreatedDateChange('created_to', e.target.value)}
@@ -330,7 +330,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
               value={activeCadence}
               onValueChange={(v) => handleFilterChange('cadence_id', v)}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -353,7 +353,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
             <span className="text-xs font-medium text-[var(--muted-foreground)]">Motivo de Perda</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-9 w-[200px] justify-between font-normal">
+                <Button variant="outline" className="h-9 w-[160px] justify-between font-normal">
                   <span className="truncate">
                     {selectedLossIds.length === 0
                       ? 'Todos'
@@ -401,7 +401,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
               value={activeAssigned}
               onValueChange={(v) => handleFilterChange('assigned_to', v)}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
