@@ -9,6 +9,7 @@ import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
+import { createdAtRange } from '../utils/created-at-range';
 
 // Build the PostgREST `or` clauses for one search term. CNPJ is stored
 // digits-only, so a punctuated query like "08.942.835/0001-72" never matches
@@ -100,6 +101,10 @@ export async function fetchLeads(
   if (!hasSearch && filters.loss_reason_id && filters.loss_reason_id.length > 0) {
     query = query.in('loss_reason_id', filters.loss_reason_id);
   }
+  // "Criado em" — dias BRT convertidos em cortes ISO UTC (ver createdAtRange)
+  const createdRange = hasSearch ? null : createdAtRange(filters);
+  if (createdRange?.gte) query = query.gte('created_at', createdRange.gte);
+  if (createdRange?.lte) query = query.lte('created_at', createdRange.lte);
 
   // Filter by cadence enrollment (skipped when searching).
   // The "__none__" case is handled at the source-table level (view above);
@@ -261,6 +266,9 @@ export async function fetchFilteredLeadIds(
   if (filters.loss_reason_id && filters.loss_reason_id.length > 0) {
     query = query.in('loss_reason_id', filters.loss_reason_id);
   }
+  const createdRange = createdAtRange(filters);
+  if (createdRange?.gte) query = query.gte('created_at', createdRange.gte);
+  if (createdRange?.lte) query = query.lte('created_at', createdRange.lte);
   if (filters.search) {
     const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
     const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);

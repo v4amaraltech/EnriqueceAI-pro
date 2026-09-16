@@ -25,6 +25,7 @@ import {
 import type { LossReasonFilterOption } from '../actions/fetch-leads';
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS, leadStatusValues } from '../schemas/lead.schemas';
+import { CREATED_PERIOD_LABELS, CREATED_PERIOD_VALUES } from '../utils/created-at-range';
 
 const statusLabels: Record<string, string> = {
   new: 'Novo',
@@ -36,6 +37,8 @@ const statusLabels: Record<string, string> = {
 };
 
 const ALL_VALUE = '__all__';
+// Valor do seletor "Criado em" que abre os campos de/até
+const CUSTOM_PERIOD = '__custom__';
 
 interface LeadFiltersProps {
   members?: { userId: string; name: string }[];
@@ -62,6 +65,9 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
   const currentCadence = searchParams.get('cadence_id') ?? '';
   const currentCnae = searchParams.get('cnae') ?? '';
   const currentCanal = searchParams.get('canal') ?? '';
+  const currentCreatedPeriod = searchParams.get('created_period') ?? '';
+  const currentCreatedFrom = searchParams.get('created_from') ?? '';
+  const currentCreatedTo = searchParams.get('created_to') ?? '';
 
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +102,13 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
   const activeCanal = overrides.canal ?? (currentCanal || ALL_VALUE);
   const activeCadence = overrides.cadence_id ?? (currentCadence || ALL_VALUE);
   const activeAssigned = overrides.assigned_to ?? (currentAssigned || ALL_VALUE);
+  const activeCreatedFrom = overrides.created_from ?? currentCreatedFrom;
+  const activeCreatedTo = overrides.created_to ?? currentCreatedTo;
+  // Seletor "Criado em": atalho da URL, ou "Personalizado" quando há de/até
+  // (ou quando o SDR acabou de escolher Personalizado e ainda não digitou datas).
+  const activeCreatedPeriod =
+    overrides.created_period ??
+    (currentCreatedPeriod || (currentCreatedFrom || currentCreatedTo ? CUSTOM_PERIOD : ALL_VALUE));
   const currentLoss = searchParams.get('loss_reason_id') ?? '';
   const activeLoss = overrides.loss_reason_id ?? currentLoss;
   const selectedLossIds = activeLoss ? activeLoss.split(',').filter(Boolean) : [];
@@ -134,7 +147,26 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
     handleFilterChange('loss_reason_id', [...set].join(','));
   }
 
-  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentCanal || currentSearch || currentAssigned || currentCadence || currentCnae || currentLoss;
+  // "Criado em": atalho (Hoje, Ontem…) vai para a URL como created_period e
+  // limpa de/até; "Personalizado" só abre os campos (a URL muda quando o SDR
+  // preenche uma data). Atalho e período personalizado nunca coexistem.
+  function handleCreatedPeriodChange(value: string) {
+    if (value === CUSTOM_PERIOD) {
+      setOverrides((prev) => ({ ...prev, created_period: CUSTOM_PERIOD }));
+      if (currentCreatedPeriod) handleFilterChange('created_period', '');
+      return;
+    }
+    handleFilterChange('created_period', value);
+    if (activeCreatedFrom) handleFilterChange('created_from', '');
+    if (activeCreatedTo) handleFilterChange('created_to', '');
+  }
+
+  function handleCreatedDateChange(key: 'created_from' | 'created_to', value: string) {
+    setOverrides((prev) => ({ ...prev, created_period: CUSTOM_PERIOD }));
+    handleFilterChange(key, value);
+  }
+
+  const hasFilters = currentStatus || currentEnrichment || currentPorte || currentUf || currentSource || currentCanal || currentSearch || currentAssigned || currentCadence || currentCnae || currentLoss || currentCreatedPeriod || currentCreatedFrom || currentCreatedTo;
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -247,6 +279,48 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
             </Select>
           </div>
         )}
+
+        {/* Criado em — separa os leads que entraram hoje dos antigos */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Criado em</span>
+          <div className="flex items-center gap-2">
+            <Select value={activeCreatedPeriod} onValueChange={handleCreatedPeriodChange}>
+              <SelectTrigger className="w-[160px]" aria-label="Criado em">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+                {CREATED_PERIOD_VALUES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {CREATED_PERIOD_LABELS[p]}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_PERIOD}>Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+            {activeCreatedPeriod === CUSTOM_PERIOD && (
+              <>
+                <Input
+                  type="date"
+                  aria-label="Criado de"
+                  className="w-[150px]"
+                  value={activeCreatedFrom}
+                  max={activeCreatedTo || undefined}
+                  onChange={(e) => handleCreatedDateChange('created_from', e.target.value)}
+                />
+                <span className="text-xs text-[var(--muted-foreground)]">até</span>
+                <Input
+                  type="date"
+                  aria-label="Criado até"
+                  className="w-[150px]"
+                  value={activeCreatedTo}
+                  min={activeCreatedFrom || undefined}
+                  onChange={(e) => handleCreatedDateChange('created_to', e.target.value)}
+                />
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Cadência */}
         {cadences && cadences.length > 0 && (

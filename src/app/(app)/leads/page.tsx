@@ -34,12 +34,15 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.canal) filters.canal = params.canal;
   if (params.loss_reason_id) filters.loss_reason_id = params.loss_reason_id;
   if (params.search) filters.search = params.search;
+  if (params.created_period) filters.created_period = params.created_period;
+  if (params.created_from) filters.created_from = params.created_from;
+  if (params.created_to) filters.created_to = params.created_to;
   if (params.page) filters.page = params.page;
   if (params.per_page) filters.per_page = params.per_page;
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
-  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.loss_reason_id || params.search);
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.loss_reason_id || params.search || params.created_period || params.created_from || params.created_to);
 
   const result = await fetchLeads(filters);
 

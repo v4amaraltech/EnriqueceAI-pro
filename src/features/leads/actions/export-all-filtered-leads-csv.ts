@@ -8,6 +8,7 @@ import { neutralizeCsvFormula } from '@/lib/utils/csv';
 
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
+import { createdAtRange } from '../utils/created-at-range';
 
 export async function exportAllFilteredLeadsCsv(
   rawFilters: Record<string, unknown>,
@@ -37,6 +38,9 @@ export async function exportAllFilteredLeadsCsv(
       query = query.eq('assigned_to', filters.assigned_to);
     }
   }
+  const createdRange = createdAtRange(filters);
+  if (createdRange?.gte) query = query.gte('created_at', createdRange.gte);
+  if (createdRange?.lte) query = query.lte('created_at', createdRange.lte);
   if (filters.search) {
     const term = sanitizeFilterValue(filters.search.replace(/[%_]/g, ''));
     query = query.or(
