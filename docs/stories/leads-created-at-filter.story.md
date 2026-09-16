@@ -6,6 +6,7 @@ Ready for Review
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-16 | @dev (Dex) | Commit `e61aa0e5` + **PR #427** aberto (autorizado pelo Vini: "Pode comiitar" / "E abrir PR"). Aguardando CI e revisão. |
 | 2026-09-16 | @dev (Dex) | Implementado: helper `createdAtRange` (BRT), campos `created_period`/`created_from`/`created_to` no schema, filtro aplicado em `fetchLeads`/`fetchFilteredLeadIds`/`exportAllFilteredLeadsCsv`, seletor "Criado em" (Hoje, Ontem, Últimos 7 dias, Este mês, Personalizado de/até) em `LeadFilters`, coluna "Criado em" ordenável em `LeadTable` (Hoje HH:mm em destaque, Ontem, há N dias, dd/MM, dd/MM/aa + tooltip). typecheck ✅ lint ✅ testes ✅ (+22, 453 no módulo). Verificação visual em página temporária sob `/docs/` (apagada). Sem commit — aguardando o Vini. |
 | 2026-09-16 | Vini + Claude | Story criada. Dor trazida pelos pré-vendas: não conseguem separar os leads adicionados "Hoje" dos antigos na tela de Leads. Opções apresentadas (1 filtro de período, 2 coluna de data, 3 selo "Novo hoje"); Vini aprovou a recomendação 1 + 2. |
 
