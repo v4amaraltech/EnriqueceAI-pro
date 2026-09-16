@@ -188,6 +188,26 @@ describe('lead schemas', () => {
       expect(result.success).toBe(false);
     });
 
+    it('aceita os atalhos de "Criado em" e datas YYYY-MM-DD', () => {
+      const result = leadFiltersSchema.safeParse({ created_period: 'today', created_from: '2026-09-01', created_to: '2026-09-16' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.created_period).toBe('today');
+        expect(result.data.created_from).toBe('2026-09-01');
+        expect(result.data.created_to).toBe('2026-09-16');
+      }
+    });
+
+    it('descarta atalho desconhecido e data fora do formato em vez de derrubar a listagem', () => {
+      const result = leadFiltersSchema.safeParse({ created_period: 'lastyear', created_from: '16/09/2026', created_to: 'undefined' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.created_period).toBeUndefined();
+        expect(result.data.created_from).toBeUndefined();
+        expect(result.data.created_to).toBeUndefined();
+      }
+    });
+
     it('should drop junk uuid filters (?assigned_to=undefined) instead of crashing the query', () => {
       const result = leadFiltersSchema.safeParse({ assigned_to: 'undefined', cadence_id: 'undefined' });
       expect(result.success).toBe(true);

@@ -19,7 +19,25 @@ const BRT_OFFSET_MS = BRT_OFFSET_HOURS * 60 * 60 * 1000;
  * Shift the instant -3h before extracting the day.
  */
 export function brtTodayIso(): string {
-  return new Date(Date.now() - BRT_OFFSET_MS).toISOString().slice(0, 10);
+  return brtDateIso(new Date());
+}
+
+/**
+ * Calendar date (`YYYY-MM-DD`) of an instant in BRT. Shifts the instant -3h
+ * and reads the UTC day, so it never depends on the process/browser timezone.
+ */
+export function brtDateIso(date: Date): string {
+  return new Date(date.getTime() - BRT_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Adds `days` (may be negative) to a `YYYY-MM-DD` string, calendar-wise.
+ * `2026-03-01` + (-1) → `2026-02-28`.
+ */
+export function addDaysIso(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isValidCnpj, stripCnpj } from '../utils/cnpj';
+import { CREATED_PERIOD_VALUES, type CreatedPeriod } from '../utils/created-at-range';
 
 export const leadStatusValues = ['new', 'contacted', 'qualified', 'won', 'unqualified', 'archived'] as const;
 export const enrichmentStatusValues = ['pending', 'enriching', 'enriched', 'enrichment_failed', 'not_found'] as const;
@@ -161,7 +162,24 @@ const uuidListFilter = z
     return valid.length > 0 ? valid : undefined;
   });
 
+// Filtro de data `YYYY-MM-DD` (dia BRT). Valor fora do formato vira
+// `undefined` = sem filtro, em vez de derrubar a listagem inteira.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const dateFilter = z
+  .string()
+  .optional()
+  .transform((v) => (v && DATE_RE.test(v) ? v : undefined));
+
+// Atalho de período ("Hoje", "Ontem"…). Valor desconhecido = sem filtro.
+const createdPeriodFilter = z
+  .string()
+  .optional()
+  .transform((v) => (v && (CREATED_PERIOD_VALUES as readonly string[]).includes(v) ? (v as CreatedPeriod) : undefined));
+
 export const leadFiltersSchema = z.object({
+  created_period: createdPeriodFilter,
+  created_from: dateFilter,
+  created_to: dateFilter,
   status: leadStatusSchema.optional(),
   enrichment_status: enrichmentStatusSchema.optional(),
   porte: z.string().optional(),

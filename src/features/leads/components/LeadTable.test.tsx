@@ -195,6 +195,20 @@ describe('LeadTable', () => {
     expect(screen.getByText('Responsável')).toBeInTheDocument();
   });
 
+  it('renderiza a coluna "Criado em" ordenável', () => {
+    render(<LeadTable leads={[createMockLead()]} total={1} cadenceInfo={{}} userMap={{}} />);
+    expect(screen.getByRole('button', { name: /Criado em/ })).toBeInTheDocument();
+  });
+
+  it('mostra "Hoje HH:mm" para lead criado hoje e a data completa no tooltip', () => {
+    const now = new Date();
+    const lead = createMockLead({ created_at: now.toISOString() });
+    render(<LeadTable leads={[lead]} total={1} cadenceInfo={{}} userMap={{}} />);
+    const cell = screen.getByText(/^Hoje \d{2}:\d{2}$/);
+    expect(cell).toBeInTheDocument();
+    expect(cell).toHaveAttribute('title', expect.stringMatching(/\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2}/));
+  });
+
   it('should render Cadência column header', () => {
     const leads = [createMockLead()];
 

@@ -23,6 +23,8 @@ function createChainMock(finalResult: unknown) {
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     ilike: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     range: vi.fn().mockImplementation(() => Promise.resolve(finalResult)),
@@ -191,6 +193,46 @@ describe('fetchLeads', () => {
     expect(result.success).toBe(true);
     // Verify .eq was called with the status filter
     expect(leadsChain.eq).toHaveBeenCalledWith('status', 'new');
+  });
+
+  it('aplica o filtro "Criado em: Hoje" como intervalo do dia BRT em created_at', async () => {
+    vi.useFakeTimers();
+    // 16/set/2026 23:30 BRT = 17/set 02:30 UTC — em UTC já é o dia seguinte
+    vi.setSystemTime(new Date('2026-09-17T02:30:00.000Z'));
+    try {
+      const memberChain = createChainMock(null);
+      memberChain.single.mockResolvedValue({ data: { org_id: 'org-1' } });
+      const leadsChain = createChainMock({ data: [], count: 0, error: null });
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'organization_members') return memberChain;
+        if (table === 'leads') return leadsChain;
+        return createChainMock(null);
+      });
+
+      const result = await fetchLeads({ created_period: 'today' });
+
+      expect(result.success).toBe(true);
+      expect(leadsChain.gte).toHaveBeenCalledWith('created_at', '2026-09-16T03:00:00.000Z');
+      expect(leadsChain.lte).toHaveBeenCalledWith('created_at', '2026-09-17T02:59:59.999Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('não aplica "Criado em" quando há busca por texto (regra: a busca sempre acha o lead)', async () => {
+    const memberChain = createChainMock(null);
+    memberChain.single.mockResolvedValue({ data: { org_id: 'org-1' } });
+    const leadsChain = createChainMock({ data: [], count: 0, error: null });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return memberChain;
+      if (table === 'leads') return leadsChain;
+      return createChainMock(null);
+    });
+
+    await fetchLeads({ created_period: 'today', search: 'acme' });
+
+    expect(leadsChain.gte).not.toHaveBeenCalled();
+    expect(leadsChain.lte).not.toHaveBeenCalled();
   });
 
   it('should apply enrichment_status filter to the query', async () => {

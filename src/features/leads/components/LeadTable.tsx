@@ -30,6 +30,7 @@ import { fetchFilteredLeadIds } from '../actions/fetch-leads';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
+import { formatCreatedAt } from '../utils/format-created-at';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
 import { EngagementScoreBadge } from './EngagementScoreBadge';
 import { LeadAvatar } from './LeadAvatar';
@@ -467,6 +468,16 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                   <SortIcon column="engagement_score" currentSort={currentSortBy} currentDir={currentSortDir} />
                 </button>
               </TableHead>
+              <TableHead className="whitespace-nowrap">
+                <button
+                  type="button"
+                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  onClick={() => handleSort('created_at')}
+                >
+                  Criado em
+                  <SortIcon column="created_at" currentSort={currentSortBy} currentDir={currentSortDir} />
+                </button>
+              </TableHead>
               <TableHead>Cadência</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead>Closer</TableHead>
@@ -484,6 +495,7 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
               const primaryName = personName ?? companyName ?? (lead.cnpj ? formatCnpj(lead.cnpj) : 'Lead sem nome');
               const secondaryName = personName ? companyName : null;
               const responsible = userMap[lead.assigned_to ?? ''] ?? userMap[lead.created_by ?? ''] ?? null;
+              const createdAt = formatCreatedAt(lead.created_at);
 
               return (
                 <TableRow
@@ -524,6 +536,17 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                     <div className="flex justify-center">
                       <EngagementScoreBadge score={lead.engagement_score} size={28} />
                     </div>
+                  </TableCell>
+                  <TableCell onClick={() => navigateToLead(lead.id)} className="whitespace-nowrap">
+                    <span
+                      title={createdAt.title}
+                      // "Hoje"/"Ontem" depende do relógio: se a página cruzar a meia-noite entre
+                      // o render no servidor e o do cliente, só o texto muda — não vale um erro.
+                      suppressHydrationWarning
+                      className={`text-sm ${createdAt.isToday ? 'font-medium text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}
+                    >
+                      {createdAt.label}
+                    </span>
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <div className="flex items-center gap-1.5">
