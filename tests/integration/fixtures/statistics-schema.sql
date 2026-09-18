@@ -34,8 +34,20 @@ AS $function$
   )::uuid
 $function$;
 
+CREATE OR REPLACE FUNCTION auth.role()
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+AS $function$
+  select
+  coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+  )::text
+$function$;
+
 GRANT USAGE ON SCHEMA auth, public TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION auth.uid(), auth.role() TO anon, authenticated, service_role;
 
 -- ── Enums (valores e ordem de prod) ──────────────────────────────────────────
 CREATE TYPE public.lead_status AS ENUM ('new', 'contacted', 'qualified', 'won', 'unqualified', 'archived');
@@ -85,7 +97,17 @@ CREATE TABLE public.interactions (
   channel public.channel_type NOT NULL,
   type public.interaction_type NOT NULL,
   cadence_id uuid,
+  metadata jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Só para a cadeia de migrations de "leads abertos" rodar por cima desta fixture:
+-- 20260522091423 faz ALTER TABLE goals ADD COLUMN leads_opened_target. As funções
+-- de leads abertos não leem goals (a meta é lida pela aplicação).
+CREATE TABLE IF NOT EXISTS public.goals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL REFERENCES public.organizations(id),
+  month date NOT NULL
 );
 
 CREATE TABLE public.cadence_enrollments (
