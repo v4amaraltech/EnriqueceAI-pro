@@ -1,11 +1,12 @@
 # Story: Cauda de WhatsApp em lead sem WhatsApp = fim de cadência
 
 ## Status
-Draft
+Ready for Review
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-18 | @dev (Dex) | Implementado + testado. typecheck ✅ lint ✅ 2152 testes ✅ (+10 novos, 26 no total nos 2 arquivos) build ✅. **Deploy ainda NÃO feito** — o aviso ao gestor vem antes (risco 1). |
 | 2026-09-18 | Vini + Claude | Story criada. Sobra da story `engine-skips-whatsapp-invalid-steps`: 130 inscrições da Recovery ficaram no último passo (WhatsApp) sem canal para onde ir. Decisão do Vini: tratar como fim de cadência (reusar a regra de Perdido), não "Contatos inválidos". |
 
 ## Origem
@@ -49,10 +50,10 @@ Ou seja: **percorreram a régua inteira sem responder** e o único passo restant
 
 ## Tasks
 
-- [ ] Estender `skipWhatsAppStepsForInvalidLeads`: sem passo de outro canal → `completed` + `markLeadLostOnCadenceEnd`
-- [ ] Evento `cadence_completed` com mensagem própria ("só restavam passos de WhatsApp e o lead está sem WhatsApp")
-- [ ] Alinhar `report-whatsapp-invalid.ts` (AC 7)
-- [ ] Testes (cauda encerra, meio avança, proteções, teto, erro)
+- [x] Estender `skipWhatsAppStepsForInvalidLeads`: sem passo de outro canal → `completed` + `markLeadLostOnCadenceEnd`
+- [x] Evento `cadence_completed` com mensagem própria ("só restavam passos de WhatsApp e o lead está sem WhatsApp")
+- [x] Alinhar `report-whatsapp-invalid.ts` (AC 7)
+- [x] Testes (cauda encerra, meio avança, proteções, teto, erro, ordem encerra→perde)
 - [ ] Conferir em prod: esperado ~130 Perdidos "Deixou de responder" nas primeiras execuções — **avisar o gestor antes**, a taxa de perda da Recovery vai subir no dia
 
 ## Risks
@@ -70,7 +71,20 @@ Ou seja: **percorreram a régua inteira sem responder** e o único passo restant
 - `whatsapp-invalid-keeps-enrollment` (PR #418) — o comportamento do botão que o AC 7 alinha.
 
 ## Dev Agent Record
-_(a preencher)_
+
+### File List
+- `src/features/cadences/services/whatsapp-invalid-skip.service.ts` — classificador `classifyInvalidWhatsAppStep` + desfecho `end`
+- `src/features/cadences/services/whatsapp-invalid-skip.service.test.ts` — +6 testes (18 no arquivo)
+- `src/features/activities/actions/report-whatsapp-invalid.ts` — AC 7: cauda encerra em vez de pausar
+- `src/features/activities/actions/report-whatsapp-invalid.test.ts` — +4 testes (8 no arquivo)
+- `docs/stories/whatsapp-invalid-tail-ends-cadence.story.md`
+
+### Notas
+1. **Ordem importa:** encerrar a inscrição ANTES de `markLeadLostOnCadenceEnd`. Com ela ainda `active`, a proteção "outra cadência aberta" bloquearia a própria perda. Coberto por teste.
+2. **Trava dupla no UPDATE** (`eq('status','active')` + `eq('current_step', atual)`): se o SDR executou o passo no meio do caminho, o motor não encerra.
+3. **Perda barrada pelas proteções** (lead respondeu, tem reunião, outra cadência aberta, retorno pendente): a inscrição fica encerrada e o lead segue como está — mesmo desfecho do fim natural de cadência.
+4. **O caminho de pausa do botão deixou de existir** para a cauda: era o único cenário que o alcançava. A pausa da story `whatsapp-invalid-keeps-enrollment` valia para esse caso; agora os dois caminhos concordam em encerrar. As 11 inscrições já pausadas por WhatsApp inválido continuam pausadas (fora do escopo).
+5. Teto de 50 é compartilhado entre avanços e encerramentos por execução.
 
 ## QA Results
 _(pendente)_

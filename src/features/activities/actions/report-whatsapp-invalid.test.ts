@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const auth = vi.hoisted(() => ({ getAuthOrgIdResult: vi.fn() }));
 const leadEvent = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
 const notif = vi.hoisted(() => ({ createNotification: vi.fn() }));
+const loss = vi.hoisted(() => ({ markLeadLostOnCadenceEnd: vi.fn() }));
 
 vi.mock('@/lib/auth/get-org-id', () => auth);
 vi.mock('@/features/leads/actions/log-lead-event', () => leadEvent);
 vi.mock('@/features/notifications/services/notification.service', () => notif);
+vi.mock('@/features/cadences/services/cadence-end-loss.service', () => loss);
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 import { reportWhatsAppInvalid } from './report-whatsapp-invalid';
@@ -84,6 +86,7 @@ beforeEach(() => {
   });
   leadEvent.logLeadEvent.mockResolvedValue(undefined);
   notif.createNotification.mockResolvedValue(undefined);
+  loss.markLeadLostOnCadenceEnd.mockResolvedValue({ lost: true, reasonName: 'Deixou de responder' });
 });
 
 const enrollmentUpdates = () => captured.filter((c) => c.table === 'cadence_enrollments' && c.op === 'update');
@@ -111,18 +114,25 @@ describe('reportWhatsAppInvalid', () => {
 
     expect(enrollmentUpdates()[0]?.payload).toEqual({ current_step: 5 });
     expect(notif.createNotification).not.toHaveBeenCalled();
+    expect(loss.markLeadLostOnCadenceEnd).not.toHaveBeenCalled();
   });
 
-  it('sem passo de outro canal: PAUSA a inscrição, nunca encerra', async () => {
+  it('cauda só de WhatsApp: encerra a cadência e passa pela regra de Perdido', async () => {
     await reportWhatsAppInvalid(INPUT);
 
     const [update] = enrollmentUpdates();
-    expect(update?.payload).toEqual({ status: 'paused' });
-    expect(update?.payload).not.toHaveProperty('completed_at');
-    expect(JSON.stringify(captured)).not.toContain('completed');
+    expect(update?.payload).toMatchObject({ status: 'completed' });
+    expect(update?.payload).toHaveProperty('completed_at');
+    expect(JSON.stringify(captured)).not.toContain('paused');
+    expect(loss.markLeadLostOnCadenceEnd).toHaveBeenCalledWith({
+      orgId: ORG,
+      leadId: INPUT.leadId,
+      cadenceId: INPUT.cadenceId,
+      enrollmentId: INPUT.enrollmentId,
+    });
   });
 
-  it('pausa deixa rastro na timeline e avisa o dono do lead', async () => {
+  it('encerramento deixa rastro de fim de cadência antes da perda', async () => {
     await reportWhatsAppInvalid(INPUT);
 
     expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
@@ -130,17 +140,41 @@ describe('reportWhatsAppInvalid', () => {
       expect.objectContaining({
         orgId: ORG,
         leadId: INPUT.leadId,
-        event: 'cadence_paused',
-        message: expect.stringContaining('sem WhatsApp'),
-        metadata: expect.objectContaining({ reason: 'whatsapp_invalid', enrollment_id: INPUT.enrollmentId }),
+        event: 'cadence_completed',
+        message: expect.stringContaining('só restavam passos de WhatsApp'),
+        metadata: expect.objectContaining({ reason: 'whatsapp_invalid_tail', enrollment_id: INPUT.enrollmentId }),
       }),
     );
+    const ordem = leadEvent.logLeadEvent.mock.invocationCallOrder[0] ?? 0;
+    const perda = loss.markLeadLostOnCadenceEnd.mock.invocationCallOrder[0] ?? 0;
+    expect(ordem).toBeLessThan(perda);
+  });
+
+  it('avisa o dono do lead com o motivo da perda', async () => {
+    await reportWhatsAppInvalid(INPUT);
+
     expect(notif.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: 'sdr-1', resource_id: INPUT.leadId, type: 'integration_error' }),
+      expect.objectContaining({
+        user_id: 'sdr-1',
+        resource_id: INPUT.leadId,
+        title: expect.stringContaining('Lead perdido'),
+        body: expect.stringContaining('Deixou de responder'),
+      }),
     );
   });
 
-  it('último passo da cadência também pausa (não encerra)', async () => {
+  it('perda barrada pelas proteções: cadência fica encerrada e o aviso muda', async () => {
+    loss.markLeadLostOnCadenceEnd.mockResolvedValue({ lost: false, skipped: 'lead_status' });
+
+    await reportWhatsAppInvalid(INPUT);
+
+    expect(enrollmentUpdates()[0]?.payload).toMatchObject({ status: 'completed' });
+    expect(notif.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining('Cadência encerrada') }),
+    );
+  });
+
+  it('último passo da cadência também encerra', async () => {
     currentStepOrder = 2;
     steps = [
       { step_order: 1, channel: 'email' },
@@ -149,7 +183,8 @@ describe('reportWhatsAppInvalid', () => {
 
     await reportWhatsAppInvalid(INPUT);
 
-    expect(enrollmentUpdates()[0]?.payload).toEqual({ status: 'paused' });
+    expect(enrollmentUpdates()[0]?.payload).toMatchObject({ status: 'completed' });
+    expect(loss.markLeadLostOnCadenceEnd).toHaveBeenCalled();
   });
 
   it('input inválido não toca no banco', async () => {
