@@ -68,6 +68,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      _bkp_foodbase_meeting_date_20260917: {
+        Row: {
+          id: string | null;
+          kind: string | null;
+          row_data: Json | null;
+        };
+        Insert: {
+          id?: string | null;
+          kind?: string | null;
+          row_data?: Json | null;
+        };
+        Update: {
+          id?: string | null;
+          kind?: string | null;
+          row_data?: Json | null;
+        };
+        Relationships: [];
+      };
       _bkp_inbound_backlog_cleanup_20260818: {
         Row: {
           backed_up_at: string | null;
@@ -119,6 +137,51 @@ export type Database = {
           scheduled_start_at?: string | null;
           status?: Database['public']['Enums']['enrollment_status'] | null;
           updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_inbound_recovery_recreate_20260918: {
+        Row: {
+          applied: boolean | null;
+          dono_atual: string | null;
+          lead_id: string | null;
+          loss_reason_id: string | null;
+          lost_at: string | null;
+          org_id: string | null;
+          planned_at: string | null;
+          reason_name: string | null;
+          rn: number | null;
+          scheduled_start_at: string | null;
+          sdr_id: string | null;
+          sdr_nome: string | null;
+        };
+        Insert: {
+          applied?: boolean | null;
+          dono_atual?: string | null;
+          lead_id?: string | null;
+          loss_reason_id?: string | null;
+          lost_at?: string | null;
+          org_id?: string | null;
+          planned_at?: string | null;
+          reason_name?: string | null;
+          rn?: number | null;
+          scheduled_start_at?: string | null;
+          sdr_id?: string | null;
+          sdr_nome?: string | null;
+        };
+        Update: {
+          applied?: boolean | null;
+          dono_atual?: string | null;
+          lead_id?: string | null;
+          loss_reason_id?: string | null;
+          lost_at?: string | null;
+          org_id?: string | null;
+          planned_at?: string | null;
+          reason_name?: string | null;
+          rn?: number | null;
+          scheduled_start_at?: string | null;
+          sdr_id?: string | null;
+          sdr_nome?: string | null;
         };
         Relationships: [];
       };
@@ -860,6 +923,66 @@ export type Database = {
           new_assigned_to?: string | null;
           prev_assigned_to?: string | null;
           scheduled_start_at?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_wa_invalid_reopen_20260914: {
+        Row: {
+          backup_at: string | null;
+          cadence_id: string | null;
+          completed_at: string | null;
+          current_step: number | null;
+          enrolled_at: string | null;
+          enrolled_by: string | null;
+          id: string | null;
+          lead_id: string | null;
+          loss_notes: string | null;
+          loss_reason_id: string | null;
+          next_step_due: string | null;
+          org_id: string | null;
+          pending_assigned_to: string | null;
+          scheduled_start_at: string | null;
+          snooze_count: number | null;
+          status: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          backup_at?: string | null;
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          backup_at?: string | null;
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -3283,6 +3406,7 @@ export type Database = {
           loss_reason_id: string | null;
           lost_at: string | null;
           meeting_held_at: string | null;
+          meeting_no_show_at: string | null;
           meeting_scheduled_at: string | null;
           meeting_starts_at: string | null;
           nome_fantasia: string | null;
@@ -3340,6 +3464,7 @@ export type Database = {
           loss_reason_id?: string | null;
           lost_at?: string | null;
           meeting_held_at?: string | null;
+          meeting_no_show_at?: string | null;
           meeting_scheduled_at?: string | null;
           meeting_starts_at?: string | null;
           nome_fantasia?: string | null;
@@ -3397,6 +3522,7 @@ export type Database = {
           loss_reason_id?: string | null;
           lost_at?: string | null;
           meeting_held_at?: string | null;
+          meeting_no_show_at?: string | null;
           meeting_scheduled_at?: string | null;
           meeting_starts_at?: string | null;
           nome_fantasia?: string | null;
@@ -5421,6 +5547,17 @@ export type Database = {
       aplicar_reagendamento: {
         Args: { p_event_id: string; p_novo_inicio: string };
         Returns: Json;
+      };
+      atualizar_convite_reuniao: {
+        Args: {
+          p_calendar_id?: string;
+          p_duracao?: string;
+          p_event_id_antigo: string;
+          p_event_id_novo: string;
+          p_inicio: string;
+          p_lead_id: string;
+        };
+        Returns: string;
       };
       calculate_engagement_score: {
         Args: { p_lead_id: string };

@@ -361,9 +361,11 @@ export async function markLeadAsWon(
     }
 
     // Preserve the original win timestamps when the lead was already won.
+    // meeting_no_show_at sempre cai: se a reunião virou Ganho, ela aconteceu —
+    // um no-show anterior (SDR marcou, depois remarcou por fora) não vale mais.
     const wonStamps = wasAlreadyWon
-      ? {}
-      : { won_by: userId, won_at: nowIso, meeting_held_at: meetingHeldAt, qualified_at: nowIso };
+      ? { meeting_no_show_at: null }
+      : { won_by: userId, won_at: nowIso, meeting_held_at: meetingHeldAt, qualified_at: nowIso, meeting_no_show_at: null };
 
     const { error: leadError } = await from(supabase, 'leads')
       .update({

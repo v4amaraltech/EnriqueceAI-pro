@@ -83,8 +83,13 @@ export async function markMeetingNoShow(leadId: string): Promise<ActionResult<vo
     message: 'SDR registrou que a reunião não aconteceu (no-show)',
   });
 
-  // 2. Status: reabre se estava 'won'; sempre limpa meeting_held_at.
-  const updates: Record<string, unknown> = { meeting_held_at: null };
+  // 2. Status: reabre se estava 'won'; sempre limpa meeting_held_at e carimba
+  //    o no-show. O carimbo é o que o Sales Hub lê (via get_leads_for_v4sales) —
+  //    sem ele, lá o status era adivinhado por uma carência de 48h.
+  const updates: Record<string, unknown> = {
+    meeting_held_at: null,
+    meeting_no_show_at: new Date().toISOString(),
+  };
   if (wasWon) {
     updates.status = 'qualified';
     updates.won_at = null;
