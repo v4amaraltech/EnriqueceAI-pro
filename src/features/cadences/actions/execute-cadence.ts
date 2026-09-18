@@ -17,6 +17,7 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
+import { skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
@@ -258,6 +259,11 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
     console.warn(`[cadence-engine] scheduled enrollment=${scheduled.id} activated, lead=${scheduled.lead_id} reactivated`);
   }
+
+  // Pré-passo: destrava quem ficou parado num passo de WhatsApp de lead sem
+  // WhatsApp (a fila esconde esses passos, então o lead não aparecia pra
+  // ninguém). Só avança; sem passo de outro canal, fica como está.
+  await skipWhatsAppStepsForInvalidLeads(supabase);
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
