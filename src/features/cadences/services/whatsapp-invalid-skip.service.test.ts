@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const leadEvent = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
+const loss = vi.hoisted(() => ({ markLeadLostOnCadenceEnd: vi.fn() }));
 vi.mock('@/features/leads/actions/log-lead-event', () => leadEvent);
+vi.mock('./cadence-end-loss.service', () => loss);
 
 import {
+  classifyInvalidWhatsAppStep,
   nextNonWhatsAppStep,
   skipWhatsAppStepsForInvalidLeads,
   WHATSAPP_SCAN_LIMIT,
@@ -48,6 +51,21 @@ describe('nextNonWhatsAppStep', () => {
 
   it('passo fora da faixa (sobra de edição de cadência): não mexe', () => {
     expect(nextNonWhatsAppStep(RECOVERY_STEPS, 10)).toBeNull();
+  });
+});
+
+describe('classifyInvalidWhatsAppStep', () => {
+  it('passo de WhatsApp com outro canal adiante: avança', () => {
+    expect(classifyInvalidWhatsAppStep(RECOVERY_STEPS, 2)).toEqual({ action: 'advance', toStep: 3 });
+  });
+
+  it('cauda só de WhatsApp: fim de cadência', () => {
+    expect(classifyInvalidWhatsAppStep(RECOVERY_STEPS, 7)).toEqual({ action: 'end' });
+  });
+
+  it('passo atual não é WhatsApp, ou fora da faixa: nada a fazer', () => {
+    expect(classifyInvalidWhatsAppStep(RECOVERY_STEPS, 3)).toEqual({ action: 'none' });
+    expect(classifyInvalidWhatsAppStep(RECOVERY_STEPS, 99)).toEqual({ action: 'none' });
   });
 });
 
@@ -118,13 +136,14 @@ beforeEach(() => {
   ];
   stepRows = RECOVERY_STEPS.map((s) => ({ cadence_id: 'cad-1', ...s }));
   leadEvent.logLeadEvent.mockResolvedValue(undefined);
+  loss.markLeadLostOnCadenceEnd.mockResolvedValue({ lost: true, reasonName: 'Deixou de responder' });
 });
 
 describe('skipWhatsAppStepsForInvalidLeads', () => {
   it('avança o passo e registra na timeline', async () => {
     const result = await skipWhatsAppStepsForInvalidLeads(supabase);
 
-    expect(result).toEqual({ scanned: 1, advanced: 1 });
+    expect(result).toEqual({ scanned: 1, advanced: 1, ended: 0 });
     expect(captured[0]?.table).toBe('cadence_enrollments');
     expect(captured[0]?.payload).toEqual({ current_step: 3 });
     // trava otimista: só avança se o passo não mudou no meio do caminho
@@ -167,20 +186,56 @@ describe('skipWhatsAppStepsForInvalidLeads', () => {
     expect(captured).toHaveLength(WHATSAPP_SKIP_BATCH);
   });
 
-  it('sem passo de outro canal: não mexe (não pausa)', async () => {
+  it('cauda só de WhatsApp: encerra e chama a regra de Perdido', async () => {
     candidates = [{ id: 'enr-2', cadence_id: 'cad-1', lead_id: 'lead-2', current_step: 7, org_id: ORG }];
 
     const result = await skipWhatsAppStepsForInvalidLeads(supabase);
 
-    expect(result).toEqual({ scanned: 1, advanced: 0 });
-    expect(captured).toHaveLength(0);
-    expect(leadEvent.logLeadEvent).not.toHaveBeenCalled();
+    expect(result).toEqual({ scanned: 1, advanced: 0, ended: 1 });
+    expect(captured[0]?.payload).toMatchObject({ status: 'completed' });
+    // trava dupla: só encerra se continuar ativa no mesmo passo
+    expect(captured[0]?.filters).toContain('eq:status');
+    expect(captured[0]?.filters).toContain('eq:current_step');
+    expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({
+        event: 'cadence_completed',
+        message: expect.stringContaining('só restavam passos de WhatsApp'),
+        metadata: expect.objectContaining({ reason: 'whatsapp_invalid_tail', last_step: 7 }),
+      }),
+    );
+    expect(loss.markLeadLostOnCadenceEnd).toHaveBeenCalledWith({
+      orgId: ORG,
+      leadId: 'lead-2',
+      cadenceId: 'cad-1',
+      enrollmentId: 'enr-2',
+    });
+  });
+
+  it('encerra ANTES de chamar a regra de Perdido (senão ela se bloqueia)', async () => {
+    candidates = [{ id: 'enr-2', cadence_id: 'cad-1', lead_id: 'lead-2', current_step: 7, org_id: ORG }];
+
+    await skipWhatsAppStepsForInvalidLeads(supabase);
+
+    const encerrou = captured.findIndex((c) => c.payload.status === 'completed');
+    expect(encerrou).toBe(0);
+    expect(loss.markLeadLostOnCadenceEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('falha ao encerrar não chama a regra de Perdido', async () => {
+    candidates = [{ id: 'enr-2', cadence_id: 'cad-1', lead_id: 'lead-2', current_step: 7, org_id: ORG }];
+    updateError = { message: 'boom' };
+
+    const result = await skipWhatsAppStepsForInvalidLeads(supabase);
+
+    expect(result).toEqual({ scanned: 1, advanced: 0, ended: 0 });
+    expect(loss.markLeadLostOnCadenceEnd).not.toHaveBeenCalled();
   });
 
   it('passo atual não é WhatsApp: não mexe', async () => {
     candidates = [{ id: 'enr-3', cadence_id: 'cad-1', lead_id: 'lead-3', current_step: 5, org_id: ORG }];
 
-    expect(await skipWhatsAppStepsForInvalidLeads(supabase)).toEqual({ scanned: 1, advanced: 0 });
+    expect(await skipWhatsAppStepsForInvalidLeads(supabase)).toEqual({ scanned: 1, advanced: 0, ended: 0 });
     expect(captured).toHaveLength(0);
   });
 
@@ -189,17 +244,17 @@ describe('skipWhatsAppStepsForInvalidLeads', () => {
 
     const result = await skipWhatsAppStepsForInvalidLeads(supabase);
 
-    expect(result).toEqual({ scanned: 1, advanced: 0 });
+    expect(result).toEqual({ scanned: 1, advanced: 0, ended: 0 });
     expect(leadEvent.logLeadEvent).not.toHaveBeenCalled();
   });
 
   it('nenhum candidato: no-op', async () => {
     candidates = [];
-    expect(await skipWhatsAppStepsForInvalidLeads(supabase)).toEqual({ scanned: 0, advanced: 0 });
+    expect(await skipWhatsAppStepsForInvalidLeads(supabase)).toEqual({ scanned: 0, advanced: 0, ended: 0 });
   });
 
   it('erro inesperado é engolido (motor segue)', async () => {
     const quebrado = { from: () => { throw new Error('sem conexão'); } } as never;
-    expect(await skipWhatsAppStepsForInvalidLeads(quebrado)).toEqual({ scanned: 0, advanced: 0 });
+    expect(await skipWhatsAppStepsForInvalidLeads(quebrado)).toEqual({ scanned: 0, advanced: 0, ended: 0 });
   });
 });

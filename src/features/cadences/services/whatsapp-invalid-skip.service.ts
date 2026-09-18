@@ -4,6 +4,8 @@ import { from } from '@/lib/supabase/from';
 
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
+import { markLeadLostOnCadenceEnd } from './cadence-end-loss.service';
+
 /**
  * Destrava inscrições paradas num passo de WhatsApp de lead sem WhatsApp.
  *
@@ -15,9 +17,13 @@ import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
  * em 18/set eram 235 inscrições ativas da Recovery nessa situação, 105 delas
  * com passo de outro canal esperando.
  *
- * Roda como pré-passo do motor. Só AVANÇA: quando não sobra passo de outro
- * canal a inscrição fica como está (pausar em massa criaria uma pilha
- * invisível — decisão do Vini em 18/set; tratar esses casos é outra story).
+ * Roda como pré-passo do motor, com dois desfechos:
+ * - existe passo posterior de outro canal → AVANÇA para ele;
+ * - a cauda da cadência é só WhatsApp → é fim de cadência: encerra e passa
+ *   pela regra de Perdido (`markLeadLostOnCadenceEnd`), que dá "Deixou de
+ *   responder" na Recovery e "Nunca respondeu" nas outras. Em 18/set eram 130
+ *   inscrições nesse caso, todas no último passo da Recovery e todas COM
+ *   telefone — daí o motivo ser não-resposta, não "Contatos inválidos".
  *
  * Tolerante a erro: loga e segue, nunca estoura o motor.
  */
@@ -57,6 +63,28 @@ export function nextNonWhatsAppStep(
   return next?.step_order ?? null;
 }
 
+export type InvalidWhatsAppAction =
+  | { action: 'none' }
+  | { action: 'advance'; toStep: number }
+  | { action: 'end' };
+
+/**
+ * O que fazer com uma inscrição de lead sem WhatsApp parada no passo atual.
+ * `none` = passo atual não é WhatsApp (ou `current_step` fora da faixa, sobra
+ * de edição de cadência); `advance` = há passo de outro canal adiante;
+ * `end` = só restam passos de WhatsApp (cauda) → fim de cadência.
+ */
+export function classifyInvalidWhatsAppStep(
+  steps: CadenceStepChannel[],
+  currentStep: number,
+): InvalidWhatsAppAction {
+  const current = steps.find((s) => s.step_order === currentStep);
+  if (!current || current.channel !== 'whatsapp') return { action: 'none' };
+
+  const target = nextNonWhatsAppStep(steps, currentStep);
+  return target === null ? { action: 'end' } : { action: 'advance', toStep: target };
+}
+
 interface Candidate {
   id: string;
   cadence_id: string;
@@ -67,8 +95,8 @@ interface Candidate {
 
 export async function skipWhatsAppStepsForInvalidLeads(
   supabase: SupabaseClient,
-): Promise<{ scanned: number; advanced: number }> {
-  const none = { scanned: 0, advanced: 0 };
+): Promise<{ scanned: number; advanced: number; ended: number }> {
+  const none = { scanned: 0, advanced: 0, ended: 0 };
   try {
     const { data: candidates } = (await from(supabase, 'cadence_enrollments')
       .select('id, cadence_id, lead_id, current_step, org_id, lead:leads!inner(whatsapp_invalid_at)')
@@ -94,21 +122,53 @@ export async function skipWhatsAppStepsForInvalidLeads(
     }
 
     let advanced = 0;
+    let ended = 0;
     for (const enrollment of candidates) {
-      if (advanced >= WHATSAPP_SKIP_BATCH) break;
-      const target = nextNonWhatsAppStep(
+      if (advanced + ended >= WHATSAPP_SKIP_BATCH) break;
+      const decision = classifyInvalidWhatsAppStep(
         stepsByCadence.get(enrollment.cadence_id) ?? [],
         enrollment.current_step,
       );
-      if (target === null) continue;
+      if (decision.action === 'none') continue;
 
-      // O trigger `calculate_next_step_due` recalcula o vencimento no UPDATE.
-      const { error } = await from(supabase, 'cadence_enrollments')
-        .update({ current_step: target } as Record<string, unknown>)
+      if (decision.action === 'advance') {
+        // O trigger `calculate_next_step_due` recalcula o vencimento no UPDATE.
+        const { error } = await from(supabase, 'cadence_enrollments')
+          .update({ current_step: decision.toStep } as Record<string, unknown>)
+          .eq('id', enrollment.id)
+          .eq('current_step', enrollment.current_step);
+        if (error) {
+          console.error(`[wa-skip] enrollment=${enrollment.id} falha ao avançar:`, error.message);
+          continue;
+        }
+
+        await logLeadEvent(supabase, {
+          orgId: enrollment.org_id,
+          leadId: enrollment.lead_id,
+          userId: null,
+          event: 'step_skipped_whatsapp_invalid',
+          message: `Passo ${enrollment.current_step} (WhatsApp) pulado automaticamente — lead sem WhatsApp; cadência seguiu para o passo ${decision.toStep}`,
+          metadata: {
+            cadence_id: enrollment.cadence_id,
+            enrollment_id: enrollment.id,
+            from_step: enrollment.current_step,
+            to_step: decision.toStep,
+          },
+        });
+        advanced++;
+        continue;
+      }
+
+      // Cauda só de WhatsApp = fim de cadência. Encerra ANTES de chamar a
+      // regra de Perdido: ela recusa lead com cadência aberta e, com a
+      // inscrição ainda ativa, bloquearia a si mesma.
+      const { error: endError } = await from(supabase, 'cadence_enrollments')
+        .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
         .eq('id', enrollment.id)
+        .eq('status', 'active')
         .eq('current_step', enrollment.current_step);
-      if (error) {
-        console.error(`[wa-skip] enrollment=${enrollment.id} falha ao avançar:`, error.message);
+      if (endError) {
+        console.error(`[wa-skip] enrollment=${enrollment.id} falha ao encerrar:`, endError.message);
         continue;
       }
 
@@ -116,22 +176,29 @@ export async function skipWhatsAppStepsForInvalidLeads(
         orgId: enrollment.org_id,
         leadId: enrollment.lead_id,
         userId: null,
-        event: 'step_skipped_whatsapp_invalid',
-        message: `Passo ${enrollment.current_step} (WhatsApp) pulado automaticamente — lead sem WhatsApp; cadência seguiu para o passo ${target}`,
+        event: 'cadence_completed',
+        message: 'Cadência concluída — só restavam passos de WhatsApp e o lead está sem WhatsApp',
         metadata: {
           cadence_id: enrollment.cadence_id,
           enrollment_id: enrollment.id,
-          from_step: enrollment.current_step,
-          to_step: target,
+          reason: 'whatsapp_invalid_tail',
+          last_step: enrollment.current_step,
         },
       });
-      advanced++;
+
+      await markLeadLostOnCadenceEnd({
+        orgId: enrollment.org_id,
+        leadId: enrollment.lead_id,
+        cadenceId: enrollment.cadence_id,
+        enrollmentId: enrollment.id,
+      });
+      ended++;
     }
 
-    if (advanced > 0) {
-      console.warn(`[wa-skip] ${advanced} inscrição(ões) avançada(s) por lead sem WhatsApp`);
+    if (advanced > 0 || ended > 0) {
+      console.warn(`[wa-skip] lead sem WhatsApp: ${advanced} avançada(s), ${ended} encerrada(s) por cauda de WhatsApp`);
     }
-    return { scanned: candidates.length, advanced };
+    return { scanned: candidates.length, advanced, ended };
   } catch (err) {
     console.error('[wa-skip] falha inesperada (motor segue):', err);
     return none;
