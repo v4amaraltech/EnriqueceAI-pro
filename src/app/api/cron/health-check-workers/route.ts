@@ -4,6 +4,11 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+import {
+  findZeroFetchCandidates,
+  ZERO_FETCH_MIN_DIALER_CALLS,
+  type ReconcileRunState,
+} from '@/features/integrations/services/api4com-reconcile-health';
 
 export const maxDuration = 60;
 
@@ -24,6 +29,89 @@ const CRITICAL_WORKERS: CriticalWorker[] = [
 ];
 
 const ALERT_COOLDOWN_HOURS = 24;
+
+const RECONCILE_JOB = 'reconcile-api4com-calls';
+const ZERO_FETCH_RESOURCE_ID = `${RECONCILE_JOB}:zero-fetch`;
+
+type SupabaseService = ReturnType<typeof createServiceRoleClient>;
+
+async function hasRecentAlert(
+  supabase: SupabaseService,
+  orgId: string,
+  resourceId: string,
+  cooldownCutoff: string,
+): Promise<boolean> {
+  const { data } = (await from(supabase, 'notifications')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('type', 'integration_error')
+    .eq('resource_type', 'worker')
+    .eq('resource_id', resourceId)
+    .gte('created_at', cooldownCutoff)
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+  return data !== null;
+}
+
+function formatBrtTime(iso: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+}
+
+/**
+ * A reconcile run can "succeed" with `fetched: 0` while the dialer kept
+ * calling — that hid a 4-month outage (2026-05-19 → 2026-09-10). In business
+ * hours, alert the org's managers when the last run pulled nothing for an
+ * org that has dialer calls in the same window. See api4com-reconcile-health.ts.
+ */
+async function checkReconcileZeroFetch(supabase: SupabaseService, cooldownCutoff: string) {
+  const { data: state } = (await from(supabase, 'worker_run_state' as never)
+    .select('last_run_at, metadata')
+    .eq('job_name', RECONCILE_JOB)
+    .maybeSingle()) as { data: ReconcileRunState | null };
+
+  const results: Array<{ org_id: string; dialer_calls: number; suspect: boolean; alerted: boolean }> = [];
+
+  for (const candidate of findZeroFetchCandidates(state)) {
+    const { count } = (await from(supabase, 'calls')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', candidate.orgId)
+      .like('metadata->>gateway', 'flux-%')
+      .gte('started_at', candidate.evidenceSince)
+      .lte('started_at', candidate.evidenceUntil)) as { count: number | null };
+
+    const dialerCalls = count ?? 0;
+    const suspect = dialerCalls >= ZERO_FETCH_MIN_DIALER_CALLS;
+    let alerted = false;
+
+    if (suspect && !(await hasRecentAlert(supabase, candidate.orgId, ZERO_FETCH_RESOURCE_ID, cooldownCutoff))) {
+      await createNotificationsForOrgMembers({
+        orgId: candidate.orgId,
+        type: 'integration_error',
+        title: 'Conferência de ligações da API4COM sem retorno',
+        body: `A conferência das ${formatBrtTime(state!.last_run_at!)} não trouxe nenhuma ligação da API4COM, mas o discador registrou ${dialerCalls} ligações no período. As métricas de ligação podem ficar incompletas até isso ser verificado.`,
+        resourceType: 'worker',
+        resourceId: ZERO_FETCH_RESOURCE_ID,
+        metadata: {
+          job_name: RECONCILE_JOB,
+          last_run_at: state?.last_run_at ?? null,
+          dialer_calls: dialerCalls,
+          evidence_since: candidate.evidenceSince,
+          evidence_until: candidate.evidenceUntil,
+        },
+        roleFilter: 'manager',
+      }).catch((err: unknown) => console.error('[health-check] zero-fetch notification failed:', err));
+      alerted = true;
+    }
+
+    results.push({ org_id: candidate.orgId, dialer_calls: dialerCalls, suspect, alerted });
+  }
+
+  return results;
+}
 
 /**
  * Detects background workers that haven't completed successfully in a while.
@@ -123,7 +211,9 @@ async function handle(request: Request) {
     });
   }
 
-  return NextResponse.json({ checked_at: now.toISOString(), summary });
+  const zeroFetch = await checkReconcileZeroFetch(supabase, cooldownCutoff);
+
+  return NextResponse.json({ checked_at: now.toISOString(), summary, zero_fetch: zeroFetch });
 }
 
 export const POST = handle;
