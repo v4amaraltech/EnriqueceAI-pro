@@ -285,8 +285,10 @@ export async function POST(request: Request) {
         .eq('org_id', feedbackReq.org_id)
         .maybeSingle()) as { data: { meeting_starts_at: string | null } | null };
       const heldAt = resolveMeetingHeldAt(heldLead?.meeting_starts_at);
+      // Realizada apaga qualquer no-show anterior (SDR marcou no-show, closer
+      // remarcou por fora e a reunião acabou acontecendo).
       await from(supabase, 'leads')
-        .update({ meeting_held_at: heldAt } as Record<string, unknown>)
+        .update({ meeting_held_at: heldAt, meeting_no_show_at: null } as Record<string, unknown>)
         .eq('id', feedbackReq.lead_id)
         .eq('org_id', feedbackReq.org_id)
         .is('meeting_held_at', null);
@@ -318,6 +320,16 @@ export async function POST(request: Request) {
         .eq('id', feedbackReq.lead_id)
         .eq('org_id', feedbackReq.org_id)
         .eq('status', 'won');
+
+      // Carimbo canônico do no-show — é o que o Sales Hub lê pra exibir o status
+      // sem adivinhar por tempo. 'rescheduled' limpa: a reunião voltou pro jogo.
+      // Fora do update acima porque aquele só alcança leads que estavam 'won'.
+      await from(supabase, 'leads')
+        .update({
+          meeting_no_show_at: result === 'no_show' ? new Date().toISOString() : null,
+        } as Record<string, unknown>)
+        .eq('id', feedbackReq.lead_id)
+        .eq('org_id', feedbackReq.org_id);
 
       // Cancela a tarefa de "feedback da reunião" (e qualquer retorno pendente)
       // criada no won-time: a reunião não aconteceu, então esse feedback perde o
