@@ -80,7 +80,10 @@ Todas autorizadas pelo Vini no chat. ⚠️ O restore foi "rodado" 2x pelo Vini 
 
 1. ⏳ **Conferência 11/set 9h BRT** (scheduled task `conferencia-webhook-api4com-julio`, só leitura; adiantada de 10h para 9h e com checagem do worker de hora em hora). O app do Claude precisa estar aberto.
 2. **Dropar** `_bkp_julio_calls_reconcile_20260910` depois de ~10/out.
-3. **Alerta para `fetched = 0` em horário comercial** — hoje o worker grava `success` mesmo sem trazer nada (foi o que escondeu o bug por 4 meses). Não implementado.
+3. ✅ **Alerta para `fetched = 0` em horário comercial** — **FEITO** em 18/09/2026, [PR #436](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/436) (squash `91e24e9b`), no ar. Em horário comercial, org cuja última rodada voltou com `fetched: 0` e sem erros vira alerta para os gestores quando o discador registrou ≥ 5 ligações na mesma janela; folga de 10 min no fim da janela e silêncio de 24 h entre avisos. Código em `features/integrations/services/api4com-reconcile-health.ts` + `app/api/cron/health-check-workers/route.ts`.
+   ⭐ O código já existia como alteração **não commitada** num worktree local, 46 commits atrás da main e sem PR — foi achado ao limpar worktrees em 18/09 e resgatado.
+   ⚠️ Limitação: a conferência roda de hora em hora e o health check de 2 em 2, então só a **última** rodada é examinada. Pane contínua é pega; falha isolada de 1 h pode passar.
+   ⭐ De quebra, a suspeita registrada aqui e em outras sessões de que o `gateway` do Julio Cesar divergia de `flux-{orgId}` **estava errada**: 990 das 1.042 ligações dele em 7 dias batem com o padrão.
 4. **Lead nas ligações inseridas pelo reconcile** — ficam sem `lead_id` (193 no Julio). Avaliar usar `findLeadByPhoneService` como o webhook faz.
 5. `CRON_SECRET` do `.env.local` está desatualizado (401 em prod); chamadas a workers em prod foram feitas com a service role.
 
