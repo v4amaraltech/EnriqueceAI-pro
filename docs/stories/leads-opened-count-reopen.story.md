@@ -1,11 +1,12 @@
 # Story: "Lead aberto" passa a contar reabertura de lead
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-18 | @devops (Gage) | Ready for Review → **Done**. PR #433 mergeado pelo Vini (squash `c4b16449`, 13:39 UTC) e ✅ **no ar** (`/api/version` = `c4b1644`). CI da main verde nos dois workflows (CI + Integração). Números conferidos em prod após o deploy (Giovani 295 em setembro). Worktree removido. |
 | 2026-09-18 | @dev (Dex) | Implementado. Migrations aplicadas em prod (Enriquece) + re-sync do Sales Hub. typecheck ✅ lint ✅ 2145 testes ✅ (+15 de integração) build ✅. Nada commitado (regra git manual). |
 | 2026-09-18 | Vini + Claude | Story criada a partir da reclamação do Giovani. Decisões do Vini: regra = reinscrição em cadência; aplicar nos 2 projetos; histórico recalculado. |
 
@@ -159,6 +160,7 @@ Ismael 22,4% → 21,5%. Não é piora de performance, é mudança de base.
 
 ## Pendências
 
-- [ ] Commit / PR (regra git manual — aguarda pedido do Vini)
-- [ ] Avisar o time de SDR da mudança de regra e da queda do Hit Rate
-- [ ] Conferir se o fluxo n8n do sync mensal continua batendo no mês seguinte
+- [x] Commit / PR — **PR #433 mergeado e no ar** (`c4b16449`)
+- [ ] Avisar o time de SDR da mudança de regra e da queda do Hit Rate — texto do
+      e-mail pronto, rascunho **não criado** no Gmail (conector desautorizado)
+- [ ] Conferir se o fluxo n8n do sync mensal continua batendo no fechamento de outubro
