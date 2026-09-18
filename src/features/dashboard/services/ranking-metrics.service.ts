@@ -425,7 +425,7 @@ function buildRateRanking(
 }
 
 /**
- * Card 4: Leads Abertos — first human-channel touch per lead, attributed to
+ * Card 4: Leads Abertos — lead opened or REOPENED, attributed to
  * the SDR who did it. Includes a daily cumulative breakdown for the chart.
  */
 export async function fetchLeadsOpenedRanking(
@@ -443,9 +443,10 @@ export async function fetchLeadsOpenedRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // RPC returns one row per SDR with count of leads whose FIRST human-channel
-  // interaction falls in [start, end). See migration
-  // 20260522091423_goals_leads_opened_target_and_rpc.sql.
+  // RPC returns one row per SDR with the count of OPENINGS in [start, end): a
+  // lead's first human-channel touch, plus the first touch after each new
+  // cadence enrollment (a reopening). See migration
+  // 20260918121458_leads_opened_count_cadence_reopen.sql.
   const { data: rows } = await (supabase.rpc as any)('count_leads_opened_by_sdr', {
     p_org_id: orgId,
     p_start: start,
@@ -494,7 +495,7 @@ export async function fetchLeadsOpenedRanking(
 }
 
 /**
- * Per-day cumulative count of leads opened (first human touch). Mirrors the
+ * Per-day cumulative count of openings (first touch + reopenings). Mirrors the
  * RPC's window filter so the chart matches the ranking total exactly.
  */
 async function fetchLeadsOpenedDaily(
