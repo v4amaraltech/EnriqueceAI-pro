@@ -20,6 +20,9 @@ interface SendEmailParams {
   inReplyToMessageId?: string;
   trackOpens?: boolean;
   trackClicks?: boolean;
+  /** BDR-3: Message-ID gerado ANTES do envio pelo chamador (intenção persistente),
+   *  para conciliar por rfc822msgid quando a resposta do Gmail se perde. */
+  messageId?: string;
   /** Lead id — when set, the message gets a List-Unsubscribe header + footer link
    *  (M9). The unsubscribe token is derived from `leadId` + `to`. */
   leadId?: string;
@@ -33,6 +36,10 @@ interface SendEmailResult {
    *  interaction so future replies can quote it via inReplyToMessageId. */
   rfcMessageId?: string;
   error?: string;
+  /** BDR-3: HTTP da resposta do Gmail quando houve resposta (classificação por código, não por classe). */
+  httpStatus?: number | null;
+  /** BDR-3: estágio em que falhou — 'response' (Gmail respondeu), 'request' (antes de enviar), 'network' (sem resposta). */
+  stage?: 'request' | 'response' | 'network' | null;
 }
 
 export interface GmailConnection {
@@ -336,7 +343,7 @@ export class EmailService {
 
     // Build raw email — include a stable Message-ID + In-Reply-To/References
     // so that non-Gmail recipients see replies as a continuing thread.
-    const rfcMessageId = generateMessageId(connection.email_address);
+    const rfcMessageId = params.messageId ?? generateMessageId(connection.email_address);
     const raw = buildRawEmail(connection.email_address, params.to, params.subject, html, {
       messageId: rfcMessageId,
       inReplyTo: params.inReplyToMessageId,
@@ -363,6 +370,8 @@ export class EmailService {
       return {
         success: false,
         error: errorBody?.error?.message ?? `Gmail API error: ${response.status}`,
+        httpStatus: response.status,
+        stage: 'response',
       };
     }
 

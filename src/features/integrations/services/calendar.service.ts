@@ -14,7 +14,7 @@ function getGcalClientSecret() {
   return process.env.GCAL_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET ?? '';
 }
 
-interface CalendarConnectionTokens {
+export interface CalendarConnectionTokens {
   id: string;
   access_token_encrypted: string;
   refresh_token_encrypted: string;
@@ -48,6 +48,18 @@ export interface CreateEventInput {
   attendeeEmails?: string[];
   generateMeetLink?: boolean;
   closerId?: string;
+  /** BDR-4: id determinístico fornecido pelo cliente (idempotência). 409 = já existe → conferir. */
+  eventId?: string;
+  /** BDR-4: propriedades privadas (ex.: meeting_request_id) para conferir pertencimento. */
+  extendedProperties?: Record<string, string>;
+}
+
+/** BDR-4: o Google já tem um evento com este id — quem chamou precisa conferir se é o mesmo. */
+export class CalendarConflictError extends Error {
+  constructor(public readonly eventId: string) {
+    super(`Já existe um evento com o id ${eventId}`);
+    this.name = 'CalendarConflict';
+  }
 }
 
 export interface CalendarEvent {
@@ -271,6 +283,9 @@ export async function createCalendarEvent(
     };
   }
 
+  if (input.eventId) event.id = input.eventId;
+  if (input.extendedProperties) event.extendedProperties = { private: input.extendedProperties };
+
   const params = input.generateMeetLink ? '?conferenceDataVersion=1&sendUpdates=all' : '?sendUpdates=all';
 
   const response = await fetch(
@@ -287,6 +302,7 @@ export async function createCalendarEvent(
   );
 
   if (!response.ok) {
+    if (response.status === 409 && input.eventId) throw new CalendarConflictError(input.eventId);
     const errorText = await response.text();
     throw new Error(`Erro ao criar evento: ${errorText}`);
   }
@@ -423,4 +439,58 @@ export async function checkFreeBusy(
   const calendarBusy = data.calendars[connection.calendar_email];
 
   return calendarBusy?.busy ?? [];
+}
+
+// ─── BDR-4 ───────────────────────────────────────────────────────────────────
+
+export interface CalendarEventDetail extends CalendarEvent {
+  status: string;
+  attendees: string[];
+  extendedProperties: Record<string, string>;
+}
+
+/** Lê um evento (null em 404/410). Usado para conferir 409 e para conciliar alterações externas. */
+export async function getCalendarEvent(
+  connection: CalendarConnectionTokens,
+  eventId: string,
+): Promise<CalendarEventDetail | null> {
+  const accessToken = await ensureValidToken(connection);
+  const response = await fetch(`${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+    signal: AbortSignal.timeout(10_000),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.status === 404 || response.status === 410) return null;
+  if (!response.ok) throw new Error(`Erro ao ler evento: ${await response.text()}`);
+  const ev = (await response.json()) as GCalEvent & {
+    attendees?: Array<{ email?: string }>;
+    extendedProperties?: { private?: Record<string, string> };
+    start: { dateTime?: string; date?: string };
+    end: { dateTime?: string; date?: string };
+  };
+  return {
+    id: ev.id,
+    htmlLink: ev.htmlLink,
+    meetLink: ev.hangoutLink ?? null,
+    summary: ev.summary,
+    startTime: ev.start.dateTime ?? ev.start.date ?? '',
+    endTime: ev.end.dateTime ?? ev.end.date ?? '',
+    status: ev.status,
+    attendees: (ev.attendees ?? []).map((a) => (a.email ?? '').toLowerCase()).filter(Boolean),
+    extendedProperties: ev.extendedProperties?.private ?? {},
+  };
+}
+
+/** Conexão do closer com um client já criado (service role em crons/rotas de API). */
+export async function getCalendarConnectionWith(
+  supabase: import('@supabase/supabase-js').SupabaseClient,
+  userId: string,
+  orgId: string,
+): Promise<CalendarConnectionTokens | null> {
+  const { data } = (await from(supabase, 'calendar_connections')
+    .select('id, access_token_encrypted, refresh_token_encrypted, token_expires_at, calendar_email')
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .in('status', ['connected', 'error'])
+    .maybeSingle()) as { data: CalendarConnectionTokens | null };
+  return data;
 }
