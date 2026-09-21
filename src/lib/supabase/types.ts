@@ -32,39 +32,33 @@ export type Database = {
         };
         Relationships: [];
       };
-      _bkp_cadence_limbo_triage_20260812: {
+      _bkp_fn_get_sdr_leads_abertos_pre_reopen_20260918: {
         Row: {
-          batch: string | null;
-          bucket: string | null;
-          cadence_id: string | null;
-          enrollment_id: string | null;
-          kind: string | null;
-          lead_id: string | null;
-          old_completed_at: string | null;
-          old_status: string | null;
-          snapshot_at: string | null;
+          created_at: string | null;
+          definition_before: string | null;
+          expires_at: string | null;
+          fn: string | null;
+          nota: string | null;
+          output_ago_2026_before: Json | null;
+          output_set_2026_before: Json | null;
         };
         Insert: {
-          batch?: string | null;
-          bucket?: string | null;
-          cadence_id?: string | null;
-          enrollment_id?: string | null;
-          kind?: string | null;
-          lead_id?: string | null;
-          old_completed_at?: string | null;
-          old_status?: string | null;
-          snapshot_at?: string | null;
+          created_at?: string | null;
+          definition_before?: string | null;
+          expires_at?: string | null;
+          fn?: string | null;
+          nota?: string | null;
+          output_ago_2026_before?: Json | null;
+          output_set_2026_before?: Json | null;
         };
         Update: {
-          batch?: string | null;
-          bucket?: string | null;
-          cadence_id?: string | null;
-          enrollment_id?: string | null;
-          kind?: string | null;
-          lead_id?: string | null;
-          old_completed_at?: string | null;
-          old_status?: string | null;
-          snapshot_at?: string | null;
+          created_at?: string | null;
+          definition_before?: string | null;
+          expires_at?: string | null;
+          fn?: string | null;
+          nota?: string | null;
+          output_ago_2026_before?: Json | null;
+          output_set_2026_before?: Json | null;
         };
         Relationships: [];
       };
@@ -83,60 +77,6 @@ export type Database = {
           id?: string | null;
           kind?: string | null;
           row_data?: Json | null;
-        };
-        Relationships: [];
-      };
-      _bkp_inbound_backlog_cleanup_20260818: {
-        Row: {
-          backed_up_at: string | null;
-          cadence_id: string | null;
-          completed_at: string | null;
-          current_step: number | null;
-          enrolled_at: string | null;
-          enrolled_by: string | null;
-          id: string | null;
-          lead_id: string | null;
-          loss_notes: string | null;
-          loss_reason_id: string | null;
-          next_step_due: string | null;
-          org_id: string | null;
-          scheduled_start_at: string | null;
-          status: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          backed_up_at?: string | null;
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          backed_up_at?: string | null;
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -221,57 +161,6 @@ export type Database = {
           reason_name?: string | null;
           rn?: number | null;
           scheduled_start_at?: string | null;
-        };
-        Relationships: [];
-      };
-      _bkp_inbound20_migration_20260818: {
-        Row: {
-          cadence_id: string | null;
-          completed_at: string | null;
-          current_step: number | null;
-          enrolled_at: string | null;
-          enrolled_by: string | null;
-          id: string | null;
-          lead_id: string | null;
-          loss_notes: string | null;
-          loss_reason_id: string | null;
-          next_step_due: string | null;
-          org_id: string | null;
-          scheduled_start_at: string | null;
-          status: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -398,39 +287,24 @@ export type Database = {
         };
         Relationships: [];
       };
-      _bkp_lead_contacts_backfill_allchannels_20260813: {
+      _bkp_leads_opened_pre_reopen_20260918: {
         Row: {
-          contact_id: string;
-          inserted_at: string;
-          lead_id: string;
+          capturado_em: string | null;
+          cnt: number | null;
+          mes: string | null;
+          performer_id: string | null;
         };
         Insert: {
-          contact_id: string;
-          inserted_at?: string;
-          lead_id: string;
+          capturado_em?: string | null;
+          cnt?: number | null;
+          mes?: string | null;
+          performer_id?: string | null;
         };
         Update: {
-          contact_id?: string;
-          inserted_at?: string;
-          lead_id?: string;
-        };
-        Relationships: [];
-      };
-      _bkp_lead_contacts_inbound_backfill_20260813: {
-        Row: {
-          contact_id: string;
-          inserted_at: string;
-          lead_id: string;
-        };
-        Insert: {
-          contact_id: string;
-          inserted_at?: string;
-          lead_id: string;
-        };
-        Update: {
-          contact_id?: string;
-          inserted_at?: string;
-          lead_id?: string;
+          capturado_em?: string | null;
+          cnt?: number | null;
+          mes?: string | null;
+          performer_id?: string | null;
         };
         Relationships: [];
       };
@@ -524,180 +398,6 @@ export type Database = {
           performed_by?: string | null;
           step_id?: string | null;
           type?: Database['public']['Enums']['interaction_type'] | null;
-        };
-        Relationships: [];
-      };
-      _bkp_phones_str_contacts_20260813: {
-        Row: {
-          emails: Json | null;
-          id: string | null;
-          lead_id: string | null;
-          phones: Json | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          emails?: Json | null;
-          id?: string | null;
-          lead_id?: string | null;
-          phones?: Json | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          emails?: Json | null;
-          id?: string | null;
-          lead_id?: string | null;
-          phones?: Json | null;
-          updated_at?: string | null;
-        };
-        Relationships: [];
-      };
-      _bkp_phones_str_leads_20260813: {
-        Row: {
-          email: string | null;
-          email_bounced_at: string | null;
-          emails: Json | null;
-          id: string | null;
-          phones: Json | null;
-          telefone: string | null;
-          updated_at: string | null;
-          whatsapp_invalid_at: string | null;
-        };
-        Insert: {
-          email?: string | null;
-          email_bounced_at?: string | null;
-          emails?: Json | null;
-          id?: string | null;
-          phones?: Json | null;
-          telefone?: string | null;
-          updated_at?: string | null;
-          whatsapp_invalid_at?: string | null;
-        };
-        Update: {
-          email?: string | null;
-          email_bounced_at?: string | null;
-          emails?: Json | null;
-          id?: string | null;
-          phones?: Json | null;
-          telefone?: string | null;
-          updated_at?: string | null;
-          whatsapp_invalid_at?: string | null;
-        };
-        Relationships: [];
-      };
-      _bkp_recovery_cut_enrollments_20260818: {
-        Row: {
-          cadence_id: string | null;
-          completed_at: string | null;
-          current_step: number | null;
-          enrolled_at: string | null;
-          enrolled_by: string | null;
-          id: string | null;
-          lead_id: string | null;
-          loss_notes: string | null;
-          loss_reason_id: string | null;
-          next_step_due: string | null;
-          org_id: string | null;
-          scheduled_start_at: string | null;
-          status: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          cadence_id?: string | null;
-          completed_at?: string | null;
-          current_step?: number | null;
-          enrolled_at?: string | null;
-          enrolled_by?: string | null;
-          id?: string | null;
-          lead_id?: string | null;
-          loss_notes?: string | null;
-          loss_reason_id?: string | null;
-          next_step_due?: string | null;
-          org_id?: string | null;
-          scheduled_start_at?: string | null;
-          status?: Database['public']['Enums']['enrollment_status'] | null;
-          updated_at?: string | null;
-        };
-        Relationships: [];
-      };
-      _bkp_recovery_cut_steps_20260818: {
-        Row: {
-          ab_distribution: number | null;
-          ab_enabled: boolean | null;
-          ab_enabled_at: string | null;
-          ab_winner_at: string | null;
-          ab_winner_variant: string | null;
-          activity_name: string | null;
-          ai_personalization: boolean | null;
-          cadence_id: string | null;
-          call_provider: string | null;
-          channel: Database['public']['Enums']['channel_type'] | null;
-          created_at: string | null;
-          delay_days: number | null;
-          delay_hours: number | null;
-          id: string | null;
-          instructions: string | null;
-          reply_type: string | null;
-          step_order: number | null;
-          template_id: string | null;
-          template_id_b: string | null;
-        };
-        Insert: {
-          ab_distribution?: number | null;
-          ab_enabled?: boolean | null;
-          ab_enabled_at?: string | null;
-          ab_winner_at?: string | null;
-          ab_winner_variant?: string | null;
-          activity_name?: string | null;
-          ai_personalization?: boolean | null;
-          cadence_id?: string | null;
-          call_provider?: string | null;
-          channel?: Database['public']['Enums']['channel_type'] | null;
-          created_at?: string | null;
-          delay_days?: number | null;
-          delay_hours?: number | null;
-          id?: string | null;
-          instructions?: string | null;
-          reply_type?: string | null;
-          step_order?: number | null;
-          template_id?: string | null;
-          template_id_b?: string | null;
-        };
-        Update: {
-          ab_distribution?: number | null;
-          ab_enabled?: boolean | null;
-          ab_enabled_at?: string | null;
-          ab_winner_at?: string | null;
-          ab_winner_variant?: string | null;
-          activity_name?: string | null;
-          ai_personalization?: boolean | null;
-          cadence_id?: string | null;
-          call_provider?: string | null;
-          channel?: Database['public']['Enums']['channel_type'] | null;
-          created_at?: string | null;
-          delay_days?: number | null;
-          delay_hours?: number | null;
-          id?: string | null;
-          instructions?: string | null;
-          reply_type?: string | null;
-          step_order?: number | null;
-          template_id?: string | null;
-          template_id_b?: string | null;
         };
         Relationships: [];
       };
@@ -1741,6 +1441,51 @@ export type Database = {
           },
         ];
       };
+      calendar_slots: {
+        Row: {
+          closer_id: string;
+          created_at: string;
+          id: string;
+          meeting_request_id: string;
+          org_id: string;
+          slot_end: string;
+          slot_start: string;
+        };
+        Insert: {
+          closer_id: string;
+          created_at?: string;
+          id?: string;
+          meeting_request_id: string;
+          org_id: string;
+          slot_end: string;
+          slot_start: string;
+        };
+        Update: {
+          closer_id?: string;
+          created_at?: string;
+          id?: string;
+          meeting_request_id?: string;
+          org_id?: string;
+          slot_end?: string;
+          slot_start?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'calendar_slots_meeting_request_id_fkey';
+            columns: ['meeting_request_id'];
+            isOneToOne: false;
+            referencedRelation: 'meeting_requests';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'calendar_slots_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       call_daily_targets: {
         Row: {
           created_at: string;
@@ -2172,6 +1917,7 @@ export type Database = {
           ligacao_enviada_at: string | null;
           ligacao_resultado: string | null;
           ligacao_tentativas: number;
+          link_enviado_at: string | null;
           link_reuniao: string | null;
           nome: string | null;
           reagendou_at: string | null;
@@ -2184,6 +1930,7 @@ export type Database = {
           ultimo_erro: string | null;
           wamid_d1: string | null;
           wamid_dia: string | null;
+          wamid_link: string | null;
         };
         Insert: {
           atualizado_em?: string;
@@ -2198,6 +1945,7 @@ export type Database = {
           ligacao_enviada_at?: string | null;
           ligacao_resultado?: string | null;
           ligacao_tentativas?: number;
+          link_enviado_at?: string | null;
           link_reuniao?: string | null;
           nome?: string | null;
           reagendou_at?: string | null;
@@ -2210,6 +1958,7 @@ export type Database = {
           ultimo_erro?: string | null;
           wamid_d1?: string | null;
           wamid_dia?: string | null;
+          wamid_link?: string | null;
         };
         Update: {
           atualizado_em?: string;
@@ -2224,6 +1973,7 @@ export type Database = {
           ligacao_enviada_at?: string | null;
           ligacao_resultado?: string | null;
           ligacao_tentativas?: number;
+          link_enviado_at?: string | null;
           link_reuniao?: string | null;
           nome?: string | null;
           reagendou_at?: string | null;
@@ -2236,8 +1986,86 @@ export type Database = {
           ultimo_erro?: string | null;
           wamid_d1?: string | null;
           wamid_dia?: string | null;
+          wamid_link?: string | null;
         };
         Relationships: [];
+      };
+      contact_holds: {
+        Row: {
+          created_at: string;
+          id: string;
+          lead_id: string;
+          org_id: string;
+          origem: string;
+          tipo: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          lead_id: string;
+          org_id: string;
+          origem?: string;
+          tipo: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          lead_id?: string;
+          org_id?: string;
+          origem?: string;
+          tipo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_holds_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       copiloto_app_users: {
         Row: {
@@ -2651,6 +2479,283 @@ export type Database = {
           },
         ];
       };
+      email_conversations: {
+        Row: {
+          created_at: string;
+          estado: string;
+          humano_user_id: string | null;
+          id: string;
+          lead_id: string;
+          lock_owner: string | null;
+          lock_until: string | null;
+          mailbox_user_id: string;
+          org_id: string;
+          thread_id: string;
+          trocas_sem_avanco: number;
+          ultima_msg_ia_at: string | null;
+          ultima_msg_lead_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          estado?: string;
+          humano_user_id?: string | null;
+          id?: string;
+          lead_id: string;
+          lock_owner?: string | null;
+          lock_until?: string | null;
+          mailbox_user_id: string;
+          org_id: string;
+          thread_id: string;
+          trocas_sem_avanco?: number;
+          ultima_msg_ia_at?: string | null;
+          ultima_msg_lead_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          estado?: string;
+          humano_user_id?: string | null;
+          id?: string;
+          lead_id?: string;
+          lock_owner?: string | null;
+          lock_until?: string | null;
+          mailbox_user_id?: string;
+          org_id?: string;
+          thread_id?: string;
+          trocas_sem_avanco?: number;
+          ultima_msg_ia_at?: string | null;
+          ultima_msg_lead_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_conversations_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      email_inbound: {
+        Row: {
+          body_text: string | null;
+          conversation_id: string | null;
+          created_at: string;
+          from_email: string | null;
+          gmail_message_id: string;
+          id: string;
+          in_reply_to: string | null;
+          internal_date: string | null;
+          kind: string;
+          lead_id: string | null;
+          mailbox_user_id: string;
+          org_id: string;
+          processed_at: string | null;
+          rfc_message_id: string | null;
+          snippet: string | null;
+          subject: string | null;
+          thread_id: string | null;
+        };
+        Insert: {
+          body_text?: string | null;
+          conversation_id?: string | null;
+          created_at?: string;
+          from_email?: string | null;
+          gmail_message_id: string;
+          id?: string;
+          in_reply_to?: string | null;
+          internal_date?: string | null;
+          kind?: string;
+          lead_id?: string | null;
+          mailbox_user_id: string;
+          org_id: string;
+          processed_at?: string | null;
+          rfc_message_id?: string | null;
+          snippet?: string | null;
+          subject?: string | null;
+          thread_id?: string | null;
+        };
+        Update: {
+          body_text?: string | null;
+          conversation_id?: string | null;
+          created_at?: string;
+          from_email?: string | null;
+          gmail_message_id?: string;
+          id?: string;
+          in_reply_to?: string | null;
+          internal_date?: string | null;
+          kind?: string;
+          lead_id?: string | null;
+          mailbox_user_id?: string;
+          org_id?: string;
+          processed_at?: string | null;
+          rfc_message_id?: string | null;
+          snippet?: string | null;
+          subject?: string | null;
+          thread_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'email_inbound_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      email_reply_intents: {
+        Row: {
+          body_html: string | null;
+          conversation_id: string;
+          created_at: string;
+          erro: string | null;
+          estado: string;
+          gmail_message_id: string | null;
+          id: string;
+          org_id: string;
+          owner: string | null;
+          responde_a: string[];
+          rfc_message_id: string;
+          subject: string | null;
+          tentativas: number;
+          updated_at: string;
+        };
+        Insert: {
+          body_html?: string | null;
+          conversation_id: string;
+          created_at?: string;
+          erro?: string | null;
+          estado?: string;
+          gmail_message_id?: string | null;
+          id?: string;
+          org_id: string;
+          owner?: string | null;
+          responde_a?: string[];
+          rfc_message_id: string;
+          subject?: string | null;
+          tentativas?: number;
+          updated_at?: string;
+        };
+        Update: {
+          body_html?: string | null;
+          conversation_id?: string;
+          created_at?: string;
+          erro?: string | null;
+          estado?: string;
+          gmail_message_id?: string | null;
+          id?: string;
+          org_id?: string;
+          owner?: string | null;
+          responde_a?: string[];
+          rfc_message_id?: string;
+          subject?: string | null;
+          tentativas?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'email_reply_intents_conversation_id_fkey';
+            columns: ['conversation_id'];
+            isOneToOne: false;
+            referencedRelation: 'email_conversations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'email_reply_intents_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       email_suppressions: {
         Row: {
           created_at: string;
@@ -2881,12 +2986,17 @@ export type Database = {
       gmail_connections: {
         Row: {
           access_token_encrypted: string;
+          bdr_ai: boolean;
           cached_signature: string | null;
           created_at: string;
           custom_signature: string | null;
+          daily_cap: number | null;
           email_address: string;
+          history_id: string | null;
           id: string;
+          last_processed_internal_date: string | null;
           org_id: string;
+          paused_reason: string | null;
           refresh_token_encrypted: string;
           signature_cached_at: string | null;
           status: Database['public']['Enums']['connection_status'];
@@ -2896,12 +3006,17 @@ export type Database = {
         };
         Insert: {
           access_token_encrypted: string;
+          bdr_ai?: boolean;
           cached_signature?: string | null;
           created_at?: string;
           custom_signature?: string | null;
+          daily_cap?: number | null;
           email_address: string;
+          history_id?: string | null;
           id?: string;
+          last_processed_internal_date?: string | null;
           org_id: string;
+          paused_reason?: string | null;
           refresh_token_encrypted: string;
           signature_cached_at?: string | null;
           status?: Database['public']['Enums']['connection_status'];
@@ -2911,12 +3026,17 @@ export type Database = {
         };
         Update: {
           access_token_encrypted?: string;
+          bdr_ai?: boolean;
           cached_signature?: string | null;
           created_at?: string;
           custom_signature?: string | null;
+          daily_cap?: number | null;
           email_address?: string;
+          history_id?: string | null;
           id?: string;
+          last_processed_internal_date?: string | null;
           org_id?: string;
+          paused_reason?: string | null;
           refresh_token_encrypted?: string;
           signature_cached_at?: string | null;
           status?: Database['public']['Enums']['connection_status'];
@@ -3576,6 +3696,84 @@ export type Database = {
           },
         ];
       };
+      lista_consentimento_wa_20260919: {
+        Row: {
+          atualizado_resposta_at: string | null;
+          canal: string | null;
+          empresa: string | null;
+          enviado_at: string | null;
+          erro_envio: string | null;
+          historico_respostas: Json;
+          intencao: string | null;
+          lead_criado_em: string | null;
+          lead_id: string;
+          lead_source: string | null;
+          motivo_exclusao: string | null;
+          motivo_perda: string | null;
+          nome: string | null;
+          onda: number | null;
+          primeiro_nome: string | null;
+          respondido_at: string | null;
+          resposta: string | null;
+          resposta_texto: string | null;
+          sobrenome: string | null;
+          status: string | null;
+          status_envio: string | null;
+          telefone_e164: string | null;
+          wamid: string | null;
+        };
+        Insert: {
+          atualizado_resposta_at?: string | null;
+          canal?: string | null;
+          empresa?: string | null;
+          enviado_at?: string | null;
+          erro_envio?: string | null;
+          historico_respostas?: Json;
+          intencao?: string | null;
+          lead_criado_em?: string | null;
+          lead_id: string;
+          lead_source?: string | null;
+          motivo_exclusao?: string | null;
+          motivo_perda?: string | null;
+          nome?: string | null;
+          onda?: number | null;
+          primeiro_nome?: string | null;
+          respondido_at?: string | null;
+          resposta?: string | null;
+          resposta_texto?: string | null;
+          sobrenome?: string | null;
+          status?: string | null;
+          status_envio?: string | null;
+          telefone_e164?: string | null;
+          wamid?: string | null;
+        };
+        Update: {
+          atualizado_resposta_at?: string | null;
+          canal?: string | null;
+          empresa?: string | null;
+          enviado_at?: string | null;
+          erro_envio?: string | null;
+          historico_respostas?: Json;
+          intencao?: string | null;
+          lead_criado_em?: string | null;
+          lead_id?: string;
+          lead_source?: string | null;
+          motivo_exclusao?: string | null;
+          motivo_perda?: string | null;
+          nome?: string | null;
+          onda?: number | null;
+          primeiro_nome?: string | null;
+          respondido_at?: string | null;
+          resposta?: string | null;
+          resposta_texto?: string | null;
+          sobrenome?: string | null;
+          status?: string | null;
+          status_envio?: string | null;
+          telefone_e164?: string | null;
+          wamid?: string | null;
+        };
+        Relationships: [];
+      };
       loss_reasons: {
         Row: {
           created_at: string;
@@ -3646,6 +3844,119 @@ export type Database = {
           status?: string;
         };
         Relationships: [];
+      };
+      meeting_requests: {
+        Row: {
+          closer_id: string;
+          conversation_id: string | null;
+          created_at: string;
+          erro: string | null;
+          estado: string;
+          execution_id: string | null;
+          google_event_id: string | null;
+          html_link: string | null;
+          id: string;
+          interaction_id: string | null;
+          lead_id: string;
+          meet_link: string | null;
+          org_id: string;
+          origem: string;
+          slot_end: string | null;
+          slot_start: string | null;
+          updated_at: string;
+          versao: number;
+        };
+        Insert: {
+          closer_id: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          erro?: string | null;
+          estado?: string;
+          execution_id?: string | null;
+          google_event_id?: string | null;
+          html_link?: string | null;
+          id?: string;
+          interaction_id?: string | null;
+          lead_id: string;
+          meet_link?: string | null;
+          org_id: string;
+          origem?: string;
+          slot_end?: string | null;
+          slot_start?: string | null;
+          updated_at?: string;
+          versao?: number;
+        };
+        Update: {
+          closer_id?: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          erro?: string | null;
+          estado?: string;
+          execution_id?: string | null;
+          google_event_id?: string | null;
+          html_link?: string | null;
+          id?: string;
+          interaction_id?: string | null;
+          lead_id?: string;
+          meet_link?: string | null;
+          org_id?: string;
+          origem?: string;
+          slot_end?: string | null;
+          slot_start?: string | null;
+          updated_at?: string;
+          versao?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'meeting_requests_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       meeting_webhook_dispatch_log: {
         Row: {
@@ -4498,6 +4809,54 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      stg_recovery_quentes_20260918: {
+        Row: {
+          cargo: string | null;
+          cnpj: string | null;
+          email: string | null;
+          empresa: string | null;
+          faturamento: string | null;
+          first_name: string | null;
+          id_legado: number;
+          last_name: string | null;
+          lead_id: string | null;
+          notes: string | null;
+          sdr: string | null;
+          segmento: string | null;
+          telefone: string | null;
+        };
+        Insert: {
+          cargo?: string | null;
+          cnpj?: string | null;
+          email?: string | null;
+          empresa?: string | null;
+          faturamento?: string | null;
+          first_name?: string | null;
+          id_legado: number;
+          last_name?: string | null;
+          lead_id?: string | null;
+          notes?: string | null;
+          sdr?: string | null;
+          segmento?: string | null;
+          telefone?: string | null;
+        };
+        Update: {
+          cargo?: string | null;
+          cnpj?: string | null;
+          email?: string | null;
+          empresa?: string | null;
+          faturamento?: string | null;
+          first_name?: string | null;
+          id_legado?: number;
+          last_name?: string | null;
+          lead_id?: string | null;
+          notes?: string | null;
+          sdr?: string | null;
+          segmento?: string | null;
+          telefone?: string | null;
+        };
+        Relationships: [];
       };
       stripe_events: {
         Row: {
@@ -5440,6 +5799,50 @@ export type Database = {
         };
         Relationships: [];
       };
+      vw_consentimento_liberados: {
+        Row: {
+          empresa: string | null;
+          intencao: string | null;
+          lead_id: string | null;
+          primeiro_nome: string | null;
+          respondido_at: string | null;
+          resposta_texto: string | null;
+          telefone_e164: string | null;
+        };
+        Insert: {
+          empresa?: string | null;
+          intencao?: string | null;
+          lead_id?: string | null;
+          primeiro_nome?: string | null;
+          respondido_at?: string | null;
+          resposta_texto?: string | null;
+          telefone_e164?: string | null;
+        };
+        Update: {
+          empresa?: string | null;
+          intencao?: string | null;
+          lead_id?: string | null;
+          primeiro_nome?: string | null;
+          respondido_at?: string | null;
+          resposta_texto?: string | null;
+          telefone_e164?: string | null;
+        };
+        Relationships: [];
+      };
+      vw_consentimento_resumo: {
+        Row: {
+          aceitaram: number | null;
+          aptos: number | null;
+          com_interesse: number | null;
+          enviados: number | null;
+          falhas: number | null;
+          onda: number | null;
+          pct_aceite: number | null;
+          recusaram: number | null;
+          responderam: number | null;
+        };
+        Relationships: [];
+      };
       vw_entrega_por_numero: {
         Row: {
           dia: string | null;
@@ -5571,7 +5974,19 @@ export type Database = {
         Args: { faturamento_reais: number };
         Returns: string;
       };
+      claim_email_conversation: {
+        Args: { p_id: string; p_lease_seconds?: number; p_owner: string };
+        Returns: boolean;
+      };
       cleanup_provider_events: { Args: never; Returns: undefined };
+      consentimento_proximos: {
+        Args: { p_lote: number; p_onda: number; p_teto_dia: number };
+        Returns: {
+          lead_id: string;
+          primeiro_nome: string;
+          telefone_e164: string;
+        }[];
+      };
       copiloto_leads_qualificacao: {
         Args: { p_lead_ids: string[] };
         Returns: {
@@ -5871,6 +6286,15 @@ export type Database = {
       ingest_callface_call: { Args: { p_payload: Json }; Returns: Json };
       is_manager: { Args: never; Returns: boolean };
       lead_visibility_mode: { Args: never; Returns: string };
+      leads_opened_events: {
+        Args: { p_cadence_ids?: string[]; p_org_id: string };
+        Returns: {
+          assigned_to: string;
+          cadence_id: string;
+          lead_id: string;
+          opened_at: string;
+        }[];
+      };
       leads_without_active_enrollment: {
         Args: { p_org_id: string };
         Returns: string[];
@@ -5951,6 +6375,10 @@ export type Database = {
         };
         Returns: number;
       };
+      registrar_envio_consentimento: {
+        Args: { p_erro?: string; p_lead_id: string; p_wamid: string };
+        Returns: undefined;
+      };
       registrar_novo_evento_no_show: {
         Args: { p_event_id: string; p_inicio: string; p_lead_id: string };
         Returns: Json;
@@ -5965,6 +6393,25 @@ export type Database = {
         };
         Returns: number;
       };
+      registrar_resposta_consentimento: {
+        Args: {
+          p_contexto_wamid: string;
+          p_intencao: string;
+          p_origem: string;
+          p_telefone: string;
+          p_texto: string;
+        };
+        Returns: {
+          consentimento: string;
+          empresa: string;
+          encontrado: boolean;
+          intencao: string;
+          lead_id: string;
+          primeira_resposta: boolean;
+          primeiro_nome: string;
+          telefone_e164: string;
+        }[];
+      };
       registrar_status_mensagem:
         | { Args: { p_eventos: Json }; Returns: Json }
         | {
@@ -5975,6 +6422,14 @@ export type Database = {
             };
             Returns: Json;
           };
+      release_email_conversation_lock: {
+        Args: { p_id: string; p_owner: string };
+        Returns: boolean;
+      };
+      renew_email_conversation_lock: {
+        Args: { p_id: string; p_lease_seconds?: number; p_owner: string };
+        Returns: boolean;
+      };
       set_primary_lead_contact: {
         Args: { p_contact_id: string };
         Returns: undefined;
