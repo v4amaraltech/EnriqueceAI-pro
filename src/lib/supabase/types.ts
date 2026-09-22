@@ -401,6 +401,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      _bkp_recovery_assign_matheus_20260921: {
+        Row: {
+          assigned_to: string | null;
+          bkp_at: string | null;
+          lead_id: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          bkp_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          assigned_to?: string | null;
+          bkp_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_recovery_realign_20260904: {
         Row: {
           applied_at: string | null;
@@ -1120,8 +1141,11 @@ export type Database = {
           current_step: number;
           enrolled_at: string;
           enrolled_by: string | null;
+          execution_id: string | null;
           id: string;
           lead_id: string;
+          lease_owner: string | null;
+          lease_until: string | null;
           loss_notes: string | null;
           loss_reason_id: string | null;
           next_step_due: string | null;
@@ -1138,8 +1162,11 @@ export type Database = {
           current_step?: number;
           enrolled_at?: string;
           enrolled_by?: string | null;
+          execution_id?: string | null;
           id?: string;
           lead_id: string;
+          lease_owner?: string | null;
+          lease_until?: string | null;
           loss_notes?: string | null;
           loss_reason_id?: string | null;
           next_step_due?: string | null;
@@ -1156,8 +1183,11 @@ export type Database = {
           current_step?: number;
           enrolled_at?: string;
           enrolled_by?: string | null;
+          execution_id?: string | null;
           id?: string;
           lead_id?: string;
+          lease_owner?: string | null;
+          lease_until?: string | null;
           loss_notes?: string | null;
           loss_reason_id?: string | null;
           next_step_due?: string | null;
@@ -1227,6 +1257,96 @@ export type Database = {
           },
           {
             foreignKeyName: 'cadence_enrollments_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      cadence_step_executions: {
+        Row: {
+          attempt: number;
+          cadence_id: string;
+          call_sid: string | null;
+          channel: string;
+          claimed_at: string;
+          claims: number;
+          confirmed_at: string | null;
+          confirmed_event_id: string | null;
+          created_at: string;
+          enrollment_id: string;
+          evento: string | null;
+          execution_id: string;
+          interaction_id: string | null;
+          last_claimed_at: string;
+          lease_owner: string | null;
+          lease_until: string | null;
+          org_id: string;
+          release_motivo: string | null;
+          released_at: string | null;
+          step_id: string;
+          step_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          attempt?: number;
+          cadence_id: string;
+          call_sid?: string | null;
+          channel: string;
+          claimed_at?: string;
+          claims?: number;
+          confirmed_at?: string | null;
+          confirmed_event_id?: string | null;
+          created_at?: string;
+          enrollment_id: string;
+          evento?: string | null;
+          execution_id: string;
+          interaction_id?: string | null;
+          last_claimed_at?: string;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          org_id: string;
+          release_motivo?: string | null;
+          released_at?: string | null;
+          step_id: string;
+          step_order: number;
+          updated_at?: string;
+        };
+        Update: {
+          attempt?: number;
+          cadence_id?: string;
+          call_sid?: string | null;
+          channel?: string;
+          claimed_at?: string;
+          claims?: number;
+          confirmed_at?: string | null;
+          confirmed_event_id?: string | null;
+          created_at?: string;
+          enrollment_id?: string;
+          evento?: string | null;
+          execution_id?: string;
+          interaction_id?: string | null;
+          last_claimed_at?: string;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          org_id?: string;
+          release_motivo?: string | null;
+          released_at?: string | null;
+          step_id?: string;
+          step_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'cadence_step_executions_enrollment_id_fkey';
+            columns: ['enrollment_id'];
+            isOneToOne: false;
+            referencedRelation: 'cadence_enrollments';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cadence_step_executions_org_id_fkey';
             columns: ['org_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
@@ -2906,6 +3026,53 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'vw_callface_reciclagem';
             referencedColumns: ['lead_id'];
+          },
+        ];
+      };
+      external_step_events: {
+        Row: {
+          aplicado: boolean;
+          call_sid: string | null;
+          enrollment_id: string | null;
+          event_id: string;
+          evento: string;
+          execution_id: string | null;
+          motivo: string | null;
+          org_id: string;
+          payload: Json;
+          received_at: string;
+        };
+        Insert: {
+          aplicado?: boolean;
+          call_sid?: string | null;
+          enrollment_id?: string | null;
+          event_id: string;
+          evento: string;
+          execution_id?: string | null;
+          motivo?: string | null;
+          org_id: string;
+          payload?: Json;
+          received_at?: string;
+        };
+        Update: {
+          aplicado?: boolean;
+          call_sid?: string | null;
+          enrollment_id?: string | null;
+          event_id?: string;
+          evento?: string;
+          execution_id?: string | null;
+          motivo?: string | null;
+          org_id?: string;
+          payload?: Json;
+          received_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'external_step_events_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -5962,6 +6129,10 @@ export type Database = {
         };
         Returns: string;
       };
+      bdr_step_execution_id: {
+        Args: { p_attempt: number; p_enrollment_id: string; p_step_id: string };
+        Returns: string;
+      };
       calculate_engagement_score: {
         Args: { p_lead_id: string };
         Returns: number;
@@ -5974,11 +6145,72 @@ export type Database = {
         Args: { faturamento_reais: number };
         Returns: string;
       };
+      claim_due_steps: {
+        Args: {
+          p_cadence_ids: string[];
+          p_channel?: string;
+          p_lease_minutes?: number;
+          p_limit?: number;
+          p_org_id: string;
+          p_owner?: string;
+        };
+        Returns: {
+          activity_name: string;
+          attempt: number;
+          cadence_id: string;
+          cadence_name: string;
+          call_provider: string;
+          channel: string;
+          dono: string;
+          enrollment_id: string;
+          execution_id: string;
+          instructions: string;
+          lead_cargo: string;
+          lead_custom: Json;
+          lead_email: string;
+          lead_empresa: string;
+          lead_id: string;
+          lead_nome: string;
+          lead_segmento: string;
+          lead_telefone: string;
+          lease_until: string;
+          next_step_due: string;
+          org_id: string;
+          recuperada: boolean;
+          step_id: string;
+          step_order: number;
+        }[];
+      };
       claim_email_conversation: {
         Args: { p_id: string; p_lease_seconds?: number; p_owner: string };
         Returns: boolean;
       };
       cleanup_provider_events: { Args: never; Returns: undefined };
+      confirm_external_step: {
+        Args: {
+          p_call_sid?: string;
+          p_event_id: string;
+          p_evento: string;
+          p_execution_id: string;
+          p_org_id: string;
+          p_payload?: Json;
+          p_performed_by?: string;
+          p_resultado?: Json;
+        };
+        Returns: {
+          advanced: boolean;
+          aplicado: boolean;
+          cadence_id: string;
+          completed: boolean;
+          duplicado: boolean;
+          enrollment_id: string;
+          interaction_id: string;
+          lead_id: string;
+          motivo: string;
+          new_step: number;
+          step_id: string;
+        }[];
+      };
       consentimento_proximos: {
         Args: { p_lote: number; p_onda: number; p_teto_dia: number };
         Returns: {
@@ -6131,6 +6363,10 @@ export type Database = {
           p_sdr_user_id?: string;
         };
         Returns: string;
+      };
+      find_lead_ids_by_phone: {
+        Args: { p_org_id: string; p_phone_digits: string };
+        Returns: string[];
       };
       find_meetings_pending_outcome: {
         Args: never;
@@ -6426,8 +6662,30 @@ export type Database = {
         Args: { p_id: string; p_owner: string };
         Returns: boolean;
       };
+      release_step_claim: {
+        Args: {
+          p_execution_id: string;
+          p_motivo?: string;
+          p_nova_tentativa?: boolean;
+          p_org_id: string;
+          p_owner?: string;
+        };
+        Returns: {
+          liberada: boolean;
+          motivo: string;
+        }[];
+      };
       renew_email_conversation_lock: {
         Args: { p_id: string; p_lease_seconds?: number; p_owner: string };
+        Returns: boolean;
+      };
+      renew_step_lease: {
+        Args: {
+          p_execution_id: string;
+          p_lease_minutes?: number;
+          p_org_id: string;
+          p_owner?: string;
+        };
         Returns: boolean;
       };
       set_primary_lead_contact: {
