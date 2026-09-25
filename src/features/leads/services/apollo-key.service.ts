@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { decrypt } from '@/lib/security/encryption';
 import { getEnv } from '@/config/env';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -9,8 +11,9 @@ import { from } from '@/lib/supabase/from';
  * Fetches and decrypts the Apollo API key for a given organization.
  * Returns null if no connection exists.
  */
-export async function getApolloApiKey(orgId: string): Promise<string | null> {
-  const supabase = await createServerSupabaseClient();
+export async function getApolloApiKey(orgId: string, client?: SupabaseClient): Promise<string | null> {
+  // `client` permite chamar fora de sessão de usuário (rotas com API key usam service role).
+  const supabase = client ?? (await createServerSupabaseClient());
 
   const { data } = (await from(supabase, 'apollo_connections')
     .select('api_key_encrypted')
