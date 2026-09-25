@@ -69,7 +69,7 @@ export function InlineEditField({
 
   return (
     <div className="space-y-1">
-      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
+      <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
       {isEditing ? (
         <div className="flex items-center gap-1">
           <input
@@ -80,7 +80,7 @@ export function InlineEditField({
             onKeyDown={handleKeyDown}
             onBlur={handleSave}
             disabled={isPending}
-            className={`flex-1 rounded-md border border-[var(--ring)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none ${mono ? 'font-mono text-xs' : ''}`}
+            className={`flex-1 rounded-md border border-[var(--ring)] bg-[var(--background)] px-3 py-2 text-base outline-none ${mono ? 'font-mono text-sm' : ''}`}
           />
           <button
             type="button"
@@ -103,9 +103,9 @@ export function InlineEditField({
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="group flex w-full items-center gap-1.5 min-w-0 overflow-hidden rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm text-left hover:ring-1 hover:ring-[var(--ring)] transition-shadow"
+          className="group flex w-full items-center gap-1.5 min-w-0 overflow-hidden rounded-md bg-[var(--muted)] px-3 py-2 text-base text-left hover:ring-1 hover:ring-[var(--ring)] transition-shadow"
         >
-          <span className={`flex-1 truncate ${mono ? 'font-mono text-xs' : ''} ${!value ? 'text-[var(--muted-foreground)] italic' : ''}`}>
+          <span className={`flex-1 truncate ${mono ? 'font-mono text-sm' : ''} ${!value ? 'text-[var(--muted-foreground)] italic' : ''}`}>
             {value || placeholder}
           </span>
           <Pencil className="h-3 w-3 shrink-0 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity" />
