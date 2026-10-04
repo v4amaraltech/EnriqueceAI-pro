@@ -64,11 +64,12 @@ function setup() {
       if (table === 'goals_per_user') return goalsChain;
       return createChainMock();
     }),
+    // Uma linha por abertura (other-sdr=50, SDR=91).
     rpc: vi.fn(() =>
       Promise.resolve({
         data: [
-          { performer_id: 'other-sdr', cnt: 50 },
-          { performer_id: SDR, cnt: 91 },
+          ...Array.from({ length: 50 }, () => ({ performer_id: 'other-sdr', opened_at: '2026-09-02T13:00:00Z' })),
+          ...Array.from({ length: 91 }, () => ({ performer_id: SDR, opened_at: '2026-09-03T13:00:00Z' })),
         ],
         error: null,
       }),
@@ -111,11 +112,11 @@ describe('fetchSdrPaceMetrics', () => {
     expect(heldChain.not).toHaveBeenCalledWith('meeting_held_at', 'is', null);
   });
 
-  it('leads abertos: usa a RPC do ranking e pega só o SDR pedido (0 se ausente)', async () => {
+  it('leads abertos: usa a mesma fonte do ranking e pega só o SDR pedido (0 se ausente)', async () => {
     const { supabase } = setup();
     const other = await fetchSdrPaceMetrics(supabase as never, ORG, '2026-09', 'sem-leads');
     expect(other.actual.leadsOpened).toBe(0);
-    expect(supabase.rpc).toHaveBeenCalledWith('count_leads_opened_by_sdr', {
+    expect(supabase.rpc).toHaveBeenCalledWith('count_leads_opened_by_sdr_daily', {
       p_org_id: ORG,
       p_start: '2026-09-01T03:00:00Z',
       p_end: '2026-09-30T23:59:59-03:00',

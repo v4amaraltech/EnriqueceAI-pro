@@ -420,13 +420,14 @@ describe('fetchLeadsOpenedRanking — idealToDate por meta individual de leads',
         return createChainMock();
       },
       (fn) =>
-        // count por SDR (u1=2, u2=1); daily não importa pro idealToDate.
-        fn === 'count_leads_opened_by_sdr'
+        // Uma linha por abertura (u1=2, u2=1): total por SDR e gráfico saem daqui.
+        fn === 'count_leads_opened_by_sdr_daily'
           ? Promise.resolve({ data: [
-              { performer_id: 'u1', cnt: 2 },
-              { performer_id: 'u2', cnt: 1 },
-            ] })
-          : Promise.resolve({ data: [] }),
+              { performer_id: 'u1', opened_at: '2026-09-02T13:00:00Z' },
+              { performer_id: 'u1', opened_at: '2026-09-03T13:00:00Z' },
+              { performer_id: 'u2', opened_at: '2026-09-03T14:00:00Z' },
+            ], error: null })
+          : Promise.resolve({ data: [], error: null }),
     );
 
     const result = await fetchLeadsOpenedRanking(supabase as never, ORG, baseFilters);

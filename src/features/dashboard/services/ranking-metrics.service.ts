@@ -17,6 +17,8 @@ import type {
   SdrRankingEntry,
 } from '../types';
 
+import { countOpenedByPerformer, fetchLeadsOpenedRows, type LeadsOpenedRow } from './leads-opened.service';
+
 export function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
@@ -443,16 +445,19 @@ export async function fetchLeadsOpenedRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // RPC returns one row per SDR with the count of OPENINGS in [start, end): a
-  // lead's first human-channel touch, plus the first touch after each new
-  // cadence enrollment (a reopening). See migration
-  // 20260918121458_leads_opened_count_cadence_reopen.sql.
-  const { data: rows } = await (supabase.rpc as any)('count_leads_opened_by_sdr', {
-    p_org_id: orgId,
-    p_start: start,
-    p_end: end,
-    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
-  }) as { data: Array<{ performer_id: string; cnt: number }> | null };
+  // OPENINGS in [start, end): a lead's first human-channel touch, plus the first
+  // touch after each new cadence enrollment (a reopening). See migration
+  // 20260918121458_leads_opened_count_cadence_reopen.sql. One row per opening —
+  // the per-SDR total and the daily chart both come from these rows (one RPC
+  // instead of count + daily in series; shared with the SDR pace panel).
+  const { data: openedRows } = await fetchLeadsOpenedRows(
+    supabase,
+    orgId,
+    start,
+    end,
+    filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
+  );
+  const rows = [...countOpenedByPerformer(openedRows ?? [])].map(([performer_id, cnt]) => ({ performer_id, cnt }));
 
   const monthStart = `${filters.month}-01`;
   const { data: goal } = (await from(supabase, 'goals')
@@ -471,10 +476,8 @@ export async function fetchLeadsOpenedRanking(
     entries.push({ userId: row.performer_id, userName: '', value: row.cnt });
   }
 
-  // Daily cumulative chart: pull the same first-touch rows but bucket by day.
-  // Reuses the RPC's filter contract via a direct SQL select on the same
-  // interactions slice. We do it client-side because the RPC already aggregates.
-  const dailyData = await fetchLeadsOpenedDaily(supabase, orgId, filters, sdrIds, monthTarget);
+  // Daily cumulative chart: the same opening rows, bucketed by BRT day.
+  const dailyData = buildLeadsOpenedDaily(openedRows ?? [], filters, sdrIds, monthTarget);
 
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
   const individualTargets = await fetchIndividualTargets(
@@ -495,17 +498,15 @@ export async function fetchLeadsOpenedRanking(
 }
 
 /**
- * Per-day cumulative count of openings (first touch + reopenings). Mirrors the
- * RPC's window filter so the chart matches the ranking total exactly.
+ * Per-day cumulative count of openings (first touch + reopenings). Built from the
+ * same rows as the ranking total, so the chart matches it exactly.
  */
-async function fetchLeadsOpenedDaily(
-  supabase: SupabaseClient,
-  orgId: string,
+function buildLeadsOpenedDaily(
+  rpcRows: ReadonlyArray<LeadsOpenedRow>,
   filters: DashboardFilters,
   sdrIds: Set<string>,
   target: number,
-): Promise<DailyDataPoint[]> {
-  const { start, end } = getDateRange(filters);
+): DailyDataPoint[] {
   const days = getDaysInMonth(filters.month);
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
   // Série vai até HOJE (dia corrente), mesma régua da janela de contagem — último
@@ -514,17 +515,8 @@ async function fetchLeadsOpenedDaily(
   const isCurrentMonth = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
   const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
 
-  // chunked here would only kick in for huge cadenceIds; for the daily series
-  // we just pull leads opened in the window and bucket in memory.
-  const { data: rpcRows } = await (supabase.rpc as any)('count_leads_opened_by_sdr_daily', {
-    p_org_id: orgId,
-    p_start: start,
-    p_end: end,
-    p_cadence_ids: filters.cadenceIds.length > 0 ? filters.cadenceIds : null,
-  }) as { data: Array<{ performer_id: string; opened_at: string }> | null };
-
   const countByDay = new Map<number, number>();
-  for (const row of rpcRows ?? []) {
+  for (const row of rpcRows) {
     if (!sdrIds.has(row.performer_id)) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(row.performer_id)) continue;
     const brt = new Date(new Date(row.opened_at).getTime() - 3 * 60 * 60 * 1000);
