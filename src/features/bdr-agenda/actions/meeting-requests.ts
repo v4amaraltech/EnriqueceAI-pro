@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
+import { escapeLikePattern } from '@/lib/utils/like';
 import {
   CalendarConflictError, CalendarEventGoneError, checkFreeBusy, createCalendarEvent, getCalendarConnectionWith,
   getCalendarEvent, updateCalendarEvent, type CalendarConnectionTokens,
@@ -32,22 +34,44 @@ export async function getMeetingRequest(supabase: SupabaseClient, id: string, or
   return data;
 }
 
+/**
+ * lead_id / closer_id / conversation_id come from the API caller: they must
+ * belong to the caller's org (closer = an active member — the calendar owner).
+ * Throws AgendaError 400 otherwise.
+ */
+export async function assertMeetingRefsInOrg(supabase: SupabaseClient, p: {
+  orgId: string; leadId: string; closerId: string; conversationId?: string | null;
+}): Promise<void> {
+  const [{ data: lead }, { data: closer }, conv] = await Promise.all([
+    from(supabase, 'leads').select('id').eq('id', p.leadId).eq('org_id', p.orgId).is('deleted_at', null).maybeSingle() as unknown as Promise<{ data: { id: string } | null }>,
+    from(supabase, 'organization_members').select('user_id').eq('user_id', p.closerId).eq('org_id', p.orgId).eq('status', 'active').maybeSingle() as unknown as Promise<{ data: { user_id: string } | null }>,
+    p.conversationId
+      ? (from(supabase, 'email_conversations').select('id').eq('id', p.conversationId).eq('org_id', p.orgId).eq('lead_id', p.leadId).maybeSingle() as unknown as Promise<{ data: { id: string } | null }>)
+      : Promise.resolve({ data: { id: 'n/a' } }),
+  ]);
+  if (!lead) throw new AgendaError('Lead não encontrado nesta organização', 400, 'lead_invalido');
+  if (!closer) throw new AgendaError('Closer não é membro ativo desta organização', 400, 'closer_invalido');
+  if (!conv.data) throw new AgendaError('Conversa não encontrada para este lead nesta organização', 400, 'conversa_invalida');
+}
+
 /** Uma solicitação ativa por lead, compartilhada pelos canais; idempotente por execution_id. */
 export async function getOrCreateMeetingRequest(supabase: SupabaseClient, p: {
   orgId: string; leadId: string; closerId: string; conversationId?: string | null; origem: string; executionId?: string | null;
 }): Promise<{ request: MeetingRequest; criada: boolean }> {
   if (p.executionId) {
-    const { data: byExec } = (await from(supabase, 'meeting_requests').select('*').eq('execution_id', p.executionId).maybeSingle()) as { data: MeetingRequest | null };
+    // Scoped to the org: execution ids are sequential (n8n) — unscoped, one org
+    // could read another org's request and its closer's free slots.
+    const { data: byExec } = (await from(supabase, 'meeting_requests').select('*').eq('org_id', p.orgId).eq('execution_id', p.executionId).maybeSingle()) as { data: MeetingRequest | null };
     if (byExec) return { request: byExec, criada: false };
   }
-  const { data: ativa } = (await from(supabase, 'meeting_requests').select('*').eq('lead_id', p.leadId).in('estado', ESTADOS_ATIVOS).maybeSingle()) as { data: MeetingRequest | null };
+  const { data: ativa } = (await from(supabase, 'meeting_requests').select('*').eq('org_id', p.orgId).eq('lead_id', p.leadId).in('estado', ESTADOS_ATIVOS).maybeSingle()) as { data: MeetingRequest | null };
   if (ativa) return { request: ativa, criada: false };
   const { data: created, error } = (await from(supabase, 'meeting_requests')
     .insert({ org_id: p.orgId, lead_id: p.leadId, closer_id: p.closerId, conversation_id: p.conversationId ?? null, origem: p.origem, execution_id: p.executionId ?? null } as Record<string, unknown>)
     .select('*').maybeSingle()) as { data: MeetingRequest | null; error: { code?: string; message: string } | null };
   if (!created) {
     // Corrida: outra execução criou a ativa do lead entre o select e o insert
-    const { data: again } = (await from(supabase, 'meeting_requests').select('*').eq('lead_id', p.leadId).in('estado', ESTADOS_ATIVOS).maybeSingle()) as { data: MeetingRequest | null };
+    const { data: again } = (await from(supabase, 'meeting_requests').select('*').eq('org_id', p.orgId).eq('lead_id', p.leadId).in('estado', ESTADOS_ATIVOS).maybeSingle()) as { data: MeetingRequest | null };
     if (again) return { request: again, criada: false };
     throw new AgendaError(`Não foi possível criar a solicitação: ${error?.message ?? '?'}`, 500, 'erro');
   }
@@ -162,6 +186,14 @@ export async function createEventForRequest(supabase: SupabaseClient, req: Meeti
   return data ?? req;
 }
 
+/** closers.id for the calendar-owner user (same e-mail, same org), or null. */
+export async function closerRowIdForUser(supabase: SupabaseClient, orgId: string, userId: string): Promise<string | null> {
+  const email = (await resolveUserEmails([userId])).get(userId);
+  if (!email) return null;
+  const { data } = (await from(supabase, 'closers').select('id').eq('org_id', orgId).ilike('email', escapeLikePattern(email)).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
+  return data?.id ?? null;
+}
+
 async function persistMeeting(supabase: SupabaseClient, req: MeetingRequest, ev: { eventId: string; htmlLink: string; meetLink: string | null; title: string; description: string; attendees: string[] }): Promise<string | null> {
   const meta = { subject: ev.title, calendar_event_id: ev.eventId, calendar_link: ev.htmlLink, meet_link: ev.meetLink, attendees: ev.attendees, closer_id: req.closer_id, start_time: req.slot_start, end_time: req.slot_end, meeting_request_id: req.id, source: 'bdr_ia' };
   const { data: inter } = (await from(supabase, 'interactions').insert({
@@ -170,7 +202,16 @@ async function persistMeeting(supabase: SupabaseClient, req: MeetingRequest, ev:
     metadata: meta, performed_by: req.closer_id, ai_generated: true,
   } as Record<string, unknown>).select('id').maybeSingle()) as { data: { id: string } | null };
   const nowIso = new Date().toISOString();
-  await from(supabase, 'leads').update({ meeting_scheduled_at: nowIso, meeting_starts_at: req.slot_start, qualified_at: nowIso, status: 'qualified', closer_id: req.closer_id } as Record<string, unknown>).eq('id', req.lead_id).eq('org_id', req.org_id);
+  // leads.closer_id references closers(id), but req.closer_id is the calendar
+  // owner's USER id — writing it failed the whole UPDATE on the FK (unchecked),
+  // so the lead never got the meeting. Map user → closers by e-mail; without a
+  // match, record the meeting without the closer.
+  const closerRowId = await closerRowIdForUser(supabase, req.org_id, req.closer_id);
+  const { error: leadErr } = (await from(supabase, 'leads').update({
+    meeting_scheduled_at: nowIso, meeting_starts_at: req.slot_start, qualified_at: nowIso, status: 'qualified',
+    ...(closerRowId ? { closer_id: closerRowId } : {}),
+  } as Record<string, unknown>).eq('id', req.lead_id).eq('org_id', req.org_id)) as { error: { message: string } | null };
+  if (leadErr) console.error(`[agenda] falha ao marcar a reunião no lead ${req.lead_id}: ${leadErr.message}`);
   await from(supabase, 'cadence_enrollments').update({ status: 'completed', completed_at: nowIso } as Record<string, unknown>).eq('lead_id', req.lead_id).in('status', ['active', 'paused']);
   await from(supabase, 'contact_holds').upsert({ org_id: req.org_id, lead_id: req.lead_id, tipo: 'prospeccao', origem: 'reuniao_agendada' } as Record<string, unknown>, { onConflict: 'lead_id,tipo', ignoreDuplicates: true });
   return inter?.id ?? null;

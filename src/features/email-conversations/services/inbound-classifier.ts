@@ -143,3 +143,67 @@ export function classifyGmailSendResult(r: {
   if (st != null && st >= 500) return 'incerta';
   return 'incerta';
 }
+
+export type SenderAuth = 'pass' | 'fail' | 'unknown';
+
+/**
+ * The Authentication-Results header Gmail itself added — the FIRST one whose
+ * authserv-id is mx.google.com (Gmail prepends its own on top). Lower ones can
+ * be forged by the sender, so later occurrences are ignored.
+ */
+export function gmailAuthenticationResults(headers: Array<{ name?: string; value?: string }> | undefined): string | null {
+  for (const h of headers ?? []) {
+    if (h.name?.toLowerCase() !== 'authentication-results') continue;
+    const v = (h.value ?? '').trim();
+    if (v.toLowerCase().startsWith('mx.google.com')) return v;
+  }
+  return null;
+}
+
+/** Same domain, or one is a subdomain of the other (relaxed alignment). */
+function domainsAligned(a: string, b: string): boolean {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+/**
+ * Was the From domain authenticated? DMARC decides when present (it already
+ * checks alignment). Without DMARC (common on small company domains), an SPF
+ * or DKIM pass only counts when it is for the From domain itself — otherwise a
+ * sender passes SPF/DKIM for their OWN domain and just forges the visible From.
+ * No Gmail header → 'unknown'.
+ */
+export function senderAuthVerdict(authResults: string | null, fromEmail?: string | null): SenderAuth {
+  if (!authResults) return 'unknown';
+  // Strip quoted strings and (comments) before splitting on ';': Gmail echoes
+  // the sender-controlled envelope address inside the SPF comment, so a
+  // MAIL FROM like `"x;dmarc=pass"@evil.com` would otherwise inject an entry.
+  const cleaned = authResults
+    .toLowerCase()
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/\([^)]*\)/g, '');
+  const entries = cleaned.split(';').map((e) => e.trim());
+  const results = (mech: string) => entries.filter((e) => e.startsWith(`${mech}=`));
+
+  const fromDomain = fromEmail?.split('@')[1]?.toLowerCase();
+  // DMARC only speaks for the From domain it evaluated (header.from).
+  const dmarcEntry = results('dmarc').find((e) => {
+    const d = e.match(/header\.from=([a-z0-9.-]+)/)?.[1];
+    return !fromDomain || !d || d === fromDomain;
+  });
+  const dmarc = dmarcEntry?.match(/^dmarc=([a-z]+)/)?.[1] ?? null;
+  if (dmarc === 'pass') return fromDomain ? 'pass' : 'fail';
+  if (dmarc === 'fail') return 'fail';
+
+  if (!fromDomain) return 'fail';
+  const spfOk = results('spf').some((e) => {
+    if (!/^spf=pass\b/.test(e)) return false;
+    const d = e.match(/smtp\.mailfrom=(?:[^@\s;]*@)?([a-z0-9.-]+)/)?.[1];
+    return !!d && domainsAligned(d, fromDomain);
+  });
+  const dkimOk = results('dkim').some((e) => {
+    if (!/^dkim=pass\b/.test(e)) return false;
+    const d = e.match(/header\.d=([a-z0-9.-]+)/)?.[1] ?? e.match(/header\.i=[^@\s;]*@([a-z0-9.-]+)/)?.[1];
+    return !!d && domainsAligned(d, fromDomain);
+  });
+  return spfOk || dkimOk ? 'pass' : 'fail';
+}

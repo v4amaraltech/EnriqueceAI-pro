@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { authenticateApiKey } from '@/features/inbound-api/services/api-key-auth';
-import { AgendaError, getOrCreateMeetingRequest, suggestSlots } from '@/features/bdr-agenda/actions/meeting-requests';
+import { AgendaError, assertMeetingRefsInOrg, getOrCreateMeetingRequest, suggestSlots } from '@/features/bdr-agenda/actions/meeting-requests';
 import { isUuid } from '@/shared/utils/uuid';
 
 /**
@@ -21,11 +21,16 @@ export async function POST(request: Request) {
   if (typeof leadId !== 'string' || !isUuid(leadId) || typeof closerId !== 'string' || !isUuid(closerId)) {
     return NextResponse.json({ success: false, error: 'lead_id e closer_id (uuid) obrigatórios' }, { status: 400 });
   }
+  const conversationId = typeof body.conversation_id === 'string' && body.conversation_id ? body.conversation_id : null;
+  if (conversationId && !isUuid(conversationId)) {
+    return NextResponse.json({ success: false, error: 'conversation_id deve ser uuid' }, { status: 400 });
+  }
   const supabase = createServiceRoleClient();
   try {
+    await assertMeetingRefsInOrg(supabase, { orgId: auth.orgId, leadId, closerId, conversationId });
     const { request: req, criada } = await getOrCreateMeetingRequest(supabase, {
       orgId: auth.orgId, leadId, closerId,
-      conversationId: typeof body.conversation_id === 'string' ? body.conversation_id : null,
+      conversationId,
       origem: typeof body.origem === 'string' ? body.origem : 'agente',
       executionId: typeof body.execution_id === 'string' ? body.execution_id : null,
     });

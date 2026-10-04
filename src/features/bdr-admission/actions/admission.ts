@@ -11,6 +11,9 @@ const JANELA_RECONTATO_DIAS = 90;
 export async function computeEmailAdmission(supabase: SupabaseClient, { orgId, cadenceIds, dias = 14, holidays = [] }: {
   orgId: string; cadenceIds: string[]; dias?: number; holidays?: string[];
 }) {
+  // Only this org's cadences: ids come from the API caller.
+  const { data: ownCadences } = (await from(supabase, 'cadences').select('id').eq('org_id', orgId).in('id', cadenceIds.length ? cadenceIds : ['00000000-0000-0000-0000-000000000000'])) as { data: Array<{ id: string }> | null };
+  cadenceIds = (ownCadences ?? []).map((c) => c.id);
   const now = new Date();
   const dates = diasUteis(dias, now, holidays);
   const { data: caixas } = (await from(supabase, 'gmail_connections').select('user_id, email_address, daily_cap, paused_reason, created_at, status')

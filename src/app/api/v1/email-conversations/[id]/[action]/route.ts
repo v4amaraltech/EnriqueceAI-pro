@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { escapeLikePattern } from '@/lib/utils/like';
 import { authenticateApiKey } from '@/features/inbound-api/services/api-key-auth';
 import { EmailService } from '@/features/integrations/services/email.service';
 import { classifyGmailSendResult } from '@/features/email-conversations/services/inbound-classifier';
@@ -66,7 +67,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ success: true });
       }
       case 'handoff': {
-        await from(supabase, 'email_conversations').update({ estado: 'humano_assumiu', humano_user_id: (body.user_id as string) ?? null } as Record<string, unknown>).eq('id', id);
+        // user_id comes from the API caller: only an active member of this org.
+        const humanoId = typeof body.user_id === 'string' && body.user_id ? body.user_id : null;
+        if (humanoId) {
+          if (!isUuid(humanoId)) return bad('user_id deve ser uuid');
+          const { data: member } = (await from(supabase, 'organization_members').select('user_id').eq('user_id', humanoId).eq('org_id', conv.org_id).eq('status', 'active').maybeSingle()) as { data: { user_id: string } | null };
+          if (!member) return bad('user_id não é membro ativo desta organização');
+        }
+        await from(supabase, 'email_conversations').update({ estado: 'humano_assumiu', humano_user_id: humanoId } as Record<string, unknown>).eq('id', id);
         await from(supabase, 'contact_holds').upsert({ org_id: conv.org_id, lead_id: conv.lead_id, tipo: 'conversa', origem: `handoff:${(body.motivo as string) ?? 'agente'}` } as Record<string, unknown>, { onConflict: 'lead_id,tipo', ignoreDuplicates: true });
         return NextResponse.json({ success: true, data: { estado: 'humano_assumiu' } });
       }
@@ -110,7 +118,7 @@ async function reply(supabase: ReturnType<typeof createServiceRoleClient>, conv:
   const { data: sup } = (await from(supabase, 'leads').select('email, email_bounced_at').eq('id', conv.lead_id).maybeSingle()) as { data: { email: string | null; email_bounced_at: string | null } | null };
   if (!sup?.email) return bad('lead sem e-mail');
   if (sup.email_bounced_at) return NextResponse.json({ success: false, error: 'E-mail do lead com bounce', code: 'bloqueado' }, { status: 409 });
-  const { data: suppressed } = (await from(supabase, 'email_suppressions').select('id').eq('org_id', conv.org_id).ilike('email', sup.email).limit(1).maybeSingle()) as { data: { id: string } | null };
+  const { data: suppressed } = (await from(supabase, 'email_suppressions').select('id').eq('org_id', conv.org_id).ilike('email', escapeLikePattern(sup.email)).limit(1).maybeSingle()) as { data: { id: string } | null };
   if (suppressed) return NextResponse.json({ success: false, error: 'E-mail suprimido (descadastro)', code: 'bloqueado' }, { status: 409 });
 
   // Teto diário da caixa (respostas do agente contam)
