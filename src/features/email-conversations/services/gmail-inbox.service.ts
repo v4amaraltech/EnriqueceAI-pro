@@ -4,7 +4,7 @@ import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { refreshAccessToken, type GmailConnection } from '@/features/integrations/services/email.service';
 
-import { extractPlainText, headersToMap, type InboundHeaders } from './inbound-classifier';
+import { extractPlainText, gmailAuthenticationResults, headersToMap, type InboundHeaders } from './inbound-classifier';
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const TIMEOUT_MS = 20_000;
@@ -104,6 +104,8 @@ export interface FullMessage {
   snippet: string;
   text: string;
   mimeType: string | null;
+  /** Gmail's own Authentication-Results (top-most mx.google.com one), or null. */
+  authResults: string | null;
 }
 
 export async function getMessageFull(token: string, id: string): Promise<FullMessage | null> {
@@ -121,6 +123,7 @@ export async function getMessageFull(token: string, id: string): Promise<FullMes
     threadId: m.threadId,
     internalDate: new Date(Number(m.internalDate ?? Date.now())),
     headers: headersToMap(m.payload?.headers),
+    authResults: gmailAuthenticationResults(m.payload?.headers),
     snippet: m.snippet ?? '',
     text: extractPlainText(m.payload as never),
     mimeType: m.payload?.mimeType ?? null,

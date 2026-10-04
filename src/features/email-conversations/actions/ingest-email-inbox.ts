@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { escapeLikePattern } from '@/lib/utils/like';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { createNotification } from '@/features/notifications/services/notification.service';
 
-import { classifyInbound, extractEmailAddress, stripQuotedReply } from '../services/inbound-classifier';
+import { classifyInbound, extractEmailAddress, senderAuthVerdict, stripQuotedReply } from '../services/inbound-classifier';
 import {
   getMailboxAccessToken, getMessageFull, listBdrMailboxes, listNewMessageIds, type BdrMailbox,
 } from '../services/gmail-inbox.service';
@@ -33,11 +35,14 @@ export async function ingestEmailInbox(): Promise<{ success: boolean; data?: Ing
   const out: IngestResult = { mailboxes: 0, novas: 0, conversas: 0, ignoradas: 0, erros: [] };
   const mailboxes = await listBdrMailboxes(supabase);
   const ownEmails = mailboxes.map((m) => m.email_address.toLowerCase());
+  // Mail between accounts of the same Workspace arrives without Gmail's
+  // Authentication-Results; external mail always carries it.
+  const ownDomains = new Set(ownEmails.map((e) => e.split('@')[1]).filter((d): d is string => !!d));
 
   for (const mb of mailboxes) {
     out.mailboxes++;
     try {
-      const r = await ingestMailbox(supabase, mb, ownEmails);
+      const r = await ingestMailbox(supabase, mb, ownEmails, ownDomains);
       out.novas += r.novas; out.conversas += r.conversas; out.ignoradas += r.ignoradas;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -48,7 +53,7 @@ export async function ingestEmailInbox(): Promise<{ success: boolean; data?: Ing
   return { success: true, data: out };
 }
 
-async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails: string[]) {
+async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails: string[], ownDomains: Set<string>) {
   const res = { novas: 0, conversas: 0, ignoradas: 0 };
   const token = await getMailboxAccessToken(supabase, mb);
   if (!token) return res;
@@ -81,13 +86,27 @@ async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails
 
     const kind = classifyInbound({ headers: msg.headers, ownEmails, isKnownLeadSender: Boolean(existingConv), mimeType: msg.mimeType });
 
+    // Remetente autenticado (SPF/DKIM/DMARC do próprio Gmail)? Sem isso, um
+    // e-mail com From forjado se passava pelo lead, parava a cadência e chegava
+    // ao agente de IA. Falha explícita nunca conta como lead; para casar um lead
+    // NOVO pelo From (sem conversa na thread) é preciso aprovação.
+    const auth = senderAuthVerdict(msg.authResults, fromEmail);
+    const internal = auth === 'unknown' && !!fromEmail && ownDomains.has(fromEmail.split('@')[1] ?? '');
+    const authOk = auth === 'pass' || internal || (Boolean(existingConv) && auth === 'unknown');
+
     // Lead: pelo e-mail do remetente (na org) ou pela conversa da thread
     let leadId: string | null = existingConv?.lead_id ?? null;
-    if (!leadId && kind === 'lead' && fromEmail) {
-      const { data: lead } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', fromEmail).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
+    if (!leadId && kind === 'lead' && fromEmail && authOk) {
+      // Igualdade case-insensitive: sem escapar, `%`/`_` do remetente viravam
+      // curingas e um From como "%@%.%" casava qualquer lead da org.
+      const { data: lead } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', escapeLikePattern(fromEmail)).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
       leadId = lead?.id ?? null;
     }
-    const finalKind = kind === 'lead' && !leadId ? 'unknown' : kind;
+    if (kind === 'lead' && !authOk) {
+      console.warn(`[inbox] ${mb.email_address}: remetente ${fromEmail ?? '?'} sem autenticação (${auth}) — não tratado como lead (msg ${msg.id})`);
+      await notifyUnverifiedReply(supabase, mb, fromEmail, existingConv?.lead_id ?? null);
+    }
+    const finalKind = kind === 'lead' && (!leadId || !authOk) ? 'unknown' : kind;
 
     const { data: inserted } = (await from(supabase, 'email_inbound')
       .insert({
@@ -162,4 +181,35 @@ async function marcarRespondeuSeForPrimeira(supabase: SupabaseClient, mb: BdrMai
   }
   await from(supabase, 'leads').update({ status: 'contacted', contacted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId).eq('status', 'new');
+}
+
+/**
+ * A message that looks like a lead's reply but failed sender authentication is
+ * not handed to the AI agent (could be forged). It may still be a real reply
+ * from a badly configured domain, so the lead's owner is told to check the
+ * inbox — generic text only, never the (untrusted) content.
+ */
+async function notifyUnverifiedReply(supabase: SupabaseClient, mb: BdrMailbox, fromEmail: string | null, convLeadId: string | null) {
+  try {
+    let leadId = convLeadId;
+    if (!leadId && fromEmail) {
+      const { data } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', escapeLikePattern(fromEmail)).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
+      leadId = data?.id ?? null;
+    }
+    if (!leadId) return;
+    const { data: lead } = (await from(supabase, 'leads').select('assigned_to, nome_fantasia, razao_social').eq('id', leadId).maybeSingle()) as { data: { assigned_to: string | null; nome_fantasia: string | null; razao_social: string | null } | null };
+    if (!lead?.assigned_to) return;
+    await createNotification({
+      org_id: mb.org_id,
+      user_id: lead.assigned_to,
+      type: 'integration_error',
+      title: `Resposta não verificada: ${lead.nome_fantasia || lead.razao_social || fromEmail || 'lead'}`,
+      body: `Chegou na caixa ${mb.email_address} um e-mail em nome deste lead que não passou na verificação do remetente, então o BDR IA não respondeu. Confira na caixa se é do lead mesmo.`,
+      resource_type: 'lead',
+      resource_id: leadId,
+      metadata: { mailbox: mb.email_address, from_email: fromEmail, reason: 'sender_auth_failed' },
+    });
+  } catch (err) {
+    console.error('[inbox] falha ao avisar resposta não verificada:', err);
+  }
 }
