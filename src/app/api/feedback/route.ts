@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
 
+import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -742,11 +743,11 @@ async function notifyManagers(
 </body>
 </html>`.trim();
 
-  // Send to each manager in parallel
+  // Send to each manager in parallel (e-mails resolved in one query)
+  const managerEmails = await resolveUserEmails(managers.map((m) => m.user_id));
   await Promise.all(
     managers.map(async (m) => {
-      const { data: authData } = await supabase.auth.admin.getUserById(m.user_id);
-      const email = authData?.user?.email;
+      const email = managerEmails.get(m.user_id);
       if (!email) return;
       try {
         await sendPlatformEmail({

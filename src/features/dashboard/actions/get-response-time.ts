@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
@@ -213,23 +213,11 @@ export async function getResponseTimeData(
     userMap.set(userId, entry);
   }
 
-  // Resolve user names
-  const nameMap = new Map<string, { name: string; avatarUrl: string | null }>();
-  try {
-    const admin = createAdminSupabaseClient();
-    const userIdsToResolve = [...userMap.keys()];
-    await Promise.all(
-      userIdsToResolve.map(async (id) => {
-        const { data } = await admin.auth.admin.getUserById(id);
-        if (data?.user) {
-          const u = data.user;
-          const name = (u.user_metadata?.name as string) || (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || u.id.slice(0, 8);
-          const avatarUrl = (u.user_metadata?.avatar_url as string) || (u.user_metadata?.picture as string) || null;
-          nameMap.set(u.id, { name, avatarUrl });
-        }
-      }),
-    );
-  } catch { /* fallback to truncated IDs */ }
+  // Resolve user names (one query)
+  const profiles = await resolveUserProfiles([...userMap.keys()]);
+  const nameMap = new Map<string, { name: string; avatarUrl: string | null }>(
+    [...profiles].map(([id, p]) => [id, { name: p.displayName, avatarUrl: p.avatarUrl }]),
+  );
 
   const byUser: ResponseTimeByUser[] = Array.from(userMap.entries())
     .map(([userId, { total, within }]) => ({

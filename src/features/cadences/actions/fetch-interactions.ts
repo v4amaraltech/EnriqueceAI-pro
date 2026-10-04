@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type { TimelineEntry, CadenceMetrics } from '../cadences.contract';
@@ -97,25 +97,8 @@ export async function fetchLeadTimeline(
   const performerIds = [...new Set(
     (interactions ?? []).map((i) => i.performed_by as string | null).filter((id): id is string => id != null),
   )];
-  const userNameMap = new Map<string, string>();
-  if (performerIds.length > 0) {
-    try {
-      const adminClient = createAdminSupabaseClient();
-      await Promise.all(
-        performerIds.map(async (id) => {
-          const { data } = await adminClient.auth.admin.getUserById(id);
-          if (data?.user) {
-            const u = data.user;
-            const meta = u.user_metadata as Record<string, unknown> | undefined;
-            const name = (meta?.full_name ?? meta?.name ?? '') as string;
-            userNameMap.set(u.id, name || u.email?.split('@')[0] || u.id.slice(0, 8));
-          }
-        }),
-      );
-    } catch {
-      // Fallback silently
-    }
-  }
+  const profiles = await resolveUserProfiles(performerIds);
+  const userNameMap = new Map([...profiles].map(([id, p]) => [id, p.displayName]));
 
   // Enrich phone interactions with call data (recording + transcription)
   const callIds = (interactions ?? [])

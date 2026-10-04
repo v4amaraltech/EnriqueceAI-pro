@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 
 const TIMEZONE = 'America/Sao_Paulo';
 /** Só dispara a partir das 8h BRT (a manhã do dia D-1 / do dia da reunião). */
@@ -174,24 +175,13 @@ export function buildWebhookPayload(
  * não resolve fica fora do mapa e o payload manda `sdr: null` (não inventa
  * valor). Espelha o padrão de meeting-reminders.service.ts.
  */
-async function resolveSdrNames(
-  supabase: SupabaseClient,
-  ids: string[],
-): Promise<Map<string, string>> {
+async function resolveSdrNames(ids: string[]): Promise<Map<string, string>> {
+  // Best-effort — id não resolvido cai em sdr=null.
   const map = new Map<string, string>();
-  const unique = [...new Set(ids.filter(Boolean))];
-  await Promise.all(
-    unique.map(async (id) => {
-      try {
-        const { data } = await supabase.auth.admin.getUserById(id);
-        const meta = data?.user?.user_metadata as { full_name?: string; name?: string } | undefined;
-        const name = meta?.full_name || meta?.name || data?.user?.email?.split('@')[0] || '';
-        if (name) map.set(id, name);
-      } catch {
-        // best-effort — id não resolvido cai em sdr=null
-      }
-    }),
-  );
+  for (const [id, p] of await resolveUserProfiles(ids)) {
+    const name = p.fullName || p.email?.split('@')[0] || '';
+    if (name) map.set(id, name);
+  }
   return map;
 }
 
@@ -263,7 +253,6 @@ export async function runMeetingWebhookDispatch(
 
   // 1b. Nome do SDR que marcou (resolvido de auth.users — não fica na view).
   const sdrNames = await resolveSdrNames(
-    supabase,
     rows.map((r) => r.sdr_user_id).filter((id): id is string => Boolean(id)),
   );
 

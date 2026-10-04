@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { fetchRankingData } from '../services/ranking-metrics.service';
@@ -51,26 +51,10 @@ export async function getRankingData(
 
     const userNameMap = new Map<string, string>();
     const userAvatarMap = new Map<string, string>();
-    if (allUserIds.size > 0) {
-      try {
-        const adminClient = createAdminSupabaseClient();
-        await Promise.all(
-          [...allUserIds].map(async (id) => {
-            const { data } = await adminClient.auth.admin.getUserById(id);
-            if (data?.user) {
-              const u = data.user;
-              const meta = u.user_metadata as { full_name?: string; avatar_url?: string } | undefined;
-              const name = meta?.full_name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
-              userNameMap.set(u.id, name);
-              if (meta?.avatar_url) {
-                userAvatarMap.set(u.id, meta.avatar_url);
-              }
-            }
-          }),
-        );
-      } catch {
-        // Fallback: keep userId truncated
-      }
+    const profiles = await resolveUserProfiles([...allUserIds]);
+    for (const [id, p] of profiles) {
+      userNameMap.set(id, p.displayName);
+      if (p.avatarUrl) userAvatarMap.set(id, p.avatarUrl);
     }
 
     function resolveNames(entries: SdrRankingEntry[]): SdrRankingEntry[] {

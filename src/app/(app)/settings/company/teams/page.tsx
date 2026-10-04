@@ -1,5 +1,5 @@
 import { requireManager } from '@/lib/auth/require-manager';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -34,19 +34,12 @@ export default async function CompanyTeamsPage() {
     data: OrganizationMemberRow[] | null;
   };
 
-  const adminClient = createAdminSupabaseClient();
+  // Names from auth.users in one query (was one sequential call per member)
+  const profiles = await resolveUserProfiles((members ?? []).map((m) => m.user_id));
   const nameMap: Record<string, string> = {};
   for (const m of members ?? []) {
-    try {
-      const { data } = await adminClient.auth.admin.getUserById(m.user_id);
-      const meta = data?.user?.user_metadata as
-        | { full_name?: string }
-        | undefined;
-      const email = data?.user?.email;
-      nameMap[m.user_id] = meta?.full_name || email || m.user_id;
-    } catch {
-      nameMap[m.user_id] = m.user_id;
-    }
+    const p = profiles.get(m.user_id);
+    nameMap[m.user_id] = p?.fullName || p?.email || m.user_id;
   }
 
   return <TeamRosterView members={members ?? []} nameMap={nameMap} />;
