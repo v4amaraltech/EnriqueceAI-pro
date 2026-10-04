@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildEvolutionEventId,
   parseInboundMessage,
-  phoneCandidates,
+  leadPhoneMatches,
+  localPhoneVariants,
 } from '../../supabase/functions/_shared/evolution-events';
 
 const INSTANCE = 'ea_c2727473_3e0deabd_a7jx';
@@ -66,10 +67,46 @@ describe('parseInboundMessage', () => {
   });
 });
 
-describe('phoneCandidates', () => {
-  it('cobre com/sem 55 e com/sem o nono dígito', () => {
-    const c = phoneCandidates('5511999998888');
-    expect(c).toEqual(expect.arrayContaining(['5511999998888', '11999998888', '1199998888', '551199998888', '+5511999998888']));
+describe('localPhoneVariants', () => {
+  it('celular com 9: forma enviada + sem o 9', () => {
+    expect(localPhoneVariants('5511999998888')).toEqual(['11999998888', '1199998888']);
+  });
+
+  it('celular SEM o 9 (WhatsApp às vezes manda assim): forma enviada + com o 9', () => {
+    expect(localPhoneVariants('551199998888')).toEqual(['1199998888', '11999998888']);
+  });
+
+  it('fixo (começa com 2–5) não ganha 9', () => {
+    expect(localPhoneVariants('551932582600')).toEqual(['1932582600']);
+  });
+
+  it('sem 55 e com formatação', () => {
+    expect(localPhoneVariants('(11) 99999-8888')).toEqual(['11999998888', '1199998888']);
+  });
+
+  it('curto demais (sem DDD) → nada', () => {
+    expect(localPhoneVariants('99998888')).toEqual([]);
+  });
+
+  it('estrangeiro ou @lid (12+ dígitos locais) → nada', () => {
+    expect(localPhoneVariants('351912345678')).toEqual([]);
+    expect(localPhoneVariants('123456789012345')).toEqual([]);
+  });
+});
+
+describe('leadPhoneMatches', () => {
+  const v = localPhoneVariants('5511999998888'); // ['11999998888', '1199998888']
+
+  it('telefone formatado, com 55, sem o 9 ou em phones[] casam', () => {
+    expect(leadPhoneMatches('(11) 99999-8888', null, v)).toBe(true);
+    expect(leadPhoneMatches('+55 11 99999-8888', null, v)).toBe(true);
+    expect(leadPhoneMatches('1199998888', null, v)).toBe(true);
+    expect(leadPhoneMatches(null, [{ tipo: 'celular', numero: '5511999998888' }], v)).toBe(true);
+  });
+
+  it('outro DDD com os mesmos últimos dígitos NÃO casa', () => {
+    expect(leadPhoneMatches('(51) 99999-8888', [], v)).toBe(false);
+    expect(leadPhoneMatches('(19) 9999-8888', [], v)).toBe(false);
   });
 });
 

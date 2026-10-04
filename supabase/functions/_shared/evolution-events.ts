@@ -81,38 +81,50 @@ export function parseInboundMessage(data: unknown): InboundReply | null {
 }
 
 /**
- * Phone strings to match against leads.telefone, covering the Brazilian country
- * code (55) and 9th-digit variance both ways (leads may be stored either form).
+ * Local forms (DDD + number, digits only) of an inbound WhatsApp number, to
+ * look the lead up by digits (`find_lead_ids_by_phone`): the number as sent and
+ * the 9th-digit variant — WhatsApp sometimes sends mobiles without the 9, and
+ * leads may be stored either way. The 9 is only added to mobiles (number starts
+ * with 6–9); landlines stay as they are. Returns [] when it isn't a BR number
+ * with DDD (10 or 11 local digits) — foreign numbers and WhatsApp `@lid` ids
+ * (~15 digits) would otherwise match a random lead by their last digits.
  */
-export function phoneCandidates(phone: string): string[] {
+export function localPhoneVariants(phone: string): string[] {
+  const local = toLocalDigits(phone);
+  if (local.length === 11) {
+    return local[2] === '9' ? [local, local.slice(0, 2) + local.slice(3)] : [local];
+  }
+  if (local.length === 10) {
+    return /[6-9]/.test(local[2] ?? '') ? [local, local.slice(0, 2) + '9' + local.slice(2)] : [local];
+  }
+  return [];
+}
+
+/** Digits only, without the 55 country code. */
+function toLocalDigits(phone: string): string {
   const digits = phone.replace(/\D/g, '');
-  const set = new Set<string>();
-  const add = (p: string) => {
-    if (p) {
-      set.add(p);
-      set.add('+' + p);
+  return digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
+}
+
+/**
+ * Does any of the lead's numbers (telefone + phones[].numero) EQUAL one of the
+ * variants? `find_lead_ids_by_phone` also compares the last 10 digits of an
+ * 11-digit number, which drops the 1st DDD digit — "(51) 99999-8888" would match
+ * "11 99999-8888". This exact check closes that gap (0 such pairs in prod on
+ * 04/10, but a hit would stop the wrong lead's cadence).
+ */
+export function leadPhoneMatches(telefone: string | null, phones: unknown, variants: readonly string[]): boolean {
+  const wanted = new Set(variants);
+  const numbers: string[] = [];
+  if (telefone) numbers.push(telefone);
+  if (Array.isArray(phones)) {
+    for (const p of phones) {
+      if (typeof p === 'string') numbers.push(p);
+      else if (p && typeof p === 'object') {
+        const n = (p as Record<string, unknown>).numero ?? (p as Record<string, unknown>).number;
+        if (typeof n === 'string') numbers.push(n);
+      }
     }
-  };
-  add(digits);
-
-  // Strip the 55 country code to get the local DDD + number.
-  let local = digits;
-  if (digits.startsWith('55') && digits.length >= 12) {
-    local = digits.slice(2);
-    add(local);
-    add('55' + local);
   }
-
-  // local = DDD(2) + number(8 or 9 digits) — toggle the 9th digit both ways.
-  if (local.length === 11 && local[2] === '9') {
-    const without = local.slice(0, 2) + local.slice(3);
-    add(without);
-    add('55' + without);
-  } else if (local.length === 10) {
-    const withNine = local.slice(0, 2) + '9' + local.slice(2);
-    add(withNine);
-    add('55' + withNine);
-  }
-
-  return [...set];
+  return numbers.some((n) => wanted.has(toLocalDigits(n)));
 }
