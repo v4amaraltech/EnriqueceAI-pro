@@ -26,7 +26,8 @@ export default async function AtividadesPage() {
 
   const [activitiesResult, progressResult, dialerResult, availableResult, activeProspectingResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
     fetchPendingActivities(),
-    fetchDailyProgress(),
+    // The page uses the queue length as `pending` (below) — skip that count.
+    fetchDailyProgress(undefined, { includePending: false }),
     fetchDialerQueue(),
     fetchAvailableLeadsCount(),
     fetchActiveProspectingCount(),

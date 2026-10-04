@@ -354,4 +354,27 @@ describe('fetchPendingActivities', () => {
     const names = result.data.map((a) => a.cadenceName).sort();
     expect(names).toEqual(['Follow Up', 'Outbound V1']);
   });
+
+  it('busca só as colunas do lead que a fila usa (inclui whatsapp_invalid_at, nunca *)', async () => {
+    const selects: string[] = [];
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return orgMemberChain();
+      const chain = createChainMock({ data: [], error: null });
+      (chain.select as ReturnType<typeof vi.fn>).mockImplementation((cols: string) => {
+        selects.push(`${table}:${cols}`);
+        return chain;
+      });
+      return chain;
+    });
+
+    await fetchPendingActivities();
+
+    const enrollmentSelect = selects.find((s) => s.startsWith('cadence_enrollments:'));
+    expect(enrollmentSelect).toBeDefined();
+    expect(enrollmentSelect).not.toContain('leads!inner(*)');
+    expect(enrollmentSelect).toContain('whatsapp_invalid_at');
+    for (const col of ['telefone', 'phones', 'socios', 'endereco', 'custom_field_values', 'assigned_to']) {
+      expect(enrollmentSelect).toContain(col);
+    }
+  });
 });

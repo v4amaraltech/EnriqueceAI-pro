@@ -44,6 +44,22 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
 
   const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.loss_reason_id || params.search || params.created_period || params.created_from || params.created_to);
 
+  // Filter options, counts and members don't depend on the lead page — start
+  // them together with fetchLeads instead of waiting for it (they used to run
+  // only after the list came back).
+  const independent = Promise.all([
+    fetchOrgMembersAuth(),
+    fetchLeadStatusCounts(),
+    fetchActiveCadences(),
+    fetchDistinctCnaes(),
+    getLeadSourceOptions(),
+    fetchDistinctCanais(),
+    fetchLossReasonsForFilter(),
+  ]);
+  // Handled up front so a rejection while fetchLeads is still running isn't
+  // reported as unhandled; the real await below still sees it.
+  independent.catch(() => undefined);
+
   const result = await fetchLeads(filters);
 
   if (!result.success) {
@@ -56,7 +72,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
     );
   }
 
-  // Fetch cadence info and user map in parallel
+  // Only these depend on the page of leads
   const leadIds = result.data.data.map((l) => l.id);
   const uniqueUserIds = [...new Set(
     result.data.data
@@ -64,16 +80,12 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       .filter((id): id is string => id !== null && id !== undefined),
   )];
 
-  const [cadenceResult, userMapResult, membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions, canaisResult, lossReasonsResult] = await Promise.all([
-    fetchLeadsCadenceInfo(leadIds),
-    fetchUserMap(uniqueUserIds),
-    fetchOrgMembersAuth(),
-    fetchLeadStatusCounts(),
-    fetchActiveCadences(),
-    fetchDistinctCnaes(),
-    getLeadSourceOptions(),
-    fetchDistinctCanais(),
-    fetchLossReasonsForFilter(),
+  const [
+    [cadenceResult, userMapResult],
+    [membersResult, statusCountsResult, cadencesResult, cnaesResult, leadSourceOptions, canaisResult, lossReasonsResult],
+  ] = await Promise.all([
+    Promise.all([fetchLeadsCadenceInfo(leadIds), fetchUserMap(uniqueUserIds)]),
+    independent,
   ]);
   const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
   const userMap = userMapResult.success ? userMapResult.data : {};
