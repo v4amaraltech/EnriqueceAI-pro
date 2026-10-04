@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
+import { runTrackedWorker } from '@/lib/workers/worker-run';
 import { executePendingStepsCron } from '@/features/cadences/actions/execute-cadence';
 
 export const maxDuration = 120;
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await executePendingStepsCron();
+  const result = await runTrackedWorker('execute-cadence-steps', () => executePendingStepsCron());
 
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 500 });
