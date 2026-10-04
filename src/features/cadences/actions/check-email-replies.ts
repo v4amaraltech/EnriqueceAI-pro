@@ -13,10 +13,14 @@ import {
 } from '@/features/integrations/services/email.service';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
+import { checkThreadForReplyOrBounce, mailboxCandidates } from '../services/reply-detection.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 
 const REPLY_CHECK_DAYS = 30;
+// ~1.2k sent emails sit in the 30-day window and the cron runs every 10 min,
+// so rotating 100 per run re-checks every thread roughly every 2 hours.
 const BATCH_SIZE = 100;
+const PARALLEL_BATCH = 5;
 
 interface SentInteraction {
   id: string;
@@ -36,7 +40,10 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   const supabase = createServiceRoleClient();
   let found = 0;
 
-  // 1. Fetch sent email interactions from the last N days that have an external_id
+  // 1. Fetch sent email interactions from the last N days that have an external_id.
+  // Rotation: least-recently-checked first (never checked = NULL first). Without
+  // an order the same arbitrary 100 rows came back every run and the rest of the
+  // window was never inspected.
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - REPLY_CHECK_DAYS);
 
@@ -47,6 +54,8 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     .not('external_id', 'is', null)
     .not('performed_by', 'is', null)
     .gte('created_at', cutoffDate.toISOString())
+    .order('metadata->>reply_checked_at', { ascending: true, nullsFirst: true })
+    .order('created_at', { ascending: true })
     .limit(BATCH_SIZE)) as { data: SentInteraction[] | null; error: { message: string } | null };
 
   if (fetchError || !sentInteractions?.length) {
@@ -57,6 +66,13 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     return { success: true, data: { found: 0 } };
   }
 
+  // Every fetched row is stamped at the end — including the ones skipped below —
+  // so the rotation moves past them instead of re-fetching them forever.
+  const checkedAt = new Date().toISOString();
+  const metaPatches = new Map<string, Record<string, unknown>>(
+    sentInteractions.map((i) => [i.id, { reply_checked_at: checkedAt }]),
+  );
+
   // 2a. Primary guard — drop interactions whose lead is already flagged
   // bounced. Without this, V4 Amaral hit a loop where the same 4 archived
   // leads (japescuma, mhbgrejao, fhytfhjii, dogaah) generated 12 bounce
@@ -64,13 +80,19 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   // (PostgREST `.in()` with a NULL inside the array short-circuits the
   // whole filter), so every cron run re-recorded the bounce. Stopping at
   // the lead level is cheaper and authoritative — a bounced email doesn't
-  // un-bounce.
+  // un-bounce. The same query brings the lead owner (mailbox fallback).
   const sentLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
-  const { data: bouncedLeads } = (await from(supabase, 'leads')
-    .select('id')
-    .in('id', sentLeadIds)
-    .not('email_bounced_at', 'is', null)) as { data: Array<{ id: string }> | null };
-  const bouncedLeadIds = new Set((bouncedLeads ?? []).map((l) => l.id));
+  const { data: sentLeads } = (await from(supabase, 'leads')
+    .select('id, assigned_to, email_bounced_at')
+    .in('id', sentLeadIds)) as {
+    data: Array<{ id: string; assigned_to: string | null; email_bounced_at: string | null }> | null;
+  };
+  const leadOwner = new Map<string, string | null>();
+  const bouncedLeadIds = new Set<string>();
+  for (const l of sentLeads ?? []) {
+    leadOwner.set(l.id, l.assigned_to);
+    if (l.email_bounced_at) bouncedLeadIds.add(l.id);
+  }
   if (bouncedLeadIds.size > 0) {
     console.warn(`[reply-check] Skipping ${bouncedLeadIds.size} leads with email_bounced_at already set`);
   }
@@ -100,65 +122,89 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
     return !alreadyProcessedMap.has(`${i.cadence_id}:${i.lead_id}`);
   });
 
-  if (!toCheck.length) {
-    console.warn(`[reply-check] All ${sentInteractions.length} interactions already processed`);
-    return { success: true, data: { found: 0 } };
-  }
+  console.warn(`[reply-check] Checking ${toCheck.length} interactions (${sentInteractions.length} fetched, ${alreadyProcessedMap.size} already processed)`);
 
-  console.warn(`[reply-check] Checking ${toCheck.length} interactions (${sentInteractions.length} total sent, ${alreadyProcessedMap.size} already processed)`);
-
-  // 3. Group interactions by performed_by (the SDR who sent the email — has the Gmail token)
-  const byUser = new Map<string, SentInteraction[]>();
-  for (const interaction of toCheck) {
-    const userId = interaction.performed_by;
-    if (!userId) continue;
-    const list = byUser.get(userId) ?? [];
-    list.push(interaction);
-    byUser.set(userId, list);
-  }
-
-  console.warn(`[reply-check] Users to check: ${byUser.size}`);
-
-  // 5. For each user, get Gmail connection and check threads
-  for (const [userId, interactions] of byUser) {
-    console.warn(`[reply-check] Processing user=${userId} interactions=${interactions.length}`);
-    const accessToken = await getValidAccessToken(supabase, userId);
-    if (!accessToken) {
-      console.error(`[reply-check] No valid Gmail token for user=${userId} — skipping ${interactions.length} interactions`);
-      continue;
+  // 3. One token lookup per mailbox per run, shared by the parallel batches.
+  const tokenCache = new Map<string, Promise<string | null>>();
+  const tokenFor = (userId: string) => {
+    let token = tokenCache.get(userId);
+    if (!token) {
+      token = getValidAccessToken(supabase, userId);
+      tokenCache.set(userId, token);
     }
-    console.warn(`[reply-check] Got valid token for user=${userId}, checking ${interactions.length} threads...`);
+    return token;
+  };
 
-    // Process interactions in parallel batches of 5 to avoid Gmail rate limits
-    const PARALLEL_BATCH = 5;
-    for (let i = 0; i < interactions.length; i += PARALLEL_BATCH) {
-      const batch = interactions.slice(i, i + PARALLEL_BATCH);
-      const results = await Promise.allSettled(
-        batch.map(async (interaction) => {
-          const threadId = await getThreadId(supabase, interaction, accessToken);
-          if (!threadId) return;
+  // The same lead can show up with several sent rows in one batch — record its
+  // reply/bounce once.
+  const recordedPairs = new Set<string>();
 
-          const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
-          if (!detection) return;
+  const inspect = async (interaction: SentInteraction) => {
+    const candidates = mailboxCandidates(interaction, leadOwner.get(interaction.lead_id) ?? null);
 
-          if (detection === 'bounce') {
-            await recordBounce(supabase, interaction);
-            await checkAndAutoBlacklistDomain(supabase, interaction);
-            found++;
-            console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
-          } else {
-            await recordReply(supabase, interaction);
-            found++;
-            console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
-          }
-        }),
-      );
-      for (const r of results) {
-        if (r.status === 'rejected') {
-          console.error('[reply-check] Batch item failed:', r.reason);
-        }
+    for (const userId of candidates) {
+      const accessToken = await tokenFor(userId);
+      if (!accessToken) continue;
+
+      const threadId = await getThreadId(interaction, accessToken);
+      if (!threadId) continue; // message not in this mailbox
+
+      const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
+      if (detection === 'not_found') continue; // thread belongs to another mailbox
+      if (detection === 'error') {
+        // Transient (or a 401/403 on this mailbox) — retried on the next rotation.
+        console.warn(`[reply-check] Gmail error for interaction=${interaction.id} mailbox=${userId} — will retry`);
+        return;
+      }
+
+      const patch = metaPatches.get(interaction.id);
+      if (patch) {
+        patch.sender_user_id = userId;
+        patch.thread_id = threadId;
+      }
+
+      if (detection === 'none') return;
+
+      const pair = `${interaction.cadence_id}:${interaction.lead_id}`;
+      if (recordedPairs.has(pair)) return;
+      recordedPairs.add(pair);
+
+      if (detection === 'bounce') {
+        await recordBounce(supabase, interaction);
+        await checkAndAutoBlacklistDomain(supabase, interaction);
+        found++;
+        console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+      } else {
+        await recordReply(supabase, interaction);
+        found++;
+        console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
+      }
+      return;
+    }
+  };
+
+  // Parallel batches of 5 to stay under Gmail rate limits
+  for (let i = 0; i < toCheck.length; i += PARALLEL_BATCH) {
+    const results = await Promise.allSettled(toCheck.slice(i, i + PARALLEL_BATCH).map(inspect));
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        console.error('[reply-check] Batch item failed:', r.reason);
       }
     }
+  }
+
+  // 4. Stamp the rotation (+ the mailbox that held the thread, when learned).
+  // Merged inside the DB (metadata || patch): rewriting the whole JSON from here
+  // would wipe opens/clicks that /api/track/* recorded during this run.
+  const { error: stampError } = await (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>)('merge_interactions_metadata', {
+    p_items: [...metaPatches].map(([id, patch]) => ({ id, patch })),
+  });
+  if (stampError) {
+    // Without the stamp the rotation stalls on these same rows — make it loud.
+    console.error('[reply-check] Failed to stamp reply_checked_at — rotation will not advance:', stampError.message);
   }
 
   console.warn(`[reply-check] Complete: checked=${toCheck.length} found=${found}`);
@@ -209,7 +255,6 @@ async function getValidAccessToken(
 
 /** Get the threadId for an interaction, from metadata cache or Gmail API */
 async function getThreadId(
-  supabase: SupabaseClient,
   interaction: SentInteraction,
   accessToken: string,
 ): Promise<string | null> {
@@ -217,7 +262,8 @@ async function getThreadId(
   const cachedThreadId = interaction.metadata?.thread_id as string | undefined;
   if (cachedThreadId) return cachedThreadId;
 
-  // Fetch from Gmail API
+  // Fetch from Gmail API (404 when the message lives in another mailbox).
+  // Persisted by the rotation stamp at the end of the run.
   try {
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${interaction.external_id}?fields=threadId`,
@@ -227,112 +273,7 @@ async function getThreadId(
     if (!response.ok) return null;
 
     const data = (await response.json()) as { threadId?: string };
-    const threadId = data.threadId ?? null;
-
-    // Cache the threadId for next time
-    if (threadId) {
-      const existingMeta = interaction.metadata ?? {};
-      await from(supabase, 'interactions')
-        .update({
-          metadata: { ...existingMeta, thread_id: threadId },
-        } as Record<string, unknown>)
-        .eq('id', interaction.id);
-    }
-
-    return threadId;
-  } catch {
-    return null;
-  }
-}
-
-/** Bounce indicator patterns in email From header */
-const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster', 'mail delivery', 'delivery status'];
-
-/** Auto-reply indicator patterns in Subject header */
-const AUTO_REPLY_SUBJECTS = [
-  'out of office',
-  'fora do escritório',
-  'fora do escritorio',
-  'automatic reply',
-  'resposta automática',
-  'resposta automatica',
-  'auto-reply',
-  'autoreply',
-  'vacation',
-  'férias',
-  'ferias',
-  'away from office',
-  'ausência',
-  'ausencia',
-];
-
-/** Auto-reply indicator headers */
-const AUTO_REPLY_HEADERS = ['x-autoreply', 'x-autorespond', 'auto-submitted'];
-
-interface GmailThreadMessage {
-  id: string;
-  payload?: {
-    headers?: Array<{ name: string; value: string }>;
-  };
-}
-
-/** Check if a Gmail thread contains a reply or a bounce */
-async function checkThreadForReplyOrBounce(
-  threadId: string,
-  accessToken: string,
-): Promise<'reply' | 'bounce' | null> {
-  try {
-    const response = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id,payload(headers))`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as { messages?: GmailThreadMessage[] };
-    const messages = data.messages ?? [];
-    if (messages.length <= 1) return null;
-
-    let hasGenuineReply = false;
-
-    // Check each reply message (beyond the first sent message)
-    for (let i = 1; i < messages.length; i++) {
-      const msg = messages[i];
-      const headers = msg?.payload?.headers ?? [];
-
-      const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
-      const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
-
-      // Check bounce
-      if (fromHeader) {
-        const fromLower = fromHeader.value.toLowerCase();
-        if (BOUNCE_SENDERS.some((sender) => fromLower.includes(sender))) {
-          return 'bounce';
-        }
-      }
-
-      // Check auto-reply headers (X-Autoreply, Auto-Submitted, etc.)
-      const isAutoReplyHeader = headers.some((h) => {
-        const name = h.name.toLowerCase();
-        if (AUTO_REPLY_HEADERS.includes(name)) return true;
-        if (name === 'auto-submitted' && h.value.toLowerCase() !== 'no') return true;
-        if (name === 'x-auto-response-suppress') return true;
-        return false;
-      });
-      if (isAutoReplyHeader) continue;
-
-      // Check auto-reply subject patterns
-      if (subjectHeader) {
-        const subjectLower = subjectHeader.value.toLowerCase();
-        const isAutoReplySubject = AUTO_REPLY_SUBJECTS.some((pattern) => subjectLower.includes(pattern));
-        if (isAutoReplySubject) continue;
-      }
-
-      // This message looks like a genuine reply
-      hasGenuineReply = true;
-    }
-
-    return hasGenuineReply ? 'reply' : null;
+    return data.threadId ?? null;
   } catch {
     return null;
   }

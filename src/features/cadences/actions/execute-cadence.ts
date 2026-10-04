@@ -720,14 +720,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           emailDispatched = true;
           // Save messageId, threadId, RFC Message-ID and subject for reply tracking
           const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
-          const metaUpdate: Record<string, unknown> = {};
+          // sender_user_id = whose Gmail actually holds the thread. performed_by
+          // stays the cadence creator (statistics attribute by it), so the
+          // reply-check cron reads the mailbox from here instead.
+          const metaUpdate: Record<string, unknown> = { sender_user_id: senderId };
           if (subject) metaUpdate.subject = subject;
           if (emailResult.threadId) metaUpdate.thread_id = emailResult.threadId;
           if (emailResult.rfcMessageId) metaUpdate.rfc_message_id = emailResult.rfcMessageId;
           if (abVariant) metaUpdate.ab_variant = abVariant;
-          if (Object.keys(metaUpdate).length > 0) {
-            updateData.metadata = metaUpdate;
-          }
+          updateData.metadata = metaUpdate;
           await from(supabase, 'interactions')
             .update(updateData)
             .eq('id', interaction.id);
