@@ -76,6 +76,8 @@ async function autoPauseEnrollment(
     cadenceName: string;
     cadenceId: string;
     channel: 'email' | 'whatsapp';
+    /** Overrides the default "lead sem email/telefone" notification text. */
+    notice?: { title: string; body: string };
   },
 ): Promise<void> {
   await from(supabase, 'cadence_enrollments')
@@ -112,8 +114,10 @@ async function autoPauseEnrollment(
         org_id: notifyCtx.orgId,
         user_id: notifyCtx.userId,
         type: 'integration_error',
-        title: `Cadência pausada — lead ${channelLabel}`,
-        body: `"${notifyCtx.leadName}" foi pausado na cadência "${notifyCtx.cadenceName}" porque o lead está ${channelLabel}. Atualize o cadastro do lead para retomar.`,
+        title: notifyCtx.notice?.title ?? `Cadência pausada — lead ${channelLabel}`,
+        body:
+          notifyCtx.notice?.body ??
+          `"${notifyCtx.leadName}" foi pausado na cadência "${notifyCtx.cadenceName}" porque o lead está ${channelLabel}. Atualize o cadastro do lead para retomar.`,
         resource_type: 'lead',
         resource_id: notifyCtx.leadId,
         metadata: { reason, cadence_id: notifyCtx.cadenceId, enrollment_id: enrollmentId },
@@ -273,6 +277,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     .eq('cadence.type', 'auto_email')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString())
+    // Oldest-due first: unordered, the same stuck rows could keep winning the
+    // 25 slots while healthy enrollments waited.
+    .order('next_step_due', { ascending: true })
     .limit(BATCH_SIZE)) as { data: EnrollmentWithLead[] | null; error: { message: string } | null };
 
   const qErr = handleQueryError(enrollError, 'Erro ao buscar enrollments pendentes', 'cadence-engine');
@@ -657,7 +664,18 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             : cadenceCreatedBy;
 
         if (!senderId) {
+          // Pause + notify. Left active, the enrollment was retried (and failed)
+          // every 5 minutes forever — and with an unordered batch, a pile of
+          // these could take all slots and starve healthy enrollments.
           await markInteractionFailed(supabase, interaction.id, 'no_sender');
+          await autoPauseEnrollment(supabase, enrollment.id, 'no_sender', {
+            ...pauseNotifyCtx,
+            channel: 'email',
+            notice: {
+              title: 'Cadência pausada — sem Gmail para enviar',
+              body: `"${leadName}" foi pausado na cadência "${enrollment.cadence.name}": não há Gmail para enviar o e-mail — o seu não está conectado e a cadência não tem criador. Conecte seu Gmail em Configurações > Integrações e retome a cadência.`,
+            },
+          });
           result.failed++;
           result.errors.push(`Cadência ${enrollment.cadence_id}: sem remetente (SDR sem Gmail e cadência sem criador)`);
           console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_sender duration_ms=${Date.now() - stepStart}`);

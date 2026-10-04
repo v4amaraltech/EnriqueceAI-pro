@@ -12,6 +12,7 @@ import { validateWebhookSecret } from "../_shared/auth.ts";
 import { normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
 import { parseInboundMessage, captureInboundReply } from "../_shared/whatsapp-reply.ts";
+import { buildEvolutionEventId, isMessageEvent } from "../_shared/evolution-events.ts";
 serve(async (req)=>{
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -25,8 +26,13 @@ serve(async (req)=>{
     console.error("Invalid webhook secret");
     return errorResponse("Unauthorized", 401);
   }
+  let payload;
   try {
-    const payload = await req.json();
+    payload = await req.json();
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+  try {
     const { event, instance: instanceName, data } = payload;
     if (!event || !instanceName) {
       return errorResponse("Missing event or instance in payload", 400);
@@ -42,8 +48,12 @@ serve(async (req)=>{
         warning: "Instance not found"
       });
     }
-    // Gerar event_id único para idempotência
-    const eventId = `${instanceName}_${event}_${payload.date_time || Date.now()}`;
+    // whatsapp_instances.org_id — `instance.organization_id` não existe e vinha
+    // undefined: a busca do lead filtrava org_id=undefined e NENHUMA resposta de
+    // WhatsApp era registrada.
+    const orgId: string = instance.org_id;
+    // Gerar event_id único para idempotência (mensagens: id do WhatsApp)
+    const eventId = buildEvolutionEventId(instanceName, event, payload);
     // Verificar se evento já foi processado
     const alreadyProcessed = await eventExists("evolution", eventId);
     if (alreadyProcessed) {
@@ -53,14 +63,6 @@ serve(async (req)=>{
         duplicate: true
       });
     }
-    // Only store full payload for connection/qrcode events — message events
-    // generate ~153KB each and are never re-read after processing
-    const isMessageEvent = event === 'messages.upsert' || event === 'MESSAGES_UPSERT'
-      || event === 'messages.update' || event === 'MESSAGES_UPDATE';
-    const storedPayload = isMessageEvent
-      ? { event, instance: instanceName, trimmed: true }
-      : payload;
-    await createProviderEvent(instance.organization_id, "evolution", eventId, event, storedPayload);
     // Processar evento conforme tipo
     switch(event){
       case "CONNECTION_UPDATE":
@@ -126,19 +128,17 @@ serve(async (req)=>{
           });
           // Capturar resposta do lead: registra interação 'replied', para as
           // cadências ativas e notifica o SDR dono (que ainda toca o som).
-          // Best-effort — falha aqui não pode quebrar o ack do webhook.
-          try {
-            const reply = parseInboundMessage(data);
-            if (reply) {
-              const result = await captureInboundReply(instance.organization_id, reply);
-              if (result.status === "recorded") {
-                console.log(`[evolution-webhook] WhatsApp reply recorded lead=${result.leadId} instance=${instanceName}`);
-              } else if (result.status === "no_lead") {
-                console.warn(`[evolution-webhook] Inbound WhatsApp with no matching lead phone=${reply.phone} org=${instance.organization_id}`);
-              }
+          // Falha aqui sobe para o catch: o evento NÃO é marcado como processado
+          // e a resposta é 5xx, para a Evolution reenviar (captureInboundReply é
+          // idempotente pelo id da mensagem).
+          const reply = parseInboundMessage(data);
+          if (reply) {
+            const result = await captureInboundReply(orgId, reply);
+            if (result.status === "recorded") {
+              console.log(`[evolution-webhook] WhatsApp reply recorded lead=${result.leadId} instance=${instanceName}`);
+            } else if (result.status === "no_lead") {
+              console.warn(`[evolution-webhook] Inbound WhatsApp with no matching lead phone=${reply.phone} org=${orgId}`);
             }
-          } catch (replyErr) {
-            console.error("[evolution-webhook] reply capture failed:", replyErr);
           }
           break;
         }
@@ -154,6 +154,14 @@ serve(async (req)=>{
       default:
         console.log(`Unhandled event type: ${event}`);
     }
+    // Só marca como processado depois de processar: antes era gravado primeiro,
+    // e uma falha no meio deixava o evento "processado" sem ter sido.
+    // Only store full payload for connection/qrcode events — message events
+    // generate ~153KB each and are never re-read after processing
+    const storedPayload = isMessageEvent(event)
+      ? { event, instance: instanceName, trimmed: true }
+      : payload;
+    await createProviderEvent(orgId, "evolution", eventId, event, storedPayload);
     return jsonResponse({
       received: true,
       event,
@@ -161,10 +169,12 @@ serve(async (req)=>{
     });
   } catch (error) {
     console.error("[evolution-webhook] Error processing webhook:", error);
-    // Return 200 to prevent infinite retries, but log error server-side
+    // 5xx para a Evolution reenviar. Antes devolvia 200 e a mensagem se perdia
+    // sem alerta. O evento não foi gravado em provider_events, então o reenvio
+    // não é descartado como duplicado.
     return jsonResponse({
-      received: true,
+      received: false,
       error: "processing_error"
-    });
+    }, 500);
   }
 });
