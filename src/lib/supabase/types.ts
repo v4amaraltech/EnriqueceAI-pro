@@ -8,6 +8,27 @@ export type Database = {
   };
   public: {
     Tables: {
+      _bkp_bdr_arroz_assign_20260922: {
+        Row: {
+          assigned_to: string | null;
+          backed_up_at: string | null;
+          lead_id: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          backed_up_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          assigned_to?: string | null;
+          backed_up_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_cadence_enrolled_backfill_20260909: {
         Row: {
           created_at_backfilled: string | null;
@@ -1450,6 +1471,7 @@ export type Database = {
           created_by: string | null;
           deleted_at: string | null;
           description: string | null;
+          executor: string;
           id: string;
           name: string;
           org_id: string;
@@ -1468,6 +1490,7 @@ export type Database = {
           created_by?: string | null;
           deleted_at?: string | null;
           description?: string | null;
+          executor?: string;
           id?: string;
           name: string;
           org_id: string;
@@ -1486,6 +1509,7 @@ export type Database = {
           created_by?: string | null;
           deleted_at?: string | null;
           description?: string | null;
+          executor?: string;
           id?: string;
           name?: string;
           org_id?: string;
