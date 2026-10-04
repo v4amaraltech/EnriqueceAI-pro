@@ -8,6 +8,45 @@ export type Database = {
   };
   public: {
     Tables: {
+      _bkp_bdr_arroz_assign_20260922: {
+        Row: {
+          assigned_to: string | null;
+          backed_up_at: string | null;
+          lead_id: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          backed_up_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          assigned_to?: string | null;
+          backed_up_at?: string | null;
+          lead_id?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bomdemais_meeting_date_20261001: {
+        Row: {
+          id: string | null;
+          kind: string | null;
+          row_data: Json | null;
+        };
+        Insert: {
+          id?: string | null;
+          kind?: string | null;
+          row_data?: Json | null;
+        };
+        Update: {
+          id?: string | null;
+          kind?: string | null;
+          row_data?: Json | null;
+        };
+        Relationships: [];
+      };
       _bkp_cadence_enrolled_backfill_20260909: {
         Row: {
           created_at_backfilled: string | null;
@@ -1450,6 +1489,7 @@ export type Database = {
           created_by: string | null;
           deleted_at: string | null;
           description: string | null;
+          executor: string;
           id: string;
           name: string;
           org_id: string;
@@ -1468,6 +1508,7 @@ export type Database = {
           created_by?: string | null;
           deleted_at?: string | null;
           description?: string | null;
+          executor?: string;
           id?: string;
           name: string;
           org_id: string;
@@ -1486,6 +1527,7 @@ export type Database = {
           created_by?: string | null;
           deleted_at?: string | null;
           description?: string | null;
+          executor?: string;
           id?: string;
           name?: string;
           org_id?: string;
@@ -6506,6 +6548,15 @@ export type Database = {
           na_fila: number;
         }[];
       };
+      get_user_profiles: {
+        Args: { p_user_ids: string[] };
+        Returns: {
+          avatar_url: string;
+          email: string;
+          full_name: string;
+          id: string;
+        }[];
+      };
       hard_delete_lead: { Args: { p_lead: string }; Returns: string };
       increment_ai_usage: {
         Args: {
@@ -6558,6 +6609,8 @@ export type Database = {
         Args: { p_resposta: string; p_telefone?: string; p_wamid: string };
         Returns: Json;
       };
+      merge_interactions_metadata: { Args: { p_items: Json }; Returns: number };
+      normalizar_celular_br: { Args: { p_tel: string }; Returns: string };
       normalize_br_phone: { Args: { raw: string }; Returns: string };
       normalize_segmento: {
         Args: { p_org: string; p_val: string };
