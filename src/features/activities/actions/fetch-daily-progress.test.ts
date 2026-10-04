@@ -155,8 +155,10 @@ describe('fetchDailyProgress', () => {
     (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
     (interactionsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: rows(3) });
     (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
-    // User has specific goal
-    (goalsChain.single as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { target: 30 } });
+    // User has specific goal (org default also fetched in parallel — user wins)
+    (goalsChain.single as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: { target: 30 } })
+      .mockResolvedValueOnce({ data: { target: 20 } });
 
     const result = await fetchDailyProgress();
     expect(result.success).toBe(true);
@@ -179,5 +181,34 @@ describe('fetchDailyProgress', () => {
     if (result.success) {
       expect(result.data.target).toBe(15);
     }
+  });
+
+  it('includePending:false (página de Atividades) não consulta leads nem inscrições', async () => {
+    // A página usa o tamanho da fila como "pendentes" — a conta daqui era jogada fora.
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
+    (interactionsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: rows(3) });
+    (goalsChain.single as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: { target: 30 } }) // user-specific
+      .mockResolvedValueOnce({ data: { target: 20 } }); // org default
+
+    const result = await fetchDailyProgress(undefined, { includePending: false });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({ completed: 3, pending: 0, total: 3, target: 30 });
+    }
+    expect(leadsChain.select).not.toHaveBeenCalled();
+    expect(enrollmentsChain.select).not.toHaveBeenCalled();
+  });
+
+  it('meta da org vale quando o SDR não tem meta própria', async () => {
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
+    (interactionsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+    (goalsChain.single as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: null })
+      .mockResolvedValueOnce({ data: { target: 25 } });
+
+    const result = await fetchDailyProgress(undefined, { includePending: false });
+    expect(result.success && result.data.target).toBe(25);
   });
 });

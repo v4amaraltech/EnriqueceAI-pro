@@ -37,27 +37,28 @@ export async function fetchLeadTimeline(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data: recent, error } = (await from(supabase, 'interactions')
-    .select('*')
-    .eq('lead_id', leadId)
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(limit)) as { data: InteractionRow[] | null; error: { message: string } | null };
+  // Round 1 (parallel): recent interactions + cadence lifecycle events. The
+  // lifecycle ones are always included, even outside the recent window, and
+  // merged (dedup by id) — so the "cadence story" never goes missing.
+  const [{ data: recent, error }, { data: lifecycle }] = await Promise.all([
+    from(supabase, 'interactions')
+      .select('*')
+      .eq('lead_id', leadId)
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(limit) as unknown as Promise<{ data: InteractionRow[] | null; error: { message: string } | null }>,
+    from(supabase, 'interactions')
+      .select('*')
+      .eq('lead_id', leadId)
+      .eq('org_id', orgId)
+      .filter('metadata->>system_event', 'in', `(${CADENCE_LIFECYCLE_EVENTS.join(',')})`)
+      .order('created_at', { ascending: false })
+      .limit(50) as unknown as Promise<{ data: InteractionRow[] | null }>,
+  ]);
 
   if (error) {
     return { success: false, error: 'Erro ao buscar interações' };
   }
-
-  // Sempre traz os eventos de ciclo de vida da cadência, mesmo fora da janela
-  // recente, e mescla (dedup por id) — garante que a "história da cadência"
-  // nunca fique invisível.
-  const { data: lifecycle } = (await from(supabase, 'interactions')
-    .select('*')
-    .eq('lead_id', leadId)
-    .eq('org_id', orgId)
-    .filter('metadata->>system_event', 'in', `(${CADENCE_LIFECYCLE_EVENTS.join(',')})`)
-    .order('created_at', { ascending: false })
-    .limit(50)) as { data: InteractionRow[] | null };
 
   const byId = new Map<string, InteractionRow>();
   for (const row of [...(recent ?? []), ...(lifecycle ?? [])]) byId.set(row.id, row);
@@ -65,57 +66,49 @@ export async function fetchLeadTimeline(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
-  const cadenceIds = [...new Set(
-    (interactions ?? []).map((i) => i.cadence_id).filter((id): id is string => id != null),
-  )];
-
-  let cadenceMap: Record<string, string> = {};
-  if (cadenceIds.length > 0) {
-    const { data: cadences } = (await from(supabase, 'cadences')
-      .select('id, name')
-      .in('id', cadenceIds)) as { data: { id: string; name: string }[] | null };
-    for (const c of cadences ?? []) {
-      cadenceMap[c.id] = c.name;
-    }
-  }
-
-  const stepIds = [...new Set(
-    (interactions ?? []).map((i) => i.step_id).filter((id): id is string => id != null),
-  )];
-
-  let stepMap: Record<string, { step_order: number; activity_name: string | null; instructions: string | null }> = {};
-  if (stepIds.length > 0) {
-    const { data: steps } = (await from(supabase, 'cadence_steps')
-      .select('id, step_order, activity_name, instructions')
-      .in('id', stepIds)) as { data: { id: string; step_order: number; activity_name: string | null; instructions: string | null }[] | null };
-    for (const s of steps ?? []) {
-      stepMap[s.id] = { step_order: s.step_order, activity_name: s.activity_name, instructions: s.instructions };
-    }
-  }
-
-  // Resolve user names for performed_by
+  const cadenceIds = [...new Set(interactions.map((i) => i.cadence_id).filter((id): id is string => id != null))];
+  const stepIds = [...new Set(interactions.map((i) => i.step_id).filter((id): id is string => id != null))];
   const performerIds = [...new Set(
-    (interactions ?? []).map((i) => i.performed_by as string | null).filter((id): id is string => id != null),
+    interactions.map((i) => i.performed_by as string | null).filter((id): id is string => id != null),
   )];
-  const profiles = await resolveUserProfiles(performerIds);
-  const userNameMap = new Map([...profiles].map(([id, p]) => [id, p.displayName]));
-
-  // Enrich phone interactions with call data (recording + transcription)
-  const callIds = (interactions ?? [])
+  // Phone interactions carry the call id (recording + transcription)
+  const callIds = interactions
     .map((i) => (i.metadata as Record<string, unknown> | null)?.callId as string | undefined)
     .filter((id): id is string => !!id);
 
-  const callDataMap = new Map<string, { recording_url: string | null; transcription: string | null; duration_seconds: number }>();
-  if (callIds.length > 0) {
-    const { data: calls } = (await from(supabase, 'calls')
-      .select('id, recording_url, transcription, duration_seconds')
-      .in('id', callIds)) as { data: Array<{ id: string; recording_url: string | null; transcription: string | null; duration_seconds: number }> | null };
-    for (const c of calls ?? []) {
-      callDataMap.set(c.id, c);
-    }
-  }
+  type StepInfo = { id: string; step_order: number; activity_name: string | null; instructions: string | null };
+  type CallInfo = { id: string; recording_url: string | null; transcription: string | null; duration_seconds: number };
 
-  const timeline: TimelineEntry[] = (interactions ?? []).map((i) => {
+  // Round 2 (parallel): everything that only depends on the interactions above
+  // (used to be four more round trips in series).
+  const [cadences, steps, profiles, calls] = await Promise.all([
+    cadenceIds.length > 0
+      ? (from(supabase, 'cadences').select('id, name').in('id', cadenceIds) as unknown as Promise<{
+          data: { id: string; name: string }[] | null;
+        }>).then((r) => r.data ?? [])
+      : Promise.resolve([] as { id: string; name: string }[]),
+    stepIds.length > 0
+      ? (from(supabase, 'cadence_steps')
+          .select('id, step_order, activity_name, instructions')
+          .in('id', stepIds) as unknown as Promise<{ data: StepInfo[] | null }>).then((r) => r.data ?? [])
+      : Promise.resolve([] as StepInfo[]),
+    resolveUserProfiles(performerIds),
+    callIds.length > 0
+      ? (from(supabase, 'calls')
+          .select('id, recording_url, transcription, duration_seconds')
+          .in('id', callIds) as unknown as Promise<{ data: CallInfo[] | null }>).then((r) => r.data ?? [])
+      : Promise.resolve([] as CallInfo[]),
+  ]);
+
+  const cadenceMap: Record<string, string> = Object.fromEntries(cadences.map((c) => [c.id, c.name]));
+  const stepMap: Record<string, { step_order: number; activity_name: string | null; instructions: string | null }> =
+    Object.fromEntries(
+      steps.map((s) => [s.id, { step_order: s.step_order, activity_name: s.activity_name, instructions: s.instructions }]),
+    );
+  const userNameMap = new Map([...profiles].map(([id, p]) => [id, p.displayName]));
+  const callDataMap = new Map(calls.map((c) => [c.id, c]));
+
+  const timeline: TimelineEntry[] = interactions.map((i) => {
     const meta = i.metadata as Record<string, unknown> | null;
     const stepData = i.step_id ? stepMap[i.step_id] : undefined;
     const performedBy = i.performed_by as string | null;

@@ -11,6 +11,12 @@ import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, Le
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
+/** Lead columns the activity queue renders (ActivityLead). */
+const SCHEDULED_LEAD_COLUMNS =
+  'id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at';
+/** Cadence-queue variant: also needs whatsapp_invalid_at to skip WhatsApp steps. */
+const QUEUE_LEAD_COLUMNS = `${SCHEDULED_LEAD_COLUMNS}, whatsapp_invalid_at`;
+
 interface RawLead {
   id: string;
   org_id: string;
@@ -81,7 +87,9 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // manager; o warn abaixo denuncia se algum dia encostar.
   const QUEUE_ENROLLMENT_LIMIT = 1500;
   let enrollQuery = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
+    // Only the lead columns the queue uses (ActivityLead + whatsapp_invalid_at for
+    // the WhatsApp skip below) — `*` shipped every column of up to ~1.500 leads.
+    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(${QUEUE_LEAD_COLUMNS}), cadence:cadences(id, name, total_steps, created_by, type)`)
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
@@ -258,7 +266,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities).
   // Mesma regra de posse: SDR só as suas; manager, todas.
   let scheduledQuery = from(supabase, 'scheduled_activities')
-    .select('id, lead_id, channel, call_provider, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
+    .select(`id, lead_id, channel, call_provider, scheduled_at, notes, leads!inner(${SCHEDULED_LEAD_COLUMNS})`)
     .eq('status', 'pending');
   if (role !== 'manager') scheduledQuery = scheduledQuery.eq('leads.assigned_to', userId);
   const scheduledResult = (await scheduledQuery
