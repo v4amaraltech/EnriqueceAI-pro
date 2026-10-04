@@ -1,7 +1,7 @@
 # Story: Segurança do BDR IA — remetente forjado, agenda e dados de outra empresa
 
 ## Status
-InReview
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
