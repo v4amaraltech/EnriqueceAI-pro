@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { fetchSdrIds, fetchSdrPaceMetrics } from '../services/sdr-pace.service';
@@ -28,23 +28,9 @@ async function resolveSdrOptions(sdrIds: string[]): Promise<SdrOption[]> {
   const options = new Map<string, SdrOption>(
     sdrIds.map((id) => [id, { userId: id, userName: id.slice(0, 8) }]),
   );
-  try {
-    const adminClient = createAdminSupabaseClient();
-    await Promise.all(
-      sdrIds.map(async (id) => {
-        const { data } = await adminClient.auth.admin.getUserById(id);
-        if (!data?.user) return;
-        const u = data.user;
-        const meta = u.user_metadata as { full_name?: string; avatar_url?: string } | undefined;
-        options.set(id, {
-          userId: id,
-          userName: meta?.full_name ?? u.email?.split('@')[0] ?? id.slice(0, 8),
-          avatarUrl: meta?.avatar_url,
-        });
-      }),
-    );
-  } catch {
-    // Fallback: mantém o id truncado como nome
+  const profiles = await resolveUserProfiles(sdrIds);
+  for (const [id, p] of profiles) {
+    options.set(id, { userId: id, userName: p.displayName, avatarUrl: p.avatarUrl ?? undefined });
   }
   return [...options.values()].sort((a, b) => a.userName.localeCompare(b.userName, 'pt-BR'));
 }

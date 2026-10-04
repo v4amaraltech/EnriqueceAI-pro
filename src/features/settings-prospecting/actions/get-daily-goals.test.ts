@@ -38,16 +38,16 @@ const USERS_BY_ID: Record<string, { id: string; email: string }> = {
   'user-2': { id: 'user-2', email: 'bob@test.com' },
 };
 
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminSupabaseClient: vi.fn().mockReturnValue({
-    auth: {
-      admin: {
-        getUserById: vi.fn().mockImplementation((id: string) =>
-          Promise.resolve({ data: { user: USERS_BY_ID[id] ?? null } }),
-        ),
-      },
-    },
-  }),
+vi.mock('@/lib/auth/user-directory', () => ({
+  resolveUserProfiles: vi.fn((ids: string[]) =>
+    Promise.resolve(
+      new Map(
+        ids
+          .filter((id) => USERS_BY_ID[id])
+          .map((id) => [id, { id, email: USERS_BY_ID[id]!.email, displayName: USERS_BY_ID[id]!.email.split('@')[0] }]),
+      ),
+    ),
+  ),
 }));
 
 import { getDailyGoals } from './get-daily-goals';
@@ -90,7 +90,7 @@ describe('getDailyGoals', () => {
     }
   });
 
-  it('should return member goals with user names from admin API', async () => {
+  it('should return member goals with user names from the user directory', async () => {
     (orgMemberChain.order as ReturnType<typeof vi.fn>).mockReturnValue({
       data: [
         { user_id: 'user-1', role: 'manager' },

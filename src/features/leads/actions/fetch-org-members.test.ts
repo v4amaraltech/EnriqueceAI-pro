@@ -13,18 +13,12 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
 
-const mockGetUserById = vi.fn();
-vi.mock('@/lib/supabase/service', () => ({
-  createServiceRoleClient: vi.fn(() => ({
-    auth: {
-      admin: {
-        getUserById: mockGetUserById,
-      },
-    },
-  })),
+const mockResolveUserProfiles = vi.fn();
+vi.mock('@/lib/auth/user-directory', () => ({
+  resolveUserProfiles: (ids: string[]) => mockResolveUserProfiles(ids),
 }));
 
-// Map of user_id → auth user record used by the getUserById mock.
+// Map of user_id → auth user record served by the user-directory mock.
 const USERS: Record<string, { id: string; email: string; user_metadata: { full_name: string } }> = {
   'user-1': { id: 'user-1', email: 'alice@company.com', user_metadata: { full_name: 'Alice Silva' } },
   'user-2': { id: 'user-2', email: 'bob@company.com', user_metadata: { full_name: 'Bob Santos' } },
@@ -52,11 +46,18 @@ function makeMembersListChain(members: Array<{ user_id: string; role?: 'manager'
 describe('fetchOrgMembersAuth', () => {
   beforeEach(() => {
     resetMocks();
-    mockGetUserById.mockImplementation((userId: string) => {
-      const user = USERS[userId];
-      if (!user) return Promise.resolve({ data: null, error: { message: 'not found' } });
-      return Promise.resolve({ data: { user }, error: null });
-    });
+    mockResolveUserProfiles.mockImplementation((ids: string[]) =>
+      Promise.resolve(
+        new Map(
+          ids
+            .filter((id) => USERS[id])
+            .map((id) => {
+              const u = USERS[id]!;
+              return [id, { id, email: u.email, fullName: u.user_metadata.full_name, displayName: u.user_metadata.full_name }];
+            }),
+        ),
+      ),
+    );
   });
 
   it('should return org members with emails', async () => {
@@ -104,8 +105,9 @@ describe('fetchOrgMembersAuth', () => {
     }
   });
 
-  it('should fallback to truncated user_id when admin client fails', async () => {
-    mockGetUserById.mockRejectedValue(new Error('Admin client unavailable'));
+  it('should fallback to truncated user_id when the user directory resolves nothing', async () => {
+    // resolveUserProfiles never throws — on failure it returns an empty map.
+    mockResolveUserProfiles.mockResolvedValue(new Map());
 
     let callCount = 0;
     mockFrom.mockImplementation(() => {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 export interface MemberInfo {
@@ -10,7 +11,7 @@ export interface MemberInfo {
 
 /**
  * Build a map of user_id → {email, name} for organization members.
- * Uses admin client to look up from auth.users since organization_members
+ * Looks up auth.users (via resolveUserProfiles) since organization_members
  * does not have user_email/name columns.
  */
 export async function buildMemberInfoMap(
@@ -24,35 +25,18 @@ export async function buildMemberInfoMap(
 
   if (!rawMembers?.length) return new Map();
 
-  // Resolve each member individually via auth.admin.getUserById
-  // (listUsers fails with "Database error finding users" on this project)
-  try {
-    const { createServiceRoleClient } = await import('@/lib/supabase/service');
-    const service = createServiceRoleClient();
-    const result = new Map<string, MemberInfo>();
-
-    await Promise.all(
-      rawMembers.map(async (m) => {
-        const { data, error } = await service.auth.admin.getUserById(m.user_id);
-        if (error || !data?.user) {
-          console.error(`[member-lookup] getUserById(${m.user_id.slice(0, 8)}) error:`, error?.message);
-          result.set(m.user_id, { email: m.user_id.slice(0, 8), name: m.user_id.slice(0, 8) });
-          return;
-        }
-        const u = data.user;
-        const meta = u.user_metadata as Record<string, string> | undefined;
-        const name = meta?.full_name ?? meta?.name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
-        const avatarUrl = meta?.avatar_url;
-        result.set(u.id, { email: u.email ?? u.id.slice(0, 8), name, avatarUrl });
-      }),
-    );
-
-    return result;
-  } catch (err) {
-    console.error('[member-lookup] Failed to resolve member names:', err);
-  }
-
-  return new Map(rawMembers.map((m) => [m.user_id, { email: m.user_id.slice(0, 8), name: m.user_id.slice(0, 8) }]));
+  // Names/e-mails from auth.users in one query; unresolved ids fall back to the id prefix
+  const profiles = await resolveUserProfiles(rawMembers.map((m) => m.user_id));
+  return new Map(
+    rawMembers.map((m) => {
+      const p = profiles.get(m.user_id);
+      const short = m.user_id.slice(0, 8);
+      return [
+        m.user_id,
+        p ? { email: p.email ?? short, name: p.displayName, avatarUrl: p.avatarUrl ?? undefined } : { email: short, name: short },
+      ];
+    }),
+  );
 }
 
 /**

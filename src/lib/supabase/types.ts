@@ -6548,6 +6548,15 @@ export type Database = {
           na_fila: number;
         }[];
       };
+      get_user_profiles: {
+        Args: { p_user_ids: string[] };
+        Returns: {
+          avatar_url: string;
+          email: string;
+          full_name: string;
+          id: string;
+        }[];
+      };
       hard_delete_lead: { Args: { p_lead: string }; Returns: string };
       increment_ai_usage: {
         Args: {

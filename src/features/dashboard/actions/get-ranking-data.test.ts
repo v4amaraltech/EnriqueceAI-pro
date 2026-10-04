@@ -15,8 +15,8 @@ vi.mock('@/lib/auth/require-auth-with-member', () => ({
   requireAuthWithMember: (...args: unknown[]) => mockRequireAuthWithMember(...args),
 }));
 
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminSupabaseClient: () => ({ auth: { admin: { listUsers: vi.fn().mockResolvedValue({ data: { users: [] } }) } } }),
+vi.mock('@/lib/auth/user-directory', () => ({
+  resolveUserProfiles: vi.fn(() => Promise.resolve(new Map())),
 }));
 
 const mockFetchRanking = vi.fn();

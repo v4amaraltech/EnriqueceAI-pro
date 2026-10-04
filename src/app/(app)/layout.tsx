@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -106,28 +106,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/upgrade');
   }
 
-  // Resolve user names via getUserById (listUsers fails with "Database error finding users")
+  // Member names/avatars from auth.users in one query (runs on every navigation)
+  const profiles = await resolveUserProfiles((members ?? []).map((m) => m.user_id));
   const userInfoMap = new Map<string, { name: string; avatar_url?: string }>();
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const memberUserIds = (members ?? []).map((m) => m.user_id);
-    await Promise.all(
-      memberUserIds.map(async (id) => {
-        const { data } = await adminClient.auth.admin.getUserById(id);
-        if (data?.user) {
-          const u = data.user;
-          const meta = u.user_metadata as Record<string, unknown> | undefined;
-          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-          const avatarUrl = (meta?.avatar_url ?? '') as string;
-          userInfoMap.set(u.id, {
-            name: fullName || u.email?.split('@')[0] || u.id.slice(0, 8),
-            avatar_url: avatarUrl || undefined,
-          });
-        }
-      }),
-    );
-  } catch {
-    // Fallback: names will be undefined, consumers use user_id slice
+  for (const [id, p] of profiles) {
+    userInfoMap.set(id, { name: p.displayName, avatar_url: p.avatarUrl ?? undefined });
   }
 
   const enrichedMembers = (members ?? []).map((m) => ({
