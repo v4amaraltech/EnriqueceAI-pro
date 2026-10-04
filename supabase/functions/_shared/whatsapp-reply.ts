@@ -7,87 +7,15 @@
 // owning SDR (which also chimes client-side — 'whatsapp_reply' is a sound type).
 import { supabaseAdmin } from './supabase-admin.ts';
 
-export interface InboundReply {
-  phone: string;
-  text: string;
-  messageId: string;
-  pushName: string | null;
-}
+import { type InboundReply, phoneCandidates } from './evolution-events.ts';
 
-/**
- * Normalize an Evolution `messages.upsert` `data` payload into an inbound reply,
- * or null when it must be ignored: our own outbound (fromMe), groups, status
- * broadcasts, or a payload without a message key.
- */
-export function parseInboundMessage(data: unknown): InboundReply | null {
-  if (!data || typeof data !== 'object') return null;
-  const container = data as Record<string, unknown>;
-  const raw = Array.isArray(data)
-    ? data[0]
-    : Array.isArray(container.messages)
-      ? (container.messages as unknown[])[0]
-      : data;
-  const msg = raw as Record<string, any> | undefined;
-  const key = msg?.key;
-  if (!key) return null;
-  if (key.fromMe === true) return null; // our own outbound
-  const jid = String(key.remoteJid ?? '');
-  if (!jid) return null;
-  if (jid.endsWith('@g.us') || jid.includes('broadcast')) return null; // group / status
-  const phone = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
-  if (!phone) return null;
-  const m = (msg?.message ?? {}) as Record<string, any>;
-  const text = String(
-    m.conversation ??
-      m.extendedTextMessage?.text ??
-      m.ephemeralMessage?.message?.conversation ??
-      m.ephemeralMessage?.message?.extendedTextMessage?.text ??
-      m.imageMessage?.caption ??
-      m.videoMessage?.caption ??
-      m.documentMessage?.caption ??
-      '',
-  );
-  return { phone, text, messageId: String(key.id ?? ''), pushName: (msg?.pushName as string) ?? null };
-}
+export { type InboundReply, parseInboundMessage, phoneCandidates } from './evolution-events.ts';
 
-/**
- * Phone strings to match against leads.telefone, covering the Brazilian country
- * code (55) and 9th-digit variance both ways (leads may be stored either form).
- */
-export function phoneCandidates(phone: string): string[] {
-  const digits = phone.replace(/\D/g, '');
-  const set = new Set<string>();
-  const add = (p: string) => {
-    if (p) {
-      set.add(p);
-      set.add('+' + p);
-    }
-  };
-  add(digits);
-
-  // Strip the 55 country code to get the local DDD + number.
-  let local = digits;
-  if (digits.startsWith('55') && digits.length >= 12) {
-    local = digits.slice(2);
-    add(local);
-    add('55' + local);
-  }
-
-  // local = DDD(2) + number(8 or 9 digits) — toggle the 9th digit both ways.
-  if (local.length === 11 && local[2] === '9') {
-    const without = local.slice(0, 2) + local.slice(3);
-    add(without);
-    add('55' + without);
-  } else if (local.length === 10) {
-    const withNine = local.slice(0, 2) + '9' + local.slice(2);
-    add(withNine);
-    add('55' + withNine);
-  }
-
-  return [...set];
-}
+/** app_flags key that turns WhatsApp reply capture on/off. */
+export const REPLY_CAPTURE_FLAG = 'whatsapp_reply_capture_enabled';
 
 export type ReplyCaptureResult =
+  | { status: 'disabled' }
   | { status: 'ignored' }
   | { status: 'duplicate' }
   | { status: 'no_lead' }
@@ -105,18 +33,20 @@ export async function captureInboundReply(
   orgId: string,
   reply: InboundReply,
 ): Promise<ReplyCaptureResult> {
-  // Idempotency: never record the same inbound message twice.
-  if (reply.messageId) {
-    const { data: existing } = await supabaseAdmin
-      .from('interactions')
-      .select('id')
-      .eq('external_id', reply.messageId)
-      .eq('channel', 'whatsapp')
-      .maybeSingle();
-    if (existing) return { status: 'duplicate' };
-  }
+  // Kill switch (app_flags, sem deploy). Nunca funcionou em prod até 04/10/2026
+  // (org errada + coluna errada); ligar muda o comportamento das cadências —
+  // resposta no WhatsApp passa a parar TODAS as inscrições ativas do lead e a
+  // notificar o SDR. Sem a linha = desligado.
+  const { data: flag } = await supabaseAdmin
+    .from('app_flags')
+    .select('enabled')
+    .eq('key', REPLY_CAPTURE_FLAG)
+    .maybeSingle();
+  if (!flag?.enabled) return { status: 'disabled' };
 
-  const { data: lead } = await supabaseAdmin
+  // Lead first: most inbound messages are not from leads, and the duplicate
+  // check below is scoped to the lead (cheap) instead of scanning interactions.
+  const { data: lead, error: leadErr } = await supabaseAdmin
     .from('leads')
     .select('id, org_id, nome_fantasia, razao_social, assigned_to')
     .eq('org_id', orgId)
@@ -125,28 +55,48 @@ export async function captureInboundReply(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  // A failed query must not read as "no lead": that is how a wrong org id
+  // (undefined) silently dropped every reply. Throw so the webhook returns 5xx.
+  if (leadErr) throw new Error(`lead lookup failed: ${leadErr.message}`);
   if (!lead) return { status: 'no_lead' };
 
-  const { data: enrollment } = await supabaseAdmin
+  // Idempotency: never record the same inbound message twice (webhook retries).
+  if (reply.messageId) {
+    const { data: existing, error: dupErr } = await supabaseAdmin
+      .from('interactions')
+      .select('id')
+      .eq('lead_id', lead.id)
+      .eq('channel', 'whatsapp')
+      .eq('external_id', reply.messageId)
+      .limit(1);
+    if (dupErr) throw new Error(`duplicate check failed: ${dupErr.message}`);
+    if (existing && existing.length > 0) return { status: 'duplicate' };
+  }
+
+  // cadence_enrollments has no created_at — ordering by it made PostgREST error
+  // out, the error went unchecked and every reply came back as "no_enrollment".
+  const { data: enrollment, error: enrollErr } = await supabaseAdmin
     .from('cadence_enrollments')
     .select('id, cadence_id, current_step, enrolled_by')
     .eq('lead_id', lead.id)
     .eq('status', 'active')
-    .order('created_at', { ascending: false })
+    .order('enrolled_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (enrollErr) throw new Error(`enrollment lookup failed: ${enrollErr.message}`);
   if (!enrollment) return { status: 'no_enrollment' };
 
   // The current whatsapp step, for A/B + timeline attribution (best-effort).
-  const { data: step } = await supabaseAdmin
+  const { data: step, error: stepErr } = await supabaseAdmin
     .from('cadence_steps')
     .select('id')
     .eq('cadence_id', enrollment.cadence_id)
     .eq('step_order', enrollment.current_step)
     .eq('channel', 'whatsapp')
     .maybeSingle();
+  if (stepErr) console.warn(`[whatsapp-reply] step lookup failed (attribution only): ${stepErr.message}`);
 
-  await supabaseAdmin.from('interactions').insert({
+  const { error: insertErr } = await supabaseAdmin.from('interactions').insert({
     org_id: lead.org_id,
     lead_id: lead.id,
     cadence_id: enrollment.cadence_id,
@@ -157,6 +107,7 @@ export async function captureInboundReply(
     external_id: reply.messageId || null,
     metadata: { from: reply.phone, detected_by: 'evolution_webhook', push_name: reply.pushName },
   });
+  if (insertErr) throw new Error(`replied interaction insert failed: ${insertErr.message}`);
 
   // Any reply stops ALL active cadences for the lead (industry standard) so we
   // don't keep messaging after engagement.

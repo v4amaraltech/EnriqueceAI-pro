@@ -224,7 +224,9 @@ export async function createProviderEvent(
     payload,
   });
 
-  if (error) {
+  // 23505 = the same delivery arrived twice concurrently (Evolution does this
+  // for messages.update); the unique (provider, event_id) did its job.
+  if (error && error.code !== '23505') {
     console.error('[supabase] Error creating provider event:', error);
   }
 }
