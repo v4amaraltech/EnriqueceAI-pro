@@ -372,9 +372,10 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
           <RankingCard
             title="Atividades Atrasadas"
             titleTooltip={
-              'Snapshot agora: quantas atividades de cadência cada SDR tem com vencimento há mais de 4 horas.\n\n' +
+              'Snapshot agora: quantas atividades de cadência cada SDR deixou de fazer no dia em que venceram.\n\n' +
+              '• A tarefa é do dia: só vira atrasada a partir das 9h do dia útil seguinte\n' +
               '• Mesma definição que a Execução usa pro badge vermelho na fila\n' +
-              '• Trigger de fim de semana já está aplicado: sex 18h não vira atrasada na seg 8h\n' +
+              '• Fim de semana não conta: o que vence na sexta só vira atrasada na segunda 9h\n' +
               '• Não conta atividades de leads ganhos, perdidos ou arquivados\n\n' +
               'Filtro de período não afeta este card — é a fila atual.'
             }

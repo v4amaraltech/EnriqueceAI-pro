@@ -29,7 +29,7 @@ import {
 import { EngagementScoreBadge } from '@/features/leads/components/EngagementScoreBadge';
 
 import type { PendingActivity } from '../types';
-import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
+import { isOverdue } from '../utils/overdue';
 
 interface ActivityRowProps {
   activity: PendingActivity;
@@ -53,12 +53,9 @@ export function formatRelativeTime(dateStr: string): { text: string; isUrgent: b
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  // Urgent uses business-hours clamp: a step that "expired" at midnight or
-  // on a Saturday only starts counting toward the threshold at 9h BRT of
-  // the next business day. Without this, Monday 9am shows everything from
-  // Friday 18h+ as +63h overdue and the SDR can't tell what's actually new.
-  const businessHoursOverdue = hoursOverdue(dateStr);
-  const isUrgent = businessHoursOverdue >= OVERDUE_THRESHOLD_HOURS;
+  // Urgent = atrasada pela régua canônica: só a partir das 9h BRT do dia útil
+  // seguinte ao vencimento. Tarefa que venceu hoje é "do dia", não vermelha.
+  const isUrgent = isOverdue(dateStr);
 
   if (diffMinutes < 1) return { text: 'Agora', isUrgent: false };
   if (diffMinutes < 60) return { text: `Há ${diffMinutes}min`, isUrgent };
