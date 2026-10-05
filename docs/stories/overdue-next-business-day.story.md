@@ -50,8 +50,8 @@ InReview
 - [x] Dashboard usa `overdueCutoff()` + tooltip
 - [x] Migration do resumo diário (`20261005200000`)
 - [x] typecheck / lint / test:run / build
-- [ ] Aplicar migration em prod (MCP)
-- [ ] PR
+- [x] Aplicar migration em prod (MCP) — 05/out, permissões conferidas (só service_role)
+- [x] PR #456
 
 ## File List
 
