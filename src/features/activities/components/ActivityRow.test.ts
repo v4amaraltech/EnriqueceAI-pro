@@ -20,19 +20,18 @@ describe('formatRelativeTime', () => {
     expect(result.isUrgent).toBe(false);
   });
 
-  it('should return hours for < 24h', () => {
-    const date = new Date(Date.now() - 3 * 3600000); // 3 hours ago
+  it('should return hours for < 24h, not urgent on the same day', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-10T15:00:00-03:00')); // Wednesday 15h BRT
+    const date = new Date(Date.now() - 3 * 3600000); // 3 hours ago, same day
     const result = formatRelativeTime(date.toISOString());
     expect(result.text).toBe('Há 3h');
-    // 3h overdue is below the 4h business-hours threshold (business-hours
-    // clamp can only reduce overdue, never increase it) → not urgent.
+    // Tarefa do dia: só vira atrasada às 9h do dia útil seguinte.
     expect(result.isUrgent).toBe(false);
   });
 
   it('should return days for >= 24h', () => {
-    // Fixed mid-week "now" so "2 days ago" is also a business day. Otherwise the
-    // business-hours overdue clamp drops isUrgent when the test runs on a Monday
-    // (2 days ago lands on the weekend), making it flaky by day-of-week.
+    // Fixed mid-week "now" so "2 days ago" is also a business day.
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-10T15:00:00-03:00')); // Wednesday 15h BRT
     const date = new Date(Date.now() - 2 * 24 * 3600000); // 2 days ago → Monday
@@ -41,11 +40,12 @@ describe('formatRelativeTime', () => {
     expect(result.isUrgent).toBe(true);
   });
 
-  it('should not mark urgent below the 4h threshold (1h overdue)', () => {
-    // Threshold raised from 1h → 4h on 26/05/2026 (OVERDUE_THRESHOLD_HOURS).
-    const date = new Date(Date.now() - 60 * 60000); // 1h ago
-    const result = formatRelativeTime(date.toISOString());
-    expect(result.isUrgent).toBe(false);
+  it('should mark urgent from 9h of the next business day', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-11T09:30:00-03:00')); // Thursday 9h30 BRT
+    const result = formatRelativeTime('2026-06-10T15:00:00-03:00'); // Wednesday 15h
+    expect(result.text).toBe('Há 18h');
+    expect(result.isUrgent).toBe(true);
   });
 
   it('should not mark urgent at 59 min', () => {

@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
-import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
+import { overdueCutoff } from '@/features/activities/utils/overdue';
 
 import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
@@ -909,8 +909,9 @@ export async function fetchLeadsToOpenRanking(
  * por passo vencido — a MESMA unidade da fila de Execução (/atividades),
  * "Atividades das Cadências (N)" com o filtro "Atrasada". Deriva do RPC
  * list_overdue_activities_brt, que espelha fetch-pending-activities (expansão
- * dos passos na janela de 24h + supressões) e aplica o threshold compartilhado
- * (OVERDUE_THRESHOLD_HOURS — atualmente 4h, via effective_due_brt). Um lead com
+ * dos passos na janela de 24h + supressões) e aplica o corte compartilhado
+ * (`overdueCutoff`: atrasada a partir das 9h BRT do dia útil seguinte ao
+ * vencimento, via effective_due_brt). Um lead com
  * 3 passos vencidos conta 3 aqui — o card bate 1:1 com a tela do SDR. Sem meta
  * (snapshot atual).
  *
@@ -929,13 +930,13 @@ export async function fetchOverdueActivitiesRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  const cutoffIso = new Date(Date.now() - OVERDUE_THRESHOLD_MS).toISOString();
+  const cutoffIso = overdueCutoff().toISOString();
 
   // Count overdue TASKS (cadence steps), not leads — matching what the SDR sees
   // on the execution screen ("Atividades das Cadências (N)" com filtro "Atrasada").
   // list_overdue_activities_brt mirrors fetch-pending-activities: it expands each
   // active enrollment into every step within the 24h window and flags each step
-  // overdue past the 4h business-hours threshold (effective_due_brt < cutoff),
+  // overdue when its effective due date is before the cutoff (effective_due_brt < cutoff),
   // applying the same suppressions (auto_email, WhatsApp/Ligação-WhatsApp inválido,
   // passo já executado). A lead with 3 overdue steps counts 3 here — one row per
   // task — so the card reconciles 1:1 with the SDR queue. The RPC already returns

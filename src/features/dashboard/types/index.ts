@@ -98,7 +98,7 @@ export interface RankingData {
   sao: RankingCardData; // reuniões realizadas aceitas pelo closer (SAO = true no feedback mais recente)
   saoRate: RankingCardData; // total is a percentage (0-100) — SAO ÷ reuniões realizadas
   leadsToOpen: RankingCardData; // snapshot atual — leads novos sem cadência ativa por SDR
-  overdueActivities: RankingCardData; // snapshot atual — atividades de cadência atrasadas (>= OVERDUE_THRESHOLD_HOURS, default 4h) por SDR
+  overdueActivities: RankingCardData; // snapshot atual — atividades de cadência atrasadas (a partir das 9h BRT do dia útil seguinte ao vencimento — overdueCutoff) por SDR
 }
 
 // Story 3.4: Insights Charts

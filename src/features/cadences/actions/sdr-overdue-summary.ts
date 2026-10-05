@@ -23,7 +23,8 @@ interface OverdueRow {
 export async function notifyOverdueActivities(): Promise<ActionResult<{ notified: number }>> {
   const supabase = createServiceRoleClient();
 
-  // Pull active enrollments overdue >24h, joined to the lead's owner and the
+  // Pull active enrollments overdue (régua canônica: venceu num dia útil que já
+  // terminou — ver utils/overdue.ts), joined to the lead's owner and the
   // current step's channel. Skipping email — the cadence executor cron
   // handles those automatically.
   const { data: rows, error } = (await (supabase.rpc as never as (fn: string) => Promise<{ data: OverdueRow[] | null; error: { message: string } | null }>)(
