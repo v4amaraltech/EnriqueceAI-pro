@@ -1,11 +1,12 @@
 # Story: "Atrasada" só a partir do dia útil seguinte
 
 ## Status
-InReview
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-10-05 | @devops | PR #456 mesclado e no ar (`a07c8f3`); migration em prod; time de SDR avisado por e-mail. Status → Done. |
 | 2026-10-05 | @dev (Dex) | Implementado + testado. |
 | 2026-10-05 | Vini + Claude | Story criada a partir das 143 "atrasadas" do Guilherme na segunda 05/out. |
 
