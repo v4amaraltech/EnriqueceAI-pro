@@ -381,13 +381,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Idempotency check: skip if a *successful* interaction already exists for this enrollment + step
-      // Only checks for 'sent' type so that failed interactions can be retried on the next batch
+      // Only checks for 'sent' type so that failed interactions can be retried on the next batch.
+      // Ignora eventos `system` (ex.: step_skipped grava step_id mas não é envio).
       const { data: existingInteraction } = (await from(supabase, 'interactions')
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('step_id', step.id)
         .eq('lead_id', enrollment.lead_id)
         .eq('type', 'sent')
+        .neq('channel', 'system')
         .limit(1)
         .maybeSingle()) as { data: { id: string } | null };
 
@@ -574,7 +576,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .select('id')
         .single()) as { data: Pick<InteractionRow, 'id'> | null; error: { code?: string } | null };
 
-      // H3: the unique partial index uq_interactions_sent_step_lead makes a
+      // H3: the unique partial index uq_interactions_sent_step_lead_real (channel <> system) makes a
       // concurrent run's duplicate insert fail with 23505. Treat it as idempotent —
       // the other run already recorded (and sent) this step — so advance via the
       // row-locked RPC and skip, instead of double-sending the email.

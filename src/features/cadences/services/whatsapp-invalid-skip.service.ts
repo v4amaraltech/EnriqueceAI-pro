@@ -42,6 +42,16 @@ export const WHATSAPP_SCAN_LIMIT = 500;
 export interface CadenceStepChannel {
   step_order: number;
   channel: string;
+  call_provider?: string | null;
+}
+
+/**
+ * Passo que depende de WhatsApp: mensagem de WhatsApp ou "Ligação via WhatsApp"
+ * (`phone` + `call_provider='whatsapp'`, Epic 7). Mesma regra de supressão da
+ * fila e das RPCs de atrasadas — a fila esconde os dois para lead sem WhatsApp.
+ */
+export function isWhatsAppStep(step: CadenceStepChannel): boolean {
+  return step.channel === 'whatsapp' || (step.channel === 'phone' && step.call_provider === 'whatsapp');
 }
 
 /**
@@ -54,10 +64,10 @@ export function nextNonWhatsAppStep(
   currentStep: number,
 ): number | null {
   const current = steps.find((s) => s.step_order === currentStep);
-  if (!current || current.channel !== 'whatsapp') return null;
+  if (!current || !isWhatsAppStep(current)) return null;
 
   const next = steps
-    .filter((s) => s.step_order > currentStep && s.channel !== 'whatsapp')
+    .filter((s) => s.step_order > currentStep && !isWhatsAppStep(s))
     .sort((a, b) => a.step_order - b.step_order)[0];
 
   return next?.step_order ?? null;
@@ -79,7 +89,7 @@ export function classifyInvalidWhatsAppStep(
   currentStep: number,
 ): InvalidWhatsAppAction {
   const current = steps.find((s) => s.step_order === currentStep);
-  if (!current || current.channel !== 'whatsapp') return { action: 'none' };
+  if (!current || !isWhatsAppStep(current)) return { action: 'none' };
 
   const target = nextNonWhatsAppStep(steps, currentStep);
   return target === null ? { action: 'end' } : { action: 'advance', toStep: target };
@@ -109,15 +119,15 @@ export async function skipWhatsAppStepsForInvalidLeads(
 
     const cadenceIds = [...new Set(candidates.map((c) => c.cadence_id))];
     const { data: steps } = (await from(supabase, 'cadence_steps')
-      .select('cadence_id, step_order, channel')
+      .select('cadence_id, step_order, channel, call_provider')
       .in('cadence_id', cadenceIds)) as {
-      data: Array<{ cadence_id: string; step_order: number; channel: string }> | null;
+      data: Array<{ cadence_id: string; step_order: number; channel: string; call_provider: string | null }> | null;
     };
 
     const stepsByCadence = new Map<string, CadenceStepChannel[]>();
     for (const step of steps ?? []) {
       const list = stepsByCadence.get(step.cadence_id) ?? [];
-      list.push({ step_order: step.step_order, channel: step.channel });
+      list.push({ step_order: step.step_order, channel: step.channel, call_provider: step.call_provider });
       stepsByCadence.set(step.cadence_id, list);
     }
 
