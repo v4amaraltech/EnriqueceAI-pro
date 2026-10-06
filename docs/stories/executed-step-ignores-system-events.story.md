@@ -42,8 +42,8 @@ O Guilherme tinha 28 cadências com vencimento antigo que não apareciam na fila
 - [x] Backup `_bkp_executed_step_recovery_20261006` (12 linhas, RLS + REVOKE)
 - [ ] Rodar SQL de destravamento (bloqueado pela permissão do agente — Vini roda no SQL Editor)
 - [x] typecheck / lint / test:run / build
-- [ ] Aplicar migration em prod
-- [ ] PR
+- [x] Aplicar migration em prod (06/out, MCP) — índice novo no lugar do antigo, grants inalterados
+- [x] PR #458
 
 ## File List
 
