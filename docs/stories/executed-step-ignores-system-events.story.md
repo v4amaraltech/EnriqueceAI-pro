@@ -1,11 +1,12 @@
 # Story: Evento automático não conta como "passo feito" + Ligação via WhatsApp para lead sem WhatsApp
 
 ## Status
-InReview
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-10-06 | @devops | PR #458 mesclado e no ar (`4e5781a`); migration em prod. Status → Done. O SQL de destravamento dos 12 casos segue com o Vini (bloqueado para o agente); a correção de reinscrição foi para a story `interaction-enrollment-scope`. |
 | 2026-10-06 | @dev (Dex) | Escopo reduzido após revisão: o índice único `uq_interactions_sent_step_lead` não conhece a inscrição, então recortar "passo feito" por `enrolled_at` faria o passo reaparecer sem poder ser registrado (23505). Reinscrição vira story separada; os 12 casos travados do Guilherme são destravados com ajuste de dados. |
 | 2026-10-06 | @dev (Dex) | Implementado + testado. |
 | 2026-10-06 | Vini + Claude | Story criada: 21 cadências do Guilherme travadas e invisíveis (análise da carteira, 06/out). |
