@@ -30,7 +30,7 @@ interface Captured {
 
 let captured: Captured[];
 /** Passos da cadência devolvidos pela query de cadence_steps. */
-let steps: Array<{ step_order: number; channel: string }>;
+let steps: Array<{ step_order: number; channel: string; call_provider?: string | null }>;
 /** step_order do passo atual (query por id). */
 let currentStepOrder: number;
 
@@ -115,6 +115,19 @@ describe('reportWhatsAppInvalid', () => {
     expect(enrollmentUpdates()[0]?.payload).toEqual({ current_step: 5 });
     expect(notif.createNotification).not.toHaveBeenCalled();
     expect(loss.markLeadLostOnCadenceEnd).not.toHaveBeenCalled();
+  });
+
+  it('pula também Ligação via WhatsApp (phone + call_provider=whatsapp)', async () => {
+    currentStepOrder = 3;
+    steps = [
+      { step_order: 3, channel: 'whatsapp' },
+      { step_order: 4, channel: 'phone', call_provider: 'whatsapp' },
+      { step_order: 5, channel: 'phone', call_provider: null },
+    ];
+
+    await reportWhatsAppInvalid(INPUT);
+
+    expect(enrollmentUpdates()[0]?.payload).toEqual({ current_step: 5 });
   });
 
   it('cauda só de WhatsApp: encerra a cadência e passa pela regra de Perdido', async () => {

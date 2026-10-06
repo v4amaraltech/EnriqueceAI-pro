@@ -12,6 +12,7 @@ import { from } from '@/lib/supabase/from';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { markLeadLostOnCadenceEnd } from '@/features/cadences/services/cadence-end-loss.service';
+import { isWhatsAppStep } from '@/features/cadences/services/whatsapp-invalid-skip.service';
 
 const inputSchema = z.object({
   enrollmentId: z.string().uuid(),
@@ -75,10 +76,10 @@ export async function reportWhatsAppInvalid(
   //    natural (story whatsapp-invalid-tail-ends-cadence, AC 7) — motor e botão
   //    precisam concordar no mesmo cenário.
   const { data: allSteps } = (await from(supabase, 'cadence_steps')
-    .select('step_order, channel')
+    .select('step_order, channel, call_provider')
     .eq('cadence_id', cadenceId)
     .order('step_order', { ascending: true })) as {
-      data: Array<{ step_order: number; channel: string }> | null;
+      data: Array<{ step_order: number; channel: string; call_provider: string | null }> | null;
     };
 
   const { data: currentStep } = (await from(supabase, 'cadence_steps')
@@ -88,7 +89,7 @@ export async function reportWhatsAppInvalid(
 
   const currentOrder = currentStep?.step_order ?? 0;
   const nextNonWhatsApp = (allSteps ?? []).find(
-    (s) => s.step_order > currentOrder && s.channel !== 'whatsapp',
+    (s) => s.step_order > currentOrder && !isWhatsAppStep(s),
   );
 
   if (nextNonWhatsApp) {

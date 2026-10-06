@@ -54,6 +54,38 @@ describe('nextNonWhatsAppStep', () => {
   });
 });
 
+describe('Ligação via WhatsApp (phone + call_provider=whatsapp)', () => {
+  // Prospecção Fria: passo 5 é Ligação via WhatsApp; 6 é ligação normal.
+  const FRIA = [
+    { step_order: 4, channel: 'phone', call_provider: null },
+    { step_order: 5, channel: 'phone', call_provider: 'whatsapp' },
+    { step_order: 6, channel: 'phone', call_provider: null },
+    { step_order: 7, channel: 'whatsapp' },
+    { step_order: 9, channel: 'phone', call_provider: 'whatsapp' },
+  ];
+
+  it('conta como passo de WhatsApp: avança para a próxima ligação normal', () => {
+    expect(classifyInvalidWhatsAppStep(FRIA, 5)).toEqual({ action: 'advance', toStep: 6 });
+  });
+
+  it('não para em outra Ligação via WhatsApp adiante', () => {
+    const steps = [
+      { step_order: 1, channel: 'whatsapp' },
+      { step_order: 2, channel: 'phone', call_provider: 'whatsapp' },
+      { step_order: 3, channel: 'phone' },
+    ];
+    expect(nextNonWhatsAppStep(steps, 1)).toBe(3);
+  });
+
+  it('cauda só de WhatsApp + Ligação via WhatsApp: fim de cadência', () => {
+    expect(classifyInvalidWhatsAppStep(FRIA, 9)).toEqual({ action: 'end' });
+  });
+
+  it('ligação normal (sem call_provider) não é tocada', () => {
+    expect(classifyInvalidWhatsAppStep(FRIA, 6)).toEqual({ action: 'none' });
+  });
+});
+
 describe('classifyInvalidWhatsAppStep', () => {
   it('passo de WhatsApp com outro canal adiante: avança', () => {
     expect(classifyInvalidWhatsAppStep(RECOVERY_STEPS, 2)).toEqual({ action: 'advance', toStep: 3 });
