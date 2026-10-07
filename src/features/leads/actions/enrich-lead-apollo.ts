@@ -14,6 +14,7 @@ import { logLeadEvent } from './log-lead-event';
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 import { enrichPerson, apolloPhoneTipo } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
+import { ordenarCelularPrimeiro, telefonePrincipal } from '@/features/bdr-steps/services/celular';
 
 export async function enrichLeadWithApollo(leadId: string, force = false): Promise<ActionResult<void>> {
   const { orgId, userId: enrichUserId } = await requireAuthWithMember();
@@ -137,10 +138,11 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
         }
       }
 
-      updates.phones = newPhones;
-      if (!lead.telefone && newPhones.length > 0) {
-        updates.telefone = newPhones[0]!.numero;
-      }
+      // BDR IA (24/09/2026): celular brasileiro na frente e como principal.
+      const ordenados = ordenarCelularPrimeiro(newPhones);
+      updates.phones = ordenados;
+      const principal = telefonePrincipal(lead.telefone, ordenados);
+      if (principal && principal !== lead.telefone) updates.telefone = principal;
     }
 
     await from(supabase, 'leads').update(updates).eq('id', leadId);
