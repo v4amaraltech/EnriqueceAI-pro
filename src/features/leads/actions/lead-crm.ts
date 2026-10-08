@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
@@ -303,7 +304,7 @@ export async function resyncLeadToCrm(
 export async function markLeadAsWon(
   leadId: string,
   crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string; responsibleUserId?: string },
-): Promise<ActionResult<{ dealCreated?: boolean }>> {
+): Promise<ActionResult<{ dealCreated?: boolean; crmDeferred?: boolean }>> {
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
@@ -334,10 +335,10 @@ export async function markLeadAsWon(
     // graded twice. We still upsert status='won' (a no-op) so the legitimate
     // reopen→re-win path (status='qualified' at that point) stamps fresh.
     const { data: currentLead } = (await from(supabase, 'leads')
-      .select('status, custom_field_values, assigned_to, meeting_starts_at')
+      .select('status, custom_field_values, assigned_to, meeting_starts_at, closer_id')
       .eq('id', leadId)
       .eq('org_id', orgId)
-      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null; assigned_to: string | null; meeting_starts_at: string | null } | null };
+      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null; assigned_to: string | null; meeting_starts_at: string | null; closer_id: string | null } | null };
     const wasAlreadyWon = currentLead?.status === 'won';
 
     // O carimbo herda a data da REUNIÃO (meeting_starts_at), não a do clique —
@@ -423,7 +424,9 @@ export async function markLeadAsWon(
         type: 'sent',
         message_content: 'Lead marcado como ganho',
         performed_by: userId,
-        metadata: { system_event: 'lead_won' },
+        // crm_options guarda o funil/etapa escolhidos no modal: quando há closer o
+        // card só é criado no feedback "Realizada" (/api/feedback), que lê daqui.
+        metadata: { system_event: 'lead_won', ...(crmOptions ? { crm_options: crmOptions } : {}) },
       } as Record<string, unknown>);
 
     // 3. Ensure the deal EXISTS in the org's CRM — but do NOT move it to the
@@ -436,14 +439,23 @@ export async function markLeadAsWon(
     // otherwise we fall back to the connection defaults (activity-queue "Ganho").
     // Best-effort: neither call throws to the caller, but we guard so the CRM
     // never blocks the win.
+    //
+    // Lead COM closer: o card NÃO nasce no Ganho. Ele só é criado quando o
+    // closer confirma "Reunião realizada" no feedback (/api/feedback) — se o
+    // closer responde "Remarcou"/"No-show" o lead reabre e o Kommo não ganha um
+    // card de reunião que não aconteceu. Sem closer não há feedback a esperar,
+    // então o card sai aqui mesmo.
     let dealCreated = false;
-    try {
-      const pushResult = crmOptions
-        ? await pushLeadToCrm(orgId, leadId, crmOptions)
-        : await pushLeadToCrmWithDefaults(orgId, leadId);
-      dealCreated = pushResult.dealCreated;
-    } catch (err) {
-      console.error('[markLeadAsWon] CRM deal-ensure error:', err);
+    const crmDeferred = Boolean(currentLead?.closer_id);
+    if (!crmDeferred) {
+      try {
+        const pushResult = crmOptions
+          ? await pushLeadToCrm(orgId, leadId, crmOptions)
+          : await pushLeadToCrmWithDefaults(orgId, leadId);
+        dealCreated = pushResult.dealCreated;
+      } catch (err) {
+        console.error('[markLeadAsWon] CRM deal-ensure error:', err);
+      }
     }
 
     // 4. Send closer feedback email (fire-and-forget)
@@ -461,16 +473,20 @@ export async function markLeadAsWon(
 
       if (closer) {
         const leadName = leadForFeedback.nome_fantasia ?? leadForFeedback.razao_social ?? 'Lead';
-        sendCloserFeedbackEmail({
-          leadId,
-          orgId,
-          closerId: closer.id,
-          closerName: closer.name,
-          closerEmail: closer.email,
-          closerPhone: closer.phone,
-          leadName,
-          senderUserId: auth.data.userId,
-        }).catch((err) => console.error('[markLeadAsWon] Feedback email error:', err));
+        // after(): um .catch() solto pode ser cortado quando a Server Action
+        // responde — e o card do CRM agora depende desse feedback.
+        after(() =>
+          sendCloserFeedbackEmail({
+            leadId,
+            orgId,
+            closerId: closer.id,
+            closerName: closer.name,
+            closerEmail: closer.email,
+            closerPhone: closer.phone,
+            leadName,
+            senderUserId: auth.data.userId,
+          }).catch((err) => console.error('[markLeadAsWon] Feedback email error:', err)),
+        );
       }
     }
 
@@ -480,7 +496,7 @@ export async function markLeadAsWon(
       action: 'lead.marked_won',
       resourceType: 'lead',
       resourceId: leadId,
-      metadata: { crm_provider: crmOptions?.provider ?? null, deal_created: dealCreated },
+      metadata: { crm_provider: crmOptions?.provider ?? null, deal_created: dealCreated, crm_deferred: crmDeferred },
     });
 
     // Notify managers that a lead was won
@@ -490,7 +506,7 @@ export async function markLeadAsWon(
       orgId,
       type: 'lead_won',
       title: `Lead ganho: ${wonName}`,
-      body: crmOptions ? `Enviado para ${crmOptions.provider}` : undefined,
+      body: crmOptions && !crmDeferred ? `Enviado para ${crmOptions.provider}` : undefined,
       resourceType: 'lead',
       resourceId: leadId,
       roleFilter: 'manager',
@@ -501,7 +517,7 @@ export async function markLeadAsWon(
     revalidatePath(`/leads/${leadId}`);
     revalidatePath('/atividades');
 
-    return { success: true, data: { dealCreated } };
+    return { success: true, data: { dealCreated, crmDeferred } };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[markLeadAsWon] Error:', message, error);

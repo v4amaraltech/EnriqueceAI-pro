@@ -520,6 +520,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       if (result.success) {
         if (result.data.dealCreated) {
           toast.success('Lead marcado como ganho e enviado ao CRM');
+        } else if (result.data.crmDeferred) {
+          toast.success('Lead marcado como ganho — vai para o CRM quando o closer confirmar a reunião');
         } else {
           toast.success('Lead marcado como ganho');
         }
