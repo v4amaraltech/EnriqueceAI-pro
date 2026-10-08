@@ -5,9 +5,10 @@ import { DEFAULT_DAILY_LIMIT } from '@/features/ai/constants';
 import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, type BantLeadContext } from '@/features/ai/prompts/bant-analysis';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
-const WHISPER_MODEL = 'whisper-1';
-// Análise BANT via OpenAI (mesma OPENAI_API_KEY do Whisper — provedor único).
-const ANALYSIS_MODEL = 'gpt-4.1';
+// Transcrição e análise BANT via OpenRouter (mesma OPENROUTER_API_KEY — provedor único).
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const WHISPER_MODEL = 'openai/whisper-1';
+const ANALYSIS_MODEL = 'openai/gpt-4.1';
 // Cap de saída: 8192 acomoda o JSON dos 7 campos em qualquer call realista.
 const ANALYSIS_MAX_TOKENS = 8192;
 
@@ -105,36 +106,54 @@ async function downloadAudio(url: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
+function getOpenRouterApiKey(): string {
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY não configurada');
+    throw new Error('OPENROUTER_API_KEY não configurada');
   }
+  return apiKey;
+}
 
-  const formData = new FormData();
-  formData.append('file', new Blob([new Uint8Array(audioBuffer)], { type: 'audio/mpeg' }), 'recording.mp3');
-  formData.append('model', WHISPER_MODEL);
-  formData.append('language', 'pt');
-  formData.append('response_format', 'text');
+function openRouterHeaders(apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    // Identifica a aplicação no painel do OpenRouter.
+    'X-Title': 'EnriqueceAI',
+  };
+  if (process.env.NEXT_PUBLIC_APP_URL) headers['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL;
+  return headers;
+}
+
+async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
+  const apiKey = getOpenRouterApiKey();
+
+  // OpenRouter recebe o áudio em base64 dentro de um JSON (não multipart).
+  const body = JSON.stringify({
+    model: WHISPER_MODEL,
+    input_audio: { data: audioBuffer.toString('base64'), format: 'mp3' },
+    language: 'pt',
+  });
 
   let lastError: Error | null = null;
 
   // Retry up to 2 times
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/audio/transcriptions`, {
         method: 'POST',
         signal: AbortSignal.timeout(120_000),
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
+        headers: openRouterHeaders(apiKey),
+        body,
       });
 
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`whisper_api_error: ${response.status} ${body}`);
+        const errBody = await response.text();
+        throw new Error(`whisper_api_error: ${response.status} ${errBody}`);
       }
 
-      const text = await response.text();
+      const data = (await response.json()) as { text?: string };
+      const text = data.text ?? '';
       if (!text.trim()) {
         throw new Error('whisper_empty_response');
       }
@@ -208,9 +227,9 @@ export async function analyzeAndSaveBant(
       }
     : undefined;
 
-  // Call OpenAI for BANT analysis
+  // Call OpenRouter for BANT analysis
   const prompt = buildBantAnalysisPrompt(transcription, leadContext);
-  const bantJson = await callOpenAIForBant(prompt);
+  const bantJson = await callOpenRouterForBant(prompt);
 
   // Map prompt response keys → database field names → field IDs
   const dbMapped = mapBantResponseToDbNames(bantJson);
@@ -258,19 +277,13 @@ export async function analyzeAndSaveBant(
   }
 }
 
-async function callOpenAIForBant(prompt: string): Promise<Record<string, string>> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY não configurada');
-  }
+async function callOpenRouterForBant(prompt: string): Promise<Record<string, string>> {
+  const apiKey = getOpenRouterApiKey();
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: 'POST',
     signal: AbortSignal.timeout(90_000),
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: openRouterHeaders(apiKey),
     body: JSON.stringify({
       model: ANALYSIS_MODEL,
       max_tokens: ANALYSIS_MAX_TOKENS,
@@ -285,7 +298,7 @@ async function callOpenAIForBant(prompt: string): Promise<Record<string, string>
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => 'no body');
-    throw new Error(`openai_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
+    throw new Error(`openrouter_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const data = (await response.json()) as {
