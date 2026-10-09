@@ -8,6 +8,7 @@ const RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
   no_show: 'Não compareceu',
   rescheduled: 'Remarcou',
+  disqualified: 'Desqualificada',
 };
 
 function getResultLabel(result: string | null): string {
@@ -19,6 +20,7 @@ const RESULT_BADGE: Record<string, string> = {
   meeting_done: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   no_show: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   rescheduled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  disqualified: 'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300',
 };
 
 /** SAO — aceite comercial da oportunidade. null = não respondido / não se aplica. */

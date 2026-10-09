@@ -6,7 +6,7 @@ import { from } from '@/lib/supabase/from';
 
 export interface CloserFeedbackData {
   id: string;
-  result: 'meeting_done' | 'no_show' | 'rescheduled' | null;
+  result: 'meeting_done' | 'no_show' | 'rescheduled' | 'disqualified' | null;
   rating: number | null;
   qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
   divergencias: string[] | null;
@@ -36,7 +36,7 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
     .maybeSingle()) as {
     data: {
       id: string;
-      result: 'meeting_done' | 'no_show' | 'rescheduled' | null;
+      result: 'meeting_done' | 'no_show' | 'rescheduled' | 'disqualified' | null;
       rating: number | null;
       qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
       divergencias: string[] | null;

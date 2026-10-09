@@ -10,12 +10,18 @@ interface CloserMetrics {
   meetingDone: number;
   noShow: number;
   rescheduled: number;
+  disqualified: number;
   avgRating: number | null;
   responseRate: number;
   // SAO: qualificadas ÷ respostas com SAO preenchido (só reuniões realizadas).
   saoAnswered: number;
   saoQualified: number;
   saoRate: number | null;
+}
+
+/** Reunião aconteceu: Realizada ou Desqualificada (lead sem fit, mas a call houve). */
+function isMeetingHeld(result: string | null): boolean {
+  return result === 'meeting_done' || result === 'disqualified';
 }
 
 /**
@@ -39,7 +45,7 @@ function computeMetrics(feedbacks: CloserFeedbackRow[]): {
 } {
   const responded = feedbacks.filter((f) => f.responded_at);
   const ratings = responded.filter((f) => f.rating !== null).map((f) => f.rating!);
-  const meetingDone = responded.filter((f) => f.result === 'meeting_done').length;
+  const meetingDone = responded.filter((f) => isMeetingHeld(f.result)).length;
   const globalSao = saoStats(responded);
 
   const global = {
@@ -71,9 +77,10 @@ function computeMetrics(feedbacks: CloserFeedbackRow[]): {
       email,
       total: fbs.length,
       responded: resp.length,
-      meetingDone: resp.filter((f) => f.result === 'meeting_done').length,
+      meetingDone: resp.filter((f) => isMeetingHeld(f.result)).length,
       noShow: resp.filter((f) => f.result === 'no_show').length,
       rescheduled: resp.filter((f) => f.result === 'rescheduled').length,
+      disqualified: resp.filter((f) => f.result === 'disqualified').length,
       avgRating: closerRatings.length > 0 ? closerRatings.reduce((a, b) => a + b, 0) / closerRatings.length : null,
       responseRate: fbs.length > 0 ? (resp.length / fbs.length) * 100 : 0,
       saoAnswered: closerSao.answered,
@@ -130,6 +137,7 @@ export function CloserPerformanceCards({ feedbacks }: { feedbacks: CloserFeedbac
                   <th className="p-3 text-center font-medium">Realizadas</th>
                   <th className="p-3 text-center font-medium">No-show</th>
                   <th className="p-3 text-center font-medium">Remarcou</th>
+                  <th className="p-3 text-center font-medium">Desqualificadas</th>
                   <th className="p-3 text-center font-medium">SAO</th>
                   <th className="p-3 text-center font-medium">Chance de fechar</th>
                   <th className="p-3 text-center font-medium">Resposta</th>
@@ -146,6 +154,7 @@ export function CloserPerformanceCards({ feedbacks }: { feedbacks: CloserFeedbac
                     <td className="p-3 text-center text-green-600 dark:text-green-400">{c.meetingDone}</td>
                     <td className="p-3 text-center text-red-600 dark:text-red-400">{c.noShow}</td>
                     <td className="p-3 text-center text-yellow-600 dark:text-yellow-400">{c.rescheduled}</td>
+                    <td className="p-3 text-center text-[var(--muted-foreground)]">{c.disqualified}</td>
                     <td className="p-3 text-center">
                       {c.saoRate !== null ? (
                         <span title={`${c.saoQualified} de ${c.saoAnswered} avaliadas`}>{c.saoRate.toFixed(0)}%</span>

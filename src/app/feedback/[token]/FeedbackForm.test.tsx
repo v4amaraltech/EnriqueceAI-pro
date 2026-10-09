@@ -149,3 +149,49 @@ describe('FeedbackForm — Oportunidade Qualificada (SAO)', () => {
     expect(screen.getByRole('button', { name: /Enviar feedback/ })).toBeDisabled();
   });
 });
+
+describe('FeedbackForm — Desqualificada', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('não mostra as perguntas da reunião realizada (qualificação, decisor, SAO)', async () => {
+    render(<FeedbackForm token={TOKEN} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Desqualificada' }));
+
+    expect(screen.queryByText(/A qualificação bateu/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/O decisor estava na call/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Oportunidade Qualificada \(SAO\)/)).not.toBeInTheDocument();
+  });
+
+  it('exige o motivo (observação) antes de liberar o envio', async () => {
+    render(<FeedbackForm token={TOKEN} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Desqualificada' }));
+    expect(screen.getByRole('button', { name: /Enviar feedback/ })).toBeDisabled();
+
+    await userEvent.type(screen.getByRole('textbox'), 'sem verba');
+    expect(screen.getByRole('button', { name: /Enviar feedback/ })).toBeEnabled();
+  });
+
+  it('envia result=disqualified com o motivo e sem campos de reunião realizada', async () => {
+    const fetchMock = mockFetchOk();
+    render(<FeedbackForm token={TOKEN} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Desqualificada' }));
+    await userEvent.type(screen.getByRole('textbox'), 'fora do perfil');
+    await userEvent.click(screen.getByRole('button', { name: /Enviar feedback/ }));
+
+    const payload = lastPayload(fetchMock);
+    expect(payload.result).toBe('disqualified');
+    expect(payload.comment).toBe('fora do perfil');
+    expect(payload.qualificacao_aderente).toBeNull();
+    expect(payload.decisor_presente).toBeNull();
+    expect(payload.oportunidade_qualificada).toBeNull();
+  });
+});
