@@ -11,12 +11,15 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
+import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
 
 export const maxDuration = 60;
 
 const REMINDER_INTERVAL_HOURS = 24;
 const MAX_REMINDERS = 3;
 const ESCALATE_AFTER_REMINDERS = 2;
+/** Janela (dias) em que um feedback vencido ainda dispara o card no CRM. */
+const EXPIRED_CRM_FALLBACK_DAYS = 3;
 
 interface PendingFeedback {
   id: string;
@@ -58,6 +61,63 @@ interface LeadInfo {
  *  - reminder_count++ and reminder_sent_at = now()
  *  - When new reminder_count >= 2, notify managers
  */
+/**
+ * Rede de segurança do CRM: lead com closer só ganha card no CRM quando o
+ * closer responde "Realizada" (/api/feedback). Se o link venceu sem resposta
+ * e o lead continua ganho, cria o card mesmo assim — nenhum deal se perde por
+ * closer que não respondeu.
+ *
+ * Só olha vencidos dos últimos EXPIRED_CRM_FALLBACK_DAYS dias (consulta
+ * limitada) e pula lead que ainda tem outro link pendente válido (ex.: closer
+ * reatribuído — o link antigo é "vencido" na hora). pushConfirmedMeetingToCrm
+ * é idempotente (dedup por crm_deal_created), então rodar todo dia é seguro.
+ */
+async function pushExpiredFeedbackLeadsToCrm() {
+  const supabase = createServiceRoleClient();
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - EXPIRED_CRM_FALLBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: expired } = (await from(supabase, 'closer_feedback_requests')
+    .select('lead_id, org_id')
+    .is('responded_at', null)
+    .lt('expires_at', now.toISOString())
+    .gte('expires_at', windowStart)
+    .limit(200)) as { data: Array<{ lead_id: string; org_id: string }> | null };
+
+  if (!expired?.length) return { crmPushed: 0 };
+
+  const leadIds = [...new Set(expired.map((e) => e.lead_id))];
+
+  const [wonLeadsResult, pendingResult] = await Promise.all([
+    from(supabase, 'leads').select('id').in('id', leadIds).eq('status', 'won').is('deleted_at', null) as unknown as Promise<{
+      data: Array<{ id: string }> | null;
+    }>,
+    from(supabase, 'closer_feedback_requests')
+      .select('lead_id')
+      .in('lead_id', leadIds)
+      .is('responded_at', null)
+      .gt('expires_at', now.toISOString()) as unknown as Promise<{ data: Array<{ lead_id: string }> | null }>,
+  ]);
+
+  const wonIds = new Set((wonLeadsResult.data ?? []).map((l) => l.id));
+  const stillPending = new Set((pendingResult.data ?? []).map((p) => p.lead_id));
+  const orgByLead = new Map(expired.map((e) => [e.lead_id, e.org_id]));
+
+  let crmPushed = 0;
+  for (const leadId of leadIds) {
+    if (!wonIds.has(leadId) || stillPending.has(leadId)) continue;
+    const orgId = orgByLead.get(leadId);
+    if (!orgId) continue;
+    try {
+      const res = await pushConfirmedMeetingToCrm(orgId, leadId);
+      if (res.dealCreated) crmPushed++;
+    } catch (err) {
+      console.error('[feedback-reminders] CRM fallback error lead=%s:', leadId, err);
+    }
+  }
+  return { crmPushed };
+}
+
 async function sendFeedbackReminders() {
   const supabase = createServiceRoleClient();
   const appUrl = getAppUrl();
@@ -321,7 +381,8 @@ export async function POST(request: Request) {
 
   try {
     const result = await sendFeedbackReminders();
-    return NextResponse.json(result);
+    const crm = await pushExpiredFeedbackLeadsToCrm();
+    return NextResponse.json({ ...result, ...crm });
   } catch (err) {
     console.error('[feedback-reminders] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

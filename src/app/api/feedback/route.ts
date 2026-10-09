@@ -5,7 +5,7 @@ import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
-import { pushLeadToCrmWithDefaults } from '@/features/leads/services/crm-push.service';
+import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
 import { isUuid } from '@/shared/utils/uuid';
 import { resolveMeetingHeldAt } from '@/features/leads/utils/meeting-held-at';
 
@@ -272,10 +272,8 @@ export async function POST(request: Request) {
     // change lead status — the lead is already 'won' from markLeadAsWon (SDR's
     // click). Feedback is a parallel quality signal, not a status gate.
     //
-    // CRM push is also no longer needed here: markLeadAsWon already pushed
-    // when the SDR clicked Ganho. Keeping a defensive pushLeadToCrmWithDefaults
-    // covers the edge case where the SDR never clicked Ganho but the closer
-    // somehow received and answered the feedback link (legacy data).
+    // CRM: lead com closer NÃO ganha card no "Ganho" — o card nasce aqui,
+    // quando o closer confirma que a reunião aconteceu (ver bloco abaixo).
     if (result === 'meeting_done') {
       // Carimbo herda a data da REUNIÃO, não a do momento em que o closer
       // respondeu o feedback (que costuma ser dias depois) — ver
@@ -294,11 +292,12 @@ export async function POST(request: Request) {
         .eq('org_id', feedbackReq.org_id)
         .is('meeting_held_at', null);
 
-      // Defensive CRM push — covers legacy leads that never went through
-      // markLeadAsWon. pushLeadToCrmWithDefaults is idempotent (dedupes on
-      // crm_deal_created), so it's a no-op for leads already synced.
+      // Ponto oficial de criação do card no CRM: lead com closer não gera card
+      // no "Ganho" (markLeadAsWon) — só aqui, com a reunião confirmada. Usa o
+      // funil/etapa escolhidos no modal de Ganho, se houver. Idempotente (dedup
+      // por crm_deal_created), então é no-op para leads já sincronizados.
       after(() =>
-        pushLeadToCrmWithDefaults(feedbackReq.org_id, feedbackReq.lead_id)
+        pushConfirmedMeetingToCrm(feedbackReq.org_id, feedbackReq.lead_id)
           .then((res) => {
             if (!res.dealCreated && res.skippedReason && res.skippedReason !== 'already_synced') {
               console.warn('[api/feedback] CRM push skipped:', res.skippedReason, 'lead=', feedbackReq.lead_id);

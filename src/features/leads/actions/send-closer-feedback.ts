@@ -4,9 +4,13 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { parseBrtDateTime } from '@/lib/utils/brt-date';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
+
+/** Mesmo prazo do default de closer_feedback_requests.expires_at (7 dias). */
+const FEEDBACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface SendFeedbackParams {
   leadId: string;
@@ -42,43 +46,69 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
   const channels: SendFeedbackChannelResult = { email: 'failed', whatsapp: 'skipped' };
 
   try {
-    // Check if a pending feedback request already exists (e.g. created by meeting briefing)
-    const { data: existing } = (await from(supabase, 'closer_feedback_requests')
-      .select('id, token')
+    // Pending request for this lead+closer (expired or not). The partial unique
+    // index idx_feedback_unique_pending (lead_id, closer_id) WHERE responded_at
+    // IS NULL ignores expires_at, so an expired-but-unanswered row would make a
+    // fresh insert fail — we reactivate it instead (see below).
+    const { data: pending } = (await from(supabase, 'closer_feedback_requests')
+      .select('id, token, expires_at')
       .eq('lead_id', leadId)
       .eq('closer_id', closerId)
       .is('responded_at', null)
-      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()) as { data: { id: string; token: string } | null };
+      .maybeSingle()) as { data: { id: string; token: string; expires_at: string } | null };
 
     let feedbackToken: string;
 
-    if (existing) {
+    if (pending && new Date(pending.expires_at).getTime() > Date.now()) {
       // Reuse existing pending feedback request — don't create duplicate
-      feedbackToken = existing.token;
+      feedbackToken = pending.token;
       console.warn('[closer-feedback] Reusing existing feedback request for lead=%s', leadId);
     } else {
-      // Don't re-ask a closer who already graded this lead in the last 24h.
+      // Início da reunião atual. Fonte canônica: leads.meeting_starts_at
+      // (timestamptz). Fallback legado: metadata.start_time da interação
+      // meeting_scheduled mais recente — hora de PAREDE em BRT, ancorada com
+      // parseBrtDateTime (new Date() direto lia 3h errado num servidor UTC).
+      const { data: leadRow } = (await from(supabase, 'leads')
+        .select('meeting_starts_at')
+        .eq('id', leadId)
+        .maybeSingle()) as { data: { meeting_starts_at: string | null } | null };
+
+      let meetingStart: Date | null = leadRow?.meeting_starts_at ? new Date(leadRow.meeting_starts_at) : null;
+      if (!meetingStart || Number.isNaN(meetingStart.getTime())) {
+        const { data: latestMeeting } = (await from(supabase, 'interactions')
+          .select('metadata')
+          .eq('lead_id', leadId)
+          .eq('type', 'meeting_scheduled')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()) as { data: { metadata: Record<string, unknown> | null } | null };
+        const startTimeRaw = latestMeeting?.metadata?.start_time as string | undefined;
+        meetingStart = startTimeRaw ? parseBrtDateTime(startTimeRaw) : null;
+      }
+
+      // Don't re-ask a closer who already CONFIRMED this meeting ("Realizada").
       // This happens when a lead is marked "Ganho" a second time (without a
-      // reopen) hours after the first feedback was already answered, spawning a
-      // duplicate request for the same meeting. A genuine second meeting is
-      // always days apart (and the lead goes through a reopen first), so it
-      // falls outside this window and still gets its own request.
-      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: recentlyAnswered } = (await from(supabase, 'closer_feedback_requests')
+      // reopen) after the feedback was already answered, spawning a duplicate
+      // request for the same meeting (PR #18). Only `meeting_done` blocks: if
+      // the closer answered "Remarcou"/"No-show", the lead was reopened and a
+      // new "Ganho" means a NEW meeting — it must get its own feedback, even
+      // within 24h (caso Bom Demais Alimentos, 29–30/09).
+      // Janela = desde o início da reunião atual; sem reunião conhecida, 24h.
+      const since = meetingStart ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const { data: alreadyConfirmed } = (await from(supabase, 'closer_feedback_requests')
         .select('id')
         .eq('lead_id', leadId)
         .eq('closer_id', closerId)
-        .not('responded_at', 'is', null)
-        .gte('responded_at', since24h)
+        .eq('result', 'meeting_done')
+        .gte('responded_at', since.toISOString())
         .limit(1)
         .maybeSingle()) as { data: { id: string } | null };
 
-      if (recentlyAnswered) {
+      if (alreadyConfirmed) {
         console.warn(
-          '[closer-feedback] Skipping — closer=%s already answered feedback for lead=%s within 24h',
+          '[closer-feedback] Skipping — closer=%s already confirmed the current meeting for lead=%s',
           closerId,
           leadId,
         );
@@ -88,44 +118,56 @@ export async function sendCloserFeedbackEmail(params: SendFeedbackParams): Promi
 
       // Don't create a feedback request before the meeting actually happens.
       // Otherwise the closer gets pestered to grade a meeting that's still in the future.
-      const { data: latestMeeting } = (await from(supabase, 'interactions')
-        .select('metadata')
-        .eq('lead_id', leadId)
-        .eq('type', 'meeting_scheduled')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()) as { data: { metadata: Record<string, unknown> | null } | null };
-
-      const startTimeRaw = latestMeeting?.metadata?.start_time as string | undefined;
-      if (startTimeRaw) {
-        const startTime = new Date(startTimeRaw);
-        if (startTime.getTime() > Date.now()) {
-          console.warn(
-            '[closer-feedback] Skipping feedback creation — meeting still in future. lead=%s start=%s',
-            leadId,
-            startTimeRaw,
-          );
-          channels.emailError = 'meeting_in_future';
-          return channels;
-        }
-      }
-
-      // Create new feedback request
-      const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
-        .insert({
-          org_id: orgId,
-          lead_id: leadId,
-          closer_id: closerId,
-        })
-        .select('id, token')
-        .single()) as { data: { id: string; token: string } | null; error: { message: string } | null };
-
-      if (insertError || !request) {
-        console.error('[closer-feedback] Failed to create feedback request:', insertError?.message);
-        channels.emailError = insertError?.message ?? 'feedback_request_insert_failed';
+      if (meetingStart && meetingStart.getTime() > Date.now()) {
+        console.warn(
+          '[closer-feedback] Skipping feedback creation — meeting still in future. lead=%s start=%s',
+          leadId,
+          meetingStart.toISOString(),
+        );
+        channels.emailError = 'meeting_in_future';
         return channels;
       }
-      feedbackToken = request.token;
+
+      if (pending) {
+        // Expired but never answered: reactivate the same row (fresh 7-day
+        // window, reminders reset) instead of inserting — the insert would hit
+        // idx_feedback_unique_pending and the closer would get nothing.
+        const nowIso = new Date().toISOString();
+        const { error: reactivateError } = (await from(supabase, 'closer_feedback_requests')
+          .update({
+            sent_at: nowIso,
+            expires_at: new Date(Date.now() + FEEDBACK_TTL_MS).toISOString(),
+            reminder_count: 0,
+            reminder_sent_at: null,
+          } as Record<string, unknown>)
+          .eq('id', pending.id)
+          .is('responded_at', null)) as { error: { message: string } | null };
+
+        if (reactivateError) {
+          console.error('[closer-feedback] Failed to reactivate feedback request:', reactivateError.message);
+          channels.emailError = reactivateError.message;
+          return channels;
+        }
+        feedbackToken = pending.token;
+        console.warn('[closer-feedback] Reactivated expired feedback request for lead=%s', leadId);
+      } else {
+        // Create new feedback request
+        const { data: request, error: insertError } = (await from(supabase, 'closer_feedback_requests')
+          .insert({
+            org_id: orgId,
+            lead_id: leadId,
+            closer_id: closerId,
+          })
+          .select('id, token')
+          .single()) as { data: { id: string; token: string } | null; error: { message: string } | null };
+
+        if (insertError || !request) {
+          console.error('[closer-feedback] Failed to create feedback request:', insertError?.message);
+          channels.emailError = insertError?.message ?? 'feedback_request_insert_failed';
+          return channels;
+        }
+        feedbackToken = request.token;
+      }
     }
 
     const feedbackUrl = `${appUrl}/feedback/${feedbackToken}`;

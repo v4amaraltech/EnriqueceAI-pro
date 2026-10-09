@@ -476,6 +476,44 @@ export async function pushLeadToCrmWithDefaults(
   });
 }
 
+function isCrmPushOptions(value: unknown): value is CrmPushOptions {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.provider === 'string' &&
+    typeof v.pipelineId === 'string' && v.pipelineId !== '' &&
+    typeof v.stageId === 'string' && v.stageId !== ''
+  );
+}
+
+/**
+ * Cria o card do lead no CRM depois que a reunião foi CONFIRMADA (closer
+ * respondeu "Realizada" ou o feedback venceu com o lead ainda ganho).
+ *
+ * Usa o funil/etapa que o SDR escolheu no modal de Ganho — guardados em
+ * `metadata.crm_options` da interação `lead_won` mais recente — e cai nos
+ * defaults da conexão quando o Ganho veio da fila (sem modal).
+ * Idempotente como pushLeadToCrm (dedup por crm_deal_created).
+ */
+export async function pushConfirmedMeetingToCrm(orgId: string, leadId: string): Promise<CrmPushResult> {
+  const supabase = createServiceRoleClient();
+
+  const { data: wonEvent } = (await from(supabase, 'interactions')
+    .select('metadata')
+    .eq('org_id', orgId)
+    .eq('lead_id', leadId)
+    .eq('metadata->>system_event', 'lead_won')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()) as { data: { metadata: Record<string, unknown> | null } | null };
+
+  const saved = wonEvent?.metadata?.crm_options;
+  if (isCrmPushOptions(saved)) {
+    return pushLeadToCrm(orgId, leadId, saved);
+  }
+  return pushLeadToCrmWithDefaults(orgId, leadId);
+}
+
 /**
  * Reflect the "Ganho" (won) event in the org's CRM:
  *   1. Ensure a deal exists (create it if the lead never got one — e.g. "Ganho"
