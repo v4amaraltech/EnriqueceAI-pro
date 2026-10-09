@@ -71,6 +71,72 @@ export type Database = {
         };
         Relationships: [];
       };
+      _bkp_executed_step_recovery_20261006: {
+        Row: {
+          cadence_id: string | null;
+          completed_at: string | null;
+          current_step: number | null;
+          enrolled_at: string | null;
+          enrolled_by: string | null;
+          execution_id: string | null;
+          id: string | null;
+          lead_id: string | null;
+          lease_owner: string | null;
+          lease_until: string | null;
+          loss_notes: string | null;
+          loss_reason_id: string | null;
+          next_step_due: string | null;
+          org_id: string | null;
+          pending_assigned_to: string | null;
+          scheduled_start_at: string | null;
+          snooze_count: number | null;
+          status: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          execution_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          execution_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_fn_get_sdr_leads_abertos_pre_reopen_20260918: {
         Row: {
           created_at: string | null;
@@ -3905,6 +3971,24 @@ export type Database = {
           },
         ];
       };
+      leads_hard_deleted: {
+        Row: {
+          deleted_at: string;
+          id: string;
+          org_id: string;
+        };
+        Insert: {
+          deleted_at?: string;
+          id: string;
+          org_id: string;
+        };
+        Update: {
+          deleted_at?: string;
+          id?: string;
+          org_id?: string;
+        };
+        Relationships: [];
+      };
       lista_consentimento_wa_20260919: {
         Row: {
           atualizado_resposta_at: string | null;
@@ -6523,7 +6607,7 @@ export type Database = {
         Args: { p_api_token: string; p_from_date?: string };
         Returns: Json[];
       };
-      get_sdr_atividades_atrasadas_v3: {
+      get_sdr_atividades_atrasadas_v4: {
         Args: { p_org_id: string };
         Returns: {
           atrasadas: number;
@@ -6792,7 +6876,7 @@ export type Database = {
         | 'calendar'
         | 'system'
         | 'crm';
-      closer_feedback_result: 'meeting_done' | 'no_show' | 'rescheduled';
+      closer_feedback_result: 'meeting_done' | 'no_show' | 'rescheduled' | 'disqualified';
       closer_qualificacao_aderencia: 'bateu' | 'divergiu' | 'nao_validado';
       connection_status: 'connected' | 'disconnected' | 'error' | 'syncing';
       crm_type: 'hubspot' | 'pipedrive' | 'rdstation' | 'kommo';
@@ -6982,7 +7066,7 @@ export const Constants = {
         'system',
         'crm',
       ],
-      closer_feedback_result: ['meeting_done', 'no_show', 'rescheduled'],
+      closer_feedback_result: ['meeting_done', 'no_show', 'rescheduled', 'disqualified'],
       closer_qualificacao_aderencia: ['bateu', 'divergiu', 'nao_validado'],
       connection_status: ['connected', 'disconnected', 'error', 'syncing'],
       crm_type: ['hubspot', 'pipedrive', 'rdstation', 'kommo'],
