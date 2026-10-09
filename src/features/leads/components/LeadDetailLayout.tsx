@@ -390,7 +390,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   }, []);
 
 
-  const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string) => {
+  const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string, preferredStageId?: string | null) => {
     setLoadingStages(true);
     setStages([]);
     setSelectedStageId(null);
@@ -398,13 +398,46 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setLoadingStages(false);
     if (result.success) {
       setStages(result.data);
-      if (result.data.length === 1) {
+      if (preferredStageId && result.data.some((st) => st.id === preferredStageId)) {
+        setSelectedStageId(preferredStageId);
+      } else if (result.data.length === 1) {
         setSelectedStageId(result.data[0]!.id);
       }
     } else {
       toast.error(result.error);
     }
   }, []);
+
+  const activeCrmConnection = crmConnections.find((c) => c.provider === selectedProvider);
+  const lockedToDefaults = Boolean(
+    activeCrmConnection?.defaultPipelineId &&
+      activeCrmConnection.defaultStageId &&
+      activeCrmConnection.pipelines.some((p) => p.id === activeCrmConnection.defaultPipelineId),
+  );
+
+  // Responsável no Kommo = o closer da reunião (casado por e-mail). Roda quando
+  // a lista de usuários chega ou o closer muda; o SDR ainda pode trocar.
+  useEffect(() => {
+    if (!selectedWonCloserId || kommoUsers.length === 0) return;
+    const closerEmail = wonClosers.find((c) => c.id === selectedWonCloserId)?.email?.trim().toLowerCase();
+    if (!closerEmail) return;
+    const match = kommoUsers.find((u) => u.email?.trim().toLowerCase() === closerEmail);
+    if (match) setSelectedKommoUserId(match.id);
+  }, [selectedWonCloserId, kommoUsers, wonClosers]);
+
+  // Funil/etapa padrão da conexão: quando configurados, o Ganho usa sempre eles
+  // (não há mais escolha manual — caso MILPAPER, card caiu em outro funil).
+  // Sem padrão, cai no comportamento antigo (auto-seleciona se só há 1 funil).
+  const preselectPipeline = useCallback((conn: CrmPipelinesEntry) => {
+    if (conn.defaultPipelineId && conn.pipelines.some((p) => p.id === conn.defaultPipelineId)) {
+      setSelectedPipelineId(conn.defaultPipelineId);
+      void loadStages(conn.provider, conn.defaultPipelineId, conn.defaultStageId);
+    } else if (conn.pipelines.length === 1) {
+      const pipeline = conn.pipelines[0]!;
+      setSelectedPipelineId(pipeline.id);
+      void loadStages(conn.provider, pipeline.id);
+    }
+  }, [loadStages]);
 
   const handleOpenWonDialog = useCallback(async () => {
     setShowWonDialog(true);
@@ -446,11 +479,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       const firstConn = pipelinesResult.data.connections[0]!;
       setSelectedProvider(firstConn.provider);
       setSendToCrm(true);
-      if (firstConn.pipelines.length === 1) {
-        const pipeline = firstConn.pipelines[0]!;
-        setSelectedPipelineId(pipeline.id);
-        void loadStages(firstConn.provider, pipeline.id);
-      }
+      preselectPipeline(firstConn);
       // Load Kommo users if Kommo is connected
       if (firstConn.provider === 'kommo' || pipelinesResult.data.connections.some((c) => c.provider === 'kommo')) {
         setLoadingKommoUsers(true);
@@ -466,7 +495,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       setWonMissingFields(missing);
     }
     setLoadingRequiredFields(false);
-  }, [loadStages, lead, customFieldDefs]);
+  }, [preselectPipeline, lead, customFieldDefs]);
 
   const handleConfirmWon = useCallback(() => {
     startTransition(async () => {
@@ -817,11 +846,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                             setSelectedStageId(null);
                             setStages([]);
                             const conn = crmConnections.find((c) => c.provider === provider);
-                            if (conn?.pipelines.length === 1) {
-                              const pipeline = conn.pipelines[0]!;
-                              setSelectedPipelineId(pipeline.id);
-                              void loadStages(provider, pipeline.id);
-                            }
+                            if (conn) preselectPipeline(conn);
                           }}
                         >
                           <SelectTrigger className="w-full">
@@ -841,7 +866,23 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                         </p>
                       )}
                     </div>
-                    {selectedProvider && (
+                    {selectedProvider && lockedToDefaults && (
+                      <div className="space-y-1 rounded-md border border-[var(--border)] p-3">
+                        <p className="text-sm">
+                          <span className="font-semibold">Funil:</span>{' '}
+                          {activeCrmConnection?.pipelines.find((p) => p.id === selectedPipelineId)?.name ?? '—'}
+                          {' · '}
+                          <span className="font-semibold">Etapa:</span>{' '}
+                          {loadingStages ? 'carregando...' : (stages.find((st) => st.id === selectedStageId)?.name ?? '—')}
+                        </p>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {selectedWonCloserId
+                            ? 'Funil padrão do CRM. O card é criado quando o closer confirmar a reunião no feedback.'
+                            : 'Funil padrão do CRM.'}
+                        </p>
+                      </div>
+                    )}
+                    {selectedProvider && !lockedToDefaults && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Funil</Label>
                         <Select
@@ -869,7 +910,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                         </Select>
                       </div>
                     )}
-                    {selectedPipelineId && (
+                    {selectedPipelineId && !lockedToDefaults && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Etapa</Label>
                         {loadingStages ? (

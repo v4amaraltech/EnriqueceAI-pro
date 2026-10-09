@@ -476,6 +476,25 @@ export async function pushLeadToCrmWithDefaults(
   });
 }
 
+/**
+ * Troca funil/etapa pelos padrões da conexão do provider, quando ambos estão
+ * configurados. O modal de Ganho não deixa mais escolher funil (caso MILPAPER,
+ * 09/10: card caiu em outro funil por escolha manual); o servidor garante o
+ * mesmo. Sem padrões (outras orgs), mantém o que veio do modal. O responsável
+ * (`responsibleUserId`) é preservado.
+ */
+export async function applyConnectionDefaults<T extends CrmPushOptions>(orgId: string, options: T): Promise<T> {
+  const { data: conn } = (await from(createServiceRoleClient(), 'crm_connections')
+    .select('default_pipeline_id, default_stage_id')
+    .eq('org_id', orgId)
+    .eq('crm_provider', options.provider)
+    .in('status', ['connected', 'syncing'])
+    .maybeSingle()) as { data: { default_pipeline_id: string | null; default_stage_id: string | null } | null };
+
+  if (!conn?.default_pipeline_id || !conn.default_stage_id) return options;
+  return { ...options, pipelineId: conn.default_pipeline_id, stageId: conn.default_stage_id };
+}
+
 function isCrmPushOptions(value: unknown): value is CrmPushOptions {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
