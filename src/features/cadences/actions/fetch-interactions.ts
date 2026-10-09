@@ -21,6 +21,7 @@ const CADENCE_LIFECYCLE_EVENTS = [
   'cadence_ignored',
   'cadence_completed',
   'cadence_paused',
+  'cadence_paused_for_return',
   'cadence_resumed',
   'enrollment_removed',
   'cadence_limbo_triaged',
