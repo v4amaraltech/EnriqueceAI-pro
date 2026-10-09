@@ -10,6 +10,7 @@ const RESULT_OPTIONS = [
   { value: 'meeting_done', label: 'Realizada' },
   { value: 'no_show', label: 'No-show' },
   { value: 'rescheduled', label: 'Remarcada' },
+  { value: 'disqualified', label: 'Desqualificada' },
 ] as const;
 
 const QUALIFICACAO_OPTIONS = [
@@ -51,6 +52,10 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
   const isMeetingDone = result === 'meeting_done';
   const isDivergiu = isMeetingDone && qualificacao === 'divergiu';
+  // Desqualificada: a reunião aconteceu, mas o lead não tem fit — vira Perdido.
+  const isDisqualified = result === 'disqualified';
+  // Observação obrigatória: descreve a call (Realizada) ou o motivo (Desqualificada).
+  const commentRequired = isMeetingDone || isDisqualified;
 
   function toggleDivergencia(value: string) {
     setDivergencias((prev) =>
@@ -89,9 +94,14 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       setError('Marque ao menos um item que não conferiu.');
       return;
     }
-    // Observações são obrigatórias quando a reunião aconteceu (descrever a call).
+    // Observações são obrigatórias quando a reunião aconteceu (descrever a call)
+    // e na desqualificação (o motivo vira a observação da perda do lead).
     if (isMeetingDone && !comment.trim()) {
       setError('Escreva uma observação sobre a reunião.');
+      return;
+    }
+    if (isDisqualified && !comment.trim()) {
+      setError('Explique por que o lead foi desqualificado.');
       return;
     }
 
@@ -140,7 +150,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     );
   }
 
-  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null || oportunidadeQualificada === null || !comment.trim()));
+  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null || oportunidadeQualificada === null)) || (commentRequired && !comment.trim());
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -149,7 +159,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
           Resultado da reunião <span className="text-primary">*</span>
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {RESULT_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -287,12 +297,12 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       )}
 
-      {/* 6. Observações — obrigatória quando Realizada (descreve a call);
-          opcional em No-show/Remarcada. */}
+      {/* 6. Observações — obrigatória quando Realizada (descreve a call) ou
+          Desqualificada (motivo); opcional em No-show/Remarcada. */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
           Observações{' '}
-          {isMeetingDone
+          {commentRequired
             ? <span className="text-primary">*</span>
             : <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>}
         </label>
@@ -301,7 +311,9 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
           onChange={(e) => { setComment(e.target.value); setError(''); }}
           placeholder={isMeetingDone
             ? 'Como foi a call? Ex.: o lead entrou pelo computador ou pelo celular, comportamento, objeções, próximos passos.'
-            : 'O que o SDR precisa saber para a próxima'}
+            : isDisqualified
+              ? 'Por que o lead foi desqualificado? Ex.: sem verba, fora do perfil, não era o decisor.'
+              : 'O que o SDR precisa saber para a próxima'}
           rows={3}
           className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-y"
         />

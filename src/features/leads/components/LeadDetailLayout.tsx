@@ -58,6 +58,7 @@ const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
   no_show: 'Não compareceu',
   rescheduled: 'Remarcou',
+  disqualified: 'Desqualificada',
 };
 
 const QUALIFICACAO_LABELS: Record<string, string> = {
