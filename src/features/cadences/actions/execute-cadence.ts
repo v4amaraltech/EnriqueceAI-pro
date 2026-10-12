@@ -17,7 +17,7 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
-import { skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
+import { skipEmailStepsForBouncedLeads, skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
@@ -268,6 +268,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // WhatsApp (a fila esconde esses passos, então o lead não aparecia pra
   // ninguém). Só avança; sem passo de outro canal, fica como está.
   await skipWhatsAppStepsForInvalidLeads(supabase);
+  // Idem para e-mail com bounce nas cadências de SDR: o bounce não pausa mais
+  // as outras cadências do lead; aqui os passos de e-mail delas são pulados.
+  await skipEmailStepsForBouncedLeads(supabase);
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')

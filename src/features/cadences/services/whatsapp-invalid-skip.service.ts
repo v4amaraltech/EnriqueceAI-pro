@@ -55,6 +55,34 @@ export function isWhatsAppStep(step: CadenceStepChannel): boolean {
 }
 
 /**
+ * Passo de e-mail. Lead com `email_bounced_at` não tem como recebê-lo: o
+ * motor pula esses passos nas cadências de SDR (mesma lógica do WhatsApp).
+ */
+export function isEmailStep(step: CadenceStepChannel): boolean {
+  return step.channel === 'email';
+}
+
+/**
+ * Próximo passo que NÃO está bloqueado depois de `currentStep`.
+ * `null` quando o passo atual não está bloqueado (nada a fazer) ou quando só
+ * restam passos bloqueados.
+ */
+function nextUnblockedStep(
+  steps: CadenceStepChannel[],
+  currentStep: number,
+  isBlocked: (step: CadenceStepChannel) => boolean,
+): number | null {
+  const current = steps.find((s) => s.step_order === currentStep);
+  if (!current || !isBlocked(current)) return null;
+
+  const next = steps
+    .filter((s) => s.step_order > currentStep && !isBlocked(s))
+    .sort((a, b) => a.step_order - b.step_order)[0];
+
+  return next?.step_order ?? null;
+}
+
+/**
  * Próximo passo de canal diferente de WhatsApp depois de `currentStep`.
  * `null` quando o passo atual não é WhatsApp (nada a fazer) ou quando só
  * restam passos de WhatsApp.
@@ -63,14 +91,7 @@ export function nextNonWhatsAppStep(
   steps: CadenceStepChannel[],
   currentStep: number,
 ): number | null {
-  const current = steps.find((s) => s.step_order === currentStep);
-  if (!current || !isWhatsAppStep(current)) return null;
-
-  const next = steps
-    .filter((s) => s.step_order > currentStep && !isWhatsAppStep(s))
-    .sort((a, b) => a.step_order - b.step_order)[0];
-
-  return next?.step_order ?? null;
+  return nextUnblockedStep(steps, currentStep, isWhatsAppStep);
 }
 
 export type InvalidWhatsAppAction =
@@ -79,20 +100,29 @@ export type InvalidWhatsAppAction =
   | { action: 'end' };
 
 /**
- * O que fazer com uma inscrição de lead sem WhatsApp parada no passo atual.
- * `none` = passo atual não é WhatsApp (ou `current_step` fora da faixa, sobra
- * de edição de cadência); `advance` = há passo de outro canal adiante;
- * `end` = só restam passos de WhatsApp (cauda) → fim de cadência.
+ * O que fazer com uma inscrição parada num passo bloqueado.
+ * `none` = passo atual não está bloqueado (ou `current_step` fora da faixa,
+ * sobra de edição de cadência); `advance` = há passo liberado adiante;
+ * `end` = só restam passos bloqueados (cauda) → fim de cadência.
  */
+export function classifyBlockedStep(
+  steps: CadenceStepChannel[],
+  currentStep: number,
+  isBlocked: (step: CadenceStepChannel) => boolean,
+): InvalidWhatsAppAction {
+  const current = steps.find((s) => s.step_order === currentStep);
+  if (!current || !isBlocked(current)) return { action: 'none' };
+
+  const target = nextUnblockedStep(steps, currentStep, isBlocked);
+  return target === null ? { action: 'end' } : { action: 'advance', toStep: target };
+}
+
+/** Lead sem WhatsApp: ver `classifyBlockedStep`. */
 export function classifyInvalidWhatsAppStep(
   steps: CadenceStepChannel[],
   currentStep: number,
 ): InvalidWhatsAppAction {
-  const current = steps.find((s) => s.step_order === currentStep);
-  if (!current || !isWhatsAppStep(current)) return { action: 'none' };
-
-  const target = nextNonWhatsAppStep(steps, currentStep);
-  return target === null ? { action: 'end' } : { action: 'advance', toStep: target };
+  return classifyBlockedStep(steps, currentStep, isWhatsAppStep);
 }
 
 interface Candidate {
@@ -103,15 +133,35 @@ interface Candidate {
   org_id: string;
 }
 
-export async function skipWhatsAppStepsForInvalidLeads(
+interface BlockedChannelConfig {
+  /** Coluna de `leads` que marca o canal como inutilizável. */
+  leadFlag: 'whatsapp_invalid_at' | 'email_bounced_at';
+  isBlocked: (step: CadenceStepChannel) => boolean;
+  /** Restringe a cadências deste tipo (ex.: só `standard`, de SDR). */
+  cadenceType?: string;
+  logTag: string;
+  channelLabel: string;
+  skippedEvent: string;
+  skippedReason: string;
+  endReason: string;
+  endMessage: string;
+}
+
+async function skipBlockedSteps(
   supabase: SupabaseClient,
+  config: BlockedChannelConfig,
 ): Promise<{ scanned: number; advanced: number; ended: number }> {
   const none = { scanned: 0, advanced: 0, ended: 0 };
   try {
-    const { data: candidates } = (await from(supabase, 'cadence_enrollments')
-      .select('id, cadence_id, lead_id, current_step, org_id, lead:leads!inner(whatsapp_invalid_at)')
+    const select = config.cadenceType
+      ? `id, cadence_id, lead_id, current_step, org_id, lead:leads!inner(${config.leadFlag}), cadence:cadences!inner(type)`
+      : `id, cadence_id, lead_id, current_step, org_id, lead:leads!inner(${config.leadFlag})`;
+    let query = from(supabase, 'cadence_enrollments')
+      .select(select)
       .eq('status', 'active')
-      .not('lead.whatsapp_invalid_at', 'is', null)
+      .not(`lead.${config.leadFlag}`, 'is', null);
+    if (config.cadenceType) query = query.eq('cadence.type', config.cadenceType);
+    const { data: candidates } = (await query
       .order('enrolled_at', { ascending: true })
       .limit(WHATSAPP_SCAN_LIMIT)) as { data: Candidate[] | null };
 
@@ -135,9 +185,10 @@ export async function skipWhatsAppStepsForInvalidLeads(
     let ended = 0;
     for (const enrollment of candidates) {
       if (advanced + ended >= WHATSAPP_SKIP_BATCH) break;
-      const decision = classifyInvalidWhatsAppStep(
+      const decision = classifyBlockedStep(
         stepsByCadence.get(enrollment.cadence_id) ?? [],
         enrollment.current_step,
+        config.isBlocked,
       );
       if (decision.action === 'none') continue;
 
@@ -148,7 +199,7 @@ export async function skipWhatsAppStepsForInvalidLeads(
           .eq('id', enrollment.id)
           .eq('current_step', enrollment.current_step);
         if (error) {
-          console.error(`[wa-skip] enrollment=${enrollment.id} falha ao avançar:`, error.message);
+          console.error(`[${config.logTag}] enrollment=${enrollment.id} falha ao avançar:`, error.message);
           continue;
         }
 
@@ -156,8 +207,8 @@ export async function skipWhatsAppStepsForInvalidLeads(
           orgId: enrollment.org_id,
           leadId: enrollment.lead_id,
           userId: null,
-          event: 'step_skipped_whatsapp_invalid',
-          message: `Passo ${enrollment.current_step} (WhatsApp) pulado automaticamente — lead sem WhatsApp; cadência seguiu para o passo ${decision.toStep}`,
+          event: config.skippedEvent,
+          message: `Passo ${enrollment.current_step} (${config.channelLabel}) pulado automaticamente — ${config.skippedReason}; cadência seguiu para o passo ${decision.toStep}`,
           metadata: {
             cadence_id: enrollment.cadence_id,
             enrollment_id: enrollment.id,
@@ -169,16 +220,16 @@ export async function skipWhatsAppStepsForInvalidLeads(
         continue;
       }
 
-      // Cauda só de WhatsApp = fim de cadência. Encerra ANTES de chamar a
-      // regra de Perdido: ela recusa lead com cadência aberta e, com a
-      // inscrição ainda ativa, bloquearia a si mesma.
+      // Cauda só de passos bloqueados = fim de cadência. Encerra ANTES de
+      // chamar a regra de Perdido: ela recusa lead com cadência aberta e, com
+      // a inscrição ainda ativa, bloquearia a si mesma.
       const { error: endError } = await from(supabase, 'cadence_enrollments')
         .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
         .eq('id', enrollment.id)
         .eq('status', 'active')
         .eq('current_step', enrollment.current_step);
       if (endError) {
-        console.error(`[wa-skip] enrollment=${enrollment.id} falha ao encerrar:`, endError.message);
+        console.error(`[${config.logTag}] enrollment=${enrollment.id} falha ao encerrar:`, endError.message);
         continue;
       }
 
@@ -187,11 +238,11 @@ export async function skipWhatsAppStepsForInvalidLeads(
         leadId: enrollment.lead_id,
         userId: null,
         event: 'cadence_completed',
-        message: 'Cadência concluída — só restavam passos de WhatsApp e o lead está sem WhatsApp',
+        message: config.endMessage,
         metadata: {
           cadence_id: enrollment.cadence_id,
           enrollment_id: enrollment.id,
-          reason: 'whatsapp_invalid_tail',
+          reason: config.endReason,
           last_step: enrollment.current_step,
         },
       });
@@ -206,11 +257,49 @@ export async function skipWhatsAppStepsForInvalidLeads(
     }
 
     if (advanced > 0 || ended > 0) {
-      console.warn(`[wa-skip] lead sem WhatsApp: ${advanced} avançada(s), ${ended} encerrada(s) por cauda de WhatsApp`);
+      console.warn(`[${config.logTag}] ${config.skippedReason}: ${advanced} avançada(s), ${ended} encerrada(s) por cauda de ${config.channelLabel}`);
     }
     return { scanned: candidates.length, advanced, ended };
   } catch (err) {
-    console.error('[wa-skip] falha inesperada (motor segue):', err);
+    console.error(`[${config.logTag}] falha inesperada (motor segue):`, err);
     return none;
   }
+}
+
+export function skipWhatsAppStepsForInvalidLeads(
+  supabase: SupabaseClient,
+): Promise<{ scanned: number; advanced: number; ended: number }> {
+  return skipBlockedSteps(supabase, {
+    leadFlag: 'whatsapp_invalid_at',
+    isBlocked: isWhatsAppStep,
+    logTag: 'wa-skip',
+    channelLabel: 'WhatsApp',
+    skippedEvent: 'step_skipped_whatsapp_invalid',
+    skippedReason: 'lead sem WhatsApp',
+    endReason: 'whatsapp_invalid_tail',
+    endMessage: 'Cadência concluída — só restavam passos de WhatsApp e o lead está sem WhatsApp',
+  });
+}
+
+/**
+ * Destrava inscrições de SDR paradas num passo de e-mail de lead com bounce.
+ * Antes o bounce PAUSAVA todas as outras cadências do lead (inclusive as de
+ * ligação/WhatsApp) e nada as retomava — limbo. Agora só a cadência que
+ * originou o bounce para; nas outras, os passos de e-mail são pulados.
+ * Cadências `auto_email` ficam fora: o motor de e-mail já trata o bounce.
+ */
+export function skipEmailStepsForBouncedLeads(
+  supabase: SupabaseClient,
+): Promise<{ scanned: number; advanced: number; ended: number }> {
+  return skipBlockedSteps(supabase, {
+    leadFlag: 'email_bounced_at',
+    isBlocked: isEmailStep,
+    cadenceType: 'standard',
+    logTag: 'email-skip',
+    channelLabel: 'e-mail',
+    skippedEvent: 'step_skipped_email_bounced',
+    skippedReason: 'e-mail do lead com bounce',
+    endReason: 'email_bounced_tail',
+    endMessage: 'Cadência concluída — só restavam passos de e-mail e o e-mail do lead deu bounce',
+  });
 }
