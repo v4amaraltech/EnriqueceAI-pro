@@ -24,6 +24,7 @@ const CADENCE_LIFECYCLE_EVENTS = [
   'cadence_resumed',
   'enrollment_removed',
   'cadence_limbo_triaged',
+  'paused_cadence_followup',
   'prospection_scheduled',
   'prospection_reactivated',
   'inbound_recovery_scheduled',

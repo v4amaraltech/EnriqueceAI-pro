@@ -14,8 +14,8 @@ import type { PendingActivity } from '../types';
 /** Lead columns the activity queue renders (ActivityLead). */
 const SCHEDULED_LEAD_COLUMNS =
   'id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at';
-/** Cadence-queue variant: also needs whatsapp_invalid_at to skip WhatsApp steps. */
-const QUEUE_LEAD_COLUMNS = `${SCHEDULED_LEAD_COLUMNS}, whatsapp_invalid_at`;
+/** Cadence-queue variant: also needs whatsapp_invalid_at / email_bounced_at to skip blocked steps. */
+const QUEUE_LEAD_COLUMNS = `${SCHEDULED_LEAD_COLUMNS}, whatsapp_invalid_at, email_bounced_at`;
 
 interface RawLead {
   id: string;
@@ -52,6 +52,7 @@ interface RawLead {
   assigned_to: string | null;
   custom_field_values: Record<string, string> | null;
   whatsapp_invalid_at: string | null;
+  email_bounced_at?: string | null;
 }
 
 interface EnrollmentRow {
@@ -192,6 +193,10 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       // Suppress WhatsApp steps when the lead's number was flagged as not WhatsApp
       // (SDR feedback via "Não é WhatsApp" button)
       if (step.channel === 'whatsapp' && enrollment.lead.whatsapp_invalid_at) continue;
+
+      // E-mail com bounce: o passo de e-mail não tem como ser feito. O motor
+      // (`skipEmailStepsForBouncedLeads`) avança a inscrição; até lá, some da fila.
+      if (step.channel === 'email' && enrollment.lead.email_bounced_at) continue;
 
       // Ligação via WhatsApp (passo phone com call_provider='whatsapp', Epic 7): só
       // é executável quando o lead tem número WhatsApp resolvível e não foi marcado
