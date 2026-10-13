@@ -175,7 +175,7 @@ export function ActivityExecutionSheetContent({
       });
 
       // Fetch email templates in parallel — used by the template selector
-      fetchEmailTemplates().then((result) => {
+      fetchEmailTemplates(activity.templateId).then((result) => {
         if (!cancelled && result.success) {
           setEmailTemplates(result.data);
         }
