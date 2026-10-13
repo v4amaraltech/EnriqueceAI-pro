@@ -7,6 +7,7 @@ import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { TemplateListResult } from '../index';
+import { AUTO_EMAIL_TEMPLATE_PREFIX } from '../internal-templates';
 import type { MessageTemplateRow } from '../../cadences/types';
 
 interface FetchTemplatesParams {
@@ -30,9 +31,12 @@ export async function fetchTemplates(
   const rangeFrom = (page - 1) * per_page;
   const to = rangeFrom + per_page - 1;
 
+  // Esconde os templates internos da cadência de e-mail automático ("Auto Email - Step N"):
+  // só o robô usa, e a tela da cadência automática não depende desta lista.
   let query = from(supabase, 'message_templates')
     .select('*', { count: 'exact' })
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .not('name', 'like', `${AUTO_EMAIL_TEMPLATE_PREFIX}%`);
 
   // Todos da org veem todos os templates; edição/exclusão é restrita em manage-templates.
   if (params.channel) {
