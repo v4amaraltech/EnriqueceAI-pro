@@ -1,11 +1,12 @@
 # Story: Feriado nacional conta como fim de semana
 
 ## Status
-InReview
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-10-13 | @devops | PR #470 mesclado (`a79319e`); migration e tipos em prod. Status → Done. |
 | 2026-10-13 | @dev (Dex) | Revisão (AJUSTAR) aplicada: Sales Hub passa a usar `overdue_cutoff_brt()`; teste de 23h BRT. Limite do teste de sincronia: para REMOVER feriado é preciso editar o INSERT antigo (o teste lê todas as migrations). |
 | 2026-10-13 | @dev (Dex) | Implementado + testado. |
 | 2026-10-13 | Vini + Claude | Story criada: 334 de 480 "atrasadas" de 13/10 tinham vencido no feriado de 12/10. |
@@ -47,7 +48,7 @@ InReview
 - [x] typecheck / lint / test:run / build
 - [x] Aplicar migration em prod (13/out, MCP) — conferido: 30 feriados, anon não lê a tabela, corte no feriado = sexta 09/10; atrasadas do time 480 → 75
 - [x] `pnpm gen:types` (commit separado)
-- [ ] PR
+- [x] PR #470
 
 ## File List
 
