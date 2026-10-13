@@ -4,10 +4,91 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: '14.5';
+    PostgrestVersion: '13.0.4';
   };
   public: {
     Tables: {
+      _bkp_agro_limbo_lost_20261012: {
+        Row: {
+          backed_up_at: string | null;
+          cadence_id: string | null;
+          enrollment_id: string | null;
+          lead_id: string | null;
+          old_completed_at: string | null;
+          old_enr_status: Database['public']['Enums']['enrollment_status'] | null;
+          old_lead_status: Database['public']['Enums']['lead_status'] | null;
+          old_loss_notes: string | null;
+          old_loss_reason_id: string | null;
+          org_id: string | null;
+        };
+        Insert: {
+          backed_up_at?: string | null;
+          cadence_id?: string | null;
+          enrollment_id?: string | null;
+          lead_id?: string | null;
+          old_completed_at?: string | null;
+          old_enr_status?: Database['public']['Enums']['enrollment_status'] | null;
+          old_lead_status?: Database['public']['Enums']['lead_status'] | null;
+          old_loss_notes?: string | null;
+          old_loss_reason_id?: string | null;
+          org_id?: string | null;
+        };
+        Update: {
+          backed_up_at?: string | null;
+          cadence_id?: string | null;
+          enrollment_id?: string | null;
+          lead_id?: string | null;
+          old_completed_at?: string | null;
+          old_enr_status?: Database['public']['Enums']['enrollment_status'] | null;
+          old_lead_status?: Database['public']['Enums']['lead_status'] | null;
+          old_loss_notes?: string | null;
+          old_loss_reason_id?: string | null;
+          org_id?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_auto_email_orphan_templates_20261013: {
+        Row: {
+          body: string | null;
+          channel: Database['public']['Enums']['channel_type'] | null;
+          created_at: string | null;
+          created_by: string | null;
+          id: string | null;
+          is_system: boolean | null;
+          name: string | null;
+          org_id: string | null;
+          subject: string | null;
+          updated_at: string | null;
+          variables_used: string[] | null;
+        };
+        Insert: {
+          body?: string | null;
+          channel?: Database['public']['Enums']['channel_type'] | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          id?: string | null;
+          is_system?: boolean | null;
+          name?: string | null;
+          org_id?: string | null;
+          subject?: string | null;
+          updated_at?: string | null;
+          variables_used?: string[] | null;
+        };
+        Update: {
+          body?: string | null;
+          channel?: Database['public']['Enums']['channel_type'] | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          id?: string | null;
+          is_system?: boolean | null;
+          name?: string | null;
+          org_id?: string | null;
+          subject?: string | null;
+          updated_at?: string | null;
+          variables_used?: string[] | null;
+        };
+        Relationships: [];
+      };
       _bkp_bdr_arroz_assign_20260922: {
         Row: {
           assigned_to: string | null;
@@ -44,6 +125,39 @@ export type Database = {
           id?: string | null;
           kind?: string | null;
           row_data?: Json | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bounce_paused_resume_20261012: {
+        Row: {
+          backed_up_at: string | null;
+          cadence_id: string | null;
+          current_step: number | null;
+          id: string | null;
+          lead_id: string | null;
+          next_step_due: string | null;
+          status: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          backed_up_at?: string | null;
+          cadence_id?: string | null;
+          current_step?: number | null;
+          id?: string | null;
+          lead_id?: string | null;
+          next_step_due?: string | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          backed_up_at?: string | null;
+          cadence_id?: string | null;
+          current_step?: number | null;
+          id?: string | null;
+          lead_id?: string | null;
+          next_step_due?: string | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -1238,6 +1352,24 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      business_holidays: {
+        Row: {
+          created_at: string;
+          holiday_date: string;
+          name: string;
+        };
+        Insert: {
+          created_at?: string;
+          holiday_date: string;
+          name: string;
+        };
+        Update: {
+          created_at?: string;
+          holiday_date?: string;
+          name?: string;
+        };
+        Relationships: [];
       };
       cadence_enrollments: {
         Row: {
@@ -6655,6 +6787,7 @@ export type Database = {
         }[];
       };
       ingest_callface_call: { Args: { p_payload: Json }; Returns: Json };
+      is_business_day_brt: { Args: { d: string }; Returns: boolean };
       is_manager: { Args: never; Returns: boolean };
       lead_visibility_mode: { Args: never; Returns: string };
       leads_opened_events: {
@@ -6700,6 +6833,7 @@ export type Database = {
         Args: { p_org: string; p_val: string };
         Returns: Record<string, unknown>;
       };
+      overdue_cutoff_brt: { Args: { p_now?: string }; Returns: string };
       pode_enviar_confirmacao: {
         Args: {
           p_event_id: string;

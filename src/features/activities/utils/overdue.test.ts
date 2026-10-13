@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isOverdue, overdueCutoff } from './overdue';
+import { effectiveDueDate, isOverdue, overdueCutoff } from './overdue';
 
 // 05/out/2026 é segunda-feira. Horários em BRT (-03:00).
 const brt = (s: string) => new Date(`${s}-03:00`);
@@ -65,4 +65,44 @@ describe('isOverdue', () => {
   it('aceita string ISO', () => {
     expect(isOverdue('2026-10-02T12:00:00.000Z', brt('2026-10-05T10:00:00'))).toBe(true);
   });
+
+  describe('feriado nacional conta como fim de semana', () => {
+    // seg 12/10/2026 = Nossa Senhora Aparecida.
+    it('venceu no feriado → não é atrasada no dia seguinte; vira na quarta 9h', () => {
+      const due = brt('2026-10-12T09:00:00');
+      expect(isOverdue(due, brt('2026-10-13T10:30:00'))).toBe(false);
+      expect(isOverdue(due, brt('2026-10-14T09:00:00'))).toBe(true);
+    });
+
+    it('venceu na sexta antes do feriado → atrasada só na terça 9h', () => {
+      const due = brt('2026-10-09T14:00:00');
+      expect(isOverdue(due, brt('2026-10-12T15:00:00'))).toBe(false);
+      expect(isOverdue(due, brt('2026-10-13T08:59:00'))).toBe(false);
+      expect(isOverdue(due, brt('2026-10-13T09:00:00'))).toBe(true);
+    });
+
+    it('23h BRT do feriado (UTC já é dia 13) continua sendo feriado', () => {
+      expect(effectiveDueDate(brt('2026-10-12T23:00:00'))).toEqual(brt('2026-10-13T09:00:00'));
+    });
+
+    it('corte no feriado = último dia útil antes dele', () => {
+      expect(overdueCutoff(brt('2026-10-12T15:00:00'))).toEqual(brt('2026-10-09T00:00:00'));
+    });
+  });
 });
+
+describe('effectiveDueDate com feriado', () => {
+  it('vencimento no feriado vai para 9h do próximo dia útil', () => {
+    expect(effectiveDueDate(brt('2026-10-12T09:00:00'))).toEqual(brt('2026-10-13T09:00:00'));
+  });
+
+  it('sexta depois das 18h antes de feriado na segunda → terça 9h', () => {
+    expect(effectiveDueDate(brt('2026-10-09T19:00:00'))).toEqual(brt('2026-10-13T09:00:00'));
+  });
+
+  it('dia útil no expediente fica igual; antes das 9h vai para 9h do mesmo dia', () => {
+    expect(effectiveDueDate(brt('2026-10-13T11:00:00'))).toEqual(brt('2026-10-13T11:00:00'));
+    expect(effectiveDueDate(brt('2026-10-13T07:00:00'))).toEqual(brt('2026-10-13T09:00:00'));
+  });
+});
+
