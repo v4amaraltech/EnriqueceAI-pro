@@ -106,4 +106,13 @@ describe('TemplateEditor', () => {
     expect(screen.queryByText('Salvar')).not.toBeInTheDocument();
     expect(screen.queryByText('Criar Template')).not.toBeInTheDocument();
   });
+
+  it('should be read-only for templates the user cannot edit', () => {
+    render(<TemplateEditor template={createTemplate()} readOnly />);
+    expect(screen.getByText('Ver Template')).toBeInTheDocument();
+    expect(screen.getByText('Somente leitura')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nome do template')).toBeDisabled();
+    expect(screen.getByLabelText('Corpo da mensagem')).toBeDisabled();
+    expect(screen.queryByText('Salvar')).not.toBeInTheDocument();
+  });
 });

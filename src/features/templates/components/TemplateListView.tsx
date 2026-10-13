@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Eye, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -39,8 +39,11 @@ import {
 } from '@/shared/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
+import type { MemberRole } from '@/lib/auth/require-auth-with-member';
+
 import type { MessageTemplateRow } from '../../cadences/types';
 import { deleteTemplate, duplicateTemplate } from '../actions/manage-templates';
+import { canEditTemplate } from '../template-permissions';
 
 interface TemplateListViewProps {
   templates: MessageTemplateRow[];
@@ -48,6 +51,8 @@ interface TemplateListViewProps {
   page: number;
   perPage: number;
   userMap: Record<string, string>;
+  currentUserId?: string;
+  role?: MemberRole;
 }
 
 const ALL_VALUE = '__all__';
@@ -66,7 +71,15 @@ function formatShortDate(dateStr: string): string {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 }
 
-export function TemplateListView({ templates, total, page, perPage, userMap }: TemplateListViewProps) {
+export function TemplateListView({
+  templates,
+  total,
+  page,
+  perPage,
+  userMap,
+  currentUserId = '',
+  role = 'manager',
+}: TemplateListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -299,6 +312,7 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
               const isWhatsApp = template.channel === 'whatsapp';
               const ChannelIcon = isWhatsApp ? MessageSquare : Mail;
               const bodyPreview = stripHtml(template.body);
+              const canEdit = canEditTemplate(template, currentUserId, role);
               return (
                 <TableRow
                   key={template.id}
@@ -354,14 +368,23 @@ export function TemplateListView({ templates, total, page, perPage, userMap }: T
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/templates/${template.id}`); }}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Editar
+                          {canEdit ? (
+                            <>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Editar
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Ver
+                            </>
+                          )}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicate(template.id); }}>
                           <Copy className="mr-2 h-4 w-4" />
                           Duplicar
                         </DropdownMenuItem>
-                        {!template.is_system && (
+                        {canEdit && (
                           <DropdownMenuItem
                             className="text-red-600"
                             onClick={(e) => { e.stopPropagation(); setDeleteId(template.id); }}
