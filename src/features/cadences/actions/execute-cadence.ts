@@ -8,6 +8,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { brtDateKey, isBrHoliday } from '@/lib/utils/br-holidays';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -187,7 +188,7 @@ export interface ExecutionResult {
   errors: string[];
 }
 
-/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri) */
+/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri, fora de feriado nacional) */
 function isBusinessHours(): boolean {
   const now = new Date();
   const brFormatter = new Intl.DateTimeFormat('en-US', {
@@ -200,7 +201,7 @@ function isBusinessHours(): boolean {
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
   const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
   const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  return !isWeekend && hour >= 8 && hour < 18;
+  return !isWeekend && !isBrHoliday(brtDateKey(now)) && hour >= 8 && hour < 18;
 }
 
 /**

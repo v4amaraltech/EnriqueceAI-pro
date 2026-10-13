@@ -8,73 +8,60 @@
  *
  * Regra (05/out/2026, story overdue-next-business-day): tarefa é do DIA em que
  * vence. Só vira "atrasada" a partir das 9h BRT do dia útil seguinte — ou seja,
- * quando o SDR teve o expediente inteiro e não fez.
+ * quando o SDR teve o expediente inteiro e não fez. Dia útil = seg–sex fora dos
+ * feriados nacionais de `@/lib/utils/br-holidays` (13/out/2026, story business-holidays).
  *
  * Histórico: 1h → 4h (26/05/2026) → dia útil seguinte (05/out/2026). Com o
  * vencimento às 9h (set/2026), as 4h faziam tudo virar vermelho às 13h do
  * próprio dia em que a tarefa chegou.
  */
 
+import { isBrBusinessDay } from '@/lib/utils/br-holidays';
+
 /** Início e fim do expediente em horas locais BRT. */
 export const BUSINESS_HOURS_START = 9;
 export const BUSINESS_HOURS_END = 18;
 
+const BRT_OFFSET_MS = 3 * 3600 * 1000; // BRT = UTC-3 fixo (sem horário de verão desde 2019)
+const DAY_MS = 86400 * 1000;
+
+/** `utcMidnightMs` representa um dia do calendário BRT (campos UTC = data BRT). */
+function isBusinessDay(utcMidnightMs: number): boolean {
+  return isBrBusinessDay(new Date(utcMidnightMs).toISOString().slice(0, 10));
+}
+
+function nextBusinessDay(utcMidnightMs: number): number {
+  let day = utcMidnightMs + DAY_MS;
+  while (!isBusinessDay(day)) day += DAY_MS;
+  return day;
+}
+
 /**
  * "Desloca" a data de vencimento pra próxima abertura de expediente quando
- * cai fora do horário comercial. Espelha a lógica do trigger SQL
- * `effective_due_brt`. Sem isso, atividade que venceu sex 18h conta como
- * 39h atrasada na seg 9h, mesmo o SDR não tendo trabalhado nesse intervalo.
+ * cai fora do horário comercial. Espelha a função SQL `effective_due_brt`.
+ * Sem isso, atividade que venceu sex 18h conta como 39h atrasada na seg 9h,
+ * mesmo o SDR não tendo trabalhado nesse intervalo.
  *
  * Regras BRT (America/Sao_Paulo):
  * - Antes de 9h em dia útil → 9h do mesmo dia
  * - Depois de 18h em dia útil → 9h do próximo dia útil
- * - Sábado/domingo → segunda 9h
+ * - Sábado, domingo ou feriado nacional (`br-holidays.ts`) → 9h do próximo dia útil
  * - Dentro de 9h-18h em dia útil → inalterado
  */
 export function effectiveDueDate(input: Date | string): Date {
   const date = typeof input === 'string' ? new Date(input) : input;
-  // Get BRT components via en-CA (yyyy-mm-dd hh:mm:ss style)
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-    weekday: 'short',
-  });
-  const parts = fmt.formatToParts(date);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  const year = Number(get('year'));
-  const month = Number(get('month'));
-  const day = Number(get('day'));
-  const hour = Number(get('hour') === '24' ? '0' : get('hour'));
-  const weekday = get('weekday'); // Mon, Tue, ..., Sun
+  const local = new Date(date.getTime() - BRT_OFFSET_MS); // campos UTC = relógio BRT
+  const day = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  const hour = local.getUTCHours();
 
-  const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  const beforeBusiness = hour < BUSINESS_HOURS_START;
-  const afterBusiness = hour >= BUSINESS_HOURS_END;
-
-  if (!isWeekend && !beforeBusiness && !afterBusiness) {
-    return date;
+  let target: number;
+  if (isBusinessDay(day)) {
+    if (hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END) return date;
+    target = hour < BUSINESS_HOURS_START ? day : nextBusinessDay(day);
+  } else {
+    target = nextBusinessDay(day);
   }
-
-  // Build the target BRT day at 9h local, then convert back to UTC.
-  // BRT is fixed UTC-3 (no DST since 2019), so a simple offset works.
-  const targetUtcMidnight = Date.UTC(year, month - 1, day) + 3 * 3600 * 1000; // 0h BRT in UTC ms
-  let daysToAdd = 0;
-  if (isWeekend) {
-    daysToAdd = weekday === 'Sat' ? 2 : 1;
-  } else if (afterBusiness) {
-    // Friday after 18h → +3 days to Monday
-    daysToAdd = weekday === 'Fri' ? 3 : 1;
-  }
-  return new Date(targetUtcMidnight + (daysToAdd * 86400 * 1000) + (BUSINESS_HOURS_START * 3600 * 1000));
-}
-
-const BRT_OFFSET_MS = 3 * 3600 * 1000; // BRT = UTC-3 fixo (sem horário de verão desde 2019)
-const DAY_MS = 86400 * 1000;
-
-function isBusinessDay(utcMidnightMs: number): boolean {
-  const dow = new Date(utcMidnightMs).getUTCDay();
-  return dow !== 0 && dow !== 6;
+  return new Date(target + BRT_OFFSET_MS + BUSINESS_HOURS_START * 3600 * 1000);
 }
 
 /**
@@ -84,8 +71,11 @@ function isBusinessDay(utcMidnightMs: number): boolean {
  *
  * Ex.: ter 10h → corte ter 00:00 (o que venceu seg ou antes está atrasado);
  * ter 8h → corte seg 00:00 (o de seg ainda não); sáb → corte sex 00:00.
+ * Feriado conta como fim de semana: ter 13/10 10h (seg 12/10 feriado) → corte
+ * ter 00:00, e o que venceu no feriado já foi deslocado para ter 9h.
  *
  * O dashboard passa este corte como `p_cutoff` da RPC `list_overdue_activities_brt`.
+ * Espelho SQL: `overdue_cutoff_brt()` (usado pelo card do Sales Hub).
  */
 export function overdueCutoff(now: Date = new Date()): Date {
   const local = new Date(now.getTime() - BRT_OFFSET_MS); // campos UTC = relógio BRT
