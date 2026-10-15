@@ -12,7 +12,8 @@ import type { ChannelType } from '../types';
 import { activateCadence } from '../actions/manage-cadences';
 import { saveTimelineSteps, type TimelineStepInput } from '../actions/save-timeline-steps';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
-import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
+import { CadenceTimeline, type DayData } from './CadenceTimeline';
+import { groupStepsByDay, relativeDelaysForDays } from '../utils/timeline-days';
 
 interface TimelineBuilderProps {
   cadence: CadenceDetail;
@@ -20,34 +21,26 @@ interface TimelineBuilderProps {
 
 // Convert existing steps (from DB) to DayData structure
 function stepsTodays(steps: CadenceStepWithTemplate[]): DayData[] {
-  const dayMap = new Map<number, TimelineStep[]>();
+  // delay_days é atraso relativo ao passo anterior; o "Dia N" é o acumulado.
+  const ordered = [...steps].sort((a, b) => a.step_order - b.step_order);
+  const groups = groupStepsByDay(ordered);
 
-  for (const step of steps) {
-    const dayNum = step.delay_days + 1; // delay_days=0 → Dia 1
-    if (!dayMap.has(dayNum)) {
-      dayMap.set(dayNum, []);
-    }
-    const config = channelConfig[step.channel as ChannelType];
-    dayMap.get(dayNum)!.push({
-      id: step.id,
-      channel: step.channel as ChannelType,
-      label: config?.label ?? step.channel,
-      templateId: step.template_id,
-      aiPersonalization: step.ai_personalization,
-    });
-  }
-
-  // Sort by day number and order steps by step_order
-  const sortedDays = [...dayMap.entries()].sort((a, b) => a[0] - b[0]);
-
-  // If no steps, start with Day 1
-  if (sortedDays.length === 0) {
+  if (groups.length === 0) {
     return [{ day: 1, steps: [] }];
   }
 
-  return sortedDays.map(([day, daySteps]) => ({
+  return groups.map(({ day, steps: daySteps }) => ({
     day,
-    steps: daySteps,
+    steps: daySteps.map((step) => {
+      const config = channelConfig[step.channel as ChannelType];
+      return {
+        id: step.id,
+        channel: step.channel as ChannelType,
+        label: config?.label ?? step.channel,
+        templateId: step.template_id,
+        aiPersonalization: step.ai_personalization,
+      };
+    }),
   }));
 }
 
@@ -57,20 +50,21 @@ function daysToStepInputs(days: DayData[]): TimelineStepInput[] {
   const inputs: TimelineStepInput[] = [];
   let globalOrder = 1;
 
-  for (const day of days) {
-    const delayDays = day.day - 1; // Dia 1 → delay_days=0
-    for (const step of day.steps) {
+  const delays = relativeDelaysForDays(days.map((d) => ({ day: d.day, stepCount: d.steps.length })));
+
+  days.forEach((day, dayIndex) => {
+    day.steps.forEach((step, stepIndex) => {
       inputs.push({
         id: step.id,
         channel: step.channel,
-        delay_days: delayDays,
+        delay_days: delays[dayIndex]![stepIndex]!,
         step_order: globalOrder,
         template_id: step.templateId,
         ai_personalization: step.aiPersonalization,
       });
       globalOrder++;
-    }
-  }
+    });
+  });
 
   return inputs;
 }
