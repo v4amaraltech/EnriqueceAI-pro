@@ -6,6 +6,7 @@ import {
   decidirWhatsApp,
   escolherCelular,
   parseWhatsAppStepRequest,
+  pedidoParaParar,
   type SinaisWhatsApp,
 } from './whatsapp-step';
 
@@ -69,5 +70,23 @@ describe('parseWhatsAppStepRequest', () => {
     const r = parseWhatsAppStepRequest({ acao: 'registrar', execution_id: EXEC, status: 'enviado', texto: 'Oi', message_id: 'ABC' });
     expect(r.ok && r.value).toMatchObject({ status: 'enviado', texto: 'Oi', messageId: 'ABC' });
     expect(parseWhatsAppStepRequest({ acao: 'registrar', execution_id: EXEC, status: 'enviado', texto: 'a'.repeat(1001) }).ok).toBe(false);
+  });
+});
+
+describe('resposta do lead', () => {
+  const LEAD = '1b6f1c2e-3d4a-4b5c-8d9e-0f1a2b3c4d5e';
+  it('exige lead_id e dispensa execution_id', () => {
+    expect(parseWhatsAppStepRequest({ acao: 'resposta', texto: 'oi' }).ok).toBe(false);
+    const r = parseWhatsAppStepRequest({ acao: 'resposta', lead_id: LEAD, texto: 'Vem mais por distribuidor', message_id: 'wamid.X' });
+    expect(r.ok && r.value).toMatchObject({ leadId: LEAD, executionId: null, optOut: false, messageId: 'wamid.X' });
+  });
+  it('pedido para parar vira opt-out; sem interesse não', () => {
+    expect(pedidoParaParar('Pare de me mandar mensagem')).toBe(true);
+    expect(pedidoParaParar('Não quero mais receber')).toBe(true);
+    expect(pedidoParaParar('Parar de receber')).toBe(true);
+    expect(pedidoParaParar('Não tenho interesse no momento')).toBe(false);
+    expect(pedidoParaParar('Vem por representante')).toBe(false);
+    const r = parseWhatsAppStepRequest({ acao: 'resposta', lead_id: LEAD, texto: 'sair' });
+    expect(r.ok && r.value.optOut).toBe(true);
   });
 });

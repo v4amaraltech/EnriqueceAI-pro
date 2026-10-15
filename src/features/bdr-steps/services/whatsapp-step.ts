@@ -81,8 +81,13 @@ export function decidirWhatsApp(s: SinaisWhatsApp): DecisaoWhatsApp {
 }
 
 export interface WhatsAppStepRequest {
-  acao: 'checar' | 'iniciar' | 'registrar';
-  executionId: string;
+  acao: 'checar' | 'iniciar' | 'registrar' | 'resposta';
+  /** checar / iniciar / registrar */
+  executionId: string | null;
+  /** resposta: lead que respondeu no WhatsApp da Ana */
+  leadId: string | null;
+  /** resposta: lead pediu para parar (bloqueio total) */
+  optOut: boolean;
   /** registrar */
   status: 'enviado' | 'falhou' | 'incerto' | null;
   texto: string | null;
@@ -90,7 +95,7 @@ export interface WhatsAppStepRequest {
   erro: string | null;
 }
 
-const ACOES = new Set(['checar', 'iniciar', 'registrar']);
+const ACOES = new Set(['checar', 'iniciar', 'registrar', 'resposta']);
 const STATUS = new Set(['enviado', 'falhou', 'incerto']);
 
 function str(v: unknown): string | null {
@@ -100,9 +105,14 @@ function str(v: unknown): string | null {
 export function parseWhatsAppStepRequest(body: unknown): ParseResult<WhatsAppStepRequest> {
   const b = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
   const acao = str(b.acao);
-  if (!acao || !ACOES.has(acao)) return { ok: false, error: 'acao deve ser checar, iniciar ou registrar' };
+  if (!acao || !ACOES.has(acao)) return { ok: false, error: 'acao deve ser checar, iniciar, registrar ou resposta' };
   const executionId = str(b.execution_id);
-  if (!executionId || !isUuid(executionId)) return { ok: false, error: 'execution_id obrigatório (uuid)' };
+  const leadId = str(b.lead_id);
+  if (acao === 'resposta') {
+    if (!leadId || !isUuid(leadId)) return { ok: false, error: 'lead_id obrigatório (uuid) na resposta' };
+  } else if (!executionId || !isUuid(executionId)) {
+    return { ok: false, error: 'execution_id obrigatório (uuid)' };
+  }
 
   let status: WhatsAppStepRequest['status'] = null;
   if (acao === 'registrar') {
@@ -117,11 +127,20 @@ export function parseWhatsAppStepRequest(body: unknown): ParseResult<WhatsAppSte
     ok: true,
     value: {
       acao: acao as WhatsAppStepRequest['acao'],
-      executionId,
+      executionId: acao === 'resposta' ? null : executionId,
+      leadId: acao === 'resposta' ? leadId : null,
+      optOut: b.opt_out === true || (acao === 'resposta' && pedidoParaParar(str(b.texto))),
       status,
       texto,
       messageId: str(b.message_id)?.slice(0, 200) ?? null,
       erro: str(b.erro)?.slice(0, 300) ?? null,
     },
   };
+}
+
+/** Resposta que pede para parar de receber (vira bloqueio total). "Sem interesse" só bloqueia a prospecção. */
+export function pedidoParaParar(texto: string | null): boolean {
+  if (!texto) return false;
+  const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return /\b(pare|parar|para de|sair|stop|remover|remova|descadastr|nao quero (mais )?receber|nao me (mande|envie|chame) mais|parar de receber)/.test(t);
 }
