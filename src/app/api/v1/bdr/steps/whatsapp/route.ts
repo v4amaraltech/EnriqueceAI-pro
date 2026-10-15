@@ -35,6 +35,9 @@ type Confirm = { aplicado: boolean; duplicado: boolean; motivo: string; interact
  *                                          anterior interrompida: registrado como incerto, NÃO envie.
  *   { acao: 'registrar', execution_id, status: 'enviado'|'falhou'|'incerto', texto, message_id?, erro? }
  *                                        → histórico do lead + avanço do passo.
+ *   { acao: 'resposta',  lead_id, texto, message_id, opt_out? }
+ *                                        → lead respondeu: bloqueio de prospecção (ou total se pediu para parar)
+ *                                          e resposta no histórico. Idempotente por message_id.
  * Passo que não deve sair agora (fora do horário, IA falhou antes de iniciar) → /release sem nova tentativa.
  */
 export async function POST(request: Request) {
@@ -48,9 +51,36 @@ export async function POST(request: Request) {
   const q = parsed.value;
   const supabase = createServiceRoleClient();
 
+  // ── resposta: o lead respondeu no WhatsApp da Ana ─────────────────────
+  // Sai da prospecção (bloqueio 'prospeccao'; pedido para parar → 'total') e a resposta
+  // entra no histórico. Idempotente por message_id. Um humano assume a conversa.
+  if (q.acao === 'resposta') {
+    const { data: lead } = (await from(supabase, 'leads').select('id, assigned_to')
+      .eq('id', q.leadId!).eq('org_id', auth.orgId).maybeSingle()) as { data: { id: string; assigned_to: string | null } | null };
+    if (!lead) return NextResponse.json({ success: false, error: 'lead não encontrado nesta org' }, { status: 404 });
+
+    if (q.messageId) {
+      const { data: ja } = (await from(supabase, 'interactions').select('id').eq('lead_id', lead.id).eq('channel', 'whatsapp')
+        .eq('type', 'replied').eq('external_id', q.messageId).limit(1).maybeSingle()) as { data: { id: string } | null };
+      if (ja) return NextResponse.json({ success: true, data: { estado: 'ja_registrada', interaction_id: ja.id } });
+    }
+
+    const tipo = q.optOut ? 'total' : 'prospeccao';
+    await from(supabase, 'contact_holds').upsert(
+      { org_id: auth.orgId, lead_id: lead.id, tipo, origem: q.optOut ? 'whatsapp_pediu_para_parar' : 'whatsapp_respondeu' } as Record<string, unknown>,
+      { onConflict: 'lead_id,tipo', ignoreDuplicates: true },
+    );
+    const { data: inter } = (await from(supabase, 'interactions').insert({
+      org_id: auth.orgId, lead_id: lead.id, channel: 'whatsapp', type: 'replied',
+      message_content: q.texto, external_id: q.messageId, performed_by: lead.assigned_to, ai_generated: false,
+      metadata: { source: 'ana_ia_whatsapp', opt_out: q.optOut, bloqueio: tipo },
+    } as Record<string, unknown>).select('id').maybeSingle()) as { data: { id: string } | null };
+    return NextResponse.json({ success: true, data: { estado: 'registrada', bloqueio: tipo, interaction_id: inter?.id ?? null } });
+  }
+
   const { data: exec } = (await from(supabase, 'cadence_step_executions')
     .select('execution_id, enrollment_id, channel, confirmed_at')
-    .eq('execution_id', q.executionId).eq('org_id', auth.orgId).maybeSingle()) as { data: Exec | null };
+    .eq('execution_id', q.executionId!).eq('org_id', auth.orgId).maybeSingle()) as { data: Exec | null };
   if (!exec) return NextResponse.json({ success: false, code: 'execution_id_desconhecida', error: 'execution_id não reservado nesta org' }, { status: 404 });
   if (exec.channel !== 'whatsapp') return NextResponse.json({ success: false, error: `passo é ${exec.channel}, não whatsapp` }, { status: 400 });
   if (exec.confirmed_at) return NextResponse.json({ success: true, data: { enviar: false, estado: 'ja_confirmado' } });
