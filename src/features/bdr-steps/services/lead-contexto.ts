@@ -60,7 +60,8 @@ export function resumirHistorico(cronologico: InteracaoBruta[]): {
     }
     if (i.channel === 'phone' && i.type === 'failed') contagem.ligacoes++;
     if (i.channel === 'email' && i.type === 'sent') contagem.emails_enviados++;
-    if (i.channel === 'email' && i.type === 'opened') contagem.emails_abertos++;
+    // Só abertura/clique real (depois do corte, gravado no próprio envio): a do robô de segurança não conta.
+    if (i.channel === 'email' && i.type === 'sent' && (texto(meta.aberto_real_em) || texto(meta.clicado_real_em))) contagem.emails_abertos++;
     if (i.channel === 'whatsapp' && i.type === 'sent') contagem.whatsapps_enviados++;
     if (i.type === 'replied') contagem.respostas++;
 

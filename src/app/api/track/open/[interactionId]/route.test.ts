@@ -90,6 +90,46 @@ describe('Track Open Endpoint', () => {
     );
   });
 
+  it('marca aberto_real_em quando a abertura chega depois do corte', async () => {
+    const enviado = new Date(Date.now() - 10 * 60_000).toISOString();
+    const selectChain = createChainMock({ data: { metadata: { open_count: 1 }, created_at: enviado } });
+    const updateChain = createChainMock({ data: null });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      return callIndex === 1 ? selectChain : updateChain;
+    });
+
+    const request = new Request('https://example.com/api/track/open/550e8400-e29b-41d4-a716-446655440000');
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
+
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ open_count: 2, aberto_real_em: expect.any(String) }),
+      }),
+    );
+  });
+
+  it('não marca aberto_real_em em abertura de robô logo após o envio', async () => {
+    const enviado = new Date(Date.now() - 10_000).toISOString();
+    const selectChain = createChainMock({ data: { metadata: {}, created_at: enviado } });
+    const updateChain = createChainMock({ data: null });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      return callIndex === 1 ? selectChain : updateChain;
+    });
+
+    const request = new Request('https://example.com/api/track/open/550e8400-e29b-41d4-a716-446655440000');
+    await GET(request, makeParams('550e8400-e29b-41d4-a716-446655440000'));
+
+    const metadata = (updateChain.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0].metadata;
+    expect(metadata.open_count).toBe(1);
+    expect(metadata.aberto_real_em).toBeUndefined();
+  });
+
   it('should still return GIF when interaction not found', async () => {
     const selectChain = createChainMock({ data: null });
     mockFrom.mockReturnValue(selectChain);
