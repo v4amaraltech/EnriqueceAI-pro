@@ -143,7 +143,10 @@ export async function POST(request: Request) {
     from(supabase, 'interactions').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('channel', 'whatsapp')
       .eq('type', 'sent').eq('metadata->>source', 'ana_ia_whatsapp'),
     from(supabase, 'interactions').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('channel', 'email').eq('type', 'replied'),
-    from(supabase, 'interactions').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('channel', 'email').eq('type', 'opened'),
+    // E-mails abertos (ou clicados) de verdade: só conta o que chegou depois do corte e ficou gravado no
+    // próprio envio (src/lib/email/engajamento-real.ts) — a abertura do robô de segurança não é sinal.
+    from(supabase, 'interactions').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('channel', 'email').eq('type', 'sent')
+      .or('metadata->>aberto_real_em.not.is.null,metadata->>clicado_real_em.not.is.null'),
     from(supabase, 'cadence_enrollments').select('id').eq('lead_id', lead.id),
   ]) as unknown as [
     { data: Array<{ tipo: string }> | null }, { count: number | null }, { count: number | null },
