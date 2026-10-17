@@ -8,6 +8,7 @@ import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
+import { entraNaFilaHumana } from '../utils/fila-humana';
 import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 
 export interface DialerQueuePhone {
@@ -44,7 +45,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   // leads atribuídos a ele (não confiar no RLS — em modo 'all' deixa de escopar);
   // manager, a org toda.
   let queue = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name)')
+    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name, type, executor)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString());
   if (role !== 'manager') queue = queue.eq('lead.assigned_to', userId);
@@ -58,7 +59,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
         current_step: number;
         next_step_due: string;
         lead: { id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string; telefone: string | null; first_name: string | null; last_name: string | null; socios: LeadSocio[] | null; phones: LeadPhone[] | null } | null;
-        cadence: { id: string; name: string } | null;
+        cadence: { id: string; name: string; type: string | null; executor: string | null } | null;
       }> | null;
       error: { message: string } | null;
     };
@@ -124,6 +125,8 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   const phoneEnrollments: Array<{ enrollment: Enrollment; stepInfo: PhoneStepInfo; phone: string; phones: DialerQueuePhone[] }> = [];
   for (const e of enrollments) {
     if (!e.lead || !e.cadence) continue;
+    // Passos de cadência executada pela IA são discados pela Ana (V4 Call), nunca pelo SDR
+    if (!entraNaFilaHumana(e.cadence)) continue;
     const phoneMap = phoneSteps.get(e.cadence_id);
     if (!phoneMap || phoneMap.size === 0) continue; // cadence has no phone steps at all
 

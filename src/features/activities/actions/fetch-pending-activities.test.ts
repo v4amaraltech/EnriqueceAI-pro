@@ -213,6 +213,23 @@ describe('fetchPendingActivities', () => {
     });
   });
 
+  it('tira da fila os passos de cadência executada pela IA (executor bdr_ai)', async () => {
+    const daIa = { ...mockEnrollment, id: 'enr-ia', cadence: { ...mockCadence, executor: 'bdr_ai' } };
+    const doSdr = { ...mockEnrollment, cadence: { ...mockCadence, executor: 'sdr' } };
+    wireByTable({
+      cadence_enrollments: { data: [daIa, doSdr], error: null },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: { data: [], error: null },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.enrollmentId)).toEqual(['enr-1']);
+  });
+
   it('should skip enrollments without matching step', async () => {
     const enrollmentNoStep = {
       ...mockEnrollment,

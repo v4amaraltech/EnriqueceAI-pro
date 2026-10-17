@@ -8,6 +8,7 @@ import { from } from '@/lib/supabase/from';
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
+import { entraNaFilaHumana } from '../utils/fila-humana';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
@@ -64,7 +65,7 @@ interface EnrollmentRow {
   next_step_due: string | null;
   snooze_count: number | null;
   lead: RawLead;
-  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'>;
+  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'> & { executor?: string | null };
 }
 
 export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
@@ -90,7 +91,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   let enrollQuery = from(supabase, 'cadence_enrollments')
     // Only the lead columns the queue uses (ActivityLead + whatsapp_invalid_at for
     // the WhatsApp skip below) — `*` shipped every column of up to ~1.500 leads.
-    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(${QUEUE_LEAD_COLUMNS}), cadence:cadences(id, name, total_steps, created_by, type)`)
+    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(${QUEUE_LEAD_COLUMNS}), cadence:cadences(id, name, total_steps, created_by, type, executor)`)
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
@@ -158,8 +159,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   for (const enrollment of enrollments) {
     if (!enrollment.lead || !enrollment.cadence || !enrollment.next_step_due) continue;
 
-    // Skip auto_email cadences — they are managed via background job, not the manual queue
-    if (enrollment.cadence.type === 'auto_email') continue;
+    // Fora da fila humana: auto_email (job em background) e cadências executadas pela IA (Ana)
+    if (!entraNaFilaHumana(enrollment.cadence)) continue;
 
     const cadenceSteps = (stepMap.get(enrollment.cadence_id) ?? [])
       .slice()
