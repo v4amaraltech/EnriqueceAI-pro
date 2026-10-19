@@ -1,11 +1,12 @@
 # Story: Monitor de disponibilidade externo ao host (aviso quando o site cai)
 
 ## Status
-InProgress
+InReview
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-10-19 | Vini + Claude | Segredo `resend_api_key` criado no Vault (1ª vez com o texto de exemplo; corrigido com `vault.update_secret`). Teste manual em prod: URL inválida → 2 rodadas → e-mail "fora do ar" enviado (Resend 200) + sino; URL de volta → e-mail "voltou" (Resend 200) + sino. PR #482 aberto. |
 | 2026-10-19 | Claude (com OK do Vini) | Migration aplicada em prod via MCP (versão `20261019132752`), cron `uptime-monitor` ativo (jobid 66, 1ª rodada 13:28 UTC ok em 300 ms), tipos regenerados. Falta a chave do Resend no Vault e o teste manual com e-mail. |
 | 2026-10-19 | Vini + Claude | Story criada após a queda de 19/10 (Contabo reiniciou o host, ~30 min fora, ninguém avisado). Migration escrita e ensaiada em prod dentro de transação com rollback (não aplicada). |
 
@@ -53,10 +54,11 @@ InProgress
 - [x] Migration: tabelas + RLS/REVOKE + `uptime_probe` + `uptime_send_alert` + `uptime_monitor_tick` + seed + cron idempotente.
 - [x] Ensaio da migration em prod dentro de `BEGIN … ROLLBACK` (sem o cron): rodada OK, 2 falhas → "down" (sino criado, e-mail pulado por falta da chave), URL de volta → "recovered".
 - [x] Aplicar a migration em prod via MCP (`apply_migration`) — 19/10 13:27 UTC, versão `20261019132752`.
-- [ ] **Vini:** criar o segredo no Vault (SQL Editor, não no chat): `select vault.create_secret('<chave do Resend>', 'resend_api_key', 'Resend — alertas de uptime');`
+- [x] **Vini:** criar o segredo no Vault (SQL Editor, não no chat): `select vault.create_secret('<chave do Resend>', 'resend_api_key', 'Resend — alertas de uptime');` — feito 19/10 15:04 UTC (trocar o valor depois: `vault.update_secret('<id>', '<chave>')`).
 - [x] `pnpm gen:types` (+237 linhas, só adições; também entraram objetos já em prod sem tipo: `bdr_cadence_links`, `bdr_ultimo_engajamento_email`, `begin_email_step`, `confirm_email_step`, `consentimento_alimentar_inbound`) + `pnpm typecheck && pnpm lint`.
-- [ ] Teste manual (abaixo) com o alerta chegando por e-mail.
-- [ ] Commit / PR (só com pedido explícito).
+- [x] Teste manual (abaixo) com o alerta chegando por e-mail — 19/10 15:05 UTC: `down` e `recovered` com `email.sent = true` (Resend 200) e `bell.count = 1`.
+- [x] Commit / PR — PR #482 (`a861ae97` + `62faab81`).
+- [ ] Mesclar após CI verde (`gh pr merge --squash`), story → Done, remover worktree.
 
 ## Teste manual
 
