@@ -3,12 +3,12 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
-import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { neutralizeCsvFormula } from '@/lib/utils/csv';
 
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
 import { createdAtRange } from '../utils/created-at-range';
+import { searchClausesForTerm, splitSearchTerms } from '../utils/lead-search';
 
 export async function exportAllFilteredLeadsCsv(
   rawFilters: Record<string, unknown>,
@@ -42,10 +42,8 @@ export async function exportAllFilteredLeadsCsv(
   if (createdRange?.gte) query = query.gte('created_at', createdRange.gte);
   if (createdRange?.lte) query = query.lte('created_at', createdRange.lte);
   if (filters.search) {
-    const term = sanitizeFilterValue(filters.search.replace(/[%_]/g, ''));
-    query = query.or(
-      `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
-    );
+    const term = splitSearchTerms(filters.search).join(' ');
+    if (term) query = query.or(searchClausesForTerm(term).join(','));
   }
 
   const { data, error } = (await query.order('created_at', { ascending: false }).limit(10000)) as {
