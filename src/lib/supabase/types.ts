@@ -3994,6 +3994,7 @@ export type Database = {
           whatsapp_invalid_at: string | null;
           won_at: string | null;
           won_by: string | null;
+          phone_digits: string | null;
         };
         Insert: {
           archived_at?: string | null;
@@ -7053,6 +7054,12 @@ export type Database = {
         Returns: Record<string, unknown>;
       };
       overdue_cutoff_brt: { Args: { p_now?: string }; Returns: string };
+      phone_digits: {
+        Args: { '': Database['public']['Tables']['leads']['Row'] };
+        Returns: {
+          error: true;
+        } & 'the function public.phone_digits with parameter or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache';
+      };
       pode_enviar_confirmacao: {
         Args: {
           p_event_id: string;
