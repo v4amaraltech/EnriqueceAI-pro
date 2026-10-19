@@ -1353,6 +1353,45 @@ export type Database = {
           },
         ];
       };
+      bdr_cadence_links: {
+        Row: {
+          created_at: string;
+          email_cadence_id: string;
+          janela_abertura_dias: number;
+          org_id: string;
+          phone_cadence_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          email_cadence_id: string;
+          janela_abertura_dias?: number;
+          org_id: string;
+          phone_cadence_id: string;
+        };
+        Update: {
+          created_at?: string;
+          email_cadence_id?: string;
+          janela_abertura_dias?: number;
+          org_id?: string;
+          phone_cadence_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'bdr_cadence_links_email_cadence_id_fkey';
+            columns: ['email_cadence_id'];
+            isOneToOne: false;
+            referencedRelation: 'cadences';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bdr_cadence_links_phone_cadence_id_fkey';
+            columns: ['phone_cadence_id'];
+            isOneToOne: true;
+            referencedRelation: 'cadences';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       business_holidays: {
         Row: {
           created_at: string;
@@ -5355,6 +5394,136 @@ export type Database = {
           },
         ];
       };
+      uptime_checks: {
+        Row: {
+          alert_detail: Json | null;
+          alert_kind: string | null;
+          attempts: number;
+          checked_at: string;
+          error: string | null;
+          id: number;
+          latency_ms: number | null;
+          monitor_id: string;
+          ok: boolean;
+          status_code: number | null;
+        };
+        Insert: {
+          alert_detail?: Json | null;
+          alert_kind?: string | null;
+          attempts?: number;
+          checked_at?: string;
+          error?: string | null;
+          id?: never;
+          latency_ms?: number | null;
+          monitor_id: string;
+          ok: boolean;
+          status_code?: number | null;
+        };
+        Update: {
+          alert_detail?: Json | null;
+          alert_kind?: string | null;
+          attempts?: number;
+          checked_at?: string;
+          error?: string | null;
+          id?: never;
+          latency_ms?: number | null;
+          monitor_id?: string;
+          ok?: boolean;
+          status_code?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'uptime_checks_monitor_id_fkey';
+            columns: ['monitor_id'];
+            isOneToOne: false;
+            referencedRelation: 'uptime_monitors';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      uptime_monitors: {
+        Row: {
+          alert_emails: string[] | null;
+          consecutive_failures: number;
+          created_at: string;
+          down_since: string | null;
+          enabled: boolean;
+          expect_body_like: string | null;
+          failure_threshold: number;
+          id: string;
+          is_down: boolean;
+          last_alert_at: string | null;
+          last_alert_kind: string | null;
+          last_checked_at: string | null;
+          last_error: string | null;
+          last_ok_at: string | null;
+          last_status_code: number | null;
+          name: string;
+          notify_org_id: string | null;
+          remind_every: string;
+          retry_delay_seconds: number;
+          timeout_ms: number;
+          updated_at: string;
+          url: string;
+        };
+        Insert: {
+          alert_emails?: string[] | null;
+          consecutive_failures?: number;
+          created_at?: string;
+          down_since?: string | null;
+          enabled?: boolean;
+          expect_body_like?: string | null;
+          failure_threshold?: number;
+          id?: string;
+          is_down?: boolean;
+          last_alert_at?: string | null;
+          last_alert_kind?: string | null;
+          last_checked_at?: string | null;
+          last_error?: string | null;
+          last_ok_at?: string | null;
+          last_status_code?: number | null;
+          name: string;
+          notify_org_id?: string | null;
+          remind_every?: string;
+          retry_delay_seconds?: number;
+          timeout_ms?: number;
+          updated_at?: string;
+          url: string;
+        };
+        Update: {
+          alert_emails?: string[] | null;
+          consecutive_failures?: number;
+          created_at?: string;
+          down_since?: string | null;
+          enabled?: boolean;
+          expect_body_like?: string | null;
+          failure_threshold?: number;
+          id?: string;
+          is_down?: boolean;
+          last_alert_at?: string | null;
+          last_alert_kind?: string | null;
+          last_checked_at?: string | null;
+          last_error?: string | null;
+          last_ok_at?: string | null;
+          last_status_code?: number | null;
+          name?: string;
+          notify_org_id?: string | null;
+          remind_every?: string;
+          retry_delay_seconds?: number;
+          timeout_ms?: number;
+          updated_at?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'uptime_monitors_notify_org_id_fkey';
+            columns: ['notify_org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       webhook_endpoints: {
         Row: {
           created_at: string;
@@ -6181,6 +6350,7 @@ export type Database = {
       };
       vw_confirmacao_ligacao_hoje: {
         Row: {
+          calendar_id: string | null;
           event_id: string | null;
           id: number | null;
           lead_id: string | null;
@@ -6195,6 +6365,7 @@ export type Database = {
           telefone_sem_ddi: string | null;
         };
         Insert: {
+          calendar_id?: string | null;
           event_id?: string | null;
           id?: number | null;
           lead_id?: string | null;
@@ -6209,6 +6380,7 @@ export type Database = {
           telefone_sem_ddi?: never;
         };
         Update: {
+          calendar_id?: string | null;
           event_id?: string | null;
           id?: number | null;
           lead_id?: string | null;
@@ -6391,6 +6563,23 @@ export type Database = {
         Args: { p_attempt: number; p_enrollment_id: string; p_step_id: string };
         Returns: string;
       };
+      bdr_ultimo_engajamento_email: {
+        Args: { p_lead_id: string };
+        Returns: string;
+      };
+      begin_email_step: {
+        Args: {
+          p_execution_id: string;
+          p_org_id: string;
+          p_rfc_message_id: string;
+        };
+        Returns: {
+          enrollment_id: string;
+          estado: string;
+          lead_id: string;
+          rfc_message_id: string;
+        }[];
+      };
       calculate_engagement_score: {
         Args: { p_lead_id: string };
         Returns: number;
@@ -6407,6 +6596,7 @@ export type Database = {
         Args: {
           p_cadence_ids: string[];
           p_channel?: string;
+          p_exige_abertura_email?: boolean;
           p_lease_minutes?: number;
           p_limit?: number;
           p_org_id: string;
@@ -6423,6 +6613,7 @@ export type Database = {
           enrollment_id: string;
           execution_id: string;
           instructions: string;
+          lead_abriu_email_em: string;
           lead_cargo: string;
           lead_custom: Json;
           lead_email: string;
@@ -6431,6 +6622,7 @@ export type Database = {
           lead_nome: string;
           lead_segmento: string;
           lead_telefone: string;
+          lead_telefone_fixo: string;
           lease_until: string;
           next_step_due: string;
           org_id: string;
@@ -6444,6 +6636,29 @@ export type Database = {
         Returns: boolean;
       };
       cleanup_provider_events: { Args: never; Returns: undefined };
+      confirm_email_step: {
+        Args: {
+          p_conteudo?: string;
+          p_evento: string;
+          p_execution_id: string;
+          p_gmail_message_id?: string;
+          p_interaction_id?: string;
+          p_metadata?: Json;
+          p_org_id: string;
+          p_performed_by: string;
+        };
+        Returns: {
+          advanced: boolean;
+          aplicado: boolean;
+          completed: boolean;
+          duplicado: boolean;
+          enrollment_id: string;
+          interaction_id: string;
+          lead_id: string;
+          motivo: string;
+          new_step: number;
+        }[];
+      };
       confirm_external_step: {
         Args: {
           p_call_sid?: string;
@@ -6468,6 +6683,10 @@ export type Database = {
           new_step: number;
           step_id: string;
         }[];
+      };
+      consentimento_alimentar_inbound: {
+        Args: { p_onda?: number };
+        Returns: number;
       };
       consentimento_proximos: {
         Args: { p_lote: number; p_onda: number; p_teto_dia: number };
@@ -6983,6 +7202,24 @@ export type Database = {
           lead_id: string;
           recording_url: string;
         }[];
+      };
+      uptime_monitor_tick: { Args: never; Returns: Json };
+      uptime_probe: {
+        Args: { p_expect_body_like?: string; p_url: string };
+        Returns: {
+          error: string;
+          latency_ms: number;
+          ok: boolean;
+          status_code: number;
+        }[];
+      };
+      uptime_send_alert: {
+        Args: {
+          p_error?: string;
+          p_kind: string;
+          p_monitor: Database['public']['Tables']['uptime_monitors']['Row'];
+        };
+        Returns: Json;
       };
       user_org_id: { Args: never; Returns: string };
       verify_api_secret: {
