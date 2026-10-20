@@ -1,7 +1,10 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { getEnv } from '@/config/env';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { decrypt } from '@/lib/security/encryption';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -14,7 +17,8 @@ import {
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
-import { checkThreadForReplyOrBounce, mailboxCandidates } from '../services/reply-detection.service';
+import { buildBdrEmailReplyPayload, sendBdrEmailReplyWebhook } from '../services/bdr-reply-webhook.service';
+import { fetchReplyText, inspectThread, mailboxCandidates, type ThreadReplyDetails } from '../services/reply-detection.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 
 const REPLY_CHECK_DAYS = 30;
@@ -150,7 +154,8 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       const threadId = await getThreadId(interaction, accessToken);
       if (!threadId) continue; // message not in this mailbox
 
-      const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
+      const inspected = await inspectThread(threadId, accessToken);
+      const detection = inspected.outcome;
       if (detection === 'not_found') continue; // thread belongs to another mailbox
       if (detection === 'error') {
         // Transient (or a 401/403 on this mailbox) — retried on the next rotation.
@@ -176,7 +181,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
         found++;
         console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
       } else {
-        await recordReply(supabase, interaction);
+        await recordReply(supabase, interaction, { mailboxUserId: userId, threadId, accessToken, reply: inspected.reply ?? null });
         found++;
         console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
       }
@@ -280,26 +285,52 @@ async function getThreadId(
   }
 }
 
+/** Onde a resposta foi achada (caixa + thread) e o que o poll leu dela. */
+interface ReplyContext {
+  mailboxUserId: string;
+  threadId: string;
+  accessToken: string;
+  reply: ThreadReplyDetails | null;
+}
+
+interface LeadRow {
+  org_id: string;
+  assigned_to: string | null;
+  nome_fantasia: string | null;
+  razao_social: string | null;
+  cnpj: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
+  email: string | null;
+}
+
 /** Record a reply: create replied interaction + update enrollment status */
 async function recordReply(
   supabase: SupabaseClient,
   sentInteraction: SentInteraction,
+  ctx: ReplyContext,
 ): Promise<void> {
   // Get org_id + owner + name from the lead (owner/name used for the SDR notification)
   const { data: lead } = (await from(supabase, 'leads')
-    .select('org_id, assigned_to, nome_fantasia, razao_social, cnpj')
+    .select('org_id, assigned_to, nome_fantasia, razao_social, cnpj, first_name, last_name, job_title, email')
     .eq('id', sentInteraction.lead_id)
-    .single()) as {
-      data: {
-        org_id: string;
-        assigned_to: string | null;
-        nome_fantasia: string | null;
-        razao_social: string | null;
-        cnpj: string | null;
-      } | null;
-    };
+    .single()) as { data: LeadRow | null };
 
   if (!lead) return;
+
+  // Inscrição ativa nesta cadência (vai para o aviso do BDR IA) — lida ANTES do
+  // update abaixo, que a marca como replied.
+  const { data: activeEnrollment } = (await from(supabase, 'cadence_enrollments')
+    .select('id')
+    .eq('lead_id', sentInteraction.lead_id)
+    .eq('cadence_id', sentInteraction.cadence_id)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+
+  // Id gerado aqui: é o `event_id` do aviso (estável, idempotente no n8n).
+  const repliedInteractionId = randomUUID();
 
   // Create replied interaction. H2: inherit step_id + ab_variant from the
   // originating 'sent' so the A/B panel (which filters by step_id and buckets by
@@ -308,6 +339,7 @@ async function recordReply(
   const replyAbVariant = sentInteraction.metadata?.ab_variant;
   await from(supabase, 'interactions')
     .insert({
+      id: repliedInteractionId,
       org_id: lead.org_id,
       lead_id: sentInteraction.lead_id,
       cadence_id: sentInteraction.cadence_id,
@@ -338,6 +370,9 @@ async function recordReply(
     interaction_id: sentInteraction.id,
   });
 
+  // Aviso no grupo interno (n8n) — só cadência do BDR IA. Nunca derruba o poll.
+  await notifyBdrReplyWebhook(supabase, sentInteraction, lead, ctx, repliedInteractionId, activeEnrollment?.id ?? null);
+
   // Notify the SDR who owns the lead that it replied by email. This mirrors the
   // bounce path (recordBounce) — previously the reply was recorded and cadences
   // stopped, but the SDR was never told, so 'lead_replied' notifications never
@@ -362,6 +397,66 @@ async function recordReply(
     } catch (notifErr) {
       console.error(`[reply-check] Failed to notify reply for lead=${sentInteraction.lead_id}:`, notifErr);
     }
+  }
+}
+
+/**
+ * Resposta em cadência com executor `bdr_ai` → POST para o n8n (grupo interno).
+ * Uma vez por resposta (event_id = id da interaction `replied`). Sem URL
+ * configurada, só avisa no log. Qualquer erro fica aqui dentro.
+ */
+async function notifyBdrReplyWebhook(
+  supabase: SupabaseClient,
+  sent: SentInteraction,
+  lead: LeadRow,
+  ctx: ReplyContext,
+  repliedInteractionId: string,
+  enrollmentId: string | null,
+): Promise<void> {
+  try {
+    const { data: cadence } = (await from(supabase, 'cadences')
+      .select('name, executor')
+      .eq('id', sent.cadence_id)
+      .maybeSingle()) as { data: { name: string | null; executor: string | null } | null };
+    if (cadence?.executor !== 'bdr_ai') return;
+
+    const url = getEnv().BDR_EMAIL_REPLY_WEBHOOK_URL;
+    if (!url) {
+      console.warn(`[reply-check] BDR_EMAIL_REPLY_WEBHOOK_URL não configurada — aviso da resposta não enviado (lead=${sent.lead_id} cadence=${sent.cadence_id})`);
+      return;
+    }
+
+    const { data: mailbox } = (await from(supabase, 'gmail_connections')
+      .select('email_address')
+      .eq('org_id', lead.org_id)
+      .eq('user_id', ctx.mailboxUserId)
+      .maybeSingle()) as { data: { email_address: string | null } | null };
+
+    const trecho = ctx.reply?.messageId ? await fetchReplyText(ctx.reply.messageId, ctx.accessToken) : null;
+
+    const payload = buildBdrEmailReplyPayload({
+      repliedInteractionId,
+      orgId: lead.org_id,
+      leadId: sent.lead_id,
+      enrollmentId,
+      cadenceId: sent.cadence_id,
+      cadenceName: cadence.name,
+      mailboxEmail: mailbox?.email_address ?? null,
+      threadId: ctx.threadId,
+      reply: ctx.reply,
+      sentSubject: (sent.metadata?.subject as string | undefined) ?? null,
+      trecho,
+      lead,
+      // O poll NÃO cria hold (só o ingestor da caixa cria `email_replied`).
+      holdCriado: false,
+    });
+
+    const result = await sendBdrEmailReplyWebhook(url, payload);
+    if (result.ok) {
+      console.warn(`[reply-check] Aviso BDR IA enviado: event_id=${repliedInteractionId} lead=${sent.lead_id} tentativas=${result.attempts}`);
+    }
+  } catch (err) {
+    console.error(`[reply-check] Aviso BDR IA falhou para lead=${sent.lead_id}:`, err);
   }
 }
 
