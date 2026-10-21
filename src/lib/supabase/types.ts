@@ -1120,6 +1120,7 @@ export type Database = {
       api4com_connections: {
         Row: {
           api_key_encrypted: string | null;
+          api4com_extension_id: string | null;
           base_url: string;
           created_at: string;
           id: string;
@@ -1128,11 +1129,13 @@ export type Database = {
           sip_domain: string | null;
           sip_password_encrypted: string | null;
           status: string;
+          synced_at: string | null;
           updated_at: string;
           user_id: string;
         };
         Insert: {
           api_key_encrypted?: string | null;
+          api4com_extension_id?: string | null;
           base_url?: string;
           created_at?: string;
           id?: string;
@@ -1141,11 +1144,13 @@ export type Database = {
           sip_domain?: string | null;
           sip_password_encrypted?: string | null;
           status?: string;
+          synced_at?: string | null;
           updated_at?: string;
           user_id: string;
         };
         Update: {
           api_key_encrypted?: string | null;
+          api4com_extension_id?: string | null;
           base_url?: string;
           created_at?: string;
           id?: string;
@@ -1154,6 +1159,7 @@ export type Database = {
           sip_domain?: string | null;
           sip_password_encrypted?: string | null;
           status?: string;
+          synced_at?: string | null;
           updated_at?: string;
           user_id?: string;
         };
@@ -1162,6 +1168,47 @@ export type Database = {
             foreignKeyName: 'api4com_connections_org_id_fkey';
             columns: ['org_id'];
             isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      api4com_org_settings: {
+        Row: {
+          api_key_encrypted: string;
+          base_url: string;
+          created_at: string;
+          id: string;
+          last_synced_at: string | null;
+          org_id: string;
+          sip_domain: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          api_key_encrypted: string;
+          base_url?: string;
+          created_at?: string;
+          id?: string;
+          last_synced_at?: string | null;
+          org_id: string;
+          sip_domain?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          api_key_encrypted?: string;
+          base_url?: string;
+          created_at?: string;
+          id?: string;
+          last_synced_at?: string | null;
+          org_id?: string;
+          sip_domain?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'api4com_org_settings_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: true;
             referencedRelation: 'organizations';
             referencedColumns: ['id'];
           },

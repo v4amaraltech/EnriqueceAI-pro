@@ -17,8 +17,10 @@ export interface Api4ComWebhookPayload {
   metadata: Record<string, string>;
 }
 
-// Response from POST /dialer
+// Response from POST /calls (same `id` as the call list and the webhook events;
+// the deprecated POST /dialer returned a different id)
 export interface Api4ComOriginateResponse {
+  status?: string;
   id: string;
   message: string;
 }
