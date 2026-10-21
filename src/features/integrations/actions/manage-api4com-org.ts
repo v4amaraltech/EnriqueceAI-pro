@@ -41,6 +41,7 @@ interface ConnectionRow {
   sip_password_encrypted: string | null;
   api_key_encrypted: string | null;
   synced_at: string | null;
+  webphone_enabled: boolean | null;
 }
 
 async function requireManagerOrg(): Promise<ActionResult<{ orgId: string; userId: string }>> {
@@ -62,7 +63,7 @@ async function loadMembers(client: ServiceClient, orgId: string): Promise<Member
 
 async function loadConnections(client: ServiceClient, orgId: string): Promise<ConnectionRow[]> {
   const { data } = (await from(client, 'api4com_connections' as never)
-    .select('user_id, ramal, sip_password_encrypted, api_key_encrypted, synced_at')
+    .select('user_id, ramal, sip_password_encrypted, api_key_encrypted, synced_at, webphone_enabled')
     .eq('org_id', orgId)) as { data: ConnectionRow[] | null };
   return data ?? [];
 }
@@ -278,6 +279,7 @@ export async function fetchApi4ComOrgOverview(): Promise<ActionResult<Api4ComOrg
         hasSipPassword: !!c?.sip_password_encrypted,
         syncedAt: c?.synced_at ?? null,
         hasOwnToken: !!c?.api_key_encrypted,
+        webphoneEnabled: !!c?.webphone_enabled,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -294,4 +296,39 @@ export async function fetchApi4ComOrgOverview(): Promise<ActionResult<Api4ComOrg
       team,
     },
   };
+}
+
+/**
+ * Liga/desliga o webphone no navegador para UMA pessoa (bloco 2). Rollout
+ * controlado: o gestor libera um SDR por vez. Exige ramal com senha SIP
+ * sincronizada; com o webphone ligado, a extensão do Chrome dessa pessoa
+ * precisa ficar fechada.
+ */
+export async function setWebphoneEnabled(input: { userId: string; enabled: boolean }): Promise<ActionResult<void>> {
+  const auth = await requireManagerOrg();
+  if (!auth.success) return auth;
+  const { orgId } = auth.data;
+
+  const client = createServiceRoleClient();
+  const { data: row } = (await from(client, 'api4com_connections' as never)
+    .select('id, sip_domain, sip_password_encrypted')
+    .eq('org_id', orgId)
+    .eq('user_id', input.userId)
+    .maybeSingle()) as { data: { id: string; sip_domain: string | null; sip_password_encrypted: string | null } | null };
+
+  if (!row) return { success: false, error: 'Essa pessoa não tem ramal cadastrado' };
+  if (input.enabled && (!row.sip_domain || !row.sip_password_encrypted)) {
+    return { success: false, error: 'Sincronize os ramais antes: falta domínio ou senha SIP para essa pessoa' };
+  }
+
+  const { error } = await from(client, 'api4com_connections' as never)
+    .update({ webphone_enabled: input.enabled })
+    .eq('id', row.id);
+  if (error) {
+    console.error('[api4com] setWebphoneEnabled failed:', error);
+    return { success: false, error: 'Erro ao salvar a liberação do webphone' };
+  }
+
+  revalidatePath('/settings/integrations');
+  return { success: true, data: undefined };
 }

@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import { disconnectApi4ComOrg, syncApi4ComExtensions } from '../actions/manage-api4com-org';
+import { disconnectApi4ComOrg, setWebphoneEnabled, syncApi4ComExtensions } from '../actions/manage-api4com-org';
 import type { Api4ComOrgOverview, Api4ComSyncReport } from '../types';
 import { Api4ComOrgTokenModal } from './Api4ComOrgTokenModal';
 
@@ -139,7 +139,8 @@ export function Api4ComOrgCard({ overview }: Api4ComOrgCardProps) {
               <th className="py-1 pr-3 font-medium">E-mail</th>
               <th className="py-1 pr-3 font-medium">Ramal</th>
               <th className="py-1 pr-3 font-medium">Senha SIP</th>
-              <th className="py-1 font-medium">Sincronizado</th>
+              <th className="py-1 pr-3 font-medium">Sincronizado</th>
+              <th className="py-1 font-medium" title="Atende a ligação na própria página, sem a extensão do Chrome">Webphone</th>
             </tr>
           </thead>
           <tbody>
@@ -163,7 +164,31 @@ export function Api4ComOrgCard({ overview }: Api4ComOrgCardProps) {
                   )}
                 </td>
                 <td className="py-1 pr-3">{m.hasSipPassword ? 'sim' : '—'}</td>
-                <td className="py-1">{formatDateTime(m.syncedAt)}</td>
+                <td className="py-1 pr-3">{formatDateTime(m.syncedAt)}</td>
+                <td className="py-1">
+                  <label className="inline-flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5"
+                      checked={m.webphoneEnabled}
+                      disabled={isPending || !m.ramal || !m.hasSipPassword}
+                      aria-label={`Webphone no navegador para ${m.name}`}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        startTransition(async () => {
+                          const r = await setWebphoneEnabled({ userId: m.userId, enabled });
+                          if (r.success) {
+                            toast.success(enabled ? `${m.name}: webphone ligado. A extensão do Chrome dessa pessoa precisa ficar fechada.` : `${m.name}: webphone desligado`);
+                            router.refresh();
+                          } else {
+                            toast.error(r.error);
+                          }
+                        });
+                      }}
+                    />
+                    <span>{m.webphoneEnabled ? 'ligado' : 'desligado'}</span>
+                  </label>
+                </td>
               </tr>
             ))}
           </tbody>

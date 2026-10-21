@@ -23,6 +23,8 @@ import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone
 import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
 import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
+import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
 
 import type { CallAttempt } from '../types/call-attempt';
@@ -89,6 +91,10 @@ export function ActivityPhonePanel({
   // <5s with both supposedly answered, which is physically impossible.
   const inFlightRef = useRef(false);
   const [attempts, setAttempts] = useState<CallAttempt[]>([]);
+  // Webphone no navegador (bloco 2): quando registrado nesta aba, a ligação
+  // toca aqui e a extensão do Chrome não é necessária.
+  const webphone = useApi4ComWebphone();
+  const webphoneReady = canReceiveCalls(webphone);
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
@@ -137,6 +143,11 @@ export function ActivityPhonePanel({
   function handleInitiateCall() {
     if (!selectedPhone) return;
     if (inFlightRef.current) return;
+    const blocked = dialingBlockReason(webphone);
+    if (blocked) {
+      toast.error(blocked, { duration: 6000 });
+      return;
+    }
     inFlightRef.current = true;
 
     setElapsed(0);
@@ -152,7 +163,8 @@ export function ActivityPhonePanel({
 
       if (!result.success) {
         // Show backend error if present, otherwise generic guidance
-        const errorMsg = result.error || 'Verifique se a extensão API4COM está aberta e tente novamente.';
+        const errorMsg =
+          result.error || (webphoneReady ? 'Não foi possível iniciar a ligação. Tente novamente.' : 'Verifique se a extensão API4COM está aberta e tente novamente.');
         console.error('[ActivityPhonePanel] initiateCall failed:', result.error);
         toast.error(errorMsg, { duration: 8000 });
         setCallState('idle');
@@ -317,14 +329,23 @@ export function ActivityPhonePanel({
 
   return (
     <div className="flex h-full flex-col">
-      {/* API4COM webphone reminder */}
+      {/* API4COM: webphone desta aba ou lembrete da extensão */}
       {dialerProvider === 'api4com' && callState === 'idle' && (
-        <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-          <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
-          <p className="text-xs text-amber-700 dark:text-amber-400">
-            Certifique-se de que a <strong>extensão API4COM (webphone)</strong> está aberta no navegador antes de ligar.
-          </p>
-        </div>
+        webphoneReady ? (
+          <div className="mb-3 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2.5">
+            <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
+            <p className="text-xs text-green-700 dark:text-green-400">
+              <strong>Webphone ativo nesta aba.</strong> A ligação toca e é atendida aqui mesmo — mantenha a extensão do Chrome fechada.
+            </p>
+          </div>
+        ) : (
+          <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+            <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Certifique-se de que a <strong>extensão API4COM (webphone)</strong> está aberta no navegador antes de ligar.
+            </p>
+          </div>
+        )
       )}
 
       {/* Origem / Destino header */}
