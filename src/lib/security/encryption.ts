@@ -20,6 +20,18 @@ function getKey(): Buffer | null {
 }
 
 /**
+ * True when TOKEN_ENCRYPTION_KEY is set. Callers that store credentials
+ * (API tokens, SIP passwords) must refuse to write when this is false:
+ * `encrypt()` degrades to plaintext without a key, which is fine for a
+ * throwaway dev database but not for a shared one — on 21/10/2026 an org
+ * token and six SIP passwords were saved in plaintext from a localhost
+ * pointed at production because `.env.local` had an empty key.
+ */
+export function isEncryptionConfigured(): boolean {
+  return getKey() !== null;
+}
+
+/**
  * Checks if a string looks like an encrypted value (iv:authTag:ciphertext).
  */
 function isEncrypted(value: string): boolean {

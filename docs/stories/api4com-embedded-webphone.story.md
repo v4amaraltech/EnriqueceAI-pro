@@ -244,6 +244,8 @@ Blocos 2 e 3 (previsto):
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 21/10/2026 — Token da org cadastrado pelo Vini e ramais sincronizados (6 casados pelo ramal; Ana Luiza sem ramal). ⚠️ Feito pelo localhost com `TOKEN_ENCRYPTION_KEY` vazia → token e 6 senhas SIP gravados em claro; recifrados dentro do container de produção às 18:19 UTC (token validado em `/users/me`). Trava adicionada: `isEncryptionConfigured()` bloqueia salvar/sincronizar sem chave (3 testes). Ajuste ainda não commitado.
+- 21/10/2026 — @devops: push da branch e PR #487 aberto para a main (https://github.com/v4amaraltech/EnriqueceAI-pro/pull/487). Aguarda CI e merge.
 - 21/10/2026 — @dev: migration `api4com_org_settings` aplicada em produção via MCP (versão `20261021175620`) e `pnpm gen:types` rodado. Nada commitado.
 - 21/10/2026 — @dev: bloco 1 implementado na branch `feat/api4com-org-token-calls` (typecheck, lint e 2519 testes ok). Status Ready → InProgress. Migration NÃO aplicada; `gen:types` pendente; nada commitado.
 - 21/10/2026 — @po: validada (GO 9/10). Status Draft → Ready. Adicionados estimativa, dependências, critério de pronto e entrega em 3 PRs.

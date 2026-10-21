@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { resolveUserProfiles } from '@/lib/auth/user-directory';
-import { encrypt } from '@/lib/security/encryption';
+import { encrypt, isEncryptionConfigured } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -26,6 +26,9 @@ import {
 import type { Api4ComOrgOverview, Api4ComSyncReport, Api4ComTeamMember } from '../types';
 
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
+
+const ENCRYPTION_MISSING_ERROR =
+  'Criptografia de credenciais não configurada neste ambiente (TOKEN_ENCRYPTION_KEY). O token e as senhas SIP seriam gravados em claro; use o ambiente de produção.';
 
 interface MemberRow {
   user_id: string;
@@ -160,6 +163,7 @@ export async function saveApi4ComOrgSettings(
 
   const apiKey = input.apiToken?.trim();
   if (!apiKey) return { success: false, error: 'Informe o token da API4COM' };
+  if (!isEncryptionConfigured()) return { success: false, error: ENCRYPTION_MISSING_ERROR };
 
   const creds: Api4ComApiCredentials = { apiKey, baseUrl: normalizeBaseUrl(input.baseUrl) };
 
@@ -203,6 +207,8 @@ export async function syncApi4ComExtensions(): Promise<ActionResult<Api4ComSyncR
   const auth = await requireManagerOrg();
   if (!auth.success) return auth;
   const { orgId } = auth.data;
+
+  if (!isEncryptionConfigured()) return { success: false, error: ENCRYPTION_MISSING_ERROR };
 
   const client = createServiceRoleClient();
   const creds = await getOrgSettingsCredentials(orgId, client);
