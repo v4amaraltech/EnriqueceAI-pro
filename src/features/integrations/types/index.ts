@@ -118,6 +118,8 @@ export interface Api4ComTeamMember {
   syncedAt: string | null;
   /** Token legado cadastrado na própria linha do usuário. */
   hasOwnToken: boolean;
+  /** Webphone no navegador liberado pelo gestor para esta pessoa (bloco 2). */
+  webphoneEnabled: boolean;
 }
 
 export interface Api4ComOrgOverview {

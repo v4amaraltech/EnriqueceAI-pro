@@ -206,7 +206,26 @@ Sondagem rodada dentro do container do app no Coolify (a chave de cifra só exis
 - [ ] Validação em produção (seção "Validação", passos 1–3). `POST /calls` ainda não foi disparado em produção.
 - [ ] CodeRabbit: CLI configurado só em WSL; não rodado neste Mac.
 
-### Decisões do dev
+### Bloco 2 — implementado em 21/10/2026 (branch `feat/api4com-webphone-browser`, mesmo worktree)
+- [x] `jssip` 3.13.9 (tipos próprios do pacote; `@types/jssip` é um stub vazio e foi descartado).
+- [x] Migration `20261021185445_api4com_webphone_enabled.sql`: coluna `api4com_connections.webphone_enabled` (default `false`). Rollout por pessoa: o gestor liga um SDR por vez. Aplicada em produção em 21/10 (0 ligados) e `gen:types` rodado.
+- [x] `webphone-state.ts` (puro): reducer do estado do webphone (registro, microfone, ligação com fases tocando/em ligação/encerrada, mudo), `isIntegratedCallHeader`, `canReceiveCalls`, `callTalkSeconds`. 12 testes.
+- [x] `webphone-client.ts`: singleton JsSIP por aba — registra `sip:{ramal}@{domínio}` em `wss://{domínio}:6443` (realm = domínio, `register_expires` 600, `no_answer_timeout` 30, reconexão 2–30 s), pede o microfone no start, atende sozinho o INVITE com `X-Api4comintegratedcall: true`, inbound comum fica tocando até "Atender", segunda chamada recebe 486, áudio remoto num `<audio>` escondido, `answerCall`/`hangupCall`/`toggleMute`/`stopWebphone`. Guarda de geração contra o duplo mount do StrictMode.
+- [x] `useApi4ComWebphone` (`useSyncExternalStore`) e `Api4ComWebphoneMount` no layout `(app)`: busca `getWebphoneSipConfig()`, só registra se o gestor liberou, e mostra um indicador fixo mínimo (status do registro; durante a ligação: número, fase, cronômetro, Atender/Mutar/Desligar). O painel flutuante arrastável com anotações e avaliação é o bloco 3.
+- [x] `getWebphoneSipConfig` (nova action mínima: domínio, ramal e senha SIP do próprio usuário, só com `webphone_enabled`) e **`getApi4ComSipCredentials` removida** (devolvia o token da API ao navegador). 3 testes.
+- [x] Cartão do gestor: coluna "Webphone" com liga/desliga por pessoa (`setWebphoneEnabled`; exige ramal com senha SIP sincronizada).
+- [x] `ActivityPhonePanel`: com o webphone registrado nesta aba, o lembrete amarelo da extensão vira um aviso verde "Webphone ativo nesta aba" e a mensagem de erro deixa de mandar abrir a extensão. `PowerDialerTab` e `LeadDetailLayout`: mesmas mensagens condicionais.
+- [x] Aplicar a migration em produção + `pnpm gen:types`.
+- [x] **Validação de ponta a ponta (localhost + API4COM real, 21/10 19:14 UTC):** Vini ligou para o próprio celular sem a extensão; a página atendeu a perna do ramal, o celular atendeu, 174 s de conversa, `answered_at` 19:14:34, `NORMAL_CLEARING`, gravação e `webhook_linked` pelo id (`f0075b2e…`). Mais duas ligações no mesmo teste (16 s atendida; uma cancelada) também casaram pelo id. Falta só a validação em produção depois do deploy (um SDR um dia inteiro).
+- [x] **Registro SIP real validado no localhost (21/10):** o ramal 1014 registrou em `wss://v4amaral.api4com.com:6443` e o indicador mostrou "Webphone ativo". Para isso foi preciso liberar a porta na CSP: `connect-src` tinha `wss://*.api4com.com`, que no CSP só vale para a porta padrão (443); adicionado `wss://*.api4com.com:6443` em `next.config.ts`. Áudio/atendimento validados pelo Vini no Chrome (localhost, 21/10 19:08 UTC): a página atendeu sozinha a perna do ramal e a ligação saiu com `webhook_linked` pelo id (`5a89a7ce…`); o destino devolveu `NUMBER_CHANGED` (0 s, gravação do aviso da operadora), então falta uma ligação atendida de ponta a ponta. Ajustes feitos nesse teste: registro sem esperar o microfone, indicador no canto esquerdo (atrás dos toasts à direita), `dialingBlockReason` trava o Ligar enquanto o webphone não está pronto.
+
+### Decisões do dev (bloco 2)
+- Flag por pessoa em vez de por org: a validação pede um SDR por um dia, e a extensão e a página disputam o mesmo ramal, então ligar para todos de uma vez travaria quem ainda usa a extensão.
+- O cabeçalho é lido do `request` do evento `newRTCSession` (o `RTCSession` tipado não expõe `request`).
+- A ligação de saída continua sendo originada pelo servidor (`POST /calls`); o webphone só atende a perna do ramal. Nada mudou no casamento com o webhook.
+- O indicador do bloco 2 é propositalmente mínimo (fixo no canto); arrastar, anotações e estrelas ficam no bloco 3.
+
+### Decisões do dev (bloco 1)
 - O token por usuário continua funcionando (fallback) para não quebrar quem já está configurado; a org Julio Cesar segue assim até cadastrar o token dela.
 - `getApi4ComSipCredentials` (action morta que vaza token) fica para o bloco 2, que a substitui pela action mínima do webphone.
 - A linha do SDR em `api4com_connections` criada pelo sync nasce com `api_key_encrypted = null` e `base_url` da org.
@@ -232,18 +251,34 @@ Bloco 1 (feito):
 - `src/features/calls/services/recover-recording.service.ts`
 - `src/lib/supabase/types.ts` (regenerado)
 
-Blocos 2 e 3 (previsto):
-- `src/features/integrations/hooks/useApi4ComWebphone.ts` (novo)
-- `src/features/integrations/components/WebphonePanel.tsx` (novo)
-- `src/features/calls/actions/get-webphone-sip-config.ts` (novo) e remoção de `get-api4com-sip-credentials.ts`
+Bloco 2 (feito):
+- `supabase/migrations/20261021185445_api4com_webphone_enabled.sql` (novo)
+- `src/lib/supabase/types.ts` (regenerado)
+- `src/features/integrations/webphone/webphone-state.ts` + `.test.ts` (novos)
+- `src/features/integrations/webphone/webphone-client.ts` (novo)
+- `src/features/integrations/webphone/useApi4ComWebphone.ts` (novo)
+- `src/features/integrations/webphone/Api4ComWebphoneMount.tsx` (novo)
+- `src/features/calls/actions/get-webphone-sip-config.ts` + `.test.ts` (novos); `get-api4com-sip-credentials.ts` removido
+- `src/features/integrations/actions/manage-api4com-org.ts` (`setWebphoneEnabled`, `webphoneEnabled` no overview)
+- `src/features/integrations/components/Api4ComOrgCard.tsx`, `src/features/integrations/types/index.ts`
 - `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx`
 - `src/features/leads/components/LeadDetailLayout.tsx`
 - `src/app/(app)/layout.tsx`
+- `next.config.ts` (CSP: `wss://*.api4com.com:6443`)
+- `package.json`, `pnpm-lock.yaml` (jssip)
+
+Bloco 3 (previsto):
+- `src/features/integrations/webphone/WebphonePanel.tsx` (painel flutuante arrastável, anotações, avaliação)
 
 ## Validação @po (21/10/2026)
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 21/10/2026 — Bloco 2 validado de ponta a ponta no localhost com a API4COM real: ligação de 174 s atendida sem extensão, `answered_at`, gravação e webhook por id. Nada commitado.
+- 21/10/2026 — Teste do bloco 2 no localhost (Chrome do Vini): ramal registrado, página atendeu a perna do ramal, ligação casou com o webhook pelo id. Destino deu NUMBER_CHANGED (0 s). Três ajustes após o primeiro erro 424 "user not registered" (registro sem esperar microfone, indicador à esquerda, trava do Ligar). Nada commitado.
+- 21/10/2026 — @dev: migration `api4com_webphone_enabled` aplicada em produção (versão `20261021185445`, flag desligada para todos) e `pnpm gen:types` rodado.
+- 21/10/2026 — @dev: bloco 2 implementado na branch `feat/api4com-webphone-browser` (JsSIP, auto-atendimento, action mínima, flag por SDR). Migration não aplicada; nada commitado.
+- 21/10/2026 — @devops: PR #487 mesclado (squash `755b2c7c`) e deploy confirmado em produção pelo `/api/version` às 15:33 BRT. Bloco 1 NO AR. Restam blocos 2 e 3 e a validação em produção (passos 1–3).
 - 21/10/2026 — Token da org cadastrado pelo Vini e ramais sincronizados (6 casados pelo ramal; Ana Luiza sem ramal). ⚠️ Feito pelo localhost com `TOKEN_ENCRYPTION_KEY` vazia → token e 6 senhas SIP gravados em claro; recifrados dentro do container de produção às 18:19 UTC (token validado em `/users/me`). Trava adicionada: `isEncryptionConfigured()` bloqueia salvar/sincronizar sem chave (3 testes). Ajuste ainda não commitado.
 - 21/10/2026 — @devops: push da branch e PR #487 aberto para a main (https://github.com/v4amaraltech/EnriqueceAI-pro/pull/487). Aguarda CI e merge.
 - 21/10/2026 — @dev: migration `api4com_org_settings` aplicada em produção via MCP (versão `20261021175620`) e `pnpm gen:types` rodado. Nada commitado.

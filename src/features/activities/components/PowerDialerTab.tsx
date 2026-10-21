@@ -16,6 +16,8 @@ import {
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
@@ -115,6 +117,11 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     const phoneToCall = phone ?? currentItem?.phone;
     if (!phoneToCall) return;
     if (inFlightRef.current) return;
+    const blocked = dialingBlockReason(getWebphoneState());
+    if (blocked) {
+      toast.error(blocked, { duration: 6000 });
+      return;
+    }
     inFlightRef.current = true;
 
     startTransition(async () => {
@@ -127,7 +134,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       });
 
       if (!result.success) {
-        if (result.error?.includes('ramal') || result.error?.includes('offline') || result.error?.includes('not registered') || result.error?.includes('503')) {
+        const looksLikeNoPhone = result.error?.includes('ramal') || result.error?.includes('offline') || result.error?.includes('not registered') || result.error?.includes('503');
+        if (looksLikeNoPhone && !canReceiveCalls(getWebphoneState())) {
           toast.error('Abra a extensão API4COM (webphone) antes de ligar', { duration: 5000 });
         } else {
           toast.error(result.error);

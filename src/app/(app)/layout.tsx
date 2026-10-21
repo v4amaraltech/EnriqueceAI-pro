@@ -16,6 +16,7 @@ import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGua
 import { TrialBanner } from '@/features/billing/components/TrialBanner';
 import type { SubscriptionStatus } from '@/features/billing/types';
 import { BILLING_EXEMPT_PREFIXES, isSubscriptionBlocked } from '@/features/billing/utils/subscription-access';
+import { Api4ComWebphoneMount } from '@/features/integrations/webphone/Api4ComWebphoneMount';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
@@ -161,6 +162,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </SubscriptionGuard>
             <Toaster />
             <ChunkReloadFlagReset />
+            {/* Webphone no navegador (API4COM): só monta para quem o gestor liberou. */}
+            <Api4ComWebphoneMount />
           </NotificationProvider>
         </OrganizationProvider>
       </TooltipProvider>

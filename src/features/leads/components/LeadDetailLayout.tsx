@@ -48,6 +48,8 @@ import { reassignCloser } from '../actions/reassign-closer';
 import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
+import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { buildContactPhones, type ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 import { listLeadContacts } from '../actions/lead-contacts';
 import type { LeadContact } from '../types';
@@ -298,6 +300,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     telefone: lead.telefone,
   });
 
+
   const dialPhone = useCallback(async (phone: string, contactId: string | null) => {
     if (!phone) {
       toast.error('Lead não possui telefone cadastrado');
@@ -313,17 +316,24 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         window.open(`tel:${phone}`, '_self');
         return;
       }
+      const webphoneState = getWebphoneState();
+      const blocked = dialingBlockReason(webphoneState);
+      if (blocked) {
+        toast.error(blocked, { duration: 6000 });
+        return;
+      }
+      const webphoneReady = canReceiveCalls(webphoneState);
       const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id, contactId });
       if (result.success) {
-        toast('Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
+        toast(webphoneReady ? 'Ligação iniciada — atendendo nesta aba.' : 'Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
           icon: '📞',
           duration: 5000,
         });
       } else {
-        toast.error(result.error ?? 'Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
+        toast.error(result.error ?? (webphoneReady ? 'Erro ao iniciar ligação.' : 'Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.'));
       }
     } catch {
-      toast.error('Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
+      toast.error('Erro ao iniciar ligação. Tente novamente.');
     } finally {
       setIsCalling(false);
       inFlightRef.current = false;

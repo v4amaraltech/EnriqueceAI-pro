@@ -1132,6 +1132,7 @@ export type Database = {
           synced_at: string | null;
           updated_at: string;
           user_id: string;
+          webphone_enabled: boolean;
         };
         Insert: {
           api_key_encrypted?: string | null;
@@ -1147,6 +1148,7 @@ export type Database = {
           synced_at?: string | null;
           updated_at?: string;
           user_id: string;
+          webphone_enabled?: boolean;
         };
         Update: {
           api_key_encrypted?: string | null;
@@ -1162,6 +1164,7 @@ export type Database = {
           synced_at?: string | null;
           updated_at?: string;
           user_id?: string;
+          webphone_enabled?: boolean;
         };
         Relationships: [
           {
