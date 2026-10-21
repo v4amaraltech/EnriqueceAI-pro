@@ -85,6 +85,16 @@ describe('reduceWebphone — ligação', () => {
     expect(s.call?.muted).toBe(true);
   });
 
+  it('call_stats guarda o último resumo de áudio da ligação certa e sobrevive ao call_ended', () => {
+    const stats = { packetsReceived: 10, packetsLost: 1, lossPercent: 9.1, jitterMs: 8, rttMs: 40, collectedAt: 'now' };
+    const ringing = run([incoming]);
+    expect(ringing.call?.audioStats).toBeNull();
+    expect(reduceWebphone(ringing, { type: 'call_stats', id: 'outra', stats })).toBe(ringing);
+    const s = run([{ type: 'call_stats', id: 'c1', stats }, { type: 'call_ended', id: 'c1', at: 9000, cause: 'BYE' }], ringing);
+    expect(s.call?.audioStats).toEqual(stats);
+    expect(s.call?.phase).toBe('ended');
+  });
+
   it('callTalkSeconds é 0 antes de atender e usa o agora durante a conversa', () => {
     const ringing = run([incoming]);
     expect(callTalkSeconds(ringing.call, 50_000)).toBe(0);

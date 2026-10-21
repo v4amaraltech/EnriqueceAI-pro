@@ -24,6 +24,13 @@ import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
 import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
+import { useWebphoneCallContext } from '@/features/integrations/webphone/useWebphoneCallContext';
+import {
+  clearWebphoneCallContext,
+  onWebphoneConcludeRequested,
+  releaseWebphoneCallOwner,
+  setWebphoneCallContext,
+} from '@/features/integrations/webphone/webphone-call-context';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
 
@@ -95,6 +102,9 @@ export function ActivityPhonePanel({
   // toca aqui e a extensão do Chrome não é necessária.
   const webphone = useApi4ComWebphone();
   const webphoneReady = canReceiveCalls(webphone);
+  // Anotações digitadas no painel flutuante do webphone (bloco 3): entram
+  // pré-preenchidas no modal de resultado desta tarefa.
+  const { notes: webphoneNotes } = useWebphoneCallContext();
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
@@ -177,12 +187,16 @@ export function ActivityPhonePanel({
       setCallState('connected');
       inFlightRef.current = false;
 
-      // Notify the webphone about the call context for classification
-      window.dispatchEvent(
-        new CustomEvent('webphone:call-context', {
-          detail: { callRecordId: result.data.callId, leadId },
-        }),
-      );
+      // Contexto para o painel flutuante do webphone (lead, linha em `calls`).
+      // Este painel continua dono do resultado enquanto estiver montado.
+      setWebphoneCallContext({
+        callId: result.data.callId,
+        providerCallId: result.data.providerCallId,
+        leadId,
+        leadName,
+        phone: selectedPhone,
+        ownerHandlesResult: true,
+      });
     });
   }
 
@@ -225,6 +239,7 @@ export function ActivityPhonePanel({
         notes: attemptNotes || undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
+      clearWebphoneCallContext(callId);
     }
 
     // Re-fetch lead phones in case new ones were added during the call
@@ -282,6 +297,7 @@ export function ActivityPhonePanel({
     }
 
     onMarkDone(aggregatedNotes);
+    if (callId) clearWebphoneCallContext(callId);
     setCallStatus('');
     setCallState('idle');
     setCallId(null);
@@ -293,6 +309,7 @@ export function ActivityPhonePanel({
 
   function handleDismissModal() {
     // Keep previous attempts when dismissing (user might want to retry)
+    if (callId) clearWebphoneCallContext(callId);
     setCallState('idle');
     setCallStatus('');
     setCallId(null);
@@ -326,6 +343,28 @@ export function ActivityPhonePanel({
     isActive: isInCall,
     onHangup: handleRemoteHangup,
   });
+
+  // "Concluir" no painel flutuante do webphone: abre o modal de resultado
+  // daqui (com as anotações de lá) sem esperar o webhook chegar pelo Realtime.
+  useEffect(() => {
+    if (!callId) return;
+    return onWebphoneConcludeRequested((detail) => {
+      if (detail.callId === callId) handleRemoteHangup(detail.durationSeconds);
+    });
+  }, [callId, handleRemoteHangup]);
+
+  // Se o SDR sair desta tela no meio da ligação, o painel flutuante assume o
+  // resultado (abre o CallResultModal dele ao concluir).
+  const activeCallIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeCallIdRef.current = isInCall || callState === 'ended' ? callId : null;
+  }, [callId, callState, isInCall]);
+  useEffect(
+    () => () => {
+      if (activeCallIdRef.current) releaseWebphoneCallOwner(activeCallIdRef.current);
+    },
+    [],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -516,6 +555,7 @@ export function ActivityPhonePanel({
         phoneLabel={selectedPhone}
         durationSeconds={callDuration}
         connected={callDuration > 0}
+        initialNotes={webphoneNotes}
         isSending={isSending || isPending}
         onRetry={canRetry ? handleRetryAttempt : undefined}
         onMarkNoShow={canMarkNoShow ? handleMarkNoShow : undefined}

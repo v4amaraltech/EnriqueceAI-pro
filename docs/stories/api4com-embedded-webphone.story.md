@@ -125,16 +125,16 @@ A ligação continua sendo **originada pelo servidor**, agora por `POST /calls` 
 - [ ] SDR cujo e-mail não existe na conta API4COM aparece na lista do gestor como "sem ramal", e o botão "Ligar" dele avisa isso em vez de falhar em silêncio.
 - [ ] Com a extensão do Chrome **fechada**, o SDR clica em "Ligar" na fila de atividades, ouve o lead e é ouvido pela página do EnriqueceAI.
 - [ ] O botão "Desligar" do painel encerra a ligação dos dois lados em até 2 s; a linha em `calls` recebe `duration_seconds` e `hangup_cause` pelo webhook como hoje.
-- [ ] O painel é arrastável, continua visível ao trocar de tela dentro do app e lembra a posição.
+- [x] O painel é arrastável, continua visível ao trocar de tela dentro do app e lembra a posição. *(implementado no bloco 3; conferência visual pendente na validação em produção)*
 - [ ] Mutar funciona e é visível no painel.
 - [ ] A ligação sai por `POST /calls` (não mais `/dialer`) e casa com o webhook pelo `api4com_call_id` (sem cair no casamento por ramal + número); gera gravação e transcrição como hoje.
 - [ ] "Sincronizar ramais" preenche ramal, domínio e senha SIP de cada SDR a partir de `GET /extensions`, casando por e-mail; nenhuma senha aparece na tela.
-- [ ] Avaliação de áudio opcional é gravada em `calls.metadata.audio_quality`; "Pular" não grava nada.
+- [x] Avaliação de áudio opcional é gravada em `calls.metadata.audio_quality`; "Pular" não grava nada. *(implementado no bloco 3, com testes da action)*
 - [ ] Microfone negado ou registro SIP falhando mostram mensagem específica e o botão "Ligar" cai no comportamento atual (`POST /dialer` + extensão) em vez de falhar em silêncio.
 - [ ] `getApi4ComSipCredentials` removida; nenhuma action devolve o token da API ao navegador.
 - [ ] Nenhum erro de console nas páginas autenticadas com o webphone montado (o motivo do PR #23 não pode voltar).
 - [ ] Dashboard, Estatísticas, Sales Hub e `get_calls_for_v4sales` não mudam: a métrica de conexão continua vindo de `answered_at` do webhook.
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test:run` e `pnpm build` passam; `pnpm gen:types` rodado no mesmo PR da migration.
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test:run` e `pnpm build` passam; `pnpm gen:types` rodado no mesmo PR da migration. *(verde nos três blocos; bloco 3 não tem migration)*
 
 ## Critério de pronto
 A story está pronta quando os três PRs estão no ar, a validação em produção (seção abaixo) foi cumprida com um SDR por um dia inteiro sem a extensão, o gestor consegue cadastrar o token e sincronizar ramais pela tela, e a métrica de conexão desse SDR no dia ficou na faixa do time. A action `getApi4ComSipCredentials` não existe mais. Estatísticas, Dashboard e Sales Hub não mudaram de número por causa desta story.
@@ -219,6 +219,25 @@ Sondagem rodada dentro do container do app no Coolify (a chave de cifra só exis
 - [x] **Validação de ponta a ponta (localhost + API4COM real, 21/10 19:14 UTC):** Vini ligou para o próprio celular sem a extensão; a página atendeu a perna do ramal, o celular atendeu, 174 s de conversa, `answered_at` 19:14:34, `NORMAL_CLEARING`, gravação e `webhook_linked` pelo id (`f0075b2e…`). Mais duas ligações no mesmo teste (16 s atendida; uma cancelada) também casaram pelo id. Falta só a validação em produção depois do deploy (um SDR um dia inteiro).
 - [x] **Registro SIP real validado no localhost (21/10):** o ramal 1014 registrou em `wss://v4amaral.api4com.com:6443` e o indicador mostrou "Webphone ativo". Para isso foi preciso liberar a porta na CSP: `connect-src` tinha `wss://*.api4com.com`, que no CSP só vale para a porta padrão (443); adicionado `wss://*.api4com.com:6443` em `next.config.ts`. Áudio/atendimento validados pelo Vini no Chrome (localhost, 21/10 19:08 UTC): a página atendeu sozinha a perna do ramal e a ligação saiu com `webhook_linked` pelo id (`5a89a7ce…`); o destino devolveu `NUMBER_CHANGED` (0 s, gravação do aviso da operadora), então falta uma ligação atendida de ponta a ponta. Ajustes feitos nesse teste: registro sem esperar o microfone, indicador no canto esquerdo (atrás dos toasts à direita), `dialingBlockReason` trava o Ligar enquanto o webphone não está pronto.
 
+### Bloco 3 — implementado em 21/10/2026 (branch `claude/busy-antonelli-d472c3`, worktree `busy-antonelli-d472c3`)
+- [x] `WebphonePanel.tsx`: painel flutuante no layout `(app)` (via `Api4ComWebphoneMount`, só para quem tem `webphone_enabled`), arrastável pelo cabeçalho com `@dnd-kit/core` (`PointerSensor`, distância 4 px), posição em `localStorage` (`enriqueceai.webphone.panel-position.v1`, try/catch, padrão canto inferior esquerdo, re-limitada à viewport no resize). Estados: pill com o status do registro quando não há ligação; "Chamando…"/"Chamada recebida" (Atender para inbound real); "Em ligação" com nome do lead (quando conhecido), número, cronômetro, Mutar e Desligar; "Ligação finalizada" com tempo (ou "Não atendida"), anotações e Concluir; depois "Como estava a qualidade do áudio?" com 5 estrelas (Pular/Enviar). O indicador mínimo do bloco 2 foi removido.
+- [x] `webphone-call-context.ts` (+ hook `useWebphoneCallContext`): store de módulo com o contexto da ligação (`callId` de `calls`, id na API4COM, lead, número, `ownerHandlesResult`) e as anotações do painel. Os três discadores publicam o contexto logo depois de `initiateCall` (`ActivityPhonePanel` — substitui o `CustomEvent` `webphone:call-context` que ninguém ouvia —, `PowerDialerTab`, `LeadDetailLayout`). Reducer puro, 10 testes.
+- [x] Resultado sem modal duplicado: quem iniciou a ligação e tem `CallResultModal` (fila de atividades, Power Dialer) continua dono. "Concluir" no painel dispara `webphone:conclude-requested`; o discador dono vai para `ended` na hora (sem esperar o webhook pelo Realtime) e abre o modal dele com as anotações do painel pré-preenchidas (`initialNotes`, prop opcional nova do `CallResultModal`; o contrato de `classifyWebphoneCall` não mudou). Se o discador desmontou no meio da ligação (trocou de tela) ou a ligação veio do detalhe do lead (que não tem modal), o painel abre o próprio `CallResultModal` e grava por `classifyWebphoneCall` + `scheduleActivity`, como os discadores fazem. Um contexto esquecido não gruda numa chamada recebida depois (`contextMatchesCall`, janela de 60 s).
+- [x] `webphone-audio-stats.ts` (puro): `summarizeRtcStats` resume o `RTCStatsReport` (`inbound-rtp` de áudio → pacotes recebidos/perdidos/% perda/jitter; `candidate-pair` nomeado ou `remote-inbound-rtp` → RTT). O cliente amostra `session.connection.getStats()` a cada 5 s durante a conversa e tenta uma amostra final (até 400 ms) antes do BYE quando o Desligar é daqui — quando o outro lado desliga, a `RTCPeerConnection` já está fechada no `ended`, então vale a última amostra. Evento `call_stats` no reducer. 6 + 1 testes.
+- [x] `saveWebphoneCallAudio` (action nova, `features/calls/actions`) + `webphone-audio.schemas.ts`: grava `calls.metadata.audio_quality` (1–5) e/ou `calls.metadata.audio_stats` mesclando no metadata atual (`api4com_call_id`, `gateway`… preservados); só o autor da ligação (`calls.user_id`) na própria org; nunca toca em `status`/`duration_seconds`. "Pular" não chama nada. `audio_stats` é gravado uma vez, automaticamente, quando a ligação atendida termina. 5 + 7 testes.
+- [x] Desligar no painel: `hangupCall()` do cliente (perna WebRTC) **e** `hangupApi4ComCall` pelo id da API4COM do contexto, como garantia. O botão do painel de atividades continua fazendo o dele; nenhum dos dois chama o outro.
+- [x] `webphone-panel-position.ts` (puro): parse/load/save com try/catch, `clampPanelPosition`, `movePanelPosition`. 7 testes.
+- [x] `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm test:run` ✅ 2575 testes (316 arquivos; 50 novos) · `pnpm build` ✅. Sem migration neste bloco (`gen:types` não se aplica).
+- [ ] Validação no navegador com a API4COM real (só o Vini tem o webphone ligado): arrastar e posição lembrada, cronômetro, Mutar, Desligar em até 2 s, anotações chegando ao modal da atividade, estrelas gravando `audio_quality`, `audio_stats` preenchido, e conferir que não há erro de console com o painel montado.
+- [ ] CodeRabbit: CLI configurado só em WSL; não rodado neste Mac.
+
+### Decisões do dev (bloco 3)
+- O painel **não** abre um segundo `CallResultModal` quando a fila de atividades ou o Power Dialer está na tela: pede ao discador para concluir (evento de janela) e ele usa o modal que já tem. Só assume o resultado quando ninguém mais vai fazê-lo (discador desmontado ou ligação do detalhe do lead). Evita a tela com dois modais e mantém `onMarkDone`/tentativas/re-discagem onde já estavam.
+- A "fotografia" da ligação encerrada fica no painel (não no cliente JsSIP): o cliente continua limpando a ligação 2,5 s depois do fim para liberar a próxima; o painel guarda número, duração, estatísticas e contexto até o SDR concluir. `doneCallId` evita re-fotografar a mesma ligação nessa janela.
+- Estatísticas por amostragem (5 s) em vez de uma leitura só no fim: no desligamento remoto o JsSIP fecha a `RTCPeerConnection` antes de emitir `ended` e `getStats()` deixa de responder.
+- Quando o dono conclui ou fecha o modal dele, o painel pula direto para a avaliação de áudio (opcional); sem `callId` conhecido (inbound que não passou por `initiateCall`) não há o que avaliar e o Concluir só fecha.
+- `CallResultModal` ganhou só a prop opcional `initialNotes`; a Ligação via WhatsApp (que também usa o modal) não passa nada e segue igual.
+
 ### Decisões do dev (bloco 2)
 - Flag por pessoa em vez de por org: a validação pede um SDR por um dia, e a extensão e a página disputam o mesmo ramal, então ligar para todos de uma vez travaria quem ainda usa a extensão.
 - O cabeçalho é lido do `request` do evento `newRTCSession` (o `RTCSession` tipado não expõe `request`).
@@ -267,13 +286,25 @@ Bloco 2 (feito):
 - `next.config.ts` (CSP: `wss://*.api4com.com:6443`)
 - `package.json`, `pnpm-lock.yaml` (jssip)
 
-Bloco 3 (previsto):
-- `src/features/integrations/webphone/WebphonePanel.tsx` (painel flutuante arrastável, anotações, avaliação)
+Bloco 3 (feito):
+- `src/features/integrations/webphone/WebphonePanel.tsx` (novo — painel flutuante arrastável, anotações, avaliação)
+- `src/features/integrations/webphone/webphone-call-context.ts` + `.test.ts` (novos), `useWebphoneCallContext.ts` (novo)
+- `src/features/integrations/webphone/webphone-audio-stats.ts` + `.test.ts` (novos)
+- `src/features/integrations/webphone/webphone-panel-position.ts` + `.test.ts` (novos)
+- `src/features/integrations/webphone/webphone-state.ts` + `.test.ts` (`audioStats`, evento `call_stats`)
+- `src/features/integrations/webphone/webphone-client.ts` (amostragem de `getStats()`, `hangupCall` assíncrono)
+- `src/features/integrations/webphone/Api4ComWebphoneMount.tsx` (monta o `WebphonePanel`; indicador mínimo removido)
+- `src/features/calls/actions/save-webphone-call-audio.ts` + `.test.ts` (novos)
+- `src/features/calls/schemas/webphone-audio.schemas.ts` + `.test.ts` (novos)
+- `src/features/activities/components/CallResultModal.tsx` (prop opcional `initialNotes`)
+- `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx` (publicam o contexto; respondem ao "Concluir" do painel; liberam o resultado ao desmontar)
+- `src/features/leads/components/LeadDetailLayout.tsx` (publica o contexto; painel assume o resultado)
 
 ## Validação @po (21/10/2026)
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 21/10/2026 — @dev: bloco 3 implementado no worktree `busy-antonelli-d472c3` (branch `claude/busy-antonelli-d472c3`): painel flutuante arrastável, anotações → `CallResultModal`, avaliação de áudio e `audio_stats` em `calls.metadata`, action `saveWebphoneCallAudio`. Typecheck, lint, testes e build verdes. Nada commitado; validação no navegador com a API4COM real pendente (Vini).
 - 21/10/2026 — Bloco 2 validado de ponta a ponta no localhost com a API4COM real: ligação de 174 s atendida sem extensão, `answered_at`, gravação e webhook por id. Nada commitado.
 - 21/10/2026 — Teste do bloco 2 no localhost (Chrome do Vini): ramal registrado, página atendeu a perna do ramal, ligação casou com o webhook pelo id. Destino deu NUMBER_CHANGED (0 s). Três ajustes após o primeiro erro 424 "user not registered" (registro sem esperar microfone, indicador à esquerda, trava do Ligar). Nada commitado.
 - 21/10/2026 — @dev: migration `api4com_webphone_enabled` aplicada em produção (versão `20261021185445`, flag desligada para todos) e `pnpm gen:types` rodado.

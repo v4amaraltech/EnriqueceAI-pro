@@ -48,6 +48,7 @@ import { reassignCloser } from '../actions/reassign-closer';
 import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
+import { setWebphoneCallContext } from '@/features/integrations/webphone/webphone-call-context';
 import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { buildContactPhones, type ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
@@ -325,6 +326,16 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       const webphoneReady = canReceiveCalls(webphoneState);
       const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id, contactId });
       if (result.success) {
+        // Esta tela não tem modal de resultado: o painel flutuante do webphone
+        // assume o desfecho e as anotações ao concluir (bloco 3).
+        setWebphoneCallContext({
+          callId: result.data.callId,
+          providerCallId: result.data.providerCallId,
+          leadId: lead.id,
+          leadName: lead.nome_fantasia ?? lead.razao_social ?? null,
+          phone,
+          ownerHandlesResult: false,
+        });
         toast(webphoneReady ? 'Ligação iniciada — atendendo nesta aba.' : 'Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
           icon: '📞',
           duration: 5000,
@@ -338,7 +349,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       setIsCalling(false);
       inFlightRef.current = false;
     }
-  }, [lead.id]);
+  }, [lead.id, lead.nome_fantasia, lead.razao_social]);
 
   const handleCall = useCallback(async () => {
     // Com mais de um número, abre o seletor pra o SDR escolher de quem é o

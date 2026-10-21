@@ -93,6 +93,11 @@ export interface CallResultModalProps {
   durationSeconds: number;
   /** Sinal técnico de atendimento — pré-seleciona o desfecho e o pill do topo. */
   connected: boolean;
+  /**
+   * Anotações digitadas em outro lugar durante a ligação (painel flutuante do
+   * webphone). Entram no campo quando o modal abre; o SDR pode editar.
+   */
+  initialNotes?: string;
   isSending?: boolean;
   /** Quando presente, mostra "Ligar de novo". Recebe as anotações atuais — o
    *  consumidor registra a tentativa com elas e RE-DISCA na hora (o SDR liga
@@ -133,13 +138,14 @@ export function CallResultModal({
   phoneLabel,
   durationSeconds,
   connected,
+  initialNotes = '',
   isSending = false,
   onRetry,
   onLeadLost,
   onMarkNoShow,
   onConclude,
 }: CallResultModalProps) {
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialNotes);
   const [outcome, setOutcome] = useState<CallDisposition | null>(() => defaultOutcome(connected));
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [returnTime, setReturnTime] = useState('09:00');
@@ -158,7 +164,7 @@ export function CallResultModal({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setNotes('');
+      setNotes(initialNotes);
       setOutcome(defaultOutcome(connected));
       setReturnDate(undefined);
       setReturnTime('09:00');

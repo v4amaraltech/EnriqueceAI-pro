@@ -3,6 +3,8 @@
 // O cliente JsSIP (`webphone-client.ts`) traduz os eventos do SIP para
 // `WebphoneEvent` e este reducer mantém um único estado observável pela UI.
 
+import type { WebphoneAudioStats } from './webphone-audio-stats';
+
 export type WebphoneRegistration = 'disabled' | 'connecting' | 'registered' | 'disconnected' | 'error';
 export type WebphoneCallPhase = 'ringing' | 'in-call' | 'ended';
 export type MicPermission = 'unknown' | 'granted' | 'denied';
@@ -19,6 +21,8 @@ export interface WebphoneCall {
   endedAt: number | null;
   endCause: string | null;
   muted: boolean;
+  /** Último resumo de `getStats()` da conexão WebRTC (bloco 3); null até a mídia fluir. */
+  audioStats: WebphoneAudioStats | null;
 }
 
 export interface WebphoneState {
@@ -40,6 +44,7 @@ export type WebphoneEvent =
   | { type: 'call_accepted'; id: string; at: number }
   | { type: 'call_ended'; id: string; at: number; cause: string | null }
   | { type: 'call_muted'; id: string; muted: boolean }
+  | { type: 'call_stats'; id: string; stats: WebphoneAudioStats }
   | { type: 'call_cleared'; id: string };
 
 export const initialWebphoneState: WebphoneState = {
@@ -81,6 +86,7 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
           endedAt: null,
           endCause: null,
           muted: false,
+          audioStats: null,
         },
       };
     }
@@ -93,6 +99,9 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
     case 'call_muted':
       if (!state.call || state.call.id !== event.id) return state;
       return { ...state, call: { ...state.call, muted: event.muted } };
+    case 'call_stats':
+      if (!state.call || state.call.id !== event.id) return state;
+      return { ...state, call: { ...state.call, audioStats: event.stats } };
     case 'call_cleared':
       if (!state.call || state.call.id !== event.id) return state;
       return { ...state, call: null };
