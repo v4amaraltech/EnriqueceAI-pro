@@ -1,6 +1,7 @@
 import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { normalizePhone } from '@/lib/utils/phone';
 
 import type {
   Api4ComCallListResponse,
@@ -13,45 +14,117 @@ import {
   findCallWebhookIntegration,
   planCallWebhookRepair,
 } from './api4com-call-webhook';
+import type { Api4ComExtension } from './api4com-extension-sync';
 
-interface Api4ComCredentials {
+export const API4COM_DEFAULT_BASE_URL = 'https://api.api4com.com/api/v1/';
+
+/** Token + base URL da CONTA (vale para todos os ramais da org). */
+export interface Api4ComApiCredentials {
   apiKey: string;
   baseUrl: string;
+}
+
+/** Credencial da conta + ramal de um usuário. */
+export interface Api4ComCredentials extends Api4ComApiCredentials {
   ramal: string;
 }
 
-async function getCredentials(userId: string): Promise<Api4ComCredentials | null> {
-  const supabase = createServiceRoleClient();
+type ServiceClient = ReturnType<typeof createServiceRoleClient>;
 
-  const { data } = (await from(supabase, 'api4com_connections' as never)
-    .select('api_key_encrypted, base_url, ramal')
+export function normalizeBaseUrl(url: string | null | undefined): string {
+  return (url?.trim() || API4COM_DEFAULT_BASE_URL).replace(/\/+$/, '');
+}
+
+/**
+ * Token da organização (`api4com_org_settings`). É a fonte principal desde a
+ * story api4com-embedded-webphone: um token da conta pai (`ttl: -1`) para a
+ * org inteira, em vez de um token por SDR.
+ */
+export async function getOrgSettingsCredentials(
+  orgId: string,
+  client: ServiceClient = createServiceRoleClient(),
+): Promise<Api4ComApiCredentials | null> {
+  const { data } = (await from(client, 'api4com_org_settings' as never)
+    .select('api_key_encrypted, base_url')
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: { api_key_encrypted: string | null; base_url: string | null } | null };
+
+  if (!data?.api_key_encrypted) return null;
+  return { apiKey: decrypt(data.api_key_encrypted), baseUrl: normalizeBaseUrl(data.base_url) };
+}
+
+/**
+ * Credencial da conta para operações por org (reconcile, gravações, webhook):
+ * token da org; se a org ainda não tem, o primeiro token de usuário conectado
+ * (legado — qualquer token da conta enxerga o domínio inteiro).
+ */
+export async function getOrgApiCredentials(
+  orgId: string,
+  client: ServiceClient = createServiceRoleClient(),
+): Promise<Api4ComApiCredentials | null> {
+  const org = await getOrgSettingsCredentials(orgId, client);
+  if (org) return org;
+
+  const { data } = (await from(client, 'api4com_connections' as never)
+    .select('api_key_encrypted, base_url')
+    .eq('org_id', orgId)
+    .eq('status', 'connected')
+    .not('api_key_encrypted', 'is', null)
+    .limit(1)
+    .maybeSingle()) as { data: { api_key_encrypted: string | null; base_url: string | null } | null };
+
+  if (!data?.api_key_encrypted) return null;
+  return { apiKey: decrypt(data.api_key_encrypted), baseUrl: normalizeBaseUrl(data.base_url) };
+}
+
+/**
+ * Credencial + ramal de um usuário: ramal da linha dele em
+ * `api4com_connections`; token da org quando existe, senão o token da própria
+ * linha (legado).
+ */
+export async function getUserCredentials(userId: string): Promise<Api4ComCredentials | null> {
+  const client = createServiceRoleClient();
+
+  const { data } = (await from(client, 'api4com_connections' as never)
+    .select('org_id, api_key_encrypted, base_url, ramal')
     .eq('user_id', userId)
     .eq('status', 'connected')
     .maybeSingle()) as {
-    data: { api_key_encrypted: string | null; base_url: string; ramal: string } | null;
+    data: { org_id: string; api_key_encrypted: string | null; base_url: string | null; ramal: string } | null;
   };
 
-  if (!data?.api_key_encrypted) return null;
+  if (!data?.ramal) return null;
 
+  const org = await getOrgSettingsCredentials(data.org_id, client);
+  if (org) return { ...org, ramal: data.ramal };
+
+  if (!data.api_key_encrypted) return null;
   return {
     apiKey: decrypt(data.api_key_encrypted),
-    baseUrl: data.base_url.replace(/\/$/, ''),
+    baseUrl: normalizeBaseUrl(data.base_url),
     ramal: data.ramal,
   };
 }
 
-async function api4comFetch<T>(
-  creds: Api4ComCredentials,
+interface FetchOptions {
+  timeoutMs?: number;
+  /** Tentativas extras em erro de rede. Zero para operações que não podem repetir (originar chamada). */
+  retries?: number;
+}
+
+export async function api4comFetch<T>(
+  creds: Api4ComApiCredentials,
   method: string,
   path: string,
   body?: Record<string, unknown>,
+  options: FetchOptions = {},
 ): Promise<T> {
   const url = `${creds.baseUrl}${path}`;
-  const TIMEOUT_MS = 10_000;
-  const MAX_RETRIES = 2;
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const maxRetries = options.retries ?? 2;
 
   let lastError: Error | null = null;
-  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       const response = await fetch(url, {
         method,
@@ -60,7 +133,7 @@ async function api4comFetch<T>(
           Authorization: creds.apiKey,
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!response.ok) {
@@ -72,10 +145,10 @@ async function api4comFetch<T>(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const isNetworkError = lastError.message === 'fetch failed' || lastError.name === 'AbortError' || lastError.name === 'TimeoutError';
-      console.warn(`[api4com] ${method} ${path} attempt ${attempt}/${MAX_RETRIES + 1} failed:`, lastError.message);
+      console.warn(`[api4com] ${method} ${path} attempt ${attempt}/${maxRetries + 1} failed:`, lastError.message);
       // Only retry on network errors (not on auth/4xx/5xx from API4COM)
       if (!isNetworkError) break;
-      if (attempt <= MAX_RETRIES) {
+      if (attempt <= maxRetries) {
         await new Promise((r) => setTimeout(r, 500 * attempt));
       }
     }
@@ -89,31 +162,53 @@ async function api4comFetch<T>(
 }
 
 /**
- * Initiate a call via API4COM.
- * Connects the user's extension (ramal) to the given phone number.
+ * `called` do `POST /calls`: E.164 com DDI (`+5548988669122`). Números
+ * nacionais sem DDI (10 ou 11 dígitos) ganham `+55`.
+ */
+export function toApi4ComCalled(phone: string): string {
+  const digits = normalizePhone(phone);
+  if (digits.length < 8) throw new Error('Telefone inválido');
+  if (digits.startsWith('55') && digits.length >= 12) return `+${digits}`;
+  if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
+  return `+${digits}`;
+}
+
+// `POST /calls` só responde depois que o ramal atende (doc API4COM), e o
+// `no_answer_timeout` padrão do ramal é 30 s. Sem retry: repetir um originate
+// que deu timeout poderia discar duas vezes.
+const ORIGINATE_TIMEOUT_MS = 40_000;
+
+/**
+ * Originate a call via API4COM (`POST /calls`): toca o ramal do usuário e, ao
+ * atender, conecta o número. Substitui o `POST /dialer`, descontinuado pela
+ * API4COM — e cujo `id` não batia com o do webhook (daí o worker
+ * `back-associate`). O `id` do `/calls` é o mesmo da lista de chamadas e dos
+ * eventos `channel-answer`/`channel-hangup`.
  */
 export async function originateCall(
   userId: string,
   phone: string,
   metadata?: Record<string, string>,
 ): Promise<{ data: Api4ComOriginateResponse; ramal: string }> {
-  const creds = await getCredentials(userId);
+  const creds = await getUserCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
-  const data = await api4comFetch<Api4ComOriginateResponse>(creds, 'POST', '/dialer', {
-    extension: creds.ramal,
-    phone,
-    metadata: metadata ?? {},
-  });
+  const data = await api4comFetch<Api4ComOriginateResponse>(
+    creds,
+    'POST',
+    '/calls',
+    {
+      extension: creds.ramal,
+      caller: creds.ramal,
+      called: toApi4ComCalled(phone),
+      metadata: metadata ?? {},
+    },
+    { timeoutMs: ORIGINATE_TIMEOUT_MS, retries: 0 },
+  );
 
-  // Diagnostic log to confirm response shape. Webhook payload.id never matches
-  // the .id stored in calls.metadata.api4com_call_id — suspect /dialer returns
-  // a request_id but webhook fires with channel_id. Logging the full response
-  // so we can see if API4COM returns an additional channelId/callId field we
-  // are currently ignoring via the narrow Api4ComOriginateResponse type.
-  // Loga só as CHAVES da resposta (não o payload) — basta para a investigação
-  // do id-mismatch (channelId/callId extra) sem despejar dados da chamada no log.
-  console.warn('[api4com][originate-response] keys:', Object.keys(data ?? {}));
+  if (!data?.id) {
+    throw new Error('API4COM não devolveu o id da chamada');
+  }
 
   return { data, ramal: creds.ramal };
 }
@@ -126,7 +221,7 @@ export async function hangupCall(
   userId: string,
   api4comCallId: string,
 ): Promise<Api4ComHangupResponse> {
-  const creds = await getCredentials(userId);
+  const creds = await getUserCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
   const url = `${creds.baseUrl}/calls/${api4comCallId}/hangup`;
@@ -161,7 +256,7 @@ export async function listCalls(
   page: number = 1,
   filter?: Record<string, unknown>,
 ): Promise<Api4ComCallListResponse> {
-  const creds = await getCredentials(userId);
+  const creds = await getUserCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
   const params = new URLSearchParams({ page: String(page) });
@@ -173,9 +268,21 @@ export async function listCalls(
 }
 
 /**
- * Garante que a conta API4COM do usuário entregue os eventos de ligação:
- * integração gateway `webhook` SEM filtro (cria se faltar; liga/tira filtro se
- * precisar). NUNCA toca em outra integração — ver `planCallWebhookRepair`.
+ * Ramais da conta (`GET /extensions`): número, senha SIP, domínio e e-mail de
+ * cada ramal. É o que permite ligar cada SDR ao seu ramal sem cadastro manual.
+ */
+export async function listExtensions(creds: Api4ComApiCredentials): Promise<Api4ComExtension[]> {
+  const data = await api4comFetch<unknown>(creds, 'GET', '/extensions');
+  if (!Array.isArray(data)) {
+    throw new Error('API4COM devolveu uma lista de ramais inválida');
+  }
+  return data as Api4ComExtension[];
+}
+
+/**
+ * Garante que a conta API4COM entregue os eventos de ligação: integração
+ * gateway `webhook` SEM filtro (cria se faltar; liga/tira filtro se precisar).
+ * NUNCA toca em outra integração — ver `planCallWebhookRepair`.
  *
  * Histórico: de mai a set/2026 esta função fazia PATCH na PRIMEIRA integração
  * da conta, trocando a `webhookUrl` dela pela nossa e filtrando por gateway. Em
@@ -189,10 +296,7 @@ export async function listCalls(
  */
 const WEBHOOK_REGISTER_MAX_ATTEMPTS = 3;
 
-export async function ensureCallWebhook(userId: string): Promise<void> {
-  const creds = await getCredentials(userId);
-  if (!creds) throw new Error('API4COM não configurada para este usuário');
-
+export async function ensureCallWebhookWithCredentials(creds: Api4ComApiCredentials): Promise<void> {
   const target = { webhookUrl: CALL_WEBHOOK_DEFAULT_URL, webhookVersion: CALL_WEBHOOK_DEFAULT_VERSION };
 
   let lastError: unknown;
@@ -221,4 +325,11 @@ export async function ensureCallWebhook(userId: string): Promise<void> {
   throw lastError instanceof Error
     ? lastError
     : new Error('Falha ao configurar a entrega de eventos da API4COM após múltiplas tentativas');
+}
+
+/** Webhook com a credencial do usuário (token da org quando houver). */
+export async function ensureCallWebhook(userId: string): Promise<void> {
+  const creds = await getUserCredentials(userId);
+  if (!creds) throw new Error('API4COM não configurada para este usuário');
+  await ensureCallWebhookWithCredentials(creds);
 }

@@ -100,6 +100,49 @@ export interface Api4ComConnectionSafe {
   updated_at: string;
 }
 
+// API4Com account settings (per org): one token for every ramal of the org.
+export interface Api4ComOrgSettingsSafe {
+  configured: boolean;
+  base_url: string | null;
+  sip_domain: string | null;
+  last_synced_at: string | null;
+}
+
+export interface Api4ComTeamMember {
+  userId: string;
+  name: string;
+  email: string | null;
+  role: 'manager' | 'sdr';
+  ramal: string | null;
+  hasSipPassword: boolean;
+  syncedAt: string | null;
+  /** Token legado cadastrado na própria linha do usuário. */
+  hasOwnToken: boolean;
+}
+
+export interface Api4ComOrgOverview {
+  settings: Api4ComOrgSettingsSafe;
+  team: Api4ComTeamMember[];
+}
+
+export interface Api4ComSyncPerson {
+  name: string;
+  email: string | null;
+}
+
+export interface Api4ComSyncReport {
+  /** Linhas existentes casadas pelo ramal (domínio/senha completados). */
+  linked: Array<Api4ComSyncPerson & { ramal: string }>;
+  /** Usuários que ganharam ramal pelo e-mail. */
+  created: Array<Api4ComSyncPerson & { ramal: string }>;
+  /** Linhas cujo ramal não existe mais na conta. */
+  missing: Array<Api4ComSyncPerson & { ramal: string }>;
+  /** Mais de um ramal para o e-mail — o gestor escolhe. */
+  ambiguous: Array<Api4ComSyncPerson & { ramais: string[] }>;
+  /** Sem ramal na conta (ou sem e-mail). */
+  unmatched: Api4ComSyncPerson[];
+}
+
 // Apollo connection (per org)
 export interface ApolloConnectionSafe {
   id: string;

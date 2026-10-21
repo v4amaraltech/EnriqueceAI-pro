@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-import { decrypt } from '@/lib/security/encryption';
 import { verifyRecordingToken } from '@/lib/security/recording-token';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
+import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 
 // Recording hosts we're willing to proxy. recording_url originates from the
 // API4COM webhook payload (external), so without this allowlist proxyAudio would
@@ -119,20 +119,11 @@ async function refetchFromApi4com(
     duration_seconds: number;
   },
 ): Promise<string | null> {
-  // Get API4COM credentials
-  const { data: conn } = (await from(supabase, 'api4com_connections' as never)
-    .select('api_key_encrypted, base_url')
-    .eq('org_id', call.org_id)
-    .eq('status', 'connected')
-    .limit(1)
-    .maybeSingle()) as {
-    data: { api_key_encrypted: string; base_url: string } | null;
-  };
+  // Credential of the account: org token, else any legacy user token of the org.
+  const creds = await getOrgApiCredentials(call.org_id, supabase);
+  if (!creds) return null;
 
-  if (!conn?.api_key_encrypted) return null;
-
-  const apiKey = decrypt(conn.api_key_encrypted);
-  const baseUrl = conn.base_url.replace(/\/$/, '');
+  const { apiKey, baseUrl } = creds;
   const api4comCallId = call.metadata?.api4com_call_id;
 
   for (let page = 1; page <= 5; page++) {

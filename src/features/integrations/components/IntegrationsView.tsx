@@ -31,7 +31,7 @@ import { checkFeature } from '@/features/billing/services/feature-flags';
 import { WhatsAppGlyph } from '@/features/whatsapp-calls/components/WhatsAppGlyph';
 import { MyWhatsAppCallRow } from '@/features/whatsapp-calls/components/MyWhatsAppCallRow';
 import type { MyWhatsAppNumber } from '@/features/whatsapp-calls/components/MyWhatsAppNumberCard';
-import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, CrmProvider, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
+import type { Api4ComConnectionSafe, Api4ComOrgOverview, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, CrmProvider, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { getCrmAuthUrl, disconnectCrm, triggerCrmSync } from '../actions/manage-crm';
 import { disconnectApi4Com } from '../actions/manage-api4com';
@@ -42,6 +42,7 @@ import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
 import { WebhookEndpointsManager } from '@/features/cadences/components/WebhookEndpointsManager';
 
 import { Api4ComConfigModal } from './Api4ComConfigModal';
+import { Api4ComOrgCard } from './Api4ComOrgCard';
 import { ApolloConfigModal } from './ApolloConfigModal';
 import { CrmFieldMappingModal } from './CrmFieldMappingModal';
 import { RdStationTokenModal } from './RdStationTokenModal';
@@ -54,6 +55,8 @@ interface IntegrationsViewProps {
   crmConnections: CrmConnectionSafe[];
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
+  /** Token da conta + ramal de cada pessoa do time. Só para gestores. */
+  api4comOrg?: Api4ComOrgOverview | null;
   evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
   apollo: ApolloConnectionSafe | null;
   planFeatures: PlanFeatures;
@@ -87,7 +90,7 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
   );
 }
 
-export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, evolutionInstance, apollo, planFeatures, isManager, myWhatsAppCall }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, api4comOrg = null, evolutionInstance, apollo, planFeatures, isManager, myWhatsAppCall }: IntegrationsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -276,7 +279,7 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             <div className="w-32 shrink-0 font-medium">API4Com</div>
             <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               {api4com
-                ? `Ramal ${api4com.ramal} \u00b7 Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`
+                ? `Ramal ${api4com.ramal} \u00b7 ${api4comOrg?.settings.configured && !api4com.has_api_key ? 'via conta da organiza\u00e7\u00e3o' : `Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`}`
                 : 'Integração automática com sistema de ligações'}
             </div>
             {api4com && <StatusBadge status={api4com.status} />}
@@ -323,6 +326,9 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               )}
             </div>
           </div>
+
+          {/* API4Com — conta da organização (token único + ramais do time). Gestor. */}
+          {isManager && api4comOrg && <Api4ComOrgCard overview={api4comOrg} />}
 
           {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7).
               Gestor: gerencia os números de todos os SDRs.
