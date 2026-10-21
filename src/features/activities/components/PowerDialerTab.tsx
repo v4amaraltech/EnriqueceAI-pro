@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { Pause, Phone, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +16,12 @@ import {
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import {
+  clearWebphoneCallContext,
+  onWebphoneConcludeRequested,
+  releaseWebphoneCallOwner,
+  setWebphoneCallContext,
+} from '@/features/integrations/webphone/webphone-call-context';
 import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 
@@ -67,6 +73,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   );
 
   function resetCallState() {
+    if (callId) clearWebphoneCallContext(callId);
     setCallState('idle');
     setCallId(null);
     setProviderCallId(null);
@@ -83,6 +90,26 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     isActive: isInCall,
     onHangup: handleRemoteHangup,
   });
+
+  // "Concluir" no painel flutuante do webphone → este painel vai para o
+  // resultado sem esperar o webhook. Ao desmontar no meio da ligação, o
+  // painel flutuante assume o resultado.
+  useEffect(() => {
+    if (!callId) return;
+    return onWebphoneConcludeRequested((detail) => {
+      if (detail.callId === callId) handleRemoteHangup(detail.durationSeconds);
+    });
+  }, [callId, handleRemoteHangup]);
+  const activeCallIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeCallIdRef.current = callState !== 'idle' ? callId : null;
+  }, [callId, callState]);
+  useEffect(
+    () => () => {
+      if (activeCallIdRef.current) releaseWebphoneCallOwner(activeCallIdRef.current);
+    },
+    [],
+  );
 
   function handleStart() {
     setIsActive(true);
@@ -149,6 +176,15 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       setProviderCallId(result.data.providerCallId);
       setCallState('connected');
       inFlightRef.current = false;
+
+      setWebphoneCallContext({
+        callId: result.data.callId,
+        providerCallId: result.data.providerCallId,
+        leadId: currentItem?.leadId ?? null,
+        leadName: currentItem?.leadName ?? null,
+        phone: phoneToCall,
+        ownerHandlesResult: true,
+      });
     });
   }
 

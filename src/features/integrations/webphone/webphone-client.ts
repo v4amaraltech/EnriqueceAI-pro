@@ -6,6 +6,7 @@
 // a API4COM manda o INVITE para o ramal com `X-Api4comintegratedcall: true`
 // e a página atende sozinha. Sem extensão do Chrome.
 
+import { summarizeRtcStats } from './webphone-audio-stats';
 import {
   INTEGRATED_CALL_HEADER,
   initialWebphoneState,
@@ -28,6 +29,12 @@ import type { UA } from 'jssip/lib/UA';
 
 const SIP_WSS_PORT = 6443;
 const ENDED_CALL_CLEAR_MS = 2500;
+// Amostra de `getStats()` a cada poucos segundos durante a conversa: quando o
+// OUTRO lado desliga, a RTCPeerConnection já está fechada no evento `ended` e
+// `getStats()` não responde mais — fica valendo a última amostra.
+const STATS_SAMPLE_MS = 5000;
+// Ao desligar daqui, esperamos no máximo isto por uma amostra final antes do BYE.
+const STATS_FINAL_TIMEOUT_MS = 400;
 
 let state: WebphoneState = initialWebphoneState;
 const listeners = new Set<() => void>();
@@ -35,6 +42,8 @@ let ua: UA | null = null;
 let activeSession: RTCSession | null = null;
 let activeCallId: string | null = null;
 let remoteAudio: HTMLAudioElement | null = null;
+let activePeerConnection: RTCPeerConnection | null = null;
+let statsTimer: number | null = null;
 let callSeq = 0;
 // Geração do start: um stop (ou um novo start) invalida um start ainda em
 // andamento — o StrictMode do React monta/desmonta duas vezes em dev.
@@ -91,9 +100,34 @@ function clearEndedCallLater(id: string): void {
     if (activeCallId === id) {
       activeSession = null;
       activeCallId = null;
+      activePeerConnection = null;
     }
     dispatch({ type: 'call_cleared', id });
   }, ENDED_CALL_CLEAR_MS);
+}
+
+/** Lê `getStats()` da conexão ativa e publica o resumo no estado. Nunca lança. */
+async function sampleAudioStats(id: string): Promise<void> {
+  const pc = activePeerConnection;
+  if (!pc || activeCallId !== id || pc.connectionState === 'closed') return;
+  try {
+    const stats = summarizeRtcStats(await pc.getStats());
+    if (stats && activeCallId === id) dispatch({ type: 'call_stats', id, stats });
+  } catch (err) {
+    console.warn('[webphone] getStats failed:', err);
+  }
+}
+
+function startStatsSampling(id: string): void {
+  stopStatsSampling();
+  statsTimer = window.setInterval(() => void sampleAudioStats(id), STATS_SAMPLE_MS);
+}
+
+function stopStatsSampling(): void {
+  if (statsTimer !== null) {
+    window.clearInterval(statsTimer);
+    statsTimer = null;
+  }
 }
 
 function handleNewSession(session: RTCSession, request: IncomingRequest | OutgoingRequest): void {
@@ -123,6 +157,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   });
 
   session.on('peerconnection', ({ peerconnection }) => {
+    activePeerConnection = peerconnection;
     peerconnection.addEventListener('track', (ev: RTCTrackEvent) => {
       const stream = ev.streams[0] ?? new MediaStream([ev.track]);
       attachRemoteStream(stream);
@@ -131,10 +166,12 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   session.on('accepted', () => dispatch({ type: 'call_accepted', id, at: Date.now() }));
   session.on('confirmed', () => {
     if (state.call?.id === id && state.call.phase === 'ringing') dispatch({ type: 'call_accepted', id, at: Date.now() });
+    startStatsSampling(id);
   });
   session.on('muted', () => dispatch({ type: 'call_muted', id, muted: true }));
   session.on('unmuted', () => dispatch({ type: 'call_muted', id, muted: false }));
   const onEnd = (e: { cause?: string }) => {
+    stopStatsSampling();
     dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null });
     clearEndedCallLater(id);
   };
@@ -189,6 +226,8 @@ export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
 
 export function stopWebphone(): void {
   startGeneration++;
+  stopStatsSampling();
+  activePeerConnection = null;
   if (activeSession) {
     try {
       activeSession.terminate();
@@ -218,10 +257,21 @@ export function answerCall(): void {
   }
 }
 
-export function hangupCall(): void {
-  if (!activeSession || !state.call || state.call.phase === 'ended') return;
+/**
+ * Desliga a perna do ramal. Antes do BYE tenta uma amostra final de
+ * `getStats()` (até STATS_FINAL_TIMEOUT_MS): o `terminate()` fecha a
+ * RTCPeerConnection na hora e depois disso não há mais estatísticas.
+ */
+export async function hangupCall(): Promise<void> {
+  const session = activeSession;
+  const call = state.call;
+  if (!session || !call || call.phase === 'ended') return;
+  if (call.phase === 'in-call') {
+    await Promise.race([sampleAudioStats(call.id), new Promise<void>((r) => window.setTimeout(r, STATS_FINAL_TIMEOUT_MS))]);
+  }
+  if (activeSession !== session || state.call?.phase === 'ended') return;
   try {
-    activeSession.terminate();
+    session.terminate();
   } catch (err) {
     console.error('[webphone] hangup failed:', err);
   }
