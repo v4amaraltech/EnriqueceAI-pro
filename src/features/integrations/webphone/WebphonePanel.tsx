@@ -26,7 +26,9 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
+import { useWebphoneLeadAnswer } from './useWebphoneLeadAnswer';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
+import type { LeadAnswer } from './webphone-lead-answer';
 import {
   clearWebphoneCallContext,
   contextMatchesCall,
@@ -58,6 +60,11 @@ import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webpho
  * discador já não está montado (ou a ligação veio do detalhe do lead, que não
  * tem modal), o painel abre o próprio `CallResultModal` e grava por
  * `classifyWebphoneCall`, como os discadores fazem.
+ *
+ * "Atendida" aqui é do LEAD, não do ramal: a página atende o INVITE da API4COM
+ * na hora, então o cliente SIP sempre vê a chamada como atendida. Quem diz se o
+ * lead atendeu é o webhook (`useWebphoneLeadAnswer`), consultado enquanto a
+ * ligação está no painel.
  */
 
 const REGISTRATION_LABEL: Record<WebphoneState['registration'], { text: string; dot: string }> = {
@@ -99,6 +106,16 @@ function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext |
   };
 }
 
+/**
+ * Sinal de "atendida" para o painel e o modal: a palavra do webhook vale mais
+ * que a do cliente SIP; sem webhook ainda, cai no atendimento do ramal.
+ */
+export function leadConnected(leadAnswer: LeadAnswer, ramalAnswered: boolean): boolean {
+  if (leadAnswer === 'answered') return true;
+  if (leadAnswer === 'not_answered') return false;
+  return ramalAnswered;
+}
+
 function viewportSize() {
   return { width: window.innerWidth, height: window.innerHeight };
 }
@@ -110,6 +127,7 @@ export function WebphonePanel() {
   const liveCall = webphone.call && webphone.call.phase !== 'ended' ? webphone.call : null;
   // Contexto que de fato pertence à ligação em andamento (um esquecido não conta).
   const liveCallContext = liveCall && contextMatchesCall(ctxState.context, liveCall) ? ctxState.context : null;
+  const liveContextCallId = liveCallContext?.callId ?? null;
 
   // A ligação acabou de encerrar: congela a fotografia dela até o SDR concluir.
   // Ajuste durante o render (padrão do React para derivar estado de uma prop)
@@ -137,6 +155,8 @@ export function WebphonePanel() {
 
   // Contexto vivo da ligação fotografada (o dono pode ter liberado ou limpado).
   const finishedCallId = stage.kind === 'idle' ? null : stage.call.context?.callId ?? null;
+  // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.)
+  const leadAnswer = useWebphoneLeadAnswer(liveContextCallId ?? finishedCallId);
   const liveContext = finishedCallId && ctxState.context?.callId === finishedCallId ? ctxState.context : null;
 
   // O discador dono concluiu (ou fechou) o modal dele e limpou o contexto:
@@ -230,12 +250,13 @@ export function WebphonePanel() {
           <LiveCallView
             call={liveCall}
             context={liveCallContext}
+            leadAnswer={leadAnswer}
             notes={ctxState.notes}
             onNotesChange={setWebphoneCallNotes}
             onHangup={handleHangup}
           />
         ) : stage.kind === 'finished' ? (
-          <FinishedView call={stage.call} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
+          <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
         ) : stage.kind === 'rating' ? (
           <RatingView onRate={(stars) => handleRate(stage.call, stars)} />
         ) : stage.kind === 'result' ? (
@@ -256,7 +277,8 @@ export function WebphonePanel() {
           leadId={resultCall.context.leadId ?? undefined}
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
           durationSeconds={resultCall.talkSeconds}
-          connected={resultCall.answered}
+          connected={leadConnected(leadAnswer, resultCall.answered)}
+          dismissible={false}
           initialNotes={ctxState.notes}
           onConclude={(args) => handleOwnResult(resultCall, args)}
         />
@@ -396,12 +418,14 @@ function IdlePill({ state }: { state: WebphoneState }) {
 function LiveCallView({
   call,
   context,
+  leadAnswer,
   notes,
   onNotesChange,
   onHangup,
 }: {
   call: WebphoneCall;
   context: WebphoneCallContext | null;
+  leadAnswer: LeadAnswer;
   notes: string;
   onNotesChange: (notes: string) => void;
   onHangup: () => void;
@@ -414,9 +438,13 @@ function LiveCallView({
     return () => window.clearInterval(t);
   }, [inCall]);
 
+  // Ramal atendido pela página ≠ lead atendeu: até o webhook confirmar, a
+  // ligação integrada continua "chamando" o lead.
   const title =
     call.phase === 'in-call'
-      ? 'Em ligação'
+      ? call.integrated && leadAnswer !== 'answered'
+        ? 'Chamando o lead…'
+        : 'Em ligação'
       : call.integrated || call.direction === 'outgoing'
         ? 'Chamando…'
         : 'Chamada recebida';
@@ -458,11 +486,13 @@ function LiveCallView({
 
 function FinishedView({
   call,
+  leadAnswer,
   notes,
   onNotesChange,
   onConclude,
 }: {
   call: FinishedCall;
+  leadAnswer: LeadAnswer;
   notes: string;
   onNotesChange: (notes: string) => void;
   onConclude: () => void;
@@ -478,7 +508,7 @@ function FinishedView({
           {name && number && <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>}
         </div>
         <p className="shrink-0 text-right font-mono text-lg tabular-nums">
-          {call.answered ? formatDuration(call.talkSeconds) : <span className="text-sm text-amber-600">Não atendida</span>}
+          {leadConnected(leadAnswer, call.answered) ? formatDuration(call.talkSeconds) : <span className="text-sm text-amber-600">Não atendida</span>}
         </p>
       </div>
       <NotesField notes={notes} onChange={onNotesChange} autoFocus />

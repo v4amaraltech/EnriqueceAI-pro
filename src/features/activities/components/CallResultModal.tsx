@@ -98,6 +98,13 @@ export interface CallResultModalProps {
    * webphone). Entram no campo quando o modal abre; o SDR pode editar.
    */
   initialNotes?: string;
+  /**
+   * `false` trava o fechamento acidental: clique fora e Esc não fecham o modal
+   * (só "Concluir" ou o × do cabeçalho). O painel flutuante do webphone usa,
+   * porque fica visível atrás do modal e um clique nele descartava o resultado
+   * sem gravar anotações nem desfecho.
+   */
+  dismissible?: boolean;
   isSending?: boolean;
   /** Quando presente, mostra "Ligar de novo". Recebe as anotações atuais — o
    *  consumidor registra a tentativa com elas e RE-DISCA na hora (o SDR liga
@@ -139,6 +146,7 @@ export function CallResultModal({
   durationSeconds,
   connected,
   initialNotes = '',
+  dismissible = true,
   isSending = false,
   onRetry,
   onLeadLost,
@@ -201,7 +209,11 @@ export function CallResultModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+        onInteractOutside={dismissible ? undefined : (e) => e.preventDefault()}
+        onEscapeKeyDown={dismissible ? undefined : (e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Resultado da Ligação</DialogTitle>
           {/* Descrição obrigatória para leitores de tela — sem ela o Radix

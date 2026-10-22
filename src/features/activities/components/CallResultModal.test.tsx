@@ -149,3 +149,26 @@ describe('CallResultModal', () => {
     });
   });
 });
+
+describe('dismissible={false} — fechamento só pelo Concluir ou pelo ×', () => {
+  it('Esc não fecha', async () => {
+    const user = userEvent.setup();
+    const { props } = renderModal({ connected: true, dismissible: false });
+    await user.keyboard('{Escape}');
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('o × do cabeçalho continua fechando', async () => {
+    const user = userEvent.setup();
+    const { props } = renderModal({ connected: true, dismissible: false });
+    await user.click(screen.getByRole('button', { name: /Close/ }));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('padrão (dismissible) → Esc fecha', async () => {
+    const user = userEvent.setup();
+    const { props } = renderModal({ connected: true });
+    await user.keyboard('{Escape}');
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+});
