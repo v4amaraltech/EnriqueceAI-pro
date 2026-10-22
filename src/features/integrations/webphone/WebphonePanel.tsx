@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Mic, MicOff, Phone, PhoneOff, Star } from 'lucide-react';
+import { GripVertical, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -56,12 +56,14 @@ import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webpho
  * posição lembrada em `localStorage`; sem ligação some da tela — só fica um
  * pill pequeno se o registro SIP deu erro ou o microfone está bloqueado.
  *
- * Quem iniciou a ligação (fila de atividades, Power Dialer) continua dono do
- * resultado: ao "Concluir" aqui, o painel só pede a esse discador para abrir o
- * `CallResultModal` dele, com as anotações daqui pré-preenchidas. Se o
- * discador já não está montado (ou a ligação veio do detalhe do lead, que não
- * tem modal), o painel abre o próprio `CallResultModal` e grava por
- * `classifyWebphoneCall`, como os discadores fazem.
+ * Ao desligar não há tela intermediária nem avaliação de áudio (decisão do
+ * Vini, 22/10/2026: "muito clique pro SDR"). Quem iniciou a ligação (fila de
+ * atividades, Power Dialer) continua dono do resultado: o painel avisa esse
+ * discador na hora e ele abre o `CallResultModal` dele, com as anotações daqui
+ * pré-preenchidas. Se o discador já não está montado (ou a ligação veio do
+ * detalhe do lead, que não tem modal), o painel abre o próprio
+ * `CallResultModal` e grava por `classifyWebphoneCall`. A coleta de
+ * `audio_stats` (getStats) continua, sem clique.
  *
  * "Atendida" aqui é do LEAD, não do ramal: a página atende o INVITE da API4COM
  * na hora, então o cliente SIP sempre vê a chamada como atendida. Quem diz se o
@@ -79,6 +81,12 @@ const REGISTRATION_LABEL: Record<WebphoneState['registration'], { text: string; 
 
 const DRAGGABLE_ID = 'webphone-panel';
 
+/**
+ * Espera pelo contexto quando a ligação acaba antes de o `POST /calls`
+ * responder (falha muito rápida): depois disso o painel desiste e some.
+ */
+export const LATE_CONTEXT_WAIT_MS = 3_000;
+
 /** Fotografia da ligação no momento em que acabou; sobrevive ao `call_cleared` do cliente. */
 interface FinishedCall {
   id: string;
@@ -86,6 +94,8 @@ interface FinishedCall {
   answered: boolean;
   talkSeconds: number;
   audioStats: WebphoneAudioStats | null;
+  /** Quando o INVITE chegou — casa um contexto publicado depois do fim. */
+  startedAt: number;
   /** Contexto conhecido quando acabou (pode ser null: inbound sem `initiateCall`). */
   context: WebphoneCallContext | null;
 }
@@ -93,9 +103,10 @@ interface FinishedCall {
 type PanelStage =
   /** `doneCallId`: última ligação já concluída aqui — o cliente ainda a mostra como `ended` por ~2,5 s. */
   | { kind: 'idle'; doneCallId: string | null }
+  /** A ligação acabou e o painel está decidindo o destino (invisível, instantâneo ou até 3 s). */
   | { kind: 'finished'; call: FinishedCall }
-  | { kind: 'result'; call: FinishedCall }
-  | { kind: 'rating'; call: FinishedCall };
+  /** Resultado registrado pelo próprio painel (`CallResultModal`). */
+  | { kind: 'result'; call: FinishedCall };
 
 function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext | null): FinishedCall {
   return {
@@ -104,6 +115,7 @@ function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext |
     answered: call.answeredAt !== null,
     talkSeconds: callTalkSeconds(call, call.endedAt ?? Date.now()),
     audioStats: call.audioStats,
+    startedAt: call.startedAt,
     context: contextMatchesCall(context, call) ? context : null,
   };
 }
@@ -145,29 +157,60 @@ export function WebphonePanel() {
       .catch((err: unknown) => console.warn('[webphone] audio_stats not saved:', err));
   }, [stage]);
 
-  // Contexto vivo da ligação fotografada (o dono pode ter liberado ou limpado).
+  // Ligação fotografada no fim (decidindo o destino ou no resultado do painel).
   const finishedCallId = stage.kind === 'idle' ? null : stage.call.context?.callId ?? null;
   // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.)
   const leadAnswer = useWebphoneLeadAnswer(liveContextCallId ?? finishedCallId);
-  const liveContext = finishedCallId && ctxState.context?.callId === finishedCallId ? ctxState.context : null;
-
-  // O discador dono concluiu (ou fechou) o modal dele e limpou o contexto:
-  // o painel pula direto para a avaliação opcional (ajuste durante o render).
-  if (stage.kind === 'finished' && finishedCallId && !liveContext) {
-    setStage({ kind: 'rating', call: stage.call });
-  }
-  // Ninguém atendeu: não houve conversa, não há áudio para avaliar. Vale também
-  // quando o sinal da API4COM chega com a avaliação já na tela (discagem
-  // automática conclui sozinha e segue para o próximo).
-  if (stage.kind === 'rating' && leadAnswer === 'not_answered') {
-    setStage({ kind: 'idle', doneCallId: stage.call.id });
-  }
 
   const finish = useCallback((call: FinishedCall) => {
     if (call.context) clearWebphoneCallContext(call.context.callId);
     else setWebphoneCallNotes('');
     setStage({ kind: 'idle', doneCallId: call.id });
   }, []);
+
+  /**
+   * A ligação acabou: decide o destino sem pedir clique. Devolve `false` só
+   * quando ainda não há contexto (o `POST /calls` pode responder depois do fim).
+   */
+  const onCallFinished = useEffectEvent((call: FinishedCall): boolean => {
+    const live = ctxState.context;
+    let ctx: WebphoneCallContext | null;
+    if (call.context) {
+      // Vale o contexto vivo: o dono pode ter liberado o resultado (desmontou)
+      // ou já concluído e limpado (aí não há mais nada a fazer aqui).
+      ctx = live && live.callId === call.context.callId ? live : null;
+      if (!ctx) {
+        setStage({ kind: 'idle', doneCallId: call.id });
+        return true;
+      }
+    } else {
+      ctx = contextMatchesCall(live, call) ? live : null;
+      if (!ctx) return false;
+    }
+
+    if (ctx.ownerHandlesResult) {
+      // O discador dono abre o modal dele; as anotações seguem no store para
+      // ele e é ele quem limpa o contexto ao concluir ou fechar.
+      requestWebphoneConclude({
+        callId: ctx.callId,
+        durationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
+        notes: ctxState.notes,
+      });
+      setStage({ kind: 'idle', doneCallId: call.id });
+      return true;
+    }
+    setStage({ kind: 'result', call: { ...call, context: ctx } });
+    return true;
+  });
+
+  useEffect(() => {
+    if (stage.kind !== 'finished') return;
+    const { call } = stage;
+    if (onCallFinished(call)) return;
+    // Sem linha em `calls` (inbound real, ou contexto que não chegou): some.
+    const t = window.setTimeout(() => finish(call), LATE_CONTEXT_WAIT_MS);
+    return () => window.clearTimeout(t);
+  }, [stage, ctxState.context, finish]);
 
   function handleHangup() {
     void hangupWebphoneLeg();
@@ -181,26 +224,6 @@ export function WebphonePanel() {
         })
         .catch((err: unknown) => console.warn('[webphone] hangupApi4ComCall failed:', err));
     }
-  }
-
-  function handleConclude() {
-    if (stage.kind !== 'finished') return;
-    const { call } = stage;
-    if (liveContext?.ownerHandlesResult) {
-      requestWebphoneConclude({
-        callId: liveContext.callId,
-        durationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
-        notes: ctxState.notes,
-      });
-      setStage({ kind: 'rating', call });
-      return;
-    }
-    if (liveContext) {
-      setStage({ kind: 'result', call });
-      return;
-    }
-    // Sem linha em `calls` (inbound que não passou por initiateCall): nada a classificar.
-    finish(call);
   }
 
   function handleOwnResult(call: FinishedCall, args: { notes: string; returnSchedule: { scheduledAt: string; channel: 'phone' | 'whatsapp' | 'email'; callProvider: 'whatsapp' | null } | null; outcome: Parameters<typeof classifyWebphoneCall>[0]['sdrOutcome'] }) {
@@ -227,20 +250,7 @@ export function WebphonePanel() {
       }).catch((err: unknown) => console.error('[webphone] scheduleActivity failed:', err));
     }
     clearWebphoneCallContext(ctx.callId);
-    setStage({ kind: 'rating', call });
-  }
-
-  function handleRate(call: FinishedCall, stars: number | null) {
-    const callId = call.context?.callId;
-    if (stars !== null && callId) {
-      saveWebphoneCallAudio({ callId, audioQuality: stars })
-        .then((r) => {
-          if (r.success) toast.success('Obrigado! Avaliação do áudio registrada.');
-          else toast.error(r.error);
-        })
-        .catch((err: unknown) => console.error('[webphone] saveWebphoneCallAudio failed:', err));
-    }
-    finish(call);
+    setStage({ kind: 'idle', doneCallId: call.id });
   }
 
   const resultCall = stage.kind === 'result' ? stage.call : null;
@@ -249,12 +259,13 @@ export function WebphonePanel() {
   const host = useWebphonePanelHost();
 
   // Sem ligação o painel some (como no CRM da matriz): só aparece quando o SDR
-  // liga. O pill parado fica apenas para problema que impede ligar.
-  const idle = !liveCall && stage.kind === 'idle';
+  // liga. O pill parado fica apenas para problema que impede ligar. Depois do
+  // fim não há tela própria: o resultado é a janela do discador (ou do painel).
   const idleProblem = webphone.registration === 'error' || webphone.mic === 'denied';
+  const showPanel = liveCall !== null || idleProblem;
 
   const shell = (
-    <DraggableShell compact={idle}>
+    <DraggableShell compact={!liveCall}>
       {liveCall ? (
         <LiveCallView
           call={liveCall}
@@ -264,12 +275,6 @@ export function WebphonePanel() {
           onNotesChange={setWebphoneCallNotes}
           onHangup={handleHangup}
         />
-      ) : stage.kind === 'finished' ? (
-        <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
-      ) : stage.kind === 'rating' ? (
-        <RatingView onRate={(stars) => handleRate(stage.call, stars)} />
-      ) : stage.kind === 'result' ? (
-        <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
       ) : (
         <IdlePill state={webphone} />
       )}
@@ -278,15 +283,12 @@ export function WebphonePanel() {
 
   return (
     <>
-      {idle && !idleProblem ? null : host ? createPortal(shell, host) : shell}
+      {!showPanel ? null : host ? createPortal(shell, host) : shell}
 
       {resultCall?.context && (
         <CallResultModal
           open
-          onClose={() => {
-            clearWebphoneCallContext(resultCall.context!.callId);
-            setStage({ kind: 'rating', call: resultCall });
-          }}
+          onClose={() => finish(resultCall)}
           leadName={resultCall.context.leadName ?? resultCall.remoteNumber ?? 'Lead'}
           leadId={resultCall.context.leadId ?? undefined}
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
@@ -498,41 +500,6 @@ function LiveCallView({
   );
 }
 
-function FinishedView({
-  call,
-  leadAnswer,
-  notes,
-  onNotesChange,
-  onConclude,
-}: {
-  call: FinishedCall;
-  leadAnswer: LeadAnswer;
-  notes: string;
-  onNotesChange: (notes: string) => void;
-  onConclude: () => void;
-}) {
-  const name = call.context?.leadName ?? null;
-  const number = call.context?.phone ?? call.remoteNumber;
-  return (
-    <>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">Ligação finalizada</p>
-          <p className="truncate font-medium">{name ?? (number || 'Número desconhecido')}</p>
-          {name && number && <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>}
-        </div>
-        <p className="shrink-0 text-right font-mono text-lg tabular-nums">
-          {leadConnected(leadAnswer, call.answered) ? formatDuration(call.talkSeconds) : <span className="text-sm text-amber-600">Não atendida</span>}
-        </p>
-      </div>
-      <NotesField notes={notes} onChange={onNotesChange} autoFocus />
-      <Button size="sm" className="w-full" onClick={onConclude}>
-        Concluir
-      </Button>
-    </>
-  );
-}
-
 function NotesField({ notes, onChange, autoFocus }: { notes: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   return (
     <Textarea
@@ -543,41 +510,5 @@ function NotesField({ notes, onChange, autoFocus }: { notes: string; onChange: (
       aria-label="Anotações da ligação"
       autoFocus={autoFocus}
     />
-  );
-}
-
-function RatingView({ onRate }: { onRate: (stars: number | null) => void }) {
-  const [hover, setHover] = useState(0);
-  const [value, setValue] = useState(0);
-  const shown = hover || value;
-  return (
-    <>
-      <p className="text-sm font-medium">Como estava a qualidade do áudio?</p>
-      <div className="flex items-center justify-center gap-1" role="radiogroup" aria-label="Qualidade do áudio">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={value === n}
-            aria-label={`${n} ${n === 1 ? 'estrela' : 'estrelas'}`}
-            className="rounded p-1 transition-transform hover:scale-110"
-            onMouseEnter={() => setHover(n)}
-            onMouseLeave={() => setHover(0)}
-            onClick={() => setValue(n)}
-          >
-            <Star className={cn('h-6 w-6', n <= shown ? 'fill-amber-400 text-amber-400' : 'text-[var(--muted-foreground)]')} />
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <Button size="sm" variant="ghost" className="flex-1" onClick={() => onRate(null)}>
-          Pular
-        </Button>
-        <Button size="sm" className="flex-1" disabled={value === 0} onClick={() => onRate(value)}>
-          Enviar
-        </Button>
-      </div>
-    </>
   );
 }

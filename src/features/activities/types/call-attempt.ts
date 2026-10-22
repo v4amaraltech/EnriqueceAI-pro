@@ -52,3 +52,12 @@ export function formatAggregatedNotes(attempts: CallAttempt[]): string {
     .map((a) => `[Tentativa ${a.attemptNumber}] ${a.phone} - [${statusLabel(a.status)}] ${a.notes} (${a.durationSeconds}s)`)
     .join('\n');
 }
+
+/**
+ * As anotações agregadas têm texto escrito pelo SDR? `formatAggregatedNotes`
+ * sempre gera marcações ("[]", "[Tentativa 1] número - []  (0s)") mesmo sem
+ * nada digitado; isto ignora marcações, números, durações e espaços.
+ */
+export function hasWrittenNotes(aggregated: string): boolean {
+  return aggregated.replace(/\[[^\]]*\]|\(\d+s\)|[+\d\s()-]/g, '') !== '';
+}

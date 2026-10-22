@@ -32,6 +32,7 @@ import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/web
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import { completeDialerCall } from '../actions/complete-dialer-call';
+import { hasWrittenNotes } from '../types/call-attempt';
 import {
   AUTO_DIAL_ANSWER_TIMEOUT_MS,
   findNextAutoDialIndex,
@@ -441,9 +442,13 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   function handleComplete(callStatus: string, notes: string, durationSeconds: number) {
     const wasAwaitingSdr = auto.phase === 'awaiting-sdr';
+    // O painel flutuante não tem mais tela própria depois da ligação: o que o
+    // SDR anotou nele durante a conversa entra quando o formulário daqui não tem
+    // texto (ele sempre traz as marcações das tentativas, ex.: "[]").
+    const panelNotes = getWebphoneCallContextState().notes.trim();
     void completeCurrent({
       callStatus,
-      notes,
+      notes: !hasWrittenNotes(notes) && panelNotes ? `${notes} ${panelNotes}`.trim() : notes,
       durationSeconds,
       // Não atendida pela API4COM: o desfecho já é sabido.
       sdrOutcome: leadAnswer === 'not_answered' ? 'no_answer' : undefined,
