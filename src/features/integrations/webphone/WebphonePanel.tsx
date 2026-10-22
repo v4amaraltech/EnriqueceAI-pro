@@ -53,8 +53,8 @@ import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webpho
  *
  * Vive no layout `(app)` e por isso continua na tela quando o SDR troca de
  * página no meio da ligação. Arrastável pelo cabeçalho (`@dnd-kit/core`), com a
- * posição lembrada em `localStorage`; sem ligação vira um pill pequeno com o
- * status do registro SIP.
+ * posição lembrada em `localStorage`; sem ligação some da tela — só fica um
+ * pill pequeno se o registro SIP deu erro ou o microfone está bloqueado.
  *
  * Quem iniciou a ligação (fila de atividades, Power Dialer) continua dono do
  * resultado: ao "Concluir" aqui, o painel só pede a esse discador para abrir o
@@ -248,8 +248,13 @@ export function WebphonePanel() {
   // o painel se desenha dentro dela, senão ficaria escondido e inacessível.
   const host = useWebphonePanelHost();
 
+  // Sem ligação o painel some (como no CRM da matriz): só aparece quando o SDR
+  // liga. O pill parado fica apenas para problema que impede ligar.
+  const idle = !liveCall && stage.kind === 'idle';
+  const idleProblem = webphone.registration === 'error' || webphone.mic === 'denied';
+
   const shell = (
-    <DraggableShell compact={!liveCall && stage.kind === 'idle'}>
+    <DraggableShell compact={idle}>
       {liveCall ? (
         <LiveCallView
           call={liveCall}
@@ -273,7 +278,7 @@ export function WebphonePanel() {
 
   return (
     <>
-      {host ? createPortal(shell, host) : shell}
+      {idle && !idleProblem ? null : host ? createPortal(shell, host) : shell}
 
       {resultCall?.context && (
         <CallResultModal
