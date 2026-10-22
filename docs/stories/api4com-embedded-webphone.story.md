@@ -278,11 +278,11 @@ Na fila de atividades o painel flutuante não aparecia durante a ligação: a ta
 - A linha do SDR em `api4com_connections` criada pelo sync nasce com `api_key_encrypted = null` e `base_url` da org.
 - `GET /extensions` em contas grandes: sem paginação na doc; a V4 Amaral tem 55 ramais e a chamada volta inteira.
 
-### Fim da tela "Ligação finalizada" e da avaliação de áudio — 22/10/2026 (branch `feat/webphone-no-rating`)
-Pedido do Vini: "fica muito clique pra fazer o SDR". Depois de desligar o SDR passava por 3 etapas (painel "Ligação finalizada" + Concluir → "Resultado da Ligação" → 5 estrelas + Enviar/Pular). Agora, ao desligar, abre direto a janela de resultado com as anotações feitas durante a ligação.
-- [x] `WebphonePanel`: sem `FinishedView` nem `RatingView`. Um efeito (`useEffectEvent`) resolve o fim sozinho: dono com resultado próprio (fila, Power Dialer) recebe `requestWebphoneConclude` com as anotações e o painel some; página do lead abre o `CallResultModal` do painel na hora; sem contexto, espera até 3 s (`LATE_CONTEXT_WAIT_MS`) por um contexto atrasado e some. Usa o contexto VIVO (o dono pode ter liberado ou já concluído). `audio_stats` continua sendo gravado sem clique; `audio_quality` deixa de ser coletado.
-- [x] `PowerDialerTab`: concluir no manual com o formulário sem texto (só as marcações "[]") usa as anotações do painel (`hasWrittenNotes`).
-- [x] Testes: `WebphonePanel.test.tsx` (4, todos falham na versão anterior), +1 no `PowerDialerTab.auto.test.tsx`, `call-attempt.notes.test.ts` (2).
+### Fim da avaliação de áudio com estrelas — 22/10/2026 (branch `feat/webphone-no-rating`)
+Pedido do Vini: "fica muito clique pra fazer o SDR". Sai só a etapa "Como estava a qualidade do áudio?" (5 estrelas + Enviar/Pular). A tela "Ligação finalizada" (anotações + Concluir) continua — uma 1ª versão desta branch tirou as duas por engano e foi desfeita a pedido do Vini.
+- [x] `WebphonePanel`: sem `RatingView`/`handleRate`/etapa `rating`. Depois do Concluir (dono avisado, modal do próprio painel concluído ou fechado, ou dono que concluiu pelo próprio modal) o painel some. `audio_stats` continua sendo gravado sem clique; `audio_quality` deixa de ser coletado.
+- [x] `PowerDialerTab`: concluir no manual com o formulário sem texto (só as marcações "[]") usa as anotações do painel (`hasWrittenNotes`) — o painel manda as anotações no evento, mas o Power Dialer as ignorava.
+- [x] Testes: `WebphonePanel.test.tsx` (3, ligação atendida; todos falham na versão com estrelas), +1 no `PowerDialerTab.auto.test.tsx`, `call-attempt.notes.test.ts` (2).
 - ⚠️ Critério de aceite "Avaliação de áudio opcional é gravada em `calls.metadata.audio_quality`" deixou de valer por decisão do Vini — @po ajustar.
 
 ## File List
@@ -359,7 +359,8 @@ Ajustes pós-produção (22/10):
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
-- 22/10/2026 — @dev: removidas a tela "Ligação finalizada" e a avaliação com estrelas do painel (pedido do Vini: menos cliques); ao desligar abre direto o resultado. Branch `feat/webphone-no-rating`. Nada commitado.
+- 22/10/2026 — @dev: a pedido do Vini, a tela "Ligação finalizada" VOLTA (a 1ª versão do PR #501 tinha tirado por engano); sai só a avaliação com estrelas. Branch `feat/webphone-no-rating`.
+- 22/10/2026 — @dev: removidas a tela "Ligação finalizada" e a avaliação com estrelas do painel (pedido do Vini: menos cliques); ao desligar abre direto o resultado. Branch `feat/webphone-no-rating`, PR #501.
 - 22/10/2026 — @dev: fila de atividades e Power Dialer passam a usar o sinal do webhook ("Não atendida", 0 s, "Ligar de novo"/"Tentar novamente" em destaque); modal se atualiza quando o webhook chega; servidor não grava mais o tempo do ramal depois do webhook. Branch `fix/webphone-queue-lead-answer`. Nada commitado.
 - 22/10/2026 — @devops: PR #491 mesclado (squash `6461d69`) e deploy confirmado às 05:46 BRT. Painel aparece dentro da gaveta da fila (validado pelo Vini).
 - 22/10/2026 — @dev: painel flutuante passa a ser desenhado dentro da gaveta de execução da fila de atividades (branch `fix/webphone-panel-in-sheet`); antes ficava escondido atrás dela. Typecheck, lint e testes verdes. Nada commitado.

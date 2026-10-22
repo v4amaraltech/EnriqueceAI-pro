@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useSyncExternalStore } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialWebphoneState, type WebphoneCall, type WebphoneState } from './webphone-state';
 
@@ -49,12 +49,11 @@ vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ Sche
 
 import {
   clearWebphoneCallContext,
-  getWebphoneCallContextState,
   onWebphoneConcludeRequested,
   setWebphoneCallContext,
   setWebphoneCallNotes,
 } from './webphone-call-context';
-import { LATE_CONTEXT_WAIT_MS, WebphonePanel } from './WebphonePanel';
+import { WebphonePanel } from './WebphonePanel';
 
 const CALL_ID = '6f1c2a3e-0000-4000-8000-000000000031';
 const ready: WebphoneState = { ...initialWebphoneState, registration: 'registered', mic: 'granted' };
@@ -92,20 +91,17 @@ async function endCall(startedAt: number) {
   });
 }
 
-describe('WebphonePanel — sem tela "Ligação finalizada" e sem avaliação', () => {
+describe('WebphonePanel — "Ligação finalizada" continua, sem avaliação com estrelas', () => {
   beforeEach(() => {
     clearWebphoneCallContext();
     setWebphoneCallNotes('');
-    answer.value = 'not_answered';
+    // Atendida: é o caso em que a versão anterior pedia as estrelas.
+    answer.value = 'answered';
     for (const fn of Object.values(actions)) fn.mockClear();
     phone.set(ready);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('fila de atividades: ao desligar avisa o dono com as anotações e o painel some, sem estrelas', async () => {
+  it('fila de atividades: mostra "Ligação finalizada"; Concluir avisa o dono com as anotações e o painel some, sem estrelas', async () => {
     const started = Date.now();
     publish(true);
     const concluded = vi.fn();
@@ -116,67 +112,54 @@ describe('WebphonePanel — sem tela "Ligação finalizada" e sem avaliação', 
       phone.set({ ...ready, call: sipCall('in-call', started) });
     });
     fireEvent.change(screen.getByRole('textbox', { name: 'Anotações da ligação' }), { target: { value: 'pediu proposta' } });
-
     await endCall(started);
 
-    expect(concluded).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID, notes: 'pediu proposta', durationSeconds: 0 }));
-    expect(screen.queryByRole('textbox', { name: 'Anotações da ligação' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/qualidade do áudio/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toHaveValue('pediu proposta');
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+
+    expect(concluded).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID, notes: 'pediu proposta' }));
     expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
-    // As anotações seguem no store para o modal do dono.
-    expect(getWebphoneCallContextState().notes).toBe('pediu proposta');
+    expect(screen.queryByText(/qualidade do áudio/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     off();
   });
 
-  it('página do lead: ao desligar abre direto o resultado; concluir grava e fecha, sem estrelas', async () => {
+  it('página do lead: Concluir abre o resultado; ao concluir o painel some, sem estrelas', async () => {
     const started = Date.now();
     publish(false);
     setWebphoneCallNotes('retornar amanhã');
     render(<WebphonePanel />);
 
     await endCall(started);
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
 
     expect(screen.getByText('Resultado da Ligação')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Faça anotações sobre a ligação/)).toHaveValue('retornar amanhã');
+    fireEvent.click(screen.getByRole('radio', { name: /Conversa relevante/ }));
     fireEvent.click(screen.getByRole('button', { name: /Concluir atividade/ }));
 
     expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(
-      expect.objectContaining({ callId: CALL_ID, sdrOutcome: 'no_answer', notes: 'retornar amanhã' }),
+      expect.objectContaining({ callId: CALL_ID, notes: 'retornar amanhã' }),
     );
     expect(screen.queryByText('Resultado da Ligação')).not.toBeInTheDocument();
     expect(screen.queryByText(/qualidade do áudio/i)).not.toBeInTheDocument();
     expect(actions.saveWebphoneCallAudio).not.toHaveBeenCalledWith(expect.objectContaining({ audioQuality: expect.anything() }));
   });
 
-  it('contexto que chega depois do fim (até 3 s) ainda abre o resultado', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: false });
+  it('o dono conclui pelo próprio modal com o painel em "Ligação finalizada": o painel some, sem estrelas', async () => {
     const started = Date.now();
+    publish(true);
     render(<WebphonePanel />);
 
     await endCall(started);
-    expect(screen.queryByText('Resultado da Ligação')).not.toBeInTheDocument();
-
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
     await act(async () => {
-      vi.advanceTimersByTime(1000);
-      publish(false);
+      clearWebphoneCallContext(CALL_ID);
     });
 
-    expect(screen.getByText('Resultado da Ligação')).toBeInTheDocument();
-  });
-
-  it('sem contexto (ligação recebida): nada aparece e o painel desiste em 3 s', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: false });
-    const started = Date.now();
-    setWebphoneCallNotes('rascunho');
-    render(<WebphonePanel />);
-
-    await endCall(started);
-    await act(async () => {
-      vi.advanceTimersByTime(LATE_CONTEXT_WAIT_MS);
-    });
-
-    expect(screen.queryByText('Resultado da Ligação')).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(getWebphoneCallContextState().notes).toBe('');
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    expect(screen.queryByText(/qualidade do áudio/i)).not.toBeInTheDocument();
   });
 });
