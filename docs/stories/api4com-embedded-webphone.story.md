@@ -243,6 +243,12 @@ Feito:
 - [x] `originateCall`: no 424 "has been failed" (perna do ramal) repete UMA vez após 3 s — seguro porque nenhuma chamada nasceu (o timeout continua sem retry). `describeOriginateError` traduz os dois 424 conhecidos em mensagem para o SDR; `initiateApi4ComCall` usa, então fila, Power Dialer e página do lead mostram o mesmo texto. 3 + 2 testes.
 - Typecheck, lint e testes verdes. Nada commitado.
 
+### Painel dentro da gaveta da fila — 22/10/2026 (branch `fix/webphone-panel-in-sheet`)
+Na fila de atividades o painel flutuante não aparecia durante a ligação: a tarefa abre numa gaveta Radix (`Sheet`) de tela cheia com overlay `z-50` desenhada em portal DEPOIS do layout, então cobria o painel. Só subir o `z-index` não bastava: com a gaveta aberta o Radix bloqueia cliques fora dela, prende o foco (não daria para digitar as anotações) e fecha a gaveta no clique externo.
+- [x] `webphone-panel-host.ts` (registro em pilha) + `WebphonePanelHost.tsx` (encaixe + hook `useWebphonePanelHost`). A gaveta de execução monta o encaixe dentro do `SheetContent`; o `WebphonePanel` se desenha nele via `createPortal` enquanto existir e volta ao layout quando a gaveta fecha. Mesma posição (o painel é `position: fixed`, posição salva em `localStorage`).
+- [x] 4 testes, incluindo um com a gaveta real do Radix: o painel fica dentro do conteúdo da gaveta, aceita digitação e o clique nele não a fecha. O mesmo teste FALHA sem o encaixe.
+- Não verificado no navegador: o webphone local exige a `TOKEN_ENCRYPTION_KEY` de produção no `.env.local`. Validar em produção após o deploy.
+
 ### Decisões do dev (bloco 3)
 - O painel **não** abre um segundo `CallResultModal` quando a fila de atividades ou o Power Dialer está na tela: pede ao discador para concluir (evento de janela) e ele usa o modal que já tem. Só assume o resultado quando ninguém mais vai fazê-lo (discador desmontado ou ligação do detalhe do lead). Evita a tela com dois modais e mantém `onMarkDone`/tentativas/re-discagem onde já estavam.
 - A "fotografia" da ligação encerrada fica no painel (não no cliente JsSIP): o cliente continua limpando a ligação 2,5 s depois do fim para liberar a próxima; o painel guarda número, duração, estatísticas e contexto até o SDR concluir. `doneCallId` evita re-fotografar a mesma ligação nessa janela.
@@ -312,6 +318,11 @@ Bloco 3 (feito):
 - `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx` (publicam o contexto; respondem ao "Concluir" do painel; liberam o resultado ao desmontar)
 - `src/features/leads/components/LeadDetailLayout.tsx` (publica o contexto; painel assume o resultado)
 
+Painel dentro da gaveta (22/10):
+- `src/features/integrations/webphone/webphone-panel-host.ts`, `WebphonePanelHost.tsx`, `webphone-panel-host.test.tsx` (novos)
+- `src/features/integrations/webphone/WebphonePanel.tsx` (portal para o encaixe)
+- `src/features/activities/components/ActivityExecutionSheet.tsx` (monta o encaixe)
+
 Ajustes pós-produção (22/10):
 - `src/features/activities/components/CallResultModal.tsx` + `.test.tsx` (prop `dismissible`)
 - `src/features/integrations/webphone/webphone-lead-answer.ts` + `.test.ts` (novos), `useWebphoneLeadAnswer.ts` (novo)
@@ -324,6 +335,8 @@ Ajustes pós-produção (22/10):
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 22/10/2026 — @dev: painel flutuante passa a ser desenhado dentro da gaveta de execução da fila de atividades (branch `fix/webphone-panel-in-sheet`); antes ficava escondido atrás dela. Typecheck, lint e testes verdes. Nada commitado.
+- 22/10/2026 — @devops: PR #490 mesclado (squash `00e3e50b`) e deploy confirmado às 22:16 BRT de 21/10.
 - 22/10/2026 — @dev: ajustes pós-produção na branch `fix/webphone-result-modal`: modal de resultado do painel não fecha por clique fora/Esc; "Não atendida" e `connected` do modal passam a vir do webhook (`answered_at`/`hangup_cause`) em vez da perna do ramal; 424 "has been failed" ganha uma nova tentativa após 3 s e mensagem clara nos três discadores. Typecheck, lint e testes verdes. Nada commitado.
 - 21/10/2026 — Teste do bloco 3 em produção pelo Vini (página do lead): painel reconheceu a ligação, gravou 5 estrelas e `audio_stats`; anotações/desfecho perdidos por fechamento acidental do modal; painel mostrava a perna do ramal como "atendida". Diagnóstico pelos logs do Supabase (edge_logs) e do container.
 - 21/10/2026 — @devops: PR #489 mesclado (squash `d39784a8`) e deploy confirmado às 17:44 BRT. Bloco 3 NO AR — os três blocos em produção, flag ligada só para o Vini.

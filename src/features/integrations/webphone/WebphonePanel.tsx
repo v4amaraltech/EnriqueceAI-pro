@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   DndContext,
@@ -27,6 +28,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
 import { useWebphoneLeadAnswer } from './useWebphoneLeadAnswer';
+import { useWebphonePanelHost } from './WebphonePanelHost';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
 import type { LeadAnswer } from './webphone-lead-answer';
 import {
@@ -242,29 +244,36 @@ export function WebphonePanel() {
   }
 
   const resultCall = stage.kind === 'result' ? stage.call : null;
+  // Gaveta/modal de tela cheia aberta (ex.: execução da fila de atividades):
+  // o painel se desenha dentro dela, senão ficaria escondido e inacessível.
+  const host = useWebphonePanelHost();
+
+  const shell = (
+    <DraggableShell compact={!liveCall && stage.kind === 'idle'}>
+      {liveCall ? (
+        <LiveCallView
+          call={liveCall}
+          context={liveCallContext}
+          leadAnswer={leadAnswer}
+          notes={ctxState.notes}
+          onNotesChange={setWebphoneCallNotes}
+          onHangup={handleHangup}
+        />
+      ) : stage.kind === 'finished' ? (
+        <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
+      ) : stage.kind === 'rating' ? (
+        <RatingView onRate={(stars) => handleRate(stage.call, stars)} />
+      ) : stage.kind === 'result' ? (
+        <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
+      ) : (
+        <IdlePill state={webphone} />
+      )}
+    </DraggableShell>
+  );
 
   return (
     <>
-      <DraggableShell compact={!liveCall && stage.kind === 'idle'}>
-        {liveCall ? (
-          <LiveCallView
-            call={liveCall}
-            context={liveCallContext}
-            leadAnswer={leadAnswer}
-            notes={ctxState.notes}
-            onNotesChange={setWebphoneCallNotes}
-            onHangup={handleHangup}
-          />
-        ) : stage.kind === 'finished' ? (
-          <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
-        ) : stage.kind === 'rating' ? (
-          <RatingView onRate={(stars) => handleRate(stage.call, stars)} />
-        ) : stage.kind === 'result' ? (
-          <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
-        ) : (
-          <IdlePill state={webphone} />
-        )}
-      </DraggableShell>
+      {host ? createPortal(shell, host) : shell}
 
       {resultCall?.context && (
         <CallResultModal
