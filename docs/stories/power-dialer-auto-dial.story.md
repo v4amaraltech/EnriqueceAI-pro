@@ -100,6 +100,7 @@ Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios test�
 - `src/features/integrations/webphone/WebphonePanel.tsx` (sem estrelas quando não atendeu)
 
 ## Change Log
+- 22/10/2026 — @dev: avaliação com estrelas removida do painel (story `api4com-embedded-webphone`); o critério 10 vale sempre. No manual, concluir com o formulário vazio usa as anotações do painel. Branch `feat/webphone-no-rating`.
 - 22/10/2026 — @dev: implementado na branch `feat/power-dialer-auto-dial` (todas as tarefas). Status Ready → InProgress. Typecheck, lint e testes verdes. Nada commitado.
 - 22/10/2026 — @po: validada (GO 9/10). Status Draft → Ready. Adicionada a seção "Valor".
 - 22/10/2026 — Story criada (Draft) a partir do plano aprovado pelo Vini.

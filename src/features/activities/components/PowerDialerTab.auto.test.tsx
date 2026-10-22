@@ -49,6 +49,8 @@ vi.mock('@/features/auth/hooks/useOrganization', () => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
+import { clearWebphoneCallContext, setWebphoneCallNotes } from '@/features/integrations/webphone/webphone-call-context';
+
 import { PowerDialerTab } from './PowerDialerTab';
 
 function lead(id: string, name: string, over: Partial<DialerQueueItem> = {}): DialerQueueItem {
@@ -216,5 +218,25 @@ describe('PowerDialerTab — discagem automática', () => {
     expect(screen.getByRole('switch', { name: 'Discagem automática' })).toBeDisabled();
     fireEvent.click(screen.getByText('Iniciar ligacoes'));
     expect(screen.queryByText(/Próxima ligação/)).not.toBeInTheDocument();
+  });
+
+  it('modo manual: concluir com o formulário vazio usa as anotações feitas no painel', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    clearWebphoneCallContext();
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    await advance(10);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+
+    act(() => setWebphoneCallNotes('pediu proposta por e-mail'));
+    answer.value = 'answered';
+    await endBrowserCall();
+    fireEvent.click(screen.getByRole('button', { name: /Concluir atividade/ }));
+    await advance(10);
+
+    expect(actions.completeDialerCall).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: '00000000-0000-4000-8000-000000000001', notes: expect.stringContaining('pediu proposta por e-mail') }),
+    );
   });
 });

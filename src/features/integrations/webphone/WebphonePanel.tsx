@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Mic, MicOff, Phone, PhoneOff, Star } from 'lucide-react';
+import { GripVertical, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -61,7 +61,9 @@ import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webpho
  * `CallResultModal` dele, com as anotações daqui pré-preenchidas. Se o
  * discador já não está montado (ou a ligação veio do detalhe do lead, que não
  * tem modal), o painel abre o próprio `CallResultModal` e grava por
- * `classifyWebphoneCall`, como os discadores fazem.
+ * `classifyWebphoneCall`, como os discadores fazem. Depois disso o painel some:
+ * não há mais avaliação de áudio com estrelas (decisão do Vini, 22/10/2026 —
+ * clique demais para o SDR); a coleta de `audio_stats` continua, sem clique.
  *
  * "Atendida" aqui é do LEAD, não do ramal: a página atende o INVITE da API4COM
  * na hora, então o cliente SIP sempre vê a chamada como atendida. Quem diz se o
@@ -94,8 +96,7 @@ type PanelStage =
   /** `doneCallId`: última ligação já concluída aqui — o cliente ainda a mostra como `ended` por ~2,5 s. */
   | { kind: 'idle'; doneCallId: string | null }
   | { kind: 'finished'; call: FinishedCall }
-  | { kind: 'result'; call: FinishedCall }
-  | { kind: 'rating'; call: FinishedCall };
+  | { kind: 'result'; call: FinishedCall };
 
 function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext | null): FinishedCall {
   return {
@@ -152,14 +153,8 @@ export function WebphonePanel() {
   const liveContext = finishedCallId && ctxState.context?.callId === finishedCallId ? ctxState.context : null;
 
   // O discador dono concluiu (ou fechou) o modal dele e limpou o contexto:
-  // o painel pula direto para a avaliação opcional (ajuste durante o render).
+  // não há mais nada a fazer aqui e o painel some (ajuste durante o render).
   if (stage.kind === 'finished' && finishedCallId && !liveContext) {
-    setStage({ kind: 'rating', call: stage.call });
-  }
-  // Ninguém atendeu: não houve conversa, não há áudio para avaliar. Vale também
-  // quando o sinal da API4COM chega com a avaliação já na tela (discagem
-  // automática conclui sozinha e segue para o próximo).
-  if (stage.kind === 'rating' && leadAnswer === 'not_answered') {
     setStage({ kind: 'idle', doneCallId: stage.call.id });
   }
 
@@ -192,7 +187,7 @@ export function WebphonePanel() {
         durationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
         notes: ctxState.notes,
       });
-      setStage({ kind: 'rating', call });
+      setStage({ kind: 'idle', doneCallId: call.id });
       return;
     }
     if (liveContext) {
@@ -227,20 +222,7 @@ export function WebphonePanel() {
       }).catch((err: unknown) => console.error('[webphone] scheduleActivity failed:', err));
     }
     clearWebphoneCallContext(ctx.callId);
-    setStage({ kind: 'rating', call });
-  }
-
-  function handleRate(call: FinishedCall, stars: number | null) {
-    const callId = call.context?.callId;
-    if (stars !== null && callId) {
-      saveWebphoneCallAudio({ callId, audioQuality: stars })
-        .then((r) => {
-          if (r.success) toast.success('Obrigado! Avaliação do áudio registrada.');
-          else toast.error(r.error);
-        })
-        .catch((err: unknown) => console.error('[webphone] saveWebphoneCallAudio failed:', err));
-    }
-    finish(call);
+    setStage({ kind: 'idle', doneCallId: call.id });
   }
 
   const resultCall = stage.kind === 'result' ? stage.call : null;
@@ -266,8 +248,6 @@ export function WebphonePanel() {
         />
       ) : stage.kind === 'finished' ? (
         <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
-      ) : stage.kind === 'rating' ? (
-        <RatingView onRate={(stars) => handleRate(stage.call, stars)} />
       ) : stage.kind === 'result' ? (
         <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
       ) : (
@@ -283,10 +263,7 @@ export function WebphonePanel() {
       {resultCall?.context && (
         <CallResultModal
           open
-          onClose={() => {
-            clearWebphoneCallContext(resultCall.context!.callId);
-            setStage({ kind: 'rating', call: resultCall });
-          }}
+          onClose={() => finish(resultCall)}
           leadName={resultCall.context.leadName ?? resultCall.remoteNumber ?? 'Lead'}
           leadId={resultCall.context.leadId ?? undefined}
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
@@ -543,41 +520,5 @@ function NotesField({ notes, onChange, autoFocus }: { notes: string; onChange: (
       aria-label="Anotações da ligação"
       autoFocus={autoFocus}
     />
-  );
-}
-
-function RatingView({ onRate }: { onRate: (stars: number | null) => void }) {
-  const [hover, setHover] = useState(0);
-  const [value, setValue] = useState(0);
-  const shown = hover || value;
-  return (
-    <>
-      <p className="text-sm font-medium">Como estava a qualidade do áudio?</p>
-      <div className="flex items-center justify-center gap-1" role="radiogroup" aria-label="Qualidade do áudio">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={value === n}
-            aria-label={`${n} ${n === 1 ? 'estrela' : 'estrelas'}`}
-            className="rounded p-1 transition-transform hover:scale-110"
-            onMouseEnter={() => setHover(n)}
-            onMouseLeave={() => setHover(0)}
-            onClick={() => setValue(n)}
-          >
-            <Star className={cn('h-6 w-6', n <= shown ? 'fill-amber-400 text-amber-400' : 'text-[var(--muted-foreground)]')} />
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <Button size="sm" variant="ghost" className="flex-1" onClick={() => onRate(null)}>
-          Pular
-        </Button>
-        <Button size="sm" className="flex-1" disabled={value === 0} onClick={() => onRate(value)}>
-          Enviar
-        </Button>
-      </div>
-    </>
   );
 }
