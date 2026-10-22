@@ -223,8 +223,13 @@ export function CallResultModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* `grid-cols-[minmax(0,1fr)]`: o DialogContent é um grid de uma coluna
+          `auto`, que cresce até o maior texto sem quebra (o nome do lead com
+          `truncate`). Com razão social longa a coluna passava da largura do
+          modal e cortava o selo "Atendida/Não atendida" e o "Concluir"
+          (22/10/2026). Com mínimo 0 a coluna respeita o modal e o nome trunca. */}
       <DialogContent
-        className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="grid-cols-[minmax(0,1fr)] sm:max-w-2xl max-h-[90vh] overflow-y-auto"
         onInteractOutside={dismissible ? undefined : (e) => e.preventDefault()}
         onEscapeKeyDown={dismissible ? undefined : (e) => e.preventDefault()}
       >
