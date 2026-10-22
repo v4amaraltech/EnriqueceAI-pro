@@ -45,10 +45,12 @@ export async function classifyWebphoneCall(
 
   // Fetch current call to check ownership and current state
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, duration_seconds, lead_id, org_id')
+    .select('id, duration_seconds, lead_id, org_id, hangup_cause')
     .eq('id', callId)
     .eq('org_id', orgId)
-    .single()) as { data: { id: string; duration_seconds: number; lead_id: string | null; org_id: string } | null };
+    .single()) as {
+    data: { id: string; duration_seconds: number; lead_id: string | null; org_id: string; hangup_cause: string | null } | null;
+  };
 
   if (!call) {
     return { success: false, error: 'Ligação não encontrada' };
@@ -68,8 +70,11 @@ export async function classifyWebphoneCall(
     updates.sdr_disposition = sdrOutcome;
   }
 
-  // Use client-side duration as fallback if webhook hasn't set it
-  if (call.duration_seconds === 0 && clientDurationSeconds > 0) {
+  // Duração medida na tela só como reserva enquanto o webhook não fechou a
+  // ligação. Com `hangup_cause` gravado a API4COM já deu a duração real — e
+  // 0 s ali é "ninguém atendeu", não "falta medir": o tempo da tela é da perna
+  // do ramal (o webphone atende na hora) e virava duração falsa (22/10/2026).
+  if (call.duration_seconds === 0 && clientDurationSeconds > 0 && !call.hangup_cause) {
     updates.duration_seconds = clientDurationSeconds;
   }
 
