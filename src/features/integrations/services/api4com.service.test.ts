@@ -7,7 +7,7 @@ vi.mock('@/lib/security/encryption', () => ({
   encrypt: (v: string) => `enc:${v}`,
 }));
 
-import { getOrgApiCredentials, getUserCredentials, originateCall, toApi4ComCalled } from './api4com.service';
+import { describeOriginateError, getOrgApiCredentials, getUserCredentials, isRamalLegFailure, originateCall, toApi4ComCalled } from './api4com.service';
 
 type Row = Record<string, unknown> | null;
 
@@ -144,5 +144,67 @@ describe('originateCall', () => {
   it('falha quando a API4COM não devolve id', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ message: 'ok' }) });
     await expect(originateCall('u1', '48988669122')).rejects.toThrow('não devolveu o id');
+  });
+});
+
+describe('originateCall — perna do ramal falhou (424 "has been failed")', () => {
+  const fetchMock = vi.fn();
+  const RAMAL_FAIL = {
+    ok: false,
+    status: 424,
+    text: async () => '{"error":{"statusCode":424,"name":"Error","message":"call from 1014 to +5516982501819 has been failed"}}',
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    service.createServiceRoleClient.mockReturnValue(
+      makeClient({
+        api4com_connections: { org_id: 'org', api_key_encrypted: null, base_url: null, ramal: '1014' },
+        api4com_org_settings: { api_key_encrypted: 'enc:org-token', base_url: 'https://api.api4com.com/api/v1/' },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('repete UMA vez e devolve a chamada da segunda tentativa', async () => {
+    fetchMock.mockResolvedValueOnce(RAMAL_FAIL).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: '200', id: 'call-2', message: 'successful request' }),
+    });
+
+    const result = await originateCall('u1', '(16) 98250-1819', {}, { ramalRetryDelayMs: 0 });
+
+    expect(result.data.id).toBe('call-2');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('falhou de novo → propaga o erro cru (sem terceira tentativa)', async () => {
+    fetchMock.mockResolvedValue(RAMAL_FAIL);
+    await expect(originateCall('u1', '(16) 98250-1819', {}, { ramalRetryDelayMs: 0 })).rejects.toThrow('has been failed');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('outro erro 4xx (ex.: ramal não registrado) NÃO repete', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 424, text: async () => '{"error":{"message":"user not registered"}}' });
+    await expect(originateCall('u1', '(16) 98250-1819', {}, { ramalRetryDelayMs: 0 })).rejects.toThrow('not registered');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('describeOriginateError', () => {
+  it('reconhece só o 424 de perna do ramal', () => {
+    expect(isRamalLegFailure('API4COM POST /calls failed (424): {"error":{"message":"call from 1014 to +55 has been failed"}}')).toBe(true);
+    expect(isRamalLegFailure('API4COM POST /calls failed (424): {"error":{"message":"user not registered"}}')).toBe(false);
+    expect(isRamalLegFailure('API4COM POST /calls failed (500): has been failed')).toBe(false);
+  });
+
+  it('traduz os dois 424 conhecidos e deixa o resto como está', () => {
+    expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"call from 1014 to +55 has been failed"}}')).toMatch(/não conseguiu chamar o seu ramal/);
+    expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"user not registered"}}')).toMatch(/não está registrado/);
+    expect(describeOriginateError('Telefone inválido')).toBe('Telefone inválido');
   });
 });

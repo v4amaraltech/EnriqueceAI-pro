@@ -179,6 +179,31 @@ export function toApi4ComCalled(phone: string): string {
 const ORIGINATE_TIMEOUT_MS = 40_000;
 
 /**
+ * A API4COM devolve 424 "call from {ramal} to {número} has been failed" quando a
+ * perna do RAMAL não completou: ele ainda estava ocupado com a ligação anterior
+ * (o hangup chega ao provedor alguns segundos depois de o navegador encerrar —
+ * visto em produção em 21/10/2026, 15 s entre o fim no webphone e o webhook) ou
+ * não estava registrado. Nenhuma chamada nasce nesse caso, então repetir UMA vez
+ * é seguro — diferente do timeout, que pode ter discado.
+ */
+export function isRamalLegFailure(message: string): boolean {
+  return /\(424\)/.test(message) && /has been failed/i.test(message);
+}
+
+export const RAMAL_LEG_RETRY_DELAY_MS = 3_000;
+
+/** Mensagem para o SDR a partir do erro cru do `POST /calls`. */
+export function describeOriginateError(message: string): string {
+  if (isRamalLegFailure(message)) {
+    return 'A API4COM não conseguiu chamar o seu ramal. Se você acabou de desligar, aguarde alguns segundos e tente de novo; se persistir, confira se o webphone está verde.';
+  }
+  if (/\(424\)/.test(message) && /not registered/i.test(message)) {
+    return 'Seu ramal não está registrado na API4COM. Aguarde o webphone ficar verde (ou abra a extensão) e tente de novo.';
+  }
+  return message;
+}
+
+/**
  * Originate a call via API4COM (`POST /calls`): toca o ramal do usuário e, ao
  * atender, conecta o número. Substitui o `POST /dialer`, descontinuado pela
  * API4COM — e cujo `id` não batia com o do webhook (daí o worker
@@ -189,22 +214,36 @@ export async function originateCall(
   userId: string,
   phone: string,
   metadata?: Record<string, string>,
+  options: { ramalRetryDelayMs?: number } = {},
 ): Promise<{ data: Api4ComOriginateResponse; ramal: string }> {
   const creds = await getUserCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
-  const data = await api4comFetch<Api4ComOriginateResponse>(
-    creds,
-    'POST',
-    '/calls',
-    {
-      extension: creds.ramal,
-      caller: creds.ramal,
-      called: toApi4ComCalled(phone),
-      metadata: metadata ?? {},
-    },
-    { timeoutMs: ORIGINATE_TIMEOUT_MS, retries: 0 },
-  );
+  const post = () =>
+    api4comFetch<Api4ComOriginateResponse>(
+      creds,
+      'POST',
+      '/calls',
+      {
+        extension: creds.ramal,
+        caller: creds.ramal,
+        called: toApi4ComCalled(phone),
+        metadata: metadata ?? {},
+      },
+      { timeoutMs: ORIGINATE_TIMEOUT_MS, retries: 0 },
+    );
+
+  let data: Api4ComOriginateResponse;
+  try {
+    data = await post();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!isRamalLegFailure(message)) throw err;
+    const delay = options.ramalRetryDelayMs ?? RAMAL_LEG_RETRY_DELAY_MS;
+    console.warn(`[api4com] ramal ${creds.ramal} não completou a perna do POST /calls; nova tentativa em ${delay} ms`);
+    await new Promise((r) => setTimeout(r, delay));
+    data = await post();
+  }
 
   if (!data?.id) {
     throw new Error('API4COM não devolveu o id da chamada');

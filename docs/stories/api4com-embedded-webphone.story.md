@@ -231,6 +231,18 @@ Sondagem rodada dentro do container do app no Coolify (a chave de cifra só exis
 - [ ] Validação no navegador com a API4COM real (só o Vini tem o webphone ligado): arrastar e posição lembrada, cronômetro, Mutar, Desligar em até 2 s, anotações chegando ao modal da atividade, estrelas gravando `audio_quality`, `audio_stats` preenchido, e conferir que não há erro de console com o painel montado.
 - [ ] CodeRabbit: CLI configurado só em WSL; não rodado neste Mac.
 
+### Ajustes pós-produção — 22/10/2026 (branch `fix/webphone-result-modal`, worktree `EnriqueceAI_Pro-webphone`)
+Teste do Vini em produção (21/10, 21:34 e 21:40 BRT, página do lead, destino com NUMBER_CHANGED/ORIGINATOR_CANCEL):
+- A ligação das 21:40 gravou `audio_quality` 5 e `audio_stats`; anotações e desfecho NÃO, porque o `CallResultModal` foi fechado por clique fora/Esc (o painel flutuante fica visível atrás e convida ao clique) e o painel pulou direto para as estrelas. A das 21:34 não gravou nada (contexto não casou; sem registro do navegador para confirmar o motivo).
+- O painel mostrou "00:06" como atendida: o cliente SIP atende a perna do RAMAL na hora, então `answeredAt` nunca diz se o LEAD atendeu. Isso também fazia o modal exigir desfecho em vez de preencher "Não atendeu".
+- Na fila de atividades o clique no ícone da API4COM deu erro 424 `call from 1014 to +55… has been failed` às 21:34:38 — 15 s depois de outra ligação do mesmo ramal ter acabado no navegador e 8 s ANTES de o webhook dela chegar: a API4COM ainda tinha o ramal ocupado. Nenhuma chamada nasce nesse caso.
+
+Feito:
+- [x] `CallResultModal`: prop `dismissible` (padrão `true`); com `false`, clique fora e Esc não fecham (só "Concluir" ou o ×). O painel flutuante passa `dismissible={false}`. 3 testes.
+- [x] `webphone-lead-answer.ts` (puro) + action `getWebphoneCallOutcome` + hook `useWebphoneLeadAnswer`: o painel consulta a linha de `calls` a cada 3 s (até 40 vezes) enquanto o webhook não gravou `answered_at` nem `hangup_cause`. `answered_at` → atendida; `hangup_cause` sem `answered_at` → "Não atendida"; o modal recebe `connected` por esse sinal (cai no atendimento do ramal só enquanto "desconhecido"). Em ligação integrada, o título fica "Chamando o lead…" até o webhook confirmar. 4 + 4 testes.
+- [x] `originateCall`: no 424 "has been failed" (perna do ramal) repete UMA vez após 3 s — seguro porque nenhuma chamada nasceu (o timeout continua sem retry). `describeOriginateError` traduz os dois 424 conhecidos em mensagem para o SDR; `initiateApi4ComCall` usa, então fila, Power Dialer e página do lead mostram o mesmo texto. 3 + 2 testes.
+- Typecheck, lint e testes verdes. Nada commitado.
+
 ### Decisões do dev (bloco 3)
 - O painel **não** abre um segundo `CallResultModal` quando a fila de atividades ou o Power Dialer está na tela: pede ao discador para concluir (evento de janela) e ele usa o modal que já tem. Só assume o resultado quando ninguém mais vai fazê-lo (discador desmontado ou ligação do detalhe do lead). Evita a tela com dois modais e mantém `onMarkDone`/tentativas/re-discagem onde já estavam.
 - A "fotografia" da ligação encerrada fica no painel (não no cliente JsSIP): o cliente continua limpando a ligação 2,5 s depois do fim para liberar a próxima; o painel guarda número, duração, estatísticas e contexto até o SDR concluir. `doneCallId` evita re-fotografar a mesma ligação nessa janela.
@@ -300,10 +312,22 @@ Bloco 3 (feito):
 - `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx` (publicam o contexto; respondem ao "Concluir" do painel; liberam o resultado ao desmontar)
 - `src/features/leads/components/LeadDetailLayout.tsx` (publica o contexto; painel assume o resultado)
 
+Ajustes pós-produção (22/10):
+- `src/features/activities/components/CallResultModal.tsx` + `.test.tsx` (prop `dismissible`)
+- `src/features/integrations/webphone/webphone-lead-answer.ts` + `.test.ts` (novos), `useWebphoneLeadAnswer.ts` (novo)
+- `src/features/integrations/webphone/WebphonePanel.tsx` (atendida = sinal do webhook; modal não descartável)
+- `src/features/calls/actions/get-webphone-call-outcome.ts` + `.test.ts` (novos)
+- `src/features/integrations/services/api4com.service.ts` + `.test.ts` (retry único no 424 de ramal; `describeOriginateError`)
+- `src/features/calls/actions/initiate-api4com-call.ts` (mensagem amigável)
+
 ## Validação @po (21/10/2026)
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 22/10/2026 — @dev: ajustes pós-produção na branch `fix/webphone-result-modal`: modal de resultado do painel não fecha por clique fora/Esc; "Não atendida" e `connected` do modal passam a vir do webhook (`answered_at`/`hangup_cause`) em vez da perna do ramal; 424 "has been failed" ganha uma nova tentativa após 3 s e mensagem clara nos três discadores. Typecheck, lint e testes verdes. Nada commitado.
+- 21/10/2026 — Teste do bloco 3 em produção pelo Vini (página do lead): painel reconheceu a ligação, gravou 5 estrelas e `audio_stats`; anotações/desfecho perdidos por fechamento acidental do modal; painel mostrava a perna do ramal como "atendida". Diagnóstico pelos logs do Supabase (edge_logs) e do container.
+- 21/10/2026 — @devops: PR #489 mesclado (squash `d39784a8`) e deploy confirmado às 17:44 BRT. Bloco 3 NO AR — os três blocos em produção, flag ligada só para o Vini.
+- 21/10/2026 — @devops: PR #488 mesclado (squash `cb836868`) e deploy confirmado às 16:29 BRT. Bloco 2 NO AR.
 - 21/10/2026 — @dev: bloco 3 implementado no worktree `busy-antonelli-d472c3` (branch `claude/busy-antonelli-d472c3`): painel flutuante arrastável, anotações → `CallResultModal`, avaliação de áudio e `audio_stats` em `calls.metadata`, action `saveWebphoneCallAudio`. Typecheck, lint, testes e build verdes. Nada commitado; validação no navegador com a API4COM real pendente (Vini).
 - 21/10/2026 — Bloco 2 validado de ponta a ponta no localhost com a API4COM real: ligação de 174 s atendida sem extensão, `answered_at`, gravação e webhook por id. Nada commitado.
 - 21/10/2026 — Teste do bloco 2 no localhost (Chrome do Vini): ramal registrado, página atendeu a perna do ramal, ligação casou com o webhook pelo id. Destino deu NUMBER_CHANGED (0 s). Três ajustes após o primeiro erro 424 "user not registered" (registro sem esperar microfone, indicador à esquerda, trava do Ligar). Nada commitado.

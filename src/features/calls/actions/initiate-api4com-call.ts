@@ -7,7 +7,7 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import { originateCall } from '@/features/integrations/services/api4com.service';
+import { describeOriginateError, originateCall } from '@/features/integrations/services/api4com.service';
 import { normalizePhone } from '@/lib/utils/phone';
 
 const initiateCallSchema = z.object({
@@ -115,7 +115,7 @@ export async function initiateApi4ComCall(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao iniciar chamada';
     console.error('[api4com] originateCall failed:', message);
-    return { success: false, error: message };
+    return { success: false, error: describeOriginateError(message) };
   }
 }
 
