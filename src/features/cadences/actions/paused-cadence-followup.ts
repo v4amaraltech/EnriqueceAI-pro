@@ -7,9 +7,10 @@ import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import {
   FOLLOWUP_MAX_PER_ORG,
-  FOLLOWUP_MIN_BUSINESS_DAYS,
+  type FollowupKind,
   buildFollowupNote,
   businessDaysSince,
+  minBusinessDaysFor,
   todayAt9hBrt,
 } from '../services/paused-cadence-followup.logic';
 
@@ -19,22 +20,34 @@ interface LimboLead {
   assigned_to: string | null;
 }
 
-interface PausedEnrollment {
+interface EnrollmentRow {
   lead_id: string;
+  status: string;
+  scheduled_start_at: string | null;
   cadence: { name: string } | null;
+}
+
+interface LeadFollowup {
+  kind: FollowupKind;
+  cadenceNames: string[];
 }
 
 /** Lista de ids por chamada `.in()` — evita estourar a URL do PostgREST. */
 const ID_CHUNK = 100;
 
+const KIND_PRIORITY: Record<FollowupKind, number> = { paused: 0, bounced: 1, replied: 2 };
+
 /**
  * Cadência pausada SEM data de volta (bounce, "Não é WhatsApp", erro de envio,
  * pausa manual) não volta sozinha: fica fora da fila, do auto-perda e do motor,
- * e o lead fica "Contatado" sem próxima atividade (limbo).
+ * e o lead fica "Contatado" sem próxima atividade (limbo). O mesmo vale para a
+ * inscrição que terminou em `bounced` ou `replied`: a auto-perda só olha
+ * `completed`, então nada tira o lead dali.
  *
- * Roda antes do alerta diário de limbo: para cada lead do limbo que tem dono,
- * cadência pausada sem `scheduled_start_at` e 3+ dias úteis sem contato, cria
- * uma tarefa "Definir destino" na fila do SDR. A tarefa pendente já tira o lead
+ * Roda antes do alerta diário de limbo: para cada lead do limbo que tem dono e
+ * cadência pausada sem `scheduled_start_at` (ou última inscrição `bounced`/
+ * `replied`), cria uma tarefa "Definir destino" na fila do SDR — após 3+ dias
+ * úteis sem contato; se o lead respondeu, no mesmo dia. A tarefa pendente já tira o lead
  * da view `v_leads_cadence_limbo`; o alerta aos gestores fica com o resto
  * (lead sem dono, pausa recente).
  *
@@ -56,23 +69,42 @@ export async function createPausedCadenceFollowups(
   }
   if (!limbo?.length) return { success: true, data: { candidates: 0, created: 0 } };
 
-  // Só entra quem tem cadência PAUSADA sem data de volta.
-  const cadencesByLead = new Map<string, string[]>();
+  // Só entra quem tem cadência PAUSADA sem data de volta, ou cuja inscrição
+  // mais recente terminou em bounce/resposta (inscrição antiga com bounce e
+  // depois concluída é caso da auto-perda, não daqui).
+  const followupByLead = new Map<string, LeadFollowup>();
   for (let i = 0; i < limbo.length; i += ID_CHUNK) {
     const ids = limbo.slice(i, i + ID_CHUNK).map((l) => l.id);
-    const { data: paused } = (await from(supabase, 'cadence_enrollments')
-      .select('lead_id, cadence:cadences(name)')
+    const { data: rows } = (await from(supabase, 'cadence_enrollments')
+      .select('lead_id, status, scheduled_start_at, cadence:cadences(name)')
       .in('lead_id', ids)
-      .eq('status', 'paused')
-      .is('scheduled_start_at', null)) as { data: PausedEnrollment[] | null };
-    for (const row of paused ?? []) {
-      const names = cadencesByLead.get(row.lead_id) ?? [];
+      .order('enrolled_at', { ascending: false })) as { data: EnrollmentRow[] | null };
+
+    // Linhas vêm da mais recente para a mais antiga.
+    const latestByLead = new Map<string, EnrollmentRow>();
+    for (const row of rows ?? []) {
+      if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, row);
+    }
+
+    for (const row of rows ?? []) {
+      let kind: FollowupKind | null = null;
+      if (row.status === 'paused' && !row.scheduled_start_at) kind = 'paused';
+      else if ((row.status === 'bounced' || row.status === 'replied') && latestByLead.get(row.lead_id) === row) {
+        kind = row.status;
+      }
+      if (!kind) continue;
+
+      // Prioridade do texto/prazo: respondeu > bounce > pausada. A nota cita só
+      // as cadências do motivo que venceu.
+      const current = followupByLead.get(row.lead_id);
+      if (current && KIND_PRIORITY[current.kind] > KIND_PRIORITY[kind]) continue;
+      const names = current?.kind === kind ? current.cadenceNames : [];
       if (row.cadence?.name && !names.includes(row.cadence.name)) names.push(row.cadence.name);
-      cadencesByLead.set(row.lead_id, names);
+      followupByLead.set(row.lead_id, { kind, cadenceNames: names });
     }
   }
 
-  const candidates = limbo.filter((l) => cadencesByLead.has(l.id));
+  const candidates = limbo.filter((l) => followupByLead.has(l.id));
   const createdByOrg = new Map<string, number>();
   const scheduledAt = todayAt9hBrt(now);
   let created = 0;
@@ -85,8 +117,10 @@ export async function createPausedCadenceFollowups(
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false })
         .limit(1)) as { data: Array<{ created_at: string }> | null };
+      const followup = followupByLead.get(lead.id);
+      if (!followup) continue;
       const lastContact = last?.[0]?.created_at;
-      if (lastContact && businessDaysSince(new Date(lastContact), now) < FOLLOWUP_MIN_BUSINESS_DAYS) continue;
+      if (lastContact && businessDaysSince(new Date(lastContact), now) < minBusinessDaysFor(followup.kind)) continue;
 
       const { data: pauseEvent } = (await from(supabase, 'interactions')
         .select('metadata')
@@ -96,8 +130,8 @@ export async function createPausedCadenceFollowups(
         .order('created_at', { ascending: false })
         .limit(1)) as { data: Array<{ metadata: { reason?: string } | null }> | null };
 
-      const cadenceNames = cadencesByLead.get(lead.id) ?? [];
-      const notes = buildFollowupNote(cadenceNames, pauseEvent?.[0]?.metadata?.reason);
+      const { kind, cadenceNames } = followup;
+      const notes = buildFollowupNote(kind, cadenceNames, pauseEvent?.[0]?.metadata?.reason);
 
       const { error: insertError } = await from(supabase, 'scheduled_activities' as never)
         .insert({
@@ -119,7 +153,7 @@ export async function createPausedCadenceFollowups(
         userId: null,
         event: 'paused_cadence_followup',
         message: notes,
-        metadata: { cadences: cadenceNames, assigned_to: lead.assigned_to },
+        metadata: { kind, cadences: cadenceNames, assigned_to: lead.assigned_to },
       });
 
       createdByOrg.set(lead.org_id, (createdByOrg.get(lead.org_id) ?? 0) + 1);

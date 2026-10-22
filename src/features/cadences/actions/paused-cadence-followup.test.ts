@@ -14,7 +14,7 @@ const OLD = '2026-10-06T15:00:00Z'; // terça anterior → 4 dias úteis
 const RECENT = '2026-10-09T15:00:00Z'; // sexta → 1 dia útil
 
 let limbo: Array<{ id: string; org_id: string; assigned_to: string | null }>;
-let paused: Array<{ lead_id: string; cadence: { name: string } | null }>;
+let paused: Array<{ lead_id: string; status?: string; scheduled_start_at?: string | null; cadence: { name: string } | null }>;
 let lastContact: Record<string, string | undefined>;
 let pauseReason: Record<string, string | undefined>;
 let inserts: Array<Record<string, unknown>>;
@@ -37,7 +37,8 @@ function makeChain(table: string) {
   chain.then = (resolve: (v: unknown) => unknown) => {
     let result: unknown = { data: null, error: null };
     if (table === 'v_leads_cadence_limbo') result = { data: limbo, error: null };
-    else if (table === 'cadence_enrollments') result = { data: paused, error: null };
+    else if (table === 'cadence_enrollments')
+      result = { data: paused.map((p) => ({ status: 'paused', scheduled_start_at: null, ...p })), error: null };
     else if (table === 'interactions') {
       const leadId = filters.find(([n, a]) => n === 'eq' && a === 'lead_id')?.[2] as string;
       const isPauseLookup = filters.some(([n]) => n === 'contains');
@@ -104,6 +105,56 @@ describe('createPausedCadenceFollowups', () => {
     pauseReason = {};
     await createPausedCadenceFollowups(NOW);
     expect(String(inserts[0]?.notes)).toContain('motivo não registrado');
+  });
+
+  it('pausa com data de volta não entra', async () => {
+    paused = [{ lead_id: 'lead-1', scheduled_start_at: '2026-10-20T12:00:00Z', cadence: { name: 'Recovery' } }];
+    const res = await createPausedCadenceFollowups(NOW);
+    expect(res).toEqual({ success: true, data: { candidates: 0, created: 0 } });
+  });
+
+  it('lead que respondeu ganha a tarefa no mesmo dia', async () => {
+    paused = [{ lead_id: 'lead-1', status: 'replied', cadence: { name: 'BDR IA' } }];
+    lastContact = { 'lead-1': '2026-10-12T11:00:00Z' };
+
+    const res = await createPausedCadenceFollowups(NOW);
+
+    expect(res).toEqual({ success: true, data: { candidates: 1, created: 1 } });
+    expect(String(inserts[0]?.notes)).toContain('lead respondeu (BDR IA)');
+    expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ kind: 'replied' }) }),
+    );
+  });
+
+  it('bounce na última inscrição gera a tarefa após 3 dias úteis', async () => {
+    paused = [{ lead_id: 'lead-1', status: 'bounced', cadence: { name: 'Cabos' } }];
+    await createPausedCadenceFollowups(NOW);
+    expect(String(inserts[0]?.notes)).toContain('e-mail voltou (bounce) na Cabos');
+
+    inserts = [];
+    lastContact = { 'lead-1': RECENT };
+    const res = await createPausedCadenceFollowups(NOW);
+    expect(res).toEqual({ success: true, data: { candidates: 1, created: 0 } });
+  });
+
+  it('bounce antigo seguido de cadência concluída não entra (é da auto-perda)', async () => {
+    paused = [
+      { lead_id: 'lead-1', status: 'completed', cadence: { name: 'Nova' } },
+      { lead_id: 'lead-1', status: 'bounced', cadence: { name: 'Antiga' } },
+    ];
+    const res = await createPausedCadenceFollowups(NOW);
+    expect(res).toEqual({ success: true, data: { candidates: 0, created: 0 } });
+  });
+
+  it('respondeu vence pausada: nota fala da resposta', async () => {
+    paused = [
+      { lead_id: 'lead-1', status: 'replied', cadence: { name: 'BDR IA' } },
+      { lead_id: 'lead-1', status: 'paused', cadence: { name: 'Recovery' } },
+    ];
+    await createPausedCadenceFollowups(NOW);
+    expect(String(inserts[0]?.notes)).toContain('lead respondeu (BDR IA)');
+    expect(String(inserts[0]?.notes)).not.toContain('Recovery');
   });
 
   it('respeita o teto por org', async () => {

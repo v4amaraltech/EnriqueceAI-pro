@@ -6,6 +6,21 @@
 /** Dias úteis sem contato antes de criar a tarefa. */
 export const FOLLOWUP_MIN_BUSINESS_DAYS = 3;
 
+/**
+ * Por que o lead ficou sem próxima atividade:
+ * - paused: cadência pausada sem data de volta;
+ * - bounced: última inscrição terminou em bounce;
+ * - replied: última inscrição terminou porque o lead respondeu.
+ * bounced/replied não entram na auto-perda (só olha `completed`) — sem a tarefa,
+ * ninguém é cobrado.
+ */
+export type FollowupKind = 'paused' | 'bounced' | 'replied';
+
+/** Lead que respondeu não espera: a tarefa sai no mesmo dia. */
+export function minBusinessDaysFor(kind: FollowupKind): number {
+  return kind === 'replied' ? 0 : FOLLOWUP_MIN_BUSINESS_DAYS;
+}
+
 /** Teto de tarefas criadas por org por execução — não inundar a fila. */
 export const FOLLOWUP_MAX_PER_ORG = 30;
 
@@ -54,8 +69,24 @@ export function describePauseReason(reason: string | null | undefined): string {
   return reason;
 }
 
-export function buildFollowupNote(cadenceNames: string[], reason: string | null | undefined): string {
+export function buildFollowupNote(
+  kind: FollowupKind,
+  cadenceNames: string[],
+  reason: string | null | undefined,
+): string {
   const names = cadenceNames.length ? cadenceNames.join(', ') : 'cadência';
+  if (kind === 'replied') {
+    return (
+      `Definir destino: lead respondeu (${names}) e está sem próxima atividade. ` +
+      'Responda, troque de cadência ou marque Ganho/Perdido.'
+    );
+  }
+  if (kind === 'bounced') {
+    return (
+      `Definir destino: e-mail voltou (bounce) na ${names} e o lead está sem próxima atividade. ` +
+      'Corrija o e-mail, troque de cadência ou marque Ganho/Perdido.'
+    );
+  }
   return (
     `Definir destino: cadência pausada sem data de volta (${names} — ${describePauseReason(reason)}). ` +
     'Retome a cadência, troque de cadência ou marque Ganho/Perdido.'
