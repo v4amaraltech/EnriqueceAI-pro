@@ -91,6 +91,7 @@ function StatusBadge({ status }: { status: keyof typeof statusConfig }) {
 }
 
 export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, api4com, api4comOrg = null, evolutionInstance, apollo, planFeatures, isManager, myWhatsAppCall }: IntegrationsViewProps) {
+  const orgApi4ComManaged = isManager && !!api4comOrg?.settings.configured;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -271,66 +272,69 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             </div>
           </div>
 
-          {/* API4Com */}
-          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="flex w-10 shrink-0 items-center justify-center">
-              <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
-            </div>
-            <div className="w-32 shrink-0 font-medium">API4Com</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {api4com
-                ? `Ramal ${api4com.ramal} \u00b7 ${api4comOrg?.settings.configured && !api4com.has_api_key ? 'via conta da organiza\u00e7\u00e3o' : `Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`}`
-                : 'Integração automática com sistema de ligações'}
-            </div>
-            {api4com && <StatusBadge status={api4com.status} />}
-            <div className="ml-auto shrink-0 flex items-center gap-2">
-              {api4com ? (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      startTransition(async () => {
-                        const r = await testApi4ComConnection();
-                        if (r.success && r.data.ok) toast.success(`API4Com conectado (ramal ${r.data.ramal})`);
-                        else toast.error('Conexão com API4Com falhou — verifique o token');
-                      });
-                    }}
-                    disabled={isPending}
-                  >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                    Testar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowApi4ComConfig(true)}
-                  >
-                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                    Gerenciar
-                  </Button>
-                  {(isManager || !api4com.org_managed) && (
+          {/* API4Com — ramal individual. Com o token da org, o gestor vê só o cartão da organização
+              (o ramal dele vira uma linha da tabela do time). */}
+          {!orgApi4ComManaged && (
+            <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+              <div className="flex w-10 shrink-0 items-center justify-center">
+                <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
+              </div>
+              <div className="w-32 shrink-0 font-medium">API4Com</div>
+              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                {api4com
+                  ? `Ramal ${api4com.ramal} \u00b7 ${api4comOrg?.settings.configured && !api4com.has_api_key ? 'via conta da organiza\u00e7\u00e3o' : `Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`}`
+                  : 'Integração automática com sistema de ligações'}
+              </div>
+              {api4com && <StatusBadge status={api4com.status} />}
+              <div className="ml-auto shrink-0 flex items-center gap-2">
+                {api4com ? (
+                  <>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                      onClick={() => setShowDisconnectApi4Com(true)}
+                      onClick={() => {
+                        startTransition(async () => {
+                          const r = await testApi4ComConnection();
+                          if (r.success && r.data.ok) toast.success(`API4Com conectado (ramal ${r.data.ramal})`);
+                          else toast.error('Conexão com API4Com falhou — verifique o token');
+                        });
+                      }}
+                      disabled={isPending}
                     >
-                      <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                      Desconectar
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      Testar
                     </Button>
-                  )}
-                </>
-              ) : (
-                <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>
-                  Conectar
-                </Button>
-              )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowApi4ComConfig(true)}
+                    >
+                      <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                      Gerenciar
+                    </Button>
+                    {(isManager || !api4com.org_managed) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                        onClick={() => setShowDisconnectApi4Com(true)}
+                      >
+                        <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                        Desconectar
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>
+                    Conectar
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* API4Com — conta da organização (token único + ramais do time). Gestor. */}
-          {isManager && api4comOrg && <Api4ComOrgCard overview={api4comOrg} />}
+          {isManager && api4comOrg && <Api4ComOrgCard overview={api4comOrg} standalone={orgApi4ComManaged} />}
 
           {/* Ligação via WhatsApp (discador WhatsApp-nativo, Epic 7).
               Gestor: gerencia os números de todos os SDRs.
