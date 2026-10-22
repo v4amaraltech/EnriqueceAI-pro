@@ -4,9 +4,9 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { from } from '@/lib/supabase/from';
 
 import { callDispositionSchema, callStatusSchema } from '../schemas/call.schemas';
+import { applySdrCallResult } from '../services/apply-sdr-call-result';
 
 // `calls.status` continua sendo escrito EXCLUSIVAMENTE pelo webhook do API4COM
 // (/api/webhooks/api4com), que classifica significant / no_contact /
@@ -43,91 +43,17 @@ export async function classifyWebphoneCall(
 
   const { callId, sdrOutcome, clientDurationSeconds, notes, leadId } = parsed.data;
 
-  // Fetch current call to check ownership and current state
-  const { data: call } = (await from(supabase, 'calls')
-    .select('id, duration_seconds, lead_id, org_id, hangup_cause')
-    .eq('id', callId)
-    .eq('org_id', orgId)
-    .single()) as {
-    data: { id: string; duration_seconds: number; lead_id: string | null; org_id: string; hangup_cause: string | null } | null;
-  };
-
-  if (!call) {
-    return { success: false, error: 'Ligação não encontrada' };
-  }
-
-  // `status` DELIBERADAMENTE omitido — quem manda nele é o webhook do API4COM.
-  const updates: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
-
-  if (notes) {
-    updates.notes = notes;
-  }
-
-  // O desfecho do SDR vai para a coluna própria, ao lado do status técnico.
-  if (sdrOutcome) {
-    updates.sdr_disposition = sdrOutcome;
-  }
-
-  // Duração medida na tela só como reserva enquanto o webhook não fechou a
-  // ligação. Com `hangup_cause` gravado a API4COM já deu a duração real — e
-  // 0 s ali é "ninguém atendeu", não "falta medir": o tempo da tela é da perna
-  // do ramal (o webphone atende na hora) e virava duração falsa (22/10/2026).
-  if (call.duration_seconds === 0 && clientDurationSeconds > 0 && !call.hangup_cause) {
-    updates.duration_seconds = clientDurationSeconds;
-  }
-
-  // Only write if we have a meaningful change (notes or duration); otherwise
-  // skip — there's no point flipping updated_at for an empty submission.
-  if (Object.keys(updates).length > 1) {
-    await from(supabase, 'calls').update(updates).eq('id', callId).eq('org_id', orgId);
-  }
-
-  // Atualiza a interaction `internal_api4com` que initiateApi4ComCall já
-  // criou pra esta ligação — em vez de inserir uma nova. Antes, classify
-  // sempre criava uma row separada com `source=webphone`, fazendo 1 ligação
-  // virar 2 (e até 3, somando o INSERT da execução de cadência) no contador
-  // de "atividades realizadas". Hoje (27/05/2026) a V4 Amaral acumulou
-  // 257 phone interactions fantasmas em 302 ligações reais.
-  //
-  // Mantém o INSERT como fallback se o internal_api4com ainda não estiver
-  // gravado (legacy ou casos raros onde initiate não inseriu).
-  const effectiveLeadId = leadId ?? call.lead_id;
-  if (effectiveLeadId) {
-    const { data: existing } = (await from(supabase, 'interactions')
-      .select('id, metadata, message_content')
-      .eq('lead_id', effectiveLeadId)
-      .eq('channel', 'phone')
-      .contains('metadata', { callId })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null };
-
-    if (existing) {
-      const mergedMeta = {
-        ...(existing.metadata ?? {}),
-        classified_via: 'webphone',
-        ...(notes ? { webphone_notes: notes } : {}),
-      };
-      await from(supabase, 'interactions')
-        .update({
-          ...(notes && !existing.message_content ? { message_content: notes } : {}),
-          metadata: mergedMeta,
-        } as Record<string, unknown>)
-        .eq('id', existing.id);
-    } else {
-      await from(supabase, 'interactions')
-        .insert({
-          org_id: orgId,
-          lead_id: effectiveLeadId,
-          channel: 'phone',
-          type: 'sent',
-          message_content: notes || null,
-          metadata: { callId, source: 'webphone' },
-          performed_by: userId,
-        } as Record<string, unknown>);
-    }
-  }
+  const result = await applySdrCallResult(supabase, {
+    orgId,
+    userId,
+    callId,
+    sdrOutcome,
+    clientDurationSeconds,
+    notes,
+    leadId,
+    via: 'webphone',
+  });
+  if (!result.success) return result;
 
   return { success: true, data: { callId } };
 }

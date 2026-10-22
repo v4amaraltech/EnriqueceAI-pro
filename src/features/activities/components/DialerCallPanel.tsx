@@ -44,6 +44,8 @@ interface DialerCallPanelProps {
   callState: CallState;
   /** O lead atendeu, segundo o webhook da API4COM ("unknown" até ele chegar). */
   leadAnswer?: LeadAnswer;
+  /** Discagem automática cuidando da vez: esconde o botão de ligar manual. */
+  manualDialHidden?: boolean;
   onComplete: (callStatus: string, notes: string, durationSeconds: number) => void;
   onSkip: () => void;
   onInitiateCall: (phone: string) => void;
@@ -57,6 +59,7 @@ export function DialerCallPanel({
   isSending,
   callState,
   leadAnswer = 'unknown',
+  manualDialHidden = false,
   onComplete,
   onSkip,
   onInitiateCall,
@@ -239,7 +242,7 @@ export function DialerCallPanel({
 
             {/* Call action buttons */}
             <div className="mt-3 flex items-center gap-4">
-              {callState === 'idle' && (
+              {callState === 'idle' && !manualDialHidden && (
                 <button
                   onClick={() => onInitiateCall(selectedPhone)}
                   disabled={isSending}
@@ -291,7 +294,12 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && (isSending ? 'Iniciando ligação...' : 'Clique para ligar via API4COM')}
+              {callState === 'idle' &&
+                (manualDialHidden
+                  ? 'A discagem automática liga para este número'
+                  : isSending
+                    ? 'Iniciando ligação...'
+                    : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
