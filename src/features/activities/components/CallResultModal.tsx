@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
 
 import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
+import { CONNECTED_MIN_DURATION_SECONDS } from '@/features/calls/connection';
 import { mapDispositionToAction, dispositionOptionsForTelemetry } from '@/features/calls/disposition';
 import type { CallDisposition } from '@/features/calls/types';
 
@@ -206,6 +207,10 @@ export function CallResultModal({
   // Atendida obriga o SDR a escolher o desfecho antes de concluir. Na não
   // atendida `outcome` já vem preenchido (no_contact), então nunca bloqueia.
   const missingOutcome = showOutcome && outcome === null;
+  // A API4COM marca como atendida também quando a CAIXA POSTAL pega a linha —
+  // não há sinal que separe as duas. Abaixo do piso de conversa (50s) o selo
+  // avisa em vez de afirmar; o SDR diz o que foi no desfecho.
+  const maybeVoicemail = connected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS;
 
   function buildReturnSchedule(): CallReturnSchedule | null {
     if (!needsReturn || !returnDate) return null;
@@ -254,7 +259,7 @@ export function CallResultModal({
             <div
               className={cn(
                 'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-                connected
+                connected && !maybeVoicemail
                   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                   : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
               )}
@@ -264,7 +269,9 @@ export function CallResultModal({
               ) : (
                 <PhoneMissed className="h-3.5 w-3.5" />
               )}
-              <span>{connected ? 'Atendida' : 'Não atendida'}</span>
+              <span>
+                {maybeVoicemail ? 'Atendida · pode ser caixa postal' : connected ? 'Atendida' : 'Não atendida'}
+              </span>
               <span aria-hidden>·</span>
               <span className="font-mono tabular-nums">{formatDuration(durationSeconds)}</span>
             </div>

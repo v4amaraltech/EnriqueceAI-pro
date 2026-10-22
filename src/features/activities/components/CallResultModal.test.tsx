@@ -96,6 +96,19 @@ describe('CallResultModal', () => {
       expect(screen.getByText('Atendida')).toBeInTheDocument();
       expect(screen.getByText('04:17')).toBeInTheDocument();
     });
+
+    it('abaixo de 50s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
+      renderModal({ connected: true, durationSeconds: 43 });
+      expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+      expect(screen.queryByText('Atendida')).not.toBeInTheDocument();
+      // O SDR continua escolhendo o desfecho.
+      expect(screen.getByRole('radio', { name: /Não atendeu/ })).toBeInTheDocument();
+    });
+
+    it('a partir de 50s volta a ser "Atendida"', () => {
+      renderModal({ connected: true, durationSeconds: 50 });
+      expect(screen.getByText('Atendida')).toBeInTheDocument();
+    });
   });
 
   describe('bloco de retorno — só quando o lead pediu retorno', () => {
@@ -188,7 +201,7 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
       onConclude,
     };
     const { rerender } = render(<CallResultModal {...base} />);
-    expect(screen.getByText('Atendida')).toBeInTheDocument();
+    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
     expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
 
     rerender(<CallResultModal {...base} connected={false} durationSeconds={0} />);
