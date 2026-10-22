@@ -34,6 +34,12 @@ export interface DialerQueueItem {
   nextStepDue: string;
   activityName: string | null;
   callScript: string | null;
+  /**
+   * A etapa ATUAL da inscrição é a de ligação. Quando `false`, o item entrou na
+   * fila pela próxima etapa de ligação da cadência: concluir pularia as etapas
+   * do meio, então a discagem automática não o disca (só o modo manual).
+   */
+  currentStepIsPhone: boolean;
 }
 
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
@@ -83,11 +89,11 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   ]);
 
   // Build lookup: cadence_id -> set of phone step_orders and their data
-  interface PhoneStepInfo { id: string; activityName: string | null; instructions: string | null }
+  interface PhoneStepInfo { id: string; order: number; activityName: string | null; instructions: string | null }
   const phoneSteps = new Map<string, Map<number, PhoneStepInfo>>(); // cadence_id -> (step_order -> step info)
   for (const s of phoneStepsResult.data ?? []) {
     const map = phoneSteps.get(s.cadence_id) ?? new Map();
-    map.set(s.step_order, { id: s.id, activityName: s.activity_name, instructions: s.instructions });
+    map.set(s.step_order, { id: s.id, order: s.step_order, activityName: s.activity_name, instructions: s.instructions });
     phoneSteps.set(s.cadence_id, map);
   }
 
@@ -197,6 +203,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       nextStepDue: e.next_step_due,
       activityName: stepInfo.activityName,
       callScript: stepInfo.instructions,
+      currentStepIsPhone: stepInfo.order === e.current_step,
     });
   }
 

@@ -156,6 +156,12 @@ export function WebphonePanel() {
   if (stage.kind === 'finished' && finishedCallId && !liveContext) {
     setStage({ kind: 'rating', call: stage.call });
   }
+  // Ninguém atendeu: não houve conversa, não há áudio para avaliar. Vale também
+  // quando o sinal da API4COM chega com a avaliação já na tela (discagem
+  // automática conclui sozinha e segue para o próximo).
+  if (stage.kind === 'rating' && leadAnswer === 'not_answered') {
+    setStage({ kind: 'idle', doneCallId: stage.call.id });
+  }
 
   const finish = useCallback((call: FinishedCall) => {
     if (call.context) clearWebphoneCallContext(call.context.callId);
