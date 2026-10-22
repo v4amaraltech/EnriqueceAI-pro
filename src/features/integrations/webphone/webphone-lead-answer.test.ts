@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { leadAnswerFromCallRow } from './webphone-lead-answer';
+import { effectiveCallSeconds, leadAnswerFromCallRow, leadConnected } from './webphone-lead-answer';
 
 describe('leadAnswerFromCallRow', () => {
   it('answered_at presente → atendida (mesmo com hangup_cause normal)', () => {
@@ -19,5 +19,23 @@ describe('leadAnswerFromCallRow', () => {
 
   it('duração > 0 sem answered_at (ramal legado sem channel-answer) → atendida', () => {
     expect(leadAnswerFromCallRow({ answered_at: null, hangup_cause: null, duration_seconds: 42 })).toBe('answered');
+  });
+});
+
+describe('leadConnected / effectiveCallSeconds', () => {
+  it('o webhook vence o tempo medido na tela', () => {
+    expect(leadConnected('not_answered', true)).toBe(false);
+    expect(leadConnected('answered', false)).toBe(true);
+  });
+
+  it('sem webhook ainda, usa a reserva', () => {
+    expect(leadConnected('unknown', true)).toBe(true);
+    expect(leadConnected('unknown', false)).toBe(false);
+  });
+
+  it('não atendida registra 0 s; nos demais casos, o medido', () => {
+    expect(effectiveCallSeconds('not_answered', 7)).toBe(0);
+    expect(effectiveCallSeconds('answered', 174)).toBe(174);
+    expect(effectiveCallSeconds('unknown', 5)).toBe(5);
   });
 });

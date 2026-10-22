@@ -169,14 +169,28 @@ export function CallResultModal({
   // uma prop muda") em vez de useEffect: o React reexecuta o componente na hora,
   // sem pintar o estado velho e sem render em cascata.
   const [wasOpen, setWasOpen] = useState(open);
+  const [wasConnected, setWasConnected] = useState(connected);
   if (open !== wasOpen) {
     setWasOpen(open);
+    setWasConnected(connected);
     if (open) {
       setNotes(initialNotes);
       setOutcome(defaultOutcome(connected));
       setReturnDate(undefined);
       setReturnTime('09:00');
       setReturnChannel('phone');
+      setShowOutcome(connected);
+    }
+  } else if (open && connected !== wasConnected) {
+    // O sinal de atendimento mudou com o modal aberto (o webhook da API4COM
+    // chegou depois): reaplica o padrão se o SDR ainda não mexeu no desfecho
+    // ou se a escolha dele deixou de valer (ex.: "Conversa relevante" numa
+    // ligação que a telefonia diz que ninguém atendeu).
+    setWasConnected(connected);
+    const untouched = outcome === defaultOutcome(wasConnected) && showOutcome === wasConnected;
+    const stillValid = outcome !== null && dispositionOptionsForTelemetry(connected).some((o) => o.value === outcome);
+    if (untouched || !stillValid) {
+      setOutcome(defaultOutcome(connected));
       setShowOutcome(connected);
     }
   }

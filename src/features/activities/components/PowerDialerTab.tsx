@@ -16,6 +16,7 @@ import {
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
 import {
   clearWebphoneCallContext,
   onWebphoneConcludeRequested,
@@ -80,6 +81,8 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
+  // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.)
+  const leadAnswer = useWebphoneLeadAnswer(callState === 'ended' ? callId : null);
 
   const handleRemoteHangup = useCallback((_durationSeconds: number) => {
     setCallState('ended');
@@ -321,6 +324,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
                 item={currentItem}
                 isSending={isPending}
                 callState={callState}
+                leadAnswer={leadAnswer}
                 onComplete={handleComplete}
                 onSkip={handleSkip}
                 onInitiateCall={handleInitiateCall}

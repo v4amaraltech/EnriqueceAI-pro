@@ -30,7 +30,7 @@ import { useWebphoneCallContext } from './useWebphoneCallContext';
 import { useWebphoneLeadAnswer } from './useWebphoneLeadAnswer';
 import { useWebphonePanelHost } from './WebphonePanelHost';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
-import type { LeadAnswer } from './webphone-lead-answer';
+import { effectiveCallSeconds, leadConnected, type LeadAnswer } from './webphone-lead-answer';
 import {
   clearWebphoneCallContext,
   contextMatchesCall,
@@ -108,16 +108,6 @@ function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext |
   };
 }
 
-/**
- * Sinal de "atendida" para o painel e o modal: a palavra do webhook vale mais
- * que a do cliente SIP; sem webhook ainda, cai no atendimento do ramal.
- */
-export function leadConnected(leadAnswer: LeadAnswer, ramalAnswered: boolean): boolean {
-  if (leadAnswer === 'answered') return true;
-  if (leadAnswer === 'not_answered') return false;
-  return ramalAnswered;
-}
-
 function viewportSize() {
   return { width: window.innerWidth, height: window.innerHeight };
 }
@@ -191,7 +181,11 @@ export function WebphonePanel() {
     if (stage.kind !== 'finished') return;
     const { call } = stage;
     if (liveContext?.ownerHandlesResult) {
-      requestWebphoneConclude({ callId: liveContext.callId, durationSeconds: call.talkSeconds, notes: ctxState.notes });
+      requestWebphoneConclude({
+        callId: liveContext.callId,
+        durationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
+        notes: ctxState.notes,
+      });
       setStage({ kind: 'rating', call });
       return;
     }
@@ -209,7 +203,7 @@ export function WebphonePanel() {
     classifyWebphoneCall({
       callId: ctx.callId,
       sdrOutcome: args.outcome,
-      clientDurationSeconds: call.talkSeconds,
+      clientDurationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
       notes: args.notes || undefined,
       leadId: ctx.leadId ?? undefined,
     })
@@ -285,7 +279,7 @@ export function WebphonePanel() {
           leadName={resultCall.context.leadName ?? resultCall.remoteNumber ?? 'Lead'}
           leadId={resultCall.context.leadId ?? undefined}
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
-          durationSeconds={resultCall.talkSeconds}
+          durationSeconds={effectiveCallSeconds(leadAnswer, resultCall.talkSeconds)}
           connected={leadConnected(leadAnswer, resultCall.answered)}
           dismissible={false}
           initialNotes={ctxState.notes}

@@ -243,6 +243,16 @@ Feito:
 - [x] `originateCall`: no 424 "has been failed" (perna do ramal) repete UMA vez após 3 s — seguro porque nenhuma chamada nasceu (o timeout continua sem retry). `describeOriginateError` traduz os dois 424 conhecidos em mensagem para o SDR; `initiateApi4ComCall` usa, então fila, Power Dialer e página do lead mostram o mesmo texto. 3 + 2 testes.
 - Typecheck, lint e testes verdes. Nada commitado.
 
+### "Atendida" pelo webhook na fila e no Power Dialer — 22/10/2026 (branch `fix/webphone-queue-lead-answer`)
+Teste do Vini na fila (22/10, 05:59–06:07 BRT): ligações com `NUMBER_CHANGED`/`ORIGINATOR_CANCEL` (lead não atendeu; "caixa postal" = mensagem da operadora) apareciam no modal da fila como "Atendida · 00:05/00:07". O PR #490 só corrigira o modal aberto pelo painel na página do lead; a fila usava `connected={callDuration > 0}` com o tempo da perna do ramal. E "Ligar de novo" gravou 9 s numa ligação não atendida: `classifyWebphoneCall` usava o tempo da tela sempre que `duration_seconds` era 0 — inclusive DEPOIS do webhook ter fechado a ligação com 0 s.
+- [x] `leadConnected` / `effectiveCallSeconds` movidos para `webphone-lead-answer.ts` (puros, compartilhados).
+- [x] `ActivityPhonePanel`: `useWebphoneLeadAnswer(callId)` quando a chamada termina; modal recebe `connected` e duração por esse sinal (não atendida → "Não atendida", 0 s, "Ligar de novo" principal); tentativas e `classifyWebphoneCall` recebem 0 s.
+- [x] `PowerDialerTab` / `DialerCallPanel`: selo "Atendida"/"Não atendida" pelo webhook; não atendida → "Tentar novamente" vira o botão principal. (A duração do Power Dialer já saía 0: o timer zera ao encerrar.)
+- [x] `WebphonePanel`: manda 0 s ao concluir ligação não atendida.
+- [x] `CallResultModal`: se o sinal muda com o modal aberto (webhook chega depois), reaplica o padrão quando o SDR não mexeu no desfecho OU a escolha deixou de valer para a telemetria. 3 testes.
+- [x] `classifyWebphoneCall`: não usa o tempo da tela quando a linha já tem `hangup_cause`. 2 testes (arquivo novo).
+- ⚠️ Fora do escopo, só registrado: `completeDialerCall` (Power Dialer) cria uma SEGUNDA linha em `calls` (`origin='power_dialer'`, 0 s) além da criada pelo `initiateCall` — 31 em out/2026, 348 em jul/2026.
+
 ### Painel dentro da gaveta da fila — 22/10/2026 (branch `fix/webphone-panel-in-sheet`)
 Na fila de atividades o painel flutuante não aparecia durante a ligação: a tarefa abre numa gaveta Radix (`Sheet`) de tela cheia com overlay `z-50` desenhada em portal DEPOIS do layout, então cobria o painel. Só subir o `z-index` não bastava: com a gaveta aberta o Radix bloqueia cliques fora dela, prende o foco (não daria para digitar as anotações) e fecha a gaveta no clique externo.
 - [x] `webphone-panel-host.ts` (registro em pilha) + `WebphonePanelHost.tsx` (encaixe + hook `useWebphonePanelHost`). A gaveta de execução monta o encaixe dentro do `SheetContent`; o `WebphonePanel` se desenha nele via `createPortal` enquanto existir e volta ao layout quando a gaveta fecha. Mesma posição (o painel é `position: fixed`, posição salva em `localStorage`).
@@ -318,6 +328,13 @@ Bloco 3 (feito):
 - `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx` (publicam o contexto; respondem ao "Concluir" do painel; liberam o resultado ao desmontar)
 - `src/features/leads/components/LeadDetailLayout.tsx` (publica o contexto; painel assume o resultado)
 
+"Atendida" pelo webhook na fila e no Power Dialer (22/10):
+- `src/features/integrations/webphone/webphone-lead-answer.ts` + `.test.ts` (`leadConnected`, `effectiveCallSeconds`)
+- `src/features/integrations/webphone/WebphonePanel.tsx`
+- `src/features/activities/components/ActivityPhonePanel.tsx`, `PowerDialerTab.tsx`, `DialerCallPanel.tsx`
+- `src/features/activities/components/CallResultModal.tsx` + `.test.tsx`
+- `src/features/calls/actions/classify-webphone-call.ts` + `.test.ts` (novo)
+
 Painel dentro da gaveta (22/10):
 - `src/features/integrations/webphone/webphone-panel-host.ts`, `WebphonePanelHost.tsx`, `webphone-panel-host.test.tsx` (novos)
 - `src/features/integrations/webphone/WebphonePanel.tsx` (portal para o encaixe)
@@ -335,6 +352,8 @@ Ajustes pós-produção (22/10):
 Checklist de 10 pontos: 1 título ✅ · 2 descrição ✅ · 3 critérios testáveis ✅ · 4 escopo IN/OUT ✅ · 5 dependências ✅ (seção adicionada) · 6 estimativa ✅ (adicionada) · 7 valor de negócio ✅ · 8 riscos ✅ · 9 critério de pronto ✅ (adicionado) · 10 alinhamento ⚠️ (não há PRD/épico; origem é pedido direto do Vini com referência ao CRM da matriz, aceito como fonte). **Veredito: GO, 9/10.** Condições aplicadas nesta validação: estimativa, dependências, critério de pronto e entrega em 3 PRs por bloco. Observação para o @dev: tratar o bloco 1 como PR independente e só abrir o bloco 2 depois do protótipo isolado do registro SIP.
 
 ## Change Log
+- 22/10/2026 — @dev: fila de atividades e Power Dialer passam a usar o sinal do webhook ("Não atendida", 0 s, "Ligar de novo"/"Tentar novamente" em destaque); modal se atualiza quando o webhook chega; servidor não grava mais o tempo do ramal depois do webhook. Branch `fix/webphone-queue-lead-answer`. Nada commitado.
+- 22/10/2026 — @devops: PR #491 mesclado (squash `6461d69`) e deploy confirmado às 05:46 BRT. Painel aparece dentro da gaveta da fila (validado pelo Vini).
 - 22/10/2026 — @dev: painel flutuante passa a ser desenhado dentro da gaveta de execução da fila de atividades (branch `fix/webphone-panel-in-sheet`); antes ficava escondido atrás dela. Typecheck, lint e testes verdes. Nada commitado.
 - 22/10/2026 — @devops: PR #490 mesclado (squash `00e3e50b`) e deploy confirmado às 22:16 BRT de 21/10.
 - 22/10/2026 — @dev: ajustes pós-produção na branch `fix/webphone-result-modal`: modal de resultado do painel não fecha por clique fora/Esc; "Não atendida" e `connected` do modal passam a vir do webhook (`answered_at`/`hangup_cause`) em vez da perna do ramal; 424 "has been failed" ganha uma nova tentativa após 3 s e mensagem clara nos três discadores. Typecheck, lint e testes verdes. Nada commitado.

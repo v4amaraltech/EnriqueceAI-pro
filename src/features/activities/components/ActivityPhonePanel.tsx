@@ -25,6 +25,8 @@ import { scheduleActivity } from '../actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
 import { useWebphoneCallContext } from '@/features/integrations/webphone/useWebphoneCallContext';
+import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
+import { effectiveCallSeconds, leadConnected } from '@/features/integrations/webphone/webphone-lead-answer';
 import {
   clearWebphoneCallContext,
   onWebphoneConcludeRequested,
@@ -89,6 +91,12 @@ export function ActivityPhonePanel({
   const [callStatus, setCallStatus] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
+  // O lead atendeu? Vem do webhook da API4COM (answered_at / hangup_cause). O
+  // tempo medido na tela conta a perna do ramal — que o webphone atende na
+  // hora —, então sozinho dizia "Atendida" até em número alterado/caixa postal.
+  const leadAnswer = useWebphoneLeadAnswer(callState === 'ended' ? callId : null);
+  const callConnected = leadConnected(leadAnswer, callDuration > 0);
+  const resultSeconds = effectiveCallSeconds(leadAnswer, callDuration);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
   // Synchronous guard against double-clicks. useTransition's isPending only
@@ -223,7 +231,7 @@ export function ActivityPhonePanel({
       phone: selectedPhone,
       status: callStatus,
       notes: attemptNotes,
-      durationSeconds: callDuration,
+      durationSeconds: resultSeconds,
     };
   }
 
@@ -235,7 +243,7 @@ export function ActivityPhonePanel({
     if (callId) {
       classifyWebphoneCall({
         callId,
-        clientDurationSeconds: callDuration,
+        clientDurationSeconds: resultSeconds,
         notes: attemptNotes || undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
@@ -279,7 +287,7 @@ export function ActivityPhonePanel({
       classifyWebphoneCall({
         callId,
         sdrOutcome: outcome,
-        clientDurationSeconds: callDuration,
+        clientDurationSeconds: resultSeconds,
         notes: resultNotes || undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
@@ -553,8 +561,8 @@ export function ActivityPhonePanel({
         leadEmail={leadEmail}
         leadFirstName={leadFirstName}
         phoneLabel={selectedPhone}
-        durationSeconds={callDuration}
-        connected={callDuration > 0}
+        durationSeconds={resultSeconds}
+        connected={callConnected}
         initialNotes={webphoneNotes}
         isSending={isSending || isPending}
         onRetry={canRetry ? handleRetryAttempt : undefined}

@@ -30,3 +30,22 @@ export function leadAnswerFromCallRow(row: CallAnswerSignals | null | undefined)
 export const LEAD_ANSWER_POLL_INTERVAL_MS = 3_000;
 /** Teto de consultas por ligação (~2 min): depois disso fica "desconhecido". */
 export const LEAD_ANSWER_MAX_POLLS = 40;
+
+/**
+ * Sinal de "atendida" para os discadores e o modal de resultado: a palavra do
+ * webhook vale mais que a do cliente; sem webhook ainda, usa o `fallback`
+ * (atendimento da perna do ramal / duração medida na tela).
+ */
+export function leadConnected(leadAnswer: LeadAnswer, fallback: boolean): boolean {
+  if (leadAnswer === 'answered') return true;
+  if (leadAnswer === 'not_answered') return false;
+  return fallback;
+}
+
+/**
+ * Segundos de conversa a registrar: 0 quando o lead não atendeu (o tempo
+ * medido na tela é da perna do ramal, não conversa); senão o medido.
+ */
+export function effectiveCallSeconds(leadAnswer: LeadAnswer, measuredSeconds: number): number {
+  return leadAnswer === 'not_answered' ? 0 : measuredSeconds;
+}

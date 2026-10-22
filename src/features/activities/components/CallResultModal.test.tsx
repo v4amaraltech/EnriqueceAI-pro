@@ -172,3 +172,71 @@ describe('dismissible={false} — fechamento só pelo Concluir ou pelo ×', () =
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', () => {
+  it('atendida → não atendida: esconde o desfecho, pré-seleciona "Não atendeu" e "Ligar de novo" vira principal', async () => {
+    const user = userEvent.setup();
+    const onConclude = vi.fn();
+    const base: CallResultModalProps = {
+      open: true,
+      onClose: vi.fn(),
+      leadName: 'Lead de Teste',
+      phoneLabel: '16982501819',
+      durationSeconds: 7,
+      connected: true,
+      onRetry: vi.fn(),
+      onConclude,
+    };
+    const { rerender } = render(<CallResultModal {...base} />);
+    expect(screen.getByText('Atendida')).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+
+    rerender(<CallResultModal {...base} connected={false} durationSeconds={0} />);
+
+    expect(screen.getByText('Não atendida')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Concluir atividade/ }));
+    expect(onConclude).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+  });
+
+  it('escolha que deixou de valer volta ao padrão "Não atendeu"', async () => {
+    const user = userEvent.setup();
+    const base: CallResultModalProps = {
+      open: true,
+      onClose: vi.fn(),
+      leadName: 'Lead de Teste',
+      phoneLabel: '16982501819',
+      durationSeconds: 7,
+      connected: true,
+      onConclude: vi.fn(),
+    };
+    const { rerender } = render(<CallResultModal {...base} />);
+    await user.click(screen.getByRole('radio', { name: /Conversa relevante/ }));
+
+    rerender(<CallResultModal {...base} connected={false} durationSeconds={0} />);
+
+    expect(screen.queryByRole('radio', { name: /Conversa relevante/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
+    expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_answer');
+  });
+
+  it('mantém a escolha do SDR que continua válida quando o sinal muda', async () => {
+    const user = userEvent.setup();
+    const base: CallResultModalProps = {
+      open: true,
+      onClose: vi.fn(),
+      leadName: 'Lead de Teste',
+      phoneLabel: '16982501819',
+      durationSeconds: 0,
+      connected: false,
+      onConclude: vi.fn(),
+    };
+    const { rerender } = render(<CallResultModal {...base} />);
+    await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
+    await user.click(screen.getByRole('radio', { name: /Falha técnica/ }));
+
+    // O webhook chega dizendo que atendeu: "Falha técnica" vale nos dois casos.
+    rerender(<CallResultModal {...base} connected durationSeconds={12} />);
+    expect(screen.getByRole('radio', { name: /Falha técnica/ })).toBeChecked();
+  });
+});
