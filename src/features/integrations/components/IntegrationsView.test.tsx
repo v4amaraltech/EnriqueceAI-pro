@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, Api4ComOrgOverview, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
@@ -25,6 +25,14 @@ vi.mock('../actions/manage-apollo', () => ({
 
 vi.mock('../actions/manage-whatsapp', () => ({
   disconnectEvolutionWhatsApp: vi.fn(),
+}));
+
+vi.mock('../actions/manage-api4com-org', () => ({
+  assignApi4ComExtension: vi.fn(),
+  disconnectApi4ComOrg: vi.fn(),
+  setWebphoneEnabled: vi.fn(),
+  syncApi4ComExtensions: vi.fn(),
+  saveApi4ComOrgSettings: vi.fn(),
 }));
 
 vi.mock('../actions/manage-api4com', () => ({
@@ -115,6 +123,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   org_sip_domain: null,
   has_api_key: true,
   has_sip_password: false,
+  org_managed: false,
   status: 'connected',
   created_at: '2026-02-15T10:00:00Z',
   updated_at: '2026-02-15T10:00:00Z',
@@ -264,6 +273,53 @@ describe('IntegrationsView', () => {
       />,
     );
     expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('esconde Desconectar da API4Com para o SDR quando a org tem token', () => {
+    render(
+      <IntegrationsView {...defaultProps} isManager={false} api4com={{ ...api4comConnected, org_managed: true }} />,
+    );
+    expect(screen.getByText(/Ramal 1014/)).toBeInTheDocument();
+    expect(screen.queryByText('Desconectar')).not.toBeInTheDocument();
+  });
+
+  const orgOverview: Api4ComOrgOverview = {
+    settings: { configured: true, base_url: 'https://api.api4com.com/api/v1/', sip_domain: 'v4amaral.api4com.com', last_synced_at: null },
+    team: [
+      { userId: 'u1', name: 'Vinicius', email: 'v@x.com', role: 'manager', ramal: '1014', hasSipPassword: true, syncedAt: null, hasOwnToken: true, webphoneEnabled: true },
+      { userId: 'u2', name: 'Ismael', email: 'i@x.com', role: 'sdr', ramal: null, hasSipPassword: false, syncedAt: null, hasOwnToken: false, webphoneEnabled: false },
+      { userId: 'u3', name: 'Matheus', email: 'm@x.com', role: 'sdr', ramal: '1028', hasSipPassword: false, syncedAt: null, hasOwnToken: false, webphoneEnabled: false },
+    ],
+  };
+
+  it('gestor com token da org vê um cartão só, com a situação de cada pessoa', () => {
+    render(<IntegrationsView {...defaultProps} api4com={api4comConnected} api4comOrg={orgOverview} />);
+    // A linha individual (Ramal 1014 · Gerenciar/Desconectar) some.
+    expect(screen.queryByText(/Ramal 1014/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Gerenciar')).not.toBeInTheDocument();
+    expect(screen.getByText('1 de 3 prontos para ligar')).toBeInTheDocument();
+    expect(screen.getByText('Pronto')).toBeInTheDocument();
+    expect(screen.getByText('Sem ramal')).toBeInTheDocument();
+    expect(screen.getByText('Falta sincronizar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ramal de Ismael')).toBeInTheDocument();
+    expect(screen.queryByText(/token próprio/)).not.toBeInTheDocument();
+  });
+
+  it('gestor sem token da org continua vendo o ramal individual', () => {
+    render(
+      <IntegrationsView
+        {...defaultProps}
+        api4com={api4comConnected}
+        api4comOrg={{ settings: { configured: false, base_url: null, sip_domain: null, last_synced_at: null }, team: [] }}
+      />,
+    );
+    expect(screen.getByText(/Ramal 1014/)).toBeInTheDocument();
+    expect(screen.getByText('Configurar token')).toBeInTheDocument();
+  });
+
+  it('mantém Desconectar da API4Com para o gestor mesmo com token da org', () => {
+    render(<IntegrationsView {...defaultProps} api4com={{ ...api4comConnected, org_managed: true }} />);
+    expect(screen.getByText('Desconectar')).toBeInTheDocument();
   });
 
 });

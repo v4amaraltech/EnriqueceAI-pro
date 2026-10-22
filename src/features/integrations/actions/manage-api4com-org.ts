@@ -90,7 +90,7 @@ async function applyExtensionSync(
 
   const person = (userId: string) => {
     const p = profiles.get(userId);
-    return { name: p?.displayName ?? userId.slice(0, 8), email: p?.email ?? null };
+    return { userId, name: p?.displayName ?? userId.slice(0, 8), email: p?.email ?? null };
   };
   const now = new Date().toISOString();
   const domain = pickAccountDomain(extensions);
@@ -228,6 +228,76 @@ export async function syncApi4ComExtensions(): Promise<ActionResult<Api4ComSyncR
   const report = await applyExtensionSync(client, orgId, creds, extensions);
   revalidatePath('/settings/integrations');
   return { success: true, data: report };
+}
+
+interface AssignExtensionInput {
+  userId: string;
+  ramal: string;
+}
+
+/**
+ * Gestor define (ou troca) o ramal de UMA pessoa. Confere o ramal na conta
+ * pela API4COM e já grava domínio + senha SIP — é o caminho para quem ficou
+ * "sem ramal" porque o e-mail casa com mais de um ramal (duplicados 1047–1054).
+ */
+export async function assignApi4ComExtension(input: AssignExtensionInput): Promise<ActionResult<{ ramal: string }>> {
+  const auth = await requireManagerOrg();
+  if (!auth.success) return auth;
+  const { orgId } = auth.data;
+
+  const ramal = normalizeRamal(input.ramal);
+  if (!ramal) return { success: false, error: 'Informe o número do ramal' };
+  if (!isEncryptionConfigured()) return { success: false, error: ENCRYPTION_MISSING_ERROR };
+
+  const client = createServiceRoleClient();
+  const [members, connections, creds] = await Promise.all([
+    loadMembers(client, orgId),
+    loadConnections(client, orgId),
+    getOrgSettingsCredentials(orgId, client),
+  ]);
+  if (!creds) return { success: false, error: 'Cadastre o token da API4COM da organização antes' };
+  if (!members.some((m) => m.user_id === input.userId)) {
+    return { success: false, error: 'Pessoa não encontrada na organização' };
+  }
+  const owner = connections.find((c) => normalizeRamal(c.ramal) === ramal && c.user_id !== input.userId);
+  if (owner) return { success: false, error: `O ramal ${ramal} já está com outra pessoa do time` };
+
+  let extensions: Api4ComExtension[];
+  try {
+    extensions = await listExtensions(creds);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'erro desconhecido';
+    return { success: false, error: `Falha ao listar ramais na API4COM: ${message}` };
+  }
+  const ext = extensions.find((e) => normalizeRamal(e.ramal) === ramal);
+  if (!ext) return { success: false, error: `O ramal ${ramal} não existe na conta API4COM` };
+
+  const fields: Record<string, unknown> = {
+    ramal,
+    sip_domain: ext.domain?.trim().toLowerCase() || pickAccountDomain(extensions),
+    sip_password_encrypted: ext.senha ? encrypt(String(ext.senha)) : null,
+    api4com_extension_id: String(ext.id),
+    synced_at: new Date().toISOString(),
+    status: 'connected',
+  };
+
+  const existing = connections.find((c) => c.user_id === input.userId);
+  const { error } = existing
+    ? await from(client, 'api4com_connections' as never).update(fields).eq('org_id', orgId).eq('user_id', input.userId)
+    : await from(client, 'api4com_connections' as never).insert({
+        ...fields,
+        org_id: orgId,
+        user_id: input.userId,
+        base_url: `${creds.baseUrl}/`,
+        api_key_encrypted: null,
+      });
+  if (error) {
+    console.error('[api4com] assignApi4ComExtension failed:', error);
+    return { success: false, error: 'Erro ao salvar o ramal' };
+  }
+
+  revalidatePath('/settings/integrations');
+  return { success: true, data: { ramal } };
 }
 
 /** Remove o token da organização. As linhas de ramal ficam (voltam ao token legado, se houver). */
