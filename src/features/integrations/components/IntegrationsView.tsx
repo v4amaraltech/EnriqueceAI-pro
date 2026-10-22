@@ -309,15 +309,17 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     <Settings2 className="mr-1.5 h-3.5 w-3.5" />
                     Gerenciar
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnectApi4Com(true)}
-                  >
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                    Desconectar
-                  </Button>
+                  {(isManager || !api4com.org_managed) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                      onClick={() => setShowDisconnectApi4Com(true)}
+                    >
+                      <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                      Desconectar
+                    </Button>
+                  )}
                 </>
               ) : (
                 <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>

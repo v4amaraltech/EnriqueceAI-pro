@@ -115,6 +115,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   org_sip_domain: null,
   has_api_key: true,
   has_sip_password: false,
+  org_managed: false,
   status: 'connected',
   created_at: '2026-02-15T10:00:00Z',
   updated_at: '2026-02-15T10:00:00Z',
@@ -264,6 +265,19 @@ describe('IntegrationsView', () => {
       />,
     );
     expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('esconde Desconectar da API4Com para o SDR quando a org tem token', () => {
+    render(
+      <IntegrationsView {...defaultProps} isManager={false} api4com={{ ...api4comConnected, org_managed: true }} />,
+    );
+    expect(screen.getByText(/Ramal 1014/)).toBeInTheDocument();
+    expect(screen.queryByText('Desconectar')).not.toBeInTheDocument();
+  });
+
+  it('mantém Desconectar da API4Com para o gestor mesmo com token da org', () => {
+    render(<IntegrationsView {...defaultProps} api4com={{ ...api4comConnected, org_managed: true }} />);
+    expect(screen.getByText('Desconectar')).toBeInTheDocument();
   });
 
 });

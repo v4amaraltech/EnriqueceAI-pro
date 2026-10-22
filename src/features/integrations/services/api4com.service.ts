@@ -53,6 +53,19 @@ export async function getOrgSettingsCredentials(
   return { apiKey: decrypt(data.api_key_encrypted), baseUrl: normalizeBaseUrl(data.base_url) };
 }
 
+/** A org tem token da conta cadastrado? Não decifra nada — só checa a existência. */
+export async function hasOrgApi4ComToken(
+  orgId: string,
+  client: ServiceClient = createServiceRoleClient(),
+): Promise<boolean> {
+  const { data } = (await from(client, 'api4com_org_settings' as never)
+    .select('id')
+    .eq('org_id', orgId)
+    .not('api_key_encrypted', 'is', null)
+    .maybeSingle()) as { data: { id: string } | null };
+  return !!data;
+}
+
 /**
  * Credencial da conta para operações por org (reconcile, gravações, webhook):
  * token da org; se a org ainda não tem, o primeiro token de usuário conectado

@@ -95,6 +95,8 @@ export interface Api4ComConnectionSafe {
   org_sip_domain: string | null;
   has_api_key: boolean;
   has_sip_password: boolean;
+  /** A org tem token da conta: o ramal é gerido pelo gestor e o SDR não desconecta. */
+  org_managed: boolean;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
