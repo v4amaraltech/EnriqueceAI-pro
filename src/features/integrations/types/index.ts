@@ -130,6 +130,7 @@ export interface Api4ComOrgOverview {
 }
 
 export interface Api4ComSyncPerson {
+  userId: string;
   name: string;
   email: string | null;
 }
