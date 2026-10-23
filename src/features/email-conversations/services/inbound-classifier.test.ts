@@ -100,3 +100,112 @@ describe('senderAuthVerdict', () => {
     expect(senderAuthVerdict(header as string | null, FROM)).toBe(expected);
   });
 });
+
+import { collectMimeParts, extractReferencedMessageIds, isCalendarMessage, matchesOurThread } from './inbound-classifier';
+
+const ownDomains = ['v4company.com', 'v4companyamaral.com'];
+const lead = { from: 'Wagner <wagner@dacolonia.com.br>' };
+
+/** Assuntos reais das 12 conversas falsas encerradas em 19/10/2026 (caixa do Vini, piloto BDR-3). */
+const REAL_CALENDAR_SUBJECTS = [
+  'Declined: douglas@dwwtecnologia.com.br has declined V4 Company + Corretei',
+  'Convite: V4 Company + DaColônia Alimentos Naturais Ltda - qui. 24 set. 2026 11am - 12pm (BRT) (Vinicius Mercante)',
+  'Decline: V4 Company + DaColônia Alimentos Naturais Ltda',
+  'Re: Decline: V4 Company + DaColônia Alimentos Naturais Ltda',
+  'Aceitar: Convite atualizado: V4 Company + DaColônia Alimentos Naturais Ltda - sex. 2 out. 2026 2pm - 3pm (BRT) (wagner@dacolonia.com.br)',
+  'Convite: V4 Company + Leviora - qua. 30 set. 2026 1pm - 2:30pm (BRT) (Vinicius Mercante)',
+  'Convite: Integração V4 - Köli  - qui. 1 out. 2026 10:30am - 11:30am (BRT) (vinicius.mercante@v4company.com)',
+  'Convite: V4 Company + TONDO S/A. - qua. 14 out. 2026 3pm - 4:30pm (BRT) (Vinicius Mercante)',
+  'Convite: V4 Company + Grupo Prever - qua. 14 out. 2026 5pm - 6:30pm (BRT) (Vinicius Mercante)',
+  'Convite atualizado: V4 Company + TONDO (Orquídea alimentos) - seg. 19 out. 2026 11am - 12pm (BRT) (Vinicius Mercante)',
+  'Convite atualizado: V4 Company + Grupo Prever - qui. 15 out. 2026 4pm - 5:30pm (BRT) (Vinicius Mercante)',
+];
+/** Também reais: NÃO são agenda — são e-mail avulso de lead; a regra 2 é quem barra a conversa. */
+const REAL_PLAIN_SUBJECTS = [
+  'Re: Proposta Comercial V4 Company <> DaColônia Alimentos Naturais',
+  'Re: Aurora Fine Brands + V4 Company (Reunião)',
+  'RES: Aurora Fine Brands + V4 Company (Reunião)',
+];
+
+describe('regra 1 — convite/resposta de agenda é calendar, nunca lead', () => {
+  it('parte MIME text/calendar (mesmo com parâmetro method=REQUEST)', () => {
+    expect(classifyInbound({ headers: { ...lead, subject: 'Reunião' }, ownEmails: own, partMimeTypes: ['multipart/mixed', 'text/calendar; method=REQUEST'] })).toBe('calendar');
+    expect(classifyInbound({ headers: { ...lead, subject: 'Reunião' }, ownEmails: own, mimeType: 'text/calendar' })).toBe('calendar');
+  });
+  it('anexo .ics ou application/ics', () => {
+    expect(classifyInbound({ headers: { ...lead, subject: 'Reunião' }, ownEmails: own, attachmentNames: ['invite.ICS'] })).toBe('calendar');
+    expect(classifyInbound({ headers: { ...lead, subject: 'Reunião' }, ownEmails: own, partMimeTypes: ['application/ics'] })).toBe('calendar');
+  });
+  it('header Content-Class de calendário (Outlook/Exchange)', () => {
+    expect(classifyInbound({ headers: { ...lead, subject: 'Reunião', 'content-class': 'urn:content-classes:calendarmessage' }, ownEmails: own })).toBe('calendar');
+  });
+  it('remetente calendar-notification@google.com', () => {
+    expect(classifyInbound({ headers: { from: 'Google Agenda <calendar-notification@google.com>', subject: 'Lembrete' }, ownEmails: own })).toBe('calendar');
+  });
+  it('"via Google Agenda" / "via Google Calendar" no From', () => {
+    expect(classifyInbound({ headers: { from: 'Wagner (via Google Agenda) <wagner@dacolonia.com.br>', subject: 'Reunião' }, ownEmails: own })).toBe('calendar');
+    expect(classifyInbound({ headers: { from: 'Wagner (via Google Calendar) <wagner@dacolonia.com.br>', subject: 'Meeting' }, ownEmails: own })).toBe('calendar');
+  });
+  it.each([
+    'Convite: x', 'Convite atualizado: x', 'Aceitar: x', 'Aceito: x', 'Recusado: x', 'Talvez: x',
+    'Invitation: x', 'Updated invitation: x', 'Accepted: x', 'Declined: x', 'Tentative: x',
+  ])('prefixo de assunto "%s"', (subject) => {
+    expect(classifyInbound({ headers: { ...lead, subject }, ownEmails: own })).toBe('calendar');
+  });
+  it('padrão de data do Google ("- qua. 14 out. 2026") sem prefixo', () => {
+    expect(classifyInbound({ headers: { ...lead, subject: 'V4 Company + Leviora - qua. 30 set. 2026 1pm - 2:30pm (BRT)' }, ownEmails: own })).toBe('calendar');
+    expect(isCalendarMessage({ headers: { subject: 'Reunião - sáb. 1 mai 2027' } })).toBe(true);
+  });
+  it.each(REAL_CALENDAR_SUBJECTS)('assunto real: "%s" → calendar', (subject) => {
+    expect(classifyInbound({ headers: { ...lead, subject }, ownEmails: own })).toBe('calendar');
+  });
+  it.each(REAL_PLAIN_SUBJECTS)('assunto real: "%s" NÃO é agenda (segue como lead; regra 2 decide a conversa)', (subject) => {
+    expect(classifyInbound({ headers: { ...lead, subject }, ownEmails: own })).toBe('lead');
+  });
+  it('agenda vence auto-reply, mas bounce vence agenda', () => {
+    expect(classifyInbound({ headers: { ...lead, subject: 'Convite: x', 'auto-submitted': 'auto-generated' }, ownEmails: own })).toBe('calendar');
+    expect(classifyInbound({ headers: { from: 'mailer-daemon@googlemail.com', subject: 'Convite: x' }, ownEmails: own })).toBe('bounce');
+  });
+  it('collectMimeParts percorre a árvore e junta MIME e anexos', () => {
+    expect(collectMimeParts({ mimeType: 'multipart/mixed', parts: [
+      { mimeType: 'text/plain' },
+      { mimeType: 'application/ics', filename: 'invite.ics', parts: [] },
+    ] })).toEqual({ mimeTypes: ['multipart/mixed', 'text/plain', 'application/ics'], attachmentNames: ['invite.ics'] });
+    expect(collectMimeParts(undefined)).toEqual({ mimeTypes: [], attachmentNames: [] });
+  });
+});
+
+describe('regra 2 — conversa só quando continua um thread que NÓS começamos', () => {
+  // Envio real da cadência "BDR IA — Arroz (e-mail auto)" (DaColônia, 24/09) e uma resposta do agente
+  const sends = [
+    { thread_id: '1a0c8c76f59c7353', rfc_message_id: '<muqxfwdh.9tg89rac2q@v4company.com>' },
+    { rfc_message_id: '<bdr-9f842307-f3f3-4a59-8116-187adb254c3e@v4companyamaral.com>' },
+  ];
+  it('casa pelo thread_id do Gmail igual ao metadata.thread_id do envio da cadência', () => {
+    expect(matchesOurThread({ threadId: '1a0c8c76f59c7353', headers: { subject: 'Re: Previsibilidade de vendas na Dacolônia Alimentos' } }, sends)).toBe(true);
+  });
+  it('casa pelo In-Reply-To contendo o rfc_message_id do envio (thread diferente)', () => {
+    expect(matchesOurThread({ threadId: 'outra-thread', headers: { 'in-reply-to': '<muqxfwdh.9tg89rac2q@v4company.com>' } }, sends)).toBe(true);
+  });
+  it('casa pelo References contendo o Message-ID do agente (<bdr-…>), sem distinguir maiúsculas', () => {
+    expect(matchesOurThread({ threadId: null, headers: { references: '<abc@lead.com> <BDR-9F842307-f3f3-4a59-8116-187adb254c3e@v4companyamaral.com>' } }, sends)).toBe(true);
+  });
+  it('negativo: lead desconhecido, thread que não é nosso e sem referência nossa → não é conversa', () => {
+    expect(matchesOurThread({ threadId: '1a0ed92b6bd9f9f9', headers: { subject: 'Re: Proposta Comercial V4 Company <> DaColônia Alimentos Naturais', 'in-reply-to': '<xyz@dacolonia.com.br>' } }, sends)).toBe(false);
+    expect(matchesOurThread({ threadId: '1a0c8c76f59c7353', headers: {} }, [])).toBe(false);
+  });
+  it('extractReferencedMessageIds junta In-Reply-To e References sem repetir', () => {
+    expect(extractReferencedMessageIds({ 'in-reply-to': '<a@x.com>', references: '<b@x.com>\r\n <a@x.com>' })).toEqual(['<a@x.com>', '<b@x.com>']);
+    expect(extractReferencedMessageIds({})).toEqual([]);
+  });
+});
+
+describe('regra 3 — remetente do nosso domínio é own', () => {
+  it('colega da casa que não é caixa BDR (foi assim que convites encaminhados viraram conversa)', () => {
+    expect(classifyInbound({ headers: { from: 'Guilherme <guilhermefernandes.marques@v4company.com>', subject: 'Re: Aurora Fine Brands + V4 Company (Reunião)' }, ownEmails: own, ownDomains })).toBe('own');
+    expect(classifyInbound({ headers: { from: 'Ana <analuiza@v4companyamaral.com>', subject: 'Oi' }, ownEmails: own, ownDomains })).toBe('own');
+  });
+  it('domínio parecido não é da casa', () => {
+    expect(classifyInbound({ headers: { from: 'x@notv4company.com', subject: 'Re: V4' }, ownEmails: own, ownDomains })).toBe('lead');
+  });
+});
