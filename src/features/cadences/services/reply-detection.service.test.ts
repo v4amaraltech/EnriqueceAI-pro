@@ -66,6 +66,39 @@ describe('checkThreadForReplyOrBounce', () => {
     expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('reply');
   });
 
+  it('nosso próprio e-mail seguinte na mesma conversa não é resposta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'Ana <analuiza@v4companyamaral.com>' }],
+          [
+            { name: 'From', value: 'analuiza@v4companyamaral.com' },
+            { name: 'Subject', value: 'Re: canais da panco' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('none');
+  });
+
+  it('resposta do lead depois do nosso segundo e-mail conta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'analuiza@v4companyamaral.com' }],
+          [{ name: 'From', value: 'analuiza@v4companyamaral.com' }],
+          [
+            { name: 'From', value: 'Lead <cliente@empresa.com>' },
+            { name: 'Subject', value: 'Re: canais da panco' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('reply');
+  });
+
   it('resposta automática de férias não conta', async () => {
     vi.stubGlobal(
       'fetch',

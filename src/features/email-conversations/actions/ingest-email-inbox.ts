@@ -149,6 +149,8 @@ async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails
     dispatchWebhookEvent(supabase, mb.org_id, 'email.replied', {
       lead_id: leadId, conversation_id: conv.id, conversation_estado: conv.estado, inbound_id: inserted.id,
       thread_id: msg.threadId, mailbox_user_id: mb.user_id, mailbox_email: mb.email_address, source: 'bdr_inbox',
+      from_email: fromEmail, subject: msg.headers['subject'] ?? null, snippet: msg.snippet.slice(0, 300),
+      received_at: msg.internalDate.toISOString(),
     });
   }
 
