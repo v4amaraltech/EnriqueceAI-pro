@@ -7,6 +7,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { isEventProcessed, markEventProcessed } from '@/lib/webhooks';
 
 import { apolloPhoneTipo } from '@/features/leads/services/apollo.service';
+import { ordenarCelularPrimeiro, telefonePrincipal } from '@/features/bdr-steps/services/celular';
 
 export const maxDuration = 30;
 
@@ -176,13 +177,17 @@ export async function POST(request: Request) {
     // Merge (dedupe por numero): contato primário + lead (pode ter número que o
     // contato ainda não tem, por dessincronização antiga) + payload do Apollo.
     const seenNumbers = new Set<string>();
-    const mergedPhones: { tipo: string; numero: string }[] = [];
+    const unidos: { tipo: string; numero: string }[] = [];
     for (const p of [...(primaryContact?.phones ?? []), ...(lead.phones ?? []), ...phones]) {
       if (!seenNumbers.has(p.numero)) {
         seenNumbers.add(p.numero);
-        mergedPhones.push(p);
+        unidos.push(p);
       }
     }
+    // BDR IA (24/09/2026): celular brasileiro na frente — o trigger
+    // sync_primary_contact_to_lead usa o 1º número do contato como telefone
+    // principal, e a Ana liga para o telefone principal.
+    const mergedPhones = ordenarCelularPrimeiro(unidos);
 
     if (primaryContact) {
       await from(supabase, 'lead_contacts')
@@ -192,7 +197,7 @@ export async function POST(request: Request) {
       // Lead antigo sem contato — atualiza direto as colunas do lead.
       await from(supabase, 'leads')
         .update({
-          telefone: lead.telefone ?? mergedPhones[0]?.numero ?? null,
+          telefone: telefonePrincipal(lead.telefone, mergedPhones),
           phones: mergedPhones,
         } as Record<string, unknown>)
         .eq('id', lead.id);

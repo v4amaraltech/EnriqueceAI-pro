@@ -10,6 +10,7 @@ import { from } from '@/lib/supabase/from';
 import { remainingSlots } from '@/lib/utils/plan-limits';
 
 import { enrichPerson, apolloPhoneTipo, type ApolloPersonFull } from '../services/apollo.service';
+import { ordenarCelularPrimeiro, telefonePrincipal } from '@/features/bdr-steps/services/celular';
 import { logLeadEventBulk } from './log-lead-event';
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 
@@ -296,19 +297,22 @@ function mapApolloToLead(
   apolloPersonId?: string,
   searchOrgName?: string | null,
 ) {
-  const phone = person.phone_numbers?.[0]?.raw_number ?? person.sanitized_phone ?? null;
   const org = person.organization;
 
   // All phones with explicit type → phones JSONB
-  const allPhones: Array<{ tipo: string; numero: string }> = [];
+  const rawPhones: Array<{ tipo: string; numero: string }> = [];
   if (person.phone_numbers && person.phone_numbers.length > 0) {
     for (const pn of person.phone_numbers) {
-      allPhones.push({ tipo: apolloPhoneTipo(pn.type), numero: pn.raw_number });
+      rawPhones.push({ tipo: apolloPhoneTipo(pn.type), numero: pn.raw_number });
     }
-  } else if (phone) {
+  } else if (person.sanitized_phone) {
     // Only sanitized_phone available — default to celular
-    allPhones.push({ tipo: 'celular', numero: phone });
+    rawPhones.push({ tipo: 'celular', numero: person.sanitized_phone });
   }
+  // BDR IA (24/09/2026): o 1º número do Apollo costuma ser o da sede; o
+  // celular brasileiro vai na frente e vira o telefone principal do lead.
+  const allPhones = ordenarCelularPrimeiro(rawPhones);
+  const phone = telefonePrincipal(null, allPhones);
 
   return {
     org_id: orgId,
