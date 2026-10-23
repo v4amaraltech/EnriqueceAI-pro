@@ -1,14 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({ createServiceRoleClient: vi.fn() }));
+const h = vi.hoisted(() => ({
+  env: { BDR_EMAIL_REPLY_WEBHOOK_URL: 'https://hook.test/ana' as string | undefined },
+  cadence: { name: 'Inbound — E-mail (auto)', executor: 'sdr' } as { name: string; executor: string } | null,
+  sendBdr: vi.fn(),
+}));
 
 vi.mock('@/lib/supabase/service', () => service);
+vi.mock('@/config/env', () => ({ getEnv: () => h.env }));
+vi.mock('../services/bdr-reply-webhook.service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/bdr-reply-webhook.service')>()),
+  sendBdrEmailReplyWebhook: h.sendBdr,
+}));
 vi.mock('@/lib/security/encryption', () => ({ decrypt: (v: string) => v }));
 vi.mock('@/features/integrations/services/email.service', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('@/features/notifications/services/notification.service', () => ({ createNotification: vi.fn() }));
 vi.mock('../services/webhook-dispatch.service', () => ({ dispatchWebhookEvent: vi.fn() }));
 const leadEvent = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
 vi.mock('@/features/leads/actions/log-lead-event', () => leadEvent);
+
+import { createNotification } from '@/features/notifications/services/notification.service';
 
 import { checkEmailReplies } from './check-email-replies';
 
@@ -81,10 +93,12 @@ function makeChain(table: string) {
           status: 'connected',
           token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
           access_token_encrypted: `tok-${user}`,
+          email_address: `${user}@v4.com`,
         },
       };
     }
-    if (table === 'leads') return { data: { org_id: 'org', assigned_to: 'dono', nome_fantasia: 'ACME' } };
+    if (table === 'leads') return { data: { org_id: 'org', assigned_to: 'dono', nome_fantasia: 'ACME', first_name: 'Paula', last_name: 'Costa', job_title: 'Gerente', email: 'paula@acme.com' } };
+    if (table === 'cadences') return { data: h.cadence };
     return { data: null };
   };
   chain.maybeSingle = vi.fn(() => Promise.resolve(resolveSingle()));
@@ -120,6 +134,10 @@ function sent(over: Partial<Sent> = {}): Sent {
 const metadataUpdateOf = (id: string) => stamped.find((s) => s.id === id)?.patch;
 
 beforeEach(() => {
+  h.env.BDR_EMAIL_REPLY_WEBHOOK_URL = 'https://hook.test/ana';
+  h.cadence = { name: 'Inbound — E-mail (auto)', executor: 'sdr' };
+  h.sendBdr.mockReset();
+  h.sendBdr.mockResolvedValue({ ok: true, attempts: 1, status: 200 });
   sentRows = [];
   leads = [{ id: 'lead-1', assigned_to: 'dono', email_bounced_at: null }];
   processed = [];
@@ -144,7 +162,10 @@ beforeEach(() => {
       if (!thread || thread.mailbox !== token) return new Response('', { status: 404 });
       const messages = [{ id: 'a', payload: { headers: [{ name: 'From', value: 'sdr@v4.com' }] } }];
       if (thread.reply) {
-        messages.push({ id: 'b', payload: { headers: [{ name: 'From', value: 'cliente@acme.com' }] } });
+        messages.push({ id: 'b', payload: { headers: [
+          { name: 'From', value: 'cliente@acme.com' }, { name: 'Subject', value: 'RES: Proposta' },
+          { name: 'Message-ID', value: '<resp@acme.com>' }, { name: 'Date', value: 'Mon, 19 Oct 2026 12:00:00 -0300' },
+        ] } });
       }
       if (thread.bounce) {
         messages.push({ id: 'c', payload: { headers: [{ name: 'From', value: 'Mail Delivery Subsystem <mailer-daemon@googlemail.com>' }] } });
@@ -260,5 +281,88 @@ describe('checkEmailReplies', () => {
       expect.anything(),
       expect.objectContaining({ event: 'email_bounced', leadId: 'lead-1', userId: null }),
     );
+  });
+});
+
+describe('checkEmailReplies — aviso no grupo interno (webhook do BDR IA)', () => {
+  const bdrCadence = { name: 'BDR IA — Indústrias de Alimentos (v3 — ligação, e-mail e WhatsApp)', executor: 'bdr_ai' };
+
+  it('resposta em cadência bdr_ai dispara o aviso, uma vez, com o contrato e event_id = id da interaction replied', async () => {
+    h.cadence = bdrCadence;
+    sentRows = [sent({ metadata: { thread_id: 'th-1', subject: 'Proposta', sender_user_id: 'ana' } })];
+    threads = { 'th-1': { mailbox: 'ana', reply: true } };
+
+    const res = await checkEmailReplies();
+
+    expect(res).toEqual({ success: true, data: { found: 1 } });
+    const replied = captured.find((c) => c.op === 'insert' && c.payload.type === 'replied');
+    expect(h.sendBdr).toHaveBeenCalledTimes(1);
+    const [url, payload] = h.sendBdr.mock.calls[0] as [string, Record<string, unknown>];
+    expect(url).toBe('https://hook.test/ana');
+    expect(payload).toEqual({
+      evento: 'email.replied',
+      event_id: replied?.payload.id,
+      org_id: 'org', lead_id: 'lead-1', enrollment_id: null, cadence_id: 'cad-1',
+      cadence_nome: bdrCadence.name,
+      mailbox: 'ana@v4.com', thread_id: 'th-1',
+      rfc_message_id: '<resp@acme.com>', assunto: 'RES: Proposta', trecho: null,
+      respondido_em: '2026-10-19T15:00:00.000Z',
+      lead: { nome: 'Paula Costa', empresa: 'ACME', cargo: 'Gerente', email: 'paula@acme.com' },
+      hold_criado: false,
+    });
+    expect(typeof payload.event_id).toBe('string');
+  });
+
+  it('resposta em cadência de SDR humano não dispara (mas segue registrando replied)', async () => {
+    h.cadence = { name: 'Inbound — E-mail (auto)', executor: 'sdr' };
+    sentRows = [sent()];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    await checkEmailReplies();
+
+    expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(1);
+    expect(h.sendBdr).not.toHaveBeenCalled();
+  });
+
+  it('não dispara duas vezes para a mesma resposta (dois envios do mesmo lead no lote)', async () => {
+    h.cadence = bdrCadence;
+    sentRows = [sent(), sent({ id: 'int-2', metadata: { thread_id: 'th-2' } })];
+    threads = { 'th-1': { mailbox: 'dono', reply: true }, 'th-2': { mailbox: 'dono', reply: true } };
+
+    await checkEmailReplies();
+
+    expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(1);
+    expect(h.sendBdr).toHaveBeenCalledTimes(1);
+  });
+
+  it('falha do webhook não derruba o poll: replied gravado, SDR avisado, cron devolve sucesso', async () => {
+    h.cadence = bdrCadence;
+    h.sendBdr.mockRejectedValue(new Error('n8n fora do ar'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sentRows = [sent()];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    const res = await checkEmailReplies();
+
+    expect(res).toEqual({ success: true, data: { found: 1 } });
+    expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(1);
+    expect(captured.some((c) => c.table === 'cadence_enrollments' && c.op === 'update')).toBe(true);
+    expect(vi.mocked(createNotification)).toHaveBeenCalledWith(expect.objectContaining({ type: 'lead_replied' }));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Aviso BDR IA falhou'), expect.any(Error));
+    error.mockRestore();
+  });
+
+  it('sem BDR_EMAIL_REPLY_WEBHOOK_URL: não dispara e loga um aviso', async () => {
+    h.cadence = bdrCadence;
+    h.env.BDR_EMAIL_REPLY_WEBHOOK_URL = undefined;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    sentRows = [sent()];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    await checkEmailReplies();
+
+    expect(h.sendBdr).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('BDR_EMAIL_REPLY_WEBHOOK_URL não configurada'));
+    warn.mockRestore();
   });
 });

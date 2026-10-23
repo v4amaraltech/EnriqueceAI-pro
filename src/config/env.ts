@@ -56,6 +56,9 @@ const envSchema = z.object({
   // key is never exposed to the browser; all calls go through Server Actions.
   WACALLS_BASE_URL: z.string().url().optional(),
   WACALLS_API_KEY: z.string().min(1).optional(),
+  // Aviso no grupo interno (n8n) quando um lead responde e-mail de cadência do
+  // BDR IA. Sem URL, o poll de respostas segue normal e só loga um aviso.
+  BDR_EMAIL_REPLY_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

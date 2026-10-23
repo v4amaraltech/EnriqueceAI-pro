@@ -1,6 +1,8 @@
 // Pure pieces of the email reply-check cron (actions/check-email-replies.ts),
 // kept out of the 'use server' module so they aren't exposed as Server Actions.
 
+import { extractPlainText, stripQuotedReply } from '@/features/email-conversations/services/inbound-classifier';
+
 /**
  * Whose Gmail may hold the thread, in the order to try.
  *
@@ -64,27 +66,49 @@ interface GmailThreadMessage {
   };
 }
 
+export type ThreadOutcome = 'reply' | 'bounce' | 'none' | 'not_found' | 'error';
+
+/** Cabeçalhos da PRIMEIRA resposta genuína do thread (só cabeçalhos: o poll não lê o corpo). */
+export interface ThreadReplyDetails {
+  messageId: string;
+  from: string | null;
+  subject: string | null;
+  rfcMessageId: string | null;
+  /** Cabeçalho Date da resposta, em ISO 8601; null se ausente/inválido. */
+  date: string | null;
+}
+
+export interface ThreadInspection {
+  outcome: ThreadOutcome;
+  reply?: ThreadReplyDetails;
+}
+
 /**
  * Check if a Gmail thread contains a reply or a bounce.
  * 'not_found' = the thread isn't in this mailbox (try the next candidate);
  * 'error' = transient failure (leave it for the next rotation).
  */
-export async function checkThreadForReplyOrBounce(
-  threadId: string,
-  accessToken: string,
-): Promise<'reply' | 'bounce' | 'none' | 'not_found' | 'error'> {
+export async function checkThreadForReplyOrBounce(threadId: string, accessToken: string): Promise<ThreadOutcome> {
+  return (await inspectThread(threadId, accessToken)).outcome;
+}
+
+/**
+ * Same check, but also returns the first genuine reply's headers (for the
+ * BDR reply webhook). Reads `messages(id,payload(headers))` only — never the body.
+ */
+export async function inspectThread(threadId: string, accessToken: string): Promise<ThreadInspection> {
   try {
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id,payload(headers))`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
-    if (response.status === 404) return 'not_found';
-    if (!response.ok) return 'error';
+    if (response.status === 404) return { outcome: 'not_found' };
+    if (!response.ok) return { outcome: 'error' };
 
     const data = (await response.json()) as { messages?: GmailThreadMessage[] };
     const messages = data.messages ?? [];
-    if (messages.length <= 1) return 'none';
+    if (messages.length <= 1) return { outcome: 'none' };
 
     // The first message is ours (the cadence email). Later messages from the
     // same address are ours too: a follow-up step sent as "Re:" in the same
@@ -95,6 +119,7 @@ export async function checkThreadForReplyOrBounce(
     const ourAddress = extractAddress(headerValue(messages[0]?.payload?.headers, 'from'));
 
     let hasGenuineReply = false;
+    let reply: ThreadReplyDetails | undefined;
 
     // Check each reply message (beyond the first sent message)
     for (let i = 1; i < messages.length; i++) {
@@ -110,7 +135,7 @@ export async function checkThreadForReplyOrBounce(
       if (fromHeader) {
         const fromLower = fromHeader.value.toLowerCase();
         if (BOUNCE_SENDERS.some((sender) => fromLower.includes(sender))) {
-          return 'bounce';
+          return { outcome: 'bounce' };
         }
       }
 
@@ -133,10 +158,42 @@ export async function checkThreadForReplyOrBounce(
 
       // This message looks like a genuine reply
       hasGenuineReply = true;
+      if (!reply && msg) {
+        const header = (name: string) => headers.find((h) => h.name.toLowerCase() === name)?.value ?? null;
+        const rawDate = header('date');
+        const parsed = rawDate ? new Date(rawDate) : null;
+        reply = {
+          messageId: msg.id,
+          from: fromHeader?.value ?? null,
+          subject: subjectHeader?.value ?? null,
+          rfcMessageId: header('message-id'),
+          date: parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : null,
+        };
+      }
     }
 
-    return hasGenuineReply ? 'reply' : 'none';
+    return hasGenuineReply ? { outcome: 'reply', reply } : { outcome: 'none' };
   } catch {
-    return 'error';
+    return { outcome: 'error' };
+  }
+}
+
+/**
+ * Texto da resposta (sem HTML e sem o trecho citado), até `maxChars`. Uma
+ * chamada extra ao Gmail, feita só quando o aviso do BDR IA vai sair; qualquer
+ * falha devolve null — o aviso sai sem trecho.
+ */
+export async function fetchReplyText(messageId: string, accessToken: string, maxChars = 500): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!response.ok) return null;
+    const data = (await response.json()) as { payload?: unknown; snippet?: string };
+    const text = stripQuotedReply(extractPlainText(data.payload as never)).trim() || (data.snippet ?? '').trim();
+    return text ? text.slice(0, maxChars) : null;
+  } catch {
+    return null;
   }
 }
