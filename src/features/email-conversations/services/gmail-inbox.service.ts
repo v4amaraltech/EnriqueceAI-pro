@@ -4,7 +4,7 @@ import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { refreshAccessToken, type GmailConnection } from '@/features/integrations/services/email.service';
 
-import { extractPlainText, gmailAuthenticationResults, headersToMap, type InboundHeaders } from './inbound-classifier';
+import { collectMimeParts, extractPlainText, gmailAuthenticationResults, headersToMap, type InboundHeaders } from './inbound-classifier';
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const TIMEOUT_MS = 20_000;
@@ -104,6 +104,10 @@ export interface FullMessage {
   snippet: string;
   text: string;
   mimeType: string | null;
+  /** MIME de todas as partes (raiz incluída): detecta text/calendar. */
+  partMimeTypes: string[];
+  /** Nomes dos anexos: detecta .ics. */
+  attachmentNames: string[];
   /** Gmail's own Authentication-Results (top-most mx.google.com one), or null. */
   authResults: string | null;
 }
@@ -118,6 +122,7 @@ export async function getMessageFull(token: string, id: string): Promise<FullMes
     throw new Error(`messages.get ${r.status}: ${r.error}`);
   }
   const m = r.data;
+  const parts = collectMimeParts(m.payload as never);
   return {
     id: m.id,
     threadId: m.threadId,
@@ -127,6 +132,8 @@ export async function getMessageFull(token: string, id: string): Promise<FullMes
     snippet: m.snippet ?? '',
     text: extractPlainText(m.payload as never),
     mimeType: m.payload?.mimeType ?? null,
+    partMimeTypes: parts.mimeTypes,
+    attachmentNames: parts.attachmentNames,
   };
 }
 
