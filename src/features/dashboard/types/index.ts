@@ -94,7 +94,7 @@ export interface RankingData {
   leadsOpened: RankingCardData;
   meetingsScheduled: RankingCardData;
   meetingsHeld: RankingCardData;
-  hitRate: RankingCardData; // total is a percentage (0-100)
+  noShows: RankingCardData; // no-shows registrados no período (SDR ou closer), 1 por lead por dia — remarcação não apaga
   sao: RankingCardData; // reuniões realizadas aceitas pelo closer (SAO = true no feedback mais recente)
   saoRate: RankingCardData; // total is a percentage (0-100) — SAO ÷ reuniões realizadas
   leadsToOpen: RankingCardData; // snapshot atual — leads novos sem cadência ativa por SDR
