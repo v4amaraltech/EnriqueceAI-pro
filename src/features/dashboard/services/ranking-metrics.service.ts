@@ -358,9 +358,9 @@ export async function fetchCallsRanking(
  * Card 3: Taxa de Comparecimento (Marcada → Realizada). Numerador = reuniões
  * realizadas; denominador = reuniões marcadas no período, ambos por SDR. O
  * inverso desta taxa é o no-show. Calculada em memória a partir dos cards de
- * Reuniões Marcadas e Realizadas — mesmo padrão do Hit Rate, sem RPC própria.
+ * Reuniões Marcadas e Realizadas — mesmo padrão da Taxa SAO, sem RPC própria.
  *
- * Aproximação temporal (idêntica à do Hit Rate): marcadas e realizadas são
+ * Aproximação temporal (idêntica à da Taxa SAO): marcadas e realizadas são
  * contadas dentro da janela do filtro; não rastreamos se a reunião específica
  * marcada no período foi a mesma realizada. Por isso a taxa pode passar de
  * 100% quando há acúmulo de reuniões marcadas em meses anteriores sendo
@@ -375,8 +375,8 @@ export function fetchAttendanceRateRanking(
 
 /**
  * Card de TAXA derivado de dois cards de volume (numerador ÷ denominador por
- * SDR, em %). Corpo único do Hit Rate, da Taxa de Comparecimento e da Taxa
- * SAO — todos aproximações temporais (numerador e denominador contados dentro
+ * SDR, em %). Corpo único da Taxa de Comparecimento e da Taxa
+ * SAO — ambas aproximações temporais (numerador e denominador contados dentro
  * da janela, sem rastrear o mesmo lead nos dois), então podem passar de 100%.
  *
  * - `value` = taxa do SDR; `secondaryValue` = numerador do SDR.
@@ -832,16 +832,93 @@ export function fetchSaoRateRanking(
   return buildRateRanking(sao, held);
 }
 
+/** Eventos da timeline que registram um no-show (SDR e closer, respectivamente). */
+export const NO_SHOW_SYSTEM_EVENTS = ['meeting_no_show_manual', 'meeting_unconfirmed'] as const;
+
+/** Dia civil em BRT (UTC-3) de um instante ISO — chave da deduplicação por dia. */
+function brtDay(iso: string): string {
+  return new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /**
- * Card 7: Hit Rate (Aberto → Realizada). Numerador = reuniões realizadas;
- * denominador = leads abertos no período (primeira interaction humana),
- * ambos atribuídos via leads.assigned_to.
+ * Card 7: No-show — quantas reuniões não aconteceram no período, por SDR.
+ *
+ * Fonte: eventos da timeline (`interactions.metadata.system_event`), não o
+ * carimbo `leads.meeting_no_show_at`. O carimbo é ESTADO ATUAL: a remarcação
+ * (trigger sync_lead_meeting_starts_at), o `meeting_done` do closer e o Ganho
+ * limpam o campo, então um no-show seguido de remarcação sumiria do card e o
+ * número encolheria ao longo do mês. Decisão do gestor em 27/out/2026: todo
+ * no-show registrado conta, remarcar depois não apaga.
+ *
+ * - `meeting_no_show_manual`: SDR clicou "Reunião não aconteceu" (markMeetingNoShow).
+ * - `meeting_unconfirmed`: closer respondeu "Não compareceu" no link de feedback.
+ * - Janela pela data do REGISTRO (`created_at`); o evento não guarda a hora da
+ *   reunião, e `meeting_starts_at` do lead já pode ser a da remarcação.
+ * - Dedup 1 por lead por dia (BRT): SDR e closer marcando a mesma reunião
+ *   perdida não viram 2 no-shows.
+ * - Atribuição via leads.assigned_to, só SDRs ativos/invited (como os demais
+ *   cards). Sem meta: `monthTarget: 0` esconde a linha "do previsto".
  */
-export function fetchHitRateRanking(
-  opened: RankingCardData,
-  held: RankingCardData,
-): RankingCardData {
-  return buildRateRanking(held, opened);
+export async function fetchNoShowsRanking(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: DashboardFilters,
+): Promise<RankingCardData> {
+  const { start, end } = getDateRange(filters);
+
+  const { data: sdrs } = (await from(supabase, 'organization_members')
+    .select('user_id')
+    .eq('org_id', orgId)
+    .eq('role', 'sdr')
+    .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
+  const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
+
+  const { data: events } = (await from(supabase, 'interactions')
+    .select('lead_id, created_at')
+    .eq('org_id', orgId)
+    .in('metadata->>system_event', [...NO_SHOW_SYSTEM_EVENTS])
+    .gte('created_at', start)
+    .lt('created_at', end)
+    .limit(10000)) as { data: Array<{ lead_id: string | null; created_at: string }> | null };
+
+  // 1 no-show por lead por dia — SDR e closer podem registrar a mesma reunião.
+  const episodes = new Map<string, string>(); // `${lead}|${dia}` → lead_id
+  for (const ev of events ?? []) {
+    if (!ev.lead_id) continue;
+    episodes.set(`${ev.lead_id}|${brtDay(ev.created_at)}`, ev.lead_id);
+  }
+
+  const leadIds = [...new Set(episodes.values())];
+  const leadRows = await chunkedIn(leadIds, (chunk) =>
+    from(supabase, 'leads')
+      .select('id, assigned_to')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .in('id', chunk) as unknown as PromiseLike<{
+      data: Array<{ id: string; assigned_to: string | null }> | null;
+      error: unknown;
+    }>,
+  );
+  const ownerByLead = new Map<string, string | null>();
+  for (const l of leadRows) ownerByLead.set(l.id, l.assigned_to);
+
+  const counted: Array<{ sdr: string }> = [];
+  for (const leadId of episodes.values()) {
+    const sdr = ownerByLead.get(leadId);
+    if (!sdr || !sdrIds.has(sdr)) continue;
+    if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
+    counted.push({ sdr });
+  }
+
+  const { entries, total } = countBySdr(counted);
+  const sdrCount = entries.length || 1;
+  return {
+    total,
+    monthTarget: 0,
+    percentOfTarget: 0,
+    averagePerSdr: Math.round(total / sdrCount),
+    sdrBreakdown: entries.sort((a, b) => b.value - a.value),
+  };
 }
 
 /**
@@ -987,21 +1064,21 @@ export async function fetchRankingData(
   // Reuniões realizadas são buscadas UMA vez e compartilhadas pelos cards
   // "Reuniões Realizadas" e "SAO" (subconjunto).
   const heldLeads = fetchHeldLeadsForRanking(supabase, orgId, filters);
-  const [leadsFinished, callsDone, leadsOpened, meetingsScheduled, meetingsHeld, sao, leadsToOpen, overdueActivities] = await Promise.all([
+  const [leadsFinished, callsDone, leadsOpened, meetingsScheduled, meetingsHeld, sao, noShows, leadsToOpen, overdueActivities] = await Promise.all([
     fetchLeadsFinishedRanking(supabase, orgId, filters),
     fetchCallsRanking(supabase, orgId, filters),
     fetchLeadsOpenedRanking(supabase, orgId, filters),
     fetchMeetingsScheduledRanking(supabase, orgId, filters),
     fetchMeetingsHeldRanking(supabase, orgId, filters, heldLeads),
     fetchSaoRanking(supabase, orgId, filters, heldLeads),
+    fetchNoShowsRanking(supabase, orgId, filters),
     fetchLeadsToOpenRanking(supabase, orgId, filters),
     fetchOverdueActivitiesRanking(supabase, orgId, filters),
   ]);
 
   // Derived in-memory from the cards above (no extra round-trip).
-  const hitRate = fetchHitRateRanking(leadsOpened, meetingsHeld);
   const attendanceRate = fetchAttendanceRateRanking(meetingsScheduled, meetingsHeld);
   const saoRate = fetchSaoRateRanking(meetingsHeld, sao);
 
-  return { leadsFinished, callsDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, hitRate, sao, saoRate, leadsToOpen, overdueActivities };
+  return { leadsFinished, callsDone, attendanceRate, leadsOpened, meetingsScheduled, meetingsHeld, noShows, sao, saoRate, leadsToOpen, overdueActivities };
 }

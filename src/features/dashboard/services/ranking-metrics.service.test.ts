@@ -13,6 +13,7 @@ import {
   fetchSaoRateRanking,
   fetchScheduledLeadsForRanking,
   fetchMeetingsScheduledRanking,
+  fetchNoShowsRanking,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
@@ -693,6 +694,8 @@ describe('fetchRankingData', () => {
     expect(result).toHaveProperty('attendanceRate');
     expect(result).toHaveProperty('sao');
     expect(result).toHaveProperty('saoRate');
+    expect(result).toHaveProperty('noShows');
+    expect(result).not.toHaveProperty('hitRate');
     expect(result.leadsFinished.total).toBe(0);
     expect(result.sao.total).toBe(0);
     expect(result.saoRate.total).toBe(0);
@@ -700,8 +703,148 @@ describe('fetchRankingData', () => {
     const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
     const leadsCalls = fromMock.mock.calls.filter((c) => c[0] === 'leads').length;
     // meetingsScheduled + held (compartilhado por Realizadas e SAO) = 2; sem o
-    // compartilhamento seriam 3. (leadsFinished não consulta leads sem enrollments.)
+    // compartilhamento seriam 3. (leadsFinished não consulta leads sem enrollments;
+    // noShows sem eventos não consulta leads — chunkedIn com lista vazia.)
     expect(leadsCalls).toBe(2);
+  });
+});
+
+describe('fetchNoShowsRanking — todo no-show registrado conta, 1 por lead por dia', () => {
+  const SDRS = { data: [{ user_id: 'u1' }, { user_id: 'u2' }] };
+
+  function setup(
+    events: Array<{ lead_id: string | null; created_at: string }>,
+    leads: Array<{ id: string; assigned_to: string | null }>,
+  ) {
+    const sdrsChain = createChainMock(SDRS);
+    const eventsChain = createChainMock({ data: events });
+    const leadsChain = createChainMock({ data: leads });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return sdrsChain;
+      if (table === 'interactions') return eventsChain;
+      if (table === 'leads') return leadsChain;
+      return createChainMock();
+    });
+    return { supabase, eventsChain, leadsChain };
+  }
+
+  it('conta por SDR e no total, sem meta', async () => {
+    const { supabase, eventsChain } = setup(
+      [
+        { lead_id: 'l1', created_at: '2026-10-02T14:00:00Z' },
+        { lead_id: 'l2', created_at: '2026-10-05T14:00:00Z' },
+        { lead_id: 'l3', created_at: '2026-10-07T14:00:00Z' },
+      ],
+      [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u1' },
+        { id: 'l3', assigned_to: 'u2' },
+      ],
+    );
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, { ...baseFilters, month: '2026-10' });
+
+    expect(result.total).toBe(3);
+    expect(result.monthTarget).toBe(0);
+    expect(result.percentOfTarget).toBe(0);
+    expect(result.averagePerSdr).toBe(2); // round(3 / 2)
+    expect(result.sdrBreakdown).toEqual([
+      { userId: 'u1', userName: '', value: 2 },
+      { userId: 'u2', userName: '', value: 1 },
+    ]);
+    // Só os dois eventos de no-show (SDR e closer), dentro da janela do mês.
+    expect(eventsChain.in).toHaveBeenCalledWith('metadata->>system_event', [
+      'meeting_no_show_manual',
+      'meeting_unconfirmed',
+    ]);
+    expect(eventsChain.gte).toHaveBeenCalledWith('created_at', '2026-10-01T03:00:00Z');
+    expect(eventsChain.lt).toHaveBeenCalledWith('created_at', '2026-10-31T23:59:59-03:00');
+  });
+
+  it('SDR e closer marcando o mesmo lead no mesmo dia contam uma vez; em dias diferentes, duas', async () => {
+    const { supabase } = setup(
+      [
+        // mesma reunião: SDR às 13h BRT, closer às 18h BRT
+        { lead_id: 'l1', created_at: '2026-10-02T16:00:00Z' },
+        { lead_id: 'l1', created_at: '2026-10-02T21:00:00Z' },
+        // remarcou e deu no-show de novo noutro dia
+        { lead_id: 'l1', created_at: '2026-10-09T16:00:00Z' },
+      ],
+      [{ id: 'l1', assigned_to: 'u1' }],
+    );
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, { ...baseFilters, month: '2026-10' });
+
+    expect(result.total).toBe(2);
+    expect(result.sdrBreakdown).toEqual([{ userId: 'u1', userName: '', value: 2 }]);
+  });
+
+  it('dedup usa o dia em BRT: 23h e 01h UTC do mesmo dia BRT são um só', async () => {
+    const { supabase } = setup(
+      [
+        { lead_id: 'l1', created_at: '2026-10-02T23:30:00Z' }, // 20:30 BRT dia 2
+        { lead_id: 'l1', created_at: '2026-10-03T01:30:00Z' }, // 22:30 BRT dia 2
+      ],
+      [{ id: 'l1', assigned_to: 'u1' }],
+    );
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, { ...baseFilters, month: '2026-10' });
+
+    expect(result.total).toBe(1);
+  });
+
+  it('ignora lead de quem não é SDR ativo, sem dono ou sem lead_id', async () => {
+    const { supabase } = setup(
+      [
+        { lead_id: 'l1', created_at: '2026-10-02T14:00:00Z' },
+        { lead_id: 'l2', created_at: '2026-10-03T14:00:00Z' },
+        { lead_id: 'l3', created_at: '2026-10-04T14:00:00Z' },
+        { lead_id: null, created_at: '2026-10-05T14:00:00Z' },
+      ],
+      [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'manager-1' },
+        { id: 'l3', assigned_to: null },
+      ],
+    );
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, { ...baseFilters, month: '2026-10' });
+
+    expect(result.total).toBe(1);
+    expect(result.sdrBreakdown).toEqual([{ userId: 'u1', userName: '', value: 1 }]);
+  });
+
+  it('respeita o filtro de vendedor (userIds)', async () => {
+    const { supabase } = setup(
+      [
+        { lead_id: 'l1', created_at: '2026-10-02T14:00:00Z' },
+        { lead_id: 'l2', created_at: '2026-10-03T14:00:00Z' },
+      ],
+      [
+        { id: 'l1', assigned_to: 'u1' },
+        { id: 'l2', assigned_to: 'u2' },
+      ],
+    );
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, {
+      ...baseFilters,
+      month: '2026-10',
+      userIds: ['u2'],
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.sdrBreakdown).toEqual([{ userId: 'u2', userName: '', value: 1 }]);
+  });
+
+  it('sem eventos: zero, lista vazia e não consulta leads', async () => {
+    const { supabase, leadsChain } = setup([], []);
+
+    const result = await fetchNoShowsRanking(supabase as never, ORG, { ...baseFilters, month: '2026-10' });
+
+    expect(result.total).toBe(0);
+    expect(result.averagePerSdr).toBe(0);
+    expect(result.sdrBreakdown).toEqual([]);
+    expect(leadsChain.select).not.toHaveBeenCalled();
   });
 });
 

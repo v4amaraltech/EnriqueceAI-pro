@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, BadgeCheck, CalendarCheck2, DoorOpen, Handshake, Inbox, Percent, PhoneCall, UserCheck } from 'lucide-react';
+import { AlarmClock, BadgeCheck, CalendarCheck2, CalendarX2, DoorOpen, Handshake, Inbox, Percent, PhoneCall, UserCheck } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -225,7 +225,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
         </div>
       )}
 
-      {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → SAO → Hit Rate → Taxa SAO */}
+      {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → SAO → No-show → Taxa SAO */}
       {ranking && (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards">
           <RankingCard
@@ -293,20 +293,20 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             onSdrClick={handleSdrClick}
           />
           <RankingCard
-            title="Hit Rate"
+            title="No-show"
             titleTooltip={
-              'Taxa de conversão de Lead Aberto para Reunião Realizada no período.\n\n' +
-              '• Numerador: reuniões realizadas (leads ganhos)\n' +
-              '• Denominador: leads abertos (primeiro contato humano)\n\n' +
+              'Quantas reuniões não aconteceram no período, por SDR.\n\n' +
+              '• Conta cada no-show registrado pelo SDR ("Reunião não aconteceu") ou pelo closer (feedback "Não compareceu"), pela data do registro\n' +
+              '• Remarcar a reunião depois não tira o no-show da conta\n' +
+              '• SDR e closer marcando a mesma reunião no mesmo dia contam uma vez\n\n' +
               'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
             }
-            icon={Percent}
+            icon={CalendarX2}
             iconColor="bg-rose-500/10"
             iconTextColor="text-rose-500"
-            unit="%"
-            data={ranking.hitRate}
-            primaryColumnLabel="realizadas"
-            averageLabel="média hit rate/vendedor"
+            data={ranking.noShows}
+            primaryColumnLabel="no-shows"
+            averageLabel="média no-show/vendedor"
             onSdrClick={handleSdrClick}
           />
           <RankingCard
