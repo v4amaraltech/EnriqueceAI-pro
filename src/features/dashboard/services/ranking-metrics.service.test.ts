@@ -14,6 +14,7 @@ import {
   fetchScheduledLeadsForRanking,
   fetchMeetingsScheduledRanking,
   fetchNoShowsRanking,
+  meetingStartFromEvent,
 } from './ranking-metrics.service';
 import type { RankingCardData } from '../types';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
@@ -617,62 +618,137 @@ describe('fetchSaoRateRanking', () => {
 });
 
 describe('fetchScheduledLeadsForRanking — fonte única do card "Reuniões Marcadas" e do painel por dia', () => {
-  const rows = [
-    { id: 'a', razao_social: 'Acme', nome_fantasia: 'A', assigned_to: 'sdr-1', meeting_scheduled_at: '2026-01-05T12:00:00Z', meeting_starts_at: '2026-01-07T14:00:00Z' },
-    { id: 'b', razao_social: 'Beta', nome_fantasia: null, assigned_to: 'sdr-2', meeting_scheduled_at: '2026-01-05T13:00:00Z' },
-    { id: 'c', razao_social: 'Gestor', nome_fantasia: null, assigned_to: 'mgr-1', meeting_scheduled_at: '2026-01-06T13:00:00Z' },
-    { id: 'd', razao_social: 'Sem dono', nome_fantasia: null, assigned_to: null, meeting_scheduled_at: '2026-01-06T13:00:00Z' },
+  const events = [
+    // lead a: marcou dia 5 (9h BRT), remarcou o horário no mesmo dia (14h BRT) → 1 marcação, fica a última
+    { lead_id: 'a', created_at: '2026-01-05T12:00:00Z', metadata: { start_time: '2026-01-07T10:00:00' } },
+    { lead_id: 'a', created_at: '2026-01-05T17:00:00Z', metadata: { start_time: '2026-01-07T11:00:00' } },
+    // lead b: marcou dia 5, deu no-show e marcou de novo dia 9 → 2 marcações
+    { lead_id: 'b', created_at: '2026-01-05T13:00:00Z', metadata: { start_time: '2026-01-06T15:00:00' } },
+    { lead_id: 'b', created_at: '2026-01-09T13:00:00Z', metadata: {} },
+    { lead_id: 'c', created_at: '2026-01-06T13:00:00Z', metadata: null },
+    { lead_id: 'd', created_at: '2026-01-06T13:00:00Z', metadata: null },
+    { lead_id: 'e', created_at: '2026-01-06T14:00:00Z', metadata: null },
+    { lead_id: null, created_at: '2026-01-06T15:00:00Z', metadata: null },
+  ];
+  const leads = [
+    { id: 'a', razao_social: 'Acme', nome_fantasia: 'A', assigned_to: 'sdr-1', meeting_starts_at: '2026-01-07T14:00:00Z' },
+    { id: 'b', razao_social: 'Beta', nome_fantasia: null, assigned_to: 'sdr-2', meeting_starts_at: '2026-01-12T14:00:00Z' },
+    { id: 'c', razao_social: 'Gestor', nome_fantasia: null, assigned_to: 'mgr-1', meeting_starts_at: null },
+    { id: 'd', razao_social: 'Sem dono', nome_fantasia: null, assigned_to: null, meeting_starts_at: null },
+    // 'e' não volta do banco (arquivado/deletado) → fora
   ];
 
   function build() {
     const membersChain = createChainMock({ data: [{ user_id: 'sdr-1' }, { user_id: 'sdr-2' }] });
-    const leadsChain = createChainMock({ data: rows });
+    const eventsChain = createChainMock({ data: events });
+    const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({ data: { meetings_scheduled_target: 10 } });
     const supabase = createMockSupabase((table) => {
       if (table === 'organization_members') return membersChain;
+      if (table === 'interactions') return eventsChain;
       if (table === 'leads') return leadsChain;
       if (table === 'goals') return goalsChain;
       return createChainMock({ data: [] });
     });
-    return { supabase, leadsChain };
+    return { supabase, eventsChain, leadsChain };
   }
 
-  it('devolve os leads com empresa, só de SDRs ativos e com dono', async () => {
-    const { supabase, leadsChain } = build();
+  it('conta cada marcação da timeline (1 por lead por dia), só de SDRs ativos e com dono', async () => {
+    const { supabase, eventsChain, leadsChain } = build();
     const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, baseFilters);
 
     expect(result.sdrIds).toEqual(new Set(['sdr-1', 'sdr-2']));
-    expect(result.leads.map((l) => l.id)).toEqual(['a', 'b']);
-    expect(result.leads[0]).toEqual({
+    // b (dia 5, 10h BRT), a (dia 5, 14h BRT — última do dia), b de novo (dia 9), em ordem
+    // cronológica; c=gestor, d=sem dono, e=arquivado ficam fora
+    expect(result.leads.map((l) => [l.id, l.meeting_scheduled_at])).toEqual([
+      ['b', '2026-01-05T13:00:00Z'],
+      ['a', '2026-01-05T17:00:00Z'],
+      ['b', '2026-01-09T13:00:00Z'],
+    ]);
+    // horário da reunião vem do evento (parede BRT → UTC); sem start_time, cai no do lead
+    expect(result.leads[1]).toEqual({
       id: 'a',
       razao_social: 'Acme',
       nome_fantasia: 'A',
       assigned_to: 'sdr-1',
-      meeting_scheduled_at: '2026-01-05T12:00:00Z',
-      meeting_starts_at: '2026-01-07T14:00:00Z',
+      meeting_scheduled_at: '2026-01-05T17:00:00Z',
+      meeting_starts_at: '2026-01-07T14:00:00.000Z',
     });
-    expect(result.leads[1]?.meeting_starts_at).toBeNull();
-    expect(leadsChain.select).toHaveBeenCalledWith('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at, meeting_starts_at');
+    expect(result.leads[0]?.meeting_starts_at).toBe('2026-01-06T18:00:00.000Z');
+    expect(result.leads[2]?.meeting_starts_at).toBe('2026-01-12T14:00:00Z');
+
+    expect(eventsChain.eq).toHaveBeenCalledWith('type', 'meeting_scheduled');
+    expect(eventsChain.gte).toHaveBeenCalledWith('created_at', '2026-01-01T03:00:00Z');
+    expect(eventsChain.lt).toHaveBeenCalledWith('created_at', '2026-01-31T23:59:59-03:00');
+    expect(leadsChain.select).toHaveBeenCalledWith('id, razao_social, nome_fantasia, assigned_to, meeting_starts_at');
     expect(leadsChain.neq).toHaveBeenCalledWith('status', 'archived');
+    expect(leadsChain.is).toHaveBeenCalledWith('deleted_at', null);
+    expect(leadsChain.in).toHaveBeenCalledWith('id', ['a', 'b', 'c', 'd', 'e']);
   });
 
   it('respeita o filtro de vendedor', async () => {
     const { supabase } = build();
     const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, { ...baseFilters, userIds: ['sdr-2'] });
-    expect(result.leads.map((l) => l.id)).toEqual(['b']);
+    expect(result.leads.map((l) => l.id)).toEqual(['b', 'b']);
+  });
+
+  it('dedup usa o dia em BRT: 23h e 01h UTC do mesmo dia BRT são uma marcação só', async () => {
+    const membersChain = createChainMock({ data: [{ user_id: 'sdr-1' }] });
+    const eventsChain = createChainMock({
+      data: [
+        { lead_id: 'x', created_at: '2026-01-02T23:30:00Z', metadata: null }, // 20:30 BRT dia 2
+        { lead_id: 'x', created_at: '2026-01-03T01:30:00Z', metadata: null }, // 22:30 BRT dia 2
+      ],
+    });
+    const leadsChain = createChainMock({ data: [{ id: 'x', razao_social: 'X', nome_fantasia: null, assigned_to: 'sdr-1', meeting_starts_at: null }] });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return membersChain;
+      if (table === 'interactions') return eventsChain;
+      if (table === 'leads') return leadsChain;
+      return createChainMock({ data: [] });
+    });
+    const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, baseFilters);
+    expect(result.leads).toHaveLength(1);
+    expect(result.leads[0]?.meeting_scheduled_at).toBe('2026-01-03T01:30:00Z');
+  });
+
+  it('sem marcações não consulta leads', async () => {
+    const membersChain = createChainMock({ data: [{ user_id: 'sdr-1' }] });
+    const eventsChain = createChainMock({ data: [] });
+    const supabase = createMockSupabase((table) => {
+      if (table === 'organization_members') return membersChain;
+      if (table === 'interactions') return eventsChain;
+      return createChainMock({ data: [] });
+    });
+    const result = await fetchScheduledLeadsForRanking(supabase as never, ORG, baseFilters);
+    expect(result.leads).toEqual([]);
+    const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
+    expect(fromMock.mock.calls.some((c) => c[0] === 'leads')).toBe(false);
   });
 
   it('o card conta exatamente o universo desta função (total, por SDR e por dia)', async () => {
     const { supabase } = build();
     const card = await fetchMeetingsScheduledRanking(supabase as never, ORG, baseFilters);
-    expect(card.total).toBe(2);
+    expect(card.total).toBe(3);
     expect(card.sdrBreakdown.map((e) => [e.userId, e.value])).toEqual(
-      expect.arrayContaining([['sdr-1', 1], ['sdr-2', 1]]),
+      expect.arrayContaining([['sdr-1', 1], ['sdr-2', 2]]),
     );
-    // dia 5 em BRT: 2 marcadas; acumulado segue 2 até o fim
+    // dia 5 em BRT: 2 marcadas; dia 9: a remarcação do lead b → acumulado 3
     expect(card.dailyData?.[3]?.actual).toBe(0);
     expect(card.dailyData?.[4]?.actual).toBe(2);
-    expect(card.dailyData?.[5]?.actual).toBe(2);
+    expect(card.dailyData?.[7]?.actual).toBe(2);
+    expect(card.dailyData?.[8]?.actual).toBe(3);
+  });
+});
+
+describe('meetingStartFromEvent', () => {
+  it('converte o relógio de parede BRT do evento para UTC; aceita offset explícito; nulo se faltar', () => {
+    expect(meetingStartFromEvent({ start_time: '2026-10-20T09:00:00' })).toBe('2026-10-20T12:00:00.000Z');
+    expect(meetingStartFromEvent({ start_time: '2026-10-20T09:00:00-03:00' })).toBe('2026-10-20T12:00:00.000Z');
+    expect(meetingStartFromEvent({ start_time: '2026-10-20T12:00:00Z' })).toBe('2026-10-20T12:00:00.000Z');
+    expect(meetingStartFromEvent({ start_time: 'quando der' })).toBeNull();
+    expect(meetingStartFromEvent({})).toBeNull();
+    expect(meetingStartFromEvent(null)).toBeNull();
   });
 });
 
@@ -702,10 +778,10 @@ describe('fetchRankingData', () => {
     // Realizadas buscadas UMA vez para os cards "Reuniões Realizadas" e "SAO"
     const fromMock = (supabase as { from: ReturnType<typeof vi.fn> }).from;
     const leadsCalls = fromMock.mock.calls.filter((c) => c[0] === 'leads').length;
-    // meetingsScheduled + held (compartilhado por Realizadas e SAO) = 2; sem o
-    // compartilhamento seriam 3. (leadsFinished não consulta leads sem enrollments;
-    // noShows sem eventos não consulta leads — chunkedIn com lista vazia.)
-    expect(leadsCalls).toBe(2);
+    // Só held (compartilhado por Realizadas e SAO) = 1; sem o compartilhamento
+    // seriam 2. (leadsFinished não consulta leads sem enrollments; marcadas e
+    // noShows sem eventos não consultam leads — chunkedIn com lista vazia.)
+    expect(leadsCalls).toBe(1);
   });
 });
 
