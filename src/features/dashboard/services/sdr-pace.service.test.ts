@@ -37,7 +37,27 @@ function call(overrides: Record<string, unknown> = {}) {
 }
 
 function setup() {
-  const scheduledChain = createChainMock({ count: 4, error: null });
+  // Marcadas = eventos da timeline: 4 marcações em 3 leads do SDR (l2 remarcado noutro
+  // dia) + 1 de outro SDR + 1 no mesmo dia de l1 (dedup) → 4 para o SDR.
+  const membersChain = createChainMock({ data: [{ user_id: SDR }, { user_id: 'other-sdr' }] });
+  const eventsChain = createChainMock({
+    data: [
+      { lead_id: 'l1', created_at: '2026-09-02T12:00:00Z', metadata: { start_time: '2026-09-04T10:00:00' } },
+      { lead_id: 'l1', created_at: '2026-09-02T15:00:00Z', metadata: { start_time: '2026-09-04T11:00:00' } },
+      { lead_id: 'l2', created_at: '2026-09-03T12:00:00Z', metadata: null },
+      { lead_id: 'l2', created_at: '2026-09-10T12:00:00Z', metadata: null },
+      { lead_id: 'l3', created_at: '2026-09-11T12:00:00Z', metadata: null },
+      { lead_id: 'l9', created_at: '2026-09-11T12:00:00Z', metadata: null },
+    ],
+  });
+  const scheduledChain = createChainMock({
+    data: [
+      { id: 'l1', razao_social: 'L1', nome_fantasia: null, assigned_to: SDR, meeting_starts_at: null },
+      { id: 'l2', razao_social: 'L2', nome_fantasia: null, assigned_to: SDR, meeting_starts_at: null },
+      { id: 'l3', razao_social: 'L3', nome_fantasia: null, assigned_to: SDR, meeting_starts_at: null },
+      { id: 'l9', razao_social: 'L9', nome_fantasia: null, assigned_to: 'other-sdr', meeting_starts_at: null },
+    ],
+  });
   const heldChain = createChainMock({ count: 3, error: null });
   let leadsCalls = 0;
   const callsChain = createPagedChain([
@@ -59,7 +79,10 @@ function setup() {
 
   const supabase = {
     from: vi.fn((table: string) => {
-      if (table === 'leads') return leadsCalls++ === 0 ? scheduledChain : heldChain;
+      // held consulta leads de cara; marcadas só depois de ler membros e eventos.
+      if (table === 'leads') return leadsCalls++ === 0 ? heldChain : scheduledChain;
+      if (table === 'organization_members') return membersChain;
+      if (table === 'interactions') return eventsChain;
       if (table === 'calls') return callsChain;
       if (table === 'goals_per_user') return goalsChain;
       return createChainMock();
@@ -75,7 +98,7 @@ function setup() {
       }),
     ),
   };
-  return { supabase, scheduledChain, heldChain, callsChain, goalsChain };
+  return { supabase, scheduledChain, eventsChain, heldChain, callsChain, goalsChain };
 }
 
 describe('fetchSdrPaceMetrics', () => {
@@ -101,13 +124,15 @@ describe('fetchSdrPaceMetrics', () => {
     expect(callsChain.order).toHaveBeenCalledWith('id', { ascending: true });
   });
 
-  it('reuniões: contagem exata (head) atribuída ao dono do lead', async () => {
-    const { supabase, scheduledChain, heldChain } = setup();
+  it('reuniões: marcadas pela fonte do card (eventos, dono do lead); realizadas por contagem exata (head)', async () => {
+    const { supabase, scheduledChain, eventsChain, heldChain } = setup();
     await fetchSdrPaceMetrics(supabase as never, ORG, '2026-09', SDR);
 
-    expect(scheduledChain.select).toHaveBeenCalledWith('id', { count: 'exact', head: true });
-    expect(scheduledChain.eq).toHaveBeenCalledWith('assigned_to', SDR);
+    expect(eventsChain.eq).toHaveBeenCalledWith('type', 'meeting_scheduled');
+    expect(eventsChain.gte).toHaveBeenCalledWith('created_at', '2026-09-01T03:00:00Z');
+    expect(eventsChain.lt).toHaveBeenCalledWith('created_at', '2026-09-30T23:59:59-03:00');
     expect(scheduledChain.neq).toHaveBeenCalledWith('status', 'archived');
+    expect(scheduledChain.in).toHaveBeenCalledWith('id', ['l1', 'l2', 'l3', 'l9']);
     expect(heldChain.eq).toHaveBeenCalledWith('assigned_to', SDR);
     expect(heldChain.not).toHaveBeenCalledWith('meeting_held_at', 'is', null);
   });

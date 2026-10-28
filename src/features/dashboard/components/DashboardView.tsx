@@ -247,8 +247,9 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
           <RankingCard
             title="Reuniões Marcadas"
             titleTooltip={
-              'Quantas reuniões cada SDR marcou no período (campo meeting_scheduled_at do lead).\n\n' +
-              'Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
+              'Quantas reuniões cada SDR marcou no período (cada marcação registrada na timeline do lead; ' +
+              'o mesmo lead conta de novo se deu no-show e foi remarcado noutro dia).\n\n' +
+              'Cada marcação conta para o SDR responsável pelo lead. Gerentes não aparecem no ranking.'
             }
             icon={CalendarCheck2}
             iconColor="bg-indigo-500/10"

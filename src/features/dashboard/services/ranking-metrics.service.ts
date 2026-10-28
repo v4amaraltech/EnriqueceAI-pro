@@ -541,29 +541,51 @@ function buildLeadsOpenedDaily(
 }
 
 export interface ScheduledLead {
+  /** Lead da marcação — repete quando o mesmo lead foi marcado mais de uma vez no período. */
   id: string;
   razao_social: string | null;
   nome_fantasia: string | null;
   assigned_to: string;
+  /** Instante em que o SDR marcou (evento `meeting_scheduled` da timeline). */
   meeting_scheduled_at: string;
-  /** Horário da reunião marcada (pode ser nulo em registros antigos). */
+  /** Horário da reunião daquela marcação (pode ser nulo em registros antigos). */
   meeting_starts_at: string | null;
 }
 
 export interface ScheduledLeadsForRanking {
   /** SDRs ativos/invited da org — divisor do "ideal dia" e filtro de atribuição. */
   sdrIds: Set<string>;
-  /** Leads com reunião marcada na janela, já filtrados por SDR/vendedor. */
+  /** Marcações na janela, já filtradas por SDR/vendedor, em ordem cronológica. */
   leads: ScheduledLead[];
 }
 
 /**
- * Universo de "reuniões marcadas" do Dashboard na janela do filtro: leads cujo
- * `meeting_scheduled_at` caiu no período, atribuídos ao SDR responsável
- * (`leads.assigned_to`, que precisa ser SDR ativo/invited), arquivados excluídos.
- * Fonte ÚNICA do card/ranking "Reuniões Marcadas" e do painel de leads por dia
- * do gráfico RM/RR — os dois têm que bater. Não filtra por cadência (o card
- * nunca filtrou).
+ * Horário da reunião gravado no evento `meeting_scheduled` (`metadata.start_time`,
+ * relógio de parede de São Paulo sem offset, ex. "2026-10-20T09:00:00") → ISO UTC.
+ * Mesma conversão do trigger `sync_lead_meeting_starts_at`. Nulo se ausente/inválido.
+ */
+export function meetingStartFromEvent(metadata: unknown): string | null {
+  const raw = (metadata as { start_time?: unknown } | null)?.start_time;
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const hasOffset = /[zZ]$|[+-]\d{2}:\d{2}$/.test(raw);
+  const date = new Date(hasOffset ? raw : `${raw}-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/**
+ * Universo de "reuniões marcadas" do Dashboard na janela do filtro: cada
+ * MARCAÇÃO registrada na timeline (`interactions.type = 'meeting_scheduled'`),
+ * não 1 por lead. Lead que deu no-show e foi marcado de novo no mês conta
+ * duas vezes — decisão do gestor em 28/out/2026 (antes a fonte era
+ * `leads.meeting_scheduled_at`, que a nova marcação sobrescreve, e a primeira
+ * sumia do card). Dedup 1 por lead por dia BRT: mexer no horário no mesmo
+ * dia não é reunião nova (fica a última do dia).
+ *
+ * Atribuição pelo responsável ATUAL do lead (`leads.assigned_to`, que precisa
+ * ser SDR ativo/invited); arquivados e deletados ficam de fora. Fonte ÚNICA
+ * do card/ranking "Reuniões Marcadas", do KPI do topo, da seção "SDR
+ * selecionado" e do painel de leads por dia do gráfico RM/RR — todos batem.
+ * Não filtra por cadência (o card nunca filtrou).
  */
 export async function fetchScheduledLeadsForRanking(
   supabase: SupabaseClient,
@@ -579,27 +601,51 @@ export async function fetchScheduledLeadsForRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  const { data: rows } = (await from(supabase, 'leads')
-    .select('id, razao_social, nome_fantasia, assigned_to, meeting_scheduled_at, meeting_starts_at')
+  const { data: events } = (await from(supabase, 'interactions')
+    .select('lead_id, created_at, metadata')
     .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .neq('status', 'archived')
-    .not('meeting_scheduled_at', 'is', null)
-    .gte('meeting_scheduled_at', start)
-    .lt('meeting_scheduled_at', end)
+    .eq('type', 'meeting_scheduled')
+    .gte('created_at', start)
+    .lt('created_at', end)
+    .order('created_at', { ascending: true })
     .limit(10000)) as {
-    data: Array<{
-      id: string;
-      razao_social?: string | null;
-      nome_fantasia?: string | null;
-      assigned_to: string | null;
-      meeting_scheduled_at: string;
-      meeting_starts_at?: string | null;
-    }> | null;
+    data: Array<{ lead_id: string | null; created_at: string; metadata: unknown }> | null;
   };
 
+  // 1 marcação por lead por dia BRT — fica a última do dia (horário mais atual).
+  type Episode = { leadId: string; at: string; startsAt: string | null };
+  const episodes = new Map<string, Episode>(); // `${lead}|${dia}`
+  for (const ev of events ?? []) {
+    if (!ev.lead_id) continue;
+    const key = `${ev.lead_id}|${brtDay(ev.created_at)}`;
+    const prev = episodes.get(key);
+    if (prev && new Date(prev.at).getTime() > new Date(ev.created_at).getTime()) continue;
+    episodes.set(key, { leadId: ev.lead_id, at: ev.created_at, startsAt: meetingStartFromEvent(ev.metadata) });
+  }
+
+  type LeadRow = {
+    id: string;
+    razao_social: string | null;
+    nome_fantasia: string | null;
+    assigned_to: string | null;
+    meeting_starts_at: string | null;
+  };
+  const leadIds = [...new Set([...episodes.values()].map((e) => e.leadId))];
+  const leadRows = await chunkedIn(leadIds, (chunk) =>
+    from(supabase, 'leads')
+      .select('id, razao_social, nome_fantasia, assigned_to, meeting_starts_at')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .neq('status', 'archived')
+      .in('id', chunk) as unknown as PromiseLike<{ data: LeadRow[] | null; error: unknown }>,
+  );
+  const leadById = new Map<string, LeadRow>();
+  for (const l of leadRows) leadById.set(l.id, l);
+
   const leads: ScheduledLead[] = [];
-  for (const lead of rows ?? []) {
+  for (const ep of episodes.values()) {
+    const lead = leadById.get(ep.leadId);
+    if (!lead) continue;
     const sdr = lead.assigned_to;
     if (!sdr || !sdrIds.has(sdr)) continue;
     if (filters.userIds.length > 0 && !filters.userIds.includes(sdr)) continue;
@@ -608,17 +654,20 @@ export async function fetchScheduledLeadsForRanking(
       razao_social: lead.razao_social ?? null,
       nome_fantasia: lead.nome_fantasia ?? null,
       assigned_to: sdr,
-      meeting_scheduled_at: lead.meeting_scheduled_at,
-      meeting_starts_at: lead.meeting_starts_at ?? null,
+      meeting_scheduled_at: ep.at,
+      // Evento antigo sem start_time: cai no horário atual do lead.
+      meeting_starts_at: ep.startsAt ?? lead.meeting_starts_at ?? null,
     });
   }
+  leads.sort((a, b) => new Date(a.meeting_scheduled_at).getTime() - new Date(b.meeting_scheduled_at).getTime());
 
   return { sdrIds, leads };
 }
 
 /**
- * Card 5: Reuniões Marcadas — contagem por SDR e por dia sobre o universo de
- * fetchScheduledLeadsForRanking. Retorna também dailyData pra alimentar o KPI
+ * Card 5: Reuniões Marcadas — contagem de MARCAÇÕES por SDR e por dia sobre o
+ * universo de fetchScheduledLeadsForRanking (o mesmo lead pode contar mais de
+ * uma vez no mês). Retorna também dailyData pra alimentar o KPI
  * card no topo do dashboard.
  */
 export async function fetchMeetingsScheduledRanking(

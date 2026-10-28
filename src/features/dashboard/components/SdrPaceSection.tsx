@@ -23,7 +23,7 @@ const HELP = {
   leadsOpened:
     'Leads que o SDR começou a trabalhar no mês (e-mail, WhatsApp, telefone, LinkedIn ou pesquisa). Conta o 1º contato do lead e também a REABERTURA: se o lead volta para uma cadência e é trabalhado de novo, conta de novo. Atribuído ao dono atual do lead — mesmo número do ranking "Leads Abertos".',
   meetingsScheduled:
-    'Reuniões agendadas no mês (pela data em que foram marcadas) nos leads do SDR. Conta mesmo que a reunião ainda não tenha acontecido.',
+    'Marcações de reunião no mês (pela data em que foram marcadas) nos leads do SDR. Conta mesmo que a reunião ainda não tenha acontecido; lead remarcado noutro dia conta de novo.',
   meetingsHeld: 'Reuniões que aconteceram no mês (pela data do evento) nos leads do SDR.',
   calls: 'Todas as ligações feitas pelo SDR no mês (discador e Callface), atendidas ou não.',
   callsConnected:
