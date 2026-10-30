@@ -4,6 +4,9 @@ const mockFrom = vi.fn();
 const mockSupabase = { from: mockFrom };
 const deliver = vi.fn();
 const sendPlatformEmail = vi.fn();
+const verifyCronSecret = vi.fn(() => true);
+const pushConfirmedMeetingToCrm = vi.fn();
+const reconcileConfirmedMeetingsToCrm = vi.fn();
 
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
@@ -14,7 +17,7 @@ vi.mock('@/lib/supabase/from', () => ({
 }));
 
 vi.mock('@/lib/auth/verify-cron-secret', () => ({
-  verifyCronSecret: () => true,
+  verifyCronSecret: (...args: unknown[]) => verifyCronSecret(...(args as [])),
 }));
 
 vi.mock('@/lib/email/platform-email', () => ({
@@ -27,8 +30,20 @@ vi.mock('@/features/notifications/services/notification.service', () => ({
   createNotificationsForOrgMembers: () => Promise.resolve(),
 }));
 
+vi.mock('@/features/integrations/services/whatsapp.service', () => ({
+  validateBrazilianPhone: () => false,
+}));
+
+vi.mock('@/features/integrations/services/whatsapp-evolution.service', () => ({
+  EvolutionWhatsAppService: { sendMessage: vi.fn() },
+}));
+
 vi.mock('@/features/leads/services/crm-push.service', () => ({
-  pushConfirmedMeetingToCrm: () => Promise.resolve({ dealCreated: false }),
+  pushConfirmedMeetingToCrm: (...args: unknown[]) => pushConfirmedMeetingToCrm(...args),
+}));
+
+vi.mock('@/features/leads/services/crm-reconcile.service', () => ({
+  reconcileConfirmedMeetingsToCrm: (...args: unknown[]) => reconcileConfirmedMeetingsToCrm(...args),
 }));
 
 vi.mock('@/features/leads/services/feedback-messenger.service', () => ({
@@ -63,6 +78,18 @@ function chain(resolver: (calls: Array<[string, unknown[]]>) => Record<string, u
     Promise.resolve(resolver(calls)).then(resolve, reject);
   return c;
 }
+
+const emptyChain = () => chain(() => ({ data: [], error: null }));
+
+const RECONCILE_OK = {
+  orgs: 1,
+  candidates: 3,
+  recovered: 2,
+  notCreated: 0,
+  failed: 1,
+  recoveredLeadIds: ['l-1', 'l-2'],
+  abortedByNetwork: false,
+};
 
 const UNSENT = {
   id: 'req-1',
@@ -109,20 +136,28 @@ function setup(lead: { status?: string; meeting_starts_at: string | null; delete
         error: null,
       }));
     }
-    return chain(() => ({ data: [], error: null }));
+    return emptyChain();
   });
   return { requestUpdates };
 }
 
-const request = () => new Request('https://example.com/api/cron/feedback-reminders', { method: 'POST' });
-
-describe('feedback-reminders — envio adiado (Ganho antes da reunião)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    deliver.mockResolvedValue({ email: 'sent', whatsapp: 'skipped' });
-    sendPlatformEmail.mockResolvedValue({ success: true });
+const request = () =>
+  new Request('https://example.com/api/cron/feedback-reminders', {
+    method: 'POST',
+    headers: { authorization: 'Bearer cron' },
   });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  verifyCronSecret.mockReturnValue(true);
+  deliver.mockResolvedValue({ email: 'sent', whatsapp: 'skipped' });
+  sendPlatformEmail.mockResolvedValue({ success: true });
+  pushConfirmedMeetingToCrm.mockResolvedValue({ dealCreated: false });
+  reconcileConfirmedMeetingsToCrm.mockResolvedValue(RECONCILE_OK);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+describe('feedback-reminders — envio adiado (Ganho antes da reunião)', () => {
   it('reunião já começou: entrega o link pelo serviço e conta como enviado', async () => {
     setup({ meeting_starts_at: new Date(Date.now() - 10 * 60_000).toISOString() });
 
@@ -191,5 +226,48 @@ describe('feedback-reminders — envio adiado (Ganho antes da reunião)', () => 
       .map(([, c]) => c as Record<string, ReturnType<typeof vi.fn>>);
     const notCalls = feedbackChains.flatMap((c) => c.not!.mock.calls);
     expect(notCalls.filter(([col, op, val]) => col === 'sent_at' && op === 'is' && val === null)).toHaveLength(2);
+  });
+});
+
+describe('cron feedback-reminders — reconciliação do CRM', () => {
+  beforeEach(() => {
+    // Sem envio adiado, lembretes pendentes nem feedback vencido: toda consulta devolve vazio.
+    mockFrom.mockImplementation(() => emptyChain());
+  });
+
+  it('rejeita sem CRON_SECRET', async () => {
+    verifyCronSecret.mockReturnValueOnce(false);
+    const res = await POST(request());
+    expect(res.status).toBe(401);
+    expect(reconcileConfirmedMeetingsToCrm).not.toHaveBeenCalled();
+  });
+
+  it('roda a reconciliação diária depois dos lembretes e devolve os contadores', async () => {
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(reconcileConfirmedMeetingsToCrm).toHaveBeenCalledTimes(1);
+    expect(json).toMatchObject({
+      scheduledSent: 0,
+      reminders: 0,
+      crmPushed: 0,
+      crmReconciled: 2,
+      crmReconcileCandidates: 3,
+      crmReconcileFailed: 1,
+      crmReconcileAborted: false,
+    });
+    // sem feedback vencido não há push avulso
+    expect(pushConfirmedMeetingToCrm).not.toHaveBeenCalled();
+  });
+
+  it('erro inesperado na reconciliação não derruba o cron', async () => {
+    reconcileConfirmedMeetingsToCrm.mockRejectedValueOnce(new Error('boom'));
+
+    const res = await POST(request());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({ crmReconciled: 0, crmReconcileError: true });
   });
 });

@@ -12,6 +12,7 @@ import { validateBrazilianPhone } from '@/features/integrations/services/whatsap
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
 import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
+import { reconcileConfirmedMeetingsToCrm } from '@/features/leads/services/crm-reconcile.service';
 import {
   FEEDBACK_TTL_MS,
   deliverCloserFeedbackRequest,
@@ -233,6 +234,29 @@ async function pushExpiredFeedbackLeadsToCrm() {
     }
   }
   return { crmPushed };
+}
+
+/**
+ * Reconciliação diária dos cards perdidos (crm-reconcile.service): leads
+ * ganhos dos últimos 14 dias, já liberados para o CRM (sem closer, ou closer
+ * respondeu "Realizada"), que ficaram sem `crm_deal_created` — ex.: o push do
+ * feedback falhou por rede (27/10/2026) e o retry também não deu conta.
+ * Complementa pushExpiredFeedbackLeadsToCrm, que só cobre link VENCIDO sem
+ * resposta. Nunca derruba o cron: erro aqui vira log + contador.
+ */
+async function reconcileCrmSafely() {
+  try {
+    const r = await reconcileConfirmedMeetingsToCrm();
+    return {
+      crmReconciled: r.recovered,
+      crmReconcileCandidates: r.candidates,
+      crmReconcileFailed: r.failed,
+      crmReconcileAborted: r.abortedByNetwork,
+    };
+  } catch (err) {
+    console.error('[feedback-reminders] CRM reconcile error:', err);
+    return { crmReconciled: 0, crmReconcileCandidates: 0, crmReconcileFailed: 0, crmReconcileAborted: false, crmReconcileError: true };
+  }
 }
 
 async function sendFeedbackReminders() {
@@ -504,7 +528,8 @@ export async function POST(request: Request) {
     const scheduled = await sendScheduledFeedbackRequests();
     const result = await sendFeedbackReminders();
     const crm = await pushExpiredFeedbackLeadsToCrm();
-    return NextResponse.json({ ...scheduled, ...result, ...crm });
+    const reconcile = await reconcileCrmSafely();
+    return NextResponse.json({ ...scheduled, ...result, ...crm, ...reconcile });
   } catch (err) {
     console.error('[feedback-reminders] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

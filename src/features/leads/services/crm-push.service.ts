@@ -1,6 +1,8 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { resolveKommoResponsibleUserId } from './crm-responsible';
+
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
@@ -10,6 +12,15 @@ import { RDStationAdapter } from '@/features/integrations/services/rdstation.ada
 import type { CrmConnectionRow, CrmProvider } from '@/features/integrations/types/crm';
 import { DEFAULT_FIELD_MAPPINGS } from '@/features/integrations/types/crm';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+
+import {
+  DEFAULT_RETRY_POLICY,
+  NO_RETRY,
+  describeError,
+  isNetworkError,
+  withNetworkRetry,
+  type RetryPolicy,
+} from './crm-network-retry';
 
 export interface CrmPushOptions {
   provider: CrmProvider;
@@ -48,8 +59,42 @@ function formatValueForKommo(value: string): string {
  *
  * Idempotent: if a deal already exists for the lead (crm_deal_created interaction),
  * returns { dealCreated: false, skippedReason: 'already_synced' } without re-pushing.
+ *
+ * `retry`: política de repetição para ERRO DE REDE (DNS/timeout/conexão). Padrão
+ * sem repetição — o clique de Ganho do SDR é síncrono e não pode esperar 40s.
+ * Os caminhos em segundo plano (feedback do closer, cron, worker) passam
+ * DEFAULT_RETRY_POLICY via pushConfirmedMeetingToCrm. Cada tentativa recomeça
+ * do dedup (`crm_deal_created`), então repetir nunca cria um segundo card.
+ * Esgotadas as tentativas, o erro final vai para console.error com o leadId e
+ * é relançado para o chamador.
  */
 export async function pushLeadToCrm(
+  orgId: string,
+  leadId: string,
+  crmOptions: CrmPushOptions,
+  retry: RetryPolicy = NO_RETRY,
+): Promise<CrmPushResult> {
+  try {
+    return await withNetworkRetry(
+      () => pushLeadToCrmOnce(orgId, leadId, crmOptions),
+      `push lead=${leadId} provider=${crmOptions.provider}`,
+      retry,
+    );
+  } catch (err) {
+    if (isNetworkError(err)) {
+      console.error(
+        '[crm-push] push abandonado por erro de rede lead=%s org=%s após %d tentativa(s): %s',
+        leadId,
+        orgId,
+        retry.delaysMs.length + 1,
+        describeError(err),
+      );
+    }
+    throw err;
+  }
+}
+
+async function pushLeadToCrmOnce(
   orgId: string,
   leadId: string,
   crmOptions: CrmPushOptions,
@@ -137,6 +182,11 @@ export async function pushLeadToCrm(
     );
     contactExternalId = pushResult.external_id;
   } catch (pushErr) {
+    // Rede fora (DNS, timeout) e nenhum contato já sincronizado para reaproveitar:
+    // sem contato o Kommo devolveria `no_contact_id` em silêncio e o card se
+    // perderia (27/10/2026). Relança para o retry de pushLeadToCrm tentar de
+    // novo. Erro da API (4xx) segue o fluxo antigo: loga e continua.
+    if (isNetworkError(pushErr) && !existingSync?.external_id) throw pushErr;
     console.error('[crm-push] pushContact failed:', pushErr);
   }
 
@@ -391,12 +441,26 @@ export async function pushLeadToCrm(
       return { dealCreated: false, contactExternalId, skippedReason: 'no_contact_id' };
     }
 
+    // Responsável = closer da reunião quando o modal não gravou (ou gravou o
+    // padrão da conexão) — ver crm-responsible.ts. Nunca lança.
+    const responsibleUserId = await resolveKommoResponsibleUserId({
+      supabase,
+      orgId,
+      leadId,
+      closerId: lead.closer_id,
+      explicitUserId: crmOptions.responsibleUserId,
+      connectionDefaultUserId: connection.default_responsible_user_id,
+      adapter: kommoAdapter,
+      credentials,
+    });
+    const parsedResponsibleUserId = responsibleUserId ? parseInt(responsibleUserId, 10) : NaN;
+
     const result = await kommoAdapter.pushDeal(credentials, {
       title: dealTitle,
       contactExternalId: resolvedContactId,
       pipelineId: parseInt(crmOptions.pipelineId, 10),
       stageId: parseInt(crmOptions.stageId, 10),
-      responsibleUserId: crmOptions.responsibleUserId ? parseInt(crmOptions.responsibleUserId, 10) : undefined,
+      responsibleUserId: Number.isNaN(parsedResponsibleUserId) ? undefined : parsedResponsibleUserId,
       customFieldsValues: customFieldsValues.length > 0 ? customFieldsValues : undefined,
     });
     dealExternalId = result.external_id;
@@ -443,6 +507,7 @@ export async function pushLeadToCrm(
 export async function pushLeadToCrmWithDefaults(
   orgId: string,
   leadId: string,
+  retry: RetryPolicy = NO_RETRY,
 ): Promise<CrmPushResult> {
   const supabase = createServiceRoleClient();
 
@@ -468,12 +533,17 @@ export async function pushLeadToCrmWithDefaults(
     return { dealCreated: false, skippedReason: 'no_defaults' };
   }
 
-  return pushLeadToCrm(orgId, leadId, {
-    provider: connection.crm_provider,
-    pipelineId: connection.default_pipeline_id,
-    stageId: connection.default_stage_id,
-    responsibleUserId: connection.default_responsible_user_id ?? undefined,
-  });
+  return pushLeadToCrm(
+    orgId,
+    leadId,
+    {
+      provider: connection.crm_provider,
+      pipelineId: connection.default_pipeline_id,
+      stageId: connection.default_stage_id,
+      responsibleUserId: connection.default_responsible_user_id ?? undefined,
+    },
+    retry,
+  );
 }
 
 /**
@@ -513,8 +583,16 @@ function isCrmPushOptions(value: unknown): value is CrmPushOptions {
  * `metadata.crm_options` da interação `lead_won` mais recente — e cai nos
  * defaults da conexão quando o Ganho veio da fila (sem modal).
  * Idempotente como pushLeadToCrm (dedup por crm_deal_created).
+ *
+ * Roda sempre em segundo plano (`after()` do /api/feedback, cron, worker), por
+ * isso repete em erro de rede por padrão (DEFAULT_RETRY_POLICY: 2s/8s/30s). A
+ * reconciliação diária (crm-reconcile.service) cobre o que ainda escapar.
  */
-export async function pushConfirmedMeetingToCrm(orgId: string, leadId: string): Promise<CrmPushResult> {
+export async function pushConfirmedMeetingToCrm(
+  orgId: string,
+  leadId: string,
+  retry: RetryPolicy = DEFAULT_RETRY_POLICY,
+): Promise<CrmPushResult> {
   const supabase = createServiceRoleClient();
 
   const { data: wonEvent } = (await from(supabase, 'interactions')
@@ -528,9 +606,9 @@ export async function pushConfirmedMeetingToCrm(orgId: string, leadId: string): 
 
   const saved = wonEvent?.metadata?.crm_options;
   if (isCrmPushOptions(saved)) {
-    return pushLeadToCrm(orgId, leadId, saved);
+    return pushLeadToCrm(orgId, leadId, saved, retry);
   }
-  return pushLeadToCrmWithDefaults(orgId, leadId);
+  return pushLeadToCrmWithDefaults(orgId, leadId, retry);
 }
 
 /**
