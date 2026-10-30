@@ -134,6 +134,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [kommoUsers, setKommoUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedKommoUserId, setSelectedKommoUserId] = useState<string | null>(null);
   const [loadingKommoUsers, setLoadingKommoUsers] = useState(false);
+  // Lista de usuários do Kommo falhou (ou veio vazia): o servidor resolve o
+  // responsável pelo e-mail do closer (crm-responsible.ts) — só avisamos.
+  const [kommoUsersUnavailable, setKommoUsersUnavailable] = useState(false);
 
   // Closer feedback
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
@@ -496,6 +499,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setLoadingPipelines(false);
     setKommoUsers([]);
     setSelectedKommoUserId(null);
+    setKommoUsersUnavailable(false);
     if (pipelinesResult.success && pipelinesResult.data.connections.length > 0) {
       setCrmConnections(pipelinesResult.data.connections);
       const firstConn = pipelinesResult.data.connections[0]!;
@@ -504,11 +508,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       preselectPipeline(firstConn);
       // Load Kommo users if Kommo is connected
       if (firstConn.provider === 'kommo' || pipelinesResult.data.connections.some((c) => c.provider === 'kommo')) {
+        // Enquanto carrega, o botão "Confirmar ganho" fica travado (ver
+        // DialogFooter): confirmar antes da lista chegar gravava crm_options
+        // sem responsável e o Kommo atribuía o card ao dono do token
+        // (NEXT360, 29/10). Se a lista falhar, libera e o servidor resolve.
         setLoadingKommoUsers(true);
-        fetchKommoUsers().then((r) => {
-          if (r.success) setKommoUsers(r.data);
-          setLoadingKommoUsers(false);
-        });
+        fetchKommoUsers()
+          .then((r) => {
+            if (r.success && r.data.length > 0) setKommoUsers(r.data);
+            else setKommoUsersUnavailable(true);
+          })
+          .catch(() => setKommoUsersUnavailable(true))
+          .finally(() => setLoadingKommoUsers(false));
       }
     }
 
@@ -978,7 +989,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum usuário encontrado</p>
+                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                            {kommoUsersUnavailable
+                              ? 'Não foi possível carregar os usuários do Kommo. O responsável do card será o closer da reunião (definido automaticamente ao enviar).'
+                              : 'Nenhum usuário encontrado'}
+                          </p>
                         )}
                       </div>
                     )}
@@ -1080,6 +1095,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               disabled={
                 isPending
                 || (sendToCrm && (!selectedPipelineId || !selectedStageId))
+                || (sendToCrm && selectedProvider === 'kommo' && loadingKommoUsers)
                 || loadingRequiredFields
                 || wonMissingFields.some((f) => !wonFieldValues[f.key]?.trim())
               }

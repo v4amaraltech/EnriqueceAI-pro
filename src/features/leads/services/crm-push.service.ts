@@ -1,6 +1,8 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { resolveKommoResponsibleUserId } from './crm-responsible';
+
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
@@ -391,12 +393,26 @@ export async function pushLeadToCrm(
       return { dealCreated: false, contactExternalId, skippedReason: 'no_contact_id' };
     }
 
+    // Responsável = closer da reunião quando o modal não gravou (ou gravou o
+    // padrão da conexão) — ver crm-responsible.ts. Nunca lança.
+    const responsibleUserId = await resolveKommoResponsibleUserId({
+      supabase,
+      orgId,
+      leadId,
+      closerId: lead.closer_id,
+      explicitUserId: crmOptions.responsibleUserId,
+      connectionDefaultUserId: connection.default_responsible_user_id,
+      adapter: kommoAdapter,
+      credentials,
+    });
+    const parsedResponsibleUserId = responsibleUserId ? parseInt(responsibleUserId, 10) : NaN;
+
     const result = await kommoAdapter.pushDeal(credentials, {
       title: dealTitle,
       contactExternalId: resolvedContactId,
       pipelineId: parseInt(crmOptions.pipelineId, 10),
       stageId: parseInt(crmOptions.stageId, 10),
-      responsibleUserId: crmOptions.responsibleUserId ? parseInt(crmOptions.responsibleUserId, 10) : undefined,
+      responsibleUserId: Number.isNaN(parsedResponsibleUserId) ? undefined : parsedResponsibleUserId,
       customFieldsValues: customFieldsValues.length > 0 ? customFieldsValues : undefined,
     });
     dealExternalId = result.external_id;
