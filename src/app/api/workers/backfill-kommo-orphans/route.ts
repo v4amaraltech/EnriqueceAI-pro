@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { isUuid } from '@/lib/utils/uuid';
 import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
+import { selectCrmEligibleWonLeads, type CrmSkipReason } from '@/features/leads/services/crm-reconcile.service';
 
 export const maxDuration = 300;
 
@@ -20,9 +21,6 @@ interface OrphanLead {
   closer_id: string | null;
 }
 
-/** Por que um lead ganho ficou de fora do push. */
-type SkipReason = 'already_synced' | 'meeting_not_confirmed';
-
 /**
  * Worker que (re)cria no CRM o card de leads ganhos que ficaram sem
  * `crm_deal_created` — ex.: o push do feedback "Realizada" falhou por rede
@@ -32,10 +30,12 @@ type SkipReason = 'already_synced' | 'meeting_not_confirmed';
  *  - `leadIds` (lista explícita): só esses leads, na org informada.
  *  - sem `leadIds`: varre os últimos `limit` ganhos da org (modo original).
  *
- * Em ambos vale a regra do card (story rescheduled-meeting-crm-and-feedback):
- * lead COM closer só ganha card depois de um feedback "Realizada"
- * (`closer_feedback_requests.result = 'meeting_done'`); lead sem closer entra
- * direto. O push usa `pushConfirmedMeetingToCrm`, que respeita o funil/etapa/
+ * Em ambos vale a regra do card (story rescheduled-meeting-crm-and-feedback),
+ * centralizada em `selectCrmEligibleWonLeads` (mesma regra da reconciliação
+ * diária do cron feedback-reminders): lead COM closer só ganha card depois de
+ * um feedback "Realizada" (`closer_feedback_requests.result = 'meeting_done'`);
+ * lead sem closer entra direto. O push usa `pushConfirmedMeetingToCrm`, que
+ * repete em erro de rede e respeita o funil/etapa/
  * responsável escolhidos no modal de Ganho (`crm_options` da interação
  * `lead_won`) e cai nos defaults da conexão quando não houve modal. Cada
  * chamada é idempotente (dedup por `crm_deal_created`), então re-rodar é seguro.
@@ -98,38 +98,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ found: 0, pushed: 0, skipped: 0, failed: 0, notFound, message: 'No won leads' });
   }
 
-  const skipped: Array<{ id: string; reason: SkipReason }> = [];
-
-  // Lead com closer precisa do "Realizada" do closer antes de virar card.
-  const closerLeadIds = found.filter((l) => l.closer_id).map((l) => l.id);
-  const confirmed = new Set<string>();
-  for (let i = 0; i < closerLeadIds.length; i += MAX_LEAD_IDS) {
-    const chunk = closerLeadIds.slice(i, i + MAX_LEAD_IDS);
-    const { data: done } = (await from(supabase, 'closer_feedback_requests')
-      .select('lead_id')
-      .in('lead_id', chunk)
-      .eq('result', 'meeting_done')) as { data: Array<{ lead_id: string }> | null };
-    for (const row of done ?? []) confirmed.add(row.lead_id);
-  }
-
-  const candidates: OrphanLead[] = [];
-  for (const lead of found) {
-    const { data: alreadyPushed } = (await from(supabase, 'interactions')
-      .select('id')
-      .eq('lead_id', lead.id)
-      .eq('type', 'crm_deal_created')
-      .limit(1)
-      .maybeSingle()) as { data: { id: string } | null };
-    if (alreadyPushed) {
-      skipped.push({ id: lead.id, reason: 'already_synced' });
-      continue;
-    }
-    if (lead.closer_id && !confirmed.has(lead.id)) {
-      skipped.push({ id: lead.id, reason: 'meeting_not_confirmed' });
-      continue;
-    }
-    candidates.push(lead);
-  }
+  // Já sincronizado → fora; com closer sem "Realizada" → fora; o resto entra.
+  const { candidates, skipped }: { candidates: OrphanLead[]; skipped: Array<{ id: string; reason: CrmSkipReason }> } =
+    await selectCrmEligibleWonLeads(supabase, found);
 
   const describe = (l: OrphanLead) => ({
     id: l.id,

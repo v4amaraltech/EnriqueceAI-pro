@@ -81,18 +81,18 @@ function feedbackChain(confirmedIds: string[]) {
   return c;
 }
 
+/** `crm_deal_created` em lote (selectCrmEligibleWonLeads): devolve só os ids pedidos no `.in()` que já têm card. */
 function interactionsChain(syncedIds: string[]) {
   const c: Record<string, unknown> = {};
-  let leadId: string | null = null;
+  let askedIds: string[] = [];
   c.select = vi.fn().mockReturnValue(c);
-  c.eq = vi.fn((col: string, val: string) => {
-    if (col === 'lead_id') leadId = val;
+  c.eq = vi.fn().mockReturnValue(c);
+  c.in = vi.fn((_col: string, ids: string[]) => {
+    askedIds = ids;
     return c;
   });
-  c.limit = vi.fn().mockReturnValue(c);
-  c.maybeSingle = vi.fn(() =>
-    Promise.resolve({ data: leadId && syncedIds.includes(leadId) ? { id: 'int-1' } : null, error: null }),
-  );
+  c.then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: syncedIds.filter((id) => askedIds.includes(id)).map((lead_id) => ({ lead_id })) }).then(resolve);
   return c;
 }
 
