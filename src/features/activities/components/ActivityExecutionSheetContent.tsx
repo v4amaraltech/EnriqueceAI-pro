@@ -334,6 +334,11 @@ export function ActivityExecutionSheetContent({
         activityName={activity.activityName}
         callScript={activity.callScript}
         dialerProvider={dialerProvider}
+        cadenceStep={
+          activity.enrollmentId.startsWith('scheduled:')
+            ? undefined
+            : { enrollmentId: activity.enrollmentId, stepId: activity.stepId }
+        }
       />
     );
   }

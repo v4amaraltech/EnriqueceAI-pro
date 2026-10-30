@@ -40,6 +40,7 @@ import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
 import { formatDuration } from '@/lib/utils/format';
 
+import { formatResumeDate } from '../utils/callback-resume';
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
@@ -62,6 +63,8 @@ interface ActivityPhonePanelProps {
   activityName?: string | null;
   callScript?: string | null;
   dialerProvider?: DialerProvider;
+  /** Passo de cadência da atividade (ausente em atividade avulsa/agendada). */
+  cadenceStep?: { enrollmentId: string; stepId: string };
 }
 
 export function ActivityPhonePanel({
@@ -80,6 +83,7 @@ export function ActivityPhonePanel({
   activityName,
   callScript,
   dialerProvider = 'api4com',
+  cadenceStep,
 }: ActivityPhonePanelProps) {
   // Use first resolved phone or fallback to lead.telefone
   const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
@@ -293,7 +297,9 @@ export function ActivityPhonePanel({
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }
 
-    // Schedule return activity if requested
+    // "Pediu para ligar depois": agenda o retorno e pausa a cadência até o dia
+    // útil seguinte a ele — senão os próximos toques caíam na fila antes do
+    // retorno combinado (caso Épou Store, 09/out/2026).
     if (returnSchedule) {
       scheduleActivity({
         leadId,
@@ -301,7 +307,15 @@ export function ActivityPhonePanel({
         callProvider: returnSchedule.callProvider,
         scheduledAt: returnSchedule.scheduledAt,
         notes: resultNotes ? `Retorno: ${resultNotes}` : undefined,
-      }).catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
+        pauseCadenceUntilReturn: true,
+        executedStep: cadenceStep,
+      })
+        .then((r) => {
+          if (r.success && r.data.cadencePausedUntil) {
+            toast.info(`Cadência pausada até ${formatResumeDate(r.data.cadencePausedUntil)}`);
+          }
+        })
+        .catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
     }
 
     onMarkDone(aggregatedNotes);
