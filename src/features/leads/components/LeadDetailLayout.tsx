@@ -70,6 +70,18 @@ const QUALIFICACAO_LABELS: Record<string, string> = {
   nao_validado: 'Não deu pra validar',
 };
 
+/** "dd/mm HH:mm" em BRT do início da reunião que segura o envio do feedback. */
+function formatScheduledFor(iso: string | undefined): string {
+  if (!iso) return 'reunião';
+  return new Date(iso).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 const DIVERGENCIA_LABELS: Record<string, string> = {
   verba: 'Verba',
   decisor: 'Decisor',
@@ -191,7 +203,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           toast.error(res.error);
           return;
         }
-        const { email, whatsapp, whatsappError, whatsappSkipReason } = res.data;
+        const { email, whatsapp, whatsappError, whatsappSkipReason, scheduledFor } = res.data;
+        if (email === 'scheduled') {
+          toast.info(`Feedback agendado para depois da reunião (${formatScheduledFor(scheduledFor)})`);
+          loadCloserFeedback();
+          return;
+        }
         const parts: string[] = [];
         parts.push(email === 'sent' ? 'Email enviado' : 'Email falhou');
         if (whatsapp === 'sent') parts.push('WhatsApp enviado');
@@ -209,7 +226,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         toast.error(err instanceof Error ? err.message : 'Erro ao reenviar feedback');
       })
       .finally(() => setIsResendingFeedback(false));
-  }, [lead.id]);
+  }, [lead.id, loadCloserFeedback]);
 
   // Manager action: reassign closer (if changed) then notify the right person —
   // resend feedback (if a request was pending) and/or briefing (if meeting upcoming).
@@ -223,6 +240,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           const fb = await resendCloserFeedback({ leadId: lead.id });
           if (!fb.success) {
             toast.error(fb.error);
+            return;
+          }
+          if (fb.data.email === 'scheduled') {
+            toast.info(`Feedback agendado para depois da reunião (${formatScheduledFor(fb.data.scheduledFor)})`);
+            loadCloserFeedback();
             return;
           }
           toast.success(
@@ -244,9 +266,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           const fb = await resendCloserFeedback({ leadId: lead.id });
           parts.push(
             fb.success
-              ? fb.data.whatsapp === 'sent'
-                ? 'Feedback reenviado por email e WhatsApp.'
-                : 'Feedback reenviado por email.'
+              ? fb.data.email === 'scheduled'
+                ? `Feedback agendado para depois da reunião (${formatScheduledFor(fb.data.scheduledFor)}).`
+                : fb.data.whatsapp === 'sent'
+                  ? 'Feedback reenviado por email e WhatsApp.'
+                  : 'Feedback reenviado por email.'
               : `Falha ao reenviar feedback: ${fb.error}`,
           );
         }
@@ -725,7 +749,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       {!isManager && closerFeedback && !closerFeedback.responded_at && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3 flex items-center justify-between gap-3">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong>
+            {closerFeedback.sent_at ? (
+              <>Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong></>
+            ) : (
+              <>Feedback de <strong>{closerFeedback.closer_name}</strong> será enviado após a reunião</>
+            )}
           </p>
           <Button
             size="sm"
@@ -748,7 +776,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               <p className="text-sm font-medium">Closer responsável</p>
               {closerFeedback && !closerFeedback.responded_at ? (
                 <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                  Aguardando feedback de <strong>{closerFeedback.closer_name}</strong>
+                  {closerFeedback.sent_at ? (
+                    <>Aguardando feedback de <strong>{closerFeedback.closer_name}</strong></>
+                  ) : (
+                    <>Feedback de <strong>{closerFeedback.closer_name}</strong> será enviado após a reunião</>
+                  )}
                 </p>
               ) : closerFeedback?.responded_at ? (
                 <p className="text-xs text-[var(--muted-foreground)]">
