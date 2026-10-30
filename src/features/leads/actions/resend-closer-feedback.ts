@@ -14,6 +14,7 @@ const inputSchema = z.object({
 
 interface LeadRow {
   id: string;
+  status: string;
   closer_id: string | null;
   nome_fantasia: string | null;
   razao_social: string | null;
@@ -30,11 +31,23 @@ interface PendingRequestRow {
   id: string;
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  already_answered_recently: 'O closer já respondeu o feedback desta reunião',
+  no_manager_evolution: 'Nenhum gestor com WhatsApp conectado para enviar',
+};
+
 /**
  * Re-trigger a closer feedback notification (email + WhatsApp via the org
  * manager's Evolution instance). Reuses any pending request for the lead/closer
- * pair so the closer keeps the original link; only creates a new row if none
- * exists.
+ * pair so the closer keeps the original link.
+ *
+ * Sem request nenhum, só segue para lead `won`: é o caminho do gestor para
+ * recuperar um Ganho cujo link nunca saiu (ex.: Ganho marcado antes da reunião
+ * em versões antigas, que descartavam o pedido). Lead fora de `won` sem request
+ * continua recusado — clicar o botão num lead antigo não abre ciclo novo.
+ *
+ * Reunião ainda no futuro: o serviço deixa o pedido agendado (`email:
+ * 'scheduled'`) e o cron envia depois — isso é sucesso, não falha.
  */
 export async function resendCloserFeedback(
   input: z.infer<typeof inputSchema>,
@@ -49,7 +62,7 @@ export async function resendCloserFeedback(
   const { orgId, userId, supabase } = auth.data;
 
   const { data: lead } = (await from(supabase, 'leads')
-    .select('id, closer_id, nome_fantasia, razao_social')
+    .select('id, status, closer_id, nome_fantasia, razao_social')
     .eq('id', parsed.data.leadId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -72,9 +85,6 @@ export async function resendCloserFeedback(
     return { success: false, error: 'Closer não encontrado' };
   }
 
-  // Require at least one pending request — avoids creating a new feedback
-  // cycle just because someone clicked the button on an old won lead. The
-  // service itself will reuse this row instead of creating a new one.
   const { data: pending } = (await from(supabase, 'closer_feedback_requests')
     .select('id')
     .eq('lead_id', lead.id)
@@ -84,7 +94,7 @@ export async function resendCloserFeedback(
     .limit(1)
     .maybeSingle()) as { data: PendingRequestRow | null };
 
-  if (!pending) {
+  if (!pending && lead.status !== 'won') {
     return { success: false, error: 'Nenhum feedback pendente para este lead' };
   }
 
@@ -100,11 +110,13 @@ export async function resendCloserFeedback(
     senderUserId: userId,
   });
 
+  if (result.email === 'scheduled') {
+    return { success: true, data: result };
+  }
+
   if (result.email !== 'sent' && result.whatsapp !== 'sent') {
-    return {
-      success: false,
-      error: result.emailError ?? result.whatsappError ?? 'Falha ao enviar feedback',
-    };
+    const raw = result.emailError ?? result.whatsappError ?? 'Falha ao enviar feedback';
+    return { success: false, error: ERROR_MESSAGES[raw] ?? raw };
   }
 
   return { success: true, data: result };

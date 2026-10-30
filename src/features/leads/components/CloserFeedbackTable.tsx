@@ -108,6 +108,14 @@ export function CloserFeedbackTable({ feedbacks }: CloserFeedbackTableProps) {
                     <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                       Respondido
                     </Badge>
+                  ) : !fb.sent_at ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                      title="O link sai sozinho quando a reunião começar"
+                    >
+                      Agendado
+                    </Badge>
                   ) : isExpired ? (
                     <Badge variant="outline" className="bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300">
                       Expirado
@@ -119,7 +127,7 @@ export function CloserFeedbackTable({ feedbacks }: CloserFeedbackTableProps) {
                   )}
                 </td>
                 <td className="p-3 text-xs text-[var(--muted-foreground)]">
-                  {new Date(fb.sent_at).toLocaleDateString('pt-BR')}
+                  {fb.sent_at ? new Date(fb.sent_at).toLocaleDateString('pt-BR') : '—'}
                 </td>
               </tr>
             );
