@@ -59,4 +59,4 @@ Casos reais (out/2026, closer Jhonata): NEXT360 Telecom, Construtora Epereira, B
 - `docs/stories/closer-feedback-deferred-until-meeting.story.md` (novo)
 
 ## Change Log
-- 2026-10-30: story criada e implementação (@dev). Sem commit — aguardando revisão do Vini.
+- 2026-10-30: story criada e implementação (@dev). Commit `4c223ab0` na branch `claude/optimistic-wright-856edb`; sem push nem PR.
