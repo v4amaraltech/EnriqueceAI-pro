@@ -30,9 +30,14 @@ vi.mock('./webphone-client', () => ({
   getWebphoneState: () => phone.get(),
 }));
 
-const answer = vi.hoisted(() => ({ value: 'not_answered' as 'unknown' | 'answered' | 'not_answered' }));
+const answer = vi.hoisted(() => ({
+  value: 'not_answered' as 'unknown' | 'answered' | 'not_answered',
+  hangupCause: null as string | null,
+}));
 vi.mock('./useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: (callId: string | null) => (callId ? answer.value : 'unknown'),
+  useWebphoneCallOutcome: (callId: string | null) =>
+    callId ? { leadAnswer: answer.value, hangupCause: answer.hangupCause } : { leadAnswer: 'unknown', hangupCause: null },
 }));
 
 const actions = vi.hoisted(() => ({
@@ -97,6 +102,7 @@ describe('WebphonePanel — "Ligação finalizada" continua, sem avaliação com
     setWebphoneCallNotes('');
     // Atendida: é o caso em que a versão anterior pedia as estrelas.
     answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
     for (const fn of Object.values(actions)) fn.mockClear();
     phone.set(ready);
   });
@@ -161,5 +167,50 @@ describe('WebphonePanel — "Ligação finalizada" continua, sem avaliação com
 
     expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
     expect(screen.queryByText(/qualidade do áudio/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('WebphonePanel — motivo quando o lead não atende', () => {
+  beforeEach(() => {
+    clearWebphoneCallContext();
+    setWebphoneCallNotes('');
+    for (const fn of Object.values(actions)) fn.mockClear();
+    phone.set(ready);
+  });
+
+  it('operadora recusou: mostra "Não atendida" e o motivo em português', async () => {
+    answer.value = 'not_answered';
+    answer.hangupCause = 'NORMAL_TEMPORARY_FAILURE';
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByText('Não atendida')).toBeInTheDocument();
+    expect(screen.getByTestId('webphone-hangup-reason')).toHaveTextContent('Falha na operadora. Tente de novo em instantes.');
+  });
+
+  it('webhook ainda não chegou: sem motivo na tela', async () => {
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.queryByTestId('webphone-hangup-reason')).not.toBeInTheDocument();
+  });
+
+  it('lead atendeu: nunca mostra motivo, mesmo com causa gravada', async () => {
+    answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.queryByTestId('webphone-hangup-reason')).not.toBeInTheDocument();
   });
 });

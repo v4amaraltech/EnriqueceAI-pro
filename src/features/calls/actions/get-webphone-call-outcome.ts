@@ -13,6 +13,8 @@ const inputSchema = z.object({ callId: z.string().uuid() });
 export interface WebphoneCallOutcome {
   leadAnswer: LeadAnswer;
   durationSeconds: number;
+  /** Causa do fim gravada pelo webhook — o painel mostra o motivo quando o lead não atende. */
+  hangupCause: string | null;
 }
 
 /**
@@ -46,6 +48,10 @@ export async function getWebphoneCallOutcome(input: unknown): Promise<ActionResu
 
   return {
     success: true,
-    data: { leadAnswer: leadAnswerFromCallRow(call), durationSeconds: call.duration_seconds ?? 0 },
+    data: {
+      leadAnswer: leadAnswerFromCallRow(call),
+      durationSeconds: call.duration_seconds ?? 0,
+      hangupCause: call.hangup_cause,
+    },
   };
 }

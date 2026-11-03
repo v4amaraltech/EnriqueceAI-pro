@@ -37,7 +37,7 @@ describe('getWebphoneCallOutcome', () => {
 
     const r = await getWebphoneCallOutcome({ callId: CALL_ID });
 
-    expect(r).toEqual({ success: true, data: { leadAnswer: 'not_answered', durationSeconds: 0 } });
+    expect(r).toEqual({ success: true, data: { leadAnswer: 'not_answered', durationSeconds: 0, hangupCause: 'NUMBER_CHANGED' } });
     expect(filters).toEqual([
       ['id', CALL_ID],
       ['org_id', 'org-1'],
@@ -48,7 +48,7 @@ describe('getWebphoneCallOutcome', () => {
     const { client } = supabaseWith({ answered_at: null, hangup_cause: null, duration_seconds: 0 });
     auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org-1', userId: 'u1', supabase: client } });
     const r = await getWebphoneCallOutcome({ callId: CALL_ID });
-    expect(r).toEqual({ success: true, data: { leadAnswer: 'unknown', durationSeconds: 0 } });
+    expect(r).toEqual({ success: true, data: { leadAnswer: 'unknown', durationSeconds: 0, hangupCause: null } });
   });
 
   it('linha de outra org (ou inexistente) → não encontrada', async () => {
