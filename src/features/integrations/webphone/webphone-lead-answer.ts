@@ -49,3 +49,41 @@ export function leadConnected(leadAnswer: LeadAnswer, fallback: boolean): boolea
 export function effectiveCallSeconds(leadAnswer: LeadAnswer, measuredSeconds: number): number {
   return leadAnswer === 'not_answered' ? 0 : measuredSeconds;
 }
+
+// Motivo da queda, em português simples, para o painel mostrar quando o lead
+// NÃO atendeu. Sem isso a tela só dizia "Ligação finalizada 00:00" e parecia
+// que o webphone nem tinha discado (03/11/2026: a operadora recusava ~40% das
+// ligações com NORMAL_TEMPORARY_FAILURE e o SDR achava que era defeito).
+// Causas = as que o webhook da API4COM grava em `calls.hangup_cause`.
+const CARRIER_RETRY = 'Falha na operadora. Tente de novo em instantes.';
+
+const HANGUP_REASON: Record<string, string> = {
+  NORMAL_TEMPORARY_FAILURE: CARRIER_RETRY,
+  NETWORK_OUT_OF_ORDER: CARRIER_RETRY,
+  EXCHANGE_ROUTING_ERROR: CARRIER_RETRY,
+  RECOVERY_ON_TIMER_EXPIRE: 'A operadora não respondeu a tempo. Tente de novo.',
+  NUMBER_CHANGED: 'Número mudou ou foi desativado.',
+  UNALLOCATED_NUMBER: 'Este número não existe.',
+  INVALID_NUMBER_FORMAT: 'Número em formato inválido.',
+  USER_BUSY: 'Linha ocupada.',
+  BUSY: 'Linha ocupada.',
+  NO_ANSWER: 'O lead não atendeu.',
+  NO_USER_RESPONSE: 'O lead não atendeu.',
+  MISSED: 'O lead não atendeu.',
+  CALL_REJECTED: 'O lead recusou a ligação.',
+  VOICEMAIL: 'Caiu na caixa postal.',
+  ORIGINATOR_CANCEL: 'Ligação encerrada antes de o lead atender.',
+  NORMAL_CLEARING: 'Ligação encerrada antes de o lead atender.',
+};
+
+const GENERIC_REASON = 'A operadora não completou a ligação.';
+
+/**
+ * Texto do motivo para o SDR quando o lead não atendeu; `null` enquanto o
+ * webhook não trouxe a causa. Causa desconhecida vira um texto genérico.
+ */
+export function hangupReasonLabel(hangupCause: string | null | undefined): string | null {
+  const cause = hangupCause?.trim().toUpperCase();
+  if (!cause) return null;
+  return HANGUP_REASON[cause] ?? GENERIC_REASON;
+}

@@ -27,10 +27,10 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
-import { useWebphoneLeadAnswer } from './useWebphoneLeadAnswer';
+import { useWebphoneCallOutcome } from './useWebphoneLeadAnswer';
 import { useWebphonePanelHost } from './WebphonePanelHost';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
-import { effectiveCallSeconds, leadConnected, type LeadAnswer } from './webphone-lead-answer';
+import { effectiveCallSeconds, hangupReasonLabel, leadConnected, type LeadAnswer } from './webphone-lead-answer';
 import {
   clearWebphoneCallContext,
   contextMatchesCall,
@@ -148,8 +148,9 @@ export function WebphonePanel() {
 
   // Contexto vivo da ligação fotografada (o dono pode ter liberado ou limpado).
   const finishedCallId = stage.kind === 'idle' ? null : stage.call.context?.callId ?? null;
-  // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.)
-  const leadAnswer = useWebphoneLeadAnswer(liveContextCallId ?? finishedCallId);
+  // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.) Quando não
+  // atendeu, a causa vira o motivo mostrado na tela de "Ligação finalizada".
+  const { leadAnswer, hangupCause } = useWebphoneCallOutcome(liveContextCallId ?? finishedCallId);
   const liveContext = finishedCallId && ctxState.context?.callId === finishedCallId ? ctxState.context : null;
 
   // O discador dono concluiu (ou fechou) o modal dele e limpou o contexto:
@@ -247,7 +248,7 @@ export function WebphonePanel() {
           onHangup={handleHangup}
         />
       ) : stage.kind === 'finished' ? (
-        <FinishedView call={stage.call} leadAnswer={leadAnswer} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
+        <FinishedView call={stage.call} leadAnswer={leadAnswer} hangupCause={hangupCause} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
       ) : stage.kind === 'result' ? (
         <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
       ) : (
@@ -478,18 +479,21 @@ function LiveCallView({
 function FinishedView({
   call,
   leadAnswer,
+  hangupCause,
   notes,
   onNotesChange,
   onConclude,
 }: {
   call: FinishedCall;
   leadAnswer: LeadAnswer;
+  hangupCause: string | null;
   notes: string;
   onNotesChange: (notes: string) => void;
   onConclude: () => void;
 }) {
   const name = call.context?.leadName ?? null;
   const number = call.context?.phone ?? call.remoteNumber;
+  const reason = leadAnswer === 'not_answered' ? hangupReasonLabel(hangupCause) : null;
   return (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -502,6 +506,11 @@ function FinishedView({
           {leadConnected(leadAnswer, call.answered) ? formatDuration(call.talkSeconds) : <span className="text-sm text-amber-600">Não atendida</span>}
         </p>
       </div>
+      {reason && (
+        <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400" role="status" data-testid="webphone-hangup-reason">
+          {reason}
+        </p>
+      )}
       <NotesField notes={notes} onChange={onNotesChange} autoFocus />
       <Button size="sm" className="w-full" onClick={onConclude}>
         Concluir
