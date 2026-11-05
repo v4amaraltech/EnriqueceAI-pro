@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
+import { CallAiOutcome } from '@/features/calls/components/CallAiOutcome';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { leadFieldLabel } from '@/features/leads/constants/lead-field-labels';
 
@@ -279,6 +280,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   enrollment_added: 'Inscrito em cadência',
                   enrollment_status_changed: 'Cadência atualizada',
                   cadence_paused: 'Cadência pausada',
+                  cadence_paused_for_return: 'Cadência pausada até o retorno',
                   cadence_resumed: 'Cadência retomada',
                   cadence_completed: 'Cadência concluída',
                   cadence_ignored: 'Cadência encerrada',
@@ -360,6 +362,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                         <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
                       )}
 
+                      {entry.channel === 'phone' && <CallAiOutcome outcome={entry.call_ai_outcome} />}
                       {/* Call recording + transcription */}
                       {entry.channel === 'phone' && entry.recording_url && (
                         <div className="mt-2 space-y-2">

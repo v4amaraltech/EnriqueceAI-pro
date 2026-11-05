@@ -5,6 +5,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
+import { readAiOutcome } from '@/features/calls/ai-outcome';
+
 import type { TimelineEntry, CadenceMetrics } from '../cadences.contract';
 import type { CadenceEnrollmentRow, InteractionRow } from '../types';
 
@@ -21,6 +23,7 @@ const CADENCE_LIFECYCLE_EVENTS = [
   'cadence_ignored',
   'cadence_completed',
   'cadence_paused',
+  'cadence_paused_for_return',
   'cadence_resumed',
   'enrollment_removed',
   'cadence_limbo_triaged',
@@ -78,7 +81,13 @@ export async function fetchLeadTimeline(
     .filter((id): id is string => !!id);
 
   type StepInfo = { id: string; step_order: number; activity_name: string | null; instructions: string | null };
-  type CallInfo = { id: string; recording_url: string | null; transcription: string | null; duration_seconds: number };
+  type CallInfo = {
+    id: string;
+    recording_url: string | null;
+    transcription: string | null;
+    duration_seconds: number;
+    metadata: Record<string, unknown> | null;
+  };
 
   // Round 2 (parallel): everything that only depends on the interactions above
   // (used to be four more round trips in series).
@@ -96,7 +105,7 @@ export async function fetchLeadTimeline(
     resolveUserProfiles(performerIds),
     callIds.length > 0
       ? (from(supabase, 'calls')
-          .select('id, recording_url, transcription, duration_seconds')
+          .select('id, recording_url, transcription, duration_seconds, metadata')
           .in('id', callIds) as unknown as Promise<{ data: CallInfo[] | null }>).then((r) => r.data ?? [])
       : Promise.resolve([] as CallInfo[]),
   ]);
@@ -135,6 +144,7 @@ export async function fetchLeadTimeline(
       recording_url: callData?.recording_url ?? null,
       transcription: callData?.transcription ?? null,
       call_duration: callData?.duration_seconds ?? null,
+      call_ai_outcome: readAiOutcome(callData?.metadata),
     };
   });
 
