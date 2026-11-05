@@ -2,9 +2,15 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
+import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
+
+import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
 import type { DialerStats } from '../schemas/dialer-preferences.schemas';
+import { countCallsByPhone, phoneKey } from '../utils/auto-dialer';
+import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 
 export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
   const auth = await getAuthOrgIdResult();
@@ -28,7 +34,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
   // próprios leads (leads!inner + assigned_to; não confiar no RLS, que em modo
   // 'all' deixa de escopar); manager, a org toda.
   let enrollQuery = from(supabase, 'cadence_enrollments')
-    .select('id, lead_id, cadence_id, current_step, lead:leads!inner(id, telefone)')
+    .select('id, lead_id, cadence_id, current_step, lead:leads!inner(id, telefone, socios, phones)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString());
   if (role !== 'manager') enrollQuery = enrollQuery.eq('lead.assigned_to', userId);
@@ -38,7 +44,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
       lead_id: string;
       cadence_id: string;
       current_step: number;
-      lead: { id: string; telefone: string | null } | null;
+      lead: { id: string; telefone: string | null; socios: LeadSocio[] | null; phones: LeadPhone[] | null } | null;
     }> | null;
   };
 
@@ -76,33 +82,30 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
     };
   }
 
-  // Count leads without phone
-  const leadsWithoutPhone = phoneEnrollments.filter(
-    (e) => !e.lead?.telefone,
-  ).length;
+  // Números de cada lead (mesma resolução da fila do Power Dialer).
+  const phonesByEnrollment = new Map(
+    phoneEnrollments.map((e) => [e.id, e.lead ? getAllLeadPhones(e.lead).map((p) => p.formatted) : []]),
+  );
 
-  // Count leads at daily limit — check calls made today
+  const leadsWithoutPhone = phoneEnrollments.filter((e) => (phonesByEnrollment.get(e.id) ?? []).length === 0).length;
+
+  // No limite do dia = TODOS os números do lead atingiram o limite (o limite é
+  // por número desde a story power-dialer-rounds, 05/11/2026).
   const leadIds = [...new Set(phoneEnrollments.map((e) => e.lead_id))];
-  // BRT midnight: shift "now" by -3h then truncate to UTC midnight, shift back
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const todayStart = new Date(Date.UTC(nowBrt.getUTCFullYear(), nowBrt.getUTCMonth(), nowBrt.getUTCDate()) + 3 * 60 * 60 * 1000);
-
-  const { data: todayCalls } = (await from(supabase, 'calls')
-    .select('lead_id')
-    .in('lead_id', leadIds)
-    .gte('started_at', todayStart.toISOString())) as {
-    data: Array<{ lead_id: string }> | null;
-  };
-
-  // Count calls per lead today
-  const callsPerLead = new Map<string, number>();
-  for (const c of todayCalls ?? []) {
-    callsPerLead.set(c.lead_id, (callsPerLead.get(c.lead_id) ?? 0) + 1);
-  }
+  const todayCalls = await chunkedIn<{ destination: string | null; started_at: string | null }>(leadIds, (chunk) =>
+    from(supabase, 'calls')
+      .select('destination, started_at')
+      .in('lead_id', chunk)
+      .gte('started_at', brtDayStartIso(brtTodayIso())) as unknown as PromiseLike<{
+      data: Array<{ destination: string | null; started_at: string | null }> | null;
+      error: unknown;
+    }>,
+  );
+  const callsByPhone = countCallsByPhone(todayCalls);
 
   const leadsAtDailyLimit = phoneEnrollments.filter((e) => {
-    const count = callsPerLead.get(e.lead_id) ?? 0;
-    return count >= dailyLimit;
+    const phones = phonesByEnrollment.get(e.id) ?? [];
+    return phones.length > 0 && phones.every((p) => (callsByPhone.get(phoneKey(p))?.count ?? 0) >= dailyLimit);
   }).length;
 
   const totalPhoneLeads = phoneEnrollments.length;

@@ -117,10 +117,10 @@ export function DialerPreferencesDialog({
 
           <div className="border-t border-[var(--border)]" />
 
-          {/* Limite diário de tentativas por lead */}
+          {/* Limite diário de tentativas por número */}
           <div className="space-y-3 py-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Limite diário de tentativas por lead</h3>
+              <h3 className="text-sm font-semibold">Limite diário de tentativas por número</h3>
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
@@ -146,7 +146,7 @@ export function DialerPreferencesDialog({
               </div>
             </div>
             <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Máximo de tentativas de ligação que um lead pode receber em um mesmo dia. Após isso, o lead ficará fora da fila do Power Dialer até o fim do dia.
+              Máximo de ligações para CADA número do lead no mesmo dia, com pelo menos 1 hora entre uma e outra. Quando todos os números do lead atingem o limite, ele sai da fila do Power Dialer até o fim do dia.
             </p>
             <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               *Valor entre {DAILY_LIMIT_MIN} e {DAILY_LIMIT_MAX}.
