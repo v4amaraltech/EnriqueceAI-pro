@@ -36,6 +36,12 @@ const completeDialerCallSchema = z.object({
   callId: z.string().uuid().optional(),
   /** Desfecho do SDR (ou "no_answer" da discagem automática). */
   sdrOutcome: callDispositionSchema.optional(),
+  /**
+   * Atendida no automático (story power-dialer-rounds): o SDR não escolheu o
+   * resultado — marca `calls.metadata.ai_outcome.status='pending'` para a IA
+   * classificar a gravação depois.
+   */
+  aiOutcomePending: z.boolean().optional(),
 });
 
 export type CompleteDialerCallInput = z.infer<typeof completeDialerCallSchema>;
@@ -50,7 +56,7 @@ export async function completeDialerCall(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { enrollmentId, cadenceId, stepId, leadId, phone, notes, durationSeconds, callId, sdrOutcome } = parsed.data;
+  const { enrollmentId, cadenceId, stepId, leadId, phone, notes, durationSeconds, callId, sdrOutcome, aiOutcomePending } = parsed.data;
 
   // 1. Registrar a ligação.
   let recordedCallId: string;
@@ -70,6 +76,7 @@ export async function completeDialerCall(
     });
     if (!applied.success) return applied;
     recordedCallId = callId;
+    if (aiOutcomePending && !sdrOutcome) await markAiOutcomePending(supabase, orgId, callId);
   } else {
     const legacy = await insertLegacyDialerCall(supabase, { orgId, userId, leadId, cadenceId, stepId, phone, notes, durationSeconds });
     if (!legacy.success) return legacy;
@@ -172,4 +179,27 @@ async function insertLegacyDialerCall(
   } as Record<string, unknown>);
 
   return { success: true, data: call.id };
+}
+
+/**
+ * `calls.metadata.ai_outcome = { status: 'pending' }` sem apagar o resto do
+ * metadata (`audio_stats` etc.). Falha aqui não desfaz a conclusão da etapa.
+ */
+async function markAiOutcomePending(supabase: SupabaseClient, orgId: string, callId: string): Promise<void> {
+  try {
+    const { data } = (await from(supabase, 'calls')
+      .select('metadata')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single()) as { data: { metadata: Record<string, unknown> | null } | null };
+    const metadata = data?.metadata ?? {};
+    const current = metadata.ai_outcome as { status?: string } | undefined;
+    if (current?.status && current.status !== 'pending') return; // a IA já respondeu
+    await from(supabase, 'calls')
+      .update({ metadata: { ...metadata, ai_outcome: { status: 'pending', requested_at: new Date().toISOString() } } })
+      .eq('id', callId)
+      .eq('org_id', orgId);
+  } catch (err) {
+    console.error('[completeDialerCall] markAiOutcomePending failed:', err);
+  }
 }

@@ -8,6 +8,7 @@ import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
+import { countCallsByPhone, phoneKey } from '../utils/auto-dialer';
 import { entraNaFilaHumana } from '../utils/fila-humana';
 import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 
@@ -15,6 +16,13 @@ export interface DialerQueuePhone {
   formatted: string;
   raw: string;
   label: string;
+}
+
+/** Ligações de hoje (BRT) para um número do lead. */
+export interface DialerPhoneAttempt {
+  phone: string;
+  attemptsToday: number;
+  lastAttemptAt: string | null;
 }
 
 export interface DialerQueueItem {
@@ -40,6 +48,12 @@ export interface DialerQueueItem {
    * do meio, então a discagem automática não o disca (só o modo manual).
    */
   currentStepIsPhone: boolean;
+  /**
+   * Tentativas de hoje por número (story power-dialer-rounds). O limite diário
+   * (`dialer_daily_limit_per_lead`) vale POR NÚMERO; o lead sai da fila só
+   * quando todos os números o atingiram.
+   */
+  phoneAttempts: DialerPhoneAttempt[];
 }
 
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
@@ -154,9 +168,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     phoneEnrollments.push({ enrollment: e, stepInfo, phone, phones });
   }
 
-  // Check daily call limits for these leads
+  // Ligações de hoje por NÚMERO (story power-dialer-rounds, 05/11/2026): cada
+  // número do lead tem o seu limite diário; antes era por lead.
   const leadIds = [...new Set(phoneEnrollments.map((pe) => pe.enrollment.lead_id))];
-  const callsPerLead = new Map<string, number>();
+  let attemptsByPhone = new Map<string, { count: number; last: string | null }>();
 
   if (leadIds.length > 0) {
     // Start of TODAY in BRT (not the server's UTC midnight). `setHours(0,0,0,0)`
@@ -164,27 +179,28 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     // near midnight BRT.
     const todayStartIso = brtDayStartIso(brtTodayIso());
 
-    const todayCalls = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+    const todayCalls = await chunkedIn<{ lead_id: string; destination: string | null; started_at: string | null }>(leadIds, (chunk) =>
       from(supabase, 'calls')
-        .select('lead_id')
+        .select('lead_id, destination, started_at')
         .in('lead_id', chunk)
         .gte('started_at', todayStartIso) as unknown as PromiseLike<{
-        data: Array<{ lead_id: string }> | null;
+        data: Array<{ lead_id: string; destination: string | null; started_at: string | null }> | null;
         error: unknown;
       }>,
     );
 
-    for (const c of todayCalls) {
-      callsPerLead.set(c.lead_id, (callsPerLead.get(c.lead_id) ?? 0) + 1);
-    }
+    attemptsByPhone = countCallsByPhone(todayCalls);
   }
 
   const result: DialerQueueItem[] = [];
   for (const { enrollment: e, stepInfo, phone, phones } of phoneEnrollments) {
     if (!e.lead || !e.cadence) continue;
-    // Exclude leads at daily limit
-    const callCount = callsPerLead.get(e.lead_id) ?? 0;
-    if (callCount >= dailyLimit) continue;
+    const phoneAttempts: DialerPhoneAttempt[] = phones.map((p) => {
+      const a = attemptsByPhone.get(phoneKey(p.formatted));
+      return { phone: p.formatted, attemptsToday: a?.count ?? 0, lastAttemptAt: a?.last ?? null };
+    });
+    // Sai da fila só quando TODOS os números atingiram o limite do dia.
+    if (phoneAttempts.every((a) => a.attemptsToday >= dailyLimit)) continue;
 
     result.push({
       enrollmentId: e.id,
@@ -204,6 +220,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       activityName: stepInfo.activityName,
       callScript: stepInfo.instructions,
       currentStepIsPhone: stepInfo.order === e.current_step,
+      phoneAttempts,
     });
   }
 

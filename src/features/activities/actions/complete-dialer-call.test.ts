@@ -77,6 +77,32 @@ describe('completeDialerCall', () => {
     webhook.dispatchWebhookEvent.mockClear();
   });
 
+  it('atendida no automático: marca ai_outcome pendente sem apagar o metadata', async () => {
+    const { client, ops } = fakeSupabase({
+      call: { id: CALL_ID, duration_seconds: 42, lead_id: LEAD, org_id: 'org', hangup_cause: 'NORMAL_CLEARING', metadata: { audio_stats: { mos: 4 } } },
+      interaction: { id: 'int-1', metadata: { callId: CALL_ID }, message_content: null },
+    });
+    auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org', userId: 'u1', supabase: client } });
+
+    const r = await completeDialerCall({ ...base, callId: CALL_ID, aiOutcomePending: true });
+
+    expect(r.success).toBe(true);
+    const meta = ops.find((o) => o.table === 'calls' && o.op === 'update' && 'metadata' in o.payload);
+    expect(meta?.payload.metadata).toMatchObject({ audio_stats: { mos: 4 }, ai_outcome: { status: 'pending' } });
+  });
+
+  it('com desfecho do SDR não marca a IA', async () => {
+    const { client, ops } = fakeSupabase({
+      call: { id: CALL_ID, duration_seconds: 0, lead_id: LEAD, org_id: 'org', hangup_cause: 'NUMBER_CHANGED', metadata: {} },
+      interaction: { id: 'int-1', metadata: { callId: CALL_ID }, message_content: null },
+    });
+    auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org', userId: 'u1', supabase: client } });
+
+    await completeDialerCall({ ...base, callId: CALL_ID, sdrOutcome: 'no_answer', aiOutcomePending: true });
+
+    expect(ops.some((o) => o.table === 'calls' && 'metadata' in o.payload)).toBe(false);
+  });
+
   it('com callId: grava na linha existente — NENHUM insert em calls nem em interactions', async () => {
     const { client, ops } = fakeSupabase({
       call: { id: CALL_ID, duration_seconds: 0, lead_id: LEAD, org_id: 'org', hangup_cause: 'NUMBER_CHANGED' },

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
+import { CallAiOutcome } from '@/features/calls/components/CallAiOutcome';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { InteractionType } from '@/features/cadences/types';
@@ -169,6 +170,7 @@ export function LeadTimelineTab({ timeline }: LeadTimelineTabProps) {
                     Nenhuma anotação
                   </p>
                 )}
+                {entry.channel === 'phone' && <CallAiOutcome outcome={entry.call_ai_outcome} />}
                 {/* Call recording + transcription */}
                 {entry.channel === 'phone' && entry.recording_url && (
                   <div className="mt-2 space-y-2">

@@ -6,11 +6,18 @@ import {
   AUTO_DIAL_COUNTDOWN_SECONDS,
   type AutoDialEvent,
   type AutoDialState,
+  AUTO_DIAL_MIN_GAP_MS,
+  availablePhones,
+  buildAttemptLog,
+  countCallsByPhone,
+  decideAfterNoAnswer,
   describeAutoDial,
-  findNextAutoDialIndex,
   initialAutoDialState,
   isAutoDialEligible,
   isAutoDialRunning,
+  phoneKey,
+  pickNextAutoDial,
+  recordAttempt,
   reduceAutoDial,
 } from './auto-dialer';
 
@@ -32,17 +39,38 @@ describe('reduceAutoDial — laço principal', () => {
     expect(run([{ type: 'start' }, { type: 'dial_now' }])).toEqual({ phase: 'dialing' });
   });
 
-  it('não atendeu → registra sozinho → nova contagem para o próximo', () => {
-    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered' }]);
-    expect(s).toEqual({ phase: 'auto-completing' });
+  it('não atendeu na última tentativa → registra sozinho → nova contagem', () => {
+    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered', then: 'complete' }]);
+    expect(s).toEqual({ phase: 'auto-completing', outcome: 'no_answer' });
     expect(run([{ type: 'completed' }], s)).toEqual({ phase: 'countdown', secondsLeft: 5 });
   });
 
-  it('atendeu → para e espera o SDR; Concluir volta a contar', () => {
+  it('não atendeu com outro número livre → contagem para o mesmo lead', () => {
+    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered', then: 'next_number' }]);
+    expect(s).toEqual({ phase: 'countdown', secondsLeft: 5 });
+  });
+
+  it('não atendeu com números no intervalo → advancing → próximo lead ou espera', () => {
+    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered', then: 'next_lead' }]);
+    expect(s).toEqual({ phase: 'advancing' });
+    expect(isAutoDialRunning(s)).toBe(true);
+    expect(run([{ type: 'next_lead' }], s)).toEqual({ phase: 'countdown', secondsLeft: 5 });
+    const w = run([{ type: 'wait', until: 123 }], s);
+    expect(w).toEqual({ phase: 'waiting', until: 123 });
+    expect(run([{ type: 'tick' }], w)).toEqual(w);
+    expect(run([{ type: 'wake' }], w)).toEqual({ phase: 'countdown', secondsLeft: 5 });
+  });
+
+  it('atendeu → conclui sozinho (IA) → nova contagem', () => {
     const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'answered' }]);
-    expect(s).toEqual({ phase: 'awaiting-sdr', reason: 'answered' });
-    expect(run([{ type: 'tick' }, { type: 'dial_now' }], s)).toEqual(s);
-    expect(run([{ type: 'sdr_concluded' }], s)).toEqual({ phase: 'countdown', secondsLeft: 5 });
+    expect(s).toEqual({ phase: 'auto-completing', outcome: 'answered' });
+    expect(describeAutoDial(s)).toMatch(/Atendida/);
+    expect(run([{ type: 'completed' }], s)).toEqual({ phase: 'countdown', secondsLeft: 5 });
+  });
+
+  it('depois de concluir, pode esperar o próximo liberar', () => {
+    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'answered' }, { type: 'completed' }, { type: 'wait', until: 5 }]);
+    expect(s).toEqual({ phase: 'waiting', until: 5 });
   });
 
   it('20 s sem sinal da API4COM → o SDR decide', () => {
@@ -63,7 +91,7 @@ describe('reduceAutoDial — pausas e falhas', () => {
   });
 
   it('falha ao registrar o resultado pausa', () => {
-    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered' }, { type: 'complete_failed', message: 'erro' }]);
+    const s = run([...toInCall, { type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered', then: 'complete' }, { type: 'complete_failed', message: 'erro' }]);
     expect(s).toMatchObject({ phase: 'paused', reason: 'complete_failed' });
   });
 
@@ -110,18 +138,71 @@ function item(id: string, over: Partial<DialerQueueItem> = {}): DialerQueueItem 
     activityName: null,
     callScript: null,
     currentStepIsPhone: true,
+    phoneAttempts: [],
     ...over,
   };
 }
 
-describe('elegibilidade', () => {
+describe('elegibilidade e rodadas', () => {
+  const NOW = Date.parse('2026-11-05T15:00:00Z');
+  const LIMIT = 3;
+  const two = { phone: '(11) 911110000', phones: [
+    { formatted: '(11) 911110000', raw: '5511911110000', label: 'a' },
+    { formatted: '(11) 922220000', raw: '5511922220000', label: 'b' },
+  ] };
+
   it('pula feitos, sem telefone e fora da etapa de ligação', () => {
     const queue = [item('a'), item('b', { currentStepIsPhone: false }), item('c', { phone: null }), item('d')];
     const done = new Set(['a']);
     expect(isAutoDialEligible(queue[0]!, done)).toBe(false);
     expect(isAutoDialEligible(queue[1]!, done)).toBe(false);
     expect(isAutoDialEligible(queue[2]!, done)).toBe(false);
-    expect(findNextAutoDialIndex(queue, -1, done)).toBe(3);
-    expect(findNextAutoDialIndex(queue, 3, done)).toBe(-1);
+    expect(pickNextAutoDial(queue, -1, done, new Map(), LIMIT, NOW)).toEqual({ kind: 'dial', index: 3 });
+  });
+
+  it('phoneKey ignora máscara e o 55 do país', () => {
+    expect(phoneKey('(11) 99999-0000')).toBe('11999990000');
+    expect(phoneKey('5511999990000')).toBe('11999990000');
+    expect(phoneKey('11999990000')).toBe('11999990000');
+  });
+
+  it('cada número: até 3 por dia e 1 h entre tentativas', () => {
+    let log = recordAttempt(new Map(), '(11) 911110000', NOW);
+    expect(availablePhones(two, log, LIMIT, NOW + 1000)).toEqual(['(11) 922220000']);
+    expect(decideAfterNoAnswer(two, log, LIMIT, NOW + 1000)).toBe('next_number');
+
+    log = recordAttempt(log, '(11) 922220000', NOW + 60_000);
+    expect(decideAfterNoAnswer(two, log, LIMIT, NOW + 120_000)).toBe('next_lead');
+    expect(availablePhones(two, log, LIMIT, NOW + AUTO_DIAL_MIN_GAP_MS)).toEqual(['(11) 911110000']);
+
+    const full = new Map([
+      ['11911110000', { count: 3, lastAt: NOW }],
+      ['11922220000', { count: 3, lastAt: NOW }],
+    ]);
+    expect(decideAfterNoAnswer(two, full, LIMIT, NOW)).toBe('complete');
+  });
+
+  it('dá a volta na fila e espera quando ninguém está liberado', () => {
+    const queue = [item('a'), item('b')];
+    const log = recordAttempt(new Map(), '(11) 99999-0000', NOW);
+    // a e b têm o mesmo telefone na fixture → ambos no intervalo
+    expect(pickNextAutoDial(queue, 0, new Set(), log, LIMIT, NOW + 1)).toEqual({ kind: 'wait', index: 1, until: NOW + AUTO_DIAL_MIN_GAP_MS });
+    expect(pickNextAutoDial(queue, 1, new Set(), new Map(), LIMIT, NOW)).toEqual({ kind: 'dial', index: 0 });
+    expect(pickNextAutoDial(queue, 0, new Set(['a', 'b']), new Map(), LIMIT, NOW)).toEqual({ kind: 'none' });
+  });
+
+  it('buildAttemptLog usa a contagem do servidor', () => {
+    const log = buildAttemptLog([item('a', { phoneAttempts: [{ phone: '(11) 99999-0000', attemptsToday: 2, lastAttemptAt: '2026-11-05T14:00:00Z' }] })]);
+    expect(log.get('11999990000')).toEqual({ count: 2, lastAt: Date.parse('2026-11-05T14:00:00Z') });
+  });
+
+  it('countCallsByPhone junta máscaras/55 e guarda a última', () => {
+    const m = countCallsByPhone([
+      { destination: '5511999990000', started_at: '2026-11-05T12:00:00Z' },
+      { destination: '11999990000', started_at: '2026-11-05T14:00:00Z' },
+      { destination: null, started_at: '2026-11-05T15:00:00Z' },
+    ]);
+    expect(m.get('11999990000')).toEqual({ count: 2, last: '2026-11-05T14:00:00Z' });
+    expect(m.size).toBe(1);
   });
 });

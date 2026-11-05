@@ -53,6 +53,7 @@ const mockQueue: DialerQueueItem[] = [
     activityName: null,
     callScript: null,
     currentStepIsPhone: true,
+    phoneAttempts: [],
   },
   {
     enrollmentId: 'e2',
@@ -72,6 +73,7 @@ const mockQueue: DialerQueueItem[] = [
     activityName: null,
     callScript: null,
     currentStepIsPhone: true,
+    phoneAttempts: [],
   },
   {
     enrollmentId: 'e3',
@@ -91,6 +93,7 @@ const mockQueue: DialerQueueItem[] = [
     activityName: null,
     callScript: null,
     currentStepIsPhone: true,
+    phoneAttempts: [],
   },
 ];
 

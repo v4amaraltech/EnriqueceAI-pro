@@ -72,6 +72,7 @@ function lead(id: string, name: string, over: Partial<DialerQueueItem> = {}): Di
     activityName: null,
     callScript: null,
     currentStepIsPhone: true,
+    phoneAttempts: [],
     ...over,
   };
 }
@@ -144,14 +145,35 @@ describe('PowerDialerTab — discagem automática', () => {
     window.localStorage.clear();
   });
 
-  it('não atendeu → registra "no_answer" na mesma ligação e liga o próximo depois de 5 s', async () => {
+  it('não atendeu com tentativas no dia → NÃO conclui a tarefa e liga o próximo lead', async () => {
     renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')]);
     fireEvent.click(screen.getByText('Iniciar ligacoes'));
 
     expect(screen.getByText(/Próxima ligação em 5 s — Maria Silva/)).toBeInTheDocument();
+    expect(screen.getByText(/número 1 de 1 · tentativa 1\/3/)).toBeInTheDocument();
     await advance(5000);
     expect(actions.initiateCall).toHaveBeenCalledTimes(1);
     expect(actions.initiateCall).toHaveBeenCalledWith(expect.objectContaining({ phone: '(11) 90001-0000', leadId: 'l-1' }));
+
+    answer.value = 'not_answered';
+    await advance(10);
+    await endBrowserCall();
+
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+    expect(screen.getByText(/Próxima ligação em 5 s — Joao Santos/)).toBeInTheDocument();
+
+    answer.value = 'unknown';
+    await advance(5000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
+    expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 'l-2' }));
+  });
+
+  it('última tentativa do dia sem atender → registra "no_answer" e segue', async () => {
+    const lastTry = [{ phone: '(11) 90001-0000', attemptsToday: 2, lastAttemptAt: '2026-01-01T00:00:00Z' }];
+    renderDialer([lead('1', 'Maria Silva', { phoneAttempts: lastTry }), lead('2', 'Joao Santos')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    expect(screen.getByText(/tentativa 3\/3/)).toBeInTheDocument();
+    await advance(5000);
 
     answer.value = 'not_answered';
     await advance(10);
@@ -166,14 +188,55 @@ describe('PowerDialerTab — discagem automática', () => {
       }),
     );
     expect(screen.getByText(/Próxima ligação em 5 s — Joao Santos/)).toBeInTheDocument();
+  });
+
+  it('lead com 2 números: não atendeu no 1º → disca o 2º do mesmo lead', async () => {
+    const phones = [
+      { formatted: '(11) 911110000', raw: '5511911110000', label: 'a' },
+      { formatted: '(11) 922220000', raw: '5511922220000', label: 'b' },
+    ];
+    renderDialer([lead('1', 'Maria Silva', { phone: '(11) 911110000', phones }), lead('2', 'Joao Santos')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ phone: '(11) 911110000' }));
+
+    answer.value = 'not_answered';
+    await advance(10);
+    await endBrowserCall();
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+    expect(screen.getByText(/Próxima ligação em 5 s — Maria Silva/)).toBeInTheDocument();
+    expect(screen.getByText(/número 2 de 2/)).toBeInTheDocument();
 
     answer.value = 'unknown';
     await advance(5000);
     expect(actions.initiateCall).toHaveBeenCalledTimes(2);
-    expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 'l-2' }));
+    expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ phone: '(11) 922220000', leadId: 'l-1' }));
   });
 
-  it('atendeu → para e espera o SDR concluir', async () => {
+  it('todos no intervalo de 1 h → aguarda e liga de novo quando libera', async () => {
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+
+    answer.value = 'not_answered';
+    await advance(10);
+    await endBrowserCall();
+    expect(screen.getByText(/Aguardando: próxima ligação liberada às/)).toBeInTheDocument();
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+
+    answer.value = 'unknown';
+    await act(async () => {
+      phone.set(ready);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    });
+    await advance(6000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
+    expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 'l-1' }));
+  });
+
+  it('atendeu → conclui sozinho com a IA pendente e liga o próximo', async () => {
     renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')]);
     fireEvent.click(screen.getByText('Iniciar ligacoes'));
     await advance(5000);
@@ -182,10 +245,13 @@ describe('PowerDialerTab — discagem automática', () => {
     await advance(10);
     await endBrowserCall();
 
-    expect(screen.getByText('O lead atendeu — conclua para seguir')).toBeInTheDocument();
-    expect(actions.completeDialerCall).not.toHaveBeenCalled();
-    await advance(10_000);
-    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollmentId: 'e-1', aiOutcomePending: true, sdrOutcome: undefined }),
+    );
+    expect(screen.getByText(/Próxima ligação em 5 s — Joao Santos/)).toBeInTheDocument();
+    answer.value = 'unknown';
+    await advance(5000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
   });
 
   it('não disca lead fora da etapa de ligação', async () => {

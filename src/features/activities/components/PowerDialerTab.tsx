@@ -35,12 +35,21 @@ import { completeDialerCall } from '../actions/complete-dialer-call';
 import { hasWrittenNotes } from '../types/call-attempt';
 import {
   AUTO_DIAL_ANSWER_TIMEOUT_MS,
-  findNextAutoDialIndex,
+  availablePhones,
+  buildAttemptLog,
+  decideAfterNoAnswer,
   initialAutoDialState,
   isAutoDialEligible,
+  itemPhones,
   loadAutoDialPreference,
+  phoneKey,
+  pickNextAutoDial,
+  recordAttempt,
   reduceAutoDial,
   saveAutoDialPreference,
+  type AutoDialEvent,
+  type AutoDialPick,
+  type PhoneAttempt,
 } from '../utils/auto-dialer';
 
 import { AutoDialStatusBar, AutoDialToggle } from './AutoDialControls';
@@ -57,6 +66,8 @@ interface PowerDialerTabProps {
 }
 
 type DialResult = { ok: true } | { ok: false; error: string | null };
+/** `wait`: no automático, o próximo lead só fica liberado nesse horário (ms). */
+type CompleteResult = { ok: true; wait?: number } | { ok: false; error: string | null };
 
 function browserStorage(): Storage | null {
   try {
@@ -89,6 +100,10 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   const [autoEnabled, setAutoEnabled] = useState(() => loadAutoDialPreference(browserStorage()));
   const [auto, dispatchAuto] = useReducer(reduceAutoDial, initialAutoDialState);
   const autoOn = auto.phase !== 'off';
+  // Tentativas de hoje por número (story power-dialer-rounds): começa com a
+  // contagem do servidor e soma cada discagem feita nesta tela.
+  const [attemptLog, setAttemptLog] = useState<Map<string, PhoneAttempt>>(() => buildAttemptLog(initialQueue));
+  const dailyLimit = currentPreferences.daily_limit_per_lead;
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -108,9 +123,21 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     [queue],
   );
 
-  /** Próximo lead depois de `fromIndex`: no automático, só os elegíveis. */
-  function nextIndexAfter(fromIndex: number, statuses: Map<string, DialerItemStatus>, autoMode: boolean): number {
-    return autoMode ? findNextAutoDialIndex(queue, fromIndex, new Set(statuses.keys())) : findNextPending(fromIndex, statuses);
+  /** Próximo lead do automático depois de `fromIndex` (dá a volta na fila). */
+  function pickAuto(fromIndex: number, statuses: Map<string, DialerItemStatus>): AutoDialPick {
+    return pickNextAutoDial(queue, fromIndex, new Set(statuses.keys()), attemptLog, dailyLimit, Date.now());
+  }
+
+  /** Vai para o lead escolhido e devolve o evento do automático (null = acabou). */
+  function applyPick(pick: AutoDialPick): AutoDialEvent | null {
+    if (pick.kind === 'none') return null;
+    setCurrentIndex(pick.index);
+    return pick.kind === 'dial' ? { type: 'next_lead' } : { type: 'wait', until: pick.until };
+  }
+
+  function finishAuto() {
+    dispatchAuto({ type: 'stop' });
+    toast.success('Discagem automática concluída: não há mais tentativas para hoje.');
   }
 
   function resetCallState() {
@@ -211,6 +238,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           return;
         }
 
+        setAttemptLog((prev) => recordAttempt(prev, phoneToCall, Date.now()));
         setCallId(result.data.callId);
         setProviderCallId(result.data.providerCallId);
         // Se o navegador já viu o fim enquanto o POST /calls respondia, mantém.
@@ -239,12 +267,14 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     durationSeconds: number;
     callStatus?: string;
     sdrOutcome?: CallDisposition;
-  }): Promise<DialResult> {
+    /** Atendida no automático: a IA classifica a gravação depois. */
+    aiOutcomePending?: boolean;
+  }): Promise<CompleteResult> {
     const item = currentItem;
     if (!item) return Promise.resolve({ ok: false, error: null });
     const autoMode = autoOn;
 
-    return new Promise<DialResult>((resolve) => {
+    return new Promise<CompleteResult>((resolve) => {
       startTransition(async () => {
         const result = await completeDialerCall({
           enrollmentId: item.enrollmentId,
@@ -257,6 +287,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           durationSeconds: args.durationSeconds,
           callId: callId ?? undefined,
           sdrOutcome: args.sdrOutcome,
+          aiOutcomePending: args.aiOutcomePending,
         });
 
         if (!result.success) {
@@ -270,12 +301,20 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         setItemStatuses(newStatuses);
         resetCallState();
 
-        const next = nextIndexAfter(currentIndex, newStatuses, autoMode);
+        if (autoMode) {
+          const pick = pickAuto(currentIndex, newStatuses);
+          if (pick.kind === 'none') {
+            finishAuto();
+            resolve({ ok: true });
+            return;
+          }
+          setCurrentIndex(pick.index);
+          resolve(pick.kind === 'wait' ? { ok: true, wait: pick.until } : { ok: true });
+          return;
+        }
+        const next = findNextPending(currentIndex, newStatuses);
         if (next >= 0) {
           setCurrentIndex(next);
-        } else if (autoMode) {
-          dispatchAuto({ type: 'stop' });
-          toast.success('Discagem automática concluída: não há mais leads na etapa de ligação.');
         } else {
           setIsActive(false);
           toast.success('Todas as ligacoes foram concluidas!');
@@ -289,22 +328,30 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   // Laço da discagem automática
   // -------------------------------------------------------------------------
 
-  /** Aponta para o primeiro lead elegível a partir do atual; false se não há. */
-  function alignToEligible(): boolean {
-    if (currentItem && isAutoDialEligible(currentItem, doneIds)) return true;
-    const idx = findNextAutoDialIndex(queue, -1, doneIds);
-    if (idx < 0) return false;
-    setCurrentIndex(idx);
-    return true;
+  /** Números do lead da vez que podem ser discados agora. */
+  function dialablePhones(): string[] {
+    if (!currentItem || !isAutoDialEligible(currentItem, doneIds)) return [];
+    return availablePhones(currentItem, attemptLog, dailyLimit, Date.now());
+  }
+
+  /**
+   * Aponta para um lead com número liberado (o atual, se puder). Devolve o
+   * evento a seguir (`wait` quando todos estão no intervalo) ou null se acabou.
+   */
+  function alignAuto(): AutoDialEvent | null {
+    if (dialablePhones().length > 0) return { type: 'next_lead' };
+    return applyPick(pickAuto(currentIndex - 1, itemStatuses));
   }
 
   function startAuto() {
     if (!webphoneReady) return;
-    if (!alignToEligible()) {
-      toast.info('Nenhum lead na etapa de ligação para discar automaticamente.');
+    const ev = alignAuto();
+    if (!ev) {
+      toast.info('Nenhum lead na etapa de ligação com tentativas para hoje.');
       return;
     }
     dispatchAuto({ type: 'start' });
+    if (ev.type === 'wait') dispatchAuto(ev);
   }
 
   function handleAutoToggle(enabled: boolean) {
@@ -324,14 +371,13 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     return () => window.clearTimeout(t);
   }, [auto]);
 
-  // Zerou a contagem (ou "Ligar agora"): disca o telefone principal.
+  // Zerou a contagem (ou "Ligar agora"): disca o próximo número liberado do lead.
   const onAutoDial = useEffectEvent(() => {
-    if (!currentItem || !isAutoDialEligible(currentItem, doneIds)) {
-      if (alignToEligible()) dispatchAuto({ type: 'next_lead' });
-      else {
-        dispatchAuto({ type: 'stop' });
-        toast.success('Discagem automática concluída: não há mais leads na etapa de ligação.');
-      }
+    const phones = dialablePhones();
+    if (phones.length === 0) {
+      const ev = applyPick(pickAuto(currentIndex - 1, itemStatuses));
+      if (ev) dispatchAuto(ev);
+      else finishAuto();
       return;
     }
     const state = getWebphoneState();
@@ -344,7 +390,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       dispatchAuto({ type: 'pause', reason: 'blocked', message: blocked });
       return;
     }
-    void dial(currentItem.phone ?? undefined).then((r) =>
+    void dial(phones[0]).then((r) =>
       dispatchAuto(r.ok ? { type: 'dial_started' } : { type: 'dial_failed', message: r.error }),
     );
   });
@@ -357,27 +403,69 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     if (auto.phase === 'in-call' && callState === 'ended') dispatchAuto({ type: 'call_ended' });
   }, [auto.phase, callState]);
 
-  // Esperando o sinal da API4COM (atendeu ou não).
+  // Esperando o sinal da API4COM (atendeu ou não). Não atendeu: outro número
+  // do lead, outro lead (volta mais tarde) ou última tentativa do dia.
+  const onLeadAnswer = useEffectEvent((answer: 'answered' | 'not_answered') => {
+    if (answer === 'answered' || !currentItem) {
+      dispatchAuto({ type: 'lead_answer', answer });
+      return;
+    }
+    const then = decideAfterNoAnswer(currentItem, attemptLog, dailyLimit, Date.now());
+    if (then === 'next_number') resetCallState();
+    dispatchAuto({ type: 'lead_answer', answer, then });
+  });
   useEffect(() => {
     if (auto.phase !== 'resolving') return;
     if (leadAnswer !== 'unknown') {
-      dispatchAuto({ type: 'lead_answer', answer: leadAnswer });
+      onLeadAnswer(leadAnswer);
       return;
     }
     const t = window.setTimeout(() => dispatchAuto({ type: 'answer_timeout' }), AUTO_DIAL_ANSWER_TIMEOUT_MS);
     return () => window.clearTimeout(t);
   }, [auto.phase, leadAnswer]);
 
-  // Não atendeu: registra sozinho (com as anotações do painel flutuante) e segue.
-  const onAutoComplete = useEffectEvent(() => {
-    const notes = getWebphoneCallContextState().notes;
-    void completeCurrent({ notes, durationSeconds: 0, sdrOutcome: 'no_answer' }).then((r) =>
-      dispatchAuto(r.ok ? { type: 'completed' } : { type: 'complete_failed', message: r.error }),
-    );
+  // Não atendeu, com tentativas mais tarde: vai para o próximo lead sem
+  // concluir a tarefa (o lead volta quando o intervalo de 1 h passar).
+  const onAutoAdvance = useEffectEvent(() => {
+    resetCallState();
+    const ev = applyPick(pickAuto(currentIndex, itemStatuses));
+    if (ev) dispatchAuto(ev);
+    else finishAuto();
   });
   useEffect(() => {
-    if (auto.phase === 'auto-completing') onAutoComplete();
+    if (auto.phase === 'advancing') onAutoAdvance();
   }, [auto.phase]);
+
+  // Todos em espera: acorda quando o primeiro número fica liberado.
+  useEffect(() => {
+    if (auto.phase !== 'waiting') return;
+    const delay = Math.min(Math.max(auto.until - Date.now(), 0) + 1000, 2 ** 31 - 1);
+    const t = window.setTimeout(() => dispatchAuto({ type: 'wake' }), delay);
+    return () => window.clearTimeout(t);
+  }, [auto]);
+
+  // Registra sozinho (com as anotações do painel flutuante) e segue:
+  // atendida → a IA classifica a gravação depois; não atendida (última
+  // tentativa do dia) → "Não atendeu".
+  const onAutoComplete = useEffectEvent((outcome: 'answered' | 'no_answer') => {
+    const notes = getWebphoneCallContextState().notes;
+    const args =
+      outcome === 'answered'
+        ? { notes, durationSeconds: 0, aiOutcomePending: true }
+        : { notes, durationSeconds: 0, sdrOutcome: 'no_answer' as const };
+    void completeCurrent(args).then((r) => {
+      if (!r.ok) {
+        dispatchAuto({ type: 'complete_failed', message: r.error });
+        return;
+      }
+      dispatchAuto({ type: 'completed' });
+      if (r.wait !== undefined) dispatchAuto({ type: 'wait', until: r.wait });
+    });
+  });
+  const autoCompleteOutcome = auto.phase === 'auto-completing' ? auto.outcome : null;
+  useEffect(() => {
+    if (autoCompleteOutcome) onAutoComplete(autoCompleteOutcome);
+  }, [autoCompleteOutcome]);
 
   // -------------------------------------------------------------------------
   // Ações da tela
@@ -408,13 +496,15 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     setItemStatuses(newStatuses);
     resetCallState();
 
-    const next = nextIndexAfter(currentIndex, newStatuses, autoOn);
+    if (autoOn) {
+      const ev = applyPick(pickAuto(currentIndex, newStatuses));
+      if (ev) dispatchAuto(ev);
+      else finishAuto();
+      return;
+    }
+    const next = findNextPending(currentIndex, newStatuses);
     if (next >= 0) {
       setCurrentIndex(next);
-      dispatchAuto({ type: 'next_lead' });
-    } else if (autoOn) {
-      dispatchAuto({ type: 'stop' });
-      toast.info('Discagem automática concluída: não há mais leads na etapa de ligação.');
     } else {
       setIsActive(false);
       toast.info('Fila de ligacoes concluida!');
@@ -453,7 +543,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       // Não atendida pela API4COM: o desfecho já é sabido.
       sdrOutcome: leadAnswer === 'not_answered' ? 'no_answer' : undefined,
     }).then((r) => {
-      if (r.ok && wasAwaitingSdr) dispatchAuto({ type: 'sdr_concluded' });
+      if (!r.ok || !wasAwaitingSdr) return;
+      dispatchAuto({ type: 'sdr_concluded' });
+      if (r.wait !== undefined) dispatchAuto({ type: 'wait', until: r.wait });
     });
   }
 
@@ -463,6 +555,16 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     if (!isActive) setIsActive(true);
     // Escolher um lead na lista = o SDR assumiu o controle.
     if (autoOn) dispatchAuto({ type: 'pause', reason: 'user' });
+  }
+
+  // "Número 1 de 2 · tentativa 2/3" do próximo número a discar.
+  const nextPhone = auto.phase === 'countdown' ? dialablePhones()[0] : undefined;
+  let attemptDetail: string | null = null;
+  if (currentItem && nextPhone) {
+    const all = itemPhones(currentItem);
+    const pos = all.findIndex((p) => phoneKey(p) === phoneKey(nextPhone));
+    const done = attemptLog.get(phoneKey(nextPhone))?.count ?? 0;
+    attemptDetail = `${nextPhone} · número ${pos + 1} de ${all.length} · tentativa ${done + 1}/${dailyLimit}`;
   }
 
   // Idle state: show Meetime-style layout
@@ -526,11 +628,17 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         <AutoDialStatusBar
           state={auto}
           leadName={currentItem?.leadName ?? null}
+          detail={attemptDetail}
           canResume={callState === 'idle'}
           onPause={() => dispatchAuto({ type: 'pause', reason: 'user' })}
           onResume={() => {
-            if (alignToEligible()) dispatchAuto({ type: 'resume' });
-            else dispatchAuto({ type: 'stop' });
+            const ev = alignAuto();
+            if (!ev) {
+              finishAuto();
+              return;
+            }
+            dispatchAuto({ type: 'resume' });
+            if (ev.type === 'wait') dispatchAuto(ev);
           }}
           onDialNow={() => dispatchAuto({ type: 'dial_now' })}
           onSkip={handleSkip}

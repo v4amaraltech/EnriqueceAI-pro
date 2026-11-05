@@ -6,6 +6,8 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { processCallTranscription } from '@/features/calls/services/transcription.service';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import { AI_OUTCOME_MIN_DURATION_SECONDS, transcriptionMinDurationFor } from '@/features/calls/ai-outcome';
+import { markAiOutcomeFailed } from '@/features/calls/services/apply-ai-call-outcome.service';
 
 export const maxDuration = 300; // 5 min — sequential processing
 const BATCH_LIMIT = 10;
@@ -21,8 +23,45 @@ const BATCH_LIMIT = 10;
  * Note: a NULL duration is treated as "unknown / not yet finalized" — we leave
  * it alone so an in-flight call isn't skipped prematurely.
  */
-export function isTooShortToTranscribe(durationSeconds: number | null): boolean {
-  return durationSeconds !== null && durationSeconds < TRANSCRIPTION_MIN_DURATION_SECONDS;
+export function isTooShortToTranscribe(durationSeconds: number | null, metadata?: unknown): boolean {
+  return durationSeconds !== null && durationSeconds < transcriptionMinDurationFor(metadata);
+}
+
+/** Janela em que o cron procura ligações com `ai_outcome` pendente. */
+const AI_OUTCOME_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
+/** Depois disso, `ai_outcome` pendente sem áudio utilizável vira `failed` (Revisar). */
+export const AI_OUTCOME_EXPIRE_AFTER_MS = 2 * 60 * 60 * 1000;
+/** `processing` parado há mais que isso = execução que morreu no meio. */
+const AI_OUTCOME_STUCK_AFTER_MS = 30 * 60 * 1000;
+
+interface AiPendingRow {
+  id: string;
+  created_at: string;
+  recording_url: string | null;
+  duration_seconds: number | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/**
+ * Motivo para desistir de uma ligação que espera o resultado da IA, ou `null`
+ * se ainda vale esperar. Só expira depois de `AI_OUTCOME_EXPIRE_AFTER_MS`
+ * (gravação pode chegar atrasada pela recuperação).
+ */
+export function aiOutcomeExpiryReason(
+  row: Pick<AiPendingRow, 'created_at' | 'recording_url' | 'duration_seconds' | 'metadata'>,
+  now: Date,
+): string | null {
+  const meta = row.metadata as { ai_outcome?: { status?: string; started_at?: string } } | null;
+  const status = meta?.ai_outcome?.status;
+  if (status === 'processing') {
+    const startedAt = meta?.ai_outcome?.started_at ? new Date(meta.ai_outcome.started_at).getTime() : 0;
+    return now.getTime() - startedAt > AI_OUTCOME_STUCK_AFTER_MS ? 'processing_stuck' : null;
+  }
+  if (status !== 'pending') return null;
+  if (now.getTime() - new Date(row.created_at).getTime() < AI_OUTCOME_EXPIRE_AFTER_MS) return null;
+  if (!row.recording_url) return 'no_recording';
+  if ((row.duration_seconds ?? 0) < AI_OUTCOME_MIN_DURATION_SECONDS) return 'duration_too_short';
+  return null;
 }
 
 /**
@@ -66,8 +105,24 @@ export async function POST(request: Request) {
   const pendingExplicit = (results[0] as { data: Array<{ id: string; created_at: string }> | null }).data ?? [];
   const pendingNull = (results[1] as { data: Array<{ id: string; created_at: string }> | null }).data ?? [];
 
-  const calls = [...pendingExplicit, ...pendingNull]
-    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // Ligações do Power Dialer esperando o resultado da IA (piso de 10 s). Pega
+  // QUALQUER transcription_status (exceto processing): o `pending` pode ter
+  // sido gravado depois do hangup, quando a ligação já tinha virado `skipped`
+  // (duration_too_short) ou até `completed` (≥ 5 min) — o service trata cada caso.
+  const aiPendingCalls = await fetchAiOutcomeCalls(supabase);
+  const aiEligible = aiPendingCalls.filter(
+    (c) =>
+      (c.metadata as { ai_outcome?: { status?: string } } | null)?.ai_outcome?.status === 'pending' &&
+      !!c.recording_url &&
+      (c.duration_seconds ?? 0) >= AI_OUTCOME_MIN_DURATION_SECONDS,
+  );
+
+  const seen = new Set<string>();
+  const calls = [
+    ...aiEligible.slice(0, BATCH_LIMIT),
+    ...[...pendingExplicit, ...pendingNull].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+  ]
+    .filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
     .slice(0, BATCH_LIMIT);
 
   let succeeded = 0;
@@ -91,12 +146,25 @@ export async function POST(request: Request) {
   // forever. Mark them `skipped` exactly like processCallTranscription's guard.
   const skippedTooShort = await skipTooShortPending(supabase);
 
+  // `ai_outcome` que nunca vai ter áudio (sem gravação / < 10 s) ou que travou
+  // em `processing` → `failed` + Revisar, para não ficar pendente para sempre.
+  const now = new Date();
+  let aiExpired = 0;
+  for (const row of aiPendingCalls) {
+    const reason = aiOutcomeExpiryReason(row, now);
+    if (!reason) continue;
+    await markAiOutcomeFailed(supabase, row.id, reason);
+    aiExpired++;
+  }
+
   return NextResponse.json({
     message: 'Pending transcriptions processed',
     total: calls.length,
     succeeded,
     failed,
     skippedTooShort,
+    aiOutcomePending: aiEligible.length,
+    aiExpired,
     errors: errors.length > 0 ? errors : undefined,
   });
 }
@@ -133,6 +201,20 @@ async function skipTooShortPending(
   const explicitData = (explicit as { data: { id: string }[] | null }).data ?? [];
   const nullData = (nulls as { data: { id: string }[] | null }).data ?? [];
   return explicitData.length + nullData.length;
+}
+
+/** Ligações recentes com `ai_outcome` `pending` ou `processing`. */
+async function fetchAiOutcomeCalls(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+): Promise<AiPendingRow[]> {
+  const since = new Date(Date.now() - AI_OUTCOME_LOOKBACK_MS).toISOString();
+  const { data } = (await from(supabase, 'calls')
+    .select('id, created_at, recording_url, duration_seconds, metadata')
+    .in('metadata->ai_outcome->>status', ['pending', 'processing'])
+    .gte('created_at', since)
+    .order('created_at', { ascending: true })
+    .limit(50)) as { data: AiPendingRow[] | null };
+  return data ?? [];
 }
 
 export async function GET(request: Request) {
