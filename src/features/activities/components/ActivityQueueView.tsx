@@ -14,7 +14,7 @@ import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import { fetchDailyProgress, type DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { SkipReason } from '../constants/skip-reasons';
-import type { PendingActivity } from '../types';
+import { isLimboFollowup, type PendingActivity } from '../types';
 import { isOverdue } from '../utils/overdue';
 
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
@@ -124,7 +124,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
       return [...kept, ...newOnes];
     });
   }, [initialActivities]);
-  const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'dialer'>('execution');
+  const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'destino' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   // Seed the status filter from the URL (?status=overdue|due) so the overdue
   // notification can deep-link straight into the pre-filtered queue.
@@ -305,8 +305,14 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   const prospectingLeadsCount = useMemo(() => new Set(activities.map((a) => a.lead.id)).size, [activities]);
 
   // Separate scheduled returns from cadence activities
+  // "Definir destino" (tarefa do robô para lead parado) tem aba própria: não é
+  // retorno agendado pelo SDR, e o canal gravado ('research') não diz o que é.
   const scheduledReturns = useMemo(
-    () => visibleActivities.filter((a) => a.enrollmentId.startsWith('scheduled:')),
+    () => visibleActivities.filter((a) => a.enrollmentId.startsWith('scheduled:') && !isLimboFollowup(a)),
+    [visibleActivities],
+  );
+  const limboFollowups = useMemo(
+    () => visibleActivities.filter((a) => a.enrollmentId.startsWith('scheduled:') && isLimboFollowup(a)),
     [visibleActivities],
   );
   const cadenceActivities = useMemo(
@@ -484,6 +490,17 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
         >
           Retornos{scheduledReturns.length > 0 && ` (${scheduledReturns.length})`}
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('destino')}
+          className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+            activeTab === 'destino'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-[var(--foreground)]'
+          }`}
+        >
+          Definir destino{limboFollowups.length > 0 && ` (${limboFollowups.length})`}
+        </button>
         {showPowerDialer && (
           <button
             type="button"
@@ -499,10 +516,16 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
         )}
       </div>
 
-      {activeTab === 'returns' ? (
+      {activeTab === 'returns' || activeTab === 'destino' ? (
         <>
           <ReturnsTab
-            returns={scheduledReturns}
+            returns={activeTab === 'destino' ? limboFollowups : scheduledReturns}
+            emptyTitle={activeTab === 'destino' ? 'Nenhum lead para definir destino' : undefined}
+            emptyDescription={
+              activeTab === 'destino'
+                ? 'Leads com cadência pausada sem data de volta, e-mail que voltou ou resposta sem próxima atividade aparecem aqui.'
+                : undefined
+            }
             onExecute={(a) => setSelectedKey(keyOf(a))}
             onIgnore={handleIgnore}
             onViewLead={handleViewLead}

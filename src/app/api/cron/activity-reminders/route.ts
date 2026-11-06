@@ -22,6 +22,12 @@ const CHANNEL_LABELS: Record<string, string> = {
   research: 'Pesquisa',
 };
 
+/** "Definir destino" é gravada com channel='research', mas não é pesquisa. */
+function activityLabel(a: { channel: string; kind: string | null }): string {
+  if (a.kind === 'limbo_followup') return 'Definir destino';
+  return CHANNEL_LABELS[a.channel] ?? a.channel;
+}
+
 export async function POST(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,7 +45,7 @@ export async function POST(request: Request) {
   try {
     // ── Scheduled Activity Reminders ──────────────────────────
     const { data: pendingActivities } = (await from(supabase, 'scheduled_activities' as never)
-      .select('id, org_id, user_id, lead_id, channel, scheduled_at, notes')
+      .select('id, org_id, user_id, lead_id, channel, kind, scheduled_at, notes')
       .eq('status', 'pending')
       .is('reminder_sent_at', null)
       .lte('scheduled_at', windowEnd.toISOString())
@@ -50,6 +56,7 @@ export async function POST(request: Request) {
         user_id: string;
         lead_id: string;
         channel: string;
+        kind: string | null;
         scheduled_at: string;
         notes: string | null;
       }> | null;
@@ -79,7 +86,7 @@ export async function POST(request: Request) {
         if (!claimed?.length) continue;
 
         const leadName = leadNameMap.get(activity.lead_id) ?? 'Lead';
-        const channelLabel = CHANNEL_LABELS[activity.channel] ?? activity.channel;
+        const channelLabel = activityLabel(activity);
         const timeStr = new Date(activity.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
         await createNotification({
@@ -204,7 +211,7 @@ export async function POST(request: Request) {
     // next 5min cron tick.
     const overdueThreshold = new Date(now.getTime() - OVERDUE_THRESHOLD_HOURS * 60 * 60 * 1000);
     const { data: overdueActivities } = (await from(supabase, 'scheduled_activities' as never)
-      .select('id, org_id, user_id, lead_id, channel, scheduled_at, notes')
+      .select('id, org_id, user_id, lead_id, channel, kind, scheduled_at, notes')
       .eq('status', 'pending')
       .is('overdue_reminder_sent_at', null)
       .lt('scheduled_at', overdueThreshold.toISOString())) as {
@@ -214,6 +221,7 @@ export async function POST(request: Request) {
         user_id: string;
         lead_id: string;
         channel: string;
+        kind: string | null;
         scheduled_at: string;
         notes: string | null;
       }> | null;
@@ -288,7 +296,7 @@ export async function POST(request: Request) {
           .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
           .map((a) => {
             const leadName = overdueLeadNameMap.get(a.lead_id) ?? 'Lead';
-            const channelLabel = CHANNEL_LABELS[a.channel] ?? a.channel;
+            const channelLabel = activityLabel(a);
             const when = new Date(a.scheduled_at).toLocaleString('pt-BR', {
               timeZone: 'America/Sao_Paulo',
               day: '2-digit',

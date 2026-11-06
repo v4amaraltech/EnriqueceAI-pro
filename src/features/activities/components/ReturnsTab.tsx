@@ -15,9 +15,21 @@ interface ReturnsTabProps {
   onViewLead: (leadId: string) => void;
   onLeadWon: (activity: PendingActivity) => void;
   onLeadLost: (activity: PendingActivity) => void;
+  /** Textos do estado vazio — a mesma lista serve à aba "Definir destino". */
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
-export function ReturnsTab({ returns, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost }: ReturnsTabProps) {
+export function ReturnsTab({
+  returns,
+  onExecute,
+  onIgnore,
+  onViewLead,
+  onLeadWon,
+  onLeadLost,
+  emptyTitle = 'Nenhum retorno pendente',
+  emptyDescription = 'Retornos agendados durante a execução de atividades aparecerão aqui.',
+}: ReturnsTabProps) {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
 
@@ -36,10 +48,10 @@ export function ReturnsTab({ returns, onExecute, onIgnore, onViewLead, onLeadWon
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[var(--border)] px-4 py-16 text-center">
         <CheckCircle2 className="h-10 w-10 text-emerald-500/50 mb-3" />
         <h3 className="text-sm font-medium text-[var(--foreground)]">
-          Nenhum retorno pendente
+          {emptyTitle}
         </h3>
         <p className="mt-1 text-xs text-[var(--muted-foreground)] max-w-[280px]">
-          Retornos agendados durante a execução de atividades aparecerão aqui.
+          {emptyDescription}
         </p>
       </div>
     );
