@@ -31,7 +31,8 @@ Casos reais (out/2026, closer Jhonata): NEXT360 Telecom, Construtora Epereira, B
 - [x] Testes ao lado das actions e do cron; `pnpm typecheck && pnpm lint && pnpm test:run` verdes.
 
 ## Ordem de deploy (IMPORTANTE)
-1. Aplicar a migration `20261030120000_closer_feedback_sent_at_nullable.sql` em prod **antes** do deploy — o código passa a inserir `sent_at: null`, que hoje viola o `NOT NULL`.
+1. ✅ Migration `20261106193118_closer_feedback_sent_at_nullable.sql` aplicada em prod em 06/11/2026 **antes** do deploy (tira o `NOT NULL`, mantém o `DEFAULT now()` para o código antigo).
+   - **Depois do deploy:** aplicar `20261106200000_closer_feedback_sent_at_drop_default.sql` (tira o `DEFAULT`).
 2. `pnpm gen:types` depois da migration aplicada (commit separado `chore(types): regenerate`).
 3. O cron `feedback-reminders` roda 1x/dia (13:00 UTC). Para o link sair perto do início da reunião, trocar para 1x/hora (lembretes e CRM fallback já são idempotentes/gated por 24h):
    ```sql
@@ -43,7 +44,8 @@ Casos reais (out/2026, closer Jhonata): NEXT360 Telecom, Construtora Epereira, B
 - Reenviar automaticamente link que já saiu e cuja reunião foi remarcada para depois (o link antigo continua válido até vencer; o reenvio manual reativa).
 
 ## File List
-- `supabase/migrations/20261030120000_closer_feedback_sent_at_nullable.sql` (novo)
+- `supabase/migrations/20261106193118_closer_feedback_sent_at_nullable.sql` (novo — parte 1, já em prod)
+- `supabase/migrations/20261106200000_closer_feedback_sent_at_drop_default.sql` (novo — parte 2, após o deploy)
 - `src/features/leads/services/closer-feedback-delivery.service.ts` (novo)
 - `src/features/leads/actions/send-closer-feedback.ts`
 - `src/features/leads/actions/send-closer-feedback.test.ts`

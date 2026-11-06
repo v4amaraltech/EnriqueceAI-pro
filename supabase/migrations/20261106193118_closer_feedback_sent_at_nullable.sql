@@ -8,13 +8,15 @@
 --   valor → link saiu por e-mail e/ou WhatsApp; a partir daqui contam os 7 dias
 --           de validade e os lembretes.
 --
--- Sem DEFAULT: qualquer linha inserida sem sent_at é "ainda não enviada", e o
--- cron cuida dela. Story: closer-feedback-deferred-until-meeting.
+-- Parte 1 de 2 (aplicada em prod em 06/11/2026, versão 20261106193118).
+-- O DEFAULT now() fica até o deploy do código novo: o código antigo insere sem
+-- sent_at e envia o link na hora — sem o default essas linhas nasceriam NULL e
+-- o cron novo reenviaria o link. A parte 2 (drop default) roda após o deploy.
+-- Story: closer-feedback-deferred-until-meeting.
 BEGIN;
 
 ALTER TABLE public.closer_feedback_requests
-  ALTER COLUMN sent_at DROP NOT NULL,
-  ALTER COLUMN sent_at DROP DEFAULT;
+  ALTER COLUMN sent_at DROP NOT NULL;
 
 COMMENT ON COLUMN public.closer_feedback_requests.sent_at IS
   'Momento do envio real do link ao closer. NULL = agendado (reunião ainda não começou) ou envio pendente de retry pelo cron feedback-reminders.';
