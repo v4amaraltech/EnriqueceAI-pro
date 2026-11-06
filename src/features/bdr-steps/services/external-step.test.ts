@@ -64,7 +64,7 @@ describe('parseClaimRequest', () => {
   it('usa os padrões phone/10/15min e descarta ids inválidos', () => {
     const r = parseClaimRequest({ cadence_ids: [CAD, 'lixo'] });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value).toEqual({ cadenceIds: [CAD], channel: 'phone', limit: 10, leaseMinutes: 15, owner: null });
+    if (r.ok) expect(r.value).toEqual({ cadenceIds: [CAD], channel: 'phone', limit: 10, leaseMinutes: 15, owner: null, exigeAberturaEmail: false });
   });
 
   it('limita limit e lease aos tetos', () => {
@@ -75,6 +75,15 @@ describe('parseClaimRequest', () => {
 
   it('rejeita sem cadence_ids e canal desconhecido', () => {
     expect(parseClaimRequest({}).ok).toBe(false);
+  });
+
+  it('exige_abertura_email é opcional e só vale como true explícito', () => {
+    const base = parseClaimRequest({ cadence_ids: [CAD] });
+    expect(base.ok && base.value.exigeAberturaEmail).toBe(false);
+    const on = parseClaimRequest({ cadence_ids: [CAD], exige_abertura_email: true });
+    expect(on.ok && on.value.exigeAberturaEmail).toBe(true);
+    const str = parseClaimRequest({ cadence_ids: [CAD], exige_abertura_email: 'true' });
+    expect(str.ok && str.value.exigeAberturaEmail).toBe(false);
     expect(parseClaimRequest({ cadence_ids: [CAD], channel: 'pombo' }).ok).toBe(false);
   });
 });

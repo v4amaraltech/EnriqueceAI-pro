@@ -6,14 +6,14 @@ import { from } from '@/lib/supabase/from';
 
 export interface CloserFeedbackData {
   id: string;
-  result: 'meeting_done' | 'no_show' | 'rescheduled' | null;
+  result: 'meeting_done' | 'no_show' | 'rescheduled' | 'disqualified' | null;
   rating: number | null;
   qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
   divergencias: string[] | null;
   decisor_presente: boolean | null;
   oportunidade_qualificada: boolean | null;
   comment: string | null;
-  sent_at: string;
+  sent_at: string | null;
   responded_at: string | null;
   closer_name: string;
   closer_email: string;
@@ -36,14 +36,14 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
     .maybeSingle()) as {
     data: {
       id: string;
-      result: 'meeting_done' | 'no_show' | 'rescheduled' | null;
+      result: 'meeting_done' | 'no_show' | 'rescheduled' | 'disqualified' | null;
       rating: number | null;
       qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
       divergencias: string[] | null;
       decisor_presente: boolean | null;
   oportunidade_qualificada: boolean | null;
       comment: string | null;
-      sent_at: string;
+      sent_at: string | null;
       responded_at: string | null;
       closer_id: string;
     } | null;

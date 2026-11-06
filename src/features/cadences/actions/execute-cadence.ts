@@ -8,6 +8,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { brtDateKey, isBrHoliday } from '@/lib/utils/br-holidays';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -17,7 +18,7 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
-import { skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
+import { skipEmailStepsForBouncedLeads, skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
@@ -187,7 +188,7 @@ export interface ExecutionResult {
   errors: string[];
 }
 
-/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri) */
+/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri, fora de feriado nacional) */
 function isBusinessHours(): boolean {
   const now = new Date();
   const brFormatter = new Intl.DateTimeFormat('en-US', {
@@ -200,7 +201,7 @@ function isBusinessHours(): boolean {
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
   const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
   const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  return !isWeekend && hour >= 8 && hour < 18;
+  return !isWeekend && !isBrHoliday(brtDateKey(now)) && hour >= 8 && hour < 18;
 }
 
 /**
@@ -268,6 +269,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // WhatsApp (a fila esconde esses passos, então o lead não aparecia pra
   // ninguém). Só avança; sem passo de outro canal, fica como está.
   await skipWhatsAppStepsForInvalidLeads(supabase);
+  // Idem para e-mail com bounce nas cadências de SDR: o bounce não pausa mais
+  // as outras cadências do lead; aqui os passos de e-mail delas são pulados.
+  await skipEmailStepsForBouncedLeads(supabase);
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')

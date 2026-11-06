@@ -6,6 +6,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { AUTO_EMAIL_TEMPLATE_PREFIX } from '@/features/templates/internal-templates';
+
 import { saveAutoEmailCadenceSchema } from '../cadence.schemas';
 import { ACTIVE_ENROLLMENTS_CODE } from '../types';
 import { extractVariables } from '../utils/render-template';
@@ -111,7 +113,7 @@ export async function saveAutoEmailSteps(
     const { data: template, error: templateError } = (await from(supabase, 'message_templates')
       .insert({
         org_id: orgId,
-        name: `Auto Email - Step ${i + 1}`,
+        name: `${AUTO_EMAIL_TEMPLATE_PREFIX}${i + 1}`,
         channel: 'email',
         subject: step.subject,
         body: step.body,
@@ -135,7 +137,7 @@ export async function saveAutoEmailSteps(
       const { data: templateB, error: templateBError } = (await from(supabase, 'message_templates')
         .insert({
           org_id: orgId,
-          name: `Auto Email - Step ${i + 1} (B)`,
+          name: `${AUTO_EMAIL_TEMPLATE_PREFIX}${i + 1} (B)`,
           channel: 'email',
           subject: step.subject_b ?? '',
           body: step.body_b,

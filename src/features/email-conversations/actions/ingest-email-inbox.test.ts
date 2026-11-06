@@ -5,6 +5,8 @@ const m = vi.hoisted(() => ({
   message: null as Record<string, unknown> | null,
   existingConv: null as unknown,
   leadByEmail: { id: 'lead-1' } as unknown,
+  // envios nossos (cadência bdr_ai) que casam com a mensagem; [] = thread não é nosso
+  ourSends: [{ metadata: { thread_id: 't1', rfc_message_id: '<cad-1@v4.com>' } }] as unknown,
   dispatch: vi.fn(),
   notify: vi.fn(),
 }));
@@ -38,6 +40,7 @@ function chain(table: string) {
     if (table === 'email_inbound' && call.op === 'insert') return { data: { id: 'in-1' } };
     if (table === 'email_conversations' && call.op === 'select') return { data: m.existingConv };
     if (table === 'email_conversations' && call.op === 'insert') return { data: { id: 'conv-1', lead_id: 'lead-1', estado: 'ia_ativa' } };
+    if (table === 'interactions' && call.op === 'select') return { data: m.ourSends };
     if (table === 'leads' && call.op === 'select') {
       // a busca do dono (notificação) seleciona por id
       if (call.filters.some((f) => f.startsWith('eq:id='))) return { data: { assigned_to: 'sdr-1', nome_fantasia: 'ACME', razao_social: null } };
@@ -54,11 +57,12 @@ vi.mock('@/lib/supabase/from', () => ({ from: (s: { from: (t: string) => unknown
 
 import { ingestEmailInbox } from './ingest-email-inbox';
 
-const msg = (from: string, authResults: string | null) => ({
+const msg = (from: string, authResults: string | null, { headers: extraHeaders, ...extra }: Record<string, unknown> & { headers?: Record<string, string> } = {}) => ({
   id: 'g1',
   threadId: 't1',
   internalDate: new Date('2026-10-04T12:00:00Z'),
-  headers: { from, subject: 'Re: proposta', 'message-id': '<x@lead.com>' },
+  headers: { from, subject: 'Re: proposta', 'message-id': '<x@lead.com>', ...extraHeaders },
+  ...extra,
   authResults,
   snippet: 'tenho interesse',
   text: 'tenho interesse',
@@ -67,12 +71,70 @@ const msg = (from: string, authResults: string | null) => ({
 
 const leadLookup = () => m.calls.find((c) => c.table === 'leads' && c.op === 'select');
 const inboundInsert = () => m.calls.find((c) => c.table === 'email_inbound' && c.op === 'insert')?.payload as Record<string, unknown>;
+const convCreated = () => m.calls.some((c) => c.table === 'email_conversations' && c.op === 'insert');
+const convUpdated = () => m.calls.some((c) => c.table === 'email_conversations' && c.op === 'update');
+const holdUpserted = () => m.calls.some((c) => c.table === 'contact_holds' && c.op === 'upsert');
 
 beforeEach(() => {
   m.calls = [];
   m.existingConv = null;
   m.leadByEmail = { id: 'lead-1' };
+  m.ourSends = [{ metadata: { thread_id: 't1', rfc_message_id: '<cad-1@v4.com>' } }];
   vi.clearAllMocks();
+});
+
+const AUTH_OK = 'mx.google.com; dkim=pass header.i=@lead.com; spf=pass smtp.mailfrom=joao@lead.com; dmarc=pass header.from=lead.com';
+
+describe('ingestEmailInbox — agenda e e-mail avulso não viram conversa', () => {
+  it('convite do Google Agenda (assunto real) → calendar: gravado, sem lead, sem conversa, sem agente, sem hold', async () => {
+    m.message = msg('Wagner <joao@lead.com>', AUTH_OK, { headers: { subject: 'Convite atualizado: V4 Company + Grupo Prever - qui. 15 out. 2026 4pm - 5:30pm (BRT) (Vinicius Mercante)' } });
+    const r = await ingestEmailInbox();
+    expect(inboundInsert()).toMatchObject({ kind: 'calendar', lead_id: null, conversation_id: null });
+    expect(convCreated()).toBe(false);
+    expect(holdUpserted()).toBe(false);
+    expect(m.dispatch).not.toHaveBeenCalled();
+    expect(r.data).toMatchObject({ agenda: 1, avulsas: 0, conversas: 0 });
+  });
+
+  it('agenda em thread que JÁ tem conversa não alimenta a conversa', async () => {
+    m.existingConv = { id: 'conv-1', lead_id: 'lead-1', estado: 'aguardando_lead' };
+    m.message = msg('Wagner <joao@lead.com>', AUTH_OK, { partMimeTypes: ['multipart/mixed', 'text/calendar; method=REPLY'] });
+    await ingestEmailInbox();
+    expect(inboundInsert()).toMatchObject({ kind: 'calendar', conversation_id: null });
+    expect(convUpdated()).toBe(false);
+    expect(m.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('lead autenticado fora de thread nosso (assunto real) → unrelated: gravado com o lead, sem conversa, sem replied, sem hold', async () => {
+    m.ourSends = [];
+    m.message = msg('Wagner <joao@lead.com>', AUTH_OK, { threadId: '1a0ed92b6bd9f9f9', headers: { subject: 'Re: Proposta Comercial V4 Company <> DaColônia Alimentos Naturais' } });
+    const r = await ingestEmailInbox();
+    expect(inboundInsert()).toMatchObject({ kind: 'unrelated', lead_id: 'lead-1', conversation_id: null });
+    expect(convCreated()).toBe(false);
+    expect(holdUpserted()).toBe(false);
+    expect(m.calls.some((c) => c.table === 'cadence_enrollments' && c.op === 'update')).toBe(false);
+    expect(m.dispatch).not.toHaveBeenCalled();
+    expect(r.data).toMatchObject({ agenda: 0, avulsas: 1, conversas: 0 });
+  });
+
+  it('casa pelo In-Reply-To com Message-ID nosso mesmo em outra thread do Gmail → conversa', async () => {
+    m.ourSends = [{ metadata: { rfc_message_id: '<bdr-1@v4.com>' } }];
+    m.message = msg('Lead <joao@lead.com>', AUTH_OK, { threadId: 'outra', headers: { 'in-reply-to': '<bdr-1@v4.com>' } });
+    await ingestEmailInbox();
+    expect(inboundInsert()).toMatchObject({ kind: 'lead', lead_id: 'lead-1' });
+    expect(convCreated()).toBe(true);
+    expect(m.dispatch).toHaveBeenCalled();
+  });
+
+  it('busca os envios nossos só em cadências bdr_ai, por thread e por Message-ID referenciado', async () => {
+    m.message = msg('Lead <joao@lead.com>', AUTH_OK, { headers: { 'in-reply-to': '<a@v4.com>', references: '<b@v4.com>' } });
+    await ingestEmailInbox();
+    const sel = m.calls.filter((c) => c.table === 'interactions' && c.op === 'select');
+    expect(sel.map((c) => c.filters)).toEqual([
+      expect.arrayContaining(['eq:cadences.executor="bdr_ai"', 'eq:metadata->>thread_id="t1"']),
+      expect.arrayContaining(['eq:cadences.executor="bdr_ai"', 'in:metadata->>rfc_message_id=["<a@v4.com>","<b@v4.com>"]']),
+    ]);
+  });
 });
 
 describe('ingestEmailInbox — segurança do remetente', () => {
@@ -97,10 +159,12 @@ describe('ingestEmailInbox — segurança do remetente', () => {
     expect(m.dispatch).not.toHaveBeenCalled();
   });
 
-  it('e-mail interno do mesmo Workspace (sem cabeçalho de autenticação) é aceito', async () => {
+  it('e-mail interno do mesmo domínio da casa é own: nunca conversa (regra 3)', async () => {
     m.message = msg('Teste <vini@v4.com>', null);
     await ingestEmailInbox();
-    expect(inboundInsert()).toMatchObject({ kind: 'lead', lead_id: 'lead-1' });
+    expect(inboundInsert()).toMatchObject({ kind: 'own', lead_id: null });
+    expect(convCreated()).toBe(false);
+    expect(m.dispatch).not.toHaveBeenCalled();
   });
 
   it('remetente NÃO autenticado (lead novo): não abre conversa, não chama o agente, mas avisa o SDR dono', async () => {

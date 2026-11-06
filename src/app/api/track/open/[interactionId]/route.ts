@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { marcaEngajamentoReal, segundosAposEnvio } from '@/lib/email/engajamento-real';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { isUuid } from '@/shared/utils/uuid';
 
@@ -39,16 +40,20 @@ export async function GET(
     const supabase = createServiceRoleClient();
 
     const { data: interaction } = (await from(supabase, 'interactions')
-      .select('metadata')
+      .select('metadata, created_at')
       .eq('id', interactionId)
-      .single()) as { data: { metadata: Record<string, unknown> | null } | null };
+      .single()) as { data: { metadata: Record<string, unknown> | null; created_at?: string | null } | null };
 
     if (interaction) {
       const metadata = interaction.metadata ?? {};
       const openCount = (typeof metadata.open_count === 'number' ? metadata.open_count : 0) + 1;
+      // Abertura de robô (filtro de segurança) chega segundos após o envio: só a primeira abertura
+      // depois do corte vira aberto_real_em, que é o que os sinais do BDR leem.
+      const real = marcaEngajamentoReal(metadata, 'aberto_real_em', interaction.created_at);
+      const segundos = segundosAposEnvio(interaction.created_at);
 
       await from(supabase, 'interactions')
-        .update({ metadata: { ...metadata, open_count: openCount } } as Record<string, unknown>)
+        .update({ metadata: { ...metadata, open_count: openCount, ...(real ?? {}) } } as Record<string, unknown>)
         .eq('id', interactionId);
 
       // Create 'opened' interaction record (only on first open)
@@ -73,6 +78,7 @@ export async function GET(
               metadata: {
                 sent_interaction_id: interactionId,
                 open_count: 1,
+                ...(segundos !== null ? { segundos_apos_envio: segundos, automatica: real === null } : {}),
                 ...(abVariant ? { ab_variant: abVariant } : {}),
               },
             } as Record<string, unknown>);

@@ -1,10 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { from } from '@/lib/supabase/from';
-import { decrypt } from '@/lib/security/encryption';
+import type { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 
 interface CallForRecovery {
   id: string;
@@ -30,32 +30,11 @@ export async function lookupRecordingFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
 ): Promise<string | null> {
-  // Get API4COM credentials — try call's owner first, fall back to any connected one in the org
-  const { data: userConn } = (await from(supabase, 'api4com_connections' as never)
-    .select('api_key_encrypted, base_url')
-    .eq('user_id', call.user_id)
-    .eq('status', 'connected')
-    .maybeSingle()) as {
-    data: { api_key_encrypted: string; base_url: string } | null;
-  };
+  // Credential of the account: org token, else any legacy user token of the org.
+  const creds = await getOrgApiCredentials(call.org_id, supabase as ReturnType<typeof createServiceRoleClient>);
+  if (!creds) return null;
 
-  let conn = userConn;
-  if (!conn?.api_key_encrypted) {
-    const { data: orgConn } = (await from(supabase, 'api4com_connections' as never)
-      .select('api_key_encrypted, base_url')
-      .eq('org_id', call.org_id)
-      .eq('status', 'connected')
-      .limit(1)
-      .maybeSingle()) as {
-      data: { api_key_encrypted: string; base_url: string } | null;
-    };
-    conn = orgConn;
-  }
-
-  if (!conn?.api_key_encrypted) return null;
-
-  const apiKey = decrypt(conn.api_key_encrypted);
-  const baseUrl = conn.base_url.replace(/\/$/, '');
+  const { apiKey, baseUrl } = creds;
 
   const api4comCallId = call.metadata?.api4com_call_id;
   const destKey = call.destination.replace(/\D/g, '').slice(-8);

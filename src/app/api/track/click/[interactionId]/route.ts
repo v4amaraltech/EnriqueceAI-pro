@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { marcaEngajamentoReal } from '@/lib/email/engajamento-real';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { isUuid } from '@/shared/utils/uuid';
 
@@ -49,11 +50,12 @@ export async function GET(
     lead_id: string;
     cadence_id: string | null;
     step_id: string | null;
+    created_at?: string | null;
   };
   let interaction: TrackedInteraction | null = null;
   try {
     const { data } = (await from(supabase, 'interactions')
-      .select('metadata, message_content, org_id, lead_id, cadence_id, step_id')
+      .select('metadata, message_content, org_id, lead_id, cadence_id, step_id, created_at')
       .eq('id', interactionId)
       .single()) as { data: TrackedInteraction | null };
     interaction = data;
@@ -78,9 +80,12 @@ export async function GET(
     const clicks = Array.isArray(metadata.clicks) ? metadata.clicks : [];
     const isFirstClick = clicks.length === 0;
     clicks.push({ url: parsedUrl.href, clicked_at: new Date().toISOString() });
+    // Filtro de segurança segue os links segundos após a entrega: só o clique depois do corte
+    // vira clicado_real_em (sinal do BDR).
+    const real = marcaEngajamentoReal(metadata, 'clicado_real_em', interaction.created_at);
 
     await from(supabase, 'interactions')
-      .update({ metadata: { ...metadata, clicks } } as Record<string, unknown>)
+      .update({ metadata: { ...metadata, clicks, ...(real ?? {}) } } as Record<string, unknown>)
       .eq('id', interactionId);
 
     // Create 'clicked' interaction record (only on first click)

@@ -79,6 +79,8 @@ export interface ClaimRequest {
   limit: number;
   leaseMinutes: number;
   owner: string | null;
+  /** "E-mail primeiro": em cadências vinculadas (bdr_cadence_links) só reserva quem abriu e-mail na janela. */
+  exigeAberturaEmail: boolean;
 }
 
 const CHANNELS = new Set(['phone', 'whatsapp', 'email', 'linkedin', 'research']);
@@ -94,8 +96,9 @@ export function parseClaimRequest(body: unknown): ParseResult<ClaimRequest> {
   const limit = clampInt(b.limit, 10, 1, 100);
   const leaseMinutes = clampInt(b.lease_minutes ?? b.leaseMinutes, 15, 1, 240);
   const owner = str(b.owner)?.slice(0, 120) ?? null;
+  const exigeAberturaEmail = (b.exige_abertura_email ?? b.exigeAberturaEmail) === true;
 
-  return { ok: true, value: { cadenceIds, channel, limit, leaseMinutes, owner } };
+  return { ok: true, value: { cadenceIds, channel, limit, leaseMinutes, owner, exigeAberturaEmail } };
 }
 
 export function clampInt(v: unknown, fallback: number, min: number, max: number): number {

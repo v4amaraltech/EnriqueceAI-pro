@@ -195,7 +195,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
             <Input
-              placeholder="Nome, email, empresa ou CNPJ..."
+              placeholder="Nome, email, empresa, CNPJ ou telefone..."
               className="pl-8"
               value={searchValue}
               onChange={(e) => {

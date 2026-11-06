@@ -23,6 +23,13 @@
 - [x] RPC `find_meetings_pending_outcome` avalia cada reunião (migration `20261008120000`) — aplicada em prod 08/10 (grants intactos; tipos sem mudança, mesma assinatura).
 - [x] O robô continua sem mandar feedback ao closer (decisão do PR #79 mantida). Para a reunião remarcada que passou sem Ganho, ele cobra o SDR pela tarefa "registrar desfecho".
 
+### Complemento (09/10): funil fixo no Ganho
+Caso MILPAPER (09/10): o card foi criado no funil 13534608, e não no funil de sempre, porque o SDR escolheu outro funil na janela de Ganho. Nos últimos 60 dias, 175 dos 176 cards foram para o funil padrão.
+- [x] Janela de Ganho: com funil e etapa padrão configurados na conexão, eles aparecem só para leitura. Não há mais seletor.
+- [x] Servidor (`applyConnectionDefaults`): troca qualquer funil/etapa enviado pelo padrão da conexão e mantém o responsável.
+- [x] Responsável no Kommo pré-selecionado com o usuário de mesmo e-mail do closer. O SDR ainda pode trocar.
+- [x] Conexão sem padrão configurado (outras orgs): mantém os seletores como antes.
+
 ## Fora de escopo
 - Mexer em cards que já existem no Kommo (lista entregue ao Vini para decisão manual).
 
@@ -39,3 +46,4 @@
 
 ## Change Log
 - 2026-10-08: implementação (@dev).
+- 2026-10-09: PR #461 mesclado e no ar; complemento funil fixo no Ganho (@dev).

@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
             // blocked by the default-src fallback (media has no own directive).
             "media-src 'self' blob: data: https://*.api4com.com",
             "font-src 'self' data: https://fonts.gstatic.com",
-            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.apollo.io https://*.sentry.io https://*.stripe.com https://vercel.live https://*.vercel.app https://*.api4com.com wss://*.api4com.com",
+            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.apollo.io https://*.sentry.io https://*.stripe.com https://vercel.live https://*.vercel.app https://*.api4com.com wss://*.api4com.com wss://*.api4com.com:6443",
             "frame-src 'self' https://js.stripe.com https://vercel.live",
             "object-src 'none'",
             "base-uri 'self'",

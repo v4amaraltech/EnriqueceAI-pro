@@ -7,6 +7,7 @@ import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { TemplateListResult } from '../index';
+import { AUTO_EMAIL_TEMPLATE_PREFIX } from '../internal-templates';
 import type { MessageTemplateRow } from '../../cadences/types';
 
 interface FetchTemplatesParams {
@@ -22,7 +23,7 @@ interface FetchTemplatesParams {
 export async function fetchTemplates(
   params: FetchTemplatesParams = {},
 ): Promise<ActionResult<TemplateListResult>> {
-  const { userId, orgId, role } = await requireAuthWithMember();
+  const { orgId } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   const page = params.page ?? 1;
@@ -30,15 +31,14 @@ export async function fetchTemplates(
   const rangeFrom = (page - 1) * per_page;
   const to = rangeFrom + per_page - 1;
 
+  // Esconde os templates internos da cadência de e-mail automático ("Auto Email - Step N"):
+  // só o robô usa, e a tela da cadência automática não depende desta lista.
   let query = from(supabase, 'message_templates')
     .select('*', { count: 'exact' })
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .not('name', 'like', `${AUTO_EMAIL_TEMPLATE_PREFIX}%`);
 
-  // SDR isolation: only see own templates + system templates
-  if (role === 'sdr') {
-    query = query.or(`created_by.eq.${userId},is_system.eq.true`);
-  }
-
+  // Todos da org veem todos os templates; edição/exclusão é restrita em manage-templates.
   if (params.channel) {
     query = query.eq('channel', params.channel);
   }
@@ -80,20 +80,14 @@ export async function fetchTemplates(
 export async function fetchTemplate(
   templateId: string,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const { userId, orgId, role } = await requireAuthWithMember();
+  const { orgId } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  let query = from(supabase, 'message_templates')
+  const { data, error } = (await from(supabase, 'message_templates')
     .select('*')
     .eq('id', templateId)
-    .eq('org_id', orgId);
-
-  // SDR isolation: can only access own templates + system templates
-  if (role === 'sdr') {
-    query = query.or(`created_by.eq.${userId},is_system.eq.true`);
-  }
-
-  const { data, error } = (await query.single()) as {
+    .eq('org_id', orgId)
+    .single()) as {
     data: MessageTemplateRow | null;
     error: { message: string } | null;
   };

@@ -107,10 +107,20 @@ export function DialerQueueList({ items, itemStatuses, currentIndex, isActive, o
                 </div>
               </div>
             </div>
-            {badge && (
+            {badge ? (
               <Badge variant="secondary" className={cn('ml-2 shrink-0 text-xs', badge.className)}>
                 {badge.label}
               </Badge>
+            ) : (
+              !item.currentStepIsPhone && (
+                <Badge
+                  variant="secondary"
+                  className="ml-2 shrink-0 bg-amber-100 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                  title="A etapa atual da cadência não é ligação: a discagem automática não liga para este lead."
+                >
+                  Fora da etapa
+                </Badge>
+              )
             )}
           </button>
         );

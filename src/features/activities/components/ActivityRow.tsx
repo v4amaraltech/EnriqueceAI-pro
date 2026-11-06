@@ -3,6 +3,7 @@
 import {
   ArrowRightLeft,
   ChevronDown,
+  Compass,
   Eye,
   Linkedin,
   Mail,
@@ -28,7 +29,7 @@ import {
 
 import { EngagementScoreBadge } from '@/features/leads/components/EngagementScoreBadge';
 
-import type { PendingActivity } from '../types';
+import { isLimboFollowup, type PendingActivity } from '../types';
 import { isOverdue } from '../utils/overdue';
 
 interface ActivityRowProps {
@@ -79,6 +80,11 @@ const channelLabel: Record<string, string> = {
   research: 'Pesquisa',
 };
 
+/** A nota do robô repete "Definir destino:" — o rótulo já diz isso. */
+function stripLimboPrefix(note: string): string {
+  return note.replace(/^Definir destino:\s*/, '');
+}
+
 /** Grid column definition shared with ActivityQueueView header */
 export const ACTIVITY_GRID_COLS = 'grid grid-cols-[minmax(140px,1.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_auto]';
 
@@ -94,9 +100,11 @@ function formatScheduledTime(dateStr: string): string {
 
 export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost, onSkipStep, onSwitchCadence }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
-  const Icon = channelIcon[activity.channel] ?? Mail;
-  const label = channelLabel[activity.channel] ?? activity.channel;
   const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+  // "Definir destino" é gravada com channel='research', mas não é pesquisa.
+  const isLimbo = isScheduled && isLimboFollowup(activity);
+  const Icon = isLimbo ? Compass : (channelIcon[activity.channel] ?? Mail);
+  const label = isLimbo ? 'Definir destino' : (channelLabel[activity.channel] ?? activity.channel);
 
   return (
     <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50`}>
@@ -120,11 +128,11 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
         {activity.enrollmentId.startsWith('scheduled:') ? (
           <>
             <p className="text-sm font-medium truncate">
-              Retorno agendado
+              {isLimbo ? 'Lead sem próxima atividade' : 'Retorno agendado'}
             </p>
             {activity.callScript && (
               <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)] line-clamp-2">
-                {activity.callScript}
+                {isLimbo ? stripLimboPrefix(activity.callScript) : activity.callScript}
               </p>
             )}
           </>

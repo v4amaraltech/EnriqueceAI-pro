@@ -127,10 +127,14 @@ export async function reassignCloser(
         .maybeSingle()) as { data: { id: string } | null };
 
       if (!existingNew) {
+        // sent_at NULL = ainda não enviado. O resendCloserFeedback que o caller
+        // dispara em seguida entrega (ou agenda, se a reunião ainda não começou)
+        // e carimba o envio real.
         await from(svc, 'closer_feedback_requests').insert({
           org_id: orgId,
           lead_id: leadId,
           closer_id: newCloserId,
+          sent_at: null,
         } as Record<string, unknown>);
       }
       feedbackReassigned = true;

@@ -8,7 +8,7 @@ vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
 }));
 
-import { pushConfirmedMeetingToCrm } from './crm-push.service';
+import { applyConnectionDefaults, pushConfirmedMeetingToCrm } from './crm-push.service';
 
 /**
  * interactions: 1ª consulta = interação lead_won (metadata), 2ª = dedup
@@ -73,5 +73,37 @@ describe('pushConfirmedMeetingToCrm', () => {
     await pushConfirmedMeetingToCrm('org-1', 'lead-1');
 
     expect(tables).toContain('crm_connections');
+  });
+});
+
+describe('applyConnectionDefaults', () => {
+  beforeEach(() => resetMocks());
+
+  function installConn(conn: { default_pipeline_id: string | null; default_stage_id: string | null } | null) {
+    mockFrom.mockImplementation(() => {
+      const b = createQueryBuilder();
+      b.maybeSingle = vi.fn(() => Promise.resolve({ data: conn, error: null }));
+      return b;
+    });
+  }
+
+  it('troca funil/etapa escolhidos pelo padrão da conexão e mantém o responsável', async () => {
+    installConn({ default_pipeline_id: '13390831', default_stage_id: '103287655' });
+
+    const res = await applyConnectionDefaults('org-1', {
+      provider: 'kommo',
+      pipelineId: '13534608',
+      stageId: '104426972',
+      responsibleUserId: '15013532',
+    });
+
+    expect(res).toEqual({ provider: 'kommo', pipelineId: '13390831', stageId: '103287655', responsibleUserId: '15013532' });
+  });
+
+  it('mantém a escolha do modal quando a conexão não tem padrão', async () => {
+    installConn({ default_pipeline_id: null, default_stage_id: null });
+    const opts = { provider: 'kommo' as const, pipelineId: 'p-1', stageId: 's-1' };
+
+    expect(await applyConnectionDefaults('org-1', opts)).toEqual(opts);
   });
 });

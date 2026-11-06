@@ -1,3 +1,4 @@
+import type { AiOutcome } from '@/features/calls/ai-outcome';
 import type {
   CadenceEnrollmentRow,
   CadenceRow,
@@ -185,4 +186,6 @@ export interface TimelineEntry {
   recording_url?: string | null;
   transcription?: string | null;
   call_duration?: number | null;
+  /** Resultado da ligação classificado pela IA (Power Dialer). */
+  call_ai_outcome?: AiOutcome | null;
 }

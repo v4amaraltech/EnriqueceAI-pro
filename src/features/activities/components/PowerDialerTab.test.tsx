@@ -52,6 +52,8 @@ const mockQueue: DialerQueueItem[] = [
     nextStepDue: '2026-02-23T10:00:00Z',
     activityName: null,
     callScript: null,
+    currentStepIsPhone: true,
+    phoneAttempts: [],
   },
   {
     enrollmentId: 'e2',
@@ -70,6 +72,8 @@ const mockQueue: DialerQueueItem[] = [
     nextStepDue: '2026-02-23T11:00:00Z',
     activityName: null,
     callScript: null,
+    currentStepIsPhone: true,
+    phoneAttempts: [],
   },
   {
     enrollmentId: 'e3',
@@ -88,6 +92,8 @@ const mockQueue: DialerQueueItem[] = [
     nextStepDue: '2026-02-23T12:00:00Z',
     activityName: null,
     callScript: null,
+    currentStepIsPhone: true,
+    phoneAttempts: [],
   },
 ];
 

@@ -7,6 +7,8 @@ vi.mock('@/lib/security/encryption', () => ({ decrypt: (v: string) => v }));
 vi.mock('@/features/integrations/services/email.service', () => ({ refreshAccessToken: vi.fn() }));
 vi.mock('@/features/notifications/services/notification.service', () => ({ createNotification: vi.fn() }));
 vi.mock('../services/webhook-dispatch.service', () => ({ dispatchWebhookEvent: vi.fn() }));
+const leadEvent = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
+vi.mock('@/features/leads/actions/log-lead-event', () => leadEvent);
 
 import { checkEmailReplies } from './check-email-replies';
 
@@ -35,7 +37,7 @@ let orders: string[];
 /** Patches enviados a merge_interactions_metadata (carimbo do rodízio). */
 let stamped: Array<{ id: string; patch: Record<string, unknown> }>;
 /** thread_id → caixa (token) onde ela existe, e se tem resposta */
-let threads: Record<string, { mailbox: string; reply: boolean }>;
+let threads: Record<string, { mailbox: string; reply: boolean; bounce?: boolean }>;
 
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
@@ -144,6 +146,9 @@ beforeEach(() => {
       if (thread.reply) {
         messages.push({ id: 'b', payload: { headers: [{ name: 'From', value: 'cliente@acme.com' }] } });
       }
+      if (thread.bounce) {
+        messages.push({ id: 'c', payload: { headers: [{ name: 'From', value: 'Mail Delivery Subsystem <mailer-daemon@googlemail.com>' }] } });
+      }
       return new Response(JSON.stringify({ messages }), { status: 200 });
     }),
   );
@@ -237,5 +242,23 @@ describe('checkEmailReplies', () => {
 
     expect(res).toEqual({ success: true, data: { found: 1 } });
     expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(1);
+  });
+
+  it('bounce: para só a cadência de origem — as outras do lead seguem (não pausa)', async () => {
+    sentRows = [sent()];
+    threads = { 'th-1': { mailbox: 'dono', reply: false, bounce: true } };
+
+    await checkEmailReplies();
+
+    const enrollmentUpdates = captured.filter((c) => c.table === 'cadence_enrollments' && c.op === 'update');
+    expect(enrollmentUpdates).toHaveLength(1);
+    expect(enrollmentUpdates[0]?.payload).toEqual({ status: 'bounced' });
+    expect(enrollmentUpdates[0]?.filters).toContain('eq:cadence_id:"cad-1"');
+    expect(enrollmentUpdates.some((c) => c.payload.status === 'paused')).toBe(false);
+    expect(captured.some((c) => c.table === 'leads' && 'email_bounced_at' in c.payload)).toBe(true);
+    expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ event: 'email_bounced', leadId: 'lead-1', userId: null }),
+    );
   });
 });

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
+import { CallAiOutcome } from '@/features/calls/components/CallAiOutcome';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { leadFieldLabel } from '@/features/leads/constants/lead-field-labels';
 
@@ -286,6 +287,10 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   enrollment_removed: 'Removido da cadência',
                   cadence_switched: 'Cadência trocada',
                   step_skipped_manual: 'Atividade pulada',
+                  step_skipped_whatsapp_invalid: 'Passo de WhatsApp pulado (sem WhatsApp)',
+                  step_skipped_email_bounced: 'Passo de e-mail pulado (bounce)',
+                  email_bounced: 'E-mail com bounce',
+                  paused_cadence_followup: 'Tarefa criada: definir destino da cadência pausada',
                   cadence_limbo_triaged: 'Retirado do limbo de cadência',
                   prospection_scheduled: 'Prospecção agendada',
                   prospection_reactivated: 'Prospecção reativada',
@@ -357,6 +362,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                         <TimelineMessageContent entry={entry} isShortForm={isNote || entry.channel === 'research' || entry.channel === 'phone'} />
                       )}
 
+                      {entry.channel === 'phone' && <CallAiOutcome outcome={entry.call_ai_outcome} />}
                       {/* Call recording + transcription */}
                       {entry.channel === 'phone' && entry.recording_url && (
                         <div className="mt-2 space-y-2">

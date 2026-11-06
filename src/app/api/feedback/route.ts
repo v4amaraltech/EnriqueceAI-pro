@@ -8,8 +8,13 @@ import { createNotification, createNotificationsForOrgMembers } from '@/features
 import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
 import { isUuid } from '@/shared/utils/uuid';
 import { resolveMeetingHeldAt } from '@/features/leads/utils/meeting-held-at';
+import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
-const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
+const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled', 'disqualified'];
+
+// Motivo de perda gravado quando o closer desqualifica o lead na reunião.
+// Criado sob demanda (is_system) na primeira desqualificação de cada org.
+const CLOSER_DISQUALIFIED_REASON = 'Desqualificado pelo closer';
 
 // Conferência objetiva da qualificação feita pelo pré-vendas.
 const VALID_QUALIFICACAO = ['bateu', 'divergiu', 'nao_validado'];
@@ -23,6 +28,7 @@ const RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
   no_show: 'Não compareceu',
   rescheduled: 'Remarcou',
+  disqualified: 'Desqualificada',
 };
 
 // Conferência da qualificação (form novo) — rótulos para e-mails/notificações.
@@ -45,6 +51,7 @@ const RESULT_BADGE: Record<string, { bg: string; fg: string }> = {
   meeting_done: { bg: '#dcfce7', fg: '#166534' },
   no_show: { bg: '#fee2e2', fg: '#991b1b' },
   rescheduled: { bg: '#fef3c7', fg: '#92400e' },
+  disqualified: { bg: '#e5e7eb', fg: '#374151' },
 };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.enriqueceai.com.br';
@@ -198,6 +205,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Escreva uma observação sobre a reunião' }, { status: 400 });
     }
 
+    // Na desqualificação a observação é o motivo — vira loss_notes do lead.
+    if (result === 'disqualified' && (typeof comment !== 'string' || !comment.trim())) {
+      return NextResponse.json({ error: 'Explique por que o lead foi desqualificado' }, { status: 400 });
+    }
+
     // Normaliza divergências para um array validado (ou nulo), espelhando os três
     // constraints do banco para devolver erro amigável em vez de 500.
     let divergenciasClean: string[] | null = null;
@@ -250,8 +262,12 @@ export async function POST(request: Request) {
         // Presença do decisor na call — só em meeting_done; nula nos demais.
         // Fonte direta da métrica "Decisor na Call %" do Sales Hub.
         decisor_presente: needsMeetingFields ? decisor_presente : null,
-        // SAO — só em meeting_done (constraint closer_feedback_sao_somente_se_realizada).
-        oportunidade_qualificada: needsMeetingFields ? oportunidade_qualificada : null,
+        // SAO — preenchido em meeting_done; 'disqualified' é recusa implícita da
+        // oportunidade (false). Demais resultados ficam nulos
+        // (constraint closer_feedback_sao_somente_se_realizada).
+        oportunidade_qualificada: needsMeetingFields
+          ? oportunidade_qualificada
+          : result === 'disqualified' ? false : null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', feedbackReq.id)
@@ -275,22 +291,7 @@ export async function POST(request: Request) {
     // CRM: lead com closer NÃO ganha card no "Ganho" — o card nasce aqui,
     // quando o closer confirma que a reunião aconteceu (ver bloco abaixo).
     if (result === 'meeting_done') {
-      // Carimbo herda a data da REUNIÃO, não a do momento em que o closer
-      // respondeu o feedback (que costuma ser dias depois) — ver
-      // resolveMeetingHeldAt.
-      const { data: heldLead } = (await from(supabase, 'leads')
-        .select('meeting_starts_at')
-        .eq('id', feedbackReq.lead_id)
-        .eq('org_id', feedbackReq.org_id)
-        .maybeSingle()) as { data: { meeting_starts_at: string | null } | null };
-      const heldAt = resolveMeetingHeldAt(heldLead?.meeting_starts_at);
-      // Realizada apaga qualquer no-show anterior (SDR marcou no-show, closer
-      // remarcou por fora e a reunião acabou acontecendo).
-      await from(supabase, 'leads')
-        .update({ meeting_held_at: heldAt, meeting_no_show_at: null } as Record<string, unknown>)
-        .eq('id', feedbackReq.lead_id)
-        .eq('org_id', feedbackReq.org_id)
-        .is('meeting_held_at', null);
+      await stampMeetingHeld(supabase, feedbackReq);
 
       // Ponto oficial de criação do card no CRM: lead com closer não gera card
       // no "Ganho" (markLeadAsWon) — só aqui, com a reunião confirmada. Usa o
@@ -305,6 +306,11 @@ export async function POST(request: Request) {
           })
           .catch((err) => console.error('[api/feedback] CRM push error:', err)),
       );
+    } else if (result === 'disqualified') {
+      // A reunião ACONTECEU (conta em "Reunião realizada"), mas o closer viu que
+      // o lead não tem fit: o lead vira Perdido e NÃO ganha card no CRM.
+      await stampMeetingHeld(supabase, feedbackReq);
+      await markLeadLostByCloser(supabase, feedbackReq, comment.trim());
     } else if (result === 'no_show' || result === 'rescheduled') {
       // Closer signaled the meeting didn't happen — reopen the lead.
       // SDR's "Ganho" click had marked it 'won', but closer's reality wins:
@@ -387,6 +393,7 @@ export async function POST(request: Request) {
     const isActionable =
       result === 'no_show'
       || result === 'rescheduled'
+      || result === 'disqualified'
       || (needsMeetingFields && qualificacao_aderente === 'divergiu')
       || (needsMeetingFields && oportunidade_qualificada === false);
 
@@ -401,6 +408,131 @@ export async function POST(request: Request) {
     console.error('[api/feedback] Unexpected error:', err);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
+}
+
+/**
+ * Carimba meeting_held_at (reunião aconteceu). Herda a data da REUNIÃO, não a
+ * do momento em que o closer respondeu o feedback (que costuma ser dias depois)
+ * — ver resolveMeetingHeldAt. Também apaga qualquer no-show anterior (SDR
+ * marcou no-show, closer remarcou por fora e a reunião acabou acontecendo).
+ */
+async function stampMeetingHeld(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  feedbackReq: FeedbackRequestFull,
+) {
+  const { data: heldLead } = (await from(supabase, 'leads')
+    .select('meeting_starts_at')
+    .eq('id', feedbackReq.lead_id)
+    .eq('org_id', feedbackReq.org_id)
+    .maybeSingle()) as { data: { meeting_starts_at: string | null } | null };
+  const heldAt = resolveMeetingHeldAt(heldLead?.meeting_starts_at);
+  await from(supabase, 'leads')
+    .update({ meeting_held_at: heldAt, meeting_no_show_at: null } as Record<string, unknown>)
+    .eq('id', feedbackReq.lead_id)
+    .eq('org_id', feedbackReq.org_id)
+    .is('meeting_held_at', null);
+}
+
+/** Motivo de perda "Desqualificado pelo closer" da org — cria na primeira vez. */
+async function resolveCloserDisqualifiedReason(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+): Promise<string | null> {
+  const { data: existing } = (await from(supabase, 'loss_reasons')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('name', CLOSER_DISQUALIFIED_REASON)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()) as { data: { id: string } | null };
+  if (existing) return existing.id;
+
+  const { data: last } = (await from(supabase, 'loss_reasons')
+    .select('sort_order')
+    .eq('org_id', orgId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()) as { data: { sort_order: number } | null };
+
+  const { data: created, error } = (await from(supabase, 'loss_reasons')
+    .insert({
+      org_id: orgId,
+      name: CLOSER_DISQUALIFIED_REASON,
+      is_system: true,
+      sort_order: (last?.sort_order ?? 0) + 1,
+    } as Record<string, unknown>)
+    .select('id')
+    .single()) as { data: { id: string } | null; error: { message: string } | null };
+  if (error) console.error('[api/feedback] loss reason create failed:', error.message);
+  return created?.id ?? null;
+}
+
+/**
+ * Closer desqualificou o lead na reunião → lead vira Perdido (unqualified) com
+ * o motivo "Desqualificado pelo closer" e a observação do closer como loss_notes.
+ * Espelha markLeadAsLost (que exige sessão; este endpoint é público): timeline
+ * primeiro, depois status, inscrições concluídas e retornos pendentes cancelados.
+ * Sem Recuperação de inbound: quem desqualificou foi o closer, após a reunião.
+ */
+async function markLeadLostByCloser(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  feedbackReq: FeedbackRequestFull,
+  lossNotes: string,
+) {
+  const lossReasonId = await resolveCloserDisqualifiedReason(supabase, feedbackReq.org_id);
+
+  const { error: interactionError } = await from(supabase, 'interactions').insert({
+    org_id: feedbackReq.org_id,
+    lead_id: feedbackReq.lead_id,
+    channel: 'system',
+    type: 'sent',
+    message_content: `Closer desqualificou o lead na reunião — lead marcado como perdido — Motivo: ${CLOSER_DISQUALIFIED_REASON} | Obs: ${lossNotes}`,
+    metadata: {
+      system_event: 'lead_lost',
+      loss_reason_id: lossReasonId,
+      loss_reason_name: CLOSER_DISQUALIFIED_REASON,
+      result: 'disqualified',
+      closer_id: feedbackReq.closer_id,
+    },
+  } as Record<string, unknown>);
+  if (interactionError) {
+    console.error('[api/feedback] disqualified timeline insert failed:', interactionError.message, 'lead=', feedbackReq.lead_id);
+  }
+
+  const { error: leadError } = await from(supabase, 'leads')
+    .update({
+      status: 'unqualified',
+      loss_reason_id: lossReasonId,
+      loss_notes: lossNotes,
+    } as Record<string, unknown>)
+    .eq('id', feedbackReq.lead_id)
+    .eq('org_id', feedbackReq.org_id);
+  if (leadError) {
+    console.error('[api/feedback] disqualified lead update failed:', leadError.message, 'lead=', feedbackReq.lead_id);
+    return;
+  }
+
+  dispatchWebhookEvent(supabase, feedbackReq.org_id, 'lead.unqualified', {
+    lead_id: feedbackReq.lead_id,
+    loss_reason_id: lossReasonId,
+    loss_notes: lossNotes,
+  }).catch((err) => console.error('[webhook] lead.unqualified dispatch failed:', err));
+
+  await from(supabase, 'cadence_enrollments')
+    .update({
+      status: 'completed',
+      loss_reason_id: lossReasonId,
+      loss_notes: lossNotes,
+      completed_at: new Date().toISOString(),
+    } as Record<string, unknown>)
+    .eq('lead_id', feedbackReq.lead_id)
+    .in('status', ['active', 'paused']);
+
+  // Tarefa de "feedback da reunião" e retornos pendentes perdem o sentido.
+  await from(supabase, 'scheduled_activities' as never)
+    .update({ status: 'cancelled' } as Record<string, unknown>)
+    .eq('lead_id', feedbackReq.lead_id)
+    .eq('status', 'pending');
 }
 
 /**
@@ -502,6 +634,9 @@ async function notifySdr(
   } else if (result === 'rescheduled') {
     notifTitle = `📅 ${leadName} reaberto — reunião remarcada`;
     notifBody = `${closerName} marcou que a reunião foi remarcada. Lead reaberto — combine nova data${comment ? `. Observação: ${comment}` : '.'}`;
+  } else if (result === 'disqualified') {
+    notifTitle = `❌ ${leadName} desqualificado pelo closer`;
+    notifBody = `${closerName} desqualificou o lead na reunião. Lead marcado como perdido${comment ? `. Motivo: ${comment}` : '.'}`;
   } else {
     // meeting_done: destaca a conferência da qualificação (não mais o rating).
     const qualLabel = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : null;
@@ -536,7 +671,9 @@ async function notifySdr(
     ? 'Lead reaberto. Retome o contato com o lead.'
     : result === 'rescheduled'
       ? 'Lead reaberto. Combine nova data da reunião.'
-      : '';
+      : result === 'disqualified'
+        ? 'O closer desqualificou o lead na reunião. O lead foi marcado como perdido.'
+        : '';
   const subjectPrefix = isReopen ? 'Lead reaberto' : 'Feedback da reunião';
 
   const htmlBody = `
@@ -659,6 +796,7 @@ async function notifyManagers(
   const reasons: string[] = [];
   if (result === 'no_show') reasons.push('reunião não aconteceu (no-show)');
   if (result === 'rescheduled') reasons.push('closer remarcou a reunião');
+  if (result === 'disqualified') reasons.push('closer desqualificou o lead na reunião (lead marcado como perdido)');
   if (result === 'meeting_done' && qualificacaoAderente === 'divergiu') {
     reasons.push(`a qualificação do pré-vendas divergiu na reunião${divergenciasTxt ? ` (${divergenciasTxt})` : ''}`);
   }
@@ -733,7 +871,7 @@ async function notifyManagers(
         </td></tr>
         <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-            Você recebe este email porque é manager da organização — todos os feedbacks respondidos dos closers. Casos que exigem atenção (no-show, reagendamento, qualificação divergente ou oportunidade não qualificada) vêm destacados.
+            Você recebe este email porque é manager da organização — todos os feedbacks respondidos dos closers. Casos que exigem atenção (no-show, reagendamento, desqualificação, qualificação divergente ou oportunidade não qualificada) vêm destacados.
           </p>
         </td></tr>
       </table>

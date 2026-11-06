@@ -15,7 +15,7 @@ import { fetchEmailTemplates, type EmailTemplateOption } from '../actions/fetch-
 import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
 import { snoozeButtonLabel } from '../constants/skip-reasons';
 import { resolveWhatsAppPhone, buildContactPhones } from '../utils/resolve-whatsapp-phone';
-import type { PendingActivity } from '../types';
+import { isLimboFollowup, type PendingActivity } from '../types';
 
 import { listLeadContacts } from '@/features/leads/actions/lead-contacts';
 import type { LeadContact } from '@/features/leads/types';
@@ -27,6 +27,7 @@ import { ActivityWhatsAppCallPanel } from '@/features/whatsapp-calls/components/
 
 import { ActivityPhonePanel } from './ActivityPhonePanel';
 import { ActivityResearchPanel } from './ActivityResearchPanel';
+import { LimboFollowupPanel } from './LimboFollowupPanel';
 import { ActivitySocialPointPanel } from './ActivitySocialPointPanel';
 import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
 
@@ -175,7 +176,7 @@ export function ActivityExecutionSheetContent({
       });
 
       // Fetch email templates in parallel — used by the template selector
-      fetchEmailTemplates().then((result) => {
+      fetchEmailTemplates(activity.templateId).then((result) => {
         if (!cancelled && result.success) {
           setEmailTemplates(result.data);
         }
@@ -267,6 +268,20 @@ export function ActivityExecutionSheetContent({
     return (
       <ActivitySocialPointPanel
         leadName={leadName}
+        isSending={isSending}
+        onMarkDone={onMarkDone}
+        onSkip={onSkip}
+        skipLabel={skipLabel}
+      />
+    );
+  }
+
+  // "Definir destino" é gravada com channel='research', mas não é pesquisa.
+  if (isLimboFollowup(activity)) {
+    return (
+      <LimboFollowupPanel
+        leadName={leadName}
+        reason={activity.callScript}
         isSending={isSending}
         onMarkDone={onMarkDone}
         onSkip={onSkip}

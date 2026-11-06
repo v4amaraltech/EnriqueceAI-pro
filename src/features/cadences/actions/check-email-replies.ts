@@ -11,6 +11,7 @@ import {
   type GmailConnection,
   refreshAccessToken,
 } from '@/features/integrations/services/email.service';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
 import { checkThreadForReplyOrBounce, mailboxCandidates } from '../services/reply-detection.service';
@@ -364,7 +365,7 @@ async function recordReply(
   }
 }
 
-/** Record a bounce: create bounced interaction, mark lead, pause ALL enrollments, notify SDR */
+/** Record a bounce: create bounced interaction, mark lead, stop the originating cadence, notify SDR */
 async function recordBounce(
   supabase: SupabaseClient,
   sentInteraction: SentInteraction,
@@ -409,12 +410,18 @@ async function recordBounce(
     .eq('cadence_id', sentInteraction.cadence_id)
     .eq('status', 'active');
 
-  // 4. Pause ALL other active enrollments for this lead across all cadences
-  await from(supabase, 'cadence_enrollments')
-    .update({ status: 'paused' } as Record<string, unknown>)
-    .eq('lead_id', sentInteraction.lead_id)
-    .eq('status', 'active')
-    .neq('cadence_id', sentInteraction.cadence_id);
+  // 4. As OUTRAS cadências do lead seguem. Antes eram todas pausadas — inclusive
+  // as de ligação/WhatsApp — e nada as retomava: o lead ficava "Contatado" sem
+  // próxima atividade (limbo). Agora o motor pula só os passos de e-mail delas
+  // (`skipEmailStepsForBouncedLeads`) e a fila os esconde.
+  await logLeadEvent(supabase, {
+    orgId: lead.org_id,
+    leadId: sentInteraction.lead_id,
+    userId: null,
+    event: 'email_bounced',
+    message: `E-mail${lead.email ? ` ${lead.email}` : ''} deu bounce — passos de e-mail serão pulados nas outras cadências`,
+    metadata: { cadence_id: sentInteraction.cadence_id, sent_interaction_id: sentInteraction.id },
+  });
 
   dispatchWebhookEvent(supabase, lead.org_id, 'email.bounced', {
     lead_id: sentInteraction.lead_id,
@@ -423,7 +430,7 @@ async function recordBounce(
     email: lead.email,
   });
 
-  console.warn('[reply-check] Bounce detected — marked bounced + paused all enrollments');
+  console.warn('[reply-check] Bounce detected — originating enrollment marked bounced');
 
   // 5. Notify SDR
   if (lead.assigned_to) {
@@ -434,7 +441,7 @@ async function recordBounce(
         user_id: lead.assigned_to,
         type: 'lead_bounced',
         title: `Email bounce — ${leadName}`,
-        body: `O email "${lead.email}" retornou bounce. Todos os enrollments deste lead foram pausados. Atualize o email do lead para retomar as cadências.`,
+        body: `O email "${lead.email}" retornou bounce. Os passos de e-mail deste lead serão pulados; ligações e WhatsApp seguem normalmente. Atualize o e-mail do lead se tiver um novo.`,
         resource_type: 'lead',
         resource_id: sentInteraction.lead_id,
         metadata: { cadence_id: sentInteraction.cadence_id, email: lead.email },

@@ -3,7 +3,12 @@
  * Sem I/O: testáveis sem Gmail nem banco.
  */
 
-export type InboundKind = 'lead' | 'own' | 'auto_reply' | 'bounce' | 'unknown';
+/**
+ * calendar  = convite/aceite/recusa de agenda (Google Agenda, Outlook): nunca vira conversa.
+ * unrelated = e-mail de lead que NÃO continua um thread iniciado pela cadência do BDR IA:
+ *             fica em `email_inbound` para auditoria, sem conversa e sem `replied`.
+ */
+export type InboundKind = 'lead' | 'own' | 'auto_reply' | 'bounce' | 'calendar' | 'unrelated' | 'unknown';
 
 const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster', 'mail delivery', 'delivery status', 'no-reply@accounts.google.com'];
 const AUTO_REPLY_SUBJECTS = [
@@ -12,6 +17,17 @@ const AUTO_REPLY_SUBJECTS = [
   'férias', 'ferias', 'estou ausente', 'auto: ',
 ];
 const AUTO_REPLY_HEADERS = ['x-autoreply', 'x-autorespond', 'auto-submitted', 'x-auto-response-suppress'];
+
+const CALENDAR_MIME = ['text/calendar', 'application/ics'];
+const CALENDAR_SENDERS = ['calendar-notification@google.com'];
+const CALENDAR_VIA = ['via google agenda', 'via google calendar'];
+const CALENDAR_SUBJECT_PREFIXES = [
+  'convite:', 'convite atualizado:', 'aceitar:', 'aceito:', 'recusado:', 'talvez:',
+  'invitation:', 'updated invitation:', 'accepted:', 'declined:', 'decline:', 'tentative:',
+];
+/** "V4 Company + X - qua. 14 out. 2026 3pm" — dia da semana. dia mês. ano (Google Agenda em pt-BR). */
+const CALENDAR_SUBJECT_DATE = /\s-\s(?:dom|seg|ter|qua|qui|sex|s[áa]b)\.\s\d{1,2}\s(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s\d{4}/i;
+const REPLY_PREFIX = /^((re|res|fw|fwd|enc)\s*:\s*)+/i;
 
 export interface InboundHeaders {
   [name: string]: string | undefined;
@@ -36,28 +52,43 @@ export function headersToMap(headers: Array<{ name?: string; value?: string }> |
 }
 
 /**
- * Classifica a mensagem. `ownEmails` = endereços das caixas do BDR (a própria e as irmãs).
- * `knownLeadEmail` = e-mail do lead da conversa, quando já conhecido (thread existente).
+ * Classifica a mensagem. `ownEmails` = endereços das caixas do BDR (a própria e as irmãs);
+ * `ownDomains` = domínios da casa. `isKnownLeadSender` = já existe conversa nesta thread.
+ * Ordem: own → bounce → calendar → auto_reply → lead. `unrelated` NÃO sai daqui: é o
+ * ingestor que rebaixa `lead` para `unrelated` quando a thread não é nossa (ver matchesOurThread).
  */
 export function classifyInbound({
   headers,
   ownEmails,
+  ownDomains = [],
   isKnownLeadSender = false,
   mimeType,
+  partMimeTypes,
+  attachmentNames,
 }: {
   headers: InboundHeaders;
   ownEmails: string[];
+  /** Domínios da casa (v4company.com, v4companyamaral.com…): remetente daí é `own`, nunca lead. */
+  ownDomains?: string[];
   isKnownLeadSender?: boolean;
   mimeType?: string | null;
+  /** MIME de todas as partes da mensagem (inclui a raiz). */
+  partMimeTypes?: string[];
+  /** Nomes de arquivo das partes (anexos). */
+  attachmentNames?: string[];
 }): InboundKind {
   const from = extractEmailAddress(headers['from']) ?? '';
   const subject = (headers['subject'] ?? '').toLowerCase();
 
   if (from && ownEmails.map((e) => e.toLowerCase()).includes(from)) return 'own';
+  const fromDomain = from.split('@')[1] ?? '';
+  if (fromDomain && ownDomains.map((d) => d.toLowerCase()).includes(fromDomain)) return 'own';
 
   if (BOUNCE_SENDERS.some((s) => from.includes(s)) || (mimeType ?? '').toLowerCase().startsWith('multipart/report')) {
     return 'bounce';
   }
+
+  if (isCalendarMessage({ headers, mimeType, partMimeTypes, attachmentNames })) return 'calendar';
 
   const autoSubmitted = (headers['auto-submitted'] ?? '').toLowerCase();
   if (autoSubmitted && autoSubmitted !== 'no') return 'auto_reply';
@@ -69,6 +100,70 @@ export function classifyInbound({
   return 'lead';
 }
 
+/**
+ * Convite/resposta de agenda? Qualquer um destes sinais basta: parte MIME
+ * text/calendar ou anexo .ics; Content-Class de calendário (Outlook/Exchange);
+ * remetente do Google Agenda; assunto no padrão de convite/aceite/recusa ou
+ * com a data do Google ("- qua. 14 out. 2026").
+ */
+export function isCalendarMessage({
+  headers,
+  mimeType,
+  partMimeTypes = [],
+  attachmentNames = [],
+}: {
+  headers: InboundHeaders;
+  mimeType?: string | null;
+  partMimeTypes?: string[];
+  attachmentNames?: string[];
+}): boolean {
+  const mimes = [mimeType ?? '', ...partMimeTypes].map((m) => m.toLowerCase().split(';')[0]?.trim() ?? '');
+  if (mimes.some((m) => CALENDAR_MIME.includes(m))) return true;
+  if (attachmentNames.some((n) => n.toLowerCase().trim().endsWith('.ics'))) return true;
+
+  if ((headers['content-class'] ?? '').toLowerCase().includes('urn:content-classes:calendarmessage')) return true;
+
+  const fromRaw = (headers['from'] ?? '').toLowerCase();
+  const from = extractEmailAddress(headers['from']) ?? '';
+  if (CALENDAR_SENDERS.includes(from) || CALENDAR_VIA.some((v) => fromRaw.includes(v))) return true;
+
+  // "Re: Convite: ..." continua sendo tráfego de agenda
+  const subject = (headers['subject'] ?? '').trim().toLowerCase().replace(REPLY_PREFIX, '');
+  if (CALENDAR_SUBJECT_PREFIXES.some((p) => subject.startsWith(p))) return true;
+  if (CALENDAR_SUBJECT_DATE.test(subject)) return true;
+
+  return false;
+}
+
+/** Message-IDs referenciados por In-Reply-To e References (com os <>). */
+export function extractReferencedMessageIds(headers: InboundHeaders): string[] {
+  const raw = `${headers['in-reply-to'] ?? ''} ${headers['references'] ?? ''}`;
+  return [...new Set(raw.match(/<[^<>\s]+>/g) ?? [])];
+}
+
+/** Um envio nosso: e-mail de cadência do BDR IA ou resposta do agente. */
+export interface OurSend {
+  thread_id?: string | null;
+  rfc_message_id?: string | null;
+}
+
+/**
+ * A mensagem continua um thread que NÓS começamos? Casa pelo `threadId` do
+ * Gmail igual ao `metadata.thread_id` de um envio, OU por In-Reply-To /
+ * References contendo o `rfc_message_id` de um envio. Sem casamento, não é
+ * conversa de lead (é e-mail avulso).
+ */
+export function matchesOurThread(
+  { threadId, headers }: { threadId: string | null | undefined; headers: InboundHeaders },
+  sends: OurSend[],
+): boolean {
+  if (!sends.length) return false;
+  if (threadId && sends.some((s) => !!s.thread_id && s.thread_id === threadId)) return true;
+  const refs = new Set(extractReferencedMessageIds(headers).map((r) => r.toLowerCase()));
+  if (!refs.size) return false;
+  return sends.some((s) => !!s.rfc_message_id && refs.has(s.rfc_message_id.trim().toLowerCase()));
+}
+
 /** base64url (Gmail) → texto UTF-8. */
 export function decodeBase64Url(data: string | undefined | null): string {
   if (!data) return '';
@@ -78,8 +173,22 @@ export function decodeBase64Url(data: string | undefined | null): string {
 
 interface GmailPart {
   mimeType?: string;
+  filename?: string;
   body?: { data?: string; size?: number };
   parts?: GmailPart[];
+}
+
+/** MIME de todas as partes (raiz incluída) e nomes dos anexos. */
+export function collectMimeParts(payload: GmailPart | undefined): { mimeTypes: string[]; attachmentNames: string[] } {
+  const mimeTypes: string[] = [];
+  const attachmentNames: string[] = [];
+  const walk = (p: GmailPart) => {
+    if (p.mimeType) mimeTypes.push(p.mimeType.toLowerCase());
+    if (p.filename) attachmentNames.push(p.filename);
+    for (const c of p.parts ?? []) walk(c);
+  };
+  if (payload) walk(payload);
+  return { mimeTypes, attachmentNames };
 }
 
 /** Texto puro da mensagem: prefere text/plain; cai para text/html sem tags. */

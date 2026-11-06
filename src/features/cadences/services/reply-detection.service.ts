@@ -44,6 +44,19 @@ const AUTO_REPLY_SUBJECTS = [
 /** Auto-reply indicator headers */
 const AUTO_REPLY_HEADERS = ['x-autoreply', 'x-autorespond', 'auto-submitted'];
 
+/** Value of a header by name (case-insensitive), or undefined. */
+function headerValue(headers: Array<{ name: string; value: string }> | undefined, name: string): string | undefined {
+  return headers?.find((h) => h.name.toLowerCase() === name)?.value;
+}
+
+/** "Nome <a@b.com>" → "a@b.com" (lower-case); null when there is no address. */
+function extractAddress(value: string | undefined): string | null {
+  if (!value) return null;
+  const m = value.match(/<([^>]+)>/);
+  const raw = (m?.[1] ?? value).trim().toLowerCase();
+  return raw.includes('@') ? raw : null;
+}
+
 interface GmailThreadMessage {
   id: string;
   payload?: {
@@ -73,6 +86,14 @@ export async function checkThreadForReplyOrBounce(
     const messages = data.messages ?? [];
     if (messages.length <= 1) return 'none';
 
+    // The first message is ours (the cadence email). Later messages from the
+    // same address are ours too: a follow-up step sent as "Re:" in the same
+    // thread, or the SDR writing by hand. They are not a reply from the lead.
+    // Without this, the BDR cadence's email 2 (sent in the thread of email 1)
+    // was recorded as a reply 20 min later and stopped the lead's cadences
+    // (23/10/2026: 7 leads of the Ana cadence, none had answered).
+    const ourAddress = extractAddress(headerValue(messages[0]?.payload?.headers, 'from'));
+
     let hasGenuineReply = false;
 
     // Check each reply message (beyond the first sent message)
@@ -82,6 +103,8 @@ export async function checkThreadForReplyOrBounce(
 
       const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
       const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+
+      if (ourAddress && extractAddress(fromHeader?.value) === ourAddress) continue;
 
       // Check bounce
       if (fromHeader) {

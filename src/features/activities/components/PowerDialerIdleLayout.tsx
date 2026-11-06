@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { Phone, Play } from 'lucide-react';
 import Link from 'next/link';
@@ -31,6 +31,8 @@ interface PowerDialerIdleLayoutProps {
   onStart: () => void;
   onPreferencesSaved: (updated: DialerPreferences) => void;
   dialerProvider?: DialerProvider;
+  /** Chave "Discagem automática" (só com API4COM). */
+  autoDialToggle?: ReactNode;
 }
 
 export function PowerDialerIdleLayout({
@@ -40,6 +42,7 @@ export function PowerDialerIdleLayout({
   onStart,
   onPreferencesSaved,
   dialerProvider,
+  autoDialToggle,
 }: PowerDialerIdleLayoutProps) {
   const { isManager } = useOrganization();
   const router = useRouter();
@@ -88,14 +91,17 @@ export function PowerDialerIdleLayout({
           </div>
         </div>
 
-        <Button
-          onClick={onStart}
-          disabled={queue.length === 0}
-          className="gap-2 bg-green-600 hover:bg-green-700"
-        >
-          <Play className="h-4 w-4" />
-          Iniciar ligacoes
-        </Button>
+        <div className="flex flex-wrap items-center gap-4">
+          {autoDialToggle}
+          <Button
+            onClick={onStart}
+            disabled={queue.length === 0}
+            className="gap-2 bg-green-600 hover:bg-green-700"
+          >
+            <Play className="h-4 w-4" />
+            Iniciar ligacoes
+          </Button>
+        </div>
       </div>
 
       {/* Layout: sidebar + main */}

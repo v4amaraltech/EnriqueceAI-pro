@@ -28,6 +28,8 @@ import { TemplatePreviewPanel } from './TemplatePreviewPanel';
 
 interface TemplateEditorProps {
   template?: MessageTemplateRow;
+  /** Template de outra pessoa (ou de sistema): só visualizar. */
+  readOnly?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ function plainTextToHtml(text: string): string {
     .join('');
 }
 
-export function TemplateEditor({ template }: TemplateEditorProps) {
+export function TemplateEditor({ template, readOnly = false }: TemplateEditorProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPreview, setShowPreview] = useState(false);
@@ -71,6 +73,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
 
   const isEditing = !!template;
   const isSystem = template?.is_system ?? false;
+  const isLocked = isSystem || readOnly;
 
   const detectedVars = extractVariables(`${subject} ${body}`);
 
@@ -112,9 +115,10 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
           Voltar
         </Button>
         <h1 className="text-2xl font-bold">
-          {isEditing ? 'Editar Template' : 'Novo Template'}
+          {!isEditing ? 'Novo Template' : isLocked ? 'Ver Template' : 'Editar Template'}
         </h1>
         {isSystem && <Badge variant="secondary">Sistema (somente leitura)</Badge>}
+        {!isSystem && readOnly && <Badge variant="secondary">Somente leitura</Badge>}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -132,7 +136,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Primeiro Contato"
-                  disabled={isSystem}
+                  disabled={isLocked}
                 />
               </div>
 
@@ -141,7 +145,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
               <Select
                 value={channel}
                 onValueChange={(v) => setChannel(v as ChannelType)}
-                disabled={isSystem || isEditing}
+                disabled={isLocked || isEditing}
               >
                 <SelectTrigger id="channel" className="w-full">
                   <SelectValue />
@@ -162,7 +166,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="Ex: Oportunidade para {{nome_fantasia}}"
-                  disabled={isSystem}
+                  disabled={isLocked}
                 />
               </div>
             )}
@@ -175,7 +179,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Escreva sua mensagem aqui..."
                 rows={10}
-                disabled={isSystem}
+                disabled={isLocked}
               />
               {channel === 'whatsapp' && (
                 <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
@@ -185,7 +189,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
             </div>
 
             {/* Variable insertion — grouped by Lead / Vendedor */}
-            <VariableInsertBar onInsert={insertVariable} disabled={isSystem} />
+            <VariableInsertBar onInsert={insertVariable} disabled={isLocked} />
 
             {/* Detected variables */}
             {detectedVars.length > 0 && (
@@ -202,7 +206,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
             )}
 
             <div className="flex gap-2 pt-4">
-              {!isSystem && (
+              {!isLocked && (
                 <Button onClick={handleSave} disabled={isPending}>
                   <Save className="mr-2 h-4 w-4" />
                   {isPending ? 'Salvando...' : isEditing ? 'Salvar' : 'Criar Template'}

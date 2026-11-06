@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { brtDateKey, isBrHoliday } from '@/lib/utils/br-holidays';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
 /**
@@ -21,6 +22,12 @@ interface OverdueRow {
 }
 
 export async function notifyOverdueActivities(): Promise<ActionResult<{ notified: number }>> {
+  // O cron roda seg–sex 08h; em feriado nacional ninguém trabalha → sem resumo.
+  if (isBrHoliday(brtDateKey(new Date()))) {
+    console.warn('[sdr-overdue-summary] Feriado nacional — resumo não enviado');
+    return { success: true, data: { notified: 0 } };
+  }
+
   const supabase = createServiceRoleClient();
 
   // Pull active enrollments overdue (régua canônica: venceu num dia útil que já

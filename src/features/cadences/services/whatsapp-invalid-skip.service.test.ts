@@ -6,7 +6,10 @@ vi.mock('@/features/leads/actions/log-lead-event', () => leadEvent);
 vi.mock('./cadence-end-loss.service', () => loss);
 
 import {
+  classifyBlockedStep,
   classifyInvalidWhatsAppStep,
+  isEmailStep,
+  skipEmailStepsForBouncedLeads,
   nextNonWhatsAppStep,
   skipWhatsAppStepsForInvalidLeads,
   WHATSAPP_SCAN_LIMIT,
@@ -288,5 +291,67 @@ describe('skipWhatsAppStepsForInvalidLeads', () => {
   it('erro inesperado é engolido (motor segue)', async () => {
     const quebrado = { from: () => { throw new Error('sem conexão'); } } as never;
     expect(await skipWhatsAppStepsForInvalidLeads(quebrado)).toEqual({ scanned: 0, advanced: 0, ended: 0 });
+  });
+});
+
+describe('e-mail com bounce (passos de e-mail)', () => {
+  // Inbound 2.0 resumida: e-mail, ligação, WhatsApp, e-mail, e-mail.
+  const INBOUND = [
+    { step_order: 1, channel: 'email' },
+    { step_order: 2, channel: 'phone' },
+    { step_order: 3, channel: 'whatsapp' },
+    { step_order: 4, channel: 'email' },
+    { step_order: 5, channel: 'email' },
+  ];
+
+  it('passo de e-mail com outro canal adiante: avança', () => {
+    expect(classifyBlockedStep(INBOUND, 1, isEmailStep)).toEqual({ action: 'advance', toStep: 2 });
+  });
+
+  it('cauda só de e-mail: fim de cadência', () => {
+    expect(classifyBlockedStep(INBOUND, 4, isEmailStep)).toEqual({ action: 'end' });
+  });
+
+  it('passo que não é e-mail: nada a fazer', () => {
+    expect(classifyBlockedStep(INBOUND, 2, isEmailStep)).toEqual({ action: 'none' });
+    expect(classifyBlockedStep(INBOUND, 3, isEmailStep)).toEqual({ action: 'none' });
+  });
+
+  it('motor: avança a inscrição e registra o pulo de e-mail', async () => {
+    stepRows = INBOUND.map((s) => ({ cadence_id: 'cad-1', ...s }));
+    candidates = [{ id: 'enr-1', cadence_id: 'cad-1', lead_id: 'lead-1', current_step: 1, org_id: ORG }];
+
+    const result = await skipEmailStepsForBouncedLeads(supabase);
+
+    expect(result).toEqual({ scanned: 1, advanced: 1, ended: 0 });
+    expect(captured[0]?.payload).toEqual({ current_step: 2 });
+    expect(filtersUsed).toContain('cadence_enrollments.not:lead.email_bounced_at');
+    expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ event: 'step_skipped_email_bounced', userId: null }),
+    );
+  });
+
+  it('motor: só cadências de SDR (standard) — auto_email fica com o motor de e-mail', async () => {
+    stepRows = INBOUND.map((s) => ({ cadence_id: 'cad-1', ...s }));
+    await skipEmailStepsForBouncedLeads(supabase);
+
+    expect(filtersUsed).toContain('cadence_enrollments.eq:cadence.type');
+    expect(selects.some((s) => s.includes('cadences!inner(type)'))).toBe(true);
+  });
+
+  it('motor: cauda só de e-mail encerra e chama a regra de Perdido', async () => {
+    stepRows = INBOUND.map((s) => ({ cadence_id: 'cad-1', ...s }));
+    candidates = [{ id: 'enr-1', cadence_id: 'cad-1', lead_id: 'lead-1', current_step: 4, org_id: ORG }];
+
+    const result = await skipEmailStepsForBouncedLeads(supabase);
+
+    expect(result).toEqual({ scanned: 1, advanced: 0, ended: 1 });
+    expect(captured[0]?.payload).toMatchObject({ status: 'completed' });
+    expect(leadEvent.logLeadEvent).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ event: 'cadence_completed', metadata: expect.objectContaining({ reason: 'email_bounced_tail' }) }),
+    );
+    expect(loss.markLeadLostOnCadenceEnd).toHaveBeenCalledTimes(1);
   });
 });

@@ -17,7 +17,7 @@ import { useOrganization } from '../hooks/useOrganization';
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
-  const { organization } = useOrganization();
+  const { organization, isManager } = useOrganization();
 
   const email = user?.email ?? '';
   const initials = (email.split('@')[0] || 'U')
@@ -61,12 +61,14 @@ export function UserMenu() {
             Empresa
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href="/settings/integrations" className="flex items-center gap-2">
-            <Puzzle className="h-4 w-4" />
-            Integrações
-          </a>
-        </DropdownMenuItem>
+        {isManager && (
+          <DropdownMenuItem asChild>
+            <a href="/settings/integrations" className="flex items-center gap-2">
+              <Puzzle className="h-4 w-4" />
+              Integrações
+            </a>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => signOut()} className="flex items-center gap-2 text-[var(--destructive)]">
           <LogOut className="h-4 w-4" />

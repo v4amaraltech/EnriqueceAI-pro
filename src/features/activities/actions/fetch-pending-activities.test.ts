@@ -213,6 +213,23 @@ describe('fetchPendingActivities', () => {
     });
   });
 
+  it('tira da fila os passos de cadência executada pela IA (executor bdr_ai)', async () => {
+    const daIa = { ...mockEnrollment, id: 'enr-ia', cadence: { ...mockCadence, executor: 'bdr_ai' } };
+    const doSdr = { ...mockEnrollment, cadence: { ...mockCadence, executor: 'sdr' } };
+    wireByTable({
+      cadence_enrollments: { data: [daIa, doSdr], error: null },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: { data: [], error: null },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.enrollmentId)).toEqual(['enr-1']);
+  });
+
   it('should skip enrollments without matching step', async () => {
     const enrollmentNoStep = {
       ...mockEnrollment,
@@ -353,6 +370,43 @@ describe('fetchPendingActivities', () => {
     expect(result.data).toHaveLength(2);
     const names = result.data.map((a) => a.cadenceName).sort();
     expect(names).toEqual(['Follow Up', 'Outbound V1']);
+  });
+
+  it('separa a tarefa "Definir destino" do retorno agendado pelo `kind`', async () => {
+    const base = { lead_id: 'lead-1', call_provider: null, scheduled_at: '2026-11-06T12:00:00Z', leads: mockLead };
+    wireByTable({
+      cadence_enrollments: { data: [mockEnrollment], error: null },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: {
+        data: [
+          { ...base, id: 'sa-ret', channel: 'phone', kind: 'return', notes: 'ligar 14h' },
+          {
+            ...base,
+            id: 'sa-limbo',
+            channel: 'research',
+            kind: 'limbo_followup',
+            notes: 'Definir destino: e-mail voltou (bounce) na Hotelaria.',
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const result = await fetchPendingActivities();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const ret = result.data.find((a) => a.enrollmentId === 'scheduled:sa-ret');
+    const limbo = result.data.find((a) => a.enrollmentId === 'scheduled:sa-limbo');
+    expect(ret).toMatchObject({ scheduledKind: 'return', activityName: 'Retorno: ligar 14h' });
+    expect(limbo).toMatchObject({
+      scheduledKind: 'limbo_followup',
+      cadenceName: 'Definir destino',
+      activityName: 'Definir destino: e-mail voltou (bounce) na Hotelaria.',
+    });
+    // Passo de cadência não tem tipo de atividade avulsa.
+    expect(result.data.find((a) => a.enrollmentId === 'enr-1')?.scheduledKind).toBeUndefined();
   });
 
   it('busca só as colunas do lead que a fila usa (inclui whatsapp_invalid_at, nunca *)', async () => {

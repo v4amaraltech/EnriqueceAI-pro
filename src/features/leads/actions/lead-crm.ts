@@ -11,7 +11,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
-import { pushLeadToCrm, pushLeadToCrmWithDefaults } from '../services/crm-push.service';
+import { applyConnectionDefaults, pushLeadToCrm, pushLeadToCrmWithDefaults } from '../services/crm-push.service';
 import { resyncCrmDealFields } from '../services/crm-resync.service';
 import { resolveMeetingHeldAt } from '../utils/meeting-held-at';
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
@@ -33,6 +33,9 @@ import { nextBusinessDayAt9hBRT } from '@/app/api/cron/meeting-outcome-check/rou
 export interface CrmPipelinesEntry {
   provider: CrmProvider;
   pipelines: CrmPipeline[];
+  /** Funil/etapa padrão da conexão — quando definidos, o modal de Ganho os usa fixos. */
+  defaultPipelineId: string | null;
+  defaultStageId: string | null;
 }
 
 export async function fetchCrmPipelines(): Promise<
@@ -102,7 +105,12 @@ export async function fetchCrmPipelines(): Promise<
         }
 
         return pipelines.length > 0
-          ? { provider: connection.crm_provider, pipelines }
+          ? {
+              provider: connection.crm_provider,
+              pipelines,
+              defaultPipelineId: connection.default_pipeline_id ?? null,
+              defaultStageId: connection.default_stage_id ?? null,
+            }
           : null;
       }),
     );
@@ -303,12 +311,20 @@ export async function resyncLeadToCrm(
 
 export async function markLeadAsWon(
   leadId: string,
-  crmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string; responsibleUserId?: string },
+  requestedCrmOptions?: { provider: CrmProvider; pipelineId: string; stageId: string; responsibleUserId?: string },
 ): Promise<ActionResult<{ dealCreated?: boolean; crmDeferred?: boolean }>> {
   try {
     const auth = await getAuthOrgIdResult();
     if (!auth.success) return auth;
     const { orgId, userId, supabase } = auth.data;
+
+    // Funil/etapa sempre os PADRÃO da conexão quando configurados — o modal não
+    // deixa mais escolher, e o servidor garante o mesmo (caso MILPAPER, 09/10:
+    // card caiu em outro funil por escolha manual). Só o responsável segue
+    // vindo do modal.
+    const crmOptions = requestedCrmOptions
+      ? await applyConnectionDefaults(orgId, requestedCrmOptions)
+      : undefined;
 
     // 1. Update lead to won — SDR's production is "fazer a reunião acontecer +
     // enviar pro CRM". Closer feedback later registers SAL quality (rating,
