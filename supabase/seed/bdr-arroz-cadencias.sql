@@ -16,13 +16,13 @@ WITH t1 AS (
   RETURNING id, name
 ),
 c1 AS (
-  INSERT INTO cadences (org_id, name, description, status, total_steps, created_by, priority, origin, type, auto_loss_after_days, sdr_switch_allowed)
-  VALUES (:'org_id', 'BDR IA — Arroz (contato)', 'Ligações da Ana IA (V4 Call). Passos phone executados pelo n8n via claim_due_steps.', 'active', 4, :'created_by', 'high', 'outbound', 'standard', 21, false)
+  INSERT INTO cadences (org_id, name, description, status, total_steps, created_by, priority, origin, type, auto_loss_after_days, sdr_switch_allowed, executor)
+  VALUES (:'org_id', 'BDR IA — Arroz (contato)', 'Ligações da Ana IA (V4 Call). Passos phone executados pelo n8n via claim_due_steps.', 'active', 4, :'created_by', 'high', 'outbound', 'standard', 21, false, 'bdr_ai')
   RETURNING id
 ),
 c2 AS (
-  INSERT INTO cadences (org_id, name, description, status, total_steps, created_by, priority, origin, type, auto_loss_after_days, sdr_switch_allowed)
-  VALUES (:'org_id', 'BDR IA — Arroz (e-mail auto)', 'E-mails automáticos da Ana IA (caixas bdr_ai). Respostas vão para o agente de e-mail.', 'active', 4, :'created_by', 'high', 'outbound', 'auto_email', NULL, false)
+  INSERT INTO cadences (org_id, name, description, status, total_steps, created_by, priority, origin, type, auto_loss_after_days, sdr_switch_allowed, executor)
+  VALUES (:'org_id', 'BDR IA — Arroz (e-mail auto)', 'E-mails automáticos da Ana IA (caixas bdr_ai). Respostas vão para o agente de e-mail.', 'active', 4, :'created_by', 'high', 'outbound', 'auto_email', NULL, false, 'bdr_ai')
   RETURNING id
 )
 INSERT INTO cadence_steps (cadence_id, step_order, channel, delay_days, delay_hours, activity_name, template_id, reply_type, ai_personalization)
