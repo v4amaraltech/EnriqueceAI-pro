@@ -22,7 +22,7 @@ export function AutoDialToggle({
   className?: string;
 }) {
   const hint = available
-    ? 'Liga o próximo lead sozinho; para quando alguém atende.'
+    ? 'Liga sozinho todos os números do lead (até 3x por número no dia, 1 h entre tentativas); quando atende, a IA registra o resultado.'
     : 'Disponível com o webphone ligado e verde nesta aba.';
   return (
     <label className={cn('flex items-center gap-2 text-sm', !available && 'opacity-60', className)} title={hint}>
@@ -40,6 +40,7 @@ export function AutoDialToggle({
 export function AutoDialStatusBar({
   state,
   leadName,
+  detail,
   canResume,
   onPause,
   onResume,
@@ -48,6 +49,8 @@ export function AutoDialStatusBar({
 }: {
   state: AutoDialState;
   leadName: string | null;
+  /** Linha extra (ex.: "Número 1 de 2 · tentativa 2/3"). */
+  detail?: string | null;
   /** Retomar só sem ligação em aberto (o SDR concluiu a anterior). */
   canResume: boolean;
   onPause: () => void;
@@ -68,10 +71,13 @@ export function AutoDialStatusBar({
     <div className={cn('flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3', tone)} role="status" aria-live="polite">
       <div className="flex min-w-0 items-center gap-2">
         <Zap className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
-        <p className="truncate text-sm font-medium">
-          {text}
-          {state.phase === 'countdown' && leadName ? ` — ${leadName}` : ''}
-        </p>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            {text}
+            {state.phase === 'countdown' && leadName ? ` — ${leadName}` : ''}
+          </p>
+          {detail && state.phase === 'countdown' && <p className="truncate text-xs opacity-80">{detail}</p>}
+        </div>
       </div>
       <div className="flex items-center gap-2">
         {state.phase === 'countdown' && (

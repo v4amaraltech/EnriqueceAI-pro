@@ -73,6 +73,7 @@ describe('createPausedCadenceFollowups', () => {
       lead_id: 'lead-1',
       user_id: 'sdr-1',
       channel: 'research',
+      kind: 'limbo_followup',
       scheduled_at: '2026-10-12T12:00:00.000Z',
     });
     expect(String(inserts[0]?.notes)).toContain('Recovery — número não é WhatsApp');

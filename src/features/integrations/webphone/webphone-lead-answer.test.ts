@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { effectiveCallSeconds, leadAnswerFromCallRow, leadConnected } from './webphone-lead-answer';
+import { effectiveCallSeconds, hangupReasonLabel, leadAnswerFromCallRow, leadConnected } from './webphone-lead-answer';
 
 describe('leadAnswerFromCallRow', () => {
   it('answered_at presente → atendida (mesmo com hangup_cause normal)', () => {
@@ -37,5 +37,31 @@ describe('leadConnected / effectiveCallSeconds', () => {
     expect(effectiveCallSeconds('not_answered', 7)).toBe(0);
     expect(effectiveCallSeconds('answered', 174)).toBe(174);
     expect(effectiveCallSeconds('unknown', 5)).toBe(5);
+  });
+});
+
+describe('hangupReasonLabel', () => {
+  it('falha da operadora pede para tentar de novo (caso de 03/11/2026)', () => {
+    expect(hangupReasonLabel('NORMAL_TEMPORARY_FAILURE')).toBe('Falha na operadora. Tente de novo em instantes.');
+    expect(hangupReasonLabel('NETWORK_OUT_OF_ORDER')).toBe('Falha na operadora. Tente de novo em instantes.');
+  });
+
+  it('traduz as causas de número ruim, ocupado e não atendeu', () => {
+    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Número mudou ou foi desativado.');
+    expect(hangupReasonLabel('UNALLOCATED_NUMBER')).toBe('Este número não existe.');
+    expect(hangupReasonLabel('USER_BUSY')).toBe('Linha ocupada.');
+    expect(hangupReasonLabel('NO_ANSWER')).toBe('O lead não atendeu.');
+    expect(hangupReasonLabel('VOICEMAIL')).toBe('Caiu na caixa postal.');
+  });
+
+  it('aceita minúsculas/espaços e cai num texto genérico para causa desconhecida', () => {
+    expect(hangupReasonLabel(' user_busy ')).toBe('Linha ocupada.');
+    expect(hangupReasonLabel('FAILED')).toBe('A operadora não completou a ligação.');
+  });
+
+  it('sem causa (webhook ainda não chegou) → null', () => {
+    expect(hangupReasonLabel(null)).toBeNull();
+    expect(hangupReasonLabel(undefined)).toBeNull();
+    expect(hangupReasonLabel('  ')).toBeNull();
   });
 });

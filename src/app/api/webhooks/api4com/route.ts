@@ -15,7 +15,7 @@ import {
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import type { CallStatus } from '@/features/calls/types';
-import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '@/features/calls/schemas/call.schemas';
+import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
 import {
   classifyApi4ComCall,
   getSignificantThreshold,
@@ -320,7 +320,7 @@ async function processApi4ComEvent(
   }
 
   // channel-hangup: full update
-  await updateCallFromWebhook(supabase, call.id, call.status, body, call.org_id);
+  await updateCallFromWebhook(supabase, call.id, call.status, body, call.org_id, call.metadata);
   logger.info('Call updated', { callId: call.id, api4comId: body.id });
 }
 
@@ -425,6 +425,7 @@ async function updateCallFromWebhook(
   currentStatus: CallStatus,
   payload: Api4ComWebhookPayload,
   orgId: string,
+  callMetadata: unknown,
 ) {
   const updates: Record<string, unknown> = {
     duration_seconds: payload.duration,
@@ -474,8 +475,12 @@ async function updateCallFromWebhook(
     triggerPersistRecording(callId);
   }
 
-  // Trigger automatic transcription + BANT analysis if recording available
-  if (payload.recordUrl && payload.duration >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
+  // Trigger automatic transcription + BANT analysis if recording available.
+  // Ligação do Power Dialer esperando o resultado da IA (`ai_outcome.status =
+  // 'pending'`) transcreve a partir de 10 s em vez de 5 min. Se o `pending`
+  // for gravado DEPOIS deste hangup (corrida), o cron
+  // process-pending-transcriptions pega a ligação.
+  if (shouldTranscribeOnHangup({ recordUrl: payload.recordUrl, durationSeconds: payload.duration, metadata: callMetadata })) {
     triggerTranscription(callId);
   }
 }
