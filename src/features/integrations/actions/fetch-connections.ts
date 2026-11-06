@@ -4,6 +4,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { hasOrgApi4ComToken } from '../services/api4com.service';
+
 import type { Api4ComConnectionSafe, ApolloConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 
 export interface ConnectionsOverview {
@@ -107,6 +109,8 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     orgSipDomain = domainFallback?.sip_domain ?? null;
   }
 
+  const orgManaged = api4comRaw ? await hasOrgApi4ComToken(orgId) : false;
+
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {
         id: api4comRaw.id,
@@ -116,6 +120,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
         org_sip_domain: orgSipDomain,
         has_api_key: !!api4comRaw.api_key_encrypted,
         has_sip_password: !!api4comRaw.sip_password_encrypted,
+        org_managed: orgManaged,
         status: api4comRaw.status as Api4ComConnectionSafe['status'],
         created_at: api4comRaw.created_at,
         updated_at: api4comRaw.updated_at,

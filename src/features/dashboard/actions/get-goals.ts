@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type { GoalsData } from '../types';
@@ -53,27 +53,11 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     };
   }
 
-  // Fetch user info via admin client (service_role can access auth.users)
-  const userInfoMap = new Map<string, { name: string; avatarUrl?: string }>();
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const userIds = sdrs.map((s) => s.user_id);
-    await Promise.all(
-      userIds.map(async (id) => {
-        const { data } = await adminClient.auth.admin.getUserById(id);
-        if (data?.user) {
-          const u = data.user;
-          const meta = u.user_metadata as Record<string, unknown> | undefined;
-          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-          const avatarUrl = (meta?.avatar_url ?? meta?.picture ?? '') as string;
-          const displayName = fullName || (u.email ? u.email.split('@')[0]! : u.id.slice(0, 8));
-          userInfoMap.set(u.id, { name: displayName, avatarUrl: avatarUrl || undefined });
-        }
-      }),
-    );
-  } catch {
-    // Fallback: if service_role key is missing, use truncated user_id
-  }
+  // User names/avatars from auth.users (one query)
+  const profiles = await resolveUserProfiles(sdrs.map((s) => s.user_id));
+  const userInfoMap = new Map<string, { name: string; avatarUrl?: string }>(
+    [...profiles].map(([id, p]) => [id, { name: p.displayName, avatarUrl: p.avatarUrl ?? undefined }]),
+  );
 
   // Fetch user goals for current month
   const { data: currentUserGoals } = (await from(supabase, 'goals_per_user')

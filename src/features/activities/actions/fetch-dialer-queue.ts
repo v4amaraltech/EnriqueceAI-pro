@@ -8,12 +8,21 @@ import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
+import { countCallsByPhone, phoneKey } from '../utils/auto-dialer';
+import { entraNaFilaHumana } from '../utils/fila-humana';
 import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 
 export interface DialerQueuePhone {
   formatted: string;
   raw: string;
   label: string;
+}
+
+/** Ligações de hoje (BRT) para um número do lead. */
+export interface DialerPhoneAttempt {
+  phone: string;
+  attemptsToday: number;
+  lastAttemptAt: string | null;
 }
 
 export interface DialerQueueItem {
@@ -33,6 +42,18 @@ export interface DialerQueueItem {
   nextStepDue: string;
   activityName: string | null;
   callScript: string | null;
+  /**
+   * A etapa ATUAL da inscrição é a de ligação. Quando `false`, o item entrou na
+   * fila pela próxima etapa de ligação da cadência: concluir pularia as etapas
+   * do meio, então a discagem automática não o disca (só o modo manual).
+   */
+  currentStepIsPhone: boolean;
+  /**
+   * Tentativas de hoje por número (story power-dialer-rounds). O limite diário
+   * (`dialer_daily_limit_per_lead`) vale POR NÚMERO; o lead sai da fila só
+   * quando todos os números o atingiram.
+   */
+  phoneAttempts: DialerPhoneAttempt[];
 }
 
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
@@ -44,7 +65,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   // leads atribuídos a ele (não confiar no RLS — em modo 'all' deixa de escopar);
   // manager, a org toda.
   let queue = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name)')
+    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name, type, executor)')
     .eq('status', 'active')
     .lte('next_step_due', new Date().toISOString());
   if (role !== 'manager') queue = queue.eq('lead.assigned_to', userId);
@@ -58,7 +79,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
         current_step: number;
         next_step_due: string;
         lead: { id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string; telefone: string | null; first_name: string | null; last_name: string | null; socios: LeadSocio[] | null; phones: LeadPhone[] | null } | null;
-        cadence: { id: string; name: string } | null;
+        cadence: { id: string; name: string; type: string | null; executor: string | null } | null;
       }> | null;
       error: { message: string } | null;
     };
@@ -82,11 +103,11 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   ]);
 
   // Build lookup: cadence_id -> set of phone step_orders and their data
-  interface PhoneStepInfo { id: string; activityName: string | null; instructions: string | null }
+  interface PhoneStepInfo { id: string; order: number; activityName: string | null; instructions: string | null }
   const phoneSteps = new Map<string, Map<number, PhoneStepInfo>>(); // cadence_id -> (step_order -> step info)
   for (const s of phoneStepsResult.data ?? []) {
     const map = phoneSteps.get(s.cadence_id) ?? new Map();
-    map.set(s.step_order, { id: s.id, activityName: s.activity_name, instructions: s.instructions });
+    map.set(s.step_order, { id: s.id, order: s.step_order, activityName: s.activity_name, instructions: s.instructions });
     phoneSteps.set(s.cadence_id, map);
   }
 
@@ -124,6 +145,8 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   const phoneEnrollments: Array<{ enrollment: Enrollment; stepInfo: PhoneStepInfo; phone: string; phones: DialerQueuePhone[] }> = [];
   for (const e of enrollments) {
     if (!e.lead || !e.cadence) continue;
+    // Passos de cadência executada pela IA são discados pela Ana (V4 Call), nunca pelo SDR
+    if (!entraNaFilaHumana(e.cadence)) continue;
     const phoneMap = phoneSteps.get(e.cadence_id);
     if (!phoneMap || phoneMap.size === 0) continue; // cadence has no phone steps at all
 
@@ -145,9 +168,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     phoneEnrollments.push({ enrollment: e, stepInfo, phone, phones });
   }
 
-  // Check daily call limits for these leads
+  // Ligações de hoje por NÚMERO (story power-dialer-rounds, 05/11/2026): cada
+  // número do lead tem o seu limite diário; antes era por lead.
   const leadIds = [...new Set(phoneEnrollments.map((pe) => pe.enrollment.lead_id))];
-  const callsPerLead = new Map<string, number>();
+  let attemptsByPhone = new Map<string, { count: number; last: string | null }>();
 
   if (leadIds.length > 0) {
     // Start of TODAY in BRT (not the server's UTC midnight). `setHours(0,0,0,0)`
@@ -155,27 +179,28 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     // near midnight BRT.
     const todayStartIso = brtDayStartIso(brtTodayIso());
 
-    const todayCalls = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
+    const todayCalls = await chunkedIn<{ lead_id: string; destination: string | null; started_at: string | null }>(leadIds, (chunk) =>
       from(supabase, 'calls')
-        .select('lead_id')
+        .select('lead_id, destination, started_at')
         .in('lead_id', chunk)
         .gte('started_at', todayStartIso) as unknown as PromiseLike<{
-        data: Array<{ lead_id: string }> | null;
+        data: Array<{ lead_id: string; destination: string | null; started_at: string | null }> | null;
         error: unknown;
       }>,
     );
 
-    for (const c of todayCalls) {
-      callsPerLead.set(c.lead_id, (callsPerLead.get(c.lead_id) ?? 0) + 1);
-    }
+    attemptsByPhone = countCallsByPhone(todayCalls);
   }
 
   const result: DialerQueueItem[] = [];
   for (const { enrollment: e, stepInfo, phone, phones } of phoneEnrollments) {
     if (!e.lead || !e.cadence) continue;
-    // Exclude leads at daily limit
-    const callCount = callsPerLead.get(e.lead_id) ?? 0;
-    if (callCount >= dailyLimit) continue;
+    const phoneAttempts: DialerPhoneAttempt[] = phones.map((p) => {
+      const a = attemptsByPhone.get(phoneKey(p.formatted));
+      return { phone: p.formatted, attemptsToday: a?.count ?? 0, lastAttemptAt: a?.last ?? null };
+    });
+    // Sai da fila só quando TODOS os números atingiram o limite do dia.
+    if (phoneAttempts.every((a) => a.attemptsToday >= dailyLimit)) continue;
 
     result.push({
       enrollmentId: e.id,
@@ -194,6 +219,8 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       nextStepDue: e.next_step_due,
       activityName: stepInfo.activityName,
       callScript: stepInfo.instructions,
+      currentStepIsPhone: stepInfo.order === e.current_step,
+      phoneAttempts,
     });
   }
 

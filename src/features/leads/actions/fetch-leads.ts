@@ -4,28 +4,12 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { logQueryError } from '@/lib/supabase/log-query-error';
-import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
 import { createdAtRange } from '../utils/created-at-range';
-
-// Build the PostgREST `or` clauses for one search term. CNPJ is stored
-// digits-only, so a punctuated query like "08.942.835/0001-72" never matches
-// `cnpj.ilike`. We additionally search the normalized digits against cnpj so
-// the SDR can paste a formatted CNPJ and still find the lead.
-function searchClausesForTerm(rawTerm: string, fields: readonly string[]): string[] {
-  // Strip PostgREST filter metacharacters (comma, parens, backslash) so a term
-  // like "x,status.eq.won" can't inject an extra OR condition into the clause.
-  const term = sanitizeFilterValue(rawTerm);
-  const clauses = fields.map((field) => `${field}.ilike.%${term}%`);
-  const digits = term.replace(/\D/g, '');
-  if (digits.length >= 3 && digits !== term) {
-    clauses.push(`cnpj.ilike.%${digits}%`);
-  }
-  return clauses;
-}
+import { searchClausesForTerm, splitSearchTerms } from '../utils/lead-search';
 
 export async function fetchLeads(
   rawFilters: Record<string, unknown>,
@@ -125,14 +109,16 @@ export async function fetchLeads(
   //
   // Stopwords with <3 chars are dropped so "da", "de", "do" don't force
   // exact-substring matches that miss legitimate hits.
+  //
+  // Telefone: um termo com 6+ dígitos também é procurado em `phone_digits`
+  // (computed field com todos os telefones do lead só em dígitos).
   if (filters.search) {
-    const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
-    const allTerms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
+    const allTerms = splitSearchTerms(filters.search);
     const terms = allTerms.filter((t) => t.length >= 3);
     // If the entire query is short (e.g. "AI"), use what we have rather than searching everything.
     const effectiveTerms = terms.length > 0 ? terms : allTerms;
     for (const term of effectiveTerms) {
-      query = query.or(searchClausesForTerm(term, searchFields).join(','));
+      query = query.or(searchClausesForTerm(term).join(','));
     }
   }
 
@@ -270,10 +256,9 @@ export async function fetchFilteredLeadIds(
   if (createdRange?.gte) query = query.gte('created_at', createdRange.gte);
   if (createdRange?.lte) query = query.lte('created_at', createdRange.lte);
   if (filters.search) {
-    const searchFields = ['razao_social', 'nome_fantasia', 'cnpj', 'first_name', 'last_name', 'email'];
-    const terms = filters.search.replace(/[%_]/g, '').trim().split(/\s+/).filter(Boolean);
+    const terms = splitSearchTerms(filters.search);
     if (terms.length > 0) {
-      const clauses = terms.flatMap((term) => searchClausesForTerm(term, searchFields));
+      const clauses = terms.flatMap((term) => searchClausesForTerm(term));
       query = query.or(clauses.join(','));
     }
   }

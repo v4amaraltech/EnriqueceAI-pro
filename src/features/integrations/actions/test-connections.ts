@@ -47,34 +47,28 @@ export async function testGmailConnection(): Promise<ActionResult<{ ok: boolean;
 }
 
 /**
- * Test API4COM connection by checking the integrations endpoint.
+ * Test API4COM connection by checking the integrations endpoint. Uses the
+ * org token when the org has one, else the user's legacy token.
  */
 export async function testApi4ComConnection(): Promise<ActionResult<{ ok: boolean; ramal?: string }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
-
-  const { data: conn } = (await from(supabase, 'api4com_connections' as never)
-    .select('api_key_encrypted, base_url, ramal')
-    .eq('org_id', orgId)
-    .eq('user_id', userId)
-    .maybeSingle()) as {
-    data: { api_key_encrypted: string; base_url: string; ramal: string } | null;
-  };
-
-  if (!conn) {
-    return { success: true, data: { ok: false } };
-  }
+  const { userId } = auth.data;
 
   try {
-    const apiKey = decrypt(conn.api_key_encrypted);
-    const baseUrl = conn.base_url.replace(/\/+$/, '');
-    const res = await fetch(`${baseUrl}/integrations`, {
+    const { getUserCredentials } = await import('../services/api4com.service');
+    const creds = await getUserCredentials(userId);
+    if (!creds) {
+      return { success: true, data: { ok: false } };
+    }
+
+    const res = await fetch(`${creds.baseUrl}/integrations`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+      headers: { 'Content-Type': 'application/json', Authorization: creds.apiKey },
+      signal: AbortSignal.timeout(10_000),
     });
 
-    return { success: true, data: { ok: res.ok, ramal: conn.ramal } };
+    return { success: true, data: { ok: res.ok, ramal: creds.ramal } };
   } catch {
     return { success: true, data: { ok: false } };
   }

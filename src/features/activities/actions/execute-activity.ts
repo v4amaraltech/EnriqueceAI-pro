@@ -85,12 +85,15 @@ export async function executeActivity(
   // falhado APÓS gravar a interaction, o enrollment ficava preso pra sempre
   // (a fila esconde o step via get_executed_steps, então o SDR nunca reexecuta).
   // Agora reconcilia: garante o avanço atômico via RPC e retorna sucesso.
+  // Ignora eventos `system` (step_skipped grava step_id mas não é execução) —
+  // mesma regra de get_executed_steps.
   const { data: existingInteraction } = (await from(supabase, 'interactions')
     .select('id')
     .eq('cadence_id', cadenceId)
     .eq('step_id', stepId)
     .eq('lead_id', leadId)
     .neq('type', 'failed')
+    .neq('channel', 'system')
     .limit(1)
     .maybeSingle()) as { data: { id: string } | null };
 

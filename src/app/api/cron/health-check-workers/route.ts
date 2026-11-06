@@ -1,8 +1,10 @@
+import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { CRITICAL_WORKERS } from '@/lib/workers/critical-workers';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import {
   findZeroFetchCandidates,
@@ -11,22 +13,6 @@ import {
 } from '@/features/integrations/services/api4com-reconcile-health';
 
 export const maxDuration = 60;
-
-interface CriticalWorker {
-  job_name: string;
-  // max age (hours) before we consider the worker stuck
-  stale_after_hours: number;
-  // human label for the notification
-  label: string;
-}
-
-const CRITICAL_WORKERS: CriticalWorker[] = [
-  {
-    job_name: 'reconcile-api4com-calls',
-    stale_after_hours: 3, // cron runs hourly, alert at 3 misses
-    label: 'Reconciliação de ligações API4COM',
-  },
-];
 
 const ALERT_COOLDOWN_HOURS = 24;
 
@@ -136,12 +122,29 @@ async function handle(request: Request) {
   const summary: Array<{ job: string; status: string; hours_since_success: number | null; alerted: boolean }> = [];
 
   for (const worker of CRITICAL_WORKERS) {
+    if (worker.expectedAt && !worker.expectedAt(now)) {
+      summary.push({ job: worker.job_name, status: 'off_hours', hours_since_success: null, alerted: false });
+      continue;
+    }
+
     const { data: state } = (await from(supabase, 'worker_run_state' as never)
       .select('last_run_at, last_success_at, last_status')
       .eq('job_name', worker.job_name)
       .maybeSingle()) as {
       data: { last_run_at: string | null; last_success_at: string | null; last_status: string | null } | null;
     };
+
+    if (!state && !worker.alertWhenNeverRan) {
+      // Just deployed, or recording is broken. Tell the team (not customers):
+      // if this keeps showing up, the worker is running unwatched.
+      Sentry.captureMessage(`[health-check] worker ${worker.job_name} has no run state yet`, {
+        level: 'warning',
+        tags: { worker: worker.job_name },
+        fingerprint: ['worker-not-tracked', worker.job_name],
+      });
+      summary.push({ job: worker.job_name, status: 'not_tracked_yet', hours_since_success: null, alerted: false });
+      continue;
+    }
 
     const lastSuccessAt = state?.last_success_at ? new Date(state.last_success_at) : null;
     const hoursSinceSuccess = lastSuccessAt
@@ -161,18 +164,36 @@ async function handle(request: Request) {
       continue;
     }
 
-    // Stale worker. Notify org managers — but only once per cooldown window.
+    // Stale worker. Tell the team (Sentry, every check) and the org managers
+    // (bell, once per cooldown window).
+    Sentry.captureMessage(`[health-check] worker ${worker.job_name} stale`, {
+      level: 'error',
+      tags: { worker: worker.job_name },
+      fingerprint: ['worker-stale', worker.job_name],
+      extra: {
+        hours_since_success: hoursSinceSuccess,
+        last_run_at: state?.last_run_at ?? null,
+        last_status: state?.last_status ?? null,
+      },
+    });
+
     // Iterate all orgs because the cron is global; each org's managers see
     // their own notification regardless of whether the worker's failure was
     // org-specific.
-    const { data: orgs } = (await from(supabase, 'organizations')
-      .select('id')) as { data: Array<{ id: string }> | null };
+    let orgIds: string[];
+    if (worker.notifyOrgIds) {
+      orgIds = await worker.notifyOrgIds(supabase);
+    } else {
+      const { data: orgs } = (await from(supabase, 'organizations')
+        .select('id')) as { data: Array<{ id: string }> | null };
+      orgIds = (orgs ?? []).map((o) => o.id);
+    }
 
     let alertedThisRun = false;
-    for (const org of orgs ?? []) {
+    for (const orgId of orgIds) {
       const { data: recentNotif } = (await from(supabase, 'notifications')
         .select('id')
-        .eq('org_id', org.id)
+        .eq('org_id', orgId)
         .eq('type', 'integration_error')
         .eq('resource_type', 'worker')
         .eq('resource_id', worker.job_name)
@@ -183,12 +204,12 @@ async function handle(request: Request) {
       if (recentNotif) continue;
 
       await createNotificationsForOrgMembers({
-        orgId: org.id,
+        orgId: orgId,
         type: 'integration_error',
         title: `${worker.label} parado`,
         body: hoursSinceSuccess !== null
-          ? `O worker "${worker.job_name}" não completa com sucesso há ${hoursSinceSuccess.toFixed(1)}h. Métricas podem ficar desatualizadas até ser restaurado.`
-          : `O worker "${worker.job_name}" nunca completou com sucesso. Verifique a configuração da integração.`,
+          ? `${worker.label} está sem rodar com sucesso há ${hoursSinceSuccess.toFixed(1)}h. ${worker.impact} O time técnico já foi avisado.`
+          : `${worker.label} nunca rodou com sucesso. ${worker.impact} O time técnico já foi avisado.`,
         resourceType: 'worker',
         resourceId: worker.job_name,
         metadata: {

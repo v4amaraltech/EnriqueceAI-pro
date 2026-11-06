@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getOrgPlan } from '@/features/billing/actions/get-org-plan';
 import type { PlanFeatures } from '@/features/billing/types';
 import { fetchConnections } from '@/features/integrations/actions/fetch-connections';
+import { fetchApi4ComOrgOverview } from '@/features/integrations/actions/manage-api4com-org';
 import { IntegrationsView } from '@/features/integrations/components/IntegrationsView';
 import type { MyWhatsAppNumber } from '@/features/whatsapp-calls/components/MyWhatsAppNumberCard';
 import type { WhatsAppCallSessionStatus } from '@/features/whatsapp-calls/types';
@@ -21,7 +22,9 @@ export default async function IntegrationsPage() {
   const auth = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
-  const [result, planResult, sessionRes, userRes] = await Promise.all([
+  const isManager = auth.role === 'manager';
+
+  const [result, planResult, sessionRes, userRes, api4comOrgRes] = await Promise.all([
     fetchConnections(),
     getOrgPlan(),
     // Sessão de Ligação via WhatsApp do próprio usuário (auto-pareamento do SDR
@@ -31,6 +34,8 @@ export default async function IntegrationsPage() {
       .eq('user_id', auth.userId)
       .maybeSingle(),
     supabase.auth.getUser(),
+    // Token da conta API4COM + ramais do time: só o gestor vê/gerencia.
+    isManager ? fetchApi4ComOrgOverview() : Promise.resolve(null),
   ]);
 
   if (!result.success) {
@@ -60,10 +65,11 @@ export default async function IntegrationsPage() {
       crmConnections={result.data.crmConnections}
       calendar={result.data.calendar}
       api4com={result.data.api4com}
+      api4comOrg={api4comOrgRes?.success ? api4comOrgRes.data : null}
       evolutionInstance={result.data.evolutionInstance}
       apollo={result.data.apollo}
       planFeatures={planFeatures}
-      isManager={auth.role === 'manager'}
+      isManager={isManager}
       myWhatsAppCall={myWhatsAppCall}
     />
   );

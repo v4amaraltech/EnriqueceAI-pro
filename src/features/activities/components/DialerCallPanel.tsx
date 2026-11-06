@@ -16,6 +16,7 @@ import {
 import Image from 'next/image';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import type { LeadAnswer } from '@/features/integrations/webphone/webphone-lead-answer';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -41,6 +42,10 @@ interface DialerCallPanelProps {
   item: DialerQueueItem;
   isSending: boolean;
   callState: CallState;
+  /** O lead atendeu, segundo o webhook da API4COM ("unknown" até ele chegar). */
+  leadAnswer?: LeadAnswer;
+  /** Discagem automática cuidando da vez: esconde o botão de ligar manual. */
+  manualDialHidden?: boolean;
   onComplete: (callStatus: string, notes: string, durationSeconds: number) => void;
   onSkip: () => void;
   onInitiateCall: (phone: string) => void;
@@ -53,6 +58,8 @@ export function DialerCallPanel({
   item,
   isSending,
   callState,
+  leadAnswer = 'unknown',
+  manualDialHidden = false,
   onComplete,
   onSkip,
   onInitiateCall,
@@ -127,6 +134,8 @@ export function DialerCallPanel({
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
+  // Não atendeu → tentar de novo é o caminho mais comum: vira o botão principal.
+  const notAnswered = leadAnswer === 'not_answered';
 
   return (
     <div className="flex h-full flex-col">
@@ -233,7 +242,7 @@ export function DialerCallPanel({
 
             {/* Call action buttons */}
             <div className="mt-3 flex items-center gap-4">
-              {callState === 'idle' && (
+              {callState === 'idle' && !manualDialHidden && (
                 <button
                   onClick={() => onInitiateCall(selectedPhone)}
                   disabled={isSending}
@@ -285,11 +294,28 @@ export function DialerCallPanel({
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {callState === 'idle' && (isSending ? 'Iniciando ligação...' : 'Clique para ligar via API4COM')}
+              {callState === 'idle' &&
+                (manualDialHidden
+                  ? 'A discagem automática liga para este número'
+                  : isSending
+                    ? 'Iniciando ligação...'
+                    : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
             </p>
+            {callState === 'ended' && leadAnswer !== 'unknown' && (
+              <Badge
+                variant="outline"
+                className={
+                  notAnswered
+                    ? 'mt-2 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                    : 'mt-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                }
+              >
+                {notAnswered ? 'Não atendida' : 'Atendida'}
+              </Badge>
+            )}
           </>
         ) : (
           <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
@@ -324,12 +350,12 @@ export function DialerCallPanel({
               Pular
             </Button>
             {canRetry && (
-              <Button variant="secondary" onClick={handleRetry}>
+              <Button variant={notAnswered ? 'default' : 'secondary'} onClick={handleRetry}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Tentar novamente
               </Button>
             )}
-            <Button onClick={handleComplete} disabled={isSending}>
+            <Button variant={notAnswered ? 'outline' : 'default'} onClick={handleComplete} disabled={isSending}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

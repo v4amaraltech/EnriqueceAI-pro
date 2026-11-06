@@ -28,7 +28,7 @@ Não é limitação de "1 cadência por lead": o índice único é por (cadênci
 - A migração marca as cadências `BDR IA — %` da V4 Amaral como `bdr_ai` (idempotente); o seed `bdr-arroz-cadencias.sql` já cria as duas com `executor = 'bdr_ai'`.
 
 ## Entregue
-- [x] `supabase/migrations/20260922110000_cadences_executor_bdr_ai_guardrail.sql` — coluna + CHECK + trava atualizada + marcação das cadências do piloto
+- [x] `supabase/migrations/20260922114308_cadences_executor_bdr_ai_guardrail.sql` — coluna + CHECK + trava atualizada + marcação das cadências do piloto
 - [x] `supabase/seed/bdr-arroz-cadencias.sql` — `executor = 'bdr_ai'` nas duas cadências
 
 ## Pendente
@@ -46,6 +46,6 @@ Não é limitação de "1 cadência por lead": o índice único é por (cadênci
 - `UPDATE cadences SET executor = 'x'` → recusado pelo CHECK.
 
 ## File List
-- `supabase/migrations/20260922110000_cadences_executor_bdr_ai_guardrail.sql`
+- `supabase/migrations/20260922114308_cadences_executor_bdr_ai_guardrail.sql`
 - `supabase/seed/bdr-arroz-cadencias.sql`
 - `docs/stories/bdr-guardrail-ai-executor.story.md`

@@ -15,6 +15,7 @@ import { scheduleActivity } from '@/features/activities/actions/schedule-activit
 import { CallResultModal } from '@/features/activities/components/CallResultModal';
 
 import { mapDispositionToAction } from '@/features/calls/disposition';
+import { formatResumeDate } from '@/features/activities/utils/callback-resume';
 
 import { applyCallDisposition } from '../actions/apply-call-disposition';
 import { endWhatsAppCall, startWhatsAppCall } from '../actions/calls';
@@ -350,14 +351,23 @@ export function ActivityWhatsAppCallPanel({
                 callProvider: returnSchedule.callProvider,
                 scheduledAt: returnSchedule.scheduledAt,
                 notes: notes || undefined,
-                // Agendar um retorno não encerra mais a cadência (evita o limbo);
-                // encerrar é explícito. Ver schedule-activity.ts.
+                // Não encerra a cadência (evita o limbo): pausa até o dia útil
+                // seguinte ao retorno e retoma sozinha. Ver schedule-activity.ts.
+                pauseCadenceUntilReturn: true,
+                executedStep:
+                  enrollmentId && stepId && !enrollmentId.startsWith('scheduled:')
+                    ? { enrollmentId, stepId }
+                    : undefined,
               });
               if (!r.success) {
                 toast.error(r.error);
                 return;
               }
-              toast.success('Retorno agendado');
+              toast.success(
+                r.data.cadencePausedUntil
+                  ? `Retorno agendado — cadência pausada até ${formatResumeDate(r.data.cadencePausedUntil)}`
+                  : 'Retorno agendado',
+              );
             } else if (enrollmentId && stepId) {
               // O desfecho do SDR comanda a cadência (antes era 'significant'
               // fixo, então até ligação não atendida avançava). Quando o desfecho

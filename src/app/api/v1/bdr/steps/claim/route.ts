@@ -12,10 +12,14 @@ export const dynamic = 'force-dynamic';
  * BDR-2 — Reserva de passos vencidos para o executor (n8n).
  *
  * POST /api/v1/bdr/steps/claim
- *   { cadence_ids: uuid[], channel?: 'phone', limit?: 10, lease_minutes?: 15, owner?: 'n8n-<execution>' }
+ *   { cadence_ids: uuid[], channel?: 'phone', limit?: 10, lease_minutes?: 15, owner?: 'n8n-<execution>',
+ *     exige_abertura_email?: false }
+ *   exige_abertura_email: "e-mail primeiro" — em cadências vinculadas a uma cadência de e-mail
+ *   (bdr_cadence_links) só reserva leads com e-mail aberto/clicado/respondido na janela; os demais
+ *   são adiados (e-mail ainda rodando) ou encerrados (e-mail terminou sem abertura).
  * → { success, data: [{ execution_id, attempt, recuperada, lease_until, enrollment_id, cadence_id,
  *      step_id, step_order, instructions, dono, lead_id, lead_nome, lead_empresa, lead_cargo,
- *      lead_telefone, lead_email, ... }] }
+ *      lead_telefone, lead_email, lead_telefone_fixo, lead_abriu_email_em, ... }] }
  *
  * `execution_id` é persistente por (inscrição, passo, tentativa): mande-o no
  * dispatch do V4 Call. Se o n8n cair e reservar de novo (`recuperada: true`),
@@ -40,6 +44,7 @@ export async function POST(request: Request) {
       p_limit: q.limit,
       p_lease_minutes: q.leaseMinutes,
       p_owner: q.owner,
+      p_exige_abertura_email: q.exigeAberturaEmail,
     });
     return NextResponse.json({ success: true, data: rows ?? [] }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {

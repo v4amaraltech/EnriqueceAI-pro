@@ -8,8 +8,15 @@ import { from } from '@/lib/supabase/from';
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
+import { entraNaFilaHumana } from '../utils/fila-humana';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
-import type { PendingActivity } from '../types';
+import type { PendingActivity, ScheduledActivityKind } from '../types';
+
+/** Lead columns the activity queue renders (ActivityLead). */
+const SCHEDULED_LEAD_COLUMNS =
+  'id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at';
+/** Cadence-queue variant: also needs whatsapp_invalid_at / email_bounced_at to skip blocked steps. */
+const QUEUE_LEAD_COLUMNS = `${SCHEDULED_LEAD_COLUMNS}, whatsapp_invalid_at, email_bounced_at`;
 
 interface RawLead {
   id: string;
@@ -46,6 +53,7 @@ interface RawLead {
   assigned_to: string | null;
   custom_field_values: Record<string, string> | null;
   whatsapp_invalid_at: string | null;
+  email_bounced_at?: string | null;
 }
 
 interface EnrollmentRow {
@@ -57,7 +65,7 @@ interface EnrollmentRow {
   next_step_due: string | null;
   snooze_count: number | null;
   lead: RawLead;
-  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'>;
+  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'> & { executor?: string | null };
 }
 
 export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
@@ -81,7 +89,9 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // manager; o warn abaixo denuncia se algum dia encostar.
   const QUEUE_ENROLLMENT_LIMIT = 1500;
   let enrollQuery = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
+    // Only the lead columns the queue uses (ActivityLead + whatsapp_invalid_at for
+    // the WhatsApp skip below) — `*` shipped every column of up to ~1.500 leads.
+    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(${QUEUE_LEAD_COLUMNS}), cadence:cadences(id, name, total_steps, created_by, type, executor)`)
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
@@ -149,8 +159,8 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   for (const enrollment of enrollments) {
     if (!enrollment.lead || !enrollment.cadence || !enrollment.next_step_due) continue;
 
-    // Skip auto_email cadences — they are managed via background job, not the manual queue
-    if (enrollment.cadence.type === 'auto_email') continue;
+    // Fora da fila humana: auto_email (job em background) e cadências executadas pela IA (Ana)
+    if (!entraNaFilaHumana(enrollment.cadence)) continue;
 
     const cadenceSteps = (stepMap.get(enrollment.cadence_id) ?? [])
       .slice()
@@ -184,6 +194,10 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       // Suppress WhatsApp steps when the lead's number was flagged as not WhatsApp
       // (SDR feedback via "Não é WhatsApp" button)
       if (step.channel === 'whatsapp' && enrollment.lead.whatsapp_invalid_at) continue;
+
+      // E-mail com bounce: o passo de e-mail não tem como ser feito. O motor
+      // (`skipEmailStepsForBouncedLeads`) avança a inscrição; até lá, some da fila.
+      if (step.channel === 'email' && enrollment.lead.email_bounced_at) continue;
 
       // Ligação via WhatsApp (passo phone com call_provider='whatsapp', Epic 7): só
       // é executável quando o lead tem número WhatsApp resolvível e não foi marcado
@@ -258,7 +272,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // 6. Fetch pending scheduled activities (standalone return-to-lead activities).
   // Mesma regra de posse: SDR só as suas; manager, todas.
   let scheduledQuery = from(supabase, 'scheduled_activities')
-    .select('id, lead_id, channel, call_provider, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
+    .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${SCHEDULED_LEAD_COLUMNS})`)
     .eq('status', 'pending');
   if (role !== 'manager') scheduledQuery = scheduledQuery.eq('leads.assigned_to', userId);
   const scheduledResult = (await scheduledQuery
@@ -268,6 +282,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       lead_id: string;
       channel: string;
       call_provider: string | null;
+      kind: ScheduledActivityKind | null;
       scheduled_at: string;
       notes: string | null;
       leads: RawLead;
@@ -278,36 +293,43 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   }
   const scheduledRows = scheduledResult.data;
 
-  const scheduledActivities: PendingActivity[] = (scheduledRows ?? []).map((row) => ({
-    enrollmentId: `scheduled:${row.id}`,
-    cadenceId: '',
-    cadenceName: 'Atividade Agendada',
-    cadenceCreatedBy: null,
-    stepId: row.id,
-    stepOrder: 1,
-    totalSteps: 1,
-    channel: row.channel as PendingActivity['channel'],
-    templateId: null,
-    templateSubject: null,
-    templateBody: null,
-    aiPersonalization: false,
-    nextStepDue: row.scheduled_at,
-    isCurrentStep: true,
-    snoozeCount: 0,
-    lead: {
-      ...row.leads,
-      municipio: (row.leads.endereco as Record<string, string> | null)?.municipio ?? null,
-      uf: (row.leads.endereco as Record<string, string> | null)?.uf ?? null,
-      primeiro_nome: row.leads.first_name
-        ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
-        ?? null,
-    },
-    activityName: row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
-    callScript: row.notes,
-    // Retorno de "WhatsApp Ligação" (channel='phone' + provider) reabre o discador
-    // WhatsApp na fila; os demais retornos ficam com callProvider null.
-    callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
-  }));
+  const scheduledActivities: PendingActivity[] = (scheduledRows ?? []).map((row) => {
+    const isLimbo = row.kind === 'limbo_followup';
+    return {
+      enrollmentId: `scheduled:${row.id}`,
+      cadenceId: '',
+      cadenceName: isLimbo ? 'Definir destino' : 'Atividade Agendada',
+      cadenceCreatedBy: null,
+      stepId: row.id,
+      stepOrder: 1,
+      totalSteps: 1,
+      channel: row.channel as PendingActivity['channel'],
+      templateId: null,
+      templateSubject: null,
+      templateBody: null,
+      aiPersonalization: false,
+      nextStepDue: row.scheduled_at,
+      isCurrentStep: true,
+      snoozeCount: 0,
+      lead: {
+        ...row.leads,
+        municipio: (row.leads.endereco as Record<string, string> | null)?.municipio ?? null,
+        uf: (row.leads.endereco as Record<string, string> | null)?.uf ?? null,
+        primeiro_nome: row.leads.first_name
+          ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
+          ?? null,
+      },
+      // A nota do robô já começa com "Definir destino:" — sem prefixo de retorno.
+      activityName: isLimbo
+        ? (row.notes ?? 'Definir destino')
+        : row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
+      callScript: row.notes,
+      // Retorno de "WhatsApp Ligação" (channel='phone' + provider) reabre o discador
+      // WhatsApp na fila; os demais retornos ficam com callProvider null.
+      callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
+      scheduledKind: isLimbo ? 'limbo_followup' : 'return',
+    };
+  });
 
   // 7. Merge and sort: group by lead so SDR finishes all steps for one lead before moving to the next
   // Example: Pesquisa Lead A → Ligação Lead A → Pesquisa Lead B → Ligação Lead B

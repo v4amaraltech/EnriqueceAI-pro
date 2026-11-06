@@ -1,5 +1,5 @@
 import { requireManager } from '@/lib/auth/require-manager';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -39,25 +39,9 @@ export default async function CallDailyTargetsPage() {
 
   const members = membersResult.data ?? [];
 
-  // Get display names via admin client (getUserById — listUsers fails)
-  const nameMap = new Map<string, string>();
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const userIds = members.map((m) => m.user_id);
-    await Promise.all(
-      userIds.map(async (id) => {
-        const { data } = await adminClient.auth.admin.getUserById(id);
-        if (data?.user) {
-          const u = data.user;
-          const meta = u.user_metadata as Record<string, unknown> | undefined;
-          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-          nameMap.set(u.id, fullName || u.email?.split('@')[0] || u.id.slice(0, 8));
-        }
-      }),
-    );
-  } catch {
-    // Fallback
-  }
+  // Display names from auth.users (one query)
+  const profiles = await resolveUserProfiles(members.map((m) => m.user_id));
+  const nameMap = new Map([...profiles].map(([id, p]) => [id, p.displayName]));
 
   const memberInfos = members.map((m) => ({
     userId: m.user_id,

@@ -117,7 +117,7 @@ export async function persistWhatsAppCall(
 
   // Insere a interação-espelho da tentativa na timeline do lead. A retentativa da
   // MESMA atividade de cadência colide com o índice único
-  // `uq_interactions_sent_step_lead` (1 interação 'sent' por (cadence,step,lead)
+  // `uq_interactions_sent_step_lead_real` (1 interação 'sent' por (cadence,step,lead)
   // — o anti-duplicata do contador de atividades). Nesse caso reinsere como toque
   // manual (step_id null, fora do índice parcial) pra a retentativa AINDA
   // aparecer no histórico. O erro é checado de propósito: antes era engolido, e a

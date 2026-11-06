@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import { requireAuth } from '@/lib/auth/require-auth';
+import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -13,7 +13,7 @@ interface TemplatesPageProps {
 }
 
 export default async function TemplatesPage({ searchParams }: TemplatesPageProps) {
-  await requireAuth();
+  const { userId, role } = await requireAuthWithMember();
   const params = await searchParams;
 
   const channel = typeof params.channel === 'string' ? params.channel : undefined;
@@ -47,6 +47,8 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
         page={result.data.page}
         perPage={result.data.per_page}
         userMap={userMap}
+        currentUserId={userId}
+        role={role}
       />
     </Suspense>
   );

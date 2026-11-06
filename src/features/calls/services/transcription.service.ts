@@ -4,31 +4,42 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { DEFAULT_DAILY_LIMIT } from '@/features/ai/constants';
 import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, type BantLeadContext } from '@/features/ai/prompts/bant-analysis';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
+import { isAiOutcomePending, transcriptionMinDurationFor } from '../ai-outcome';
+import { applyAiCallOutcome, markAiOutcomeFailed, type AiOutcomeCall } from './apply-ai-call-outcome.service';
+import {
+  ANALYSIS_MODEL,
+  OPENROUTER_BASE_URL,
+  WHISPER_MODEL,
+  getOpenRouterApiKey,
+  openRouterHeaders,
+} from './openrouter-client';
 
-const WHISPER_MODEL = 'whisper-1';
-// Análise BANT via OpenAI (mesma OPENAI_API_KEY do Whisper — provedor único).
-const ANALYSIS_MODEL = 'gpt-4.1';
 // Cap de saída: 8192 acomoda o JSON dos 7 campos em qualquer call realista.
 const ANALYSIS_MAX_TOKENS = 8192;
 
-interface CallForTranscription {
-  id: string;
-  org_id: string;
-  lead_id: string | null;
+interface CallForTranscription extends AiOutcomeCall {
   recording_url: string | null;
-  duration_seconds: number;
   transcription_status: string;
+  transcription: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 /**
- * Main orchestrator: download audio → transcribe → BANT analysis → save
+ * Main orchestrator: download audio → transcribe → BANT analysis → save.
+ *
+ * Ligação do Power Dialer com `metadata.ai_outcome.status = 'pending'`:
+ * transcreve a partir de 10 s (não 5 min) e, com a transcrição pronta, a IA
+ * classifica o resultado (`applyAiCallOutcome`). O BANT continua só para
+ * ligações de 5 min ou mais.
  */
 export async function processCallTranscription(callId: string): Promise<void> {
   const supabase = createServiceRoleClient();
 
   // Fetch call
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, org_id, lead_id, recording_url, duration_seconds, transcription_status')
+    .select(
+      'id, org_id, lead_id, user_id, recording_url, duration_seconds, transcription_status, transcription, metadata, started_at, created_at',
+    )
     .eq('id', callId)
     .single()) as { data: CallForTranscription | null };
 
@@ -37,30 +48,44 @@ export async function processCallTranscription(callId: string): Promise<void> {
     return;
   }
 
+  const aiPending = isAiOutcomePending(call.metadata);
+
   // Guards
   if (!call.recording_url) {
+    // Com `ai_outcome` pendente a ligação continua pendente: se a gravação
+    // chegar depois (recuperação), o cron pega; senão o cron expira.
     await updateTranscriptionStatus(supabase, callId, 'skipped', null, 'no_recording_url');
     return;
   }
 
-  if (call.duration_seconds < TRANSCRIPTION_MIN_DURATION_SECONDS) {
+  if (call.duration_seconds < transcriptionMinDurationFor(call.metadata)) {
     await updateTranscriptionStatus(supabase, callId, 'skipped', null, 'duration_too_short');
     return;
   }
 
-  if (call.transcription_status === 'completed' || call.transcription_status === 'processing') {
+  if (call.transcription_status === 'processing') {
+    return;
+  }
+
+  if (call.transcription_status === 'completed') {
+    // Já transcrita (ex.: ligação ≥ 5 min transcrita antes do `pending` ser
+    // gravado). Só falta a classificação.
+    if (aiPending && call.transcription) {
+      await applyAiCallOutcome(supabase, call, call.transcription);
+    }
     return;
   }
 
   // Mark as processing
   await updateTranscriptionStatus(supabase, callId, 'processing');
 
+  let transcription: string;
   try {
     // Step 1: Download audio
     const audioBuffer = await downloadAudio(call.recording_url);
 
     // Step 2: Transcribe via Whisper
-    const transcription = await transcribeWithWhisper(audioBuffer);
+    transcription = await transcribeWithWhisper(audioBuffer);
 
     // Step 3: Save transcription
     await from(supabase, 'calls')
@@ -71,28 +96,57 @@ export async function processCallTranscription(callId: string): Promise<void> {
         updated_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', callId);
-
-    // Step 4: BANT analysis (only if lead exists)
-    if (call.lead_id) {
-      try {
-        await analyzeAndSaveBant(supabase, call.org_id, call.lead_id, transcription);
-      } catch (bantErr) {
-        // Partial success: transcription saved, BANT failed
-        const errMsg = bantErr instanceof Error ? bantErr.message : String(bantErr);
-        console.error(`[transcription] BANT analysis failed for lead ${call.lead_id}: ${errMsg}`);
-        // Persist error in call metadata for debugging (Vercel truncates logs)
-        await from(supabase, 'calls')
-          .update({ metadata: { bant_error: errMsg.slice(0, 500), bant_failed_at: new Date().toISOString() } } as Record<string, unknown>)
-          .eq('id', callId);
-      }
-    }
-
-    // Step 5: Track AI usage
-    await incrementAiUsage(supabase, call.org_id);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'unknown_error';
     console.error('[transcription] Failed:', errorMessage);
     await updateTranscriptionStatus(supabase, callId, 'failed', null, errorMessage);
+    if (aiPending) await markAiOutcomeFailed(supabase, callId, `transcription_failed: ${errorMessage}`);
+    return;
+  }
+
+  // Step 4: resultado da ligação pela IA (Power Dialer). Erros já viram
+  // `ai_outcome.status = 'failed'` lá dentro.
+  if (aiPending) {
+    try {
+      await applyAiCallOutcome(supabase, call, transcription);
+    } catch (aiErr) {
+      const msg = aiErr instanceof Error ? aiErr.message : String(aiErr);
+      console.error(`[transcription] AI outcome failed for call ${callId}: ${msg}`);
+      await markAiOutcomeFailed(supabase, callId, msg);
+    }
+  }
+
+  // Step 5: BANT analysis (only if lead exists and the call is long enough)
+  if (call.lead_id && call.duration_seconds >= TRANSCRIPTION_MIN_DURATION_SECONDS) {
+    try {
+      await analyzeAndSaveBant(supabase, call.org_id, call.lead_id, transcription);
+    } catch (bantErr) {
+      // Partial success: transcription saved, BANT failed
+      const errMsg = bantErr instanceof Error ? bantErr.message : String(bantErr);
+      console.error(`[transcription] BANT analysis failed for lead ${call.lead_id}: ${errMsg}`);
+      // Persist error in call metadata for debugging (Vercel truncates logs).
+      // Merge com o metadata atual: substituir apagava api4com_call_id e ai_outcome.
+      const { data: fresh } = (await from(supabase, 'calls')
+        .select('metadata')
+        .eq('id', callId)
+        .single()) as { data: { metadata: Record<string, unknown> | null } | null };
+      await from(supabase, 'calls')
+        .update({
+          metadata: {
+            ...(fresh?.metadata ?? {}),
+            bant_error: errMsg.slice(0, 500),
+            bant_failed_at: new Date().toISOString(),
+          },
+        } as Record<string, unknown>)
+        .eq('id', callId);
+    }
+  }
+
+  // Step 6: Track AI usage
+  try {
+    await incrementAiUsage(supabase, call.org_id);
+  } catch (usageErr) {
+    console.error('[transcription] AI usage tracking failed:', usageErr);
   }
 }
 
@@ -106,35 +160,34 @@ async function downloadAudio(url: string): Promise<Buffer> {
 }
 
 async function transcribeWithWhisper(audioBuffer: Buffer): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY não configurada');
-  }
+  const apiKey = getOpenRouterApiKey();
 
-  const formData = new FormData();
-  formData.append('file', new Blob([new Uint8Array(audioBuffer)], { type: 'audio/mpeg' }), 'recording.mp3');
-  formData.append('model', WHISPER_MODEL);
-  formData.append('language', 'pt');
-  formData.append('response_format', 'text');
+  // OpenRouter recebe o áudio em base64 dentro de um JSON (não multipart).
+  const body = JSON.stringify({
+    model: WHISPER_MODEL,
+    input_audio: { data: audioBuffer.toString('base64'), format: 'mp3' },
+    language: 'pt',
+  });
 
   let lastError: Error | null = null;
 
   // Retry up to 2 times
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/audio/transcriptions`, {
         method: 'POST',
         signal: AbortSignal.timeout(120_000),
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
+        headers: openRouterHeaders(apiKey),
+        body,
       });
 
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`whisper_api_error: ${response.status} ${body}`);
+        const errBody = await response.text();
+        throw new Error(`whisper_api_error: ${response.status} ${errBody}`);
       }
 
-      const text = await response.text();
+      const data = (await response.json()) as { text?: string };
+      const text = data.text ?? '';
       if (!text.trim()) {
         throw new Error('whisper_empty_response');
       }
@@ -208,9 +261,9 @@ export async function analyzeAndSaveBant(
       }
     : undefined;
 
-  // Call OpenAI for BANT analysis
+  // Call OpenRouter for BANT analysis
   const prompt = buildBantAnalysisPrompt(transcription, leadContext);
-  const bantJson = await callOpenAIForBant(prompt);
+  const bantJson = await callOpenRouterForBant(prompt);
 
   // Map prompt response keys → database field names → field IDs
   const dbMapped = mapBantResponseToDbNames(bantJson);
@@ -258,19 +311,13 @@ export async function analyzeAndSaveBant(
   }
 }
 
-async function callOpenAIForBant(prompt: string): Promise<Record<string, string>> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY não configurada');
-  }
+async function callOpenRouterForBant(prompt: string): Promise<Record<string, string>> {
+  const apiKey = getOpenRouterApiKey();
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: 'POST',
     signal: AbortSignal.timeout(90_000),
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: openRouterHeaders(apiKey),
     body: JSON.stringify({
       model: ANALYSIS_MODEL,
       max_tokens: ANALYSIS_MAX_TOKENS,
@@ -285,7 +332,7 @@ async function callOpenAIForBant(prompt: string): Promise<Record<string, string>
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => 'no body');
-    throw new Error(`openai_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
+    throw new Error(`openrouter_api_error: ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const data = (await response.json()) as {

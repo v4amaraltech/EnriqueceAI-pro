@@ -2,15 +2,8 @@ import { NextResponse } from 'next/server';
 
 import { handleGmailCallback } from '@/features/integrations/actions/manage-gmail';
 import { consumeOAuthState } from '@/lib/security/oauth-state';
+import { sanitizeRedirect } from '@/lib/security/safe-redirect';
 import { getAppUrl } from '@/lib/utils/app-url';
-
-// Only allow same-origin relative paths (block protocol-relative URLs like //evil.com)
-function sanitizeRedirect(state: string | null): string {
-  if (!state || !state.startsWith('/') || state.startsWith('//') || state.includes('://')) {
-    return '/settings/integrations';
-  }
-  return state;
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

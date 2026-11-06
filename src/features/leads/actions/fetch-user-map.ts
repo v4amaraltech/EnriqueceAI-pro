@@ -4,13 +4,12 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 
 const userIdsSchema = z.array(z.string().uuid()).max(100);
 
 /**
- * Resolves user UUIDs to display names.
- * Uses getUserById individually (listUsers fails on this project).
+ * Resolves user UUIDs to display names (auth.users, one query).
  */
 export async function fetchUserMap(
   userIds: string[],
@@ -24,34 +23,10 @@ export async function fetchUserMap(
 
   await requireAuth();
 
+  const profiles = await resolveUserProfiles(parsed.data);
   const result: Record<string, string> = {};
-
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const uniqueIds = [...new Set(userIds)];
-
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        try {
-          const { data, error } = await adminClient.auth.admin.getUserById(id);
-          if (error || !data?.user) {
-            result[id] = id.slice(0, 8);
-            return;
-          }
-          const u = data.user;
-          const meta = u.user_metadata as Record<string, unknown> | undefined;
-          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-          const email = u.email ?? '';
-          result[id] = fullName || email.split('@')[0] || id.slice(0, 8);
-        } catch {
-          result[id] = id.slice(0, 8);
-        }
-      }),
-    );
-  } catch {
-    for (const id of userIds) {
-      result[id] = id.slice(0, 8);
-    }
+  for (const id of parsed.data) {
+    result[id] = profiles.get(id)?.displayName ?? id.slice(0, 8);
   }
 
   return { success: true, data: result };
@@ -63,30 +38,14 @@ export async function fetchUserMap(
 export async function fetchAvatarMap(
   userIds: string[],
 ): Promise<ActionResult<Record<string, string>>> {
-  if (userIds.length === 0) return { success: true, data: {} };
+  const parsed = userIdsSchema.safeParse(userIds);
+  if (!parsed.success) return { success: false, error: 'IDs inválidos' };
+  if (parsed.data.length === 0) return { success: true, data: {} };
 
   await requireAuth();
   const result: Record<string, string> = {};
-
-  try {
-    const adminClient = createAdminSupabaseClient();
-    const uniqueIds = [...new Set(userIds)];
-
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        try {
-          const { data, error } = await adminClient.auth.admin.getUserById(id);
-          if (error || !data?.user) return;
-          const meta = data.user.user_metadata as Record<string, unknown> | undefined;
-          const avatarUrl = (meta?.avatar_url ?? '') as string;
-          if (avatarUrl) result[id] = avatarUrl;
-        } catch {
-          // skip
-        }
-      }),
-    );
-  } catch {
-    // fallback: no avatars
+  for (const [id, p] of await resolveUserProfiles(parsed.data)) {
+    if (p.avatarUrl) result[id] = p.avatarUrl;
   }
 
   return { success: true, data: result };

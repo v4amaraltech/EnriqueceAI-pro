@@ -191,6 +191,11 @@ function buildRawEmail(
     .replace(/=+$/, '');
 }
 
+/** Refresh token is dead (`invalid_grant`): the user must reconnect Gmail. Permanent. */
+export const GMAIL_RECONNECT_REQUIRED_ERROR = 'Falha ao renovar token Gmail — reconexão necessária';
+/** Google/network hiccup while refreshing. Transient — retry later, keep the connection. */
+export const GMAIL_REFRESH_TRANSIENT_ERROR = 'Falha temporária ao renovar token Gmail — nova tentativa depois';
+
 /**
  * Refreshes an expired Gmail token using the refresh_token grant.
  * Updates the connection in the database and returns the new access token.
@@ -206,22 +211,43 @@ export async function refreshAccessToken(
     return { error: 'Google OAuth não configurado — impossível renovar token' };
   }
 
-  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: decrypt(connection.refresh_token_encrypted),
-      grant_type: 'refresh_token',
-    }),
-  });
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: decrypt(connection.refresh_token_encrypted),
+        grant_type: 'refresh_token',
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    // Network failure / timeout talking to Google — transient, keep the connection.
+    console.error(`[gmail] token refresh request failed for connection=${connection.id}:`, err);
+    return { error: GMAIL_REFRESH_TRANSIENT_ERROR };
+  }
 
   if (!tokenResponse.ok) {
-    await from(supabase, 'gmail_connections')
-      .update({ status: 'error' } as Record<string, unknown>)
-      .eq('id', connection.id);
-    return { error: 'Falha ao renovar token Gmail — reconexão necessária' };
+    const body = (await tokenResponse.json().catch(() => ({}))) as { error?: string };
+    // Only `invalid_grant` means the refresh token itself is dead (revoked,
+    // password changed, expired) and the user must reconnect. Anything else —
+    // 5xx/429 from Google, a blip — used to flip the connection to 'error' and
+    // return "reconexão necessária", which the cadence engine treats as a
+    // permanent error and pauses the enrollment on the spot (9 enrollments on
+    // 14/09, while the same mailbox sent ~90 emails in the next 2 hours).
+    if (body.error === 'invalid_grant') {
+      await from(supabase, 'gmail_connections')
+        .update({ status: 'error' } as Record<string, unknown>)
+        .eq('id', connection.id);
+      return { error: GMAIL_RECONNECT_REQUIRED_ERROR };
+    }
+    console.error(
+      `[gmail] token refresh transient failure for connection=${connection.id}: HTTP ${tokenResponse.status} ${body.error ?? ''}`,
+    );
+    return { error: GMAIL_REFRESH_TRANSIENT_ERROR };
   }
 
   const tokens = (await tokenResponse.json()) as {

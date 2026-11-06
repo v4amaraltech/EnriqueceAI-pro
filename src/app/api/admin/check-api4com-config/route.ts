@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
 import { isUuid } from '@/lib/utils/uuid';
+import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 import {
   dialerGatewayForOrg,
   dialerPassesWebhookConstraint,
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
       org_id: string;
       user_id: string;
       ramal: string;
-      api_key_encrypted: string;
+      api_key_encrypted: string | null;
       base_url: string;
     }> | null;
   };
@@ -50,8 +51,15 @@ export async function POST(request: Request) {
   const results = await Promise.all(
     connections.map(async (conn) => {
       try {
-        const apiKey = decrypt(conn.api_key_encrypted);
-        const baseUrl = conn.base_url.replace(/\/+$/, '');
+        // Ramal sem token próprio (sincronizado pelo token da org) usa a
+        // credencial da org — qualquer token da conta enxerga o domínio.
+        const creds = conn.api_key_encrypted
+          ? { apiKey: decrypt(conn.api_key_encrypted), baseUrl: conn.base_url.replace(/\/+$/, '') }
+          : await getOrgApiCredentials(conn.org_id, supabase);
+        if (!creds) {
+          return { org_id: conn.org_id, user_id: conn.user_id, ramal: conn.ramal, error: 'sem credencial (nem própria nem da org)' };
+        }
+        const { apiKey, baseUrl } = creds;
         const hdrs = { 'Content-Type': 'application/json', Authorization: apiKey };
 
         const [intResponse, callsResponse] = await Promise.all([

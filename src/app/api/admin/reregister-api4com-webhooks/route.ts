@@ -47,7 +47,22 @@ export async function POST(request: Request) {
     data: Array<{ org_id: string; ramal: string; api_key_encrypted: string | null; base_url: string }> | null;
   };
 
-  if (!connections?.length) {
+  // Token da org (`api4com_org_settings`) entra primeiro: desde a story
+  // api4com-embedded-webphone é a credencial principal, e os ramais
+  // sincronizados por ele não têm token próprio.
+  let settingsQuery = from(supabase, 'api4com_org_settings' as never).select('org_id, api_key_encrypted, base_url');
+  if (typeof body.orgId === 'string') settingsQuery = settingsQuery.eq('org_id', body.orgId);
+  const { data: orgSettings } = (await settingsQuery) as {
+    data: Array<{ org_id: string; api_key_encrypted: string; base_url: string }> | null;
+  };
+  const orgsWithToken = new Set((orgSettings ?? []).map((s) => s.org_id));
+
+  const entries = [
+    ...(orgSettings ?? []).map((s) => ({ org_id: s.org_id, ramal: 'org', api_key_encrypted: s.api_key_encrypted, base_url: s.base_url })),
+    ...(connections ?? []),
+  ];
+
+  if (entries.length === 0) {
     return NextResponse.json({ message: 'No connections found', dryRun, results: [] });
   }
 
@@ -56,11 +71,15 @@ export async function POST(request: Request) {
   const seenCredentials = new Map<string, string>();
   const results: Array<Record<string, unknown>> = [];
 
-  for (const conn of connections) {
+  for (const conn of entries) {
     const base = { org_id: conn.org_id, ramal: conn.ramal };
     try {
       if (!conn.api_key_encrypted) {
-        results.push({ ...base, error: 'sem api key' });
+        if (orgsWithToken.has(conn.org_id)) {
+          results.push({ ...base, action: 'skip', reason: 'usa o token da org' });
+        } else {
+          results.push({ ...base, error: 'sem api key' });
+        }
         continue;
       }
       const apiKey = decrypt(conn.api_key_encrypted);
@@ -118,5 +137,5 @@ export async function POST(request: Request) {
 
   const changed = results.filter((r) => (r.action === 'create' || r.action === 'repair') && !dryRun).length;
   const errors = results.filter((r) => r.error).length;
-  return NextResponse.json({ dryRun, total: connections.length, changed, errors, results });
+  return NextResponse.json({ dryRun, total: entries.length, changed, errors, results });
 }

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
-import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import {
@@ -18,6 +17,7 @@ import {
   groupCallsForReconcile,
   pickFallbackCandidate,
 } from '@/features/integrations/services/api4com-reconcile-matching';
+import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 
 export const maxDuration = 800;
 
@@ -75,7 +75,7 @@ interface ConnRow {
   user_id: string;
   ramal: string;
   base_url: string;
-  api_key_encrypted: string;
+  api_key_encrypted: string | null;
   status: string;
 }
 
@@ -152,10 +152,11 @@ export async function POST(request: Request) {
 
   const since = new Date(now.getTime() - windowHours * 3600 * 1000);
 
+  // Every connected ramal maps to a user, even without a legacy per-user token:
+  // the credential for the pull comes from the org (`getOrgApiCredentials`).
   let connsQuery = from(supabase, 'api4com_connections' as never)
     .select('id, org_id, user_id, ramal, base_url, api_key_encrypted, status')
-    .eq('status', 'connected')
-    .not('api_key_encrypted', 'is', null);
+    .eq('status', 'connected');
 
   if (body.orgId) {
     connsQuery = connsQuery.eq('org_id', body.orgId);
@@ -196,19 +197,25 @@ export async function POST(request: Request) {
     };
     const unmappedRamalCounts: Record<string, number> = {};
 
-    // Use the first connection's API key for the pull. Any key from the org
-    // works because /calls returns the whole domain.
-    const conn = orgConns[0]!;
+    // One credential per org for the pull (org token, else the first legacy
+    // user token). Any key of the account works because /calls returns the
+    // whole domain.
     let apiKey: string;
+    let baseUrl: string;
     try {
-      apiKey = decrypt(conn.api_key_encrypted);
+      const creds = await getOrgApiCredentials(orgId, supabase);
+      if (!creds) {
+        orgResult.errors.push('no_credentials: org has no API4COM token');
+        results.push(orgResult);
+        continue;
+      }
+      apiKey = creds.apiKey;
+      baseUrl = creds.baseUrl;
     } catch (err) {
       orgResult.errors.push(`decrypt_failed: ${err instanceof Error ? err.message : 'unknown'}`);
       results.push(orgResult);
       continue;
     }
-
-    const baseUrl = conn.base_url.replace(/\/+$/, '');
     const calls: Api4ComCall[] = [];
 
     // Fetch once per org — we'll thread the org's threshold into the
@@ -275,10 +282,12 @@ export async function POST(request: Request) {
             // Auth failure: mark the connection broken so the manager gets a
             // visible signal in the integrations UI. Without this an expired
             // API key just makes the reconcile silently log errors forever.
+            // The credential is the org's, so every ramal of the org is affected.
             if (res.status === 401 || res.status === 403) {
               await from(supabase, 'api4com_connections' as never)
                 .update({ status: 'error' } as Record<string, unknown>)
-                .eq('id', conn.id);
+                .eq('org_id', orgId)
+                .eq('status', 'connected');
             }
 
             break pageLoop;

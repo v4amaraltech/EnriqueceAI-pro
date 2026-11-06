@@ -8,6 +8,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { brtDateKey, isBrHoliday } from '@/lib/utils/br-holidays';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -17,7 +18,7 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
-import { skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
+import { skipEmailStepsForBouncedLeads, skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
@@ -76,6 +77,8 @@ async function autoPauseEnrollment(
     cadenceName: string;
     cadenceId: string;
     channel: 'email' | 'whatsapp';
+    /** Overrides the default "lead sem email/telefone" notification text. */
+    notice?: { title: string; body: string };
   },
 ): Promise<void> {
   await from(supabase, 'cadence_enrollments')
@@ -112,8 +115,10 @@ async function autoPauseEnrollment(
         org_id: notifyCtx.orgId,
         user_id: notifyCtx.userId,
         type: 'integration_error',
-        title: `Cadência pausada — lead ${channelLabel}`,
-        body: `"${notifyCtx.leadName}" foi pausado na cadência "${notifyCtx.cadenceName}" porque o lead está ${channelLabel}. Atualize o cadastro do lead para retomar.`,
+        title: notifyCtx.notice?.title ?? `Cadência pausada — lead ${channelLabel}`,
+        body:
+          notifyCtx.notice?.body ??
+          `"${notifyCtx.leadName}" foi pausado na cadência "${notifyCtx.cadenceName}" porque o lead está ${channelLabel}. Atualize o cadastro do lead para retomar.`,
         resource_type: 'lead',
         resource_id: notifyCtx.leadId,
         metadata: { reason, cadence_id: notifyCtx.cadenceId, enrollment_id: enrollmentId },
@@ -183,7 +188,7 @@ export interface ExecutionResult {
   errors: string[];
 }
 
-/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri) */
+/** Check if current time is within business hours (8h-18h São Paulo, Mon-Fri, fora de feriado nacional) */
 function isBusinessHours(): boolean {
   const now = new Date();
   const brFormatter = new Intl.DateTimeFormat('en-US', {
@@ -196,7 +201,7 @@ function isBusinessHours(): boolean {
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
   const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
   const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  return !isWeekend && hour >= 8 && hour < 18;
+  return !isWeekend && !isBrHoliday(brtDateKey(now)) && hour >= 8 && hour < 18;
 }
 
 /**
@@ -264,6 +269,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // WhatsApp (a fila esconde esses passos, então o lead não aparecia pra
   // ninguém). Só avança; sem passo de outro canal, fica como está.
   await skipWhatsAppStepsForInvalidLeads(supabase);
+  // Idem para e-mail com bounce nas cadências de SDR: o bounce não pausa mais
+  // as outras cadências do lead; aqui os passos de e-mail delas são pulados.
+  await skipEmailStepsForBouncedLeads(supabase);
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
   const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
@@ -273,6 +281,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     .eq('cadence.type', 'auto_email')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString())
+    // Oldest-due first: unordered, the same stuck rows could keep winning the
+    // 25 slots while healthy enrollments waited.
+    .order('next_step_due', { ascending: true })
     .limit(BATCH_SIZE)) as { data: EnrollmentWithLead[] | null; error: { message: string } | null };
 
   const qErr = handleQueryError(enrollError, 'Erro ao buscar enrollments pendentes', 'cadence-engine');
@@ -374,13 +385,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       // Idempotency check: skip if a *successful* interaction already exists for this enrollment + step
-      // Only checks for 'sent' type so that failed interactions can be retried on the next batch
+      // Only checks for 'sent' type so that failed interactions can be retried on the next batch.
+      // Ignora eventos `system` (ex.: step_skipped grava step_id mas não é envio).
       const { data: existingInteraction } = (await from(supabase, 'interactions')
         .select('id')
         .eq('cadence_id', enrollment.cadence_id)
         .eq('step_id', step.id)
         .eq('lead_id', enrollment.lead_id)
         .eq('type', 'sent')
+        .neq('channel', 'system')
         .limit(1)
         .maybeSingle()) as { data: { id: string } | null };
 
@@ -567,7 +580,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         .select('id')
         .single()) as { data: Pick<InteractionRow, 'id'> | null; error: { code?: string } | null };
 
-      // H3: the unique partial index uq_interactions_sent_step_lead makes a
+      // H3: the unique partial index uq_interactions_sent_step_lead_real (channel <> system) makes a
       // concurrent run's duplicate insert fail with 23505. Treat it as idempotent —
       // the other run already recorded (and sent) this step — so advance via the
       // row-locked RPC and skip, instead of double-sending the email.
@@ -657,7 +670,18 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             : cadenceCreatedBy;
 
         if (!senderId) {
+          // Pause + notify. Left active, the enrollment was retried (and failed)
+          // every 5 minutes forever — and with an unordered batch, a pile of
+          // these could take all slots and starve healthy enrollments.
           await markInteractionFailed(supabase, interaction.id, 'no_sender');
+          await autoPauseEnrollment(supabase, enrollment.id, 'no_sender', {
+            ...pauseNotifyCtx,
+            channel: 'email',
+            notice: {
+              title: 'Cadência pausada — sem Gmail para enviar',
+              body: `"${leadName}" foi pausado na cadência "${enrollment.cadence.name}": não há Gmail para enviar o e-mail — o seu não está conectado e a cadência não tem criador. Conecte seu Gmail em Configurações > Integrações e retome a cadência.`,
+            },
+          });
           result.failed++;
           result.errors.push(`Cadência ${enrollment.cadence_id}: sem remetente (SDR sem Gmail e cadência sem criador)`);
           console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_sender duration_ms=${Date.now() - stepStart}`);
@@ -720,14 +744,15 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           emailDispatched = true;
           // Save messageId, threadId, RFC Message-ID and subject for reply tracking
           const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
-          const metaUpdate: Record<string, unknown> = {};
+          // sender_user_id = whose Gmail actually holds the thread. performed_by
+          // stays the cadence creator (statistics attribute by it), so the
+          // reply-check cron reads the mailbox from here instead.
+          const metaUpdate: Record<string, unknown> = { sender_user_id: senderId };
           if (subject) metaUpdate.subject = subject;
           if (emailResult.threadId) metaUpdate.thread_id = emailResult.threadId;
           if (emailResult.rfcMessageId) metaUpdate.rfc_message_id = emailResult.rfcMessageId;
           if (abVariant) metaUpdate.ab_variant = abVariant;
-          if (Object.keys(metaUpdate).length > 0) {
-            updateData.metadata = metaUpdate;
-          }
+          updateData.metadata = metaUpdate;
           await from(supabase, 'interactions')
             .update(updateData)
             .eq('id', interaction.id);

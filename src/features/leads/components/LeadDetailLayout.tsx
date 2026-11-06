@@ -48,6 +48,9 @@ import { reassignCloser } from '../actions/reassign-closer';
 import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
+import { setWebphoneCallContext } from '@/features/integrations/webphone/webphone-call-context';
+import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { buildContactPhones, type ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 import { listLeadContacts } from '../actions/lead-contacts';
 import type { LeadContact } from '../types';
@@ -58,6 +61,7 @@ const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
   no_show: 'Não compareceu',
   rescheduled: 'Remarcou',
+  disqualified: 'Desqualificada',
 };
 
 const QUALIFICACAO_LABELS: Record<string, string> = {
@@ -65,6 +69,18 @@ const QUALIFICACAO_LABELS: Record<string, string> = {
   divergiu: 'Divergiu',
   nao_validado: 'Não deu pra validar',
 };
+
+/** "dd/mm HH:mm" em BRT do início da reunião que segura o envio do feedback. */
+function formatScheduledFor(iso: string | undefined): string {
+  if (!iso) return 'reunião';
+  return new Date(iso).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 const DIVERGENCIA_LABELS: Record<string, string> = {
   verba: 'Verba',
@@ -130,6 +146,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [kommoUsers, setKommoUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedKommoUserId, setSelectedKommoUserId] = useState<string | null>(null);
   const [loadingKommoUsers, setLoadingKommoUsers] = useState(false);
+  // Lista de usuários do Kommo falhou (ou veio vazia): o servidor resolve o
+  // responsável pelo e-mail do closer (crm-responsible.ts) — só avisamos.
+  const [kommoUsersUnavailable, setKommoUsersUnavailable] = useState(false);
 
   // Closer feedback
   const [closerFeedback, setCloserFeedback] = useState<CloserFeedbackData | null>(null);
@@ -184,7 +203,12 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           toast.error(res.error);
           return;
         }
-        const { email, whatsapp, whatsappError, whatsappSkipReason } = res.data;
+        const { email, whatsapp, whatsappError, whatsappSkipReason, scheduledFor } = res.data;
+        if (email === 'scheduled') {
+          toast.info(`Feedback agendado para depois da reunião (${formatScheduledFor(scheduledFor)})`);
+          loadCloserFeedback();
+          return;
+        }
         const parts: string[] = [];
         parts.push(email === 'sent' ? 'Email enviado' : 'Email falhou');
         if (whatsapp === 'sent') parts.push('WhatsApp enviado');
@@ -202,7 +226,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         toast.error(err instanceof Error ? err.message : 'Erro ao reenviar feedback');
       })
       .finally(() => setIsResendingFeedback(false));
-  }, [lead.id]);
+  }, [lead.id, loadCloserFeedback]);
 
   // Manager action: reassign closer (if changed) then notify the right person —
   // resend feedback (if a request was pending) and/or briefing (if meeting upcoming).
@@ -216,6 +240,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           const fb = await resendCloserFeedback({ leadId: lead.id });
           if (!fb.success) {
             toast.error(fb.error);
+            return;
+          }
+          if (fb.data.email === 'scheduled') {
+            toast.info(`Feedback agendado para depois da reunião (${formatScheduledFor(fb.data.scheduledFor)})`);
+            loadCloserFeedback();
             return;
           }
           toast.success(
@@ -237,9 +266,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           const fb = await resendCloserFeedback({ leadId: lead.id });
           parts.push(
             fb.success
-              ? fb.data.whatsapp === 'sent'
-                ? 'Feedback reenviado por email e WhatsApp.'
-                : 'Feedback reenviado por email.'
+              ? fb.data.email === 'scheduled'
+                ? `Feedback agendado para depois da reunião (${formatScheduledFor(fb.data.scheduledFor)}).`
+                : fb.data.whatsapp === 'sent'
+                  ? 'Feedback reenviado por email e WhatsApp.'
+                  : 'Feedback reenviado por email.'
               : `Falha ao reenviar feedback: ${fb.error}`,
           );
         }
@@ -297,6 +328,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     telefone: lead.telefone,
   });
 
+
   const dialPhone = useCallback(async (phone: string, contactId: string | null) => {
     if (!phone) {
       toast.error('Lead não possui telefone cadastrado');
@@ -312,22 +344,39 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         window.open(`tel:${phone}`, '_self');
         return;
       }
+      const webphoneState = getWebphoneState();
+      const blocked = dialingBlockReason(webphoneState);
+      if (blocked) {
+        toast.error(blocked, { duration: 6000 });
+        return;
+      }
+      const webphoneReady = canReceiveCalls(webphoneState);
       const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id, contactId });
       if (result.success) {
-        toast('Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
+        // Esta tela não tem modal de resultado: o painel flutuante do webphone
+        // assume o desfecho e as anotações ao concluir (bloco 3).
+        setWebphoneCallContext({
+          callId: result.data.callId,
+          providerCallId: result.data.providerCallId,
+          leadId: lead.id,
+          leadName: lead.nome_fantasia ?? lead.razao_social ?? null,
+          phone,
+          ownerHandlesResult: false,
+        });
+        toast(webphoneReady ? 'Ligação iniciada — atendendo nesta aba.' : 'Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
           icon: '📞',
           duration: 5000,
         });
       } else {
-        toast.error(result.error ?? 'Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
+        toast.error(result.error ?? (webphoneReady ? 'Erro ao iniciar ligação.' : 'Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.'));
       }
     } catch {
-      toast.error('Erro ao iniciar ligação. Verifique se a extensão API4COM está aberta.');
+      toast.error('Erro ao iniciar ligação. Tente novamente.');
     } finally {
       setIsCalling(false);
       inFlightRef.current = false;
     }
-  }, [lead.id]);
+  }, [lead.id, lead.nome_fantasia, lead.razao_social]);
 
   const handleCall = useCallback(async () => {
     // Com mais de um número, abre o seletor pra o SDR escolher de quem é o
@@ -390,7 +439,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   }, []);
 
 
-  const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string) => {
+  const loadStages = useCallback(async (provider: CrmProvider, pipelineId: string, preferredStageId?: string | null) => {
     setLoadingStages(true);
     setStages([]);
     setSelectedStageId(null);
@@ -398,13 +447,46 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setLoadingStages(false);
     if (result.success) {
       setStages(result.data);
-      if (result.data.length === 1) {
+      if (preferredStageId && result.data.some((st) => st.id === preferredStageId)) {
+        setSelectedStageId(preferredStageId);
+      } else if (result.data.length === 1) {
         setSelectedStageId(result.data[0]!.id);
       }
     } else {
       toast.error(result.error);
     }
   }, []);
+
+  const activeCrmConnection = crmConnections.find((c) => c.provider === selectedProvider);
+  const lockedToDefaults = Boolean(
+    activeCrmConnection?.defaultPipelineId &&
+      activeCrmConnection.defaultStageId &&
+      activeCrmConnection.pipelines.some((p) => p.id === activeCrmConnection.defaultPipelineId),
+  );
+
+  // Responsável no Kommo = o closer da reunião (casado por e-mail). Roda quando
+  // a lista de usuários chega ou o closer muda; o SDR ainda pode trocar.
+  useEffect(() => {
+    if (!selectedWonCloserId || kommoUsers.length === 0) return;
+    const closerEmail = wonClosers.find((c) => c.id === selectedWonCloserId)?.email?.trim().toLowerCase();
+    if (!closerEmail) return;
+    const match = kommoUsers.find((u) => u.email?.trim().toLowerCase() === closerEmail);
+    if (match) setSelectedKommoUserId(match.id);
+  }, [selectedWonCloserId, kommoUsers, wonClosers]);
+
+  // Funil/etapa padrão da conexão: quando configurados, o Ganho usa sempre eles
+  // (não há mais escolha manual — caso MILPAPER, card caiu em outro funil).
+  // Sem padrão, cai no comportamento antigo (auto-seleciona se só há 1 funil).
+  const preselectPipeline = useCallback((conn: CrmPipelinesEntry) => {
+    if (conn.defaultPipelineId && conn.pipelines.some((p) => p.id === conn.defaultPipelineId)) {
+      setSelectedPipelineId(conn.defaultPipelineId);
+      void loadStages(conn.provider, conn.defaultPipelineId, conn.defaultStageId);
+    } else if (conn.pipelines.length === 1) {
+      const pipeline = conn.pipelines[0]!;
+      setSelectedPipelineId(pipeline.id);
+      void loadStages(conn.provider, pipeline.id);
+    }
+  }, [loadStages]);
 
   const handleOpenWonDialog = useCallback(async () => {
     setShowWonDialog(true);
@@ -441,23 +523,27 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
     setLoadingPipelines(false);
     setKommoUsers([]);
     setSelectedKommoUserId(null);
+    setKommoUsersUnavailable(false);
     if (pipelinesResult.success && pipelinesResult.data.connections.length > 0) {
       setCrmConnections(pipelinesResult.data.connections);
       const firstConn = pipelinesResult.data.connections[0]!;
       setSelectedProvider(firstConn.provider);
       setSendToCrm(true);
-      if (firstConn.pipelines.length === 1) {
-        const pipeline = firstConn.pipelines[0]!;
-        setSelectedPipelineId(pipeline.id);
-        void loadStages(firstConn.provider, pipeline.id);
-      }
+      preselectPipeline(firstConn);
       // Load Kommo users if Kommo is connected
       if (firstConn.provider === 'kommo' || pipelinesResult.data.connections.some((c) => c.provider === 'kommo')) {
+        // Enquanto carrega, o botão "Confirmar ganho" fica travado (ver
+        // DialogFooter): confirmar antes da lista chegar gravava crm_options
+        // sem responsável e o Kommo atribuía o card ao dono do token
+        // (NEXT360, 29/10). Se a lista falhar, libera e o servidor resolve.
         setLoadingKommoUsers(true);
-        fetchKommoUsers().then((r) => {
-          if (r.success) setKommoUsers(r.data);
-          setLoadingKommoUsers(false);
-        });
+        fetchKommoUsers()
+          .then((r) => {
+            if (r.success && r.data.length > 0) setKommoUsers(r.data);
+            else setKommoUsersUnavailable(true);
+          })
+          .catch(() => setKommoUsersUnavailable(true))
+          .finally(() => setLoadingKommoUsers(false));
       }
     }
 
@@ -466,7 +552,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       setWonMissingFields(missing);
     }
     setLoadingRequiredFields(false);
-  }, [loadStages, lead, customFieldDefs]);
+  }, [preselectPipeline, lead, customFieldDefs]);
 
   const handleConfirmWon = useCallback(() => {
     startTransition(async () => {
@@ -520,6 +606,8 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       if (result.success) {
         if (result.data.dealCreated) {
           toast.success('Lead marcado como ganho e enviado ao CRM');
+        } else if (result.data.crmDeferred) {
+          toast.success('Lead marcado como ganho — vai para o CRM quando o closer confirmar a reunião');
         } else {
           toast.success('Lead marcado como ganho');
         }
@@ -661,7 +749,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       {!isManager && closerFeedback && !closerFeedback.responded_at && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950 p-3 flex items-center justify-between gap-3">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong>
+            {closerFeedback.sent_at ? (
+              <>Aguardando feedback do closer <strong>{closerFeedback.closer_name}</strong></>
+            ) : (
+              <>Feedback de <strong>{closerFeedback.closer_name}</strong> será enviado após a reunião</>
+            )}
           </p>
           <Button
             size="sm"
@@ -684,7 +776,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               <p className="text-sm font-medium">Closer responsável</p>
               {closerFeedback && !closerFeedback.responded_at ? (
                 <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                  Aguardando feedback de <strong>{closerFeedback.closer_name}</strong>
+                  {closerFeedback.sent_at ? (
+                    <>Aguardando feedback de <strong>{closerFeedback.closer_name}</strong></>
+                  ) : (
+                    <>Feedback de <strong>{closerFeedback.closer_name}</strong> será enviado após a reunião</>
+                  )}
                 </p>
               ) : closerFeedback?.responded_at ? (
                 <p className="text-xs text-[var(--muted-foreground)]">
@@ -815,11 +911,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                             setSelectedStageId(null);
                             setStages([]);
                             const conn = crmConnections.find((c) => c.provider === provider);
-                            if (conn?.pipelines.length === 1) {
-                              const pipeline = conn.pipelines[0]!;
-                              setSelectedPipelineId(pipeline.id);
-                              void loadStages(provider, pipeline.id);
-                            }
+                            if (conn) preselectPipeline(conn);
                           }}
                         >
                           <SelectTrigger className="w-full">
@@ -839,7 +931,23 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                         </p>
                       )}
                     </div>
-                    {selectedProvider && (
+                    {selectedProvider && lockedToDefaults && (
+                      <div className="space-y-1 rounded-md border border-[var(--border)] p-3">
+                        <p className="text-sm">
+                          <span className="font-semibold">Funil:</span>{' '}
+                          {activeCrmConnection?.pipelines.find((p) => p.id === selectedPipelineId)?.name ?? '—'}
+                          {' · '}
+                          <span className="font-semibold">Etapa:</span>{' '}
+                          {loadingStages ? 'carregando...' : (stages.find((st) => st.id === selectedStageId)?.name ?? '—')}
+                        </p>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {selectedWonCloserId
+                            ? 'Funil padrão do CRM. O card é criado quando o closer confirmar a reunião no feedback.'
+                            : 'Funil padrão do CRM.'}
+                        </p>
+                      </div>
+                    )}
+                    {selectedProvider && !lockedToDefaults && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Funil</Label>
                         <Select
@@ -867,7 +975,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                         </Select>
                       </div>
                     )}
-                    {selectedPipelineId && (
+                    {selectedPipelineId && !lockedToDefaults && (
                       <div className="space-y-2">
                         <Label className="text-sm font-semibold">Etapa</Label>
                         {loadingStages ? (
@@ -913,7 +1021,11 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum usuário encontrado</p>
+                          <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                            {kommoUsersUnavailable
+                              ? 'Não foi possível carregar os usuários do Kommo. O responsável do card será o closer da reunião (definido automaticamente ao enviar).'
+                              : 'Nenhum usuário encontrado'}
+                          </p>
                         )}
                       </div>
                     )}
@@ -1015,6 +1127,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               disabled={
                 isPending
                 || (sendToCrm && (!selectedPipelineId || !selectedStageId))
+                || (sendToCrm && selectedProvider === 'kommo' && loadingKommoUsers)
                 || loadingRequiredFields
                 || wonMissingFields.some((f) => !wonFieldValues[f.key]?.trim())
               }

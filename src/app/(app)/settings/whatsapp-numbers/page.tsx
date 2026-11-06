@@ -1,5 +1,5 @@
 import { requireManager } from '@/lib/auth/require-manager';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -21,6 +21,11 @@ interface SessionRow {
   paired_at: string | null;
 }
 
+/** ISO timestamp of 24h ago (server component — evaluated once per request). */
+function last24hIso(): string {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
 export default async function WhatsAppNumbersPage() {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
@@ -39,7 +44,7 @@ export default async function WhatsAppNumbersPage() {
     );
   }
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const since = last24hIso();
   const [{ data: members }, { data: sessions }, { data: recentCalls }] = await Promise.all([
     from(supabase, 'organization_members')
       .select('user_id, role')
@@ -69,18 +74,12 @@ export default async function WhatsAppNumbersPage() {
     usageByUser.set(c.user_id, u);
   }
 
-  // Resolve nomes/e-mails via admin client (auth.users), como na tela de usuários.
-  const admin = createAdminSupabaseClient();
+  // Resolve nomes/e-mails de auth.users numa consulta, como na tela de usuários.
+  const profiles = await resolveUserProfiles((members ?? []).map((m) => m.user_id));
   const rows: WhatsAppNumberRow[] = [];
   for (const m of members ?? []) {
-    let name = m.user_id;
-    try {
-      const { data } = await admin.auth.admin.getUserById(m.user_id);
-      const meta = data?.user?.user_metadata as { full_name?: string } | undefined;
-      name = meta?.full_name || data?.user?.email || m.user_id;
-    } catch {
-      // mantém o user_id como fallback
-    }
+    const p = profiles.get(m.user_id);
+    const name = p?.fullName || p?.email || m.user_id;
     const session = sessionByUser.get(m.user_id);
     rows.push({
       userId: m.user_id,

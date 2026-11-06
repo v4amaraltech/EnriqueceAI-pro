@@ -6,6 +6,7 @@ import { EvolutionWhatsAppService } from '@/features/integrations/services/whats
 import { from } from '@/lib/supabase/from';
 
 import type { ReminderDueRow, ReminderRunSummary } from '../types';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 
 const TIMEZONE = 'America/Sao_Paulo';
 /** Espaçamento anti-ban entre disparos de WhatsApp na mesma execução (ms). */
@@ -263,7 +264,7 @@ export async function runMeetingReminders(
   }
 
   // 5. Nomes dos SDRs (via auth.users — organization_members não tem nome).
-  const sdrNames = await resolveSdrNames(supabase, sdrIds);
+  const sdrNames = await resolveSdrNames(sdrIds);
   let whatsAppSent = 0; // p/ espaçamento anti-ban entre disparos
 
   // 6. Processar linha a linha.
@@ -499,22 +500,12 @@ async function recordLog(
   );
 }
 
-async function resolveSdrNames(
-  supabase: SupabaseClient,
-  userIds: string[],
-): Promise<Map<string, string>> {
+async function resolveSdrNames(userIds: string[]): Promise<Map<string, string>> {
+  // Sem nome — template renderiza vazio, mas o envio segue.
   const map = new Map<string, string>();
-  await Promise.all(
-    userIds.map(async (id) => {
-      try {
-        const { data } = await supabase.auth.admin.getUserById(id);
-        const meta = data?.user?.user_metadata as { full_name?: string; name?: string } | undefined;
-        const name = meta?.full_name || meta?.name || data?.user?.email?.split('@')[0] || '';
-        if (name) map.set(id, name);
-      } catch {
-        // sem nome — template renderiza vazio, mas o envio segue
-      }
-    }),
-  );
+  for (const [id, p] of await resolveUserProfiles(userIds)) {
+    const name = p.fullName || p.email?.split('@')[0] || '';
+    if (name) map.set(id, name);
+  }
   return map;
 }

@@ -13,6 +13,7 @@ import {
 } from '@/shared/components/ui/sheet';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import { WebphonePanelHost } from '@/features/integrations/webphone/WebphonePanelHost';
 
 import { executeActivity } from '../actions/execute-activity';
 import { executeScheduledActivity } from '../actions/execute-scheduled-activity';
@@ -388,6 +389,9 @@ export function ActivityExecutionSheet({
     <Sheet open={selectedKey !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col" showCloseButton={false}>
         <SheetTitle className="sr-only">Executar Atividade</SheetTitle>
+        {/* Painel flutuante do webphone desenhado DENTRO da gaveta: fora dela ficaria
+            escondido atrás do overlay, e clicar nele fecharia a tarefa. */}
+        <WebphonePanelHost />
 
         {/* Split layout — key forces remount when activity changes */}
         {activity && (

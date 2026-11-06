@@ -198,6 +198,27 @@ describe('ActivityExecutionSheetContent', () => {
     expect(screen.getByText('Anotações da Pesquisa')).toBeInTheDocument();
   });
 
+  it('tarefa "Definir destino" (channel research) abre o painel próprio, sem pesquisa com IA', () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('research', {
+          enrollmentId: 'scheduled:sa-1',
+          scheduledKind: 'limbo_followup',
+          callScript: 'Definir destino: e-mail voltou (bounce) na Hotelaria.',
+        })}
+        isSending={false}
+        onSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(screen.getByText(/Definir destino — Acme Corp/)).toBeInTheDocument();
+    expect(screen.getByText('e-mail voltou (bounce) na Hotelaria.')).toBeInTheDocument();
+    expect(screen.queryByText('Deep Research com IA')).not.toBeInTheDocument();
+    expect(screen.getByText('Marcar como feita')).toBeInTheDocument();
+  });
+
   it('should render phone panel for phone channel', () => {
     render(
       <ActivityExecutionSheetContent

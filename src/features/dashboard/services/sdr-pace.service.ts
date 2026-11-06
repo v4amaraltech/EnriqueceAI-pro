@@ -7,7 +7,8 @@ import { CALL_CONNECTION_COLUMNS, isConnectedCall, type CallConnectionSignals } 
 
 import type { SdrPaceMetrics } from '../types';
 import { meetingsHeldWindowFilter } from '../utils/meetings-held-window';
-import { getMonthRange } from './ranking-metrics.service';
+import { countOpenedByPerformer, fetchLeadsOpenedRows } from './leads-opened.service';
+import { fetchScheduledLeadsForRanking, getMonthRange } from './ranking-metrics.service';
 
 /** SDRs que entram na seção: mesmo corte do ranking (papel sdr, ativo ou convidado). */
 export async function fetchSdrIds(supabase: SupabaseClient, orgId: string): Promise<string[]> {
@@ -23,9 +24,10 @@ export async function fetchSdrIds(supabase: SupabaseClient, orgId: string): Prom
  * Realizado × meta de UM SDR no mês — os 5 volumes da seção "SDR selecionado".
  * Cada número usa a mesma fonte do card equivalente do ranking, então a seção
  * e o ranking nunca divergem:
- *  - Leads Abertos: RPC `count_leads_opened_by_sdr` (1º toque humano do lead OU
+ *  - Leads Abertos: `fetchLeadsOpenedRows` (RPC `_daily`; 1º toque humano do lead OU
  *    1º toque após nova inscrição em cadência = reabertura; dono do lead);
- *  - Reuniões Marcadas: `leads.meeting_scheduled_at` no mês, sem arquivado/deletado;
+ *  - Reuniões Marcadas: `fetchScheduledLeadsForRanking` (cada marcação da timeline
+ *    no mês, 1 por lead por dia; sem arquivado/deletado; dono do lead);
  *  - Reuniões Realizadas: `meeting_held_at` + `meetingsHeldWindowFilter`;
  *  - Ligações: `calls` outbound do SDR (`user_id`) no mês — discador + Callface,
  *    igual ao Sales Hub; conectadas pela regra única `isConnectedCall`.
@@ -40,7 +42,7 @@ export async function fetchSdrPaceMetrics(
 
   const [leadsOpened, meetingsScheduled, meetingsHeld, calls, targets] = await Promise.all([
     countLeadsOpened(supabase, orgId, start, end, userId),
-    countMeetingsScheduled(supabase, orgId, start, end, userId),
+    countMeetingsScheduled(supabase, orgId, month, userId),
     countMeetingsHeld(supabase, orgId, start, end, userId),
     countCalls(supabase, orgId, start, end, userId),
     fetchTargets(supabase, orgId, month, userId),
@@ -65,34 +67,25 @@ async function countLeadsOpened(
   end: string,
   userId: string,
 ): Promise<number> {
-  const { data, error } = (await (supabase.rpc as any)('count_leads_opened_by_sdr', {
-    p_org_id: orgId,
-    p_start: start,
-    p_end: end,
-    p_cadence_ids: null,
-  })) as { data: Array<{ performer_id: string; cnt: number }> | null; error: { message: string } | null };
-  if (error) throw new Error(`count_leads_opened_by_sdr: ${error.message}`);
-  return Number((data ?? []).find((r) => r.performer_id === userId)?.cnt ?? 0);
+  // Mesma fonte (e mesma chamada, no mês padrão) do card "Leads Abertos".
+  const { data, error } = await fetchLeadsOpenedRows(supabase, orgId, start, end, null);
+  if (error) throw new Error(`count_leads_opened_by_sdr_daily: ${error.message}`);
+  return countOpenedByPerformer(data).get(userId) ?? 0;
 }
 
 async function countMeetingsScheduled(
   supabase: SupabaseClient,
   orgId: string,
-  start: string,
-  end: string,
+  month: string,
   userId: string,
 ): Promise<number> {
-  const { count, error } = (await from(supabase, 'leads')
-    .select('id', { count: 'exact', head: true })
-    .eq('org_id', orgId)
-    .eq('assigned_to', userId)
-    .is('deleted_at', null)
-    .neq('status', 'archived')
-    .not('meeting_scheduled_at', 'is', null)
-    .gte('meeting_scheduled_at', start)
-    .lt('meeting_scheduled_at', end)) as { count: number | null; error: { message: string } | null };
-  if (error) throw new Error(`meetings scheduled: ${error.message}`);
-  return count ?? 0;
+  // Mesma fonte do card "Reuniões Marcadas", já filtrada por este SDR.
+  const { leads } = await fetchScheduledLeadsForRanking(supabase, orgId, {
+    month,
+    cadenceIds: [],
+    userIds: [userId],
+  });
+  return leads.length;
 }
 
 async function countMeetingsHeld(

@@ -14,7 +14,7 @@ export interface CloserFeedbackRow {
   // SAO — aceite comercial da oportunidade pelo closer (só em meeting_done).
   oportunidade_qualificada: boolean | null;
   comment: string | null;
-  sent_at: string;
+  sent_at: string | null;
   responded_at: string | null;
   expires_at: string;
 }
@@ -28,10 +28,11 @@ export interface CloserFeedbackRow {
 const NATURAL_WINDOW_FLOOR_MS = 6 * 24 * 60 * 60 * 1000; // 6 days (natural window is 7)
 
 function isSupersededByReassignment(
-  row: { responded_at: string | null; sent_at: string; expires_at: string; lead_id: string },
+  row: { responded_at: string | null; sent_at: string | null; expires_at: string; lead_id: string },
   newestSentByLead: Map<string, number>,
 ): boolean {
   if (row.responded_at) return false; // answered requests always count
+  if (!row.sent_at) return false; // agendado (ainda não enviado) — nada o substituiu
   const sentMs = new Date(row.sent_at).getTime();
   const expiresMs = new Date(row.expires_at).getTime();
   // Killed early (short validity window) → reassignment, not a natural 7-day expiry.
@@ -51,7 +52,7 @@ export async function fetchCloserFeedbacks(
   let query = from(supabase, 'closer_feedback_requests')
     .select('id, result, rating, oportunidade_qualificada, comment, sent_at, responded_at, expires_at, lead_id, closer_id')
     .eq('org_id', orgId)
-    .order('sent_at', { ascending: false })
+    .order('sent_at', { ascending: false, nullsFirst: false })
     .limit(200);
 
   if (dateFrom) query = query.gte('sent_at', `${dateFrom}T03:00:00Z`);
@@ -64,7 +65,7 @@ export async function fetchCloserFeedbacks(
       rating: number | null;
       oportunidade_qualificada: boolean | null;
       comment: string | null;
-      sent_at: string;
+      sent_at: string | null;
       responded_at: string | null;
       expires_at: string;
       lead_id: string;
@@ -79,6 +80,7 @@ export async function fetchCloserFeedbacks(
   // show up as phantom "Expirado" rows or drag down response-rate metrics.
   const newestSentByLead = new Map<string, number>();
   for (const d of data) {
+    if (!d.sent_at) continue;
     const ms = new Date(d.sent_at).getTime();
     const current = newestSentByLead.get(d.lead_id);
     if (current === undefined || ms > current) newestSentByLead.set(d.lead_id, ms);

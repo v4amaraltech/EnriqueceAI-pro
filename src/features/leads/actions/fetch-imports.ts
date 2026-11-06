@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 
 import type { LeadImportRow } from '../types';
@@ -36,26 +36,9 @@ export async function fetchImports(): Promise<ActionResult<ImportListResult>> {
   const userIds = [...new Set(imports.map((i) => i.created_by).filter(Boolean))] as string[];
   const userMap: Record<string, string> = {};
 
-  if (userIds.length > 0) {
-    try {
-      const adminClient = createAdminSupabaseClient();
-      await Promise.all(
-        userIds.map(async (id) => {
-          const { data } = await adminClient.auth.admin.getUserById(id);
-          if (data?.user) {
-            const u = data.user;
-            const meta = u.user_metadata as Record<string, unknown> | undefined;
-            const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
-            const email = u.email ?? '';
-            userMap[u.id] = fullName || email.split('@')[0] || u.id.slice(0, 8);
-          }
-        }),
-      );
-    } catch {
-      for (const id of userIds) {
-        userMap[id] = id.slice(0, 8);
-      }
-    }
+  const profiles = await resolveUserProfiles(userIds);
+  for (const id of userIds) {
+    userMap[id] = profiles.get(id)?.displayName ?? id.slice(0, 8);
   }
 
   const enriched = imports.map((row) => ({

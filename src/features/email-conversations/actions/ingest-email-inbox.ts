@@ -1,10 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { escapeLikePattern } from '@/lib/utils/like';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { createNotification } from '@/features/notifications/services/notification.service';
 
-import { classifyInbound, extractEmailAddress, stripQuotedReply } from '../services/inbound-classifier';
+import {
+  classifyInbound, extractEmailAddress, extractReferencedMessageIds, matchesOurThread, senderAuthVerdict, stripQuotedReply,
+  type InboundKind, type OurSend,
+} from '../services/inbound-classifier';
 import {
   getMailboxAccessToken, getMessageFull, listBdrMailboxes, listNewMessageIds, type BdrMailbox,
 } from '../services/gmail-inbox.service';
@@ -17,28 +22,39 @@ export interface IngestResult {
   mailboxes: number;
   novas: number;
   conversas: number;
+  /** Convites/aceites/recusas de agenda: gravados, nunca viram conversa. */
+  agenda: number;
+  /** E-mail de lead fora de thread nosso: gravado para auditoria, sem conversa. */
+  avulsas: number;
   ignoradas: number;
   erros: string[];
 }
 
 /**
- * BDR-3 — Ingestão contínua da caixa do BDR IA, independente da cadência.
- * Cada mensagem tem identidade única (caixa + gmail_message_id). Mensagens de
- * lead alimentam a conversa e disparam `email.replied` para o agente (n8n).
- * A primeira resposta marca as inscrições como replied e cria hold de
- * prospecção — encerra a prospecção fria, não a escuta.
+ * BDR-3 — Ingestão contínua da caixa do BDR IA (só caixas com `bdr_ai = true`),
+ * independente da cadência. Cada mensagem tem identidade única (caixa +
+ * gmail_message_id). Só vira conversa a mensagem de lead que CONTINUA um thread
+ * que nós começamos (e-mail da cadência do BDR IA ou resposta do agente); essa
+ * alimenta a conversa e dispara `email.replied` para o agente (n8n). A primeira
+ * resposta marca as inscrições como replied e cria hold de prospecção — encerra
+ * a prospecção fria, não a escuta. Agenda (`calendar`) e e-mail avulso
+ * (`unrelated`) ficam só em `email_inbound`.
  */
 export async function ingestEmailInbox(): Promise<{ success: boolean; data?: IngestResult; error?: string }> {
   const supabase = createServiceRoleClient();
-  const out: IngestResult = { mailboxes: 0, novas: 0, conversas: 0, ignoradas: 0, erros: [] };
+  const out: IngestResult = { mailboxes: 0, novas: 0, conversas: 0, agenda: 0, avulsas: 0, ignoradas: 0, erros: [] };
   const mailboxes = await listBdrMailboxes(supabase);
   const ownEmails = mailboxes.map((m) => m.email_address.toLowerCase());
+  const mailboxDomains = new Set(ownEmails.map((e) => e.split('@')[1]).filter((d): d is string => !!d));
+  const domainsByOrg = new Map<string, Set<string>>();
 
   for (const mb of mailboxes) {
     out.mailboxes++;
     try {
-      const r = await ingestMailbox(supabase, mb, ownEmails);
+      const ownDomains = await orgOwnDomains(supabase, mb.org_id, mailboxDomains, domainsByOrg);
+      const r = await ingestMailbox(supabase, mb, ownEmails, ownDomains);
       out.novas += r.novas; out.conversas += r.conversas; out.ignoradas += r.ignoradas;
+      out.agenda += r.agenda; out.avulsas += r.avulsas;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       out.erros.push(`${mb.email_address}: ${msg}`);
@@ -48,8 +64,57 @@ export async function ingestEmailInbox(): Promise<{ success: boolean; data?: Ing
   return { success: true, data: out };
 }
 
-async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails: string[]) {
-  const res = { novas: 0, conversas: 0, ignoradas: 0 };
+/**
+ * Domínios da casa: os das caixas do BDR mais os de TODAS as conexões Gmail da
+ * org (SDRs, closers, caixa antiga do piloto). Remetente daí é `own`, nunca lead
+ * — foi assim que convites encaminhados por um colega viraram "conversa".
+ * Mail entre contas do mesmo Workspace também chega sem Authentication-Results.
+ */
+async function orgOwnDomains(supabase: SupabaseClient, orgId: string, mailboxDomains: Set<string>, cache: Map<string, Set<string>>): Promise<Set<string>> {
+  const cached = cache.get(orgId);
+  if (cached) return cached;
+  const set = new Set(mailboxDomains);
+  const { data } = (await from(supabase, 'gmail_connections').select('email_address').eq('org_id', orgId)) as { data: Array<{ email_address: string | null }> | null };
+  for (const c of data ?? []) {
+    const d = c.email_address?.split('@')[1]?.toLowerCase();
+    if (d) set.add(d);
+  }
+  cache.set(orgId, set);
+  return set;
+}
+
+/**
+ * Envios nossos que uma mensagem pode estar continuando: e-mails de cadência
+ * com executor `bdr_ai` (casam por thread_id do Gmail ou por rfc_message_id) e
+ * respostas do agente (`email_reply_intents`, Message-ID gerado antes do envio).
+ */
+async function findOurSends(supabase: SupabaseClient, orgId: string, threadId: string | null, refIds: string[]): Promise<OurSend[]> {
+  const out: OurSend[] = [];
+  type SentRow = { metadata: Record<string, unknown> | null };
+  const cadenceSends = () => from(supabase, 'interactions')
+    .select('metadata, cadences!inner(executor)')
+    .eq('org_id', orgId).eq('channel', 'email').eq('type', 'sent').eq('cadences.executor', 'bdr_ai');
+  const push = (rows: SentRow[] | null) => {
+    for (const r of rows ?? []) {
+      out.push({ thread_id: r.metadata?.thread_id as string | undefined, rfc_message_id: r.metadata?.rfc_message_id as string | undefined });
+    }
+  };
+  if (threadId) {
+    const { data } = (await cadenceSends().eq('metadata->>thread_id', threadId).limit(5)) as { data: SentRow[] | null };
+    push(data);
+  }
+  if (refIds.length) {
+    const { data } = (await cadenceSends().in('metadata->>rfc_message_id', refIds).limit(5)) as { data: SentRow[] | null };
+    push(data);
+    const { data: intents } = (await from(supabase, 'email_reply_intents')
+      .select('rfc_message_id').eq('org_id', orgId).in('rfc_message_id', refIds).limit(5)) as { data: Array<{ rfc_message_id: string }> | null };
+    for (const i of intents ?? []) out.push({ rfc_message_id: i.rfc_message_id });
+  }
+  return out;
+}
+
+async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails: string[], ownDomains: Set<string>) {
+  const res = { novas: 0, conversas: 0, agenda: 0, avulsas: 0, ignoradas: 0 };
   const token = await getMailboxAccessToken(supabase, mb);
   if (!token) return res;
 
@@ -79,15 +144,46 @@ async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails
       ? ((await from(supabase, 'email_conversations').select('id, lead_id, estado').eq('mailbox_user_id', mb.user_id).eq('thread_id', msg.threadId).maybeSingle()) as { data: { id: string; lead_id: string; estado: string } | null })
       : { data: null };
 
-    const kind = classifyInbound({ headers: msg.headers, ownEmails, isKnownLeadSender: Boolean(existingConv), mimeType: msg.mimeType });
+    const kind = classifyInbound({
+      headers: msg.headers, ownEmails, ownDomains: [...ownDomains], isKnownLeadSender: Boolean(existingConv),
+      mimeType: msg.mimeType, partMimeTypes: msg.partMimeTypes, attachmentNames: msg.attachmentNames,
+    });
+
+    // Remetente autenticado (SPF/DKIM/DMARC do próprio Gmail)? Sem isso, um
+    // e-mail com From forjado se passava pelo lead, parava a cadência e chegava
+    // ao agente de IA. Falha explícita nunca conta como lead; para casar um lead
+    // NOVO pelo From (sem conversa na thread) é preciso aprovação.
+    const auth = senderAuthVerdict(msg.authResults, fromEmail);
+    const internal = auth === 'unknown' && !!fromEmail && ownDomains.has(fromEmail.split('@')[1] ?? '');
+    const authOk = auth === 'pass' || internal || (Boolean(existingConv) && auth === 'unknown');
 
     // Lead: pelo e-mail do remetente (na org) ou pela conversa da thread
     let leadId: string | null = existingConv?.lead_id ?? null;
-    if (!leadId && kind === 'lead' && fromEmail) {
-      const { data: lead } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', fromEmail).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
+    if (!leadId && kind === 'lead' && fromEmail && authOk) {
+      // Igualdade case-insensitive: sem escapar, `%`/`_` do remetente viravam
+      // curingas e um From como "%@%.%" casava qualquer lead da org.
+      const { data: lead } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', escapeLikePattern(fromEmail)).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
       leadId = lead?.id ?? null;
     }
-    const finalKind = kind === 'lead' && !leadId ? 'unknown' : kind;
+    if (kind === 'lead' && !authOk) {
+      console.warn(`[inbox] ${mb.email_address}: remetente ${fromEmail ?? '?'} sem autenticação (${auth}) — não tratado como lead (msg ${msg.id})`);
+      await notifyUnverifiedReply(supabase, mb, fromEmail, existingConv?.lead_id ?? null);
+    }
+
+    // Só vira conversa quem continua um thread que NÓS começamos. Lead que
+    // escreve do nada (proposta, reunião marcada por outro canal) fica só em
+    // email_inbound como `unrelated`: sem conversa, sem replied, sem agente.
+    let continuaNossoThread = Boolean(existingConv);
+    if (!continuaNossoThread && kind === 'lead' && leadId && authOk) {
+      const sends = await findOurSends(supabase, mb.org_id, msg.threadId, extractReferencedMessageIds(msg.headers));
+      continuaNossoThread = matchesOurThread({ threadId: msg.threadId, headers: msg.headers }, sends);
+    }
+    const finalKind: InboundKind = kind !== 'lead' ? kind
+      : !leadId || !authOk ? 'unknown'
+      : !continuaNossoThread ? 'unrelated'
+      : 'lead';
+    if (finalKind === 'calendar') res.agenda++;
+    if (finalKind === 'unrelated') res.avulsas++;
 
     const { data: inserted } = (await from(supabase, 'email_inbound')
       .insert({
@@ -95,7 +191,8 @@ async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails
         rfc_message_id: msg.headers['message-id'] ?? null, in_reply_to: msg.headers['in-reply-to'] ?? null,
         from_email: fromEmail, subject: msg.headers['subject'] ?? null, snippet: msg.snippet.slice(0, 500),
         body_text: stripQuotedReply(msg.text).slice(0, 20000), internal_date: msg.internalDate.toISOString(),
-        kind: finalKind, lead_id: leadId, conversation_id: existingConv?.id ?? null,
+        // agenda nunca alimenta conversa, nem a já existente na thread
+        kind: finalKind, lead_id: leadId, conversation_id: finalKind === 'calendar' ? null : (existingConv?.id ?? null),
       } as Record<string, unknown>)
       .select('id').maybeSingle()) as { data: { id: string } | null };
     if (!inserted) { res.ignoradas++; continue; } // corrida com outra execução: já gravado
@@ -130,6 +227,8 @@ async function ingestMailbox(supabase: SupabaseClient, mb: BdrMailbox, ownEmails
     dispatchWebhookEvent(supabase, mb.org_id, 'email.replied', {
       lead_id: leadId, conversation_id: conv.id, conversation_estado: conv.estado, inbound_id: inserted.id,
       thread_id: msg.threadId, mailbox_user_id: mb.user_id, mailbox_email: mb.email_address, source: 'bdr_inbox',
+      from_email: fromEmail, subject: msg.headers['subject'] ?? null, snippet: msg.snippet.slice(0, 300),
+      received_at: msg.internalDate.toISOString(),
     });
   }
 
@@ -162,4 +261,35 @@ async function marcarRespondeuSeForPrimeira(supabase: SupabaseClient, mb: BdrMai
   }
   await from(supabase, 'leads').update({ status: 'contacted', contacted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId).eq('status', 'new');
+}
+
+/**
+ * A message that looks like a lead's reply but failed sender authentication is
+ * not handed to the AI agent (could be forged). It may still be a real reply
+ * from a badly configured domain, so the lead's owner is told to check the
+ * inbox — generic text only, never the (untrusted) content.
+ */
+async function notifyUnverifiedReply(supabase: SupabaseClient, mb: BdrMailbox, fromEmail: string | null, convLeadId: string | null) {
+  try {
+    let leadId = convLeadId;
+    if (!leadId && fromEmail) {
+      const { data } = (await from(supabase, 'leads').select('id').eq('org_id', mb.org_id).ilike('email', escapeLikePattern(fromEmail)).is('deleted_at', null).limit(1).maybeSingle()) as { data: { id: string } | null };
+      leadId = data?.id ?? null;
+    }
+    if (!leadId) return;
+    const { data: lead } = (await from(supabase, 'leads').select('assigned_to, nome_fantasia, razao_social').eq('id', leadId).maybeSingle()) as { data: { assigned_to: string | null; nome_fantasia: string | null; razao_social: string | null } | null };
+    if (!lead?.assigned_to) return;
+    await createNotification({
+      org_id: mb.org_id,
+      user_id: lead.assigned_to,
+      type: 'integration_error',
+      title: `Resposta não verificada: ${lead.nome_fantasia || lead.razao_social || fromEmail || 'lead'}`,
+      body: `Chegou na caixa ${mb.email_address} um e-mail em nome deste lead que não passou na verificação do remetente, então o BDR IA não respondeu. Confira na caixa se é do lead mesmo.`,
+      resource_type: 'lead',
+      resource_id: leadId,
+      metadata: { mailbox: mb.email_address, from_email: fromEmail, reason: 'sender_auth_failed' },
+    });
+  } catch (err) {
+    console.error('[inbox] falha ao avisar resposta não verificada:', err);
+  }
 }

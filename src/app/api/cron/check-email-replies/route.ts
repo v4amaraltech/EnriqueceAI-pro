@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
+import { runTrackedWorker } from '@/lib/workers/worker-run';
 import { checkEmailReplies } from '@/features/cadences/actions/check-email-replies';
 
 export const maxDuration = 300;
@@ -10,7 +11,7 @@ async function handle(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await checkEmailReplies();
+  const result = await runTrackedWorker('check-email-replies', () => checkEmailReplies());
 
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 500 });

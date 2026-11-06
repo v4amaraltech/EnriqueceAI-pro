@@ -283,7 +283,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
                 window.location.href = authResult.data.url;
               } else {
                 toast.error('Conexão com o Google expirou. Reconecte em Configurações > Integrações.', { duration: 8000 });
-                setTimeout(() => { window.location.href = '/settings/integrations'; }, 1500);
+                setTimeout(() => { router.push('/settings/integrations'); }, 1500);
               }
             } else {
               toast.error(result.error);

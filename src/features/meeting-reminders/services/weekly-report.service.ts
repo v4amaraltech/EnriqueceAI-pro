@@ -15,7 +15,7 @@
  * depende do Gmail de nenhum SDR. Não escreve em `leads`/`interactions` (só lê).
  */
 import type { ActionResult } from '@/lib/actions/action-result';
-import { resolveUserEmails } from '@/lib/auth/user-directory';
+import { resolveUserEmails, resolveUserProfiles } from '@/lib/auth/user-directory';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -360,23 +360,17 @@ async function loadOrgReport(
 
   // Nomes dos SDRs
   const sdrIds = [...new Set(meetings.map((m) => m.assigned_to).filter((v): v is string => v !== null))];
-  const sdrNames = await resolveSdrNames(supabase, sdrIds);
+  const sdrNames = await resolveSdrNames(sdrIds);
 
   return computeReport({ orgName, meetings, sentLeadIds, sends, sdrNames, weekStart, now });
 }
 
-async function resolveSdrNames(supabase: SupabaseClient, userIds: string[]): Promise<Map<string, string>> {
+async function resolveSdrNames(userIds: string[]): Promise<Map<string, string>> {
+  // Best-effort — id não resolvido cai no fallback (o próprio user_id) no render.
   const names = new Map<string, string>();
-  for (const id of userIds) {
-    try {
-      const { data } = await supabase.auth.admin.getUserById(id);
-      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
-      const name = (meta?.full_name ?? meta?.name) as string | undefined;
-      if (name) names.set(id, name);
-      else if (data.user?.email) names.set(id, data.user.email);
-    } catch {
-      // best-effort — cai no fallback (o próprio user_id) no render
-    }
+  for (const [id, p] of await resolveUserProfiles(userIds)) {
+    const name = p.fullName || p.email;
+    if (name) names.set(id, name);
   }
   return names;
 }

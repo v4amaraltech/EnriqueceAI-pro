@@ -172,6 +172,16 @@ describe('executeActivity — email channel', () => {
     );
   });
 
+  it('idempotência ignora eventos system (step_skipped não é execução)', async () => {
+    wireMocks({ interactions: [{ data: { id: 'existing-int' } }] });
+
+    await executeActivity(baseInput);
+
+    const idx = mockFrom.mock.calls.findIndex((c) => c[0] === 'interactions');
+    const idempotency = mockFrom.mock.results[idx]!.value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(idempotency.neq).toHaveBeenCalledWith('channel', 'system');
+  });
+
   it('should return error if interaction insert fails', async () => {
     // idempotency → null, insert → null (failure to record)
     wireMocks({ interactions: [{ data: null }, { data: null }] });

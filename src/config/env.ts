@@ -34,7 +34,7 @@ const envSchema = z.object({
     .optional(),
   EVOLUTION_API_URL: z.string().url().optional(),
   EVOLUTION_API_KEY: z.string().min(1).optional(),
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
   // T3: Previously unvalidated env vars (used via process.env directly)
   KOMMO_CLIENT_ID: z.string().min(1).optional(),
   KOMMO_CLIENT_SECRET: z.string().min(1).optional(),

@@ -8,6 +8,8 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 
+import { hasOrgApi4ComToken } from '../services/api4com.service';
+
 interface SaveApi4ComInput {
   ramal: string;
   apiToken?: string;
@@ -128,7 +130,13 @@ export async function saveApi4ComConfig(
 export async function disconnectApi4Com(): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  const { orgId, userId, role, supabase } = auth.data;
+
+  // Com token da org o ramal é gerido pelo gestor: o SDR que desconecta apaga a
+  // própria linha e o "Sincronizar ramais" não a recria (e-mail ambíguo).
+  if (role !== 'manager' && (await hasOrgApi4ComToken(orgId))) {
+    return { success: false, error: 'O ramal é gerido pelo gestor da organização. Peça a ele para alterar.' };
+  }
 
   const { error } = await from(supabase, 'api4com_connections' as never)
     .delete()

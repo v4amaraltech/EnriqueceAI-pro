@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
+import { runTrackedWorker } from '@/lib/workers/worker-run';
 import { ingestEmailInbox } from '@/features/email-conversations/actions/ingest-email-inbox';
 
 export const maxDuration = 300;
@@ -9,7 +10,7 @@ async function handle(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const result = await ingestEmailInbox();
+  const result = await runTrackedWorker('ingest-email-inbox', () => ingestEmailInbox());
   if (!result.success) return NextResponse.json({ error: result.error }, { status: 500 });
   return NextResponse.json({ ok: true, data: result.data });
 }

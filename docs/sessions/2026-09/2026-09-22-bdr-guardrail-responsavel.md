@@ -12,7 +12,7 @@
 
 ## Feito no repo (solução definitiva, opção 2) — NÃO commitado, NÃO aplicado
 - Worktree `.claude/worktrees/bdr-guardrail`, branch `feat/bdr-guardrail-ai-executor` (a partir de `origin/main` `d11cf762`).
-- `supabase/migrations/20260922110000_cadences_executor_bdr_ai_guardrail.sql` — `cadences.executor` ('sdr'|'bdr_ai'), trava libera `bdr_ai`, marca as cadências `BDR IA — %` da V4.
+- `supabase/migrations/20260922114308_cadences_executor_bdr_ai_guardrail.sql` — `cadences.executor` ('sdr'|'bdr_ai'), trava libera `bdr_ai`, marca as cadências `BDR IA — %` da V4.
 - `supabase/seed/bdr-arroz-cadencias.sql` — `executor = 'bdr_ai'`.
 - `docs/stories/bdr-guardrail-ai-executor.story.md` (Draft).
 - Ensaio em prod com ROLLBACK: sem dono + bdr_ai → passa; sem dono + sdr → recusa; executor inválido → CHECK recusa; ACL `authenticated` = false mantida.

@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { CadenceDetail } from '../cadences.contract';
+import { updateCadence } from '../actions/manage-cadences';
+import { saveTimelineSteps } from '../actions/save-timeline-steps';
+import type { CadenceDetail, CadenceStepWithTemplate } from '../cadences.contract';
 import type { MessageTemplateRow } from '../types';
 import { CadenceBuilder } from './CadenceBuilder';
 
@@ -20,9 +22,12 @@ vi.mock('../actions/save-timeline-steps', () => ({
 }));
 
 vi.mock('./CadenceTimeline', () => ({
-  CadenceTimeline: ({ days, sidebarSlot, onStepClick: _onStepClick }: { days: { day: number; steps: unknown[] }[]; sidebarSlot?: React.ReactNode; onStepClick?: (step: unknown) => void }) => (
+  CadenceTimeline: ({ days, sidebarSlot, onStepClick: _onStepClick }: { days: { day: number; steps: { id: string }[] }[]; sidebarSlot?: React.ReactNode; onStepClick?: (step: unknown) => void }) => (
     <div data-testid="cadence-timeline">
       Timeline ({days.reduce((sum, d) => sum + d.steps.length, 0)} steps)
+      {days.map((d) => (
+        <div key={d.day} data-testid="timeline-day" data-day={d.day} data-steps={d.steps.map((st) => st.id).join(',')} />
+      ))}
       {sidebarSlot}
     </div>
   ),
@@ -276,5 +281,57 @@ describe('CadenceBuilder', () => {
     render(<CadenceBuilder cadence={cadence} templates={[createTemplate()]} />);
     expect(screen.getByText('Passos (2)')).toBeInTheDocument();
     expect(screen.getByText('Inscritos (0)')).toBeInTheDocument();
+  });
+
+  // Cadência v3 do BDR (78aa84ca): gravada com atraso relativo, como o motor usa.
+  // A tela antiga mostrava "Dia 1, 3, 4, 6, 8" e reordenava os passos ao salvar.
+  describe('atraso relativo (cadência v3 do BDR)', () => {
+    const v3Delays = [0, 2, 0, 5, 2, 0, 2, 3, 2, 0, 5, 2, 5, 0, 7, 2];
+    const v3Channels = ['email', 'phone', 'phone', 'email', 'phone', 'phone', 'whatsapp', 'email', 'phone', 'phone', 'whatsapp', 'email', 'phone', 'phone', 'email', 'whatsapp'] as const;
+
+    function v3Steps(): CadenceStepWithTemplate[] {
+      // Embaralhados de propósito: a tela deve ordenar por step_order.
+      return v3Delays
+        .map((delay_days, i) => ({
+          id: `v3-${i + 1}`,
+          cadence_id: 'cad-1',
+          step_order: i + 1,
+          channel: v3Channels[i]!,
+          template_id: null,
+          delay_days,
+          delay_hours: 0,
+          ai_personalization: false,
+          activity_name: null,
+          instructions: null,
+          call_provider: null,
+          reply_type: 'new_conversation' as const,
+          created_at: '2026-10-15T10:00:00Z',
+          template: null, template_b: null, template_id_b: null, ab_enabled: false, ab_distribution: 50, ab_winner_variant: null, ab_winner_at: null, ab_enabled_at: null,
+        }))
+        .reverse();
+    }
+
+    it('mostra os passos nos dias 0…37 desde a inscrição, na ordem de step_order', () => {
+      render(<CadenceBuilder cadence={createCadence({ total_steps: 16, steps: v3Steps() })} templates={[]} />);
+      const days = screen.getAllByTestId('timeline-day');
+      // "Dia N" = dias desde a inscrição + 1
+      expect(days.map((d) => Number(d.dataset.day) - 1)).toEqual([0, 2, 7, 9, 11, 14, 16, 21, 23, 28, 35, 37]);
+      const ids = days.flatMap((d) => d.dataset.steps!.split(','));
+      expect(ids).toEqual(v3Delays.map((_, i) => `v3-${i + 1}`));
+    });
+
+    it('Salvar sem mexer grava os mesmos atrasos e a mesma ordem', async () => {
+      vi.mocked(updateCadence).mockResolvedValue({ success: true, data: undefined } as never);
+      vi.mocked(saveTimelineSteps).mockResolvedValue({ success: true, data: { saved: 16 } } as never);
+      render(<CadenceBuilder cadence={createCadence({ total_steps: 16, steps: v3Steps() })} templates={[]} />);
+
+      fireEvent.click(screen.getByText('Salvar'));
+
+      await waitFor(() => expect(saveTimelineSteps).toHaveBeenCalled());
+      const inputs = vi.mocked(saveTimelineSteps).mock.calls[0]![1];
+      expect(inputs.map((s) => s.id)).toEqual(v3Delays.map((_, i) => `v3-${i + 1}`));
+      expect(inputs.map((s) => s.step_order)).toEqual(v3Delays.map((_, i) => i + 1));
+      expect(inputs.map((s) => s.delay_days)).toEqual(v3Delays);
+    });
   });
 });

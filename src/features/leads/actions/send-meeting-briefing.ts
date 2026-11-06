@@ -7,6 +7,12 @@ import { signRecordingToken } from '@/lib/security/recording-token';
 import { formatCurrencyBRLCompact } from '@/lib/utils/format';
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import {
+  buildBriefingNotesHtml,
+  resolveSdrDisplayName,
+  type BriefingNote,
+} from '../services/meeting-briefing-format';
+
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
 
 interface MeetingBriefingParams {
@@ -67,7 +73,7 @@ export async function sendMeetingBriefingEmail(
 
   try {
     // Fetch all data in parallel
-    const [leadResult, closerResult, sdrResult, customFieldsResult, lastCallResult] = await Promise.all([
+    const [leadResult, closerResult, sdrResult, customFieldsResult, lastCallResult, notesResult] = await Promise.all([
       from(supabase, 'leads')
         .select('nome_fantasia, razao_social, first_name, last_name, job_title, email, telefone, phones, cnpj, porte, cnae, faturamento_estimado, lead_source, website, instagram, linkedin, notes, fit_score, endereco, custom_field_values')
         .eq('id', leadId)
@@ -89,13 +95,21 @@ export async function sendMeetingBriefingEmail(
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle() as unknown as Promise<{ data: { id: string; recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
+      // Anotações da aba "Anotações" do lead (add-lead-note.ts)
+      from(supabase, 'interactions')
+        .select('message_content, metadata, created_at')
+        .eq('lead_id', leadId)
+        .eq('org_id', orgId)
+        .contains('metadata', { is_note: true })
+        .order('created_at', { ascending: true })
+        .limit(20) as unknown as Promise<{ data: Array<{ message_content: string | null; metadata: Record<string, unknown> | null; created_at: string }> | null }>,
     ]);
 
     const lead = leadResult.data;
     const closer = closerResult.data;
     if (!lead || !closer) return;
 
-    const sdrName = sdrResult.data?.user?.user_metadata?.name ?? sdrResult.data?.user?.email ?? 'Pré-vendas';
+    const sdrName = resolveSdrDisplayName(sdrResult.data?.user);
     const leadName = lead.nome_fantasia ?? lead.razao_social ?? 'Lead';
 
     const startDate = new Date(meetingStart);
@@ -112,11 +126,19 @@ export async function sendMeetingBriefingEmail(
 
     const lastCall = lastCallResult.data;
 
+    const leadNotes: BriefingNote[] = (notesResult.data ?? []).map((n) => ({
+      text: n.message_content ?? '',
+      created_at: n.created_at,
+      author: typeof n.metadata?.author === 'string' ? n.metadata.author : null,
+    }));
+    const notesHtml = buildBriefingNotesHtml(lead.notes, leadNotes);
+
     const html = buildBriefingHtml({
       closerName: closer.name,
       leadName,
       lead,
       sdrName,
+      notesHtml,
       meetingTitle,
       dateStr,
       timeStr,
@@ -151,6 +173,7 @@ function buildBriefingHtml(data: {
   leadName: string;
   lead: LeadData;
   sdrName: string;
+  notesHtml: string;
   meetingTitle: string;
   dateStr: string;
   timeStr: string;
@@ -162,7 +185,7 @@ function buildBriefingHtml(data: {
   recordingDuration: number | null;
   transcription: string | null;
 }): string {
-  const { closerName, leadName, lead, sdrName, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl: _leadUrl, customFields, recordingUrl, recordingDuration, transcription } = data;
+  const { closerName, leadName, lead, sdrName, notesHtml, meetingTitle, dateStr, timeStr, meetLink, feedbackUrl, leadUrl: _leadUrl, customFields, recordingUrl, recordingDuration, transcription } = data;
 
   const contactName = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
 
@@ -299,10 +322,10 @@ function buildBriefingHtml(data: {
               </table>
               ` : ''}
 
-              ${lead.notes ? `
+              ${notesHtml ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="background: #fffbeb; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; border-left: 4px solid #f59e0b;">
                 <tr><td style="padding:0 0 8px;"><strong style="color:#1a1a1a;font-size:16px;">📝 Notas do pré-vendas</strong></td></tr>
-                <tr><td style="color:#4a4a4a;font-size:15px;line-height:1.7;white-space:pre-wrap;">${lead.notes}</td></tr>
+                <tr><td style="color:#4a4a4a;font-size:15px;line-height:1.7;">${notesHtml}</td></tr>
               </table>
               ` : ''}
 

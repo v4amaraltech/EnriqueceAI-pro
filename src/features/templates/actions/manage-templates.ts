@@ -157,7 +157,8 @@ export async function deleteTemplate(
 export async function duplicateTemplate(
   templateId: string,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const { orgId, userId, role } = await requireAuthWithMember();
+  // Qualquer membro pode duplicar qualquer template da org — a cópia passa a ser dele.
+  const { orgId, userId } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
 
   const { data: source } = (await from(supabase, 'message_templates')
@@ -168,11 +169,6 @@ export async function duplicateTemplate(
 
   if (!source) {
     return { success: false, error: 'Template não encontrado' };
-  }
-
-  // SDR can only duplicate own templates or system templates
-  if (role === 'sdr' && !source.is_system && source.created_by !== userId) {
-    return { success: false, error: 'Você só pode duplicar seus próprios templates' };
   }
 
   const { data, error } = (await from(supabase, 'message_templates')

@@ -12,7 +12,7 @@ import type { MemberWithOrganization } from '@/features/auth/types';
 const settingsLinks = [
   { label: 'Meu Perfil', href: '/settings/profile', icon: User, description: 'Nome, email e senha' },
   { label: 'Usuários', href: '/settings/users', icon: Users, description: 'Gerenciar membros da equipe' },
-  { label: 'Integrações', href: '/settings/integrations', icon: Plug, description: 'Gmail, WhatsApp, CRM' },
+  { label: 'Integrações', href: '/settings/integrations', icon: Plug, description: 'Gmail, WhatsApp, CRM', managerOnly: true },
   {
     label: 'Ligação via WhatsApp',
     href: '/settings/my-whatsapp-number',
@@ -46,7 +46,7 @@ export default async function SettingsPage() {
 
       {/* Quick links */}
       <div className="mb-8 grid gap-3 sm:grid-cols-2">
-        {settingsLinks.map((link) => {
+        {settingsLinks.filter((link) => !link.managerOnly || member.role === 'manager').map((link) => {
           const Icon = link.icon;
           return (
             <Link
