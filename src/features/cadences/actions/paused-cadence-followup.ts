@@ -138,7 +138,9 @@ export async function createPausedCadenceFollowups(
           org_id: lead.org_id,
           lead_id: lead.id,
           user_id: lead.assigned_to,
+          // Sem canal próprio: `kind` é o que a fila usa para mostrar "Definir destino".
           channel: 'research',
+          kind: 'limbo_followup',
           scheduled_at: scheduledAt,
           notes,
         } as never);
