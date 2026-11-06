@@ -13,6 +13,10 @@ import { EvolutionWhatsAppService } from '@/features/integrations/services/whats
 import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
 import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
 import { reconcileConfirmedMeetingsToCrm } from '@/features/leads/services/crm-reconcile.service';
+import {
+  FEEDBACK_TTL_MS,
+  deliverCloserFeedbackRequest,
+} from '@/features/leads/services/closer-feedback-delivery.service';
 
 export const maxDuration = 60;
 
@@ -44,6 +48,116 @@ interface LeadInfo {
   id: string;
   nome_fantasia: string | null;
   razao_social: string | null;
+}
+
+interface UnsentFeedback {
+  id: string;
+  token: string;
+  lead_id: string;
+  closer_id: string;
+  org_id: string;
+  expires_at: string;
+}
+
+interface UnsentLeadInfo extends LeadInfo {
+  status: string;
+  deleted_at: string | null;
+  meeting_starts_at: string | null;
+  assigned_to: string | null;
+}
+
+/**
+ * Envio adiado: pedidos criados com `sent_at IS NULL` porque o SDR marcou o
+ * "Ganho" antes da reunião começar (sendCloserFeedbackEmail não manda nada
+ * antes de leads.meeting_starts_at). Aqui o link sai assim que a reunião
+ * passa — e-mail + WhatsApp pelo mesmo serviço do envio imediato, que carimba
+ * sent_at/expires_at no envio real. Linha cujos dois canais falharam continua
+ * sem sent_at e é tentada de novo na próxima rodada, até expires_at.
+ *
+ * Reunião ainda no futuro (ex.: SDR remarcou): só garante que expires_at
+ * cobre reunião + 7 dias e espera. Lead que saiu de `won` (perdido antes da
+ * reunião) não é cobrado — a linha vence sozinha.
+ */
+async function sendScheduledFeedbackRequests() {
+  const supabase = createServiceRoleClient();
+  const now = new Date();
+
+  const { data: unsent, error } = (await from(supabase, 'closer_feedback_requests')
+    .select('id, token, lead_id, closer_id, org_id, expires_at')
+    .is('sent_at', null)
+    .is('responded_at', null)
+    .gt('expires_at', now.toISOString())
+    .order('created_at', { ascending: true })
+    .limit(100)) as { data: UnsentFeedback[] | null; error: unknown };
+
+  if (error || !unsent?.length) {
+    return { scheduledSent: 0, scheduledWaiting: 0, scheduledErrors: 0 };
+  }
+
+  const leadIds = [...new Set(unsent.map((u) => u.lead_id))];
+  const closerIds = [...new Set(unsent.map((u) => u.closer_id))];
+
+  const [leadsResult, closersResult] = await Promise.all([
+    from(supabase, 'leads')
+      .select('id, status, deleted_at, meeting_starts_at, nome_fantasia, razao_social, assigned_to')
+      .in('id', leadIds) as unknown as Promise<{ data: UnsentLeadInfo[] | null }>,
+    from(supabase, 'closers').select('id, name, email, phone').in('id', closerIds) as unknown as Promise<{
+      data: CloserInfo[] | null;
+    }>,
+  ]);
+
+  const leadMap = new Map((leadsResult.data ?? []).map((l) => [l.id, l]));
+  const closerMap = new Map((closersResult.data ?? []).map((c) => [c.id, c]));
+
+  let scheduledSent = 0;
+  let scheduledWaiting = 0;
+  let scheduledErrors = 0;
+
+  for (const fb of unsent) {
+    const lead = leadMap.get(fb.lead_id);
+    const closer = closerMap.get(fb.closer_id);
+    if (!lead || lead.deleted_at || !closer) continue;
+    if (lead.status !== 'won') continue;
+
+    const meetingStart = lead.meeting_starts_at ? new Date(lead.meeting_starts_at) : null;
+    if (meetingStart && !Number.isNaN(meetingStart.getTime()) && meetingStart > now) {
+      scheduledWaiting++;
+      const coverUntil = new Date(meetingStart.getTime() + FEEDBACK_TTL_MS);
+      if (new Date(fb.expires_at) < coverUntil) {
+        await from(supabase, 'closer_feedback_requests')
+          .update({ expires_at: coverUntil.toISOString() } as Record<string, unknown>)
+          .eq('id', fb.id)
+          .is('sent_at', null);
+      }
+      continue;
+    }
+
+    try {
+      const result = await deliverCloserFeedbackRequest(supabase, {
+        requestId: fb.id,
+        token: fb.token,
+        orgId: fb.org_id,
+        leadId: fb.lead_id,
+        closerName: closer.name,
+        closerEmail: closer.email,
+        closerPhone: closer.phone,
+        leadName: lead.nome_fantasia ?? lead.razao_social ?? 'Lead',
+        performedBy: lead.assigned_to,
+        stampSentAt: true,
+      });
+      if (result.email === 'sent' || result.whatsapp === 'sent') {
+        scheduledSent++;
+      } else {
+        scheduledErrors++;
+        console.error('[feedback-reminders] Deferred send failed request=%s lead=%s:', fb.id, fb.lead_id, result.emailError);
+      }
+    } catch (err) {
+      scheduledErrors++;
+      console.error('[feedback-reminders] Deferred send error request=%s:', fb.id, err);
+    }
+  }
+
+  return { scheduledSent, scheduledWaiting, scheduledErrors };
 }
 
 /**
@@ -78,9 +192,12 @@ async function pushExpiredFeedbackLeadsToCrm() {
   const now = new Date();
   const windowStart = new Date(now.getTime() - EXPIRED_CRM_FALLBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
+  // Só links que de fato chegaram ao closer (sent_at): um pedido agendado que
+  // venceu sem nunca sair não é "closer que não respondeu".
   const { data: expired } = (await from(supabase, 'closer_feedback_requests')
     .select('lead_id, org_id')
     .is('responded_at', null)
+    .not('sent_at', 'is', null)
     .lt('expires_at', now.toISOString())
     .gte('expires_at', windowStart)
     .limit(200)) as { data: Array<{ lead_id: string; org_id: string }> | null };
@@ -148,10 +265,12 @@ async function sendFeedbackReminders() {
   const now = new Date();
   const intervalAgo = new Date(now.getTime() - REMINDER_INTERVAL_HOURS * 60 * 60 * 1000).toISOString();
 
-  // Pull all candidates: pending, not expired, under reminder cap
+  // Pull all candidates: pending, already SENT (sent_at), not expired, under
+  // reminder cap. Linha sem sent_at ainda espera a reunião — não há o que cobrar.
   const { data: candidates, error } = (await from(supabase, 'closer_feedback_requests')
     .select('id, token, sent_at, lead_id, closer_id, org_id, reminder_count, reminder_sent_at')
     .is('responded_at', null)
+    .not('sent_at', 'is', null)
     .lt('reminder_count', MAX_REMINDERS)
     .gt('expires_at', now.toISOString())
     .or(`reminder_sent_at.is.null,reminder_sent_at.lt.${intervalAgo}`)
@@ -404,10 +523,13 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Envio adiado primeiro: link de reunião que acabou de passar sai antes de
+    // qualquer cobrança ou fallback de CRM olhar para a mesma linha.
+    const scheduled = await sendScheduledFeedbackRequests();
     const result = await sendFeedbackReminders();
     const crm = await pushExpiredFeedbackLeadsToCrm();
     const reconcile = await reconcileCrmSafely();
-    return NextResponse.json({ ...result, ...crm, ...reconcile });
+    return NextResponse.json({ ...scheduled, ...result, ...crm, ...reconcile });
   } catch (err) {
     console.error('[feedback-reminders] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

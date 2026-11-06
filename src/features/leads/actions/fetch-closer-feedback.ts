@@ -13,7 +13,7 @@ export interface CloserFeedbackData {
   decisor_presente: boolean | null;
   oportunidade_qualificada: boolean | null;
   comment: string | null;
-  sent_at: string;
+  sent_at: string | null;
   responded_at: string | null;
   closer_name: string;
   closer_email: string;
@@ -43,7 +43,7 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
       decisor_presente: boolean | null;
   oportunidade_qualificada: boolean | null;
       comment: string | null;
-      sent_at: string;
+      sent_at: string | null;
       responded_at: string | null;
       closer_id: string;
     } | null;

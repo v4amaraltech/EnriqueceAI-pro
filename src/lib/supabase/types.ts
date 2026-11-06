@@ -2529,7 +2529,7 @@ export type Database = {
           reminder_sent_at: string | null;
           responded_at: string | null;
           result: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at: string;
+          sent_at: string | null;
           token: string;
           updated_at: string;
         };
@@ -2552,7 +2552,7 @@ export type Database = {
           reminder_sent_at?: string | null;
           responded_at?: string | null;
           result?: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at?: string;
+          sent_at?: string | null;
           token?: string;
           updated_at?: string;
         };
@@ -2575,7 +2575,7 @@ export type Database = {
           reminder_sent_at?: string | null;
           responded_at?: string | null;
           result?: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at?: string;
+          sent_at?: string | null;
           token?: string;
           updated_at?: string;
         };
