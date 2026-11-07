@@ -186,6 +186,56 @@ Ressalva de cobertura: 95 workflows n8n ativos não puderam ser lidos. Esta list
 
 Fluxos de outros clientes e versões legadas não foram auditados.
 
+## 10. Dispatcher e reconciliação (PR08)
+
+Status: implementado atrás da flag `dispatcher_v1` (global em `app_flags`, nasce desligada). A rota de cron existe mas **não está agendada**.
+
+### 10.1 Peças
+
+| Peça | Arquivo | Papel |
+|------|---------|-------|
+| Dispatcher | `contact-engine/services/dispatcher.service.ts` | `claim_send`, revalidação (comando, hash, gateway, holds e opt-out), `sending`, provedor, `confirm_send` |
+| Adaptadores | `contact-engine/services/provider-adapters.service.ts` | Composição sobre `WhatsAppService`, `EvolutionWhatsAppService` e `EmailService`, sem alterá-los |
+| Reconciliação | `contact-engine/services/reconciliation.service.ts` | Resolve `uncertain` e `sending` com lease vencido; aplica callbacks por `external_id` |
+| Ciclo | `contact-engine/services/dispatch-cycle.service.ts` | Por organização com trabalho: despacha e reconcilia |
+| Rota | `app/api/cron/dispatch-send-outbox/route.ts` | `POST`, protegida por `verifyCronSecret` |
+| Migration | `20261107180000_dispatcher_reconciliation.sql` | Status `delivered`, eventos novos, RPC `reconcile_send`, flag |
+
+### 10.2 Regras
+
+- Uma autoridade de execução por ação: chave comercial única, lease exclusivo e CAS por `version`.
+- Antes de enviar: comando não vencido, hash do payload confere, gateway permite de novo com o **mesmo** provedor e instância, e `confirm_send(sending)` revalida holds e opt-out no banco. Divergência cancela; nunca troca de caminho.
+- Timeout, exceção ou resposta ambígua depois da chamada ao provedor viram `uncertain`. Sem reenvio cego, sem fallback de provedor, número ou canal, sem rotação.
+- Classificação dos adaptadores: `accepted` (id do provedor), `rejected` (garantidamente nada saiu) ou `ambiguous` (qualquer outra coisa). A lista de mensagens "nada saiu" é fechada; texto desconhecido nunca vira `rejected`.
+- Retry só quando o adaptador consulta o provedor e ele confirma que não houve aceitação, depois de 10 minutos (consistência eventual) e com nova autorização do gateway. Hoje só o e-mail consulta (Gmail, por `rfc822msgid` com Message-ID determinístico por entrada). WhatsApp oficial e Evolution ficam `uncertain` até um callback com o id ou ação manual.
+- Callbacks (`applyProviderEvent`) são idempotentes e tolerantes a ordem: o estado nunca regride (`delivered` não volta a `sent`), repetição devolve `noop`, id desconhecido devolve `unmatched` para o chamador tentar de novo. Nenhuma rota de webhook chama essa função neste PR.
+- Logs com ids e motivos apenas.
+
+### 10.3 O que falta para enviar de verdade
+
+A outbox guarda só o hash do payload. O dispatcher precisa de um `PayloadResolver` (corpo, assunto, ator que autorizou, dono da caixa de e-mail), que é de quem enfileira. Hoje `getPayloadResolver()` em `dispatch-cycle.service.ts` devolve `null`: com a flag ligada o ciclo responde `payload_resolver_not_configured` e não reserva nada.
+
+### 10.4 Como ativar (ação separada, não feita neste PR)
+
+1. Aplicar a migration `20261107180000` e regenerar os tipos (`pnpm gen:types`).
+2. Registrar o `PayloadResolver` real e revisar a política de classificação dos adaptadores.
+3. Ligar `send_outbox_enqueue` e `dispatcher_v1` em `app_flags` (escopo global; ver a ressalva na seção 5).
+4. Agendar o cron fora de migration, clonando o comando de um job existente, como a migration `20261106223900` faz:
+
+```sql
+SELECT cron.schedule(
+  'dispatch-send-outbox',
+  '* * * * *',
+  replace(
+    (SELECT command FROM cron.job WHERE jobname = 'execute-cadence-steps'),
+    '/api/cron/execute-cadence-steps',
+    '/api/cron/dispatch-send-outbox'
+  )
+);
+```
+
+Pausar: `UPDATE app_flags SET enabled = false WHERE key = 'dispatcher_v1';` (a rota passa a responder sem ler a fila). Nunca reabre um caminho sem gateway.
+
 ## 9. Fora do escopo do PR01
 
 Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, regeneração de `types.ts` do Supabase (não há mudança de schema), qualquer envio de mensagem. Nenhum segredo, credencial ou dado real consta neste documento ou nos tipos.
