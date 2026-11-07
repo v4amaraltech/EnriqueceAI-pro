@@ -99,6 +99,63 @@ describe('checkThreadForReplyOrBounce', () => {
     expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('reply');
   });
 
+  it('resposta que chegou antes do nosso envio não é resposta a ele (despedida da Ana, 26/10)', async () => {
+    // m0 = e-mail da cadência, m1 = "não temos interesse" do lead, m2 = nossa despedida
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'Ana <analuiza@v4companyamaral.com>' }],
+          [
+            { name: 'From', value: 'Nivaldo <nivaldo@falcare.com.br>' },
+            { name: 'Subject', value: 'Re: comercial da Falcare' },
+          ],
+          [{ name: 'From', value: 'Ana <analuiza@v4companyamaral.com>' }],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok', 'm2')).toBe('none');
+  });
+
+  it('resposta depois do nosso envio conta, mesmo com outra resposta antes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'analuiza@v4companyamaral.com' }],
+          [{ name: 'From', value: 'cliente@empresa.com' }],
+          [{ name: 'From', value: 'analuiza@v4companyamaral.com' }],
+          [{ name: 'From', value: 'cliente@empresa.com' }],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok', 'm2')).toBe('reply');
+  });
+
+  it('nosso envio de outra caixa no meio da conversa também é nosso', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [{ name: 'From', value: 'Ana <analuiza@v4companyamaral.com>' }],
+          [{ name: 'From', value: 'analuiza@v4companyamaral.com' }],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok', 'm1')).toBe('none');
+  });
+
+  it('id do envio fora da conversa: confere tudo depois da 1ª mensagem (linhas antigas)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([[{ name: 'From', value: 'sdr@v4.com' }], [{ name: 'From', value: 'cliente@empresa.com' }]]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok', 'msg-que-nao-esta')).toBe('reply');
+  });
+
   it('resposta automática de férias não conta', async () => {
     vi.stubGlobal(
       'fetch',

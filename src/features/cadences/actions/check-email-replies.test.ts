@@ -15,7 +15,7 @@ import { checkEmailReplies } from './check-email-replies';
 interface Sent {
   id: string;
   lead_id: string;
-  cadence_id: string;
+  cadence_id: string | null;
   step_id: string | null;
   external_id: string;
   metadata: Record<string, unknown> | null;
@@ -31,9 +31,11 @@ interface Captured {
 
 let sentRows: Sent[];
 let leads: Array<{ id: string; assigned_to: string | null; email_bounced_at: string | null }>;
-let processed: Array<{ cadence_id: string; lead_id: string }>;
+let processed: Array<{ cadence_id: string | null; lead_id: string }>;
 let captured: Captured[];
 let orders: string[];
+/** Filtros da consulta de pares já processados (replied/bounced). */
+let processedFilters: string[];
 /** Patches enviados a merge_interactions_metadata (carimbo do rodízio). */
 let stamped: Array<{ id: string; patch: Record<string, unknown> }>;
 /** thread_id → caixa (token) onde ela existe, e se tem resposta */
@@ -95,6 +97,7 @@ function makeChain(table: string) {
     if (op === 'select' && table === 'interactions' && selectCols.includes('external_id')) {
       result = { data: sentRows, error: null };
     } else if (op === 'select' && table === 'interactions') {
+      processedFilters = [...filters];
       result = { data: processed, error: null };
     } else if (op === 'select' && table === 'leads') {
       result = { data: leads, error: null };
@@ -123,6 +126,7 @@ beforeEach(() => {
   sentRows = [];
   leads = [{ id: 'lead-1', assigned_to: 'dono', email_bounced_at: null }];
   processed = [];
+  processedFilters = [];
   captured = [];
   orders = [];
   stamped = [];
@@ -242,6 +246,39 @@ describe('checkEmailReplies', () => {
 
     expect(res).toEqual({ success: true, data: { found: 1 } });
     expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(1);
+  });
+
+  it('e-mail fora de cadência com resposta já registrada não grava de novo (loop Laza/Falcare)', async () => {
+    sentRows = [sent({ cadence_id: null, step_id: null, metadata: { thread_id: 'th-1', source: 'bdr_email_agent' } })];
+    processed = [{ cadence_id: null, lead_id: 'lead-1' }];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    const res = await checkEmailReplies();
+
+    expect(res).toEqual({ success: true, data: { found: 0 } });
+    expect(captured.some((c) => c.op === 'insert')).toBe(false);
+    expect(captured.some((c) => c.table === 'cadence_enrollments')).toBe(false);
+    expect(metadataUpdateOf('int-1')?.reply_checked_at).toEqual(expect.any(String));
+  });
+
+  it('a consulta de pares já processados não filtra por cadência (senão o par "null:lead" some)', async () => {
+    sentRows = [sent({ cadence_id: null })];
+    threads = { 'th-1': { mailbox: 'dono', reply: false } };
+
+    await checkEmailReplies();
+
+    expect(processedFilters.some((f) => f.startsWith('in:cadence_id'))).toBe(false);
+    expect(processedFilters).toContain('in:lead_id:["lead-1"]');
+  });
+
+  it('resposta de outra cadência do lead não bloqueia a conferência desta', async () => {
+    sentRows = [sent()];
+    processed = [{ cadence_id: 'cad-outra', lead_id: 'lead-1' }];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    const res = await checkEmailReplies();
+
+    expect(res).toEqual({ success: true, data: { found: 1 } });
   });
 
   it('bounce: para só a cadência de origem — as outras do lead seguem (não pausa)', async () => {

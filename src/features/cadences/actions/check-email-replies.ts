@@ -23,10 +23,15 @@ const REPLY_CHECK_DAYS = 30;
 const BATCH_SIZE = 100;
 const PARALLEL_BATCH = 5;
 
+/** Dedup key of a lead's reply/bounce per cadence; e-mails outside a cadence share "null:<lead>". */
+function pairKey(cadenceId: string | null, leadId: string): string {
+  return `${cadenceId ?? 'null'}:${leadId}`;
+}
+
 interface SentInteraction {
   id: string;
   lead_id: string;
-  cadence_id: string;
+  cadence_id: string | null;
   step_id: string | null;
   external_id: string;
   metadata: Record<string, unknown> | null;
@@ -99,28 +104,29 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   }
 
   // 2b. Secondary guard — filter interactions whose (cadence_id, lead_id)
-  // pair already has a 'replied' or 'bounced' counterpart. Strip nulls from
-  // the .in() arrays so a single sent row with cadence_id=NULL doesn't
-  // poison the whole filter at the PostgREST layer.
+  // pair already has a 'replied' or 'bounced' counterpart. Filtered by lead
+  // only: e-mails sent outside a cadence (cadence_id NULL — e.g. the BDR e-mail
+  // agent's replies) form the pair "null:<lead>", and also filtering by
+  // cadence_id dropped those rows, so their reply was re-recorded on every
+  // rotation (Laza/Falcare, 26/10–07/11/2026: 143 replies + notifications each).
+  // Nulls are stripped from the .in() array so they can't poison the filter.
   const alreadyProcessedMap = new Set<string>();
-  const uniqueCadenceIds = [...new Set(sentInteractions.map((i) => i.cadence_id).filter((v): v is string => v != null))];
   const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id).filter((v): v is string => v != null))];
 
-  if (uniqueCadenceIds.length > 0 && uniqueLeadIds.length > 0) {
+  if (uniqueLeadIds.length > 0) {
     const { data: processedInteractions } = (await from(supabase, 'interactions')
       .select('cadence_id, lead_id')
-      .in('cadence_id', uniqueCadenceIds)
       .in('lead_id', uniqueLeadIds)
-      .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string; lead_id: string }> | null };
+      .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string | null; lead_id: string }> | null };
 
     for (const pi of processedInteractions ?? []) {
-      alreadyProcessedMap.add(`${pi.cadence_id}:${pi.lead_id}`);
+      alreadyProcessedMap.add(pairKey(pi.cadence_id, pi.lead_id));
     }
   }
 
   const toCheck = sentInteractions.filter((i) => {
     if (bouncedLeadIds.has(i.lead_id)) return false;
-    return !alreadyProcessedMap.has(`${i.cadence_id}:${i.lead_id}`);
+    return !alreadyProcessedMap.has(pairKey(i.cadence_id, i.lead_id));
   });
 
   console.warn(`[reply-check] Checking ${toCheck.length} interactions (${sentInteractions.length} fetched, ${alreadyProcessedMap.size} already processed)`);
@@ -150,7 +156,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       const threadId = await getThreadId(interaction, accessToken);
       if (!threadId) continue; // message not in this mailbox
 
-      const detection = await checkThreadForReplyOrBounce(threadId, accessToken);
+      const detection = await checkThreadForReplyOrBounce(threadId, accessToken, interaction.external_id);
       if (detection === 'not_found') continue; // thread belongs to another mailbox
       if (detection === 'error') {
         // Transient (or a 401/403 on this mailbox) — retried on the next rotation.
@@ -166,7 +172,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
 
       if (detection === 'none') return;
 
-      const pair = `${interaction.cadence_id}:${interaction.lead_id}`;
+      const pair = pairKey(interaction.cadence_id, interaction.lead_id);
       if (recordedPairs.has(pair)) return;
       recordedPairs.add(pair);
 

@@ -65,13 +65,21 @@ interface GmailThreadMessage {
 }
 
 /**
- * Check if a Gmail thread contains a reply or a bounce.
+ * Check if a Gmail thread contains a reply or a bounce to OUR message.
  * 'not_found' = the thread isn't in this mailbox (try the next candidate);
  * 'error' = transient failure (leave it for the next rotation).
+ *
+ * `sentMessageId` is the Gmail id of the message we sent (interactions.external_id).
+ * When it is found in the thread, only the messages AFTER it count: a reply that
+ * arrived before we wrote answers an earlier message, not this one. Without this,
+ * the farewell the BDR e-mail agent sent on 26/10/2026 in the threads where Laza
+ * and Falcare had already said "no" was re-recorded as a new reply on every
+ * rotation (143 times each, plus an SDR notification each time).
  */
 export async function checkThreadForReplyOrBounce(
   threadId: string,
   accessToken: string,
+  sentMessageId?: string | null,
 ): Promise<'reply' | 'bounce' | 'none' | 'not_found' | 'error'> {
   try {
     const response = await fetch(
@@ -92,19 +100,31 @@ export async function checkThreadForReplyOrBounce(
     // Without this, the BDR cadence's email 2 (sent in the thread of email 1)
     // was recorded as a reply 20 min later and stopped the lead's cadences
     // (23/10/2026: 7 leads of the Ana cadence, none had answered).
-    const ourAddress = extractAddress(headerValue(messages[0]?.payload?.headers, 'from'));
+    const ourAddresses = new Set<string>();
+    const firstFrom = extractAddress(headerValue(messages[0]?.payload?.headers, 'from'));
+    if (firstFrom) ourAddresses.add(firstFrom);
+
+    // Gmail returns the thread in chronological order. Start right after our
+    // message when we can find it; otherwise after the first one (old rows).
+    const sentIndex = sentMessageId ? messages.findIndex((m) => m.id === sentMessageId) : -1;
+    if (sentIndex >= 0) {
+      const sentFrom = extractAddress(headerValue(messages[sentIndex]?.payload?.headers, 'from'));
+      if (sentFrom) ourAddresses.add(sentFrom);
+    }
+    const start = sentIndex >= 0 ? sentIndex + 1 : 1;
 
     let hasGenuineReply = false;
 
-    // Check each reply message (beyond the first sent message)
-    for (let i = 1; i < messages.length; i++) {
+    // Check each message that came after ours
+    for (let i = start; i < messages.length; i++) {
       const msg = messages[i];
       const headers = msg?.payload?.headers ?? [];
 
       const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
       const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
 
-      if (ourAddress && extractAddress(fromHeader?.value) === ourAddress) continue;
+      const fromAddress = extractAddress(fromHeader?.value);
+      if (fromAddress && ourAddresses.has(fromAddress)) continue;
 
       // Check bounce
       if (fromHeader) {
