@@ -178,7 +178,9 @@ export type SendDenialReason =
   | 'daily_cap_reached'
   | 'lead_lost'
   | 'invalid_phone'
-  | 'flag_disabled';
+  | 'flag_disabled'
+  | 'consent_opted_out'
+  | 'context_unavailable';
 
 /** Pedido ao gateway. Descreve a intencao; nao envia nada. */
 export interface SendIntent {
