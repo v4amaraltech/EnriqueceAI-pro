@@ -1,11 +1,12 @@
 # Story: BDR — Trava de responsável libera cadências executadas pela IA (`cadences.executor`)
 
 ## Status
-Draft
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-11-06 | Claude | PR #441 mesclado (`99cd7716`); migration renomeada para `20260922114308` (versão de prod). Conferido em prod: 116 inscrições sem responsável nas cadências `bdr_ai` (trava liberando). Status → Done. Follow-ups abaixo seguem abertos. |
 | 2026-09-22 | Vini + Claude | Story criada. Causa raiz encontrada (guard-rail de 06/08 exige `assigned_to` em cadência manual). Migração e seed escritos; contorno aplicado em prod (leads atribuídos ao Vini). |
 
 ## Origem
@@ -32,9 +33,9 @@ Não é limitação de "1 cadência por lead": o índice único é por (cadênci
 - [x] `supabase/seed/bdr-arroz-cadencias.sql` — `executor = 'bdr_ai'` nas duas cadências
 
 ## Pendente
-- [ ] Aplicar a migração em prod (MCP) e conferir: `select name, executor from cadences where name like 'BDR IA%'` → `bdr_ai`; `has_function_privilege('authenticated','public.enforce_enrollment_has_owner()','execute')` igual ao de antes.
-- [ ] `pnpm gen:types` no mesmo PR (coluna nova) + commit separado `chore(types): regenerate`.
-- [ ] Teste manual: inscrever lead **sem responsável** na "(contato)" pela tela de Leads → deve entrar; inscrever lead sem responsável numa cadência de SDR → deve continuar recusando.
+- [x] Aplicar a migração em prod (MCP) e conferir: `select name, executor from cadences where name like 'BDR IA%'` → `bdr_ai`; `has_function_privilege('authenticated','public.enforce_enrollment_has_owner()','execute')` igual ao de antes.
+- [x] `pnpm gen:types` no mesmo PR (coluna nova) + commit separado `chore(types): regenerate`.
+- [x] Teste manual (visto em prod: 116 inscritos sem responsável nas cadências da IA): inscrever lead **sem responsável** na "(contato)" pela tela de Leads → deve entrar; inscrever lead sem responsável numa cadência de SDR → deve continuar recusando.
 - [ ] Follow-up (story própria): fila de atividades e discador **esconderem** passos de cadência `executor = 'bdr_ai'` (hoje aparecem para o responsável como tarefa manual).
 - [ ] Follow-up (decisão de produto): "Iniciar novos leads" / "Leads para Abrir" usam `leads_no_active_enrollment`, que exclui lead com **qualquer** cadência aberta, inclusive `auto_email`. Decidir se e-mail auto deve contar.
 - [ ] Reverter o contorno quando a migração estiver no ar? Não é necessário: os 25 leads podem seguir com o Vini como responsável. Se quiser desfazer, `_bkp_bdr_arroz_assign_20260922` tem o valor anterior (NULL) dos 3 que eu atribuí; os outros 22 foram atribuídos pela tela.

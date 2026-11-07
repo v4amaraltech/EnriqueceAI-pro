@@ -1,6 +1,6 @@
 # Story: "Pediu para ligar depois" pausa a cadência até o retorno
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug fix / regra de negócio
 **Origem:** Vini (09/10/2026) — caso Épou Store (lead `f8e8c883-5111-4f18-a3ed-272774d5002c`, SDR João Fogaça)
 
@@ -44,3 +44,4 @@ A inscrição Recovery `1ce9cdaa-fbb7-4938-95e0-1cb518d6a99b` (Épou Store) foi 
 
 ## Change Log
 - 09/10/2026 — Story criada e implementada (typecheck, lint e 2397 testes ok).
+- 06/11/2026 — PR #463 mesclado (`19f16387`) e no ar (/api/version). Status → Done. Falta só observar um caso real de "Pediu para ligar depois" pausando a cadência.
