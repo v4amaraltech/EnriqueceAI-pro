@@ -2016,6 +2016,7 @@ export type Database = {
           ab_winner_variant: string | null;
           activity_name: string | null;
           ai_personalization: boolean;
+          auto_send: boolean;
           cadence_id: string;
           call_provider: string | null;
           channel: Database['public']['Enums']['channel_type'];
@@ -2037,6 +2038,7 @@ export type Database = {
           ab_winner_variant?: string | null;
           activity_name?: string | null;
           ai_personalization?: boolean;
+          auto_send?: boolean;
           cadence_id: string;
           call_provider?: string | null;
           channel: Database['public']['Enums']['channel_type'];
@@ -2058,6 +2060,7 @@ export type Database = {
           ab_winner_variant?: string | null;
           activity_name?: string | null;
           ai_personalization?: boolean;
+          auto_send?: boolean;
           cadence_id?: string;
           call_provider?: string | null;
           channel?: Database['public']['Enums']['channel_type'];
@@ -2529,7 +2532,7 @@ export type Database = {
           reminder_sent_at: string | null;
           responded_at: string | null;
           result: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at: string;
+          sent_at: string | null;
           token: string;
           updated_at: string;
         };
@@ -2552,7 +2555,7 @@ export type Database = {
           reminder_sent_at?: string | null;
           responded_at?: string | null;
           result?: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at?: string;
+          sent_at?: string | null;
           token?: string;
           updated_at?: string;
         };
@@ -2575,7 +2578,7 @@ export type Database = {
           reminder_sent_at?: string | null;
           responded_at?: string | null;
           result?: Database['public']['Enums']['closer_feedback_result'] | null;
-          sent_at?: string;
+          sent_at?: string | null;
           token?: string;
           updated_at?: string;
         };
@@ -6217,6 +6220,12 @@ export type Database = {
       };
       whatsapp_instances: {
         Row: {
+          auto_send_consecutive_failures: number;
+          auto_send_daily_limit: number;
+          auto_send_limit_changed_on: string | null;
+          auto_send_next_at: string | null;
+          auto_send_pause_reason: string | null;
+          auto_send_paused_at: string | null;
           created_at: string;
           id: string;
           instance_name: string;
@@ -6233,6 +6242,12 @@ export type Database = {
           user_id: string | null;
         };
         Insert: {
+          auto_send_consecutive_failures?: number;
+          auto_send_daily_limit?: number;
+          auto_send_limit_changed_on?: string | null;
+          auto_send_next_at?: string | null;
+          auto_send_pause_reason?: string | null;
+          auto_send_paused_at?: string | null;
           created_at?: string;
           id?: string;
           instance_name: string;
@@ -6249,6 +6264,12 @@ export type Database = {
           user_id?: string | null;
         };
         Update: {
+          auto_send_consecutive_failures?: number;
+          auto_send_daily_limit?: number;
+          auto_send_limit_changed_on?: string | null;
+          auto_send_next_at?: string | null;
+          auto_send_pause_reason?: string | null;
+          auto_send_paused_at?: string | null;
           created_at?: string;
           id?: string;
           instance_name?: string;
@@ -6291,6 +6312,144 @@ export type Database = {
           service_call_id?: string;
         };
         Relationships: [];
+      };
+      whatsapp_send_queue: {
+        Row: {
+          attempts: number;
+          cadence_id: string;
+          claimed_at: string | null;
+          counts_toward_limit: boolean;
+          created_at: string;
+          enrollment_id: string;
+          external_id: string | null;
+          id: string;
+          interaction_id: string | null;
+          lead_id: string;
+          org_id: string;
+          reason: string | null;
+          sender_user_id: string;
+          sent_at: string | null;
+          status: string;
+          step_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          attempts?: number;
+          cadence_id: string;
+          claimed_at?: string | null;
+          counts_toward_limit?: boolean;
+          created_at?: string;
+          enrollment_id: string;
+          external_id?: string | null;
+          id?: string;
+          interaction_id?: string | null;
+          lead_id: string;
+          org_id: string;
+          reason?: string | null;
+          sender_user_id: string;
+          sent_at?: string | null;
+          status?: string;
+          step_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          attempts?: number;
+          cadence_id?: string;
+          claimed_at?: string | null;
+          counts_toward_limit?: boolean;
+          created_at?: string;
+          enrollment_id?: string;
+          external_id?: string | null;
+          id?: string;
+          interaction_id?: string | null;
+          lead_id?: string;
+          org_id?: string;
+          reason?: string | null;
+          sender_user_id?: string;
+          sent_at?: string | null;
+          status?: string;
+          step_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_send_queue_cadence_id_fkey';
+            columns: ['cadence_id'];
+            isOneToOne: false;
+            referencedRelation: 'cadences';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_enrollment_id_fkey';
+            columns: ['enrollment_id'];
+            isOneToOne: false;
+            referencedRelation: 'cadence_enrollments';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_interaction_id_fkey';
+            columns: ['interaction_id'];
+            isOneToOne: false;
+            referencedRelation: 'interactions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_send_queue_step_id_fkey';
+            columns: ['step_id'];
+            isOneToOne: false;
+            referencedRelation: 'cadence_steps';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       worker_run_state: {
         Row: {
