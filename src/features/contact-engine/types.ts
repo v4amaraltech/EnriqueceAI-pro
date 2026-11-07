@@ -66,6 +66,7 @@ export type ContactEngineFlag =
   | 'send_outbox_enqueue'
   | 'dispatcher_v1'
   | 'lead_assignment_shadow'
+  | 'lead_assignment_enforced'
   | 'number_health_v1'
   | 'call_priority_v2'
   | 'edge_command_adapter'

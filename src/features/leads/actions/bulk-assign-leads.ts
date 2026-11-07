@@ -8,6 +8,8 @@ import { from } from '@/lib/supabase/from';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { runLeadAssignmentShadowBatch } from '@/features/contact-engine/services/lead-assignment.service';
+
 import { logLeadEventBulk } from './log-lead-event';
 import { validateBulkLeadIds } from '../services/bulk-leads.service';
 
@@ -52,6 +54,15 @@ export async function bulkAssignLeads(
     return { success: false, error: 'Erro ao reatribuir leads' };
   }
   const confirmedIds = (updated ?? []).map((l) => l.id);
+
+  // PR09: ponto inerte. Desligada a flag lead_assignment_shadow, nao consulta
+  // nada; ligada, so registra log comparando com a escolha do gestor. A
+  // atribuicao acima permanece exatamente como foi feita.
+  void runLeadAssignmentShadowBatch({
+    orgId,
+    source: 'bulk_assign',
+    leads: confirmedIds.map((leadId) => ({ leadId, currentAssignedTo: userId })),
+  }).catch(() => undefined);
 
   // Re-attribute downstream records so reports (team/cadence/loss-reason
   // analytics group enrollments by enrolled_by) credit the new SDR for ongoing
