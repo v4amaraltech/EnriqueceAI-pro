@@ -23,10 +23,12 @@ interface CockpitShellProps {
   viewer: CockpitViewer;
   tab: CockpitTab;
   children: ReactNode;
+  /** Cartão da próxima ligação (flag `call_cockpit_v1`). Ausente = tela como antes. */
+  callCard?: ReactNode;
 }
 
 /** Cabeçalho do Cockpit: saudação, seletor de SDR (gestor) e abas. */
-export function CockpitShell({ viewer, tab, children }: CockpitShellProps) {
+export function CockpitShell({ viewer, tab, children, callCard }: CockpitShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -83,6 +85,8 @@ export function CockpitShell({ viewer, tab, children }: CockpitShellProps) {
           ))}
         </nav>
       </div>
+
+      {callCard}
 
       {children}
     </div>
