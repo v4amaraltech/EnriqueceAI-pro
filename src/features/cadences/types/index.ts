@@ -87,6 +87,8 @@ export interface CadenceStepRow {
   activity_name: string | null;
   instructions: string | null;
   call_provider: CallProvider | null;
+  /** WhatsApp automático: o passo sai sozinho pela fila do número do SDR (whatsapp_send_queue). */
+  auto_send?: boolean;
   reply_type: ReplyType;
   template_id_b: string | null;
   ab_enabled: boolean;
@@ -174,6 +176,7 @@ export interface CadenceStepInsert {
   instructions?: string | null;
   call_provider?: CallProvider | null;
   reply_type?: ReplyType;
+  auto_send?: boolean;
 }
 
 export interface CadenceEnrollmentInsert {

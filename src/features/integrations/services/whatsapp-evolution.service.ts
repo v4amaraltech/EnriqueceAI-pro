@@ -81,8 +81,62 @@ export class EvolutionWhatsAppService {
       return { success: false, error: `${owner} não está conectado. Reconecte via QR Code.` };
     }
 
+    return this.postText(supabase, { apiUrl, apiKey, instance, to: params.to, body: params.body });
+  }
+
+  /**
+   * Envio automático da fila (story whatsapp-evolution-paced-sending): usa SÓ
+   * a instância do próprio SDR — nunca cai na instância padrão da organização,
+   * senão um envio em massa concentraria todo o volume num número só.
+   * `delayMs` mostra "digitando…" antes da mensagem (campo `delay` da Evolution v2).
+   */
+  static async sendFromUserInstance(
+    supabase: SupabaseClient,
+    params: { orgId: string; userId: string; to: string; body: string; delayMs?: number },
+  ): Promise<EvolutionSendResult & { code?: 'not_configured' | 'no_instance' | 'disconnected' }> {
+    const env = getEnv();
+    const apiUrl = env.EVOLUTION_API_URL;
+    const apiKey = env.EVOLUTION_API_KEY;
+    if (!apiUrl || !apiKey) {
+      return { success: false, code: 'not_configured', error: 'Evolution API não configurada no servidor' };
+    }
+
+    const { data: instance } = (await from(supabase, 'whatsapp_instances' as never)
+      .select('id, instance_name, status, phone, user_id')
+      .eq('org_id', params.orgId)
+      .eq('user_id', params.userId)
+      .maybeSingle()) as { data: WhatsAppInstance | null };
+
+    if (!instance) {
+      return { success: false, code: 'no_instance', error: 'SDR sem WhatsApp próprio conectado' };
+    }
+    if (instance.status !== 'connected') {
+      return { success: false, code: 'disconnected', error: 'WhatsApp do SDR não está conectado' };
+    }
+
+    const result = await this.postText(supabase, {
+      apiUrl,
+      apiKey,
+      instance,
+      to: params.to,
+      body: params.body,
+      delayMs: params.delayMs,
+    });
+    if (!result.success && result.error === RECONNECT_HINT) {
+      return { ...result, code: 'disconnected' };
+    }
+    return result;
+  }
+
+  /** POST /message/sendText com o tratamento de erro comum aos dois envios de texto. */
+  private static async postText(
+    supabase: SupabaseClient,
+    args: { apiUrl: string; apiKey: string; instance: WhatsAppInstance; to: string; body: string; delayMs?: number },
+  ): Promise<EvolutionSendResult> {
+    const { apiUrl, apiKey, instance } = args;
+
     // Validate phone number
-    const formattedPhone = validateBrazilianPhone(params.to);
+    const formattedPhone = validateBrazilianPhone(args.to);
     if (!formattedPhone) {
       return { success: false, error: 'Número de telefone inválido' };
     }
@@ -99,7 +153,8 @@ export class EvolutionWhatsAppService {
           },
           body: JSON.stringify({
             number: formattedPhone,
-            text: params.body,
+            text: args.body,
+            ...(args.delayMs ? { delay: args.delayMs } : {}),
           }),
         },
       );

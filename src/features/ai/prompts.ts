@@ -36,6 +36,7 @@ function buildLeadContextBlock(lead: LeadContext): string {
   if (lead.razao_social) parts.push(`Razão Social: ${lead.razao_social}`);
   if (lead.cnpj) parts.push(`CNPJ: ${lead.cnpj}`);
   if (lead.porte) parts.push(`Porte: ${lead.porte}`);
+  if (lead.segmento) parts.push(`Segmento: ${lead.segmento}`);
   if (lead.cnae) parts.push(`CNAE: ${lead.cnae}`);
   if (lead.situacao_cadastral) parts.push(`Situação: ${lead.situacao_cadastral}`);
   if (lead.faturamento_estimado) {

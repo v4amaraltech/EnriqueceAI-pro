@@ -13,6 +13,8 @@ const updateStepContentSchema = z.object({
   ai_personalization: z.boolean().optional(),
   activity_name: z.string().nullable().optional(),
   instructions: z.string().nullable().optional(),
+  /** WhatsApp automático — só em passo de WhatsApp com template. */
+  auto_send: z.boolean().optional(),
 });
 
 /**
@@ -47,6 +49,20 @@ export async function updateStepContent(
   if (parsed.data.ai_personalization !== undefined) updates.ai_personalization = parsed.data.ai_personalization;
   if (parsed.data.activity_name !== undefined) updates.activity_name = parsed.data.activity_name;
   if (parsed.data.instructions !== undefined) updates.instructions = parsed.data.instructions;
+  if (parsed.data.auto_send !== undefined) {
+    if (parsed.data.auto_send) {
+      const { data: step } = (await from(supabase, 'cadence_steps')
+        .select('channel, template_id')
+        .eq('id', parsed.data.stepId)
+        .eq('cadence_id', parsed.data.cadenceId)
+        .maybeSingle()) as { data: { channel: string; template_id: string | null } | null };
+      const templateId = parsed.data.template_id !== undefined ? parsed.data.template_id : step?.template_id;
+      if (step?.channel !== 'whatsapp' || !templateId) {
+        return { success: false, error: 'Envio automático só vale para passo de WhatsApp com template' };
+      }
+    }
+    updates.auto_send = parsed.data.auto_send;
+  }
 
   if (Object.keys(updates).length === 0) {
     return { success: true, data: undefined };

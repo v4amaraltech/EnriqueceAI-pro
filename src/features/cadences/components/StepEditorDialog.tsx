@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
+import { Switch } from '@/shared/components/ui/switch';
 import {
   Tooltip,
   TooltipContent,
@@ -71,7 +72,13 @@ interface StepEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   step: TimelineStep | null;
   templates?: MessageTemplateRow[];
-  onSave: (stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) => void;
+  onSave: (
+    stepId: string,
+    activityName: string | null,
+    instructions: string | null,
+    templateId: string | null,
+    autoSend: boolean,
+  ) => void;
 }
 
 const NO_TEMPLATE = 'none';
@@ -84,11 +91,18 @@ function StepEditorForm({
 }: {
   step: TimelineStep;
   templates: MessageTemplateRow[];
-  onSave: (stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) => void;
+  onSave: (
+    stepId: string,
+    activityName: string | null,
+    instructions: string | null,
+    templateId: string | null,
+    autoSend: boolean,
+  ) => void;
   onCancel: () => void;
 }) {
   const [activityName, setActivityName] = useState(step.activityName ?? '');
   const [templateId, setTemplateId] = useState<string>(step.templateId ?? NO_TEMPLATE);
+  const [autoSend, setAutoSend] = useState<boolean>(step.autoSend ?? false);
 
   // Templates do canal do passo (canais de mensagem: e-mail e WhatsApp).
   const channelTemplates = templates.filter((t) => t.channel === step.channel);
@@ -158,6 +172,8 @@ function StepEditorForm({
       activityName.trim() || null,
       plainText || null,
       templateId === NO_TEMPLATE ? null : templateId,
+      // Envio automático só com template escolhido.
+      step.channel === 'whatsapp' && templateId !== NO_TEMPLATE && autoSend,
     );
   }
 
@@ -221,6 +237,28 @@ function StepEditorForm({
                 ? 'O assunto e o corpo do template preenchem o e-mail automaticamente quando o SDR executa esta atividade.'
                 : 'O template preenche a mensagem automaticamente quando o SDR executa esta atividade (ele ainda pode trocar na hora).'}
             </p>
+          </div>
+        )}
+
+        {/* WhatsApp automático — sai sozinho pela fila do número do SDR */}
+        {step.channel === 'whatsapp' && (
+          <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+            <div className="space-y-1">
+              <Label htmlFor="step-auto-send" className="text-sm font-semibold">
+                Enviar automaticamente
+              </Label>
+              <p className="text-muted-foreground text-xs">
+                {templateId === NO_TEMPLATE
+                  ? 'Escolha um template para ligar o envio automático.'
+                  : 'A mensagem sai sozinha pelo WhatsApp do SDR dono do lead, com limite por dia e intervalo entre envios. O passo não aparece na fila do SDR.'}
+              </p>
+            </div>
+            <Switch
+              id="step-auto-send"
+              checked={templateId !== NO_TEMPLATE && autoSend}
+              onCheckedChange={setAutoSend}
+              disabled={templateId === NO_TEMPLATE}
+            />
           </div>
         )}
 
@@ -375,8 +413,14 @@ function StepEditorForm({
 export function StepEditorDialog({ open, onOpenChange, step, templates = [], onSave }: StepEditorDialogProps) {
   if (!step) return null;
 
-  function handleSave(stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) {
-    onSave(stepId, activityName, instructions, templateId);
+  function handleSave(
+    stepId: string,
+    activityName: string | null,
+    instructions: string | null,
+    templateId: string | null,
+    autoSend: boolean,
+  ) {
+    onSave(stepId, activityName, instructions, templateId, autoSend);
     onOpenChange(false);
   }
 
