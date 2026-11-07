@@ -14,6 +14,7 @@ import {
   type ConfirmTarget,
   type StoredSendCommand,
 } from './outbox.service';
+import { checkDispatchHealth, recordNumberHealthSignals, type DispatchHealthCheck } from './number-health.service';
 import { evaluateSend, type SendGatewayRequest } from './send-decision.service';
 
 /**
@@ -37,6 +38,11 @@ import { evaluateSend, type SendGatewayRequest } from './send-decision.service';
  *    provedor, numero ou canal. Retry so pela reconciliacao.
  *  - Nao ha rotacao nem escolha de numero: o provedor e a instancia vem do comando
  *    autorizado pelo gateway.
+ *  - Saude e tetos por numero (PR10): so para o provedor `evolution` e so com a flag
+ *    `number_health_v1` ligada (desligada: nenhuma leitura extra alem da flag, nenhuma
+ *    escrita, fluxo identico). Teto esgotado adia (a fila espera); numero pausado ou em
+ *    revisao cancela. Nunca troca de instancia para contornar. Depois da chamada ao
+ *    provedor, o envio (aceito ou incerto) e somado a janela do dia.
  *  - Logs: somente ids e motivos. Sem telefone, e-mail, corpo ou segredos.
  */
 export const DISPATCHER_FLAG_KEY = 'dispatcher_v1';
@@ -349,6 +355,30 @@ export async function dispatchOnce(input: DispatchInput): Promise<DispatchRunRes
   return result;
 }
 
+/** Telemetria de saude nunca interrompe o envio nem o registro do resultado. */
+async function recordHealthOutcome(
+  orgId: Uuid,
+  health: Extract<DispatchHealthCheck, { enabled: true; allowed: true }>,
+  outcome: ProviderSendOutcome,
+  at: Date,
+): Promise<void> {
+  try {
+    const left = outcome.kind !== 'rejected';
+    await recordNumberHealthSignals({
+      orgId,
+      instanceId: health.instanceId,
+      now: at,
+      delta: {
+        sentNewContacts: left && health.isNewContact ? 1 : 0,
+        sentToRespondents: left && !health.isNewContact ? 1 : 0,
+        failures: outcome.kind === 'rejected' ? 1 : 0,
+      },
+    });
+  } catch {
+    // ignorado de proposito
+  }
+}
+
 async function processClaimed(input: DispatchInput, claimed: ClaimedSend): Promise<DispatchItemOutcome> {
   const now = input.now ?? (() => new Date());
   const { orgId, leaseOwner } = input;
@@ -400,6 +430,30 @@ async function processClaimed(input: DispatchInput, claimed: ClaimedSend): Promi
 
   // 4. Flag de novo, depois transiciona para `sending` (revalida holds no banco)
   if (!(await isDispatcherEnabled())) return 'deferred';
+
+  // 4a. Saude e tetos do numero (PR10), so Evolution. O gateway acabou de confirmar a continuidade.
+  let health: DispatchHealthCheck = { enabled: false };
+  if (command.provider === 'evolution') {
+    health = await checkDispatchHealth({
+      orgId,
+      leadId: claimed.leadId,
+      senderInstanceId: command.senderInstanceId,
+      continuityConfirmedByGateway: true,
+      now: now(),
+    });
+    if (health.enabled && !health.allowed) {
+      logDispatcher('dispatcher_number_health_blocked', {
+        orgId,
+        outboxId,
+        reasons: health.reasons.join(','),
+        retryable: health.retryable,
+      });
+      // Capacidade esgotada ou leitura incerta: espera. Pausa ou revisao: cancela. Nunca outro numero.
+      if (health.retryable) return 'deferred';
+      return closeBeforeSend('cancelled', `number_health:${health.reasons.join(',')}`.slice(0, 120));
+    }
+  }
+
   const toSending = await confirmWithRetry({
     orgId,
     outboxId,
@@ -425,6 +479,11 @@ async function processClaimed(input: DispatchInput, claimed: ClaimedSend): Promi
     sendOutcome = timed.timedOut ? { kind: 'ambiguous', reason: 'provider_timeout' } : timed.value;
   } catch {
     sendOutcome = { kind: 'ambiguous', reason: 'provider_exception' };
+  }
+
+  // 5a. Soma na janela de saude: aceito ou incerto pode ter saido; rejeitado nao saiu (falha).
+  if (health.enabled && health.allowed) {
+    await recordHealthOutcome(orgId, health, sendOutcome, now());
   }
 
   // 6. Registro do resultado -----------------------------------------------------
