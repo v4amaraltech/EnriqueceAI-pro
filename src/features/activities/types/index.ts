@@ -48,6 +48,11 @@ export interface PendingActivity {
   cadenceCreatedBy: string | null;
   stepId: string;
   stepOrder: number;
+  /**
+   * Dia da cadência em que o passo cai (1 + soma dos `delay_days` até ele).
+   * Ausente em retornos agendados.
+   */
+  stepDay?: number;
   totalSteps: number;
   channel: ChannelType;
   templateId: string | null;

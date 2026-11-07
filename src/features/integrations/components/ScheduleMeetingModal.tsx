@@ -144,7 +144,7 @@ export function ScheduleMeetingModal({
 
   useEffect(() => {
     if (open && !closersLoaded) {
-      listClosers().then((result) => {
+      listClosers({ onlySchedulable: true }).then((result) => {
         if (result.success) setClosers(result.data);
         setClosersLoaded(true);
       });

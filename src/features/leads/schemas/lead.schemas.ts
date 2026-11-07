@@ -191,7 +191,7 @@ export const leadFiltersSchema = z.object({
   assigned_to: uuidFilter('__unassigned__'),
   cadence_id: uuidFilter('__none__'),
   loss_reason_id: uuidListFilter,
-  sort_by: z.enum(['created_at', 'fit_score', 'nome_fantasia', 'status', 'engagement_score']).default('created_at'),
+  sort_by: z.enum(['created_at', 'updated_at', 'fit_score', 'nome_fantasia', 'status', 'engagement_score']).default('created_at'),
   sort_dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),
   per_page: z.coerce.number().int().positive().max(100).default(25),

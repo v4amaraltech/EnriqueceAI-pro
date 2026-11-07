@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
@@ -11,6 +12,7 @@ import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, Le
 import { autoSendKey, isHandledByAutoSend } from '@/features/whatsapp-auto-send/utils/auto-step';
 
 import { entraNaFilaHumana } from '../utils/fila-humana';
+import { cadenceStepDay } from '../utils/step-day';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity, ScheduledActivityKind } from '../types';
 
@@ -70,10 +72,15 @@ interface EnrollmentRow {
   cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'> & { executor?: string | null };
 }
 
-export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
+export async function fetchPendingActivities(
+  options: { assignedTo?: string } = {},
+): Promise<ActionResult<PendingActivity[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { supabase, userId, role } = auth.data;
+  // Dono dos leads da fila: SDR sempre a própria; gestor pode pedir um SDR
+  // (Cockpit) — assim o teto de 1500/100 vale para aquele SDR, não para a org.
+  const ownerFilter = role !== 'manager' ? userId : isUuid(options.assignedTo) ? options.assignedTo : null;
 
   // 1. Fetch active enrollments whose current step is actually due (next_step_due <= now()).
   // Without this filter the queue ignores the cadence's configured delay_days — every step
@@ -97,7 +104,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
-  if (role !== 'manager') enrollQuery = enrollQuery.eq('lead.assigned_to', userId);
+  if (ownerFilter) enrollQuery = enrollQuery.eq('lead.assigned_to', ownerFilter);
   const { data: enrollments, error: enrollError } = (await enrollQuery
     .order('next_step_due', { ascending: true })
     .limit(QUEUE_ENROLLMENT_LIMIT)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
@@ -248,6 +255,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
           cadenceCreatedBy: enrollment.cadence.created_by,
           stepId: step.id,
           stepOrder: step.step_order,
+          stepDay: cadenceStepDay(cadenceSteps, step.step_order),
           totalSteps: enrollment.cadence.total_steps,
           channel: step.channel,
           templateId: step.template_id,
@@ -293,7 +301,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   let scheduledQuery = from(supabase, 'scheduled_activities')
     .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${SCHEDULED_LEAD_COLUMNS})`)
     .eq('status', 'pending');
-  if (role !== 'manager') scheduledQuery = scheduledQuery.eq('leads.assigned_to', userId);
+  if (ownerFilter) scheduledQuery = scheduledQuery.eq('leads.assigned_to', ownerFilter);
   const scheduledResult = (await scheduledQuery
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
