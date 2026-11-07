@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -34,98 +34,98 @@ const STATUS_LABEL: Record<string, { label: string; variant: 'default' | 'second
   canceled: { label: 'Cancelada', variant: 'secondary' },
 };
 
-export function CockpitView({ data }: { data: CockpitData }) {
-  const { isManager, numbers, queue, ownHasNumber } = data;
+/**
+ * Card do WhatsApp automático na aba "Tarefas do dia" do Cockpit: o número do
+ * SDR exibido (limite, fila, pausa) e, sob demanda, a fila de hoje.
+ * `data` já vem filtrado para o SDR exibido.
+ */
+export function WhatsAppAutoSendCard({ data, isOwn }: { data: CockpitData; isOwn: boolean }) {
+  const { numbers, queue } = data;
+  const [showQueue, setShowQueue] = useState(false);
+  const number = numbers[0];
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Cockpit</h1>
-        <p className="text-muted-foreground text-sm">
-          {isManager
-            ? 'WhatsApp automático do time: quanto cada número já enviou hoje, o que está na fila e quem está pausado.'
-            : 'O que o seu WhatsApp está enviando sozinho hoje e o que ainda está na fila.'}
-        </p>
-      </div>
-
-      {numbers.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-start gap-3 py-8">
-            <div className="flex items-center gap-2 font-medium">
-              <Plug className="h-4 w-4" />
-              {isManager ? 'Nenhum SDR com WhatsApp próprio conectado' : 'Você não tem WhatsApp próprio conectado'}
-            </div>
-            <p className="text-muted-foreground text-sm">
-              O envio automático usa só o número do SDR dono do lead. Sem número próprio, os passos automáticos voltam
-              para a fila manual.
-            </p>
-            {!ownHasNumber && (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/settings/integrations">Conectar WhatsApp</Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {numbers.map((n) => (
-            <NumberCard key={n.instanceId} number={n} showOwner={isManager} />
-          ))}
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Fila de hoje</CardTitle>
-          <CardDescription>Primeiro o que ainda vai sair, na ordem; depois o que já aconteceu hoje.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {queue.length === 0 ? (
-            <p className="text-muted-foreground py-4 text-sm">Nada na fila hoje.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lead</TableHead>
-                  {isManager && <TableHead>SDR</TableHead>}
-                  <TableHead>Cadência</TableHead>
-                  <TableHead>Situação</TableHead>
-                  <TableHead className="text-right">Quando</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {queue.map((row) => {
-                  const st = STATUS_LABEL[row.status] ?? { label: row.status, variant: 'outline' as const };
-                  const reason = queueReasonLabel(row.status, row.reason);
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell className="max-w-[240px] truncate font-medium">
-                        <Link href={`/leads/${row.leadId}`} className="hover:underline">
-                          {row.leadName}
-                        </Link>
-                      </TableCell>
-                      {isManager && <TableCell>{row.userName}</TableCell>}
-                      <TableCell className="max-w-[200px] truncate">{row.cadenceName}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <Badge variant={st.variant} className="w-fit">
-                            {st.label}
-                          </Badge>
-                          {reason && <span className="text-muted-foreground text-xs">{reason}</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-right text-xs">
-                        {dateTimeFmt.format(new Date(row.at))}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+  if (!number) {
+    return (
+      <Card className="h-full">
+        <CardContent className="flex h-full flex-col items-start justify-center gap-3 py-6">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Plug className="h-4 w-4" />
+            {isOwn ? 'Você não tem WhatsApp próprio conectado' : 'Este SDR não tem WhatsApp próprio conectado'}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            O envio automático usa só o número do SDR dono do lead. Sem número próprio, os passos automáticos voltam
+            para a fila manual.
+          </p>
+          {isOwn && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/integrations">Conectar WhatsApp</Link>
+            </Button>
           )}
         </CardContent>
       </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <NumberCard number={number} showOwner={!isOwn} />
+      {queue.length > 0 && (
+        <Button variant="ghost" size="sm" className="w-full" onClick={() => setShowQueue((v) => !v)}>
+          {showQueue ? 'Esconder' : 'Ver'} fila do WhatsApp de hoje ({queue.length})
+        </Button>
+      )}
+      {showQueue && <WhatsAppQueueTable queue={queue} />}
     </div>
+  );
+}
+
+function WhatsAppQueueTable({ queue }: { queue: CockpitData['queue'] }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Fila do WhatsApp de hoje</CardTitle>
+        <CardDescription>Primeiro o que ainda vai sair, na ordem; depois o que já aconteceu hoje.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Lead</TableHead>
+              <TableHead>Cadência</TableHead>
+              <TableHead>Situação</TableHead>
+              <TableHead className="text-right">Quando</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {queue.map((row) => {
+              const st = STATUS_LABEL[row.status] ?? { label: row.status, variant: 'outline' as const };
+              const reason = queueReasonLabel(row.status, row.reason);
+              return (
+                <TableRow key={row.id}>
+                  <TableCell className="max-w-[200px] truncate font-medium">
+                    <Link href={`/leads/${row.leadId}`} className="hover:underline">
+                      {row.leadName}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-[160px] truncate">{row.cadenceName}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant={st.variant} className="w-fit">
+                        {st.label}
+                      </Badge>
+                      {reason && <span className="text-muted-foreground text-xs">{reason}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-right text-xs">
+                    {dateTimeFmt.format(new Date(row.at))}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 

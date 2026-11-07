@@ -2650,6 +2650,7 @@ export type Database = {
           name: string;
           org_id: string;
           phone: string | null;
+          scheduling_enabled: boolean;
           updated_at: string;
         };
         Insert: {
@@ -2660,6 +2661,7 @@ export type Database = {
           name: string;
           org_id: string;
           phone?: string | null;
+          scheduling_enabled?: boolean;
           updated_at?: string;
         };
         Update: {
@@ -2670,6 +2672,7 @@ export type Database = {
           name?: string;
           org_id?: string;
           phone?: string | null;
+          scheduling_enabled?: boolean;
           updated_at?: string;
         };
         Relationships: [
@@ -7275,6 +7278,13 @@ export type Database = {
         Returns: boolean;
       };
       cleanup_provider_events: { Args: never; Returns: undefined };
+      cockpit_lead_stages: {
+        Args: { p_lead_ids?: string[]; p_user_id: string };
+        Returns: {
+          lead_id: string;
+          stage: string;
+        }[];
+      };
       confirm_email_step: {
         Args: {
           p_conteudo?: string;
@@ -7377,6 +7387,13 @@ export type Database = {
         Returns: {
           cnt: number;
           performer_id: string;
+        }[];
+      };
+      count_cockpit_lead_stages: {
+        Args: { p_user_id: string };
+        Returns: {
+          stage: string;
+          total: number;
         }[];
       };
       count_leads_by_loss_reason: {

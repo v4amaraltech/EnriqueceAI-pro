@@ -113,6 +113,8 @@ function SdrAvatar({ sdr, className }: { sdr: SdrOption; className?: string }) {
 
 interface SdrPaceSectionProps {
   data: SdrPaceData;
+  /** Esconde o seletor (o Cockpit já escolhe o SDR no cabeçalho). */
+  hideSelector?: boolean;
 }
 
 /**
@@ -121,7 +123,7 @@ interface SdrPaceSectionProps {
  * dashboard; ignora cadência/vendedores (as metas valem para o mês inteiro).
  * Trocar o SDR busca só os números dele e atualiza `?sdr=` sem recarregar a página.
  */
-export function SdrPaceSection({ data }: SdrPaceSectionProps) {
+export function SdrPaceSection({ data, hideSelector = false }: SdrPaceSectionProps) {
   const [selectedUserId, setSelectedUserId] = useState(data.selectedUserId);
   const [metrics, setMetrics] = useState(data.metrics);
   const [isPending, startTransition] = useTransition();
@@ -163,7 +165,7 @@ export function SdrPaceSection({ data }: SdrPaceSectionProps) {
 
   return (
     <section className="space-y-4" data-slot="sdr-pace-section">
-      <div className="rounded-lg border bg-card p-4">
+      <div className={cn('rounded-lg border bg-card p-4', hideSelector && 'hidden')}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           SDR selecionado
         </p>

@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit/audit-log';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface CloserRow {
@@ -22,17 +23,23 @@ function closersFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseCli
   return from(supabase, 'closers');
 }
 
-/** List all active closers for the org — available to all members (SDRs need this). */
-export async function listClosers(): Promise<ActionResult<CloserRow[]>> {
+/**
+ * List all active closers for the org — available to all members (SDRs need this).
+ * `onlySchedulable`: só os habilitados para agendamento (modal de agendar
+ * reunião). Os demais usos (nomes na tabela, troca de closer) veem todos.
+ */
+export async function listClosers(options: { onlySchedulable?: boolean } = {}): Promise<ActionResult<CloserRow[]>> {
   const authResult = await getAuthOrgIdResult();
   if (!authResult.success) return authResult;
   const { orgId, supabase } = authResult.data;
 
-  const { data, error } = (await closersFrom(supabase)
+  let query = closersFrom(supabase)
     .select('id, org_id, name, email, phone, created_at')
     .eq('org_id', orgId)
-    .is('deleted_at', null)
-    .order('name', { ascending: true })) as { data: CloserRow[] | null; error: unknown };
+    .is('deleted_at', null);
+  if (options.onlySchedulable) query = query.eq('scheduling_enabled', true);
+
+  const { data, error } = (await query.order('name', { ascending: true })) as { data: CloserRow[] | null; error: unknown };
 
   if (error) return { success: false, error: 'Erro ao listar closers' };
   return { success: true, data: data ?? [] };
@@ -119,4 +126,32 @@ export async function deleteCloser(id: string): Promise<ActionResult<{ deleted: 
   logAudit({ orgId, action: 'closer.deleted', resourceType: 'closer', resourceId: id });
   revalidatePath('/settings/prospecting');
   return { success: true, data: { deleted: true } };
+}
+
+/**
+ * Liga/desliga o closer para agendamento (Cockpit > Closers) — só gestor.
+ * O RLS de closers também só deixa gestor alterar.
+ */
+export async function setCloserSchedulingEnabled(id: string, enabled: boolean): Promise<ActionResult<{ id: string; enabled: boolean }>> {
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Acesso restrito a gestores' };
+  }
+  if (!isUuid(id)) return { success: false, error: 'Closer inválido' };
+
+  const { data, error } = (await closersFrom(supabase)
+    .update({ scheduling_enabled: enabled })
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle()) as { data: { id: string } | null; error: unknown };
+
+  if (error || !data) return { success: false, error: 'Erro ao atualizar o closer' };
+  logAudit({ orgId, action: 'closer.scheduling_toggled', resourceType: 'closer', resourceId: id, metadata: { enabled } });
+  revalidatePath('/cockpit');
+  return { success: true, data: { id, enabled } };
 }
