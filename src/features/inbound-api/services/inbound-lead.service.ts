@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { runLeadAssignmentShadow } from '@/features/contact-engine/services/lead-assignment.service';
 import { from } from '@/lib/supabase/from';
 import { exceedsLimit } from '@/lib/utils/plan-limits';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
@@ -188,6 +189,15 @@ async function ingestSingleLead(
     message: `Lead criado via API (${source ?? 'inbound'})`,
     metadata: { source: 'inbound_api', lead_source: source ?? null },
   });
+
+  // PR09: ponto inerte. Com lead_assignment_shadow desligada nao consulta nada;
+  // ligada, so calcula e registra log (sem PII). Nao altera a atribuicao.
+  void runLeadAssignmentShadow({
+    orgId,
+    leadId,
+    currentAssignedTo: data.assigned_to ?? null,
+    source: 'inbound',
+  }).catch(() => undefined);
 
   // Fire-and-forget: webhook dispatch + enrichment
   dispatchWebhookEvent(supabase, orgId, 'lead.created', {

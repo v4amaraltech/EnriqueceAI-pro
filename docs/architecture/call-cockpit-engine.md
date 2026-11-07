@@ -236,6 +236,18 @@ SELECT cron.schedule(
 
 Pausar: `UPDATE app_flags SET enabled = false WHERE key = 'dispatcher_v1';` (a rota passa a responder sem ler a fila). Nunca reabre um caminho sem gateway.
 
+## 11. Distribuição de leads (PR09)
+
+Status: implementado atrás de `lead_assignment_shadow` e `lead_assignment_enforced` (globais em `app_flags`, nascem desligadas). Nenhum chamador grava atribuição neste PR.
+
+- Serviço: `contact-engine/services/lead-assignment.service.ts`. Reusa `pickLeastLoadedSdr` e `countOpenEnrollmentsBySdr` do recovery.
+- Migration `20261107190000`: `lead_assignment_policies` (capacidade padrão, cursor e `cursor_version`), `lead_assignment_members` (elegíveis, capacidade própria, posição), RPC `assign_lead_by_policy` (trava a política, CAS no cursor), RLS por org, escrita só `service_role`.
+- Ordem de decisão: `assigned_to` > `pending_assigned_to` > dono de conversa ativa (PR05) > política (menor carga; empate no anel `(position, user_id)` a partir do cursor).
+- Shadow: calcula e escreve log estruturado `lead_assignment_shadow` (ids e motivos, sem PII). Não grava nada nem avança o cursor. Pontos inertes: `inbound-lead.service.ts` e `bulk-assign-leads.ts`.
+- Enforced: `assignLeadByPolicy` só atribui lead sem dono, sem pendência e sem conversa; reavalia até 3 vezes em `cursor_conflict`.
+- Não faz: reatribuição em massa, mudança do rodízio do recovery, leitura ou escrita de números, instâncias ou provedores.
+- Ativação (ação separada): aplicar a migration, rodar `pnpm gen:types`, popular política e membros, ligar o shadow e comparar os logs antes de qualquer uso do enforced.
+
 ## 9. Fora do escopo do PR01
 
 Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, regeneração de `types.ts` do Supabase (não há mudança de schema), qualquer envio de mensagem. Nenhum segredo, credencial ou dado real consta neste documento ou nos tipos.

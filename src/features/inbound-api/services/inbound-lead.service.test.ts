@@ -9,6 +9,10 @@ import { ingestInboundLeads } from './inbound-lead.service';
 // test exercises the dedup logic without touching a real DB.
 vi.mock('@/lib/supabase/from', () => ({ from: vi.fn() }));
 vi.mock('@/features/leads/actions/log-lead-event', () => ({ logLeadEvent: vi.fn() }));
+// PR09: ponto de shadow inerte; o servico em si e testado em contact-engine.
+vi.mock('@/features/contact-engine/services/lead-assignment.service', () => ({
+  runLeadAssignmentShadow: vi.fn().mockResolvedValue(null),
+}));
 vi.mock('@/features/cadences/services/webhook-dispatch.service', () => ({
   dispatchWebhookEvent: vi.fn(() => Promise.resolve()),
 }));
