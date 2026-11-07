@@ -122,7 +122,15 @@ Observações para o @dev:
 - [x] Migration aplicada em produção em 06/11 (versões `20261106223900` e `20261106223931`; arquivos renomeados para casar com prod). Conferido: colunas, RLS, policy, trigger, cron `process-whatsapp-queue` ativo com URL e autenticação certas, 0 passos ligados.
 - [x] `20261106223931`: `authenticated` só com SELECT na fila (o privilégio padrão do schema dava escrita e TRUNCATE, que ignora RLS).
 - [x] `pnpm gen:types` rodado; typecheck verde. O arquivo também trouxe `sent_at` anulável (mudança de prod de outra branch, a do feedback adiado do closer).
-- [ ] PR 2 — menu Cockpit (critérios 12–14).
+- [x] PR 1 mesclado (#513, `9341981`) e no ar em 07/11 00:35 UTC; cron validado à mão (200, `enqueued 0`, rodada em `worker_run_state`).
+
+### PR 2 — menu Cockpit (branch `feat/whatsapp-cockpit`, 07/11/2026)
+- [x] `/cockpit` no menu (barra do topo → Prospecção, menu lateral, mobile e breadcrumbs) para todos os usuários.
+- [x] `fetchCockpit`: SDR recebe só o próprio número e a própria fila; gestor recebe todos os números de SDR do time (critérios 12–13). A fila já é escopada pelo RLS; os números (RLS org-wide em `whatsapp_instances`) são filtrados no servidor (critério 14).
+- [x] `buildCockpit` (puro): contatos novos de hoje × limite, enviadas, na fila, falhas do dia, pausa e motivo, próximo envio; fila do dia com pendentes primeiro — 8 testes.
+- [x] `setAutoSendPaused`: pausar/retomar com checagem de posse (SDR só o próprio, gestor qualquer um da org, instância da organização nunca) e escrita pelo service role só nas colunas de pausa; não retoma com o WhatsApp desconectado; retomar zera falhas e intervalo — 6 testes.
+- [x] Tela conferida no navegador com dados de exemplo (gestor com número conectado e pausado, SDR sem número). Página temporária sob `/docs/` apagada.
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test:run` (2897 passaram) e `pnpm build` verdes.
 
 ### Decisões do dev
 - Envio automático só com template escolhido: o campo "Mensagem / Instruções" do passo pode ser orientação para o SDR e não pode ir para o lead.
@@ -149,6 +157,7 @@ Observações para o @dev:
 - `src/features/cadences/actions/update-step-content.ts`
 - `src/features/cadences/components/CadenceTimeline.tsx`, `CadenceBuilder.tsx`, `StepEditorDialog.tsx`
 - `src/lib/workers/critical-workers.ts` + `.test.ts`
+- PR 2: `src/app/(app)/cockpit/page.tsx`, `src/features/whatsapp-auto-send/actions/fetch-cockpit.ts`, `actions/set-auto-send-paused.ts` + `.test.ts`, `utils/cockpit-summary.ts` + `.test.ts`, `components/CockpitView.tsx`, `src/shared/components/TopBar.tsx` + `.test.tsx`, `AppSidebar.tsx`, `Breadcrumbs.tsx`
 
 ## Change Log
 - 06/11/2026 — Story criada (Draft) a partir da conversa com o Vini sobre IA executando a cadência e o SDR só ligando.
@@ -156,3 +165,4 @@ Observações para o @dev:
 - 06/11/2026 — @po validou: GO 9/10, Draft → Ready. Critérios 3, 6, 8, 9 e 11 ajustados; critérios 15 e 16 adicionados; estimativa 6–8 dias.
 - 06/11/2026 — @dev: PR 1 implementado (Ready → InProgress). Falta migration em prod + `gen:types` + PR 2 (Cockpit).
 - 06/11/2026 — Migration aplicada em prod + leitura só para `authenticated` + `gen:types`.
+- 07/11/2026 — PR 1 no ar (#513). PR 2 (Cockpit) implementado; critérios 1–16 cobertos. Falta: PR 2 mesclado + piloto em produção para Done.

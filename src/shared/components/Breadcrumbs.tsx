@@ -19,6 +19,7 @@ const pathLabels: Record<string, string> = {
   dashboard: 'Dashboard',
   leads: 'Leads',
   atividades: 'Atividades',
+  cockpit: 'Cockpit',
   cadences: 'Cadências',
   templates: 'Templates',
   reports: 'Relatórios',
