@@ -44,6 +44,8 @@ export type OutboxStatus =
   | 'reserved'
   | 'sending'
   | 'sent'
+  /** PR08: entrega confirmada pelo provedor (callback). Ver reconcile_send. */
+  | 'delivered'
   | 'failed'
   | 'uncertain'
   | 'suppressed'
