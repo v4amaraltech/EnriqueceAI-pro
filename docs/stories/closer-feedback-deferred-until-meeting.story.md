@@ -1,6 +1,6 @@
 # Story: Feedback do closer quando o "Ganho" vem antes da reunião — agendar, não descartar
 
-**Status:** InProgress
+**Status:** Done
 **Tipo:** Bug fix / regra de negócio
 **Origem:** Vini (30/10/2026) — closer Jhonata não recebeu o link do lead NEXT360 Telecom
 
@@ -32,9 +32,9 @@ Casos reais (out/2026, closer Jhonata): NEXT360 Telecom, Construtora Epereira, B
 
 ## Ordem de deploy (IMPORTANTE)
 1. ✅ Migration `20261106193118_closer_feedback_sent_at_nullable.sql` aplicada em prod em 06/11/2026 **antes** do deploy (tira o `NOT NULL`, mantém o `DEFAULT now()` para o código antigo).
-   - **Depois do deploy:** aplicar `20261106200000_closer_feedback_sent_at_drop_default.sql` (tira o `DEFAULT`).
-2. `pnpm gen:types` depois da migration aplicada (commit separado `chore(types): regenerate`).
-3. O cron `feedback-reminders` roda 1x/dia (13:00 UTC). Para o link sair perto do início da reunião, trocar para 1x/hora (lembretes e CRM fallback já são idempotentes/gated por 24h):
+   - ✅ **Depois do deploy:** aplicada em 06/11/2026 `20261106200000_closer_feedback_sent_at_drop_default.sql` (tira o `DEFAULT`).
+2. ✅ `pnpm gen:types` depois da migration aplicada (commit separado `chore(types): regenerate`).
+3. ✅ Feito em 06/11/2026 (`0 13 * * *` → `5 * * * *`): o cron `feedback-reminders` roda 1x/dia (13:00 UTC). Para o link sair perto do início da reunião, trocar para 1x/hora (lembretes e CRM fallback já são idempotentes/gated por 24h):
    ```sql
    SELECT cron.alter_job((SELECT jobid FROM cron.job WHERE jobname = 'feedback-reminders'), schedule := '5 * * * *');
    ```
@@ -62,3 +62,4 @@ Casos reais (out/2026, closer Jhonata): NEXT360 Telecom, Construtora Epereira, B
 
 ## Change Log
 - 2026-10-30: story criada e implementação (@dev). Commit `4c223ab0`; PR #509 aberto, `main` (#507 e #508) mesclada na branch em `ae76bf65` — o cron agora roda envio adiado → lembretes → fallback CRM → reconciliação.
+- 2026-11-06: PR #509 mesclado (`c8133dfd`) e no ar; migration dividida em 2 partes, ambas em prod. Cron `feedback-reminders` trocado para 1x/hora (`5 * * * *`). Status → Done; falta só observar um caso real.
