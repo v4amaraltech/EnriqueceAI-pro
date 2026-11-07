@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 
-import { readAiOutcome, type AiOutcome } from '../ai-outcome';
+import { AI_OUTCOME_REVIEW_CONFIDENCE, readAiOutcome, type AiOutcome } from '../ai-outcome';
 import { applySdrCallResult } from './apply-sdr-call-result';
 import { classifyCallOutcome, type CallOutcomeClassification, type CallOutcomeInput } from './call-outcome-classifier';
 import { scheduleCallbackActivity } from './schedule-callback.service';
@@ -85,7 +85,10 @@ export async function applyAiCallOutcome(
   const now = deps.now ?? (() => new Date());
 
   const state = await readCallState(supabase, call.id);
-  if (readAiOutcome(state?.metadata)?.status !== 'pending') return null;
+  const pendingOutcome = readAiOutcome(state?.metadata);
+  if (pendingOutcome?.status !== 'pending') return null;
+  // Só ligações armadas pelo cockpit carregam o marcador; as demais seguem como antes.
+  const holdLowConfidence = pendingOutcome.hold_low_confidence === true;
 
   const startedAt = now().toISOString();
   const { data: claimed } = (await from(supabase, 'calls')
@@ -112,6 +115,24 @@ export async function applyAiCallOutcome(
     console.error(`[ai-outcome] classificação falhou para a ligação ${call.id}: ${msg}`);
     await markAiOutcomeFailed(supabase, call.id, msg);
     return { status: 'failed', needs_review: true, error: msg };
+  }
+
+  // Baixa confiança no cockpit: não aplica nada, só guarda a sugestão para revisão humana.
+  if (holdLowConfidence && result.confidence < AI_OUTCOME_REVIEW_CONFIDENCE) {
+    const held: AiOutcome = {
+      status: 'done',
+      disposition: result.disposition,
+      confidence: result.confidence,
+      summary: result.summary,
+      callback_at: result.callback_at,
+      scheduled_activity_id: null,
+      model: result.model,
+      needs_review: true,
+      applied: false,
+      classified_at: now().toISOString(),
+    };
+    await writeAiOutcome(supabase, call.id, held);
+    return held;
   }
 
   let needsReview = result.needs_review;

@@ -145,6 +145,56 @@ describe('applyAiCallOutcome', () => {
     expect(await applyAiCallOutcome(client, CALL, 'alô', { classify, now: NOW })).toBeNull();
     expect(classify).not.toHaveBeenCalled();
   });
+
+  describe('retenção por baixa confiança (cockpit, hold_low_confidence)', () => {
+    const armed = { ai_outcome: { status: 'pending', hold_low_confidence: true } };
+
+    it('baixa confiança armada: não aplica desfecho, notas nem retorno; vira exceção revisável', async () => {
+      const { client, state } = fakeCalls({ metadata: armed });
+      const out = await applyAiCallOutcome(client, CALL, 'alô', {
+        classify: async () =>
+          classification({ disposition: 'callback_requested', callback_at: '2026-11-06T18:00:00.000Z', confidence: 0.4, needs_review: true }),
+        now: NOW,
+      });
+      expect(out).toMatchObject({ status: 'done', needs_review: true, applied: false, scheduled_activity_id: null, confidence: 0.4 });
+      expect(applySdrCallResult).not.toHaveBeenCalled();
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(state.metadata.ai_outcome).toMatchObject({ status: 'done', applied: false });
+    });
+
+    it('alta confiança armada: aplica normalmente', async () => {
+      const { client } = fakeCalls({ metadata: armed });
+      const out = await applyAiCallOutcome(client, CALL, 'alô', { classify: async () => classification(), now: NOW });
+      expect(out).toMatchObject({ status: 'done', needs_review: false });
+      expect(out?.applied).toBeUndefined();
+      expect(applySdrCallResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('flag desligada (sem marcador): baixa confiança continua sendo aplicada com selo Revisar, como antes', async () => {
+      const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+      const out = await applyAiCallOutcome(client, CALL, 'alô', {
+        classify: async () => classification({ confidence: 0.4, needs_review: true }),
+        now: NOW,
+      });
+      expect(out?.needs_review).toBe(true);
+      expect(out?.applied).toBeUndefined();
+      expect(applySdrCallResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('callback repetido (replay) não classifica nem aplica duas vezes', async () => {
+      const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+      const classify = vi.fn(async () =>
+        classification({ disposition: 'callback_requested', callback_at: '2026-11-06T18:00:00.000Z', callback_time_from_lead: true }),
+      );
+      const first = await applyAiCallOutcome(client, CALL, 'alô', { classify, now: NOW });
+      const second = await applyAiCallOutcome(client, CALL, 'alô', { classify, now: NOW });
+      expect(first?.status).toBe('done');
+      expect(second).toBeNull();
+      expect(classify).toHaveBeenCalledTimes(1);
+      expect(applySdrCallResult).toHaveBeenCalledTimes(1);
+      expect(scheduleCallbackActivity).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('composeAiNotes', () => {

@@ -45,6 +45,14 @@ export interface AiOutcome {
   classified_at?: string | null;
   started_at?: string | null;
   error?: string | null;
+  /**
+   * Marcado pelo cockpit (flag `call_cockpit_outcomes`) ao armar a ligação:
+   * resultado com baixa confiança NÃO é aplicado; vira exceção revisável.
+   * Ausente = comportamento anterior (aplica sempre e só marca "Revisar").
+   */
+  hold_low_confidence?: boolean;
+  /** `false` = a IA classificou, mas nada foi gravado em `sdr_disposition`, `notes` nem retorno. */
+  applied?: boolean;
 }
 
 /** Lê `metadata.ai_outcome` de uma linha de `calls` (tolerante a lixo). */

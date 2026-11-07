@@ -143,6 +143,21 @@ describe('fetchNextCallCard', () => {
     expect(await fetchNextCallCard({ viewer: viewer() })).toEqual({ status: 'empty' });
   });
 
+  it('pós-ligação pendente não trava a próxima: o lead já trabalhado é pulado e o seguinte aparece', async () => {
+    const server = setup({
+      candidates: [
+        { id: 'lead-1', updated_at: '2026-11-06T10:00:00Z', meeting_no_show_at: null, telefone: '11999990000' },
+        { id: 'lead-2', updated_at: '2026-11-05T10:00:00Z', meeting_no_show_at: null, telefone: '11988880000' },
+      ],
+      lead: fullLead({ id: 'lead-2' }),
+    });
+    const r = await fetchNextCallCard({ viewer: viewer(), now: new Date('2026-11-07T12:00:00Z'), excludeLeadIds: ['lead-1'] });
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') expect(r.data.context.leadId).toBe('lead-2');
+    // A escolha vem só de leads, bloqueios e interações: resumo/transcrição pendentes não entram.
+    expect(server.log.find((l) => l.table === 'leads')).toBeTruthy();
+  });
+
   it('erro ao ler bloqueios falha fechado', async () => {
     vi.mocked(createServiceRoleClient).mockReturnValue(makeClient({ app_flags: { data: [{ enabled: true }] } }).client as never);
     vi.mocked(createServerSupabaseClient).mockResolvedValue(

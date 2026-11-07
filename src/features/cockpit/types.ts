@@ -128,3 +128,44 @@ export type NextCallCardResult =
   | { status: 'empty' }
   | { status: 'error'; error: string }
   | { status: 'ok'; data: NextCallCardData };
+
+// ---------------------------------------------------------------------------
+// Resultado pós-ligação no cockpit (PR04, flag `call_cockpit_outcomes`).
+// ---------------------------------------------------------------------------
+
+/**
+ * Estado do resultado da ligação para o cartão. Só `waiting_call` e `pending`
+ * são provisórios; nenhum deles trava a próxima ligação.
+ */
+export type CockpitCallOutcome =
+  /** A ligação ainda não terminou (webhook não chegou). */
+  | { state: 'waiting_call' }
+  /** Lead não atendeu: não há transcrição nem resumo a esperar. */
+  | { state: 'not_answered'; hangupCause: string | null }
+  /** Transcrição ou classificação em andamento. */
+  | { state: 'pending'; stage: 'transcription' | 'classification' }
+  /** Resultado confirmado (pelo SDR ou pela IA com confiança suficiente). */
+  | {
+      state: 'confirmed';
+      source: 'sdr' | 'ai';
+      disposition: string;
+      summary: string | null;
+      callbackAt: string | null;
+      callbackScheduled: boolean;
+    }
+  /** Resultado da IA que exige revisão humana e NÃO foi aplicado. */
+  | {
+      state: 'exception';
+      reason: 'low_confidence' | 'failed' | 'apply_failed';
+      suggestedDisposition: string | null;
+      confidence: number | null;
+      summary: string | null;
+    }
+  /** Ligação sem resultado automático (por exemplo, não armada pelo cockpit). */
+  | { state: 'none' };
+
+export type CockpitCallOutcomeResult =
+  | { status: 'disabled' }
+  | { status: 'not_found' }
+  | { status: 'error'; error: string }
+  | { status: 'ok'; outcome: CockpitCallOutcome };
