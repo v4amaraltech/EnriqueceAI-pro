@@ -16,12 +16,13 @@ describe('cadenceEngineExpectedAt', () => {
 });
 
 describe('CRITICAL_WORKERS', () => {
-  it('vigia o motor de cadência, a detecção de respostas e a caixa do BDR além da API4COM', () => {
+  it('vigia o motor de cadência, a detecção de respostas, a caixa do BDR e o WhatsApp automático além da API4COM', () => {
     expect(CRITICAL_WORKERS.map((w) => w.job_name)).toEqual([
       'reconcile-api4com-calls',
       'execute-cadence-steps',
       'check-email-replies',
       'ingest-email-inbox',
+      'process-whatsapp-queue',
     ]);
   });
 });

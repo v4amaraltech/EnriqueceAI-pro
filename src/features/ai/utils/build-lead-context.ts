@@ -13,6 +13,7 @@ interface LeadForContext {
   porte: string | null;
   municipio: string | null;
   uf: string | null;
+  segmento?: string | null;
 }
 
 /**
@@ -33,5 +34,6 @@ export function buildLeadContext(lead: LeadForContext): LeadContext {
     endereco: lead.municipio
       ? { cidade: lead.municipio, uf: lead.uf ?? undefined }
       : null,
+    ...(lead.segmento ? { segmento: lead.segmento } : {}),
   };
 }

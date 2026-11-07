@@ -103,4 +103,23 @@ export const CRITICAL_WORKERS: CriticalWorker[] = [
     impact: 'E-mails recebidos na caixa do BDR IA podem não estar sendo lidos.',
     notifyOrgIds: orgsWithBdrMailbox,
   },
+  {
+    job_name: 'process-whatsapp-queue',
+    stale_after_hours: 1, // every minute in business hours
+    label: 'Envio automático de WhatsApp das cadências',
+    impact: 'As mensagens de WhatsApp automáticas podem estar paradas na fila dos SDRs.',
+    expectedAt: cadenceEngineExpectedAt,
+    notifyOrgIds: orgsWithAutoWhatsApp,
+  },
 ];
+
+/** Orgs com passo de WhatsApp automático em cadência ativa (story whatsapp-evolution-paced-sending). */
+async function orgsWithAutoWhatsApp(supabase: SupabaseClient): Promise<string[]> {
+  const { data } = (await from(supabase, 'cadence_steps')
+    .select('cadence:cadences!inner(org_id, status, deleted_at)')
+    .eq('channel', 'whatsapp')
+    .eq('auto_send', true)
+    .eq('cadence.status', 'active')
+    .is('cadence.deleted_at', null)) as { data: Array<{ cadence: { org_id: string } | null }> | null };
+  return uniq((data ?? []).map((r) => r.cadence?.org_id));
+}

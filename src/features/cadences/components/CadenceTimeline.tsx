@@ -32,6 +32,8 @@ export interface TimelineStep {
   instructions?: string | null;
   // Discador para passos de ligação (channel='phone'): 'whatsapp' = Ligação via WhatsApp.
   callProvider?: CallProvider | null;
+  /** WhatsApp automático: o robô envia pela fila do número do SDR. */
+  autoSend?: boolean;
 }
 
 export interface DayData {

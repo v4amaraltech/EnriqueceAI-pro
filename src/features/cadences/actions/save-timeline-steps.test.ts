@@ -138,6 +138,49 @@ describe('saveTimelineSteps', () => {
     expect(rows[1]?.delay_days).toBe(2);
   });
 
+  it('mantém o envio automático salvo quando o construtor não manda o campo (WhatsApp automático)', async () => {
+    const existing = chain({
+      data: [{ id: 's1', step_order: 1, auto_send: true }, { id: 's2', step_order: 2, auto_send: true }],
+      error: null,
+    });
+    const upsert = chain({ error: null });
+    queues = {
+      organization_members: [member()],
+      cadences: [pausedCadence(), chain()],
+      cadence_steps: [existing, upsert],
+    };
+
+    const result = await saveTimelineSteps('cad-1', [
+      { id: 's1', channel: 'whatsapp', delay_days: 0, step_order: 1, template_id: '11111111-1111-1111-1111-111111111111' },
+      // sem template não pode ficar automático
+      { id: 's2', channel: 'whatsapp', delay_days: 1, step_order: 2, template_id: null },
+    ]);
+
+    expect(result.success).toBe(true);
+    const rows = upsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows[0]?.auto_send).toBe(true);
+    expect(rows[1]?.auto_send).toBe(false);
+  });
+
+  it('liga e desliga o envio automático só em passo de WhatsApp', async () => {
+    const existing = chain({ data: [{ id: 's1', step_order: 1, auto_send: true }], error: null });
+    const upsert = chain({ error: null });
+    queues = {
+      organization_members: [member()],
+      cadences: [pausedCadence(), chain()],
+      cadence_steps: [existing, upsert],
+    };
+
+    await saveTimelineSteps('cad-1', [
+      { id: 's1', channel: 'whatsapp', delay_days: 0, step_order: 1, template_id: '11111111-1111-1111-1111-111111111111', auto_send: false },
+      { channel: 'email', delay_days: 0, step_order: 2, template_id: '11111111-1111-1111-1111-111111111111', auto_send: true },
+    ]);
+
+    const rows = upsert.upsert.mock.calls.at(-1)?.[0] as Array<Record<string, unknown>>;
+    expect(rows.find((r) => r.id === 's1')?.auto_send).toBe(false);
+    expect(rows.find((r) => r.channel === 'email')?.auto_send).toBe(false);
+  });
+
   it('should refuse a structural change with leads in progress until confirmed', async () => {
     const existing = chain({ data: [{ id: 's1', step_order: 1 }, { id: 's2', step_order: 2 }], error: null });
     const enrollmentsCount = chain({ count: 42 });

@@ -68,6 +68,7 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
         activityName: step.activity_name,
         instructions: step.instructions,
         callProvider: step.call_provider,
+        autoSend: step.auto_send ?? false,
       };
     }),
   }));
@@ -95,6 +96,7 @@ function daysToStepInputs(days: DayData[]): TimelineStepInput[] {
         activity_name: step.activityName,
         instructions: step.instructions,
         call_provider: step.callProvider,
+        auto_send: step.autoSend,
       });
       globalOrder++;
     });
@@ -200,12 +202,18 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
     setStepEditorOpen(true);
   }
 
-  function handleStepEditorSave(stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) {
+  function handleStepEditorSave(
+    stepId: string,
+    activityName: string | null,
+    instructions: string | null,
+    templateId: string | null,
+    autoSend: boolean,
+  ) {
     setDays((prev) =>
       prev.map((d) => ({
         ...d,
         steps: d.steps.map((s) =>
-          s.id === stepId ? { ...s, activityName, instructions, templateId } : s,
+          s.id === stepId ? { ...s, activityName, instructions, templateId, autoSend } : s,
         ),
       })),
     );
@@ -218,6 +226,7 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
         activity_name: activityName,
         instructions,
         template_id: templateId,
+        auto_send: autoSend,
       }).then((result) => {
         if (result.success) {
           toast.success('Atividade atualizada');

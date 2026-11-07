@@ -26,6 +26,11 @@ export interface TimelineStepInput {
   activity_name?: string | null;
   instructions?: string | null;
   call_provider?: CallProvider | null;
+  /**
+   * WhatsApp automático (story whatsapp-evolution-paced-sending). Ausente =
+   * mantém o valor salvo; só vale para passo de WhatsApp com template.
+   */
+  auto_send?: boolean;
 }
 
 export interface SaveTimelineStepsOptions {
@@ -49,6 +54,7 @@ export interface SaveTimelineStepsResult {
 interface ExistingStep {
   id: string;
   step_order: number;
+  auto_send?: boolean | null;
 }
 
 // Reordenar passos no lugar esbarra no UNIQUE (cadence_id, step_order). Os
@@ -94,7 +100,7 @@ export async function saveTimelineSteps(
 
   // Passos atuais — base para preservar IDs e detectar mudança estrutural.
   const { data: existingRows, error: existingError } = (await from(supabase, 'cadence_steps')
-    .select('id, step_order')
+    .select('id, step_order, auto_send')
     .eq('cadence_id', cadenceId)
     .order('step_order', { ascending: true })) as { data: ExistingStep[] | null; error: { message: string } | null };
 
@@ -105,6 +111,7 @@ export async function saveTimelineSteps(
   const existing = existingRows ?? [];
   const existingIds = new Set(existing.map((s) => s.id));
   const existingOrderById = new Map(existing.map((s) => [s.id, s.step_order]));
+  const existingAutoSendById = new Map(existing.map((s) => [s.id, s.auto_send === true]));
 
   // Normaliza: ordena, renumera 1..n e resolve o ID de cada passo. ID que
   // pertence à cadência (e ainda não foi usado nesta lista) é preservado; o
@@ -116,6 +123,7 @@ export async function saveTimelineSteps(
     .map((s, index) => {
       const keep = s.id != null && existingIds.has(s.id) && !seen.has(s.id);
       if (keep) seen.add(s.id as string);
+      const wantsAutoSend = s.auto_send ?? (keep ? existingAutoSendById.get(s.id as string) === true : false);
       return {
         id: keep ? (s.id as string) : randomUUID(),
         cadence_id: cadenceId,
@@ -128,6 +136,8 @@ export async function saveTimelineSteps(
         activity_name: s.activity_name ?? null,
         instructions: s.instructions ?? null,
         call_provider: s.call_provider ?? null,
+        // Envio automático só com template: o texto livre do passo pode ser instrução para o SDR.
+        auto_send: s.channel === 'whatsapp' && !!s.template_id && wantsAutoSend,
       };
     });
 

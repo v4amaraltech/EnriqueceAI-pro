@@ -8,6 +8,8 @@ import { from } from '@/lib/supabase/from';
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
 import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, LeadStatus } from '@/features/leads/types';
 
+import { autoSendKey, isHandledByAutoSend } from '@/features/whatsapp-auto-send/utils/auto-step';
+
 import { entraNaFilaHumana } from '../utils/fila-humana';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity, ScheduledActivityKind } from '../types';
@@ -146,6 +148,20 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     templateMap.set(t.id, t);
   }
 
+  // WhatsApp automático: passos que o robô envia saem da fila do SDR. Os que
+  // falharam de vez na fila automática voltam como tarefa manual.
+  const autoCadenceIds = [
+    ...new Set((steps ?? []).filter((s) => s.channel === 'whatsapp' && s.auto_send).map((s) => s.cadence_id)),
+  ];
+  const autoSendFailedKeys = new Set<string>();
+  if (autoCadenceIds.length > 0) {
+    const { data: failedItems } = (await from(supabase, 'whatsapp_send_queue' as never)
+      .select('enrollment_id, step_id')
+      .eq('status', 'failed')
+      .in('cadence_id', autoCadenceIds)) as { data: Array<{ enrollment_id: string; step_id: string }> | null };
+    for (const f of failedItems ?? []) autoSendFailedKeys.add(autoSendKey(f.enrollment_id, f.step_id));
+  }
+
   // 4. Build candidate activities (before filtering executed ones)
   // For each enrollment, generate activities for ALL steps within 24h cumulative delay
   interface CandidateActivity {
@@ -194,6 +210,9 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       // Suppress WhatsApp steps when the lead's number was flagged as not WhatsApp
       // (SDR feedback via "Não é WhatsApp" button)
       if (step.channel === 'whatsapp' && enrollment.lead.whatsapp_invalid_at) continue;
+
+      // WhatsApp automático: o robô envia pela fila do número do SDR (story whatsapp-evolution-paced-sending).
+      if (isHandledByAutoSend(step, enrollment.lead, enrollment.id, autoSendFailedKeys)) continue;
 
       // E-mail com bounce: o passo de e-mail não tem como ser feito. O motor
       // (`skipEmailStepsForBouncedLeads`) avança a inscrição; até lá, some da fila.

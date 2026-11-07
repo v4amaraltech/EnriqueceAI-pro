@@ -26,6 +26,8 @@ export interface LeadContext {
     uf?: string;
   } | null;
   socios?: Array<{ nome: string; qualificacao?: string }> | null;
+  /** Segmento do lead (`leads.segmento`) — guia o tom da mensagem. */
+  segmento?: string | null;
 }
 
 export interface GenerateMessageResult {
