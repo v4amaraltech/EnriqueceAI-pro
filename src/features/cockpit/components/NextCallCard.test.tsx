@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 
+import { armCockpitCallOutcomeAction, getCockpitCallOutcome } from '../actions/call-outcome';
 import type { CockpitViewer, NextCallCardData } from '../types';
 import { suggestApproach } from '../utils/call-approach';
 
@@ -11,8 +12,10 @@ import { NextCallCard } from './NextCallCard';
 
 vi.mock('@/features/calls/actions/initiate-api4com-call', () => ({ initiateApi4ComCall: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const nav = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('../actions/call-outcome', () => ({ armCockpitCallOutcomeAction: vi.fn(), getCockpitCallOutcome: vi.fn() }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: nav.push }),
   usePathname: () => '/cockpit',
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -95,5 +98,87 @@ describe('CockpitShell com a flag desligada', () => {
     );
     expect(screen.getByTestId('next-call-card')).toBeTruthy();
     expect(screen.getByText('conteudo legado')).toBeTruthy();
+  });
+});
+
+describe('NextCallCard e resultado pós-ligação (call_cockpit_outcomes)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(initiateApi4ComCall).mockResolvedValue({ success: true, data: { callId: 'call-9', api4comId: 'a' } } as never);
+    vi.mocked(armCockpitCallOutcomeAction).mockResolvedValue({ success: true, data: { armed: true } });
+  });
+
+  it('flag desligada: ligar não arma nem mostra resultado (igual a hoje)', async () => {
+    render(<NextCallCard card={card} dialerProvider="api4com" />);
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(initiateApi4ComCall).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ligar agora/ })).toBeTruthy());
+    expect(armCockpitCallOutcomeAction).not.toHaveBeenCalled();
+    expect(getCockpitCallOutcome).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('call-outcome')).toBeNull();
+  });
+
+  it('flag ligada: arma a ligação uma vez e mostra o painel sem discar outra', async () => {
+    render(<NextCallCard card={card} dialerProvider="api4com" outcomesEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(screen.getByTestId('call-outcome')).toBeTruthy());
+    expect(armCockpitCallOutcomeAction).toHaveBeenCalledTimes(1);
+    expect(armCockpitCallOutcomeAction).toHaveBeenCalledWith({ callId: 'call-9' });
+    expect(initiateApi4ComCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('transcrição pendente não trava: "Próxima ligação" segue habilitado e leva ao próximo lead', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(getCockpitCallOutcome).mockResolvedValue({
+      success: true,
+      data: { status: 'ok', outcome: { state: 'pending', stage: 'transcription' } },
+    });
+    render(<NextCallCard card={card} dialerProvider="api4com" outcomesEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(screen.getByTestId('call-outcome')).toBeTruthy());
+    await vi.advanceTimersByTimeAsync(3_100);
+    await waitFor(() => expect(screen.getByTestId('outcome-pending')).toBeTruthy());
+
+    const next = screen.getByTestId('next-lead-button') as HTMLButtonElement;
+    expect(next.disabled).toBe(false);
+    fireEvent.click(next);
+    expect(nav.push).toHaveBeenCalledWith('/cockpit?skip=lead-1');
+    vi.useRealTimers();
+  });
+
+  it('baixa confiança aparece como exceção revisável, sem resultado aplicado', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(getCockpitCallOutcome).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'ok',
+        outcome: { state: 'exception', reason: 'low_confidence', suggestedDisposition: 'relevant_conversation', confidence: 0.4, summary: 'Talvez queira proposta' },
+      },
+    });
+    render(<NextCallCard card={card} dialerProvider="api4com" outcomesEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(screen.getByTestId('call-outcome')).toBeTruthy());
+    await vi.advanceTimersByTimeAsync(3_100);
+    await waitFor(() => expect(screen.getByTestId('outcome-exception')).toBeTruthy());
+    expect(screen.getByTestId('outcome-exception').textContent).toContain('Nada foi aplicado');
+    expect(screen.queryByTestId('outcome-confirmed')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('resultado confirmado aparece com resumo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(getCockpitCallOutcome).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'ok',
+        outcome: { state: 'confirmed', source: 'ai', disposition: 'voicemail', summary: 'Caixa postal.', callbackAt: null, callbackScheduled: false },
+      },
+    });
+    render(<NextCallCard card={card} dialerProvider="api4com" outcomesEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(screen.getByTestId('call-outcome')).toBeTruthy());
+    await vi.advanceTimersByTimeAsync(3_100);
+    await waitFor(() => expect(screen.getByTestId('outcome-confirmed').textContent).toContain('Caixa postal'));
+    vi.useRealTimers();
   });
 });

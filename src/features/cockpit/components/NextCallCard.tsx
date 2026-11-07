@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Building2, ExternalLink, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -10,8 +11,11 @@ import { Button } from '@/shared/components/ui/button';
 
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 
+import { armCockpitCallOutcomeAction } from '../actions/call-outcome';
 import type { NextCallCardData } from '../types';
 import { relativeTimePt, sourceLabel, summarizeContext } from '../utils/call-approach';
+
+import { CallOutcomePanel } from './CallOutcomePanel';
 
 const NO_DATA = 'sem dados';
 
@@ -19,17 +23,23 @@ interface NextCallCardProps {
   card: NextCallCardData;
   /** Provedor de telefonia do usuário; só `api4com` habilita o botão. */
   dialerProvider: 'api4com' | null;
+  /** Flag `call_cockpit_outcomes`: mostra resultado e resumo após a ligação. Ausente = como antes. */
+  outcomesEnabled?: boolean;
 }
 
 /**
  * Cartão da próxima ligação. A ligação só começa com o clique do usuário e usa
  * a action existente da API4Com; nada disca sozinho.
  */
-export function NextCallCard({ card, dialerProvider }: NextCallCardProps) {
+export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: NextCallCardProps) {
   const { context: ctx, approach } = card;
   const now = new Date(card.generatedAt);
   const phone = ctx.decisionMaker.phone;
   const [calling, setCalling] = useState(false);
+  const [startedCallId, setStartedCallId] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const inFlight = useRef(false);
 
   const canCall = dialerProvider === 'api4com' && Boolean(phone);
@@ -42,14 +52,26 @@ export function NextCallCard({ card, dialerProvider }: NextCallCardProps) {
     setCalling(true);
     try {
       const result = await initiateApi4ComCall({ phone, leadId: ctx.leadId });
-      if (result.success) toast.success('Ligação iniciada');
-      else toast.error(result.error);
+      if (result.success) {
+        toast.success('Ligação iniciada');
+        if (outcomesEnabled) {
+          setStartedCallId(result.data.callId);
+          // Falha ao armar não afeta a ligação: o cartão só fica sem resumo automático.
+          void armCockpitCallOutcomeAction({ callId: result.data.callId }).catch(() => undefined);
+        }
+      } else toast.error(result.error);
     } catch {
       toast.error('Erro ao iniciar a ligação');
     } finally {
       inFlight.current = false;
       setCalling(false);
     }
+  }
+
+  function handleNext() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('skip', ctx.leadId);
+    router.push(`${pathname}?${params.toString()}`);
   }
 
   const disabledReason = !phone
@@ -145,6 +167,10 @@ export function NextCallCard({ card, dialerProvider }: NextCallCardProps) {
           </ul>
         )}
       </div>
+
+      {outcomesEnabled && startedCallId && (
+        <CallOutcomePanel key={startedCallId} callId={startedCallId} leadId={ctx.leadId} onNext={handleNext} />
+      )}
     </section>
   );
 }

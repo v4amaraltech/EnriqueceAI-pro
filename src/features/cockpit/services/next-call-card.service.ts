@@ -25,7 +25,12 @@ interface CandidateRow {
  * aplica a permissão do viewer (gestor lê a org; SDR e closer só a própria carteira).
  * Com a flag desligada nada além da flag é consultado.
  */
-export async function fetchNextCallCard(input: { viewer: CockpitViewer; now?: Date }): Promise<NextCallCardResult> {
+export async function fetchNextCallCard(input: {
+  viewer: CockpitViewer;
+  now?: Date;
+  /** Leads já trabalhados nesta sessão (PR04). Resultado pendente nunca entra aqui. */
+  excludeLeadIds?: string[];
+}): Promise<NextCallCardResult> {
   if (!(await isCallCockpitEnabled())) return { status: 'disabled' };
 
   const { viewer } = input;
@@ -48,7 +53,8 @@ export async function fetchNextCallCard(input: { viewer: CockpitViewer; now?: Da
     return { status: 'error', error: 'Falha ao carregar a próxima ligação' };
   }
 
-  const withPhone = (leadsResult.data ?? []).filter((l) => l.telefone?.trim());
+  const skipped = new Set(input.excludeLeadIds ?? []);
+  const withPhone = (leadsResult.data ?? []).filter((l) => l.telefone?.trim() && !skipped.has(l.id));
   if (withPhone.length === 0) return { status: 'empty' };
   const ids = withPhone.map((l) => l.id);
   const since = new Date(now.getTime() - INTERACTION_WINDOW_DAYS * 86_400_000).toISOString();

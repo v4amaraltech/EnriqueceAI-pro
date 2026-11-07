@@ -9,6 +9,7 @@ import { fetchPendingActivities } from '@/features/activities/actions/fetch-pend
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { NextCallCard } from '@/features/cockpit/components/NextCallCard';
+import { isCallCockpitOutcomesEnabled } from '@/features/cockpit/services/cockpit-outcomes-flag';
 import { fetchNextCallCard } from '@/features/cockpit/services/next-call-card.service';
 import { ClosersTab } from '@/features/cockpit/components/ClosersTab';
 import { CockpitShell } from '@/features/cockpit/components/CockpitShell';
@@ -29,8 +30,10 @@ import { fetchCockpit } from '@/features/whatsapp-auto-send/actions/fetch-cockpi
 
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface CockpitPageProps {
-  searchParams: Promise<{ tab?: string; sdr?: string; month?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; sdr?: string; month?: string; q?: string; page?: string; skip?: string }>;
 }
 
 export default async function CockpitPage({ searchParams }: CockpitPageProps) {
@@ -45,7 +48,7 @@ export default async function CockpitPage({ searchParams }: CockpitPageProps) {
       callCard={
         tab === 'tarefas' || tab === 'leads' || tab === 'closers' ? (
           <Suspense fallback={null}>
-            <NextCallCardServer viewer={viewer} />
+            <NextCallCardServer viewer={viewer} skip={params.skip} />
           </Suspense>
         ) : null
       }
@@ -56,12 +59,15 @@ export default async function CockpitPage({ searchParams }: CockpitPageProps) {
 }
 
 /** Cartão da próxima ligação. Com `call_cockpit_v1` desligada (ou sem lead) não renderiza nada. */
-async function NextCallCardServer({ viewer }: { viewer: CockpitViewer }) {
-  const result = await fetchNextCallCard({ viewer });
+async function NextCallCardServer({ viewer, skip }: { viewer: CockpitViewer; skip?: string }) {
+  // `call_cockpit_outcomes` (PR04): sem a flag, `skip` é ignorado e o cartão fica como antes.
+  const outcomesEnabled = await isCallCockpitOutcomesEnabled();
+  const excludeLeadIds = outcomesEnabled && skip && UUID_RE.test(skip) ? [skip] : undefined;
+  const result = await fetchNextCallCard({ viewer, excludeLeadIds });
   if (result.status !== 'ok') return null;
   const providerResult = await getDialerProvider();
   const provider = providerResult.success && providerResult.data.provider === 'api4com' ? 'api4com' : null;
-  return <NextCallCard card={result.data} dialerProvider={provider} />;
+  return <NextCallCard key={result.data.context.leadId} card={result.data} dialerProvider={provider} outcomesEnabled={outcomesEnabled} />;
 }
 
 type CockpitParams = Awaited<CockpitPageProps['searchParams']>;
