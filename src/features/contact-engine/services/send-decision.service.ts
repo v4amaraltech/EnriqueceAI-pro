@@ -12,6 +12,11 @@ import type {
   Uuid,
 } from '../types';
 
+import {
+  checkNumberCanSend,
+  loadHealthFactsForGateway,
+  type NumberHealthFacts,
+} from './number-health.service';
 import { getContactAccess, normalizeContactIdentity, type ConsentKind } from './ownership.service';
 
 /**
@@ -89,6 +94,12 @@ export interface SendDecisionFacts {
   access: AccessFacts | null;
   conversation: ConversationFacts | null;
   instance: InstanceFacts | null;
+  /**
+   * Saude e tetos do numero Evolution (PR10, flag `number_health_v1`).
+   * `undefined` = flag desligada ou provedor sem numero proprio: nenhum efeito.
+   * `null` = flag ligada mas leitura incerta: nega (fail-closed).
+   */
+  health?: NumberHealthFacts | null;
   now: Date;
 }
 
@@ -101,7 +112,9 @@ function deny(reasons: SendDenialReason[], now: Date): SendDecision {
   return {
     allowed: false,
     reasons: unique,
-    retryable: unique.length > 0 && unique.every((r) => r === 'context_unavailable' || r === 'sender_health_unknown'),
+    retryable:
+      unique.length > 0 &&
+      unique.every((r) => r === 'context_unavailable' || r === 'sender_health_unknown' || r === 'daily_cap_reached'),
     decidedAt: now.toISOString(),
   };
 }
@@ -160,11 +173,14 @@ export function decideSend(facts: SendDecisionFacts): SendDecision {
 
   let requiresTemplate = false;
   let templateId: string | null = null;
+  // Sem conversa ou acesso o motivo ja e `context_unavailable`; nao somar outro.
+  let continuityOk = true;
 
   if (conversation && access) {
     if (provider === 'evolution') {
       const continuity = conversation.leadRequestedContact && conversation.leadReplied;
       if (!continuity || access.lastConsent !== 'opt_in') {
+        continuityOk = false;
         reasons.push('evolution_requires_authorized_continuity');
       }
     } else {
@@ -185,6 +201,15 @@ export function decideSend(facts: SendDecisionFacts): SendDecision {
         }
       }
     }
+  }
+
+  // Saude e tetos do numero (PR10). So com a flag ligada (`health !== undefined`).
+  if (provider === 'evolution' && facts.health !== undefined) {
+    const check = checkNumberCanSend(facts.health, {
+      isNewContact: conversation ? !conversation.leadReplied : true,
+      continuityAuthorized: continuityOk,
+    });
+    if (!check.allowed) reasons.push(...check.reasons);
   }
 
   if (reasons.length > 0 || !instance) return deny(reasons, now);
@@ -353,13 +378,22 @@ export async function loadSendFacts(request: SendGatewayRequest, now: Date = new
   try {
     const db = createServiceRoleClient();
     const first = await loadAccess(request);
-    const [conversation, instance] =
+    const wantsHealth = request.channel === 'whatsapp' && request.preferredProvider === 'evolution';
+    const [conversation, instance, health] =
       request.channel === 'whatsapp'
-        ? await Promise.all([loadConversation(db, request, identity), loadInstance(db, request)])
-        : [null, null];
+        ? await Promise.all([
+            loadConversation(db, request, identity),
+            loadInstance(db, request),
+            wantsHealth
+              ? request.senderInstanceId
+                ? loadHealthFactsForGateway(request.orgId, request.senderInstanceId, now)
+                : Promise.resolve(undefined)
+              : Promise.resolve(undefined),
+          ])
+        : [null, null, undefined];
     // Segunda leitura ao final: opt-out ou hold gravado durante a carga prevalece.
     const second = await loadAccess(request);
-    return { ...base, access: mergeAccess(first, second), conversation, instance };
+    return { ...base, access: mergeAccess(first, second), conversation, instance, health };
   } catch {
     return base;
   }
