@@ -102,3 +102,29 @@ export type CallContextResult =
   | { status: 'not_found' }
   | { status: 'error'; error: string }
   | { status: 'ok'; data: CallContext };
+
+// ---------------------------------------------------------------------------
+// Cartão da próxima ligação (PR03, flag `call_cockpit_v1`).
+// ---------------------------------------------------------------------------
+
+/** Abordagem sugerida v0: derivada do contexto por regras fixas, sem IA. */
+export interface CallApproach {
+  version: 'v0';
+  headline: string;
+  opening: string;
+  goal: string;
+  points: string[];
+}
+
+export interface NextCallCardData {
+  context: CallContext;
+  approach: CallApproach;
+  /** Instante de geração (ISO), para tempos relativos estáveis entre servidor e cliente. */
+  generatedAt: string;
+}
+
+export type NextCallCardResult =
+  | { status: 'disabled' }
+  | { status: 'empty' }
+  | { status: 'error'; error: string }
+  | { status: 'ok'; data: NextCallCardData };

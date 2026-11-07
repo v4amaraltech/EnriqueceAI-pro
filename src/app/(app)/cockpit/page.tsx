@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { AlertTriangle } from 'lucide-react';
 
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -6,6 +8,8 @@ import { fetchDailyProgress } from '@/features/activities/actions/fetch-daily-pr
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
+import { NextCallCard } from '@/features/cockpit/components/NextCallCard';
+import { fetchNextCallCard } from '@/features/cockpit/services/next-call-card.service';
 import { ClosersTab } from '@/features/cockpit/components/ClosersTab';
 import { CockpitShell } from '@/features/cockpit/components/CockpitShell';
 import { fetchCockpitClosers } from '@/features/cockpit/services/cockpit-closers.service';
@@ -35,10 +39,29 @@ export default async function CockpitPage({ searchParams }: CockpitPageProps) {
   const viewer = await resolveCockpitViewer(params.sdr);
 
   return (
-    <CockpitShell viewer={viewer} tab={tab}>
+    <CockpitShell
+      viewer={viewer}
+      tab={tab}
+      callCard={
+        tab === 'tarefas' || tab === 'leads' || tab === 'closers' ? (
+          <Suspense fallback={null}>
+            <NextCallCardServer viewer={viewer} />
+          </Suspense>
+        ) : null
+      }
+    >
       <CockpitTabContent tab={tab} viewer={viewer} params={params} />
     </CockpitShell>
   );
+}
+
+/** Cartão da próxima ligação. Com `call_cockpit_v1` desligada (ou sem lead) não renderiza nada. */
+async function NextCallCardServer({ viewer }: { viewer: CockpitViewer }) {
+  const result = await fetchNextCallCard({ viewer });
+  if (result.status !== 'ok') return null;
+  const providerResult = await getDialerProvider();
+  const provider = providerResult.success && providerResult.data.provider === 'api4com' ? 'api4com' : null;
+  return <NextCallCard card={result.data} dialerProvider={provider} />;
 }
 
 type CockpitParams = Awaited<CockpitPageProps['searchParams']>;
