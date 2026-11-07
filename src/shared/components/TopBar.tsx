@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import {
   ChevronDown,
   FileText,
+  Gauge,
   ListChecks,
   Mail,
   MessageSquare,
@@ -62,6 +63,7 @@ export const navSections: NavSection[] = [
     icon: Users,
     items: [
       { label: 'Execução', href: '/atividades', icon: PlayCircle },
+      { label: 'Cockpit', href: '/cockpit', icon: Gauge },
       { label: 'Atividades', href: '/activities', icon: ListChecks },
       { label: 'Mensagens', href: '/templates', icon: Mail },
       { label: 'Cadências', href: '/cadences', icon: Workflow },
