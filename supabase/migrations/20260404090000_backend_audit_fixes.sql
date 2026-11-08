@@ -13,8 +13,12 @@ SELECT cron.schedule(
 );
 
 -- Item 2: Missing indexes on ldr_pipeline_log FKs
-CREATE INDEX IF NOT EXISTS idx_ldr_pipeline_log_empresa_id ON ldr_pipeline_log (empresa_id);
-CREATE INDEX IF NOT EXISTS idx_ldr_pipeline_log_socio_id ON ldr_pipeline_log (socio_id);
+DO $$ BEGIN IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+  CREATE INDEX IF NOT EXISTS idx_ldr_pipeline_log_empresa_id ON ldr_pipeline_log (empresa_id);
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+  CREATE INDEX IF NOT EXISTS idx_ldr_pipeline_log_socio_id ON ldr_pipeline_log (socio_id);
+END IF; END $$;
 
 -- Item 3: Fix goals RLS — replace permissive ALL with proper CRUD (manager-only writes)
 DROP POLICY IF EXISTS goals_org_access ON goals;

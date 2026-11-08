@@ -42,22 +42,30 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON goals
 DROP TRIGGER IF EXISTS set_updated_at ON goals_per_user;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON goals_per_user
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-DROP TRIGGER IF EXISTS set_updated_at ON ldr_empresas;
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_empresas
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-DROP TRIGGER IF EXISTS set_updated_at ON ldr_socios;
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_socios
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$ BEGIN IF to_regclass('public.ldr_empresas') IS NOT NULL THEN
+  DROP TRIGGER IF EXISTS set_updated_at ON ldr_empresas;
+  CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_empresas
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.ldr_socios') IS NOT NULL THEN
+  DROP TRIGGER IF EXISTS set_updated_at ON ldr_socios;
+  CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_socios
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END IF; END $$;
 DROP TRIGGER IF EXISTS set_updated_at ON notifications;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON notifications
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Item 6: Fix search_path on SECURITY DEFINER functions (prevent search_path hijacking)
 ALTER FUNCTION public.auto_enroll_ldr_autonomo() SET search_path = public;
-ALTER FUNCTION public.buscar_proximo_decisor_para_ligar() SET search_path = public;
+DO $$ BEGIN IF to_regprocedure('public.buscar_proximo_decisor_para_ligar()') IS NOT NULL THEN
+  ALTER FUNCTION public.buscar_proximo_decisor_para_ligar() SET search_path = public;
+END IF; END $$;
 ALTER FUNCTION public.recalc_engagement_score(uuid) SET search_path = public;
 ALTER FUNCTION public.trigger_recalc_engagement_score() SET search_path = public;
-ALTER FUNCTION public.upsert_socio_lemit(text, text, text, integer, boolean, text, text, boolean) SET search_path = public;
+DO $$ BEGIN IF to_regprocedure('public.upsert_socio_lemit(text, text, text, integer, boolean, text, text, boolean)') IS NOT NULL THEN
+  ALTER FUNCTION public.upsert_socio_lemit(text, text, text, integer, boolean, text, text, boolean) SET search_path = public;
+END IF; END $$;
 ALTER FUNCTION public.user_org_id() SET search_path = public;
 ALTER FUNCTION public.is_manager() SET search_path = public;
 ALTER FUNCTION public.lead_visibility_mode() SET search_path = public;
