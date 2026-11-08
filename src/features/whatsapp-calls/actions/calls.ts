@@ -26,6 +26,23 @@ function mapVoiceError(err: unknown): { success: false; error: string } {
   return { success: false, error: 'Erro inesperado no serviço de voz' };
 }
 
+/**
+ * Pista 17: confirma que o `sid` pertence a uma sessão do usuário logado antes de
+ * qualquer chamada ao serviço externo. A consulta usa o cliente com RLS (escopo da
+ * org) e filtra por user_id, como startWhatsAppCall.
+ */
+async function ownsCallSession(userId: string, sid: string): Promise<boolean> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = (await from(supabase, 'whatsapp_call_sessions')
+    .select('service_session_id, status')
+    .eq('user_id', userId)
+    .eq('service_session_id', sid)
+    .maybeSingle()) as { data: { service_session_id: string; status: string } | null };
+  return !!data && data.service_session_id === sid;
+}
+
+const SESSION_NOT_OWNED = 'Sessão de chamada não encontrada para o seu usuário';
+
 const startSchema = z.object({ phone: z.string().min(8, 'Número inválido') });
 const endSchema = z.object({ sid: z.string().min(1), callId: z.string().min(1) });
 const sdpSchema = z.object({
@@ -102,7 +119,10 @@ export async function exchangeCallSdp(
   const parsed = sdpSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados de SDP inválidos' };
 
-  await requireAuth();
+  const user = await requireAuth();
+  if (!(await ownsCallSession(user.id, parsed.data.sid))) {
+    return { success: false, error: SESSION_NOT_OWNED };
+  }
 
   try {
     const sdpAnswer = await exchangeVoiceSdp(parsed.data.sid, parsed.data.callId, parsed.data.sdpOffer);
@@ -120,7 +140,10 @@ export async function endWhatsAppCall(
   const parsed = endSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
 
-  await requireAuth();
+  const user = await requireAuth();
+  if (!(await ownsCallSession(user.id, parsed.data.sid))) {
+    return { success: false, error: SESSION_NOT_OWNED };
+  }
 
   try {
     await endVoiceCall(parsed.data.sid, parsed.data.callId);

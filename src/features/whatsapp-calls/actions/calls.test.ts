@@ -79,7 +79,17 @@ describe('startWhatsAppCall', () => {
 });
 
 describe('endWhatsAppCall', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionResult = { data: { service_session_id: 'sess-1', status: 'connected' } };
+  });
+
+  it('não chama o serviço quando o sid não pertence ao usuário', async () => {
+    sessionResult = { data: null };
+    const result = await endWhatsAppCall({ sid: 'sess-de-outro', callId: 'call-1' });
+    expect(result.success).toBe(false);
+    expect(voice.endVoiceCall).not.toHaveBeenCalled();
+  });
 
   it('ends the call via the voice service', async () => {
     voice.endVoiceCall.mockResolvedValue(undefined);
@@ -90,7 +100,17 @@ describe('endWhatsAppCall', () => {
 });
 
 describe('exchangeCallSdp', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionResult = { data: { service_session_id: 'sess-1', status: 'connected' } };
+  });
+
+  it('não chama o serviço quando o sid não pertence ao usuário', async () => {
+    sessionResult = { data: null };
+    const result = await exchangeCallSdp({ sid: 'sess-de-outro', callId: 'call-1', sdpOffer: 'x' });
+    expect(result.success).toBe(false);
+    expect(voice.exchangeVoiceSdp).not.toHaveBeenCalled();
+  });
 
   it('proxies the SDP offer and returns the answer', async () => {
     voice.exchangeVoiceSdp.mockResolvedValue('v=0\r\n(answer)');
