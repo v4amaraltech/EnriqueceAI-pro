@@ -97,7 +97,7 @@ async function kommoFetch<T>(
   accessToken: string,
   options: RequestInit = {},
 ): Promise<T> {
-  return crmFetch<T>(`https://${subdomain}.kommo.com/api/v4${path}`, {
+  return crmFetch<T>(`${kommoBaseUrl(subdomain).origin}/api/v4${path}`, {
     ...options,
     label: 'Kommo',
     headers: {
@@ -121,11 +121,32 @@ function extractCustomFieldValue(
  * Extract the subdomain from a Kommo referer value.
  * Kommo sends the full domain (e.g. "myaccount.kommo.com") — we need just "myaccount".
  */
-function extractSubdomain(referer: string): string {
-  return referer
-    .replace(/\.kommo\.com$/i, '')
-    .replace(/\.amocrm\.com$/i, '')
-    .trim();
+const KOMMO_SUBDOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * Valida e normaliza o subdomínio Kommo. Aceita "conta" ou "conta.kommo.com"
+ * (ou amocrm.com); qualquer outra coisa (pontos, barras, "?", "@", ":") é rejeitada
+ * para que o host do token nunca possa ser controlado por quem chama o callback.
+ */
+export function parseKommoSubdomain(raw: string): string {
+  const candidate = raw
+    .trim()
+    .toLowerCase()
+    .replace(/\.kommo\.com$/, '')
+    .replace(/\.amocrm\.com$/, '');
+  if (!KOMMO_SUBDOMAIN_RE.test(candidate)) {
+    throw new Error('Subdomínio Kommo inválido');
+  }
+  return candidate;
+}
+
+function kommoBaseUrl(subdomain: string): URL {
+  const clean = parseKommoSubdomain(subdomain);
+  const url = new URL(`https://${clean}.kommo.com`);
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.kommo.com')) {
+    throw new Error('Subdomínio Kommo inválido');
+  }
+  return url;
 }
 
 export class KommoAdapter implements CRMAdapter {
@@ -150,8 +171,8 @@ export class KommoAdapter implements CRMAdapter {
       throw new Error('Kommo requires subdomain (referer) from OAuth callback');
     }
 
-    const cleanSubdomain = extractSubdomain(subdomain);
-    const tokenUrl = `https://${cleanSubdomain}.kommo.com/oauth2/access_token`;
+    const cleanSubdomain = parseKommoSubdomain(subdomain);
+    const tokenUrl = `${kommoBaseUrl(cleanSubdomain).origin}/oauth2/access_token`;
 
     let response: Response;
     try {
@@ -199,7 +220,7 @@ export class KommoAdapter implements CRMAdapter {
     }
 
     const response = await fetch(
-      `https://${subdomain}.kommo.com/oauth2/access_token`,
+      `${kommoBaseUrl(subdomain).origin}/oauth2/access_token`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

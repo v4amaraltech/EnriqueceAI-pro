@@ -113,3 +113,41 @@ describe('KommoAdapter.updateDealStatus', () => {
     ).rejects.toThrow('Kommo subdomain missing');
   });
 });
+
+describe('KommoAdapter.exchangeCode (validação de subdomínio)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    'attacker.example/x?',
+    'attacker.example',
+    'evil.com#',
+    'a@evil.com',
+    'x.evil.com/',
+    'conta:443',
+    '',
+  ])('rejeita referer malicioso %s sem chamar fetch', async (referer) => {
+    await expect(
+      new KommoAdapter().exchangeCode('CODE', 'https://app.test/cb', referer),
+    ).rejects.toThrow();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('aceita conta.kommo.com e chama apenas *.kommo.com', async () => {
+    mockFetch.mockResolvedValue(
+      okJson({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }),
+    );
+    const creds = await new KommoAdapter().exchangeCode('CODE', 'https://app.test/cb', 'Conta.kommo.com');
+    expect(creds.subdomain).toBe('conta');
+    const url = new URL(mockFetch.mock.calls[0]![0] as string);
+    expect(url.hostname).toBe('conta.kommo.com');
+  });
+
+  it('refreshToken rejeita subdomínio persistido inválido', async () => {
+    await expect(
+      new KommoAdapter().refreshToken({ access_token: 'x', refresh_token: 'r', subdomain: 'evil.example/x?' }),
+    ).rejects.toThrow();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
