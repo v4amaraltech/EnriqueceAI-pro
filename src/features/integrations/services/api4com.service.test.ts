@@ -81,8 +81,8 @@ describe('credenciais', () => {
   });
 
   it('getOrgApiCredentials prefere a org e cai no primeiro token de usuário', async () => {
-    const withOrg = makeClient({ api4com_org_settings: { api_key_encrypted: 'enc:org-token', base_url: 'https://x/' } });
-    await expect(getOrgApiCredentials('org', withOrg as never)).resolves.toEqual({ apiKey: 'org-token', baseUrl: 'https://x' });
+    const withOrg = makeClient({ api4com_org_settings: { api_key_encrypted: 'enc:org-token', base_url: 'https://eu.api4com.com/api/v1/' } });
+    await expect(getOrgApiCredentials('org', withOrg as never)).resolves.toEqual({ apiKey: 'org-token', baseUrl: 'https://eu.api4com.com/api/v1' });
 
     const legacy = makeClient({
       api4com_org_settings: null,

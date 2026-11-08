@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { encrypt, isEncryptionConfigured } from '@/lib/security/encryption';
+import { isSafeApi4ComBaseUrl } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -166,6 +167,9 @@ export async function saveApi4ComOrgSettings(
   if (!apiKey) return { success: false, error: 'Informe o token da API4COM' };
   if (!isEncryptionConfigured()) return { success: false, error: ENCRYPTION_MISSING_ERROR };
 
+  if (input.baseUrl?.trim() && !isSafeApi4ComBaseUrl(input.baseUrl.trim())) {
+    return { success: false, error: 'URL da API4COM inválida (use https e um host api4com.com)' };
+  }
   const creds: Api4ComApiCredentials = { apiKey, baseUrl: normalizeBaseUrl(input.baseUrl) };
 
   let extensions: Api4ComExtension[];

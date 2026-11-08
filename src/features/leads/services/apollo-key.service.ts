@@ -2,7 +2,7 @@ import crypto from 'crypto';
 
 import { decrypt } from '@/lib/security/encryption';
 import { getEnv } from '@/config/env';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 
 /**
@@ -10,7 +10,9 @@ import { from } from '@/lib/supabase/from';
  * Returns null if no connection exists.
  */
 export async function getApolloApiKey(orgId: string): Promise<string | null> {
-  const supabase = await createServerSupabaseClient();
+  // Pista 10: api_key_encrypted não é mais legível pela sessão do usuário.
+  // O orgId vem sempre da sessão nos chamadores (actions de Apollo).
+  const supabase = createServiceRoleClient();
 
   const { data } = (await from(supabase, 'apollo_connections')
     .select('api_key_encrypted')

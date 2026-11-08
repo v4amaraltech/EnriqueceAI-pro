@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { fetchPublicHttps } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 
 import { lookupRecordingFromApi4Com } from './recover-recording.service';
@@ -13,8 +14,9 @@ export function callRecordingStoragePath(orgId: string, callId: string): string 
 
 async function tryDownloadAudio(url: string): Promise<Buffer | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) return null;
+    // Pista 9: http(s) em host público, redirects revalidados a cada salto.
+    const response = await fetchPublicHttps(url, { signal: AbortSignal.timeout(30_000) });
+    if (!response || !response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     return Buffer.from(arrayBuffer);
   } catch {

@@ -40,15 +40,20 @@ export async function reportWhatsAppInvalid(
   if (!auth.success) return auth;
   const { userId, supabase } = auth.data;
 
-  const { enrollmentId, cadenceId, stepId, leadId, orgId } = input;
+  // Pista 11: o orgId do cliente é ignorado; vale sempre o da sessão.
+  const orgId = auth.data.orgId;
+  const { enrollmentId, cadenceId, stepId, leadId } = input;
 
   // 1. Flag the lead so future WhatsApp steps are suppressed in the queue.
-  const { error: leadErr } = await from(supabase, 'leads')
+  const { data: flagged, error: leadErr } = (await from(supabase, 'leads')
     .update({ whatsapp_invalid_at: new Date().toISOString() } as Record<string, unknown>)
-    .eq('id', leadId);
+    .eq('id', leadId)
+    .eq('org_id', orgId)
+    .select('id')) as { data: { id: string }[] | null; error: unknown };
 
   const leadQErr = handleQueryError(leadErr, 'Erro ao marcar lead como sem WhatsApp', 'activities');
   if (leadQErr) return leadQErr;
+  if (!flagged || flagged.length === 0) return { success: false, error: 'Lead não encontrado' };
 
   // 2. Record the failed interaction for audit/history.
   await from(supabase, 'interactions')

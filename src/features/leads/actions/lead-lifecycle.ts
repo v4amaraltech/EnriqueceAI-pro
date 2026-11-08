@@ -15,11 +15,12 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 import { scheduleInboundRecovery } from '../services/inbound-recovery.service';
 
 /** Complete all active/paused enrollments for a lead (uses service role to bypass RLS) */
-async function completeEnrollmentsForLead(leadId: string) {
+async function completeEnrollmentsForLead(leadId: string, orgId: string) {
   const serviceClient = createServiceRoleClient();
   await from(serviceClient, 'cadence_enrollments')
     .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('lead_id', leadId)
+    .eq('org_id', orgId)
     .in('status', ['active', 'paused']);
 }
 
@@ -34,15 +35,22 @@ export async function archiveLead(
   // status='archived' but lead_status enum only has new/contacted/qualified/won/
   // unqualified. The UPDATE returned a 22P02 every time, the button always
   // failed. Unify with bulkDeleteLeads: archive == soft-delete via deleted_at.
-  const { error } = await from(supabase, 'leads')
+  const { data: archived, error } = (await from(supabase, 'leads')
     .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('id', leadId)
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .select('id')) as { data: { id: string }[] | null; error: unknown };
 
   const qErr = handleQueryError(error, 'Erro ao arquivar lead', 'lead-lifecycle');
   if (qErr) return qErr;
 
-  await completeEnrollmentsForLead(leadId);
+  // Pista 11: o UPDATE sob RLS atinge 0 linhas para lead de outra org. Sem esta
+  // checagem o service-role abaixo encerraria cadências do outro tenant.
+  if (!archived || archived.length === 0) {
+    return { success: false, error: 'Lead não encontrado' };
+  }
+
+  await completeEnrollmentsForLead(leadId, orgId);
 
   logLeadEvent(supabase, {
     orgId,
@@ -121,17 +129,23 @@ export async function markLeadAsLost(
   // 2. Flip lead status to unqualified + persist the loss reason on the lead
   // (canonical source — the loss reason belongs to the lead, not a cadence;
   // the enrollment copy below is only stamped for active/paused enrollments).
-  const { error: leadError } = await from(supabase, 'leads')
+  const { data: lostRows, error: leadError } = (await from(supabase, 'leads')
     .update({
       status: 'unqualified',
       loss_reason_id: lossReasonId,
       loss_notes: lossNotes ?? null,
     } as Record<string, unknown>)
     .eq('id', leadId)
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .select('id')) as { data: { id: string }[] | null; error: unknown };
 
   const qErr3 = handleQueryError(leadError, 'Erro ao marcar lead como perdido', 'lead-lifecycle');
   if (qErr3) return qErr3;
+
+  // Pista 11: lead de outra org atinge 0 linhas; não seguir para o service-role.
+  if (!lostRows || lostRows.length === 0) {
+    return { success: false, error: 'Lead não encontrado' };
+  }
 
   // Dispatch lead.unqualified webhook
   dispatchWebhookEvent(supabase, orgId, 'lead.unqualified', {
@@ -153,6 +167,7 @@ export async function markLeadAsLost(
   await from(serviceClient, 'cadence_enrollments')
     .update(enrollmentUpdate)
     .eq('lead_id', leadId)
+    .eq('org_id', orgId)
     .in('status', ['active', 'paused']);
 
   // 3b. Cancel pending scheduled return-activities for this lead. Without this,
@@ -163,6 +178,7 @@ export async function markLeadAsLost(
   await from(serviceClient, 'scheduled_activities' as never)
     .update({ status: 'cancelled' } as Record<string, unknown>)
     .eq('lead_id', leadId)
+    .eq('org_id', orgId)
     .eq('status', 'pending');
 
   // 3c. Recuperação automática de inbound: perda com motivo reativável

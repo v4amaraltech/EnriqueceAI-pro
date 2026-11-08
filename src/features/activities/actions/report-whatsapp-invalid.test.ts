@@ -65,6 +65,7 @@ function makeChain(table: string) {
   chain.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
     let result: unknown = { data: null, error: null };
     if (table === 'cadence_steps' && !op) result = { data: steps, error: null };
+    if (table === 'leads' && op === 'update') result = { data: [{ id: INPUT.leadId }], error: null };
     return Promise.resolve(result).then(resolve, reject);
   };
 

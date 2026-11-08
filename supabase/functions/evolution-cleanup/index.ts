@@ -11,6 +11,7 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { isInternalCaller } from '../_shared/auth.ts';
 import {
   APP_INSTANCE_NAME_RE,
   fetchInstance,
@@ -27,6 +28,10 @@ serve(async (req) => {
 
   if (req.method !== 'POST' && req.method !== 'GET') {
     return errorResponse('Method not allowed', 405);
+  }
+  // Pista 5: só chamadas internas (service_role / CRON_SECRET).
+  if (!isInternalCaller(req, { allowLegacyAnon: false })) {
+    return errorResponse('Unauthorized', 401);
   }
 
   try {
