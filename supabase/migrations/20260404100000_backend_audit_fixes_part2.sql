@@ -30,18 +30,25 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_created_by ON api_keys (created_by);
 CREATE INDEX IF NOT EXISTS idx_message_templates_org_id ON message_templates (org_id);
 
 -- Item 5: Missing set_updated_at triggers
+DROP TRIGGER IF EXISTS set_updated_at ON calls;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON calls
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON daily_activity_goals;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON daily_activity_goals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON goals;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON goals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON goals_per_user;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON goals_per_user
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON ldr_empresas;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_empresas
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON ldr_socios;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON ldr_socios
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON notifications;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON notifications
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
