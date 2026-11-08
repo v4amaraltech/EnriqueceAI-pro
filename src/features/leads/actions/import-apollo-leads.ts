@@ -7,6 +7,7 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { ERR_LEAD_LIMIT_EXCEEDED } from '@/lib/constants/error-codes';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
+import { countOrgLeads } from '../services/org-lead-count';
 import { remainingSlots } from '@/lib/utils/plan-limits';
 
 import { enrichPerson, apolloPhoneTipo, type ApolloPersonFull } from '../services/apollo.service';
@@ -80,10 +81,7 @@ export async function importApolloLeads(
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
-      const { count: leadCount } = (await from(supabase, 'leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .is('deleted_at', null)) as { count: number | null };
+      const leadCount = await countOrgLeads(orgId);
 
       const currentLeads = leadCount ?? 0;
       const availableSlots = remainingSlots(currentLeads, plan.max_leads);

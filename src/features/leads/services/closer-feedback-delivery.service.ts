@@ -5,6 +5,7 @@ import { getAppUrl } from '@/lib/utils/app-url';
 import { parseBrtDateTime } from '@/lib/utils/brt-date';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
+import { escapeHtml } from '@/features/leads/services/meeting-briefing-format';
 import { getFeedbackMessengerUserId } from '@/features/leads/services/feedback-messenger.service';
 
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
@@ -281,10 +282,10 @@ function buildFeedbackEmailHtml(closerName: string, leadName: string, feedbackUr
           <tr>
             <td style="padding: 32px;">
               <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">
-                Olá, ${closerName}!
+                Olá, ${escapeHtml(closerName)}!
               </h2>
               <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px;">
-                Uma reunião com o lead <strong>${leadName}</strong> foi marcada como ganha pelo pré-vendas.
+                Uma reunião com o lead <strong>${escapeHtml(leadName)}</strong> foi marcada como ganha pelo pré-vendas.
               </p>
               <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 24px;">
                 Gostaríamos de saber como foi a reunião. Por favor, clique no botão abaixo para enviar seu feedback:

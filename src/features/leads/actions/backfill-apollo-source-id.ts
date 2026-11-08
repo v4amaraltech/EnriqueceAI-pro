@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
@@ -25,6 +26,13 @@ interface BackfillResult {
  */
 export async function backfillApolloSourceIds(): Promise<ActionResult<BackfillResult>> {
   const { orgId } = await requireAuthWithMember();
+
+  // Pista 29: cada chamada gasta até 100 créditos Apollo da org.
+  const rl = await checkRateLimit(`apollo-backfill:${orgId}`, 2, 10 * 60_000);
+  if (!rl.allowed) {
+    return { success: false, error: 'Limite de execuções atingido. Aguarde alguns minutos.' };
+  }
+
   const supabase = await createServerSupabaseClient();
 
   const apiKey = await getApolloApiKey(orgId);
