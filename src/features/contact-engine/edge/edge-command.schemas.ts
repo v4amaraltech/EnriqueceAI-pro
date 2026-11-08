@@ -41,8 +41,17 @@ export const authorizeRequestSchema = z
     idempotency_key: idempotencyKey,
     execution_id: uuid.optional(),
     lead_id: uuid.optional(),
-    /** Template oficial candidato (somente WhatsApp). A aprovacao e do cadastro na Meta, nao do n8n. */
-    template: z.object({ id: z.string().trim().min(1).max(100) }).strict().optional(),
+    /**
+     * Template oficial candidato (somente WhatsApp): id da Meta ou nome. O app confere na Graph API
+     * se esta APPROVED no idioma informado (padrao pt_BR); o n8n nao atesta aprovacao.
+     */
+    template: z
+      .object({
+        id: z.string().trim().min(1).max(100),
+        language: z.string().trim().regex(/^[a-z]{2,3}(_[A-Z]{2})?$/, 'language invalido (ex.: pt_BR)').optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((v, ctx) => {

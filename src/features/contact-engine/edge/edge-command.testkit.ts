@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 
 import type { SendDecision } from '../types';
 
+import type { TemplateVerdict } from './template-approval.service';
 import type { EdgePorts, StoredEvent, Target } from './edge-command.service';
 
 export const ORG_A = '11111111-1111-4111-8111-111111111111';
@@ -46,6 +47,7 @@ export function makeFakePorts(opts: { enabledOrgs?: string[] } = {}) {
       return t ? { ok: true as const, target: t } : { ok: false as const, reason: 'not_found' as const };
     }),
     evaluate: vi.fn(async () => ALLOWED as SendDecision),
+    verifyTemplate: vi.fn(async (): Promise<TemplateVerdict> => 'approved'),
     readEvent: vi.fn(async (org: string, key: string): Promise<StoredEvent | null | 'error'> => events.get(evKey(org, key)) ?? null),
     recordEvent: vi.fn(async (i: { orgId: string; key: string; disposition: string; reasons?: string[] }): Promise<'recorded' | 'duplicate' | 'error'> => {
       const k = evKey(i.orgId, i.key);

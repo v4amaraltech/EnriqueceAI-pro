@@ -16,6 +16,7 @@ import {
   type ReplyRouteRequest,
   type ResultRequest,
 } from './edge-command.schemas';
+import type { TemplateVerdict } from './template-approval.service';
 
 /**
  * Adaptadores de borda do n8n (PR13): o n8n PEDE a decisao e REGISTRA o resultado;
@@ -78,6 +79,8 @@ export interface EdgePorts {
   isEnabled(orgId: Uuid): Promise<boolean>;
   resolveTarget(orgId: Uuid, ref: { workflow: EdgeWorkflow; executionId?: string; leadId?: string }): Promise<TargetResult>;
   evaluate(request: SendGatewayRequest): Promise<SendDecision>;
+  /** Confere o template na Graph API (WABA da org). `error` = nao foi possivel verificar. */
+  verifyTemplate(orgId: Uuid, template: { id: string; language?: string }): Promise<TemplateVerdict>;
   readEvent(orgId: Uuid, key: string): Promise<StoredEvent | null | 'error'>;
   recordEvent(input: {
     orgId: Uuid;
@@ -154,6 +157,7 @@ function buildGatewayRequest(
     preferredProvider: null,
     requestedBy: { orgId: auth.orgId, userId: target.assignedTo, source: 'n8n', apiKeyId: auth.keyId },
     contact: target.contact,
+    // Chamado so depois de `verifyTemplate` aprovar; o n8n nunca atesta a aprovacao.
     template: template ? { id: template.id, approved: true } : null,
   };
 }
@@ -192,8 +196,18 @@ export async function authorizeSend(auth: EdgeAuth, req: AuthorizeRequest, ports
     return deniedBody(previous.reasons, true, previous.reasons.length > 0 && previous.reasons.every(isRetryableReason));
   }
 
+  // Template: o app confere na Graph API (so WhatsApp). Falha de leitura nega (fail-closed).
+  let templateDenial: string | null = null;
+  if (req.workflow === 'ana_whatsapp' && req.template) {
+    const verdict = await ports.verifyTemplate(auth.orgId, req.template);
+    if (verdict === 'error') return unavailable();
+    if (verdict !== 'approved') templateDenial = verdict;
+  }
+
   // Replay de permissao: reavalia ao vivo (so pode ficar mais restrito).
-  const decision = await ports.evaluate(buildGatewayRequest(auth, req.workflow, target, req.template));
+  const decision: SendDecision = templateDenial
+    ? { allowed: false, reasons: ['template_not_approved'], retryable: false, decidedAt: new Date().toISOString() }
+    : await ports.evaluate(buildGatewayRequest(auth, req.workflow, target, req.template));
 
   if (!previous) {
     const stored = await ports.recordEvent({

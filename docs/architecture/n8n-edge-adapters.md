@@ -25,11 +25,11 @@ Com a flag desligada, as rotas novas respondem 403 `adapter_disabled` sem ler ne
 Pede a decisão do gateway. Não envia nada.
 
 ```json
-{ "workflow": "ana_whatsapp", "idempotency_key": "…", "execution_id": "<uuid>", "template": { "id": "…" } }
+{ "workflow": "ana_whatsapp", "idempotency_key": "…", "execution_id": "<uuid>", "template": { "id": "…", "language": "pt_BR" } }
 ```
 
 - `workflow`: `ana_whatsapp` ou `ana_email` (exigem `execution_id`) ou `ana_email_agent` (exige `lead_id`).
-- `template` só no WhatsApp. A aprovação do template é do cadastro na Meta; o n8n só indica qual.
+- `template` só no WhatsApp. `id` aceita o id da Meta ou o nome do template; `language` é opcional (padrão `pt_BR`, mesmo idioma que o envio atual usa). O n8n só indica qual template quer: **a aprovação é conferida pelo app** (ver 3.1.1).
 
 Resposta 200:
 
@@ -42,9 +42,20 @@ Resposta 200:
 
 Negada: `allowed: false`, `next_action` `skip` ou `release`, `retryable`, `reasons[]` (códigos do gateway, por exemplo `hold_total`, `no_consent`). `to` só aparece quando permitido e só no WhatsApp.
 
-Códigos: 403 `adapter_disabled`; 404 `not_found` (passo ou lead de outra organização é indistinguível de inexistente); 400 `wrong_channel`; 200 com `estado: ja_confirmado` e `next_action: none`; 503 `unavailable`.
+Códigos: 403 `adapter_disabled`; 503 `unavailable` também quando o template não pode ser verificado; 404 `not_found` (passo ou lead de outra organização é indistinguível de inexistente); 400 `wrong_channel`; 200 com `estado: ja_confirmado` e `next_action: none`; 503 `unavailable`.
 
 Replay: negação gravada volta como está (`replay: true`), mesmo que o gateway agora permitisse. Permissão gravada é reavaliada ao vivo e pode virar negação. Replay nunca transforma negação em permissão.
+
+#### 3.1.1 Validação do template no servidor
+
+Com a flag ligada e `template` informado, antes de consultar o gateway o app lista os templates `APPROVED` da WABA da organização na Graph API (`GET /{business_account_id}/message_templates?status=APPROVED`, mesma versão e mesma credencial de `whatsapp_connections` que o envio atual usa; o token é decifrado só no servidor e nunca sai em resposta ou log).
+
+- Aprovado: `template.id` igual ao id ou ao nome de um template APPROVED, no idioma pedido. Segue para o gateway.
+- Não aprovado, inexistente ou idioma diferente: `allowed: false`, `reasons: ["template_not_approved"]`, `next_action: skip`. A negação é gravada na trilha e o replay da mesma chave continua negado, mesmo que a Meta aprove depois (use outra `idempotency_key`).
+- Falha de leitura (Graph API fora, erro HTTP, resposta inválida, organização sem conexão WhatsApp ativa, lista maior que 5 páginas de 200): 503 `unavailable` com `retryable: true`. Nega (fail-closed), não grava a trilha e nada é enviado.
+- Cache em memória de 60 segundos por organização e WABA; erro nunca é cacheado. Um template recém-pausado ou removido na Meta pode ser aceito por até 60 segundos; a Meta ainda recusa o envio na origem.
+- Só roda com a flag `edge_command_adapter` ligada para a organização. Desligada, nenhuma chamada à Graph API é feita.
+- Sem `template` no pedido, não há consulta. Se o gateway exigir template (primeiro contato ou fora da janela de 24h) e nenhum for informado, ele nega com `outside_service_window_requires_template`.
 
 ### 3.2 `POST /api/v1/edge/messages/result`
 
@@ -140,5 +151,6 @@ Proposta: ao receber uma resposta, `POST /edge/replies/route` com o telefone e o
 - **Sem outbox neste PR.** Enfileirar na `send_outbox` faria o dispatcher reservar a mesma ação (`claim_send` pega qualquer entrada `pending`), criando dois emissores da etapa. A chave comercial e a trilha de auditoria vêm do `decision_events`. A integração com a outbox exige um marcador de transporte externo na RPC, o que seria migration.
 - **O gateway é obrigatório quando a flag está ligada**, independentemente de `send_gateway_shadow` e `send_gateway_enforced`: ligar o adaptador para uma organização é o aceite de que a decisão vale.
 - **Consentimento:** o gateway nega primeiro contato de WhatsApp sem opt-in registrado (`no_consent`). Quem liga o piloto precisa ter evidência de consentimento carregada, ou o WhatsApp da cadência será negado.
+- **Template:** a decisão de aprovar é do app, via Graph API, não de allowlist. Não foi criada tabela nem migration; a credencial já existe em `whatsapp_connections`. Cada instância do app mantém o próprio cache de 60 segundos.
 - Os eventos `signal_observed` com `model_version = edge_command_v1` aparecem na contagem do painel `/settings/motor-contato`.
 - Não cobre: Ana V4, ingestão (PR14), executor phone, fila Evolution, admissão Apollo.

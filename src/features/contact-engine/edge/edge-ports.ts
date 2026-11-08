@@ -15,6 +15,7 @@ import {
   type StoredEvent,
   type TargetResult,
 } from './edge-command.service';
+import { verifyApprovedTemplate } from './template-approval.service';
 
 type Row<T> = { data: T | null; error: { message: string } | null };
 
@@ -86,6 +87,8 @@ export function createEdgePorts(delegate: EdgePorts['delegate']): EdgePorts {
     },
 
     evaluate: (request) => evaluateSend(request),
+
+    verifyTemplate: (orgId, template) => verifyApprovedTemplate(orgId, template),
 
     async readEvent(orgId, key): Promise<StoredEvent | null | 'error'> {
       try {

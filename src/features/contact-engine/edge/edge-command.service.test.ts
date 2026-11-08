@@ -90,6 +90,66 @@ describe('authorize', () => {
   });
 });
 
+describe('authorize: validação do template no servidor', () => {
+  const withTpl = { ...wpp, template: { id: 'boas_vindas' } };
+
+  it('aprovado: confere com o idioma padrão pt_BR e segue para o gateway', async () => {
+    const f = makeFakePorts();
+    const r = await authorizeSend(authA, withTpl, f.ports);
+    expect(f.ports.verifyTemplate).toHaveBeenCalledWith(ORG_A, { id: 'boas_vindas' });
+    expect(body(r)).toMatchObject({ allowed: true });
+    expect(f.ports.evaluate).toHaveBeenCalledWith(expect.objectContaining({ template: { id: 'boas_vindas', approved: true } }));
+  });
+
+  it.each(['not_approved', 'language_mismatch'] as const)('%s: nega com template_not_approved sem consultar o gateway', async (verdict) => {
+    const f = makeFakePorts();
+    f.ports.verifyTemplate.mockResolvedValueOnce(verdict);
+    const r = await authorizeSend(authA, withTpl, f.ports);
+    expect(body(r)).toMatchObject({ allowed: false, next_action: 'skip', reasons: ['template_not_approved'] });
+    expect(body(r).to).toBeUndefined();
+    expect(f.ports.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('falha de leitura nega (503, fail-closed), não grava a trilha e permite nova tentativa', async () => {
+    const f = makeFakePorts();
+    f.ports.verifyTemplate.mockResolvedValueOnce('error');
+    const r = await authorizeSend(authA, withTpl, f.ports);
+    expect(r.status).toBe(503);
+    expect(r.body.retryable).toBe(true);
+    expect(f.events.size).toBe(0);
+    expect(f.ports.evaluate).not.toHaveBeenCalled();
+    expect(body(await authorizeSend(authA, withTpl, f.ports))).toMatchObject({ allowed: true });
+  });
+
+  it('replay de template negado continua negado, mesmo que a Meta aprove depois', async () => {
+    const f = makeFakePorts();
+    f.ports.verifyTemplate.mockResolvedValueOnce('not_approved');
+    await authorizeSend(authA, withTpl, f.ports);
+    const again = await authorizeSend(authA, withTpl, f.ports);
+    expect(body(again)).toMatchObject({ allowed: false, replay: true, reasons: ['template_not_approved'] });
+  });
+
+  it('sem template no pedido não consulta a Graph API; e-mail rejeita template no schema', async () => {
+    const f = makeFakePorts();
+    await authorizeSend(authA, wpp, f.ports);
+    expect(f.ports.verifyTemplate).not.toHaveBeenCalled();
+    expect(authorizeRequestSchema.safeParse({ workflow: 'ana_email', idempotency_key: 'run-0001', execution_id: EXEC_A, template: { id: 'x' } }).success).toBe(false);
+  });
+
+  it('flag desligada: nenhuma consulta à Graph API', async () => {
+    const f = makeFakePorts({ enabledOrgs: [] });
+    await authorizeSend(authA, withTpl, f.ports);
+    expect(f.ports.verifyTemplate).not.toHaveBeenCalled();
+  });
+
+  it('idioma informado é repassado e validado no schema', async () => {
+    const f = makeFakePorts();
+    await authorizeSend(authA, { ...wpp, template: { id: 'retomada', language: 'en_US' } }, f.ports);
+    expect(f.ports.verifyTemplate).toHaveBeenCalledWith(ORG_A, { id: 'retomada', language: 'en_US' });
+    expect(authorizeRequestSchema.safeParse({ ...wpp, template: { id: 'x', language: 'portugues' } }).success).toBe(false);
+  });
+});
+
 describe('idempotência e replay', () => {
   it('mesma chave: um único evento gravado e replay sinalizado', async () => {
     const f = makeFakePorts();
