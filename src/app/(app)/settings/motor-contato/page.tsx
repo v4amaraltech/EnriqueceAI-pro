@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
+import { NumberHealthRecoveryButton } from '@/features/contact-engine/components/number-health-recovery-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,7 +144,8 @@ export default async function ContactEnginePilotPage() {
         <CardHeader>
           <CardTitle>Saúde dos números</CardTitle>
           <CardDescription>
-            Estado e tetos por instância. Sem telefone nem mensagens.
+            Estado e tetos por instância. Sem telefone nem mensagens. Botão Recuperar número disponível
+            somente para gestores, com flag ligada, estado paused/review e WhatsApp reconectado.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,6 +158,7 @@ export default async function ContactEnginePilotPage() {
                 <TableHead>Teto total / novos</TableHead>
                 <TableHead>Rampa</TableHead>
                 <TableHead>Motivo da pausa</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -169,6 +172,15 @@ export default async function ContactEnginePilotPage() {
                   </TableCell>
                   <TableCell>{n.rampStage}</TableCell>
                   <TableCell>{n.pauseReason ?? ''}</TableCell>
+                  <TableCell>
+                    <NumberHealthRecoveryButton
+                      instanceId={n.instanceId}
+                      instanceName={n.instanceName}
+                      healthState={n.healthState as any}
+                      pauseReason={n.pauseReason}
+                      connectionStatus={n.connection}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
