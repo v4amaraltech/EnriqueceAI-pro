@@ -1,11 +1,11 @@
 import type { ActionResult } from '@/lib/actions/action-result';
-import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { ContactChannel, IsoTimestamp, MessageProvider, Uuid } from '../types';
 
 import { normalizeContactIdentity } from './ownership.service';
 import { evaluateSend, type SendGatewayRequest } from './send-decision.service';
+import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
 
 /**
  * Outbox transacional de envio (PR07).
@@ -66,17 +66,8 @@ export interface StoredSendCommand {
 type Failure = Extract<ActionResult<never>, { success: false }>;
 const fail = (error: string, code: string): Failure => ({ success: false, error, code });
 
-export async function isSendOutboxEnabled(): Promise<boolean> {
-  try {
-    const { data, error } = (await from(createServiceRoleClient(), 'app_flags')
-      .select('enabled')
-      .eq('key', SEND_OUTBOX_FLAG_KEY)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null; error?: { message: string } | null };
-    if (error) return false;
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+export async function isSendOutboxEnabled(scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(SEND_OUTBOX_FLAG_KEY, scope);
 }
 
 /** Chave comercial serializada. Independente de provedor e de instancia. */
@@ -146,7 +137,7 @@ export interface EnqueueSendResult {
 const PAYLOAD_HASH = /^[a-f0-9]{32,128}$/i;
 
 export async function enqueueSend(input: EnqueueSendInput): Promise<ActionResult<EnqueueSendResult>> {
-  if (!(await isSendOutboxEnabled())) {
+  if (!(await isSendOutboxEnabled({ orgId: input.request.orgId }))) {
     return fail('Outbox de envio desativada', 'flag_disabled');
   }
 
@@ -249,7 +240,7 @@ export interface ClaimSendResult {
 }
 
 export async function claimSend(input: ClaimSendInput): Promise<ActionResult<ClaimSendResult>> {
-  if (!(await isSendOutboxEnabled())) return fail('Outbox de envio desativada', 'flag_disabled');
+  if (!(await isSendOutboxEnabled({ orgId: input.orgId }))) return fail('Outbox de envio desativada', 'flag_disabled');
   const owner = String(input.leaseOwner ?? '').trim();
   const leaseSeconds = input.leaseSeconds ?? DEFAULT_LEASE_SECONDS;
   if (!owner) return fail('Dono do lease obrigatorio', 'invalid_input');

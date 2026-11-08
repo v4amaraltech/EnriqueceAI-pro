@@ -286,7 +286,7 @@ async function listCandidates(db: Db, orgId: Uuid, limit: number, now: Date): Pr
 }
 
 export async function reconcileOnce(input: ReconcileInput): Promise<ReconcileRunResult> {
-  if (!(await isDispatcherEnabled())) return emptyRun(false, 'flag_disabled');
+  if (!(await isDispatcherEnabled({ orgId: input.orgId }))) return emptyRun(false, 'flag_disabled');
   const result = emptyRun(true, null);
   const now = input.now ?? (() => new Date());
   const settleMs = input.settleMs ?? RECONCILE_SETTLE_MS;

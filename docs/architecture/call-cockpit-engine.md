@@ -286,6 +286,18 @@ Append-only (mesmo gatilho do PR05), única por `(org_id, idempotency_key)`, com
 
 Aplicar a migration, rodar `pnpm gen:types`, revisar os eventos `priority_suggestion` com `v1_pick_same = false` e só então ligar a flag.
 
+## 14. Piloto, corte por organização e runbook (PR12)
+
+Status: implementado, sem ligar nenhuma flag. Nenhuma cadência, envio ou workflow n8n é alterado.
+
+- Escopo de flag: a migration `20261108100000_app_flags_scope.sql` adiciona `allow_org_ids` e `allow_user_ids` (uuid[], default vazio) a `app_flags`. Sem tabela nova. Regra: `enabled` liga para todos; `allow_org_ids` liga para a organização; `allow_user_ids` só estreita os caminhos com usuário, dentro das organizações liberadas. Flag desligada com listas vazias (ou colunas ainda não aplicadas) é idêntica ao comportamento anterior. O escopo global descrito na seção 5 passa a ter esta extensão opcional.
+- Helper único: `contact-engine/services/flag-scope.service.ts` (`readScopedFlagState`, `isScopedFlagEnabled`, `isFlagEnabledForAnyScope`, `evaluateFlagRow`). Todos os serviços do motor (ownership, gateway, outbox, dispatcher, reconciliação, distribuição, saúde de número, prioridade v2) e as flags do cockpit leem por ele. Sem escopo, a leitura é a global de sempre. O gateway `enforced` continua fail-closed em erro de leitura.
+- `enqueue_send` (RPC) passa a respeitar `allow_org_ids` no portão interno. Única mudança na função.
+- O ciclo do dispatcher usa `isFlagEnabledForAnyScope` como portão barato e decide por organização em `dispatchOnce` e `reconcileOnce`.
+- Painel somente leitura para gestor: `/settings/motor-contato` (`pilot-status.service.ts`). Sem ação de envio.
+- Runbook: `docs/runbooks/motor-contato-piloto.md` (pausa, rollback, verificação). Flags de segurança (gateway, ownership, saúde de número) não fazem parte da pausa, porque desligá-las reabriria um caminho sem controle.
+- Ativação do piloto (ação separada): aplicar a migration, rodar `pnpm gen:types`, listar a organização e os dois usuários, seguir a ordem do runbook.
+
 ## 9. Fora do escopo do PR01
 
 Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, regeneração de `types.ts` do Supabase (não há mudança de schema), qualquer envio de mensagem. Nenhum segredo, credencial ou dado real consta neste documento ou nos tipos.

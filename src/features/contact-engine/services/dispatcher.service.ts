@@ -16,6 +16,7 @@ import {
 } from './outbox.service';
 import { checkDispatchHealth, recordNumberHealthSignals, type DispatchHealthCheck } from './number-health.service';
 import { evaluateSend, type SendGatewayRequest } from './send-decision.service';
+import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
 
 /**
  * Dispatcher da outbox de envio (PR08).
@@ -54,17 +55,8 @@ export const DEFAULT_PROVIDER_TIMEOUT_MS = 25_000;
 export const DEFAULT_LEASE_SECONDS = 90;
 export const DEFAULT_MAX_ITEMS = 10;
 
-export async function isDispatcherEnabled(): Promise<boolean> {
-  try {
-    const { data, error } = (await from(createServiceRoleClient(), 'app_flags')
-      .select('enabled')
-      .eq('key', DISPATCHER_FLAG_KEY)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null; error?: { message: string } | null };
-    if (error) return false;
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+export async function isDispatcherEnabled(scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(DISPATCHER_FLAG_KEY, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -316,14 +308,14 @@ const COUNTER: Record<DispatchItemOutcome, CounterKey> = {
 };
 
 export async function dispatchOnce(input: DispatchInput): Promise<DispatchRunResult> {
-  if (!(await isDispatcherEnabled())) return emptyResult(false, 'flag_disabled');
+  if (!(await isDispatcherEnabled({ orgId: input.orgId }))) return emptyResult(false, 'flag_disabled');
 
   const result = emptyResult(true, null);
   const maxItems = Math.max(1, input.maxItems ?? DEFAULT_MAX_ITEMS);
 
   for (let i = 0; i < maxItems; i++) {
     // Reavalia a flag a cada item: desligar pausa o envio no meio da rodada.
-    if (i > 0 && !(await isDispatcherEnabled())) {
+    if (i > 0 && !(await isDispatcherEnabled({ orgId: input.orgId }))) {
       result.reason = 'flag_disabled_mid_run';
       break;
     }
@@ -429,7 +421,7 @@ async function processClaimed(input: DispatchInput, claimed: ClaimedSend): Promi
   }
 
   // 4. Flag de novo, depois transiciona para `sending` (revalida holds no banco)
-  if (!(await isDispatcherEnabled())) return 'deferred';
+  if (!(await isDispatcherEnabled({ orgId: entry.orgId }))) return 'deferred';
 
   // 4a. Saude e tetos do numero (PR10), so Evolution. O gateway acabou de confirmar a continuidade.
   let health: DispatchHealthCheck = { enabled: false };

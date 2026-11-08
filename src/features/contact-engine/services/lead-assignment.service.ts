@@ -9,6 +9,7 @@ import {
 import type { Uuid } from '../types';
 
 import { isConversationOwnershipEnabled } from './ownership.service';
+import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
 
 /**
  * Distribuicao de leads dentro do app (PR09).
@@ -108,22 +109,14 @@ export interface LeadFacts {
 // Flags
 // ---------------------------------------------------------------------------
 
-async function readEffectFlag(key: string): Promise<boolean> {
-  try {
-    const client = createServiceRoleClient();
-    const { data, error } = (await from(client, 'app_flags')
-      .select('enabled')
-      .eq('key', key)
-      .limit(1)) as Rows<{ enabled: boolean }>;
-    if (error) return false;
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+function readEffectFlag(key: string, scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(key, scope);
 }
 
-export const isLeadAssignmentShadowEnabled = () => readEffectFlag(LEAD_ASSIGNMENT_SHADOW_FLAG_KEY);
-export const isLeadAssignmentEnforcedEnabled = () => readEffectFlag(LEAD_ASSIGNMENT_ENFORCED_FLAG_KEY);
+export const isLeadAssignmentShadowEnabled = (scope?: FlagScope) =>
+  readEffectFlag(LEAD_ASSIGNMENT_SHADOW_FLAG_KEY, scope);
+export const isLeadAssignmentEnforcedEnabled = (scope?: FlagScope) =>
+  readEffectFlag(LEAD_ASSIGNMENT_ENFORCED_FLAG_KEY, scope);
 
 // ---------------------------------------------------------------------------
 // Decisao pura
@@ -270,7 +263,7 @@ async function loadFacts(
 
   // Ownership so existe com a flag do PR05 ligada; desligada nao ha o que proteger.
   let owners: Array<{ lead_id: string; owner_user_id: string | null }> = [];
-  if (await isConversationOwnershipEnabled()) {
+  if (await isConversationOwnershipEnabled({ orgId })) {
     const ownRes = (await from(db, 'conversation_ownership')
       .select('lead_id, owner_user_id')
       .eq('org_id', orgId)
@@ -325,7 +318,7 @@ export async function runLeadAssignmentShadowBatch(input: {
   const none: ShadowRun = { ran: false, entries: [] };
   try {
     if (input.leads.length === 0) return none;
-    if (!(await isLeadAssignmentShadowEnabled())) return none;
+    if (!(await isLeadAssignmentShadowEnabled({ orgId: input.orgId }))) return none;
 
     const db = createServiceRoleClient();
     const leads = input.leads.slice(0, MAX_SHADOW_BATCH);
@@ -406,7 +399,7 @@ export async function assignLeadByPolicy(input: {
   orgId: Uuid;
   leadId: Uuid;
 }): Promise<ActionResult<AssignLeadOutcome>> {
-  if (!(await isLeadAssignmentEnforcedEnabled())) {
+  if (!(await isLeadAssignmentEnforcedEnabled({ orgId: input.orgId }))) {
     return { success: false, error: 'Distribuicao por politica desligada', code: 'flag_disabled' };
   }
   const db = createServiceRoleClient();

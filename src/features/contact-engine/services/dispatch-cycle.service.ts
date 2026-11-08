@@ -5,11 +5,12 @@ import type { Uuid } from '../types';
 
 import {
   dispatchOnce,
-  isDispatcherEnabled,
+  DISPATCHER_FLAG_KEY,
   type DispatchRunResult,
   type PayloadResolver,
   type ProviderAdapters,
 } from './dispatcher.service';
+import { isFlagEnabledForAnyScope } from './flag-scope.service';
 import { createDefaultAdapters } from './provider-adapters.service';
 import { reconcileOnce, type ReconcileRunResult } from './reconciliation.service';
 
@@ -54,7 +55,8 @@ export async function runDispatchCycle(
   overrides: { resolver?: PayloadResolver | null; adapters?: ProviderAdapters; now?: () => Date } = {},
 ): Promise<DispatchCycleResult> {
   const base: DispatchCycleResult = { enabled: false, reason: null, orgs: 0, dispatch: [], reconcile: [] };
-  if (!(await isDispatcherEnabled())) return { ...base, reason: 'flag_disabled' };
+  // Portao do ciclo: ligada globalmente ou em alguma lista. A decisao por organizacao fica em dispatchOnce/reconcileOnce.
+  if (!(await isFlagEnabledForAnyScope(DISPATCHER_FLAG_KEY))) return { ...base, reason: 'flag_disabled' };
 
   const resolver = overrides.resolver === undefined ? getPayloadResolver() : overrides.resolver;
   if (!resolver) return { ...base, enabled: true, reason: 'payload_resolver_not_configured' };
