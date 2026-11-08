@@ -13,6 +13,7 @@ import {
 } from '@/features/whatsapp-auto-send/utils/pacing';
 
 import type { HealthSignal, IsoTimestamp, NumberHealthState, SendDenialReason, Uuid } from '../types';
+import { readScopedFlagState, type FlagScope } from './flag-scope.service';
 
 /**
  * Saude e tetos por numero (PR10). Vale para instancias Evolution
@@ -448,17 +449,8 @@ export function checkNumberCanSend(facts: NumberHealthFacts | null, ctx: SendHea
 
 export type NumberHealthFlag = 'on' | 'off' | 'error';
 
-export async function readNumberHealthFlag(): Promise<NumberHealthFlag> {
-  try {
-    const { data, error } = (await from(createServiceRoleClient(), 'app_flags')
-      .select('enabled')
-      .eq('key', NUMBER_HEALTH_FLAG_KEY)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null; error?: { message: string } | null };
-    if (error) return 'error';
-    return data?.[0]?.enabled === true ? 'on' : 'off';
-  } catch {
-    return 'error';
-  }
+export async function readNumberHealthFlag(scope?: FlagScope): Promise<NumberHealthFlag> {
+  return readScopedFlagState(NUMBER_HEALTH_FLAG_KEY, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -612,7 +604,7 @@ export async function loadHealthFactsForGateway(
   instanceId: Uuid,
   now: Date,
 ): Promise<NumberHealthFacts | null | undefined> {
-  const flag = await readNumberHealthFlag();
+  const flag = await readNumberHealthFlag({ orgId });
   if (flag === 'off') return undefined;
   return loadNumberHealthFacts(orgId, instanceId, now);
 }
@@ -643,7 +635,7 @@ export interface DispatchHealthInput {
 }
 
 export async function checkDispatchHealth(input: DispatchHealthInput): Promise<DispatchHealthCheck> {
-  const flag = await readNumberHealthFlag();
+  const flag = await readNumberHealthFlag({ orgId: input.orgId });
   if (flag === 'off') return { enabled: false };
   const now = input.now ?? new Date();
   if (!input.senderInstanceId) {
@@ -700,7 +692,7 @@ export async function recordNumberHealthSignals(
     return { success: false, error: 'Delta invalido', code: 'invalid_input' };
   }
   try {
-    const flag = await readNumberHealthFlag();
+    const flag = await readNumberHealthFlag({ orgId: input.orgId });
     if (flag !== 'on') return { success: true, data: { recorded: false } };
     const { error } = (await createServiceRoleClient().rpc('record_number_health_window' as never, {
       p_org_id: input.orgId,
@@ -760,7 +752,7 @@ function logHealth(event: string, fields: Record<string, string | number | boole
  */
 export async function runNumberHealthEvaluation(input: RunEvaluationInput): Promise<ActionResult<RunEvaluationResult>> {
   const now = input.now ?? new Date();
-  const flag = await readNumberHealthFlag();
+  const flag = await readNumberHealthFlag({ orgId: input.orgId });
   if (flag === 'off') return { success: true, data: noop('flag_disabled') };
   if (flag === 'error') return { success: true, data: noop('flag_unreadable') };
 
@@ -883,7 +875,7 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
   if (input.note.trim().length < 10) {
     return { success: false, error: 'Informe a justificativa da recuperacao', code: 'invalid_input' };
   }
-  const flag = await readNumberHealthFlag();
+  const flag = await readNumberHealthFlag({ orgId: input.orgId });
   if (flag !== 'on') return { success: false, error: 'Saude por numero desativada', code: 'flag_disabled' };
 
   try {

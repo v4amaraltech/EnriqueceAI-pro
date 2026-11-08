@@ -1,6 +1,5 @@
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { readAiOutcome } from '@/features/calls/ai-outcome';
 
@@ -15,6 +14,7 @@ import {
   type CallContextSignal,
   type CockpitViewer,
 } from '../types';
+import { isScopedFlagEnabled, type FlagScope } from '@/features/contact-engine/services/flag-scope.service';
 
 /**
  * Contexto consolidado e SOMENTE LEITURA de um lead para a ligação (PR02).
@@ -39,17 +39,8 @@ const NO_SHOW_WINDOW_DAYS = 14;
 const ENGAGED_WINDOW_DAYS = 7;
 const DAY_MS = 86_400_000;
 
-export async function isCallCockpitEnabled(): Promise<boolean> {
-  try {
-    const client = createServiceRoleClient();
-    const { data } = (await from(client, 'app_flags')
-      .select('enabled')
-      .eq('key', CALL_COCKPIT_FLAG_KEY)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null };
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+export async function isCallCockpitEnabled(scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(CALL_COCKPIT_FLAG_KEY, scope);
 }
 
 interface LeadRow {
@@ -150,9 +141,9 @@ export async function fetchCallContext(input: {
   perPage?: number;
   now?: Date;
 }): Promise<CallContextResult> {
-  if (!(await isCallCockpitEnabled())) return { status: 'disabled' };
-
   const { viewer, leadId } = input;
+  if (!(await isCallCockpitEnabled({ orgId: viewer.orgId, userId: viewer.viewerId }))) return { status: 'disabled' };
+
   const { page, perPage } = clampPagination(input.page, input.perPage);
   const now = input.now ?? new Date();
   const supabase = await createServerSupabaseClient();

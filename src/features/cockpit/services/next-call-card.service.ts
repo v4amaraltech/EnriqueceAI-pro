@@ -39,9 +39,9 @@ export async function fetchNextCallCard(input: {
   /** Leads já trabalhados nesta sessão (PR04). Resultado pendente nunca entra aqui. */
   excludeLeadIds?: string[];
 }): Promise<NextCallCardResult> {
-  if (!(await isCallCockpitEnabled())) return { status: 'disabled' };
-
   const { viewer } = input;
+  if (!(await isCallCockpitEnabled({ orgId: viewer.orgId, userId: viewer.viewerId }))) return { status: 'disabled' };
+
   const now = input.now ?? new Date();
   const target = viewer.targetUserId;
   const supabase = await createServerSupabaseClient();
@@ -106,7 +106,7 @@ export async function fetchNextCallCard(input: {
   // versao. Desligada (ou com qualquer falha de leitura) vale exatamente a escolha de antes.
   let leadId = v1LeadId;
   let ranked: { leadId: string; result: PriorityResult } | null = null;
-  if (await isCallPriorityV2Enabled()) {
+  if (await isCallPriorityV2Enabled({ orgId: viewer.orgId, userId: viewer.viewerId })) {
     ranked = await rankWithPriorityV2({ viewer, candidates, v1LeadId, now });
     if (ranked) leadId = ranked.leadId;
   }

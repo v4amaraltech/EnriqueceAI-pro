@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { resolveHoldFlags, type HoldFlags, type HoldRow } from '@/features/contact-holds/services/hold-flags';
 
 import type { ActorIdentity, AutomationMode, ContactChannel, MessageProvider, Uuid } from '../types';
+import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
 
 /**
  * Ownership canonico de conversa e evidencia de consentimento (PR05).
@@ -26,17 +27,8 @@ const MAX_EVIDENCE_KEYS = 20;
 const MAX_EVIDENCE_VALUE_LENGTH = 300;
 const ACTIVE_MEMBER_STATUS = 'active';
 
-export async function isConversationOwnershipEnabled(): Promise<boolean> {
-  try {
-    const client = createServiceRoleClient();
-    const { data } = (await from(client, 'app_flags')
-      .select('enabled')
-      .eq('key', CONVERSATION_OWNERSHIP_FLAG_KEY)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null };
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+export async function isConversationOwnershipEnabled(scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(CONVERSATION_OWNERSHIP_FLAG_KEY, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +200,7 @@ export interface ClaimConversationInput {
 export async function claimConversation(
   input: ClaimConversationInput,
 ): Promise<ActionResult<OwnershipClaimResult>> {
-  if (!(await isConversationOwnershipEnabled())) {
+  if (!(await isConversationOwnershipEnabled({ orgId: input.actor.orgId, userId: input.actor.userId }))) {
     return fail('Ownership de conversa desativado', 'flag_disabled');
   }
   const identity = normalizeContactIdentity(input.channel, input.contact);
@@ -279,7 +271,7 @@ export interface TransferConversationInput {
 export async function transferConversation(
   input: TransferConversationInput,
 ): Promise<ActionResult<OwnershipTransferResult>> {
-  if (!(await isConversationOwnershipEnabled())) {
+  if (!(await isConversationOwnershipEnabled({ orgId: input.actor.orgId, userId: input.actor.userId }))) {
     return fail('Ownership de conversa desativado', 'flag_disabled');
   }
   const reason = cleanReason(input.reason);
@@ -344,7 +336,7 @@ export interface GetOwnerInput {
 
 /** Dono ativo da conversa na organizacao, ou null. Flag desligada: null sem consultar. */
 export async function getOwner(input: GetOwnerInput): Promise<ActionResult<OwnershipRecord | null>> {
-  if (!(await isConversationOwnershipEnabled())) return { success: true, data: null };
+  if (!(await isConversationOwnershipEnabled({ orgId: input.orgId }))) return { success: true, data: null };
   const identity = normalizeContactIdentity(input.channel, input.contact);
   if (!identity) return fail('Contato invalido para o canal', 'invalid_contact');
 
@@ -358,7 +350,7 @@ export async function listLeadOwners(input: {
   orgId: Uuid;
   leadId: Uuid;
 }): Promise<ActionResult<OwnershipRecord[]>> {
-  if (!(await isConversationOwnershipEnabled())) return { success: true, data: [] };
+  if (!(await isConversationOwnershipEnabled({ orgId: input.orgId }))) return { success: true, data: [] };
   const { data, error } = (await from(createServiceRoleClient(), 'conversation_ownership')
     .select(OWNERSHIP_COLUMNS)
     .eq('org_id', input.orgId)
@@ -421,7 +413,7 @@ function sanitizeEvidence(
 
 /** Insere evidencia append-only. Nunca atualiza nem apaga registros anteriores. */
 export async function recordConsent(input: RecordConsentInput): Promise<ActionResult<{ id: Uuid }>> {
-  if (!(await isConversationOwnershipEnabled())) {
+  if (!(await isConversationOwnershipEnabled({ orgId: input.actor.orgId, userId: input.actor.userId }))) {
     return fail('Ownership de conversa desativado', 'flag_disabled');
   }
   if (input.kind !== 'opt_in' && input.kind !== 'opt_out') {
@@ -480,7 +472,7 @@ const NO_HOLDS: HoldFlags = { bloqueado_total: false, bloqueado_prospeccao: fals
  * Erro de leitura devolve falha, nunca `allowed: true`.
  */
 export async function getContactAccess(input: GetContactAccessInput): Promise<ActionResult<ContactAccess>> {
-  if (!(await isConversationOwnershipEnabled())) {
+  if (!(await isConversationOwnershipEnabled({ orgId: input.orgId }))) {
     return {
       success: true,
       data: { allowed: false, reasons: ['flag_disabled'], holds: NO_HOLDS, lastConsent: null, owner: null },

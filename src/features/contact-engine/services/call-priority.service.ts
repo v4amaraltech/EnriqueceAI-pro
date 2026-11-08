@@ -13,6 +13,7 @@ import {
   type PrioritySignal,
   type PrioritySource,
 } from './call-priority';
+import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
 
 /**
  * Score de prioridade v2 (PR11): leitura de sinais, flag e trilha `decision_events`.
@@ -55,18 +56,8 @@ type Rows<T> = { data: T[] | null; error: { message: string; code?: string } | n
 // Flag
 // ---------------------------------------------------------------------------
 
-export async function isCallPriorityV2Enabled(): Promise<boolean> {
-  try {
-    const client = createServiceRoleClient();
-    const { data, error } = (await from(client, 'app_flags')
-      .select('enabled')
-      .eq('key', CALL_PRIORITY_FLAG_KEY)
-      .limit(1)) as Rows<{ enabled: boolean }>;
-    if (error) return false;
-    return data?.[0]?.enabled === true;
-  } catch {
-    return false;
-  }
+export async function isCallPriorityV2Enabled(scope?: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(CALL_PRIORITY_FLAG_KEY, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +313,7 @@ export async function recordHumanCorrection(input: {
   if (!Number.isFinite(input.interest) || input.interest < 0 || input.interest > INTEREST_MAX || !requestId.trim() || requestId.length > 100) {
     return { status: 'invalid' };
   }
-  if (!(await isCallPriorityV2Enabled())) return { status: 'disabled' };
+  if (!(await isCallPriorityV2Enabled({ orgId: actor.orgId, userId: actor.userId }))) return { status: 'disabled' };
 
   const client = input.client ?? createServiceRoleClient();
   const lead = (await from(client, 'leads')

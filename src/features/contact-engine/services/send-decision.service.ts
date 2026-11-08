@@ -18,6 +18,7 @@ import {
   type NumberHealthFacts,
 } from './number-health.service';
 import { getContactAccess, normalizeContactIdentity, type ConsentKind } from './ownership.service';
+import { readScopedFlagState, type FlagScope } from './flag-scope.service';
 
 /**
  * Gateway de decisao de envio (PR06).
@@ -244,17 +245,9 @@ function allow(
 
 type FlagRead = boolean | 'error';
 
-async function readFlag(key: string): Promise<FlagRead> {
-  try {
-    const { data, error } = (await from(createServiceRoleClient(), 'app_flags')
-      .select('enabled')
-      .eq('key', key)
-      .limit(1)) as { data: Array<{ enabled: boolean }> | null; error?: { message: string } | null };
-    if (error) return 'error';
-    return data?.[0]?.enabled === true;
-  } catch {
-    return 'error';
-  }
+async function readFlag(key: string, scope?: FlagScope): Promise<FlagRead> {
+  const state = await readScopedFlagState(key, scope);
+  return state === 'error' ? 'error' : state === 'on';
 }
 
 /**
@@ -262,10 +255,10 @@ async function readFlag(key: string): Promise<FlagRead> {
  * ligada (fail-closed). `shadow` com erro de leitura conta como desligada.
  * Linha ausente vale desligada.
  */
-export async function getGatewayMode(): Promise<GatewayMode> {
+export async function getGatewayMode(scope?: FlagScope): Promise<GatewayMode> {
   const [enforced, shadow] = await Promise.all([
-    readFlag(SEND_GATEWAY_ENFORCED_FLAG_KEY),
-    readFlag(SEND_GATEWAY_SHADOW_FLAG_KEY),
+    readFlag(SEND_GATEWAY_ENFORCED_FLAG_KEY, scope),
+    readFlag(SEND_GATEWAY_SHADOW_FLAG_KEY, scope),
   ]);
   if (enforced === true || enforced === 'error') return 'enforced';
   if (shadow === true) return 'shadow';
@@ -436,7 +429,7 @@ export async function runSendGatewayShadow(
 ): Promise<ShadowComparison> {
   const none: ShadowComparison = { mode: 'off', compared: false, diverged: null, gateway: null };
   try {
-    const mode = await getGatewayMode();
+    const mode = await getGatewayMode({ orgId: request.orgId });
     if (mode !== 'shadow') return { ...none, mode };
 
     const decision = await evaluateSend(request);
