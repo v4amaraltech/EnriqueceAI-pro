@@ -308,3 +308,9 @@ Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, re
 Status: implementado atrás de `edge_command_adapter` (escopo por organização, nasce desligada, sem migration). Nenhum workflow n8n, cadência ou envio atual é alterado.
 
 Contrato v1, rotas `/api/v1/edge/*`, idempotência por chave e o diff proposto de cada workflow estão em `docs/architecture/n8n-edge-adapters.md`. Código em `src/features/contact-engine/edge/`.
+
+## 16. Ingestão de borda do n8n (PR14)
+
+Status: implementado atrás de `edge_ingestion_v1` (escopo por organização, nasce desligada, sem migration). Nenhum workflow n8n, webhook ou rota atual é alterado.
+
+Rotas `/api/v1/edge/leads/ingest`, `/api/v1/edge/calls/lookup` e `/api/v1/edge/enrichment/result`, contrato `edge-ingestion.v1` e o checklist de mudanças futuras do n8n estão em `docs/architecture/n8n-edge-ingestion.md`. Código em `src/features/contact-engine/edge/`.
