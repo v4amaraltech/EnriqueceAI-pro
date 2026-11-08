@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CallContext } from '../types';
 
-import { relativeTimePt, suggestApproach, summarizeContext } from './call-approach';
+import { relativeTimePt, suggestApproach, suggestApproachV2, summarizeContext } from './call-approach';
 
 const base = (over: Partial<CallContext> = {}): CallContext => ({
   leadId: 'l1',
@@ -82,5 +82,42 @@ describe('relativeTimePt e summarizeContext', () => {
   });
   it('resumo é null sem dados', () => {
     expect(summarizeContext(base())).toBeNull();
+  });
+});
+
+describe('suggestApproachV2 (PR11)', () => {
+  const priority = {
+    version: 'call_priority_v2.0',
+    score: 410,
+    sourceLabel: 'resposta explícita',
+    reasons: ['Respondeu por email'],
+    humanCorrected: false,
+  };
+
+  it('preserva a abordagem v0 e só acrescenta pontos com fonte, marcando a versão v2', () => {
+    const ctx = base();
+    const v0 = suggestApproach(ctx);
+    const v2 = suggestApproachV2(ctx, priority);
+    expect(v2.version).toBe('v2');
+    expect(v2.headline).toBe(v0.headline);
+    expect(v2.opening).toBe(v0.opening);
+    expect(v2.goal).toBe(v0.goal);
+    expect(v2.points.slice(-v0.points.length)).toEqual(v0.points);
+    expect(v2.points[0]).toContain('resposta explícita');
+  });
+
+  it('avisa quando o interesse foi ajustado por uma pessoa', () => {
+    const v2 = suggestApproachV2(base(), { ...priority, humanCorrected: true });
+    expect(v2.points[0]).toContain('ajustado manualmente');
+  });
+
+  it('sem fonte (sem sinal): nada é acrescentado', () => {
+    const ctx = base();
+    const v2 = suggestApproachV2(ctx, { ...priority, sourceLabel: null, reasons: [] });
+    expect(v2.points).toEqual(suggestApproach(ctx).points);
+  });
+
+  it('é determinístico', () => {
+    expect(suggestApproachV2(base(), priority)).toEqual(suggestApproachV2(base(), priority));
   });
 });

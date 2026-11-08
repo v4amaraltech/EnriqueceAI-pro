@@ -52,6 +52,22 @@ describe('NextCallCard', () => {
     expect(screen.getByTestId('approach').textContent).toContain('Retomar a conversa iniciada pelo lead');
   });
 
+  it('sem prioridade v2: título v0 e nenhuma linha de fonte', () => {
+    render(<NextCallCard card={card} dialerProvider="api4com" />);
+    expect(screen.getByTestId('approach').textContent).toContain('v0, por regras');
+    expect(screen.queryByTestId('priority-source')).toBeNull();
+  });
+
+  it('com prioridade v2: mostra fonte, versão e pontuação da sugestão', () => {
+    const priority = { version: 'call_priority_v2.0', score: 410, sourceLabel: 'resposta explícita', reasons: ['Respondeu por email'], humanCorrected: false };
+    render(<NextCallCard card={{ ...card, approach: { ...card.approach, version: 'v2' }, priority }} dialerProvider="api4com" />);
+    const line = screen.getByTestId('priority-source').textContent ?? '';
+    expect(line).toContain('call_priority_v2.0');
+    expect(line).toContain('resposta explícita');
+    expect(line).toContain('410');
+    expect(screen.getByTestId('approach').textContent).toContain('v2, por regras');
+  });
+
   it('botão chama a action existente da API4Com uma única vez, mesmo com clique duplo', async () => {
     let release: (v: unknown) => void = () => {};
     vi.mocked(initiateApi4ComCall).mockImplementation(

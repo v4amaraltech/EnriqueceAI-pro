@@ -32,7 +32,7 @@ interface NextCallCardProps {
  * a action existente da API4Com; nada disca sozinho.
  */
 export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: NextCallCardProps) {
-  const { context: ctx, approach } = card;
+  const { context: ctx, approach, priority } = card;
   const now = new Date(card.generatedAt);
   const phone = ctx.decisionMaker.phone;
   const [calling, setCalling] = useState(false);
@@ -153,7 +153,12 @@ export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: 
       </div>
 
       <div className="space-y-1 rounded-md border p-3" data-testid="approach">
-        <h3 className="text-xs font-semibold">Abordagem sugerida (v0, por regras)</h3>
+        <h3 className="text-xs font-semibold">Abordagem sugerida ({approach.version}, por regras)</h3>
+        {priority && (
+          <p className="text-muted-foreground text-xs" data-testid="priority-source">
+            Prioridade {priority.version} · fonte: {priority.sourceLabel ?? 'sem sinal'} · pontuação {priority.score}
+          </p>
+        )}
         <p className="text-sm font-medium">{approach.headline}</p>
         <p className="text-xs">{approach.opening}</p>
         <p className="text-xs">
