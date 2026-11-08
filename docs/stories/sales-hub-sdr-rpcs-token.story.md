@@ -8,6 +8,7 @@ InProgress (fase 2 em PR, aguardando revisão)
 |------|-------|---------|
 | 2026-10-13 | Vini + Claude | Story criada a partir da revisão da story `business-holidays` (PR #470). |
 | 2026-11-08 | Claude (@dev) | Fase 1 já aplicada (`20261108130000_security_medium_2_19.sql`, PR #540). Fase 2 implementada para `_v4` e `_v2`: migration `20261108180000_sdr_hub_rpcs_require_token.sql` remove o ramo anon sem token. `get_sdr_leads_abertos` fica para mudança separada. |
+| 2026-11-08 | Claude (@dev) | `get_sdr_leads_abertos`, passo 1 de 3: criada `get_sdr_leads_abertos_v2(p_year, p_month, p_api_token)` (migration `20261108190000`), com o mesmo JSON e protegida. A legada não muda. |
 
 ## Origem
 
@@ -61,7 +62,11 @@ P–M (SQL simples; o custo é a coordenação com o Sales Hub).
 - [ ] Conferir edge_logs (só chamadas com token)
 - [x] Fase 2: exigir token em `_v4` e `_v2` (assinatura igual → `types.ts` sem mudança)
 - [ ] Aplicar a migration da fase 2 em prod após o merge e rodar a verificação do cabeçalho dela
-- [ ] `get_sdr_leads_abertos(integer,integer)`: migrar o consumidor direto do Hub e proteger (mudança separada)
+- [ ] `get_sdr_leads_abertos(integer,integer)` em 3 passos:
+  - [x] 1. Criar o caminho protegido `get_sdr_leads_abertos_v2` (aditivo; a legada fica igual)
+  - [ ] 1b. Aplicar a migration `20261108190000` em prod e rodar `pnpm gen:types` (`chore(types)`)
+  - [ ] 2. Hub: trocar o consumidor direto pelo proxy servidor chamando a `_v2` com token; validar tráfego real (`edge_logs`)
+  - [ ] 3. Bloquear a legada (REVOKE de PUBLIC/anon/authenticated) em PR próprio
 
 ## Dev Notes (fase 2)
 
@@ -77,4 +82,20 @@ P–M (SQL simples; o custo é a coordenação com o Sales Hub).
 - `src/features/leads/sdr-hub-rpcs-require-token-migration.test.ts` (novo)
 - `tests/integration/sdr-hub-rpcs-token.test.ts` (novo)
 - `tests/integration/fixtures/sdr-hub-rpcs-schema.sql` (novo)
+- `docs/stories/sales-hub-sdr-rpcs-token.story.md`
+
+## Dev Notes (`get_sdr_leads_abertos_v2`)
+
+- A legada existe só em prod. O corpo foi copiado (só leitura, 08/11) para `tests/integration/fixtures/sdr-leads-abertos-legacy.sql`; o teste confere o md5 de prod (`b899208067dcb769ccca919238c65a6d`).
+- A `_v2` tem o mesmo cálculo, JSON, fuso e org fixa. Muda só a checagem de chamador no começo e o `search_path = ''`, com nomes qualificados. `v_start`/`v_end` agora são calculados depois da checagem: quem não está autorizado recebe 42501, não erro de data.
+- Quem passa: service_role, usuário ativo da org V4 (`user_org_id()`) ou token válido. Token válido autoriza qualquer chamador, inclusive usuário de outra org, igual às outras RPCs com token.
+- Este passo **não** fecha a exposição: a legada continua aberta a anon sem token.
+- `leads_opened_events`: o repo tem comentários que prod não tem; o código sem comentários é idêntico (conferido no teste).
+
+## File List (`get_sdr_leads_abertos_v2`)
+
+- `supabase/migrations/20261108190000_get_sdr_leads_abertos_v2_token.sql` (novo)
+- `src/features/leads/sdr-leads-abertos-v2-migration.test.ts` (novo)
+- `tests/integration/sdr-leads-abertos-v2.test.ts` (novo)
+- `tests/integration/fixtures/sdr-leads-abertos-legacy.sql` (novo)
 - `docs/stories/sales-hub-sdr-rpcs-token.story.md`
