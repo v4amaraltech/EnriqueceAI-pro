@@ -1667,18 +1667,24 @@ export type Database = {
       };
       app_flags: {
         Row: {
+          allow_org_ids: string[];
+          allow_user_ids: string[];
           enabled: boolean;
           key: string;
           note: string | null;
           updated_at: string;
         };
         Insert: {
+          allow_org_ids?: string[];
+          allow_user_ids?: string[];
           enabled?: boolean;
           key: string;
           note?: string | null;
           updated_at?: string;
         };
         Update: {
+          allow_org_ids?: string[];
+          allow_user_ids?: string[];
           enabled?: boolean;
           key?: string;
           note?: string | null;
