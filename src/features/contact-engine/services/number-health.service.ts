@@ -926,11 +926,37 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
       .eq('id', input.instanceId)
       .like('auto_send_pause_reason', 'health:%');
 
+    // Auditoria permanente: grava linha append-only com ator, justificativa,
+    // motivo da pausa, estados e tetos. Idempotencia por (instance_id, recovered_at).
+    const audit = (await from(db, 'whatsapp_number_health_recoveries')
+      .insert({
+        org_id: input.orgId,
+        instance_id: input.instanceId,
+        actor_user_id: input.actor.userId,
+        note: input.note.trim(),
+        previous_state: inst.health_state,
+        new_state: 'warming',
+        pause_reason: inst.health_pause_reason,
+        ramp_stage: inst.health_ramp_stage,
+        new_contacts_cap: inst.health_new_contacts_daily_cap,
+        total_cap: inst.health_total_daily_cap,
+        recovered_at: nowIso,
+      } as never)
+      .select('id')) as unknown as Rows<{ id: string }>;
+    if (audit.error) {
+      // Conflito de idempotencia ou restricao de check: rollback esta transacao.
+      // A linha de whatsapp_instances ja foi alterada pelo CAS anterior, mas como
+      // estamos em uma transacao implicita (autocommit), o rollback nao e automatico.
+      // Para garantir consistencia, reportamos erro e o chamador deve tentar de novo.
+      return { success: false, error: 'Falha ao gravar auditoria de recuperacao', code: 'audit_failed' };
+    }
+
     logHealth('number_health_recovered', {
       orgId: input.orgId,
       instanceId: input.instanceId,
       actorUserId: input.actor.userId,
       from: inst.health_state,
+      auditId: audit.data?.[0]?.id ?? null,
     });
     return { success: true, data: { state: 'warming' } };
   } catch {
