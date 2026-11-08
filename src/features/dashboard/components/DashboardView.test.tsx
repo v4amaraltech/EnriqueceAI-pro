@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DashboardData, DashboardFilters, InsightsData, RankingData, SdrPaceData } from '../types';
 import { DashboardView } from './DashboardView';
@@ -66,6 +66,17 @@ vi.mock('./MeetingsByDayDrawer', () => ({
   MeetingsByDayDrawer: (props: Record<string, unknown>) => {
     mockDrawer(props);
     return props.open ? <div data-testid="meetings-by-day-drawer" /> : null;
+  },
+}));
+
+// Card "RM/RR hoje + Reuniões futuras": só interessa o que a página repassa.
+const mockTodayCard = vi.fn();
+vi.mock('./MeetingsTodayCard', () => ({
+  MeetingsTodayCard: (props: Record<string, unknown>) => {
+    mockTodayCard(props);
+    return (
+      <button data-testid="meetings-today-card" onClick={() => (props.onTodayClick as (s: string) => void)('held')} />
+    );
   },
 }));
 
@@ -403,6 +414,63 @@ describe('DashboardView', () => {
     expect(props.filters).toBe(defaultFilters);
     expect((props.sdrNames as Map<string, string>).get('u-1')).toBe('Giovanni');
     expect((props.sdrNames as Map<string, string>).get('u-2')).toBe('Matheus');
+  });
+
+  describe('card RM/RR hoje ao lado do gráfico', () => {
+    const base = { total: 0, monthTarget: 0, percentOfTarget: 0, averagePerSdr: 0, sdrBreakdown: [] };
+    const ranking: RankingData = {
+      leadsFinished: base,
+      callsDone: base,
+      attendanceRate: base,
+      leadsOpened: base,
+      meetingsScheduled: {
+        ...base,
+        dailyData: [
+          { date: '2026-02-01', day: 1, actual: 1, target: 0 },
+          { date: '2026-02-02', day: 2, actual: 3, target: 0 },
+          { date: '2026-02-03', day: 3, actual: null, target: 0 },
+        ],
+      },
+      meetingsHeld: base,
+      noShows: base,
+      sao: base,
+      saoRate: base,
+      leadsToOpen: base,
+      overdueActivities: base,
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('fora do mês atual manda RM/RR hoje como null ("—")', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-08T15:00:00Z'));
+      mockTodayCard.mockClear();
+      render(<DashboardView data={createData()} filters={defaultFilters} ranking={ranking} />);
+      const props = mockTodayCard.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      expect(props.todayScheduled).toBeNull();
+      expect(props.todayHeld).toBeNull();
+      expect(props.userIds).toBe(defaultFilters.userIds);
+    });
+
+    it('no mês atual usa o ponto de hoje do gráfico e o clique abre o painel de hoje', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 02/02 às 23h BRT (02:00Z do dia 03) ainda é dia 2 no calendário BRT
+      vi.setSystemTime(new Date('2026-02-03T02:00:00Z'));
+      mockTodayCard.mockClear();
+      mockDrawer.mockClear();
+      render(<DashboardView data={createData()} filters={defaultFilters} ranking={ranking} />);
+      const props = mockTodayCard.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      expect(props.todayScheduled).toBe(2);
+      expect(props.todayHeld).toBe(3); // kpi do createData: 2 → 5 no dia 2
+
+      fireEvent.click(screen.getByTestId('meetings-today-card'));
+      const drawer = mockDrawer.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      expect(drawer.open).toBe(true);
+      expect(drawer.day).toBe(2);
+      expect(drawer.series).toBe('held');
+    });
   });
 
   it('should not render meetings-by-day chart when ranking prop is absent', () => {

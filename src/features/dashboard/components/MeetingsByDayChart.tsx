@@ -253,7 +253,7 @@ export function MeetingsByDayChart({ data, onBarClick }: MeetingsByDayChartProps
 
   return (
     <>
-      <div className="flex flex-col rounded-lg border border-border bg-card">
+      <div className="flex h-full flex-col rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between px-4 pt-4">
           <h3 className="flex items-center gap-1.5 text-sm font-medium">
             {TITLE}

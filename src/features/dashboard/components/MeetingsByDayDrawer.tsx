@@ -67,7 +67,7 @@ const SECTION_META: Record<MeetingDaySeries, { title: string; color: string; emp
   },
 };
 
-function LeadRows({ leads, sdrNames }: { leads: MeetingDayLead[]; sdrNames: Map<string, string> }) {
+export function LeadRows({ leads, sdrNames }: { leads: MeetingDayLead[]; sdrNames: Map<string, string> }) {
   return (
     <table className="w-full text-sm">
       <thead>

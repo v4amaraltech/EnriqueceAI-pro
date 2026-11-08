@@ -198,6 +198,17 @@ export interface MeetingsByDayLeads {
   held: MeetingDayLead[];
 }
 
+/** Um dia do bloco "Reuniões futuras": leads cuja reunião COMEÇA naquele dia BRT. */
+export interface UpcomingMeetingsDay {
+  /** YYYY-MM-DD (calendário BRT). */
+  date: string;
+  leads: MeetingDayLead[];
+}
+
+export interface UpcomingMeetingsData {
+  days: UpcomingMeetingsDay[];
+}
+
 export interface ResponseTimeByUser {
   userId: string;
   userName: string;
