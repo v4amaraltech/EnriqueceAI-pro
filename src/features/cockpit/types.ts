@@ -109,7 +109,8 @@ export type CallContextResult =
 
 /** Abordagem sugerida v0: derivada do contexto por regras fixas, sem IA. */
 export interface CallApproach {
-  version: 'v0';
+  /** `v2` so com a flag `call_priority_v2` ligada (PR11); sem ela segue `v0`. */
+  version: 'v0' | 'v2';
   headline: string;
   opening: string;
   goal: string;
@@ -121,6 +122,19 @@ export interface NextCallCardData {
   approach: CallApproach;
   /** Instante de geração (ISO), para tempos relativos estáveis entre servidor e cliente. */
   generatedAt: string;
+  /** Fonte e versão da sugestão de prioridade (PR11). Ausente com `call_priority_v2` desligada. */
+  priority?: CallPriorityView;
+}
+
+export interface CallPriorityView {
+  version: string;
+  score: number;
+  /** Rótulo da fonte principal (ex.: "resposta explícita"); null sem sinal. */
+  sourceLabel: string | null;
+  /** Motivos legíveis, do maior para o menor peso. */
+  reasons: string[];
+  /** Alguém corrigiu o interesse manualmente. */
+  humanCorrected: boolean;
 }
 
 export type NextCallCardResult =

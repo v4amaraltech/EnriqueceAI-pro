@@ -70,8 +70,26 @@ const fullLead = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** app_flags sensivel a chave: so a call_cockpit_v1 vem ligada, as demais (ex.: call_priority_v2) desligadas. */
+function flagsClient(cockpitOn: boolean) {
+  const client = {
+    from: vi.fn(() => {
+      let key = '';
+      const b: Record<string, unknown> = {};
+      b.select = vi.fn(() => b);
+      b.eq = vi.fn((_col: string, value: string) => {
+        key = value;
+        return b;
+      });
+      b.limit = vi.fn(async () => ({ data: [{ enabled: key === 'call_cockpit_v1' ? cockpitOn : false }], error: null }));
+      return b;
+    }),
+  };
+  return client;
+}
+
 function setup(opts: { flag?: boolean; candidates?: unknown[]; holds?: unknown[]; lead?: unknown }) {
-  vi.mocked(createServiceRoleClient).mockReturnValue(makeClient({ app_flags: { data: [{ enabled: opts.flag ?? true }] } }).client as never);
+  vi.mocked(createServiceRoleClient).mockReturnValue(flagsClient(opts.flag ?? true) as never);
   const server = makeClient({
     leads: { data: opts.candidates ?? [] },
     contact_holds: { data: opts.holds ?? [] },
@@ -159,7 +177,7 @@ describe('fetchNextCallCard', () => {
   });
 
   it('erro ao ler bloqueios falha fechado', async () => {
-    vi.mocked(createServiceRoleClient).mockReturnValue(makeClient({ app_flags: { data: [{ enabled: true }] } }).client as never);
+    vi.mocked(createServiceRoleClient).mockReturnValue(flagsClient(true) as never);
     vi.mocked(createServerSupabaseClient).mockResolvedValue(
       makeClient({
         leads: { data: [{ id: 'l', updated_at: '2026-11-06T00:00:00Z', meeting_no_show_at: null, telefone: '1199' }] },

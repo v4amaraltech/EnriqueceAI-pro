@@ -1,4 +1,4 @@
-import type { CallApproach, CallContext } from '../types';
+import type { CallApproach, CallContext, CallPriorityView } from '../types';
 
 const SUMMARY_LIMIT = 200;
 const HIGH_FIT = 70;
@@ -112,4 +112,18 @@ export function suggestApproach(ctx: CallContext): CallApproach {
   if (ctx.scores.fit != null && ctx.scores.fit >= HIGH_FIT) points.push(`Bom encaixe com o perfil ideal (fit ${ctx.scores.fit})`);
 
   return { version: 'v0', headline, opening, goal, points };
+}
+
+/**
+ * Abordagem com a sugestão de prioridade v2 (PR11). Parte da abordagem v0 sem
+ * alterá-la e só ACRESCENTA pontos com o motivo e a fonte da prioridade. Regras
+ * fixas: sem IA, sem texto novo vindo de transcrição.
+ */
+export function suggestApproachV2(ctx: CallContext, priority: CallPriorityView): CallApproach {
+  const base = suggestApproach(ctx);
+  const extra: string[] = [];
+  if (priority.humanCorrected) extra.push('Interesse ajustado manualmente por uma pessoa do time');
+  const top = priority.reasons[0];
+  if (top && priority.sourceLabel) extra.push(`Prioridade pela fonte ${priority.sourceLabel}: ${top}`);
+  return { ...base, version: 'v2', points: [...extra, ...base.points] };
 }

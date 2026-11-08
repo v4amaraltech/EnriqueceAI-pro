@@ -248,6 +248,44 @@ Status: implementado atrás de `lead_assignment_shadow` e `lead_assignment_enfor
 - Não faz: reatribuição em massa, mudança do rodízio do recovery, leitura ou escrita de números, instâncias ou provedores.
 - Ativação (ação separada): aplicar a migration, rodar `pnpm gen:types`, popular política e membros, ligar o shadow e comparar os logs antes de qualquer uso do enforced.
 
+## 13. Score de prioridade v2 e feedback de ligações (PR11)
+
+Status: implementado atrás de `call_priority_v2` (global em `app_flags`, nasce desligada). Nenhum envio, cadência ou workflow é alterado.
+
+### 13.1 Peças
+
+| Peça | Arquivo | Papel |
+|------|---------|-------|
+| Score puro | `contact-engine/services/call-priority.ts` | `computeCallPriority`, `rankLeadsByPriority`; sem I/O |
+| Serviço | `contact-engine/services/call-priority.service.ts` | Flag, carga de sinais por organização, trilha `decision_events`, correção humana |
+| Cockpit | `cockpit/services/next-call-card.service.ts`, `cockpit/utils/call-approach.ts` | Escolha do lead e abordagem v2, fonte e versão no cartão |
+| Action | `cockpit/actions/call-priority.ts` | Correção humana de interesse |
+| Migration | `20261107210000_call_priority_v2.sql` | `decision_events` append-only, RLS por organização, flag |
+
+### 13.2 Regras do score
+
+- `score = interesse * 10 + esforço`, com esforço entre 0 e 9. Qualquer interesse positivo vale mais que todo o esforço possível: sinal de envio nunca vence resposta explícita. Resposta explícita tem ainda um piso próprio.
+- Interesse (0 a 100) vem de resposta explícita, reunião marcada, resultado de ligação informado pelo SDR, classificação da transcrição pela IA e BANT (campos B, A, N, T preenchidos). Esforço reusa `calculateEngagementScore` só com enviado, entregue, aberto, clicado, erro e falha.
+- Idempotência: cada sinal tem chave; chave repetida conta uma vez. Cada ligação tem no máximo um resultado efetivo por autor; o do SDR prevalece sobre o da IA. BANT não soma entre repetições.
+- Transcrição ausente, com confiança abaixo de 0,7, marcada para revisão, com falha ou com classificação desconhecida não soma nem subtrai, e aparece em `missing` ou `ignored`.
+- `calls.sdr_disposition` igual à disposição da IA já aplicada é atribuída à IA (o `applyAiCallOutcome` grava a da IA nesse campo quando o SDR não marcou nada); só divergente conta como resultado humano.
+- Correção humana: a mais recente substitui o interesse calculado (0 a 100); o esforço continua. Os sinais substituídos ficam em `ignored`. A correção é um evento novo, nunca edição.
+- Sem autoajuste de prompt e sem alteração de política comercial: tudo é regra fixa e determinística.
+
+### 13.3 Trilha `decision_events`
+
+Append-only (mesmo gatilho do PR05), única por `(org_id, idempotency_key)`, com `model_version`, `source`, `event_type` e `payload` restrito a chaves permitidas (ids, códigos, números; sem telefone, e-mail, nome, transcrição ou texto de mensagem). Escrita só `service_role`; `authenticated` lê a própria organização. O cliente de service role ignora RLS, então toda consulta do serviço filtra `org_id` de forma explícita.
+
+### 13.4 Comportamento por flag
+
+- Desligada: o cockpit usa `pickNextLead` e `suggestApproach` v0 exatamente como antes; nada de `decision_events` é lido ou escrito.
+- Ligada: o score v2 escolhe o lead entre os candidatos de sempre (mesma carteira e mesmos bloqueios), a abordagem vira `v2` (a v0 mais pontos com a fonte) e o cartão mostra fonte, versão e pontuação. A sugestão é gravada em `decision_events` com `v1_pick_same` para comparar com a regra anterior. Falha de leitura de qualquer sinal mantém a escolha anterior.
+- Desligar de novo volta à ordem anterior; os eventos já gravados permanecem.
+
+### 13.5 Ativação (ação separada, não feita neste PR)
+
+Aplicar a migration, rodar `pnpm gen:types`, revisar os eventos `priority_suggestion` com `v1_pick_same = false` e só então ligar a flag.
+
 ## 9. Fora do escopo do PR01
 
 Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, regeneração de `types.ts` do Supabase (não há mudança de schema), qualquer envio de mensagem. Nenhum segredo, credencial ou dado real consta neste documento ou nos tipos.
