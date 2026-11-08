@@ -11,6 +11,7 @@ import {
   processWithRetry,
   verifyHmacSignature,
 } from '@/lib/webhooks';
+import { captureInboundMessageConsent } from '@/features/contact-engine/services/consent-capture.service';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 export const maxDuration = 60;
@@ -215,6 +216,22 @@ async function processIncomingMessage(
   if (!lead) {
     logger.warn('No lead found for phone', { phone });
     return;
+  }
+
+  // Consentimento (flag consent_capture_v1, por org): mensagem inbound grava opt_in
+  // (lead escreveu primeiro) ou opt_out (pedido para parar). Antes do retorno por falta
+  // de cadencia: o consentimento nao depende de haver enrollment. Nunca interrompe o fluxo.
+  try {
+    await captureInboundMessageConsent({
+      orgId: lead.org_id,
+      leadId: lead.id,
+      phone,
+      messageId: message.id,
+      text: message.text?.body ?? null,
+      provider: 'meta_cloud',
+    });
+  } catch (err) {
+    logger.warn('Consent capture failed', { lead_id: lead.id, error: err instanceof Error ? err.message : String(err) });
   }
 
   // Find active enrollment with whatsapp channel for this lead

@@ -13,6 +13,8 @@ import { getCockpitCallOutcome } from '../actions/call-outcome';
 import type { CockpitCallOutcome } from '../types';
 import { dispositionLabel } from '../utils/call-outcome-view';
 
+import { VerbalConsentButton } from './VerbalConsentButton';
+
 interface CallOutcomePanelProps {
   callId: string;
   leadId: string;
@@ -74,6 +76,7 @@ export function CallOutcomePanel({ callId, leadId, onNext }: CallOutcomePanelPro
         </Button>
       </div>
       <OutcomeBody outcome={outcome} leadId={leadId} gaveUp={gaveUp} />
+      <VerbalConsentButton callId={callId} />
     </div>
   );
 }

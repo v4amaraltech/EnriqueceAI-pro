@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { captureFormConsent, isConsentFlag } from '@/features/contact-engine/services/consent-capture.service';
 import { runLeadAssignmentShadow } from '@/features/contact-engine/services/lead-assignment.service';
 import { from } from '@/lib/supabase/from';
 import { exceedsLimit } from '@/lib/utils/plan-limits';
@@ -198,6 +199,17 @@ async function ingestSingleLead(
     currentAssignedTo: data.assigned_to ?? null,
     source: 'inbound',
   }).catch(() => undefined);
+
+  // Consentimento de WhatsApp: so quando o formulario indicou aceite (consent_whatsapp=true)
+  // e ha telefone. Atras da flag consent_capture_v1 (por org); desligada = nada gravado.
+  // Falha aqui nunca derruba a criacao do lead.
+  if (isConsentFlag(data.consent_whatsapp) && data.telefone) {
+    try {
+      await captureFormConsent({ orgId, leadId, phone: data.telefone, channelHint: canal });
+    } catch (err) {
+      console.error('[inbound] consent capture failed:', err);
+    }
+  }
 
   // Fire-and-forget: webhook dispatch + enrichment
   dispatchWebhookEvent(supabase, orgId, 'lead.created', {

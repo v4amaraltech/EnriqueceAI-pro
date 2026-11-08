@@ -93,6 +93,7 @@ Todas nascem desligadas. Flags de restrição de segurança são fail-closed.
 | `lead_assignment_shadow` | Distribuição simulada | PR09 |
 | `number_health_v1` | Saúde e tetos por número | PR10 |
 | `call_priority_v2` | Score e priorização novos | PR11 |
+| `consent_capture_v1` | Captura de opt_in e opt_out de WhatsApp em `contact_consent_evidence` (formulário, mensagem inbound, rota da Ana V4), por organização | Captura de consentimento |
 | `edge_command_adapter` | Adaptadores n8n de mensagens | PR13 |
 | `edge_ingestion_v1` | Ingestão de borda (leads, ligações, enriquecimento) | PR14 |
 

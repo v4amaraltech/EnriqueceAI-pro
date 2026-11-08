@@ -13,6 +13,10 @@ import { NextCallCard } from './NextCallCard';
 vi.mock('@/features/calls/actions/initiate-api4com-call', () => ({ initiateApi4ComCall: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const nav = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('../actions/verbal-consent', () => ({
+  getVerbalConsentStateAction: vi.fn(async () => ({ success: true, data: { state: 'disabled' } })),
+  recordVerbalConsentAction: vi.fn(),
+}));
 vi.mock('../actions/call-outcome', () => ({ armCockpitCallOutcomeAction: vi.fn(), getCockpitCallOutcome: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: nav.push }),
