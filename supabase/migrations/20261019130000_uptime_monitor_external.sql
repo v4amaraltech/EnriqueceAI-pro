@@ -422,11 +422,14 @@ GRANT EXECUTE ON FUNCTION public.uptime_monitor_tick() TO service_role;
 -- Seed: o app em produção, avisando os gestores da V4 Amaral
 -- =============================================================================
 
+-- Só semeia se a organização existir (em banco novo ela não existe; a FK falharia).
 INSERT INTO public.uptime_monitors (name, url, notify_org_id)
-VALUES (
+SELECT
   'enriqueceai-app',
   'https://app.enriqueceai.com.br/api/version',
-  'c2727473-1df8-4faa-9264-a9fc1759fe3b'
+  'c2727473-1df8-4faa-9264-a9fc1759fe3b'::uuid
+WHERE EXISTS (
+  SELECT 1 FROM public.organizations o WHERE o.id = 'c2727473-1df8-4faa-9264-a9fc1759fe3b'::uuid
 )
 ON CONFLICT (name) DO NOTHING;
 

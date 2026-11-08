@@ -117,7 +117,9 @@ FROM (VALUES
    E'Oi {{primeiro_nome}}! Nossa reunião é daqui a pouco, às {{hora_reuniao}} (horário de Brasília).\n{{link_reuniao_linha}}\nJá deixo o acesso aqui pra facilitar. Até já! 👋',
    ARRAY['primeiro_nome','hora_reuniao','link_reuniao_linha'])
 ) AS v(org_id, name, body, vars)
-WHERE NOT EXISTS (
+WHERE EXISTS (
+  SELECT 1 FROM public.organizations o WHERE o.id = v.org_id::uuid
+) AND NOT EXISTS (
   SELECT 1 FROM public.message_templates mt
   WHERE mt.org_id = v.org_id::uuid AND mt.name = v.name
 );

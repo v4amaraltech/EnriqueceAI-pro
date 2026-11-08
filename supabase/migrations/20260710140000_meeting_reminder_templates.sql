@@ -14,7 +14,7 @@
 
 -- 1. Inserir templates (guarda por org_id+name) ------------------------------
 INSERT INTO public.message_templates (org_id, name, channel, subject, body, variables_used, is_system, created_by)
-SELECT v.org_id, v.name, 'email'::channel_type, v.subject, v.body, v.vars, false, NULL
+SELECT v.org_id::uuid, v.name, 'email'::channel_type, v.subject, v.body, v.vars, false, NULL
 FROM (VALUES
   ('c2727473-1df8-4faa-9264-a9fc1759fe3b',
    'Lembrete Reunião — Inbound 1 · Confirmação',
@@ -52,7 +52,9 @@ FROM (VALUES
    E'<p>Olá {{primeiro_nome}},</p>\n<p>Lembrete rápido: nossa reunião é daqui a 2 horas, às <strong>{{hora_reuniao}}</strong> (horário de Brasília).</p>\n{{link_reuniao_linha}}\n<p>Deixo o acesso aqui para facilitar. Até já!</p>\n<p>{{nome_vendedor}}<br>V4 Company</p>',
    ARRAY['primeiro_nome','nome_vendedor','hora_reuniao','link_reuniao_linha'])
 ) AS v(org_id, name, subject, body, vars)
-WHERE NOT EXISTS (
+WHERE EXISTS (
+  SELECT 1 FROM public.organizations o WHERE o.id = v.org_id::uuid
+) AND NOT EXISTS (
   SELECT 1 FROM public.message_templates mt
   WHERE mt.org_id = v.org_id::uuid AND mt.name = v.name
 );

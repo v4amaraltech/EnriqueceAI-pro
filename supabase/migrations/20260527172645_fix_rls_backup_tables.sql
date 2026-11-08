@@ -8,9 +8,17 @@ BEGIN;
 -- Habilita RLS nas tabelas de backup expostas ao PostgREST.
 -- Sem políticas definidas, todo acesso via API é bloqueado por padrão.
 -- service_role continua com acesso irrestrito (bypassa RLS).
-ALTER TABLE public.calls_dedupe_backup_20260517 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.calls_ghost_backup_20260517 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.calls_refined_backup_20260517 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.calls_guilherme_extra_backup_20260517 ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF to_regclass('public.calls_dedupe_backup_20260517') IS NOT NULL THEN
+  ALTER TABLE public.calls_dedupe_backup_20260517 ENABLE ROW LEVEL SECURITY;
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.calls_ghost_backup_20260517') IS NOT NULL THEN
+  ALTER TABLE public.calls_ghost_backup_20260517 ENABLE ROW LEVEL SECURITY;
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.calls_refined_backup_20260517') IS NOT NULL THEN
+  ALTER TABLE public.calls_refined_backup_20260517 ENABLE ROW LEVEL SECURITY;
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.calls_guilherme_extra_backup_20260517') IS NOT NULL THEN
+  ALTER TABLE public.calls_guilherme_extra_backup_20260517 ENABLE ROW LEVEL SECURITY;
+END IF; END $$;
 
 COMMIT;
