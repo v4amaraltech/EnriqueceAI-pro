@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { handleCrmCallback } from '@/features/integrations/actions/manage-crm';
+import { parseKommoSubdomain } from '@/features/integrations/services/kommo.adapter';
 import { consumeOAuthState } from '@/lib/security/oauth-state';
 import { getAppUrl } from '@/lib/utils/app-url';
 
@@ -44,7 +45,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const result = await handleCrmCallback('kommo', code, referer);
+  // Nunca repassa um host controlado pelo cliente: só um subdomínio válido segue.
+  let subdomain: string;
+  try {
+    subdomain = parseKommoSubdomain(referer);
+  } catch {
+    return NextResponse.redirect(
+      new URL('/settings/integrations?error=kommo_invalid_subdomain', getAppUrl()),
+    );
+  }
+
+  const result = await handleCrmCallback('kommo', code, subdomain);
 
   if (result.success) {
     return NextResponse.redirect(
