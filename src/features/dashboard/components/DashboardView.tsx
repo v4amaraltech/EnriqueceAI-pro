@@ -4,12 +4,12 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, BadgeCheck, CalendarCheck2, CalendarX2, DoorOpen, Handshake, Inbox, Percent, PhoneCall, UserCheck } from 'lucide-react';
+import { AlarmClock, BadgeCheck, CalendarCheck2, CalendarX2, DoorOpen, Handshake, Inbox, Percent, PhoneCall } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
 import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, MeetingDaySeries, OpportunityKpiData, RankingData, SdrPaceData } from '../types';
-import { currentDayOfMonthBrt } from '../utils/brt-now';
+import { brtNowParts, currentDayOfMonthBrt, currentMonthBrt } from '../utils/brt-now';
 import { buildMeetingsByDay } from '../utils/meetings-by-day';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
@@ -17,6 +17,7 @@ import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
 import { MeetingsByDayChart } from './MeetingsByDayChart';
 import { MeetingsByDayDrawer } from './MeetingsByDayDrawer';
+import { MeetingsTodayCard } from './MeetingsTodayCard';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
 import { ResponseTimeCard } from './ResponseTimeCard';
@@ -103,6 +104,15 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
   const handleMeetingsBarClick = useCallback((day: number, series: MeetingDaySeries) => {
     setMeetingsDay({ day, series });
   }, []);
+
+  // RM/RR hoje = o ponto de hoje do mesmo gráfico (bate com a barra de hoje).
+  // Só existe com o mês atual no filtro; fora dele o card mostra "—".
+  const todayDay = filters.month === currentMonthBrt() ? brtNowParts().day : null;
+  const todayPoint = todayDay !== null ? meetingsByDay?.find((p) => p.day === todayDay) : undefined;
+
+  const handleTodayClick = useCallback((series: MeetingDaySeries) => {
+    if (todayDay !== null) setMeetingsDay({ day: todayDay, series });
+  }, [todayDay]);
 
   return (
     <div className="space-y-6">
@@ -211,8 +221,18 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
 
       {/* RM e RR por dia — detalhe diário dos dois cards de reunião acima */}
       {meetingsByDay && meetingsByDay.length > 0 && (
-        <div data-slot="meetings-by-day">
+        <div
+          data-slot="meetings-by-day"
+          className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+        >
           <MeetingsByDayChart data={meetingsByDay} onBarClick={handleMeetingsBarClick} />
+          <MeetingsTodayCard
+            todayScheduled={todayPoint ? (todayPoint.scheduled ?? 0) : null}
+            todayHeld={todayPoint ? (todayPoint.held ?? 0) : null}
+            onTodayClick={handleTodayClick}
+            userIds={filters.userIds}
+            sdrNames={sdrNames}
+          />
           <MeetingsByDayDrawer
             open={meetingsDay !== null}
             onOpenChange={(open) => { if (!open) setMeetingsDay(null); }}
@@ -332,7 +352,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
 
       {/* Operational ranking — cadence execution + conversion */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
           <RankingCard
             title="Leads para Abrir"
             titleTooltip={
@@ -387,23 +407,6 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             primaryColumnLabel="atrasadas"
             averageLabel="média atrasadas/vendedor"
             onSdrClick={handleOverdueSdrClick}
-          />
-          <RankingCard
-            title="Taxa de Comparecimento"
-            titleTooltip={
-              'Das reuniões marcadas, quantas o lead efetivamente compareceu (virou reunião realizada). O inverso é o no-show.\n\n' +
-              '• Numerador: reuniões realizadas (leads ganhos)\n' +
-              '• Denominador: reuniões marcadas\n\n' +
-              'Marcadas e realizadas são contadas dentro do período — pode passar de 100% quando reuniões marcadas em meses anteriores são realizadas agora. Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
-            }
-            icon={UserCheck}
-            iconColor="bg-teal-500/10"
-            iconTextColor="text-teal-500"
-            unit="%"
-            data={ranking.attendanceRate}
-            primaryColumnLabel="realizadas"
-            averageLabel="média comparecimento/vendedor"
-            onSdrClick={handleSdrClick}
           />
         </div>
       )}
