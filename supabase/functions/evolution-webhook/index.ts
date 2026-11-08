@@ -12,6 +12,7 @@ import { validateWebhookSecret } from "../_shared/auth.ts";
 import { normalizeConnectionState, extractPhoneFromPayload, fetchInstance } from "../_shared/evolution.ts";
 import { getWhatsAppInstanceByName, updateWhatsAppInstanceByName, eventExists, createProviderEvent } from "../_shared/supabase.ts";
 import { parseInboundMessage, captureInboundReply } from "../_shared/whatsapp-reply.ts";
+import { captureInboundConsent } from "../_shared/consent-capture.ts";
 import { buildEvolutionEventId, isMessageEvent } from "../_shared/evolution-events.ts";
 serve(async (req)=>{
   // Handle CORS preflight
@@ -133,6 +134,13 @@ serve(async (req)=>{
           // idempotente pelo id da mensagem).
           const reply = parseInboundMessage(data);
           if (reply) {
+            // Consentimento (flag consent_capture_v1, por org): opt_in se o lead escreveu
+            // primeiro, opt_out se pediu para parar. Nunca derruba o registro da resposta.
+            try {
+              await captureInboundConsent(orgId, reply);
+            } catch (consentError) {
+              console.error("[evolution-webhook] consent capture failed:", consentError);
+            }
             const result = await captureInboundReply(orgId, reply);
             if (result.status === "recorded") {
               console.log(`[evolution-webhook] WhatsApp reply recorded lead=${result.leadId} instance=${instanceName}`);

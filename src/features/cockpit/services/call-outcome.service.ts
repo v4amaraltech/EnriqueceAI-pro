@@ -13,20 +13,22 @@ export interface OutcomeActor {
   isManager: boolean;
 }
 
-interface CallAccessRow extends CallOutcomeRow {
+export interface CallAccessRow extends CallOutcomeRow {
   id: string;
+  destination?: string | null;
+  started_at?: string | null;
   user_id: string | null;
   lead_id: string | null;
 }
 
 const CALL_COLUMNS =
-  'id, user_id, lead_id, answered_at, hangup_cause, duration_seconds, sdr_disposition, notes, transcription_status, metadata';
+  'id, user_id, lead_id, destination, started_at, answered_at, hangup_cause, duration_seconds, sdr_disposition, notes, transcription_status, metadata';
 
 /**
  * Lê a ligação dentro da organização e confere a permissão: gestor lê qualquer
  * uma; SDR e closer só as próprias ou de leads da própria carteira.
  */
-async function loadAccessibleCall(
+export async function loadAccessibleCall(
   supabase: SupabaseClient,
   actor: OutcomeActor,
   callId: string,

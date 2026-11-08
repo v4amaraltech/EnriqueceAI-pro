@@ -150,3 +150,58 @@ Pause (seção 5) e investigue se qualquer um ocorrer:
 - Qualquer entrada `uncertain` inesperada ou crescimento de `failed`.
 - Pedido de parar (`hold total`) seguido de qualquer envio ao mesmo contato.
 - Divergência persistente entre o gateway em shadow e a decisão atual, sem explicação.
+
+## 9. Captura de consentimento de WhatsApp (`consent_capture_v1`)
+
+Grava `opt_in` e `opt_out` append-only em `contact_consent_evidence`. Nasce desligada: sem a linha da flag, ou com ela desligada para a organização, nada é lido nem gravado. A flag não tem migration; crie a linha desligada e depois ligue por organização:
+
+```sql
+INSERT INTO app_flags (key, enabled, note)
+VALUES ('consent_capture_v1', false, 'Captura de consentimento de WhatsApp (formulário, inbound, Ana V4)')
+ON CONFLICT (key) DO NOTHING;
+
+UPDATE app_flags
+SET allow_org_ids = array_append(allow_org_ids, '<ORG_ID>'::uuid)
+WHERE key = 'consent_capture_v1'
+  AND NOT ('<ORG_ID>'::uuid = ANY (allow_org_ids));
+```
+
+Pausa: `array_remove(allow_org_ids, '<ORG_ID>'::uuid)` (ou `enabled = false` e listas vazias para todas). Pausar a captura NÃO apaga evidência já gravada, e o `opt_out` gravado continua valendo no gateway. Esta flag pode ser pausada sem risco de bypass: ela só adiciona evidência, nunca envia.
+
+Origens gravadas (`source`):
+
+| Fluxo | kind | source | Referência (`evidence.ref`) |
+|-------|------|--------|-----------------------------|
+| Formulário/LP via `POST /api/v1/leads` ou `/api/webhooks/inbound-leads` com `consent_whatsapp=true` | `opt_in` | `lead_form` | `lead:<lead_id>` |
+| Mensagem inbound (Meta oficial e Evolution), lead escreveu primeiro | `opt_in` | `inbound_message` | `inbound:<identidade>` |
+| Mensagem inbound pedindo para parar | `opt_out` | `inbound_stop_request` | id da mensagem |
+| Botão "Aceitou WhatsApp" no cockpit, após ligação atendida | `opt_in` | `call_verbal_consent` | `call:<call_id>` |
+| `POST /api/v1/edge/consent` (Ana V4) | `opt_in` ou `opt_out` | `ana_v4_opt_in`, `ana_v4_opt_out` | `x-idempotency-key` ou (tipo, lead, telefone) |
+
+Contrato para as LPs: o payload precisa enviar `consent_whatsapp: true` (ou a string `"true"`) quando o visitante marcar o aceite de contato por WhatsApp. Sem o campo, ou com qualquer outro valor, nada é gravado. Nenhuma LP envia isso hoje; a tabela `landing_leads` (LP do próprio produto) não tem `org_id` nem `lead_id` e não entra neste fluxo.
+
+Rota da Ana V4, mesma API key das rotas `/bdr`:
+
+```
+POST /api/v1/edge/consent
+Authorization: Bearer <API_KEY>
+x-idempotency-key: <chave opcional>
+{ "lead_id": "<uuid>", "telefone": "5516999867577", "tipo": "opt_in" | "opt_out", "fluxo": "<nome opcional>" }
+```
+
+Respostas: `201` gravou; `200` com `data.status` em `disabled`, `duplicate`, `skipped_opted_out`, `already_opted_out`; `404` lead fora da organização; `422` payload inválido.
+
+Regras: `opt_out` vence. Um `opt_in` automático (formulário, inbound, Ana) não é gravado sobre um `opt_out` vigente, e o gateway lê sempre o último evento da identidade. Reverter um `opt_out` é decisão manual e auditada, não deste fluxo. As origens acima não estão em `CONTACT_REQUEST_SOURCES` do gateway: liberam o primeiro contato oficial (com template), não a continuidade via Evolution.
+
+### Aceite verbal na ligação (botão "Aceitou WhatsApp")
+
+No cockpit, o painel de resultado da ligação (`CallOutcomePanel`, dentro do `NextCallCard`) mostra o botão "Aceitou WhatsApp" somente com `consent_capture_v1` ligada para a organização e depois que a ligação foi atendida (`answered_at` presente ou duração medida). O botão fica disponível por 30 minutos após o atendimento. Ao clicar, a server action grava `opt_in` com source `call_verbal_consent`:
+
+- `evidence.ref = call:<call_id>` (idempotente por ligação), mais `call_id` e `registered_by` (usuário); `created_by` recebe o usuário que registrou.
+- Identidade no formato `55...`, a partir do número que atendeu (`calls.destination`), com o telefone cadastrado do lead como alternativa.
+- Só para ligações e leads da organização do usuário. SDR e closer só nas próprias ligações ou de leads da própria carteira; gestor em toda a organização. A leitura usa o cliente do usuário (RLS).
+- `opt_out` vigente vence: o aceite verbal não é gravado e o usuário recebe a mensagem de que o contato pediu para não receber.
+
+**Regra de conteúdo:** o primeiro template enviado após esse opt-in deve referenciar a conversa, por exemplo "conforme falamos na ligação". Um template genérico não corresponde ao que foi combinado por telefone e não deve ser o primeiro contato após um aceite verbal. O gateway não impõe isso hoje; é regra de quem escolhe o template. `call_verbal_consent` não está em `CONTACT_REQUEST_SOURCES`, então não libera a continuidade via Evolution.
+
+Carga única dos leads atuais: `docs/runbooks/consent-backfill.sql` (sources `backfill_form` e `backfill_inbound`). Rode a contagem do topo, valide com o jurídico e só então os INSERT.
