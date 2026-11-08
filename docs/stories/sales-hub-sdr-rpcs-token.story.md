@@ -1,12 +1,13 @@
 # Story: Funções do Sales Hub exigem token (sem acesso anônimo)
 
 ## Status
-Draft
+InProgress (fase 2 em PR, aguardando revisão)
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-10-13 | Vini + Claude | Story criada a partir da revisão da story `business-holidays` (PR #470). |
+| 2026-11-08 | Claude (@dev) | Fase 1 já aplicada (`20261108130000_security_medium_2_19.sql`, PR #540). Fase 2 implementada para `_v4` e `_v2`: migration `20261108180000_sdr_hub_rpcs_require_token.sql` remove o ramo anon sem token. `get_sdr_leads_abertos` fica para mudança separada. |
 
 ## Origem
 
@@ -55,7 +56,25 @@ P–M (SQL simples; o custo é a coordenação com o Sales Hub).
 
 ## Tasks
 - [ ] Validar story (@po)
-- [ ] Fase 1: migration + tipos + teste de ACL
-- [ ] Sales Hub envia `p_api_token`
+- [x] Fase 1: migration + tipos (`20261108130000`, PR #540)
+- [x] Sales Hub envia `p_api_token` (Edge Function `sdr-enriquece-metrics`, informado em 08/11)
 - [ ] Conferir edge_logs (só chamadas com token)
-- [ ] Fase 2: exigir token + tipos
+- [x] Fase 2: exigir token em `_v4` e `_v2` (assinatura igual → `types.ts` sem mudança)
+- [ ] Aplicar a migration da fase 2 em prod após o merge e rodar a verificação do cabeçalho dela
+- [ ] `get_sdr_leads_abertos(integer,integer)`: migrar o consumidor direto do Hub e proteger (mudança separada)
+
+## Dev Notes (fase 2)
+
+- Só `get_sdr_atividades_atrasadas_v4(uuid,text)` e `get_sdr_leads_para_abrir_v2(uuid,text)`. Corpo igual ao da fase 1 menos o ramo `ELSIF auth.role() = 'anon'`.
+- `CREATE OR REPLACE` (mesma assinatura): mantém default, ACL e retorno. anon mantém EXECUTE — o proxy do Hub usa chave anon + token.
+- **Fora desta fase:** `get_sdr_leads_abertos(integer,integer)` (SECURITY DEFINER, sem token, anon, agregados com e-mails; o Hub ainda chama direto), RPCs de indicações e `get_leads_for_v4sales`.
+- Abas antigas do Hub (abertas antes do proxy) precisam recarregar.
+- Itens 4 e 5 dos AC (edge_logs e allowlist/`definer-acl.test.ts`) não foram feitos aqui: a allowlist e o teste de ACL não existem na `main`; a cobertura de permissão está no teste de integração.
+
+## File List (fase 2)
+
+- `supabase/migrations/20261108180000_sdr_hub_rpcs_require_token.sql` (novo)
+- `src/features/leads/sdr-hub-rpcs-require-token-migration.test.ts` (novo)
+- `tests/integration/sdr-hub-rpcs-token.test.ts` (novo)
+- `tests/integration/fixtures/sdr-hub-rpcs-schema.sql` (novo)
+- `docs/stories/sales-hub-sdr-rpcs-token.story.md`
