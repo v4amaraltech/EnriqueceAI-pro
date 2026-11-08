@@ -116,10 +116,21 @@ CREATE POLICY calls_update ON public.calls
   );
 
 -- ldr_empresas / ldr_pipeline_log / ldr_socios (1 each, all "service_role_only")
-DROP POLICY IF EXISTS service_role_only ON public.ldr_empresas;
-DROP POLICY IF EXISTS service_role_only ON public.ldr_pipeline_log;
-DROP POLICY IF EXISTS service_role_only ON public.ldr_socios;
-
+DO $$ BEGIN
+  IF to_regclass('public.ldr_empresas') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS service_role_only ON public.ldr_empresas';
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS service_role_only ON public.ldr_pipeline_log';
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF to_regclass('public.ldr_socios') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS service_role_only ON public.ldr_socios';
+  END IF;
+END $$;
 DO $$ BEGIN IF to_regclass('public.ldr_empresas') IS NOT NULL THEN
   CREATE POLICY service_role_only ON public.ldr_empresas
     FOR ALL USING ((select auth.role()) = 'service_role'::text);

@@ -6,5 +6,13 @@
 -- permissive policies leaves the existing service_role_only ALL policy as
 -- the single gate.
 
-DROP POLICY IF EXISTS allow_insert_pipeline_log ON public.ldr_pipeline_log;
-DROP POLICY IF EXISTS allow_select_pipeline_log ON public.ldr_pipeline_log;
+DO $$ BEGIN
+  IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS allow_insert_pipeline_log ON public.ldr_pipeline_log';
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS allow_select_pipeline_log ON public.ldr_pipeline_log';
+  END IF;
+END $$;
