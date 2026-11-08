@@ -7,7 +7,11 @@
 
 BEGIN;
 
-GRANT EXECUTE ON FUNCTION public.get_leads_for_v4sales(p_from_date text) TO anon;
-GRANT EXECUTE ON FUNCTION public.get_indicacoes_ranking(p_year integer, p_month integer) TO anon;
+DO $$ BEGIN IF to_regprocedure('public.get_leads_for_v4sales(text)') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.get_leads_for_v4sales(p_from_date text) TO anon;
+END IF; END $$;
+DO $$ BEGIN IF to_regprocedure('public.get_indicacoes_ranking(integer, integer)') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.get_indicacoes_ranking(p_year integer, p_month integer) TO anon;
+END IF; END $$;
 
 COMMIT;

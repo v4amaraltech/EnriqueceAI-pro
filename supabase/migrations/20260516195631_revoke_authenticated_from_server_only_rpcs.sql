@@ -25,24 +25,40 @@
 
 BEGIN;
 
-REVOKE EXECUTE ON FUNCTION public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])
-  FROM authenticated, anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])
-  TO service_role;
+DO $$ BEGIN IF to_regprocedure('public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])') IS NOT NULL THEN
+  REVOKE EXECUTE ON FUNCTION public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])
+    FROM authenticated, anon, PUBLIC;
+END IF; END $$;
+DO $$ BEGIN IF to_regprocedure('public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.count_activities_by_performer(uuid, timestamptz, timestamptz, uuid[])
+    TO service_role;
+END IF; END $$;
 
-REVOKE EXECUTE ON FUNCTION public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)
-  FROM authenticated, anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)
-  TO service_role;
+DO $$ BEGIN IF to_regprocedure('public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)') IS NOT NULL THEN
+  REVOKE EXECUTE ON FUNCTION public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)
+    FROM authenticated, anon, PUBLIC;
+END IF; END $$;
+DO $$ BEGIN IF to_regprocedure('public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.fetch_conversion_ranking_data(uuid, timestamptz, timestamptz)
+    TO service_role;
+END IF; END $$;
 
-REVOKE EXECUTE ON FUNCTION public.get_sdr_monthly_metrics()
-  FROM authenticated, anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_sdr_monthly_metrics()
-  TO service_role;
+DO $$ BEGIN IF to_regprocedure('public.get_sdr_monthly_metrics()') IS NOT NULL THEN
+  REVOKE EXECUTE ON FUNCTION public.get_sdr_monthly_metrics()
+    FROM authenticated, anon, PUBLIC;
+END IF; END $$;
+DO $$ BEGIN IF to_regprocedure('public.get_sdr_monthly_metrics()') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.get_sdr_monthly_metrics()
+    TO service_role;
+END IF; END $$;
 
-REVOKE EXECUTE ON FUNCTION public.leads_without_active_enrollment(uuid)
-  FROM authenticated, anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.leads_without_active_enrollment(uuid)
-  TO service_role;
+DO $$ BEGIN IF to_regprocedure('public.leads_without_active_enrollment(uuid)') IS NOT NULL THEN
+  REVOKE EXECUTE ON FUNCTION public.leads_without_active_enrollment(uuid)
+    FROM authenticated, anon, PUBLIC;
+END IF; END $$;
+DO $$ BEGIN IF to_regprocedure('public.leads_without_active_enrollment(uuid)') IS NOT NULL THEN
+  GRANT EXECUTE ON FUNCTION public.leads_without_active_enrollment(uuid)
+    TO service_role;
+END IF; END $$;
 
 COMMIT;

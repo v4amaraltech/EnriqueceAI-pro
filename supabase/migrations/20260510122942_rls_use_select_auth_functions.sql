@@ -120,12 +120,18 @@ DROP POLICY IF EXISTS service_role_only ON public.ldr_empresas;
 DROP POLICY IF EXISTS service_role_only ON public.ldr_pipeline_log;
 DROP POLICY IF EXISTS service_role_only ON public.ldr_socios;
 
-CREATE POLICY service_role_only ON public.ldr_empresas
-  FOR ALL USING ((select auth.role()) = 'service_role'::text);
-CREATE POLICY service_role_only ON public.ldr_pipeline_log
-  FOR ALL USING ((select auth.role()) = 'service_role'::text);
-CREATE POLICY service_role_only ON public.ldr_socios
-  FOR ALL USING ((select auth.role()) = 'service_role'::text);
+DO $$ BEGIN IF to_regclass('public.ldr_empresas') IS NOT NULL THEN
+  CREATE POLICY service_role_only ON public.ldr_empresas
+    FOR ALL USING ((select auth.role()) = 'service_role'::text);
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.ldr_pipeline_log') IS NOT NULL THEN
+  CREATE POLICY service_role_only ON public.ldr_pipeline_log
+    FOR ALL USING ((select auth.role()) = 'service_role'::text);
+END IF; END $$;
+DO $$ BEGIN IF to_regclass('public.ldr_socios') IS NOT NULL THEN
+  CREATE POLICY service_role_only ON public.ldr_socios
+    FOR ALL USING ((select auth.role()) = 'service_role'::text);
+END IF; END $$;
 
 -- leads (2)
 DROP POLICY IF EXISTS leads_org_read   ON public.leads;
