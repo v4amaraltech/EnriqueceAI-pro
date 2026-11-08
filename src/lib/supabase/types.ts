@@ -8442,7 +8442,7 @@ export type Database = {
         Returns: Json[];
       };
       get_sdr_atividades_atrasadas_v4: {
-        Args: { p_org_id: string };
+        Args: { p_api_token?: string; p_org_id: string };
         Returns: {
           atrasadas: number;
           email: string;
@@ -8460,7 +8460,7 @@ export type Database = {
         }[];
       };
       get_sdr_leads_para_abrir_v2: {
-        Args: { p_org_id: string };
+        Args: { p_api_token?: string; p_org_id: string };
         Returns: {
           email: string;
           na_fila: number;
@@ -8491,6 +8491,10 @@ export type Database = {
       ingest_callface_call: { Args: { p_payload: Json }; Returns: Json };
       is_business_day_brt: { Args: { d: string }; Returns: boolean };
       is_manager: { Args: never; Returns: boolean };
+      lead_belongs_to_user_org: {
+        Args: { p_lead_id: string };
+        Returns: boolean;
+      };
       lead_visibility_mode: { Args: never; Returns: string };
       leads_opened_events: {
         Args: { p_cadence_ids?: string[]; p_org_id: string };
