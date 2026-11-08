@@ -31,7 +31,9 @@ function makeAdminMembersSelect() {
   return vi.fn().mockImplementation(() => {
     const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } });
     const eq3 = vi.fn().mockReturnValue({ single: singleMock });
-    const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
+    // membership lookup in the inviting org: .eq().eq().maybeSingle() -> none yet
+    const maybeSingleMock = vi.fn().mockResolvedValue({ data: null });
+    const eq2 = vi.fn().mockReturnValue({ eq: eq3, maybeSingle: maybeSingleMock });
     const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
     return { eq: eq1 };
   });
@@ -212,7 +214,7 @@ describe('inviteMember', () => {
     );
   });
 
-  it('should add existing user to org with active status', async () => {
+  it('existing user gets a PENDING invite (status invited), never active', async () => {
     setupManagerWithOrg();
     mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
 
@@ -228,100 +230,52 @@ describe('inviteMember', () => {
         org_id: 'org-abc',
         user_id: 'existing-user-id',
         role: 'sdr',
-        status: 'active',
+        status: 'invited',
+        invited_expires_at: expect.any(String),
       }),
       expect.objectContaining({ onConflict: 'org_id,user_id' }),
     );
+    expect(mockAdminUpsert).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active' }),
+      expect.anything(),
+    );
   });
 
-  it('blocks inviting an existing user who belongs to another real org (avoids lockout)', async () => {
-    // H7: creating a 2nd active membership locks the user out (guards use
-    // .single() on active membership). If their other org is a real one (not
-    // their solo auto-org), block instead of silently double-enrolling.
+  it('never deletes any organization when inviting an existing user', async () => {
     setupManagerWithOrg();
     mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
 
+    const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
+
+    expect(result.success).toBe(true);
+    expect(mockAdminDelete).not.toHaveBeenCalled();
+  });
+
+  it('rejects inviting someone who is already an active member of the org', async () => {
+    setupManagerWithOrg();
+    mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'organization_members') {
         return {
-          select: vi.fn().mockImplementation((cols: string) => {
-            if (cols === 'org_id') {
-              // activeMemberships: .eq('user_id').eq('status','active') awaited
-              const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'other-real-org' }] });
-              return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
-            }
-            // active member count for the other org
-            const eq2 = vi.fn().mockResolvedValue({ count: 3 });
-            return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { status: 'active' } }),
+              }),
+            }),
           }),
           upsert: mockAdminUpsert,
           insert: mockAdminInsert,
         };
       }
-      if (table === 'organizations') {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { owner_id: 'someone-else' } }),
-            }),
-          }),
-          delete: mockAdminDelete,
-        };
-      }
-      return { insert: mockAdminInsert, upsert: mockAdminUpsert };
+      return { delete: mockAdminDelete };
     });
 
     const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toContain('outra organização');
-    }
     expect(mockAdminUpsert).not.toHaveBeenCalled();
-  });
-
-  it('removes the existing user solo auto-org before adding them (no dual membership)', async () => {
-    // H7: their other org is a solo auto-org (they own it, sole member) → safe
-    // to delete (mirrors the new-user branch), then add to the inviting org.
-    setupManagerWithOrg();
-    mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
-
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'organization_members') {
-        return {
-          select: vi.fn().mockImplementation((cols: string) => {
-            if (cols === 'org_id') {
-              const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'auto-org-id' }] });
-              return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
-            }
-            const eq2 = vi.fn().mockResolvedValue({ count: 1 });
-            return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
-          }),
-          upsert: mockAdminUpsert,
-          insert: mockAdminInsert,
-        };
-      }
-      if (table === 'organizations') {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { owner_id: 'existing-user-id' } }),
-            }),
-          }),
-          delete: mockAdminDelete,
-        };
-      }
-      return { insert: mockAdminInsert, upsert: mockAdminUpsert };
-    });
-
-    const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
-
-    expect(result.success).toBe(true);
-    expect(mockAdminDelete).toHaveBeenCalled();
-    expect(mockAdminUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ org_id: 'org-abc', user_id: 'existing-user-id', status: 'active' }),
-      expect.objectContaining({ onConflict: 'org_id,user_id' }),
-    );
+    expect(mockAdminDelete).not.toHaveBeenCalled();
   });
 
   it('should redirect if not a manager', async () => {

@@ -33,7 +33,7 @@ function makeFormData(data: Record<string, string>): FormData {
 
 // from sequence (após getManagerOrgId mockado): #1 member, #2 owner, #3 update.
 // O update encadeia DOIS .eq() (id + org_id, defense-in-depth).
-function setupMemberMocks(member: { user_id: string; org_id: string; role: string }, ownerId: string) {
+function setupMemberMocks(member: { user_id: string; org_id: string; role: string; status?: string }, ownerId: string) {
   let fromCallCount = 0;
   mockSupabase.from.mockImplementation(() => {
     fromCallCount++;
@@ -117,5 +117,20 @@ describe('updateMemberStatus', () => {
     );
 
     expect(result.success).toBe(true);
+  });
+
+  it('pista 20: gerente não ativa convite pendente nem membro removido (só o próprio usuário aceita)', async () => {
+    for (const status of ['invited', 'removed']) {
+      setupMemberMocks({ user_id: 'other-user', org_id: 'org-abc', role: 'sdr', status }, 'user-123');
+
+      const result = await updateMemberStatus(
+        makeFormData({ memberId: '550e8400-e29b-41d4-a716-446655440000', status: 'active' }),
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain('não aceitou o convite');
+      }
+    }
   });
 });

@@ -7,6 +7,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
+import { isDisposableSoloOrg } from '../services/disposable-org';
+
 export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: string } | null>> {
   try {
     const supabase = await createServerSupabaseClient();
@@ -32,7 +34,16 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
       return { success: true, data: null }; // No pending invite — normal signup
     }
 
-    const invite = invites[0]!;
+    // Aceite automático (callback do link do e-mail) só vale para convites de
+    // CONTA NOVA: o inviteUserByEmail grava invited_to_org no metadata do
+    // usuário, algo que um terceiro não consegue gravar em conta existente.
+    // Convite a quem já tinha conta fica pendente até aceite explícito
+    // (acceptOrgInvite).
+    const invitedToOrg = (user.user_metadata as Record<string, unknown> | undefined)?.invited_to_org;
+    const invite = invites.find((i) => i.org_id === invitedToOrg);
+    if (!invite) {
+      return { success: true, data: null };
+    }
 
     // Find the auto-created org (where user is manager)
     const { data: autoOrgMember } = (await from(serviceClient, 'organization_members')
@@ -43,7 +54,10 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
       .single()) as { data: { id: string; org_id: string } | null };
 
     if (autoOrgMember && autoOrgMember.org_id !== invite.org_id) {
-      // Delete auto-created org member record (cascade will clean up)
+      // Só apaga se for de fato a org solo vazia criada no cadastro.
+      if (!(await isDisposableSoloOrg(serviceClient, autoOrgMember.org_id, user.id))) {
+        return { success: true, data: null };
+      }
       const { error: delOrgErr } = await from(serviceClient, 'organizations')
         .delete()
         .eq('id', autoOrgMember.org_id);
