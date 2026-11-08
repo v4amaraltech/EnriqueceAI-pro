@@ -181,7 +181,9 @@ export type SendDenialReason =
   | 'invalid_phone'
   | 'flag_disabled'
   | 'consent_opted_out'
-  | 'context_unavailable';
+  | 'context_unavailable'
+  /** PR13: template do WhatsApp nao esta APPROVED na WABA da organizacao (ou idioma diferente). */
+  | 'template_not_approved';
 
 /** Pedido ao gateway. Descreve a intencao; nao envia nada. */
 export interface SendIntent {
