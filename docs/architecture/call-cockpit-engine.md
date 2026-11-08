@@ -301,3 +301,9 @@ Status: implementado, sem ligar nenhuma flag. Nenhuma cadência, envio ou workfl
 ## 9. Fora do escopo do PR01
 
 Migrations, tabelas, rotas, adaptadores, edição ou ativação de workflows, regeneração de `types.ts` do Supabase (não há mudança de schema), qualquer envio de mensagem. Nenhum segredo, credencial ou dado real consta neste documento ou nos tipos.
+
+## 15. Adaptadores de borda do n8n (PR13)
+
+Status: implementado atrás de `edge_command_adapter` (escopo por organização, nasce desligada, sem migration). Nenhum workflow n8n, cadência ou envio atual é alterado.
+
+Contrato v1, rotas `/api/v1/edge/*`, idempotência por chave e o diff proposto de cada workflow estão em `docs/architecture/n8n-edge-adapters.md`. Código em `src/features/contact-engine/edge/`.
