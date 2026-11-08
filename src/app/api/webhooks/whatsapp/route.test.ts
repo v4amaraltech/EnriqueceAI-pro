@@ -209,6 +209,8 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
   });
 
   it('should detect reply and mark enrollment as replied', async () => {
+    // whatsapp_connections query (org do número receptor)
+    const connChain = createChainMock({ data: [{ org_id: 'org-1' }] });
     // leads query
     const leadsChain = createChainMock({ data: { id: 'lead-1', org_id: 'org-1' } });
     // enrollment query
@@ -225,11 +227,12 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
     let callIndex = 0;
     mockFrom.mockImplementation(() => {
       callIndex++;
-      if (callIndex === 1) return leadsChain;
-      if (callIndex === 2) return enrollmentChain;
-      if (callIndex === 3) return stepChain;
-      if (callIndex === 4) return insertChain;
-      if (callIndex === 5) return updateChain;
+      if (callIndex === 1) return connChain;
+      if (callIndex === 2) return leadsChain;
+      if (callIndex === 3) return enrollmentChain;
+      if (callIndex === 4) return stepChain;
+      if (callIndex === 5) return insertChain;
+      if (callIndex === 6) return updateChain;
       return createChainMock({ data: null });
     });
 
@@ -238,6 +241,7 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
       entry: [{
         changes: [{
           value: {
+            metadata: { phone_number_id: 'pn-1' },
             messages: [{
               from: '5511999887766',
               id: 'wamid.reply-1',
@@ -256,6 +260,8 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
 
     expect(response.status).toBe(200);
     // Should have queried leads, enrollments, steps, then inserted interaction and updated enrollment
+    expect(mockFrom).toHaveBeenCalledWith('whatsapp_connections');
+    expect(leadsChain.eq).toHaveBeenCalledWith('org_id', 'org-1');
     expect(mockFrom).toHaveBeenCalledWith('leads');
     expect(mockFrom).toHaveBeenCalledWith('cadence_enrollments');
     expect(mockFrom).toHaveBeenCalledWith('interactions');
@@ -264,14 +270,18 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
   it('should log warning when no lead found for phone', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const leadsChain = createChainMock({ data: null });
-    mockFrom.mockReturnValue(leadsChain);
+    mockFrom.mockImplementation((table: string) =>
+      table === 'whatsapp_connections'
+        ? createChainMock({ data: [{ org_id: 'org-1' }] })
+        : createChainMock({ data: null }),
+    );
 
     const body = {
       object: 'whatsapp_business_account',
       entry: [{
         changes: [{
           value: {
+            metadata: { phone_number_id: 'pn-1' },
             messages: [{
               from: '5511000000000',
               id: 'wamid.unknown',
@@ -292,6 +302,37 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('No lead found'),
     );
+    consoleSpy.mockRestore();
+  });
+
+  function replyBody(metadata?: { phone_number_id: string }) {
+    return {
+      object: 'whatsapp_business_account',
+      entry: [{
+        changes: [{
+          value: {
+            ...(metadata ? { metadata } : {}),
+            messages: [{ from: '5511999887766', id: 'wamid.x', type: 'text', text: { body: 'Oi' }, timestamp: '1' }],
+          },
+        }],
+      }],
+    };
+  }
+
+  it.each([
+    ['sem conexão para o phone_number_id', { data: [] }, { phone_number_id: 'pn-x' }],
+    ['phone_number_id ambíguo (2 orgs)', { data: [{ org_id: 'a' }, { org_id: 'b' }] }, { phone_number_id: 'pn-x' }],
+    ['payload sem phone_number_id', { data: [{ org_id: 'a' }] }, undefined],
+  ])('não casa lead entre orgs: %s', async (_name, connResult, metadata) => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockFrom.mockImplementation((table: string) => createChainMock(table === 'whatsapp_connections' ? connResult : { data: { id: 'lead-x', org_id: 'other' } }));
+
+    const response = await POST(makeRequest(replyBody(metadata), {}, 'test-secret'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(response.status).toBe(200);
+    expect(mockFrom).not.toHaveBeenCalledWith('leads');
+    expect(mockFrom).not.toHaveBeenCalledWith('interactions');
     consoleSpy.mockRestore();
   });
 });

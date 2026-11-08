@@ -21,6 +21,7 @@ interface WhatsAppWebhookPayload {
   entry?: {
     changes?: {
       value?: {
+        metadata?: { display_phone_number?: string; phone_number_id?: string };
         statuses?: {
           id: string;
           status: 'sent' | 'delivered' | 'read' | 'failed';
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
         subEvents.push({
           eventId: msgEventId,
           eventType: `message.${message.type}`,
-          process: (sb) => processIncomingMessage(sb, message),
+          process: (sb) => processIncomingMessage(sb, message, value.metadata?.phone_number_id ?? null),
         });
       }
     }
@@ -195,6 +196,7 @@ export async function POST(request: Request) {
 async function processIncomingMessage(
   supabase: ReturnType<typeof createServiceRoleClient>,
   message: { from: string; id: string; type: string; text?: { body: string } },
+  phoneNumberId: string | null,
 ) {
   // Normalize the incoming phone: Meta sends "55XXXXXXXXXXX"
   const phone = message.from;
@@ -206,8 +208,28 @@ async function processIncomingMessage(
     phonesToMatch.push(phone.slice(2));
   }
 
+  // Pista 18: a org dona do número receptor vem de metadata.phone_number_id via
+  // whatsapp_connections. Sem conexão única, NÃO casa lead entre orgs (descarta).
+  if (!phoneNumberId) {
+    logger.warn('No lead found: payload sem phone_number_id, mensagem ignorada', { message_id: message.id });
+    return;
+  }
+  const { data: connections } = (await from(supabase, 'whatsapp_connections')
+    .select('org_id')
+    .eq('phone_number_id', phoneNumberId)
+    .limit(2)) as { data: { org_id: string }[] | null };
+  if (!connections || connections.length !== 1 || !connections[0]) {
+    logger.warn('No lead found: phone_number_id sem conexão única, mensagem ignorada', {
+      phone_number_id: phoneNumberId,
+      connections: connections?.length ?? 0,
+    });
+    return;
+  }
+  const connectionOrgId = connections[0].org_id;
+
   const { data: lead } = (await from(supabase, 'leads')
     .select('id, org_id, nome_fantasia, razao_social, assigned_to')
+    .eq('org_id', connectionOrgId)
     .in('telefone', phonesToMatch)
     .is('deleted_at', null)
     .limit(1)
