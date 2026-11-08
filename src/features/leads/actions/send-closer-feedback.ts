@@ -1,4 +1,6 @@
-'use server';
+// Sem 'use server' de propósito (pista 12): esta função recebe orgId/senderUserId/destinatário
+// do chamador e usa service-role, então NÃO pode virar endpoint de Server Action.
+// Só código de servidor (lead-crm, resend-closer-feedback) a importa, já autenticado.
 
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';

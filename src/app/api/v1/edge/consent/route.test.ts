@@ -46,7 +46,7 @@ const payload = (over: Record<string, unknown> = {}) => ({
 describe('POST /api/v1/edge/consent', () => {
   beforeEach(() => {
     vi.mocked(createServiceRoleClient).mockReset();
-    vi.mocked(authenticateApiKey).mockResolvedValue({ orgId: 'org-1', keyId: 'key-1' });
+    vi.mocked(authenticateApiKey).mockResolvedValue({ orgId: 'org-1', keyId: 'key-1', scopes: ['leads.write'] });
   });
 
   it('sem API key valida: 401 e nada gravado', async () => {

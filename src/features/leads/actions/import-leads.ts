@@ -9,6 +9,7 @@ import { MAX_CSV_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { countOrgLeads } from '../services/org-lead-count';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { escapeLikePattern } from '@/lib/utils/like';
 import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
@@ -99,10 +100,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       .single()) as { data: { max_leads: number } | null };
 
     if (plan) {
-      const { count: leadCount } = (await from(supabase, 'leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .is('deleted_at', null)) as { count: number | null };
+      const leadCount = await countOrgLeads(orgId);
 
       const currentLeads = leadCount ?? 0;
       if (exceedsLimit(currentLeads, 1, plan.max_leads)) {

@@ -7,6 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { ERR_LEAD_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
+import { countOrgLeads } from '../services/org-lead-count';
 import { exceedsLimit, isUnlimited } from '@/lib/utils/plan-limits';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
@@ -57,10 +58,7 @@ export async function createLead(
 
     if (plan) {
       maxLeads = plan.max_leads;
-      const { count: leadCount } = (await from(supabase, 'leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .is('deleted_at', null)) as { count: number | null };
+      const leadCount = await countOrgLeads(orgId);
 
       currentLeads = leadCount ?? 0;
       hasLimitInfo = true;
