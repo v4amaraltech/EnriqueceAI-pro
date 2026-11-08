@@ -25,12 +25,17 @@ export async function updateMemberStatus(formData: FormData): Promise<ActionResu
     // Get the member to validate — confirma que pertence à org do caller
     // (defense-in-depth contra IDOR cross-org, além da RLS).
     const { data: member } = (await from(supabase, 'organization_members')
-      .select('user_id, org_id, role')
+      .select('user_id, org_id, role, status')
       .eq('id', parsed.data.memberId)
-      .single()) as { data: { user_id: string; org_id: string; role: string } | null };
+      .single()) as { data: { user_id: string; org_id: string; role: string; status: string } | null };
 
     if (!member || member.org_id !== callerOrgId) {
       return { success: false, error: 'Membro não encontrado' };
+    }
+
+    // Convite pendente ou removido só vira ativo por aceite do próprio usuário.
+    if (member.status === 'invited' || member.status === 'removed') {
+      return { success: false, error: 'Este membro ainda não aceitou o convite' };
     }
 
     // Cannot deactivate yourself

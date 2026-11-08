@@ -70,56 +70,37 @@ export async function inviteMember(
     }
 
     if (existingUser) {
-      // The auth guards (getAuthOrgId/requireManager) select the user's active
-      // membership with `.single()`, so a SECOND active membership locks the
-      // user out of the app entirely. Resolve the user's existing membership(s)
-      // before adding this one, so the single-active-membership invariant holds.
-      const { data: activeMemberships } = (await from(admin, 'organization_members')
-        .select('org_id')
+      // Usuário que já tem conta: NUNCA apagamos a org dele nem o movemos para
+      // esta org. Criamos apenas um convite pendente (status 'invited'), que o
+      // próprio usuário precisa aceitar autenticado (acceptOrgInvite). Não
+      // consultamos nem revelamos a(s) outra(s) org(s) dele aqui.
+      const { data: existingMembership } = (await from(admin, 'organization_members')
+        .select('status')
+        .eq('org_id', currentMember.org_id)
         .eq('user_id', existingUser.id)
-        .eq('status', 'active')) as { data: Array<{ org_id: string }> | null };
+        .maybeSingle()) as { data: { status: string } | null };
 
-      const otherOrgIds = (activeMemberships ?? [])
-        .map((m) => m.org_id)
-        .filter((id) => id !== currentMember.org_id);
-
-      for (const otherOrgId of otherOrgIds) {
-        // Only auto-remove the user's SOLO auto-org (they own it and are its
-        // only active member) — mirroring the new-user branch below. Deleting a
-        // real org with teammates would be destructive, so block instead.
-        const { data: org } = (await from(admin, 'organizations')
-          .select('owner_id')
-          .eq('id', otherOrgId)
-          .maybeSingle()) as { data: { owner_id: string } | null };
-        const { count: activeMemberCount } = (await from(admin, 'organization_members')
-          .select('id', { count: 'exact', head: true })
-          .eq('org_id', otherOrgId)
-          .eq('status', 'active')) as { count: number | null };
-
-        const isSoloAutoOrg = org?.owner_id === existingUser.id && (activeMemberCount ?? 0) <= 1;
-        if (isSoloAutoOrg) {
-          // CASCADE removes the auto-membership + subscription.
-          await from(admin, 'organizations').delete().eq('id', otherOrgId);
-        } else {
-          return {
-            success: false,
-            error:
-              'Este e-mail já pertence a outra organização ativa. Peça para a pessoa sair dessa organização antes de convidá-la.',
-          };
-        }
+      if (existingMembership && existingMembership.status !== 'invited' && existingMembership.status !== 'removed') {
+        return { success: false, error: 'Este e-mail já é membro da organização.' };
       }
 
-      // User already exists — add to org with active status (idempotent per
-      // (org_id, user_id): re-invites just reactivate/update the role).
-      await from(admin, 'organization_members').upsert(
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
+
+      const { error: memberError } = await from(admin, 'organization_members').upsert(
         {
           org_id: currentMember.org_id,
           user_id: existingUser.id,
           role: parsed.data.role,
-          status: 'active',
+          status: 'invited',
+          invited_expires_at: expiresAt.toISOString(),
         },
         { onConflict: 'org_id,user_id' },
       );
+      if (memberError) {
+        console.error('Error creating pending invite:', memberError);
+        return { success: false, error: 'Erro ao convidar membro' };
+      }
     } else {
       // Send invite email via Supabase Auth (magic link)
       const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(

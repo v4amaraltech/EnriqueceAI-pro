@@ -31,6 +31,7 @@ export { inviteMember } from './actions/invite-member';
 export { updateMemberStatus } from './actions/update-member-status';
 export { updateMemberRole } from './actions/update-member-role';
 export { acceptPendingInvite } from './actions/accept-invite';
+export { acceptOrgInvite } from './actions/accept-org-invite';
 
 // Schemas & types
 export {
