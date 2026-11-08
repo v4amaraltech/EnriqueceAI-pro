@@ -32,6 +32,9 @@ export { updateMemberStatus } from './actions/update-member-status';
 export { updateMemberRole } from './actions/update-member-role';
 export { acceptPendingInvite } from './actions/accept-invite';
 export { acceptOrgInvite } from './actions/accept-org-invite';
+export { declineOrgInvite } from './actions/decline-org-invite';
+export { fetchMyPendingOrgInvites } from './actions/list-pending-org-invites';
+export type { PendingOrgInvite } from './services/pending-org-invites';
 
 // Schemas & types
 export {

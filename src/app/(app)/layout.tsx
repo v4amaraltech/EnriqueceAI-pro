@@ -10,6 +10,8 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { PendingInvitesBanner } from '@/features/auth/components/PendingInvitesBanner';
+import { listPendingOrgInvites } from '@/features/auth/services/pending-org-invites';
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
 import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGuard';
@@ -89,6 +91,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     fetchPendingActivitiesCount(),
   ]);
 
+  // Convites pendentes do próprio usuário (nunca bloqueia o layout se falhar)
+  let pendingInvitesCount = 0;
+  try {
+    pendingInvitesCount = (await listPendingOrgInvites(createServiceRoleClient(), user.id)).length;
+  } catch (err) {
+    console.error('Failed to load pending org invites:', err);
+  }
+
   const subscriptionData = subscriptionResult.data;
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
   const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
@@ -149,6 +159,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {subscriptionStatus === 'trialing' && subscriptionPeriodEnd && (
                   <TrialBanner periodEnd={subscriptionPeriodEnd} />
                 )}
+                <PendingInvitesBanner count={pendingInvitesCount} />
                 <TopBar pendingActivitiesCount={pendingCount} />
                 <main className="flex-1 overflow-auto py-6" data-tour="main-content">
                   <div className="mx-auto max-w-[1600px] px-10">
