@@ -15,7 +15,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Label } from '@/shared/components/ui/label';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { authorizeNumberRecoveryAction } from '@/features/contact-engine/actions/authorize-number-recovery';
-import type { NumberHealthState } from '@/features/contact-engine/services/number-health.service';
+import type { NumberHealthState } from '@/features/contact-engine/types';
 
 interface NumberHealthRecoveryButtonProps {
   instanceId: string;
@@ -23,6 +23,8 @@ interface NumberHealthRecoveryButtonProps {
   healthState: NumberHealthState;
   pauseReason: string | null;
   connectionStatus: string;
+  /** Flag ligada para a organizacao (validado no servidor, mas passado para UI). */
+  flagEnabled: boolean;
   onRecovered?: () => void;
 }
 
@@ -42,6 +44,7 @@ export function NumberHealthRecoveryButton({
   healthState,
   pauseReason,
   connectionStatus,
+  flagEnabled,
   onRecovered,
 }: NumberHealthRecoveryButtonProps) {
   const [open, setOpen] = useState(false);
@@ -49,8 +52,9 @@ export function NumberHealthRecoveryButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Botao so e habilitado para estados paused ou review, com WhatsApp reconectado.
-  const canRecover = (healthState === 'paused' || healthState === 'review') && connectionStatus === 'connected';
+  // Botao so e habilitado para estados paused ou review, com WhatsApp reconectado E flag ligada.
+  const canRecover =
+    flagEnabled && (healthState === 'paused' || healthState === 'review') && connectionStatus === 'connected';
 
   const handleRecover = async () => {
     if (note.trim().length < 10) {

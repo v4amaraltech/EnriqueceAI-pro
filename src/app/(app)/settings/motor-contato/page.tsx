@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 import { NumberHealthRecoveryButton } from '@/features/contact-engine/components/number-health-recovery-button';
+import type { NumberHealthState } from '@/features/contact-engine/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,10 @@ const GATEWAY_LABEL = {
 export default async function ContactEnginePilotPage() {
   const { orgId } = await getManagerOrgId();
   const status = await loadPilotStatus(orgId);
+  
+  // Verifica se flag number_health_v1 esta ligada para esta org
+  const numberHealthFlag = status.flags.find((f) => f.key === 'number_health_v1');
+  const flagEnabled = numberHealthFlag?.effectiveForOrg ?? false;
   const order = new Map(PAUSE_ORDER.map((k, i) => [k as string, i]));
   const flags = [...status.flags].sort(
     (a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99),
@@ -176,9 +181,10 @@ export default async function ContactEnginePilotPage() {
                     <NumberHealthRecoveryButton
                       instanceId={n.instanceId}
                       instanceName={n.instanceName}
-                      healthState={n.healthState as any}
+                      healthState={n.healthState as NumberHealthState}
                       pauseReason={n.pauseReason}
                       connectionStatus={n.connection}
+                      flagEnabled={flagEnabled}
                     />
                   </TableCell>
                 </TableRow>

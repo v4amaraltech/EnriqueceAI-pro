@@ -1,12 +1,13 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import {
   authorizeNumberRecovery,
   readNumberHealthFlag,
-  type NumberHealthState,
 } from '@/features/contact-engine/services/number-health.service';
+import type { NumberHealthState } from '@/features/contact-engine/types';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -88,18 +89,20 @@ export async function authorizeNumberRecoveryAction(
     };
   }
 
-    // 7. Autoriza recuperacao com auditoria permanente.
-    // Actor e role derivam da sessao validada no servidor.
-    const result = await authorizeNumberRecovery({
+  // 7. Autoriza recuperacao com auditoria permanente e atomicidade transacional.
+  // Actor e role derivam da sessao validada no servidor.
+  // Token de idempotencia gerado server-side (UUID v4) previne duplo-clique.
+  const result = await authorizeNumberRecovery({
+    orgId: session.orgId,
+    instanceId,
+    actor: {
+      userId: session.userId,
       orgId: session.orgId,
-      instanceId,
-      actor: {
-        userId: session.userId,
-        orgId: session.orgId,
-        role: 'manager',
-      },
-      note: note.trim(),
-    });
+      role: 'manager',
+    },
+    note: note.trim(),
+    idempotencyToken: randomUUID(),
+  });
 
     return result;
   } catch (err) {

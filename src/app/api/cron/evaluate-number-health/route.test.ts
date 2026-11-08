@@ -77,15 +77,17 @@ describe('/api/cron/evaluate-number-health', () => {
           }),
         };
       }
-      // Segunda chamada: le instancias
+      // Segunda chamada: le instancias com ordenacao
       return {
         select: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
-              ],
-              error: null,
+          is: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
+                ],
+                error: null,
+              }),
             }),
           }),
         }),
@@ -132,12 +134,14 @@ describe('/api/cron/evaluate-number-health', () => {
       }
       return {
         select: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
-              ],
-              error: null,
+          is: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
+                ],
+                error: null,
+              }),
             }),
           }),
         }),
@@ -177,12 +181,14 @@ describe('/api/cron/evaluate-number-health', () => {
       }
       return {
         select: vi.fn().mockReturnValue({
-          neq: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({
-              data: [
-                { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
-              ],
-              error: null,
+          is: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [
+                  { id: 'inst-1', org_id: 'org-1', instance_name: 'Test Instance' },
+                ],
+                error: null,
+              }),
             }),
           }),
         }),
