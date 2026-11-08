@@ -85,3 +85,55 @@ export function validateWebhookSecret(req: Request): boolean {
   const expectedSecret = Deno.env.get('EVOLUTION_WEBHOOK_SECRET') || '';
   return secret !== '' && secret === expectedSecret;
 }
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  let diff = ab.length ^ bb.length;
+  const len = Math.max(ab.length, bb.length);
+  for (let i = 0; i < len; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
+  return diff === 0;
+}
+
+function jwtRole(token: string): string | null {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return (JSON.parse(json) as { role?: string }).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Autoriza chamadas internas (cron/scheduler) às edge functions Evolution.
+ * Aceita `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` ou um item da lista
+ * CRON_SECRET (separada por vírgula), em tempo constante.
+ *
+ * `allowLegacyAnon`: transição para crons antigos que enviam o JWT anon (público).
+ * Aceita o JWT anon com WARNING. Remover na fase 2 depois que os crons migrarem.
+ */
+export function isInternalCaller(req: Request, opts: { allowLegacyAnon?: boolean } = {}): boolean {
+  const header = req.headers.get('Authorization') ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token) return false;
+
+  const candidates = [
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    ...(Deno.env.get('CRON_SECRET') ?? '').split(',').map((t) => t.trim()),
+  ].filter((t) => t.length > 0);
+
+  let ok = false;
+  for (const c of candidates) {
+    if (timingSafeEqualStr(token, c)) ok = true;
+  }
+  if (ok) return true;
+
+  if (opts.allowLegacyAnon && jwtRole(token) === 'anon') {
+    console.warn('[auth] chamada interna com JWT anon (legado); migrar o cron para service_role/CRON_SECRET');
+    return true;
+  }
+  return false;
+}

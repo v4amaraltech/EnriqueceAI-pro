@@ -20,7 +20,7 @@ let priorEnrollments: unknown[];
 const updates: Array<Record<string, unknown>> = [];
 const inserts: Array<Record<string, unknown>> = [];
 
-function makeChain() {
+function makeChain(table = '') {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.eq = vi.fn(() => chain);
@@ -38,11 +38,11 @@ function makeChain() {
   // Awaitable: o select de priorEnrollments e o update de encerramento terminam
   // com `.in(...)` e são aguardados direto — a resposta serve para os dois.
   chain.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-    Promise.resolve({ data: priorEnrollments, error: null }).then(resolve, reject);
+    Promise.resolve({ data: table === 'leads' ? [{ id: LEAD }] : priorEnrollments, error: null }).then(resolve, reject);
   return chain;
 }
 
-const supabase = { from: () => makeChain() };
+const supabase = { from: (table: string) => makeChain(table) };
 
 function asRole(role: 'manager' | 'sdr') {
   auth.getAuthOrgIdResult.mockResolvedValue({

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { analyzeAndSaveBant } from '../services/transcription.service';
@@ -19,12 +20,20 @@ export async function generateBantFromText(
 ): Promise<ActionResult<void>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId } = auth.data;
+  const { orgId, supabase: sessionClient } = auth.data;
 
   const parsed = inputSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
   }
+
+  // Pista 11: o lead precisa ser da org da sessão antes de usar o service-role.
+  const { data: ownLead } = (await from(sessionClient, 'leads')
+    .select('id')
+    .eq('id', parsed.data.leadId)
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: { id: string } | null };
+  if (!ownLead) return { success: false, error: 'Lead não encontrado' };
 
   const supabase = createServiceRoleClient();
 

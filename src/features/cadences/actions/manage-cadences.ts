@@ -343,7 +343,18 @@ export async function enrollLeads(
   let enrolled = 0;
   const errors: string[] = [];
 
+  // Pista 15: só inscreve leads da org da sessão (RLS de enrollments só olha org_id).
+  const { data: ownLeads } = (await from(supabase, 'leads')
+    .select('id')
+    .eq('org_id', orgId)
+    .in('id', leadIds)) as { data: { id: string }[] | null };
+  const ownLeadIds = new Set((ownLeads ?? []).map((l) => l.id));
+
   for (const leadId of leadIds) {
+    if (!ownLeadIds.has(leadId)) {
+      errors.push(`Lead ${leadId}: não encontrado`);
+      continue;
+    }
     // Complete any existing active/paused enrollment for this lead in this cadence
     const { error: completeErr } = await from(supabase, 'cadence_enrollments')
       .update({

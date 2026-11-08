@@ -14,6 +14,8 @@ import {
   findCallWebhookIntegration,
   planCallWebhookRepair,
 } from './api4com-call-webhook';
+import { isSafeApi4ComBaseUrl } from '@/lib/security/safe-url';
+
 import type { Api4ComExtension } from './api4com-extension-sync';
 
 export const API4COM_DEFAULT_BASE_URL = 'https://api.api4com.com/api/v1/';
@@ -32,7 +34,14 @@ export interface Api4ComCredentials extends Api4ComApiCredentials {
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
 
 export function normalizeBaseUrl(url: string | null | undefined): string {
-  return (url?.trim() || API4COM_DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const candidate = (url?.trim() || API4COM_DEFAULT_BASE_URL).replace(/\/+$/, '');
+  // Pista 8: o token da org vai no Authorization desta URL. Só https em host da
+  // API4COM; qualquer outro valor (inclusive legado no banco) cai no padrão.
+  if (!isSafeApi4ComBaseUrl(candidate)) {
+    console.warn('[api4com] base_url fora da allowlist, usando o padrão');
+    return API4COM_DEFAULT_BASE_URL.replace(/\/+$/, '');
+  }
+  return candidate;
 }
 
 /**
@@ -147,6 +156,8 @@ export async function api4comFetch<T>(
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(timeoutMs),
+        // Pista 8: nunca seguir redirect com o token no header.
+        redirect: 'manual',
       });
 
       if (!response.ok) {
@@ -281,6 +292,7 @@ export async function hangupCall(
   const response = await fetch(url, {
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
+    redirect: 'manual',
     headers: {
       'Content-Type': 'application/json',
       Authorization: creds.apiKey,

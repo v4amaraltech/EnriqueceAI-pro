@@ -1,3 +1,4 @@
+import { fetchPublicHttps } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -151,7 +152,11 @@ export async function processCallTranscription(callId: string): Promise<void> {
 }
 
 async function downloadAudio(url: string): Promise<Buffer> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  // Pista 9: mesma proteção SSRF do armazenamento de gravações.
+  const response = await fetchPublicHttps(url, { signal: AbortSignal.timeout(30_000) });
+  if (!response) {
+    throw new Error('audio_download_failed: blocked_url');
+  }
   if (!response.ok) {
     throw new Error(`audio_download_failed: ${response.status}`);
   }

@@ -50,6 +50,14 @@ export async function scheduleActivity(
     leadId, channel, callProvider, scheduledAt, notes, completeEnrollments, pauseCadenceUntilReturn, executedStep,
   } = parsed.data;
 
+  // Pista 11: o lead precisa ser da org da sessão antes de qualquer escrita.
+  const { data: ownLead } = (await from(supabase, 'leads')
+    .select('id')
+    .eq('id', leadId)
+    .eq('org_id', orgId)
+    .maybeSingle()) as { data: { id: string } | null };
+  if (!ownLead) return { success: false, error: 'Lead não encontrado' };
+
   // Create scheduled activity
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
     .insert({
@@ -76,6 +84,7 @@ export async function scheduleActivity(
   // Desacoplado do encerramento de cadência abaixo.
   await from(serviceClient, 'scheduled_activities' as never)
     .update({ status: 'cancelled' } as Record<string, unknown>)
+    .eq('org_id', orgId)
     .eq('lead_id', leadId)
     .eq('status', 'pending')
     .neq('id', data.id);
@@ -87,6 +96,7 @@ export async function scheduleActivity(
   if (completeEnrollments) {
     const { error: enrollError } = await from(serviceClient, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
+      .eq('org_id', orgId)
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
     if (enrollError) {

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { isSafeApi4ComBaseUrl } from '@/lib/security/safe-url';
 import { encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 
@@ -31,6 +32,10 @@ export async function saveApi4ComConfig(
   }
 
   const baseUrl = (input.baseUrl?.trim() || 'https://api.api4com.com/api/v1/');
+  // Pista 8: o token vai no Authorization desta URL; só host da API4COM via https.
+  if (!isSafeApi4ComBaseUrl(baseUrl)) {
+    return { success: false, error: 'URL da API4COM inválida (use https e um host api4com.com)' };
+  }
 
   // Check for existing connection
   const { data: existing } = (await from(supabase, 'api4com_connections' as never)

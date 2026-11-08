@@ -36,6 +36,7 @@ function makeClient(respond: (call: Call) => unknown) {
         };
       }
       chain.single = () => Promise.resolve(respond(call));
+      chain.maybeSingle = () => Promise.resolve(respond(call));
       chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve(respond(call)).then(resolve);
       return chain;
     },
@@ -66,7 +67,11 @@ describe('scheduleActivity — pausa a cadência até o retorno', () => {
     pausedRows = [{ id: ENR, cadence_id: 'cad-1' }];
     extendedRows = [];
     userClient = makeClient((call) =>
-      call.table === 'scheduled_activities' ? { data: { id: 'sa-1' }, error: null } : { data: null, error: null },
+      call.table === 'scheduled_activities'
+        ? { data: { id: 'sa-1' }, error: null }
+        : call.table === 'leads'
+          ? { data: { id: LEAD }, error: null }
+          : { data: null, error: null },
     );
     serviceClient = makeClient((call) => {
       if (call.table !== 'cadence_enrollments') return { data: null, error: null };
