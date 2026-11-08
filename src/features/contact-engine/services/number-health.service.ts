@@ -468,6 +468,7 @@ interface InstanceHealthRow {
   auto_send_consecutive_failures: number;
   auto_send_paused_at: string | null;
   health_state: NumberHealthState;
+  health_pause_reason: string | null;
   health_total_daily_cap: number;
   health_new_contacts_daily_cap: number;
   health_ramp_stage: number;
@@ -478,7 +479,7 @@ interface InstanceHealthRow {
 }
 
 const INSTANCE_HEALTH_COLUMNS =
-  'id, org_id, user_id, status, auto_send_consecutive_failures, auto_send_paused_at, health_state, health_total_daily_cap, health_new_contacts_daily_cap, health_ramp_stage, health_ramp_changed_on, health_ack_window_date, health_ack_trusted_reports, health_ack_restrictions';
+  'id, org_id, user_id, status, auto_send_consecutive_failures, auto_send_paused_at, health_state, health_pause_reason, health_total_daily_cap, health_new_contacts_daily_cap, health_ramp_stage, health_ramp_changed_on, health_ack_window_date, health_ack_trusted_reports, health_ack_restrictions';
 
 async function readInstance(db: Db, orgId: Uuid, instanceId: Uuid): Promise<InstanceHealthRow | null> {
   const res = (await from(db, 'whatsapp_instances')
@@ -859,6 +860,8 @@ export interface RecoveryInput {
   actor: { userId: Uuid; orgId: Uuid; role: 'manager' | 'sdr' };
   /** Justificativa registrada (revisao do motivo da pausa). */
   note: string;
+  /** Token de idempotencia (UUID v4) gerado pelo cliente. */
+  idempotencyToken: Uuid;
   now?: Date;
 }
 
@@ -867,6 +870,10 @@ export interface RecoveryInput {
  * reconectado. Volta para `warming` (nunca `healthy`), mantem estagio e tetos,
  * nao apaga janelas e reconhece os eventos ja vistos para que nao repausem sozinhos.
  * Reconexao sozinha nunca despausa.
+ * 
+ * ATOMICIDADE: Usa RPC `authorize_number_recovery_with_audit` que executa UPDATE
+ * da instancia, liberacao do freio da fila E INSERT de auditoria em uma UNICA
+ * transacao com rollback automatico em caso de falha.
  */
 export async function authorizeNumberRecovery(input: RecoveryInput): Promise<ActionResult<{ state: NumberHealthState }>> {
   if (input.actor.role !== 'manager' || input.actor.orgId !== input.orgId) {
@@ -881,85 +888,49 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
   try {
     const now = input.now ?? new Date();
     const db = createServiceRoleClient();
-    const inst = await readInstance(db, input.orgId, input.instanceId);
-    if (!inst) return { success: false, error: 'Numero nao encontrado', code: 'not_found' };
-    if (!isBlockedState(inst.health_state)) {
-      return { success: false, error: 'Numero nao esta pausado pela saude', code: 'not_blocked' };
+    
+    // RPC transacional: recuperacao + auditoria atomica
+    const result = (await db.rpc('authorize_number_recovery_with_audit' as never, {
+      p_org_id: input.orgId,
+      p_instance_id: input.instanceId,
+      p_actor_user_id: input.actor.userId,
+      p_note: input.note.trim(),
+      p_idempotency_token: input.idempotencyToken,
+      p_recovered_at: now.toISOString(),
+    } as never)) as unknown as { data: { success: boolean; error?: string; state?: string; audit_id?: string; duplicate?: boolean } | null; error: { message: string } | null };
+
+    if (result.error) {
+      return { success: false, error: 'Falha ao recuperar o numero', code: 'rpc_failed' };
     }
-    if (inst.status !== 'connected') {
-      return { success: false, error: 'Reconecte o WhatsApp antes de recuperar', code: 'not_connected' };
-    }
 
-    const windowDate = healthWindowKey(now);
-    const win = (await from(db, 'whatsapp_number_health_windows')
-      .select(WINDOW_COLUMNS)
-      .eq('instance_id', input.instanceId)
-      .eq('window_date', windowDate)
-      .limit(1)) as unknown as Rows<WindowRow>;
-    if (win.error) return { success: false, error: 'Falha ao ler janela', code: 'read_failed' };
-    const today = win.data?.[0];
-    const nowIso = now.toISOString();
+    const data = result.data;
+    if (!data?.success) {
+      const errorCode = data?.error === 'not_found' ? 'not_found' 
+        : data?.error === 'not_blocked' ? 'not_blocked'
+        : data?.error === 'not_connected' ? 'not_connected'
+        : data?.error === 'state_conflict' ? 'state_conflict'
+        : 'rpc_failed';
+      
+      const errorMsg = data?.error === 'not_found' ? 'Numero nao encontrado'
+        : data?.error === 'not_blocked' ? 'Numero nao esta pausado pela saude'
+        : data?.error === 'not_connected' ? 'Reconecte o WhatsApp antes de recuperar'
+        : data?.error === 'state_conflict' ? 'Estado mudou, tente de novo'
+        : 'Falha ao recuperar o numero';
 
-    const upd = (await from(db, 'whatsapp_instances')
-      .update({
-        health_state: 'warming',
-        health_pause_reason: null,
-        health_state_changed_at: nowIso,
-        health_recovered_at: nowIso,
-        health_ack_window_date: windowDate,
-        health_ack_trusted_reports: today?.trusted_reports ?? 0,
-        health_ack_restrictions: today?.restriction_events ?? 0,
-        // Falhas seguidas voltam a zero para o gatilho nao repausar na hora.
-        auto_send_consecutive_failures: 0,
-      } as never)
-      .eq('org_id', input.orgId)
-      .eq('id', input.instanceId)
-      .eq('health_state', inst.health_state)
-      .select('id')) as unknown as Rows<{ id: string }>;
-    if (upd.error) return { success: false, error: 'Falha ao gravar recuperacao', code: 'write_failed' };
-    if (!upd.data?.length) return { success: false, error: 'Estado mudou, tente de novo', code: 'state_conflict' };
-
-    // Libera o freio da fila atual somente se foi esta camada que o aplicou.
-    await from(db, 'whatsapp_instances')
-      .update({ auto_send_paused_at: null, auto_send_pause_reason: null, auto_send_next_at: null } as never)
-      .eq('org_id', input.orgId)
-      .eq('id', input.instanceId)
-      .like('auto_send_pause_reason', 'health:%');
-
-    // Auditoria permanente: grava linha append-only com ator, justificativa,
-    // motivo da pausa, estados e tetos. Idempotencia por (instance_id, recovered_at).
-    const audit = (await from(db, 'whatsapp_number_health_recoveries')
-      .insert({
-        org_id: input.orgId,
-        instance_id: input.instanceId,
-        actor_user_id: input.actor.userId,
-        note: input.note.trim(),
-        previous_state: inst.health_state,
-        new_state: 'warming',
-        pause_reason: inst.health_pause_reason,
-        ramp_stage: inst.health_ramp_stage,
-        new_contacts_cap: inst.health_new_contacts_daily_cap,
-        total_cap: inst.health_total_daily_cap,
-        recovered_at: nowIso,
-      } as never)
-      .select('id')) as unknown as Rows<{ id: string }>;
-    if (audit.error) {
-      // Conflito de idempotencia ou restricao de check: rollback esta transacao.
-      // A linha de whatsapp_instances ja foi alterada pelo CAS anterior, mas como
-      // estamos em uma transacao implicita (autocommit), o rollback nao e automatico.
-      // Para garantir consistencia, reportamos erro e o chamador deve tentar de novo.
-      return { success: false, error: 'Falha ao gravar auditoria de recuperacao', code: 'audit_failed' };
+      return { success: false, error: errorMsg, code: errorCode };
     }
 
     logHealth('number_health_recovered', {
       orgId: input.orgId,
       instanceId: input.instanceId,
       actorUserId: input.actor.userId,
-      from: inst.health_state,
-      auditId: audit.data?.[0]?.id ?? null,
+      auditId: data.audit_id ?? null,
+      duplicate: data.duplicate ?? false,
     });
+
     return { success: true, data: { state: 'warming' } };
-  } catch {
+  } catch (err) {
+    console.error('[authorizeNumberRecovery] Error:', err);
     return { success: false, error: 'Falha ao recuperar o numero', code: 'unexpected' };
   }
 }

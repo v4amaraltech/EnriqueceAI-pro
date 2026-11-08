@@ -52,9 +52,14 @@ async function evaluateNumberHealth() {
     return { evaluated: 0, skipped: 'flag_disabled' };
   }
 
-  // 2. Busca instancias Evolution elegíveis (conectadas ou desconectadas,
-  //    mas nunca deletadas) de organizacoes permitidas.
-  let query = from(db, 'whatsapp_instances').select('id, org_id, instance_name').neq('deleted_at', null);
+  // 2. Busca instancias Evolution elegíveis (nao deletadas) de organizacoes permitidas.
+  // PAGINACAO: limite 100 por execucao, ordenadas por health_evaluated_at ASC
+  // (menos recentemente avaliadas primeiro) para prevenir fome.
+  // FILTRO: is('deleted_at', null) seleciona instancias ATIVAS (deleted_at IS NULL).
+  let query = from(db, 'whatsapp_instances')
+    .select('id, org_id, instance_name')
+    .is('deleted_at', null)
+    .order('health_evaluated_at', { ascending: true, nullsFirst: true });
 
   if (!globalEnabled) {
     // Flag desligada globalmente: filtra somente orgs da lista permitida.

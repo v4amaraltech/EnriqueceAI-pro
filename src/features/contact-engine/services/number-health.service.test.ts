@@ -452,7 +452,7 @@ describe('flag number_health_v1 desligada: sem efeito', () => {
       expect(await recordNumberHealthSignals({ orgId: 'org-1', instanceId: 'inst-A', now: NOW, delta: { sentNewContacts: 1 } })).toEqual({ success: true, data: { recorded: false } });
       const run = await runNumberHealthEvaluation({ orgId: 'org-1', instanceId: 'inst-A', now: NOW });
       expect(run).toMatchObject({ success: true, data: { applied: false, reason: 'flag_disabled' } });
-      expect(await authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: { userId: 'm', orgId: 'org-1', role: 'manager' }, note: 'revisao concluida', now: NOW })).toMatchObject({ success: false, code: 'flag_disabled' });
+      expect(await authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: { userId: 'm', orgId: 'org-1', role: 'manager' }, note: 'revisao concluida', idempotencyToken: 'token-1', now: NOW })).toMatchObject({ success: false, code: 'flag_disabled' });
       onlyFlagRead();
       expect(db.updates).toEqual([]);
       expect(db.rpcs).toEqual([]);
@@ -630,7 +630,7 @@ describe('avaliacao persistida', () => {
 describe('desconexao e recuperacao autorizada', () => {
   const manager = { userId: 'mgr-1', orgId: 'org-1', role: 'manager' as const };
   const recover = (over: Partial<Parameters<typeof authorizeNumberRecovery>[0]> = {}) =>
-    authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: manager, note: 'numero reconectado e revisado', now: NOW, ...over });
+    authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: manager, note: 'numero reconectado e revisado', idempotencyToken: over.idempotencyToken ?? 'token-default', now: NOW, ...over });
 
   const paused = (over: Row = {}) =>
     instanceRow({ health_state: 'paused', health_ramp_stage: 2, health_total_daily_cap: 60, health_new_contacts_daily_cap: 30, auto_send_paused_at: '2026-11-12T10:00:00Z', auto_send_pause_reason: 'health:session_disconnected', ...over });

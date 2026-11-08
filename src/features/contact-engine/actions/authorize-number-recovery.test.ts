@@ -171,15 +171,21 @@ describe('authorizeNumberRecoveryAction', () => {
 
     const result = await authorizeNumberRecoveryAction('inst-1', 'justificativa valida com mais de dez caracteres');
     expect(result).toEqual({ success: true, data: { state: 'warming' } });
-    expect(numberHealthModule.authorizeNumberRecovery).toHaveBeenCalledWith({
+    
+    // Verifica que authorizeNumberRecovery foi chamado com os parametros corretos
+    // (idempotencyToken e gerado server-side, entao nao verificamos o valor exato)
+    expect(numberHealthModule.authorizeNumberRecovery).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(numberHealthModule.authorizeNumberRecovery).mock.calls[0]?.[0];
+    if (!call) throw new Error('authorizeNumberRecovery not called');
+    
+    expect(call.orgId).toBe('org-1');
+    expect(call.instanceId).toBe('inst-1');
+    expect(call.actor).toEqual({
+      userId: 'user-1',
       orgId: 'org-1',
-      instanceId: 'inst-1',
-      actor: {
-        userId: 'user-1',
-        orgId: 'org-1',
-        role: 'manager',
-      },
-      note: 'justificativa valida com mais de dez caracteres',
+      role: 'manager',
     });
+    expect(call.note).toBe('justificativa valida com mais de dez caracteres');
+    expect(call.idempotencyToken).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/); // UUID v4
   });
 });

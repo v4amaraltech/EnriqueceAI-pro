@@ -35,23 +35,33 @@ curl -X POST https://app.enriqueceai.com/api/cron/evaluate-number-health \
 
 Resultado esperado com flag desligada: `{ "evaluated": 0, "skipped": "flag_disabled" }`
 
-### 2. Agendamento no Vercel Cron (Produção)
+### 2. Agendamento no Coolify/Sistema (Produção)
 
-Adicionar ao `vercel.json`:
+**IMPORTANTE**: A aplicação roda em **Coolify**, NÃO Vercel. Usar o sistema de agendamento da plataforma (cron do sistema operacional, Coolify scheduled tasks, ou serviço equivalente).
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/evaluate-number-health",
-      "schedule": "*/30 * * * *"
-    }
-  ]
-}
+**Comando a agendar**:
+```bash
+curl -X POST https://app.enriqueceai.com/api/cron/evaluate-number-health \
+  -H "Authorization: Bearer ${CRON_SECRET}"
 ```
 
-**Frequência recomendada**: A cada 30 minutos  
+**Frequência recomendada**: A cada 30 minutos (`*/30 * * * *`)  
 **Justificativa**: Permite detecção rápida de problemas sem sobrecarregar o banco
+
+**Exemplo de crontab** (NÃO criar ainda - apenas documentação):
+```cron
+# Avaliação de saúde de números Evolution (a cada 30min)
+# NÃO ATIVAR SEM APROVAÇÃO
+*/30 * * * * curl -X POST https://app.enriqueceai.com/api/cron/evaluate-number-health -H "Authorization: Bearer ${CRON_SECRET}" >> /var/log/cron-number-health.log 2>&1
+```
+
+**OU via Coolify** (se disponível interface de scheduled tasks):
+- Nome: `evaluate-number-health`
+- URL: `/api/cron/evaluate-number-health`
+- Método: POST
+- Headers: `Authorization: Bearer ${CRON_SECRET}` (usar variável de ambiente, NUNCA commitar secret)
+- Schedule: `*/30 * * * *` (cron syntax)
+- **Status**: DESATIVADO até aprovação
 
 ### 3. Ativação Gradual por Organização
 
@@ -126,8 +136,9 @@ ORDER BY hour DESC;
 
 ### Desativar Cron (Emergência)
 
-1. **Remover do `vercel.json`** e fazer deploy imediato
-2. **OU** pausar execução via dashboard Vercel
+1. **Comentar linha no crontab** do sistema ou Coolify scheduled tasks
+2. **OU** remover agendamento via interface Coolify (se disponível)
+3. **Verificar desativação**: logs devem parar de registrar execuções
 
 ### Desligar Flag por Organização
 ```sql
