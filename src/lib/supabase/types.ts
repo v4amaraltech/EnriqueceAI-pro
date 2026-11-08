@@ -2772,6 +2772,95 @@ export type Database = {
         };
         Relationships: [];
       };
+      contact_consent_evidence: {
+        Row: {
+          channel: string;
+          contact_identity: string;
+          created_at: string;
+          created_by: string | null;
+          evidence: Json;
+          id: string;
+          kind: string;
+          lead_id: string;
+          org_id: string;
+          source: string;
+        };
+        Insert: {
+          channel: string;
+          contact_identity: string;
+          created_at?: string;
+          created_by?: string | null;
+          evidence?: Json;
+          id?: string;
+          kind: string;
+          lead_id: string;
+          org_id: string;
+          source: string;
+        };
+        Update: {
+          channel?: string;
+          contact_identity?: string;
+          created_at?: string;
+          created_by?: string | null;
+          evidence?: Json;
+          id?: string;
+          kind?: string;
+          lead_id?: string;
+          org_id?: string;
+          source?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'contact_consent_evidence_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       contact_holds: {
         Row: {
           created_at: string;
@@ -2845,6 +2934,225 @@ export type Database = {
             columns: ['org_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      conversation_ownership: {
+        Row: {
+          automation_mode: string;
+          channel: string;
+          contact_id: string | null;
+          contact_identity: string;
+          created_at: string;
+          id: string;
+          lead_id: string;
+          org_id: string;
+          owner_user_id: string | null;
+          provider: string | null;
+          sender_instance_id: string | null;
+          status: string;
+          updated_at: string;
+          version: number;
+        };
+        Insert: {
+          automation_mode?: string;
+          channel: string;
+          contact_id?: string | null;
+          contact_identity: string;
+          created_at?: string;
+          id?: string;
+          lead_id: string;
+          org_id: string;
+          owner_user_id?: string | null;
+          provider?: string | null;
+          sender_instance_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Update: {
+          automation_mode?: string;
+          channel?: string;
+          contact_id?: string | null;
+          contact_identity?: string;
+          created_at?: string;
+          id?: string;
+          lead_id?: string;
+          org_id?: string;
+          owner_user_id?: string | null;
+          provider?: string | null;
+          sender_instance_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_ownership_contact_id_fkey';
+            columns: ['contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'lead_contacts';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      conversation_ownership_events: {
+        Row: {
+          actor_source: string;
+          actor_user_id: string | null;
+          channel: string;
+          contact_identity: string;
+          created_at: string;
+          from_user_id: string | null;
+          from_version: number | null;
+          id: string;
+          kind: string;
+          lead_id: string;
+          org_id: string;
+          ownership_id: string;
+          reason: string | null;
+          to_user_id: string | null;
+          to_version: number;
+        };
+        Insert: {
+          actor_source: string;
+          actor_user_id?: string | null;
+          channel: string;
+          contact_identity: string;
+          created_at?: string;
+          from_user_id?: string | null;
+          from_version?: number | null;
+          id?: string;
+          kind: string;
+          lead_id: string;
+          org_id: string;
+          ownership_id: string;
+          reason?: string | null;
+          to_user_id?: string | null;
+          to_version: number;
+        };
+        Update: {
+          actor_source?: string;
+          actor_user_id?: string | null;
+          channel?: string;
+          contact_identity?: string;
+          created_at?: string;
+          from_user_id?: string | null;
+          from_version?: number | null;
+          id?: string;
+          kind?: string;
+          lead_id?: string;
+          org_id?: string;
+          ownership_id?: string;
+          reason?: string | null;
+          to_user_id?: string | null;
+          to_version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversation_ownership_events_ownership_id_fkey';
+            columns: ['ownership_id'];
+            isOneToOne: false;
+            referencedRelation: 'conversation_ownership';
             referencedColumns: ['id'];
           },
         ];
@@ -3153,6 +3461,95 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'daily_activity_goals_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      decision_events: {
+        Row: {
+          actor_user_id: string | null;
+          created_at: string;
+          event_type: string;
+          id: string;
+          idempotency_key: string;
+          lead_id: string;
+          model_version: string;
+          org_id: string;
+          payload: Json;
+          source: string;
+        };
+        Insert: {
+          actor_user_id?: string | null;
+          created_at?: string;
+          event_type: string;
+          id?: string;
+          idempotency_key: string;
+          lead_id: string;
+          model_version: string;
+          org_id: string;
+          payload?: Json;
+          source: string;
+        };
+        Update: {
+          actor_user_id?: string | null;
+          created_at?: string;
+          event_type?: string;
+          id?: string;
+          idempotency_key?: string;
+          lead_id?: string;
+          model_version?: string;
+          org_id?: string;
+          payload?: Json;
+          source?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'decision_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'decision_events_org_id_fkey';
             columns: ['org_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
@@ -4132,6 +4529,88 @@ export type Database = {
             columns: ['step_id'];
             isOneToOne: false;
             referencedRelation: 'cadence_steps';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      lead_assignment_members: {
+        Row: {
+          capacity: number | null;
+          created_at: string;
+          eligible: boolean;
+          id: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          capacity?: number | null;
+          created_at?: string;
+          eligible?: boolean;
+          id?: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          capacity?: number | null;
+          created_at?: string;
+          eligible?: boolean;
+          id?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_assignment_members_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      lead_assignment_policies: {
+        Row: {
+          created_at: string;
+          cursor_user_id: string | null;
+          cursor_version: number;
+          default_capacity: number | null;
+          enabled: boolean;
+          id: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          cursor_user_id?: string | null;
+          cursor_version?: number;
+          default_capacity?: number | null;
+          enabled?: boolean;
+          id?: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          cursor_user_id?: string | null;
+          cursor_version?: number;
+          default_capacity?: number | null;
+          enabled?: boolean;
+          id?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_assignment_policies_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
             referencedColumns: ['id'];
           },
         ];
@@ -5713,6 +6192,158 @@ export type Database = {
         };
         Relationships: [];
       };
+      send_events: {
+        Row: {
+          created_at: string;
+          detail: Json;
+          id: string;
+          kind: string;
+          org_id: string;
+          outbox_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          detail?: Json;
+          id?: string;
+          kind: string;
+          org_id: string;
+          outbox_id: string;
+        };
+        Update: {
+          created_at?: string;
+          detail?: Json;
+          id?: string;
+          kind?: string;
+          org_id?: string;
+          outbox_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'send_events_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'send_events_outbox_id_fkey';
+            columns: ['outbox_id'];
+            isOneToOne: false;
+            referencedRelation: 'send_outbox';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      send_outbox: {
+        Row: {
+          attempts: number;
+          channel: string;
+          command: Json;
+          contact_identity: string;
+          created_at: string;
+          external_id: string | null;
+          id: string;
+          idempotency_key: string;
+          last_error: string | null;
+          lead_id: string;
+          lease_expires_at: string | null;
+          lease_owner: string | null;
+          org_id: string;
+          provider: string;
+          status: string;
+          updated_at: string;
+          version: number;
+        };
+        Insert: {
+          attempts?: number;
+          channel: string;
+          command: Json;
+          contact_identity: string;
+          created_at?: string;
+          external_id?: string | null;
+          id?: string;
+          idempotency_key: string;
+          last_error?: string | null;
+          lead_id: string;
+          lease_expires_at?: string | null;
+          lease_owner?: string | null;
+          org_id: string;
+          provider: string;
+          status?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Update: {
+          attempts?: number;
+          channel?: string;
+          command?: Json;
+          contact_identity?: string;
+          created_at?: string;
+          external_id?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          last_error?: string | null;
+          lead_id?: string;
+          lease_expires_at?: string | null;
+          lease_owner?: string | null;
+          org_id?: string;
+          provider?: string;
+          status?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'send_outbox_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       standard_field_settings: {
         Row: {
           created_at: string;
@@ -6230,6 +6861,20 @@ export type Database = {
           auto_send_pause_reason: string | null;
           auto_send_paused_at: string | null;
           created_at: string;
+          health_ack_restrictions: number;
+          health_ack_trusted_reports: number;
+          health_ack_window_date: string | null;
+          health_evaluated_at: string | null;
+          health_new_contacts_daily_cap: number;
+          health_pause_reason: string | null;
+          health_ramp_changed_on: string | null;
+          health_ramp_freeze_reason: string | null;
+          health_ramp_frozen_at: string | null;
+          health_ramp_stage: number;
+          health_recovered_at: string | null;
+          health_state: string;
+          health_state_changed_at: string | null;
+          health_total_daily_cap: number;
           id: string;
           instance_name: string;
           last_error: string | null;
@@ -6252,6 +6897,20 @@ export type Database = {
           auto_send_pause_reason?: string | null;
           auto_send_paused_at?: string | null;
           created_at?: string;
+          health_ack_restrictions?: number;
+          health_ack_trusted_reports?: number;
+          health_ack_window_date?: string | null;
+          health_evaluated_at?: string | null;
+          health_new_contacts_daily_cap?: number;
+          health_pause_reason?: string | null;
+          health_ramp_changed_on?: string | null;
+          health_ramp_freeze_reason?: string | null;
+          health_ramp_frozen_at?: string | null;
+          health_ramp_stage?: number;
+          health_recovered_at?: string | null;
+          health_state?: string;
+          health_state_changed_at?: string | null;
+          health_total_daily_cap?: number;
           id?: string;
           instance_name: string;
           last_error?: string | null;
@@ -6274,6 +6933,20 @@ export type Database = {
           auto_send_pause_reason?: string | null;
           auto_send_paused_at?: string | null;
           created_at?: string;
+          health_ack_restrictions?: number;
+          health_ack_trusted_reports?: number;
+          health_ack_window_date?: string | null;
+          health_evaluated_at?: string | null;
+          health_new_contacts_daily_cap?: number;
+          health_pause_reason?: string | null;
+          health_ramp_changed_on?: string | null;
+          health_ramp_freeze_reason?: string | null;
+          health_ramp_frozen_at?: string | null;
+          health_ramp_stage?: number;
+          health_recovered_at?: string | null;
+          health_state?: string;
+          health_state_changed_at?: string | null;
+          health_total_daily_cap?: number;
           id?: string;
           instance_name?: string;
           last_error?: string | null;
@@ -6291,6 +6964,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'whatsapp_instances_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      whatsapp_number_health_windows: {
+        Row: {
+          created_at: string;
+          failures: number | null;
+          id: string;
+          instance_id: string;
+          org_id: string;
+          replies_received: number | null;
+          restriction_events: number | null;
+          sent_new_contacts: number;
+          sent_to_respondents: number;
+          trusted_reports: number | null;
+          updated_at: string;
+          window_date: string;
+        };
+        Insert: {
+          created_at?: string;
+          failures?: number | null;
+          id?: string;
+          instance_id: string;
+          org_id: string;
+          replies_received?: number | null;
+          restriction_events?: number | null;
+          sent_new_contacts?: number;
+          sent_to_respondents?: number;
+          trusted_reports?: number | null;
+          updated_at?: string;
+          window_date: string;
+        };
+        Update: {
+          created_at?: string;
+          failures?: number | null;
+          id?: string;
+          instance_id?: string;
+          org_id?: string;
+          replies_received?: number | null;
+          restriction_events?: number | null;
+          sent_new_contacts?: number;
+          sent_to_respondents?: number;
+          trusted_reports?: number | null;
+          updated_at?: string;
+          window_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_number_health_windows_instance_id_fkey';
+            columns: ['instance_id'];
+            isOneToOne: false;
+            referencedRelation: 'whatsapp_instances';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_number_health_windows_org_id_fkey';
             columns: ['org_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
@@ -7190,6 +7923,19 @@ export type Database = {
         Args: { p_event_id: string; p_novo_inicio: string };
         Returns: Json;
       };
+      assign_lead_by_policy: {
+        Args: {
+          p_expected_cursor_version: number;
+          p_lead_id: string;
+          p_org_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          assigned_to: string;
+          cursor_version: number;
+          outcome: string;
+        }[];
+      };
       atualizar_convite_reuniao: {
         Args: {
           p_calendar_id?: string;
@@ -7234,6 +7980,27 @@ export type Database = {
         Args: { faturamento_reais: number };
         Returns: string;
       };
+      claim_conversation_ownership: {
+        Args: {
+          p_actor_source?: string;
+          p_actor_user_id?: string;
+          p_automation_mode?: string;
+          p_channel: string;
+          p_contact_id?: string;
+          p_contact_identity: string;
+          p_lead_id: string;
+          p_org_id: string;
+          p_provider?: string;
+          p_reason?: string;
+          p_user_id: string;
+        };
+        Returns: {
+          outcome: string;
+          owner_user_id: string;
+          ownership_id: string;
+          version: number;
+        }[];
+      };
       claim_due_steps: {
         Args: {
           p_cadence_ids: string[];
@@ -7276,6 +8043,26 @@ export type Database = {
       claim_email_conversation: {
         Args: { p_id: string; p_lease_seconds?: number; p_owner: string };
         Returns: boolean;
+      };
+      claim_send: {
+        Args: {
+          p_lease_owner: string;
+          p_lease_seconds?: number;
+          p_org_id: string;
+        };
+        Returns: {
+          attempts: number;
+          channel: string;
+          command: Json;
+          lead_id: string;
+          lease_expires_at: string;
+          outbox_id: string;
+          outcome: string;
+          provider: string;
+          suppressed_count: number;
+          uncertain_count: number;
+          version: number;
+        }[];
       };
       cleanup_provider_events: { Args: never; Returns: undefined };
       cockpit_lead_stages: {
@@ -7331,6 +8118,23 @@ export type Database = {
           motivo: string;
           new_step: number;
           step_id: string;
+        }[];
+      };
+      confirm_send: {
+        Args: {
+          p_error?: string;
+          p_expected_version: number;
+          p_external_id?: string;
+          p_lease_owner: string;
+          p_org_id: string;
+          p_outbox_id: string;
+          p_target: string;
+        };
+        Returns: {
+          outbox_id: string;
+          outcome: string;
+          status: string;
+          version: number;
         }[];
       };
       consentimento_alimentar_inbound: {
@@ -7448,6 +8252,23 @@ export type Database = {
         Returns: string;
       };
       effective_due_brt: { Args: { ts: string }; Returns: string };
+      enqueue_send: {
+        Args: {
+          p_channel: string;
+          p_command: Json;
+          p_contact_identity: string;
+          p_idempotency_key: string;
+          p_lead_id: string;
+          p_org_id: string;
+          p_provider: string;
+        };
+        Returns: {
+          outbox_id: string;
+          outcome: string;
+          status: string;
+          version: number;
+        }[];
+      };
       enriquecer_lead: {
         Args: { p_data: Json; p_lead_id: string };
         Returns: undefined;
@@ -7735,6 +8556,38 @@ export type Database = {
         Args: { p_lead_id: string };
         Returns: undefined;
       };
+      reconcile_send: {
+        Args: {
+          p_command_patch?: Json;
+          p_error?: string;
+          p_expected_version: number;
+          p_external_id?: string;
+          p_org_id: string;
+          p_outbox_id: string;
+          p_source: string;
+          p_target: string;
+        };
+        Returns: {
+          outbox_id: string;
+          outcome: string;
+          status: string;
+          version: number;
+        }[];
+      };
+      record_number_health_window: {
+        Args: {
+          p_failures?: number;
+          p_instance_id: string;
+          p_org_id: string;
+          p_replies?: number;
+          p_restriction_events?: number;
+          p_sent_new_contacts?: number;
+          p_sent_to_respondents?: number;
+          p_trusted_reports?: number;
+          p_window_date: string;
+        };
+        Returns: undefined;
+      };
       registrar_disparo_no_show: {
         Args: {
           p_erro?: string;
@@ -7840,6 +8693,15 @@ export type Database = {
         };
         Returns: boolean;
       };
+      send_outbox_suppression_reason: {
+        Args: {
+          p_channel: string;
+          p_contact_identity: string;
+          p_lead_id: string;
+          p_org_id: string;
+        };
+        Returns: string;
+      };
       set_primary_lead_contact: {
         Args: { p_contact_id: string };
         Returns: undefined;
@@ -7868,6 +8730,24 @@ export type Database = {
       tallis_resposta: {
         Args: { p_telefone: string; p_texto: string };
         Returns: Json;
+      };
+      transfer_conversation_ownership: {
+        Args: {
+          p_actor_source?: string;
+          p_actor_user_id?: string;
+          p_channel: string;
+          p_contact_identity: string;
+          p_expected_version: number;
+          p_org_id: string;
+          p_reason: string;
+          p_to_user_id: string;
+        };
+        Returns: {
+          outcome: string;
+          owner_user_id: string;
+          ownership_id: string;
+          version: number;
+        }[];
       };
       update_call_from_webhook: {
         Args: {
