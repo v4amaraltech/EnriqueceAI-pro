@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS http WITH SCHEMA extensions;
+
 -- Monitor de disponibilidade EXTERNO ao host do Coolify (19/10/2026).
 --
 -- Em 19/10/2026 a Contabo reiniciou o host físico (patch de kernel) e o site ficou ~30 min
