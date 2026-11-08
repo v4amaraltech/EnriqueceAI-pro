@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { differenceInCalendarDays } from 'date-fns';
 
-import { AlarmClock, BadgeCheck, CalendarCheck2, CalendarX2, DoorOpen, Handshake, Inbox, Percent, PhoneCall, UserCheck } from 'lucide-react';
+import { AlarmClock, BadgeCheck, CalendarCheck2, CalendarX2, DoorOpen, Handshake, Inbox, Percent, PhoneCall } from 'lucide-react';
 
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
@@ -352,7 +352,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
 
       {/* Operational ranking — cadence execution + conversion */}
       {ranking && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-h-[480px]" data-slot="ranking-cards-ops">
           <RankingCard
             title="Leads para Abrir"
             titleTooltip={
@@ -407,23 +407,6 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
             primaryColumnLabel="atrasadas"
             averageLabel="média atrasadas/vendedor"
             onSdrClick={handleOverdueSdrClick}
-          />
-          <RankingCard
-            title="Taxa de Comparecimento"
-            titleTooltip={
-              'Das reuniões marcadas, quantas o lead efetivamente compareceu (virou reunião realizada). O inverso é o no-show.\n\n' +
-              '• Numerador: reuniões realizadas (leads ganhos)\n' +
-              '• Denominador: reuniões marcadas\n\n' +
-              'Marcadas e realizadas são contadas dentro do período — pode passar de 100% quando reuniões marcadas em meses anteriores são realizadas agora. Cada lead conta para o SDR responsável. Gerentes não aparecem no ranking.'
-            }
-            icon={UserCheck}
-            iconColor="bg-teal-500/10"
-            iconTextColor="text-teal-500"
-            unit="%"
-            data={ranking.attendanceRate}
-            primaryColumnLabel="realizadas"
-            averageLabel="média comparecimento/vendedor"
-            onSdrClick={handleSdrClick}
           />
         </div>
       )}

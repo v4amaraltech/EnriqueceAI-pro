@@ -333,7 +333,7 @@ describe('DashboardView', () => {
     expect(screen.getByText('Leads Abertos')).toBeInTheDocument();
     expect(screen.getByText('Reuniões Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Ligações Realizadas')).toBeInTheDocument();
-    expect(screen.getByText('Taxa de Comparecimento')).toBeInTheDocument();
+    expect(screen.queryByText('Taxa de Comparecimento')).not.toBeInTheDocument();
   });
 
   it('should render meetings-by-day chart when meetingsScheduled has dailyData', () => {
