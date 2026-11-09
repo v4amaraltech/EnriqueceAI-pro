@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
 
+import { onMeetingEnded, onMeetingNoShow } from '@/features/anti-no-show/engine';
 import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
@@ -292,6 +293,13 @@ export async function POST(request: Request) {
     // quando o closer confirma que a reunião aconteceu (ver bloco abaixo).
     if (result === 'meeting_done') {
       await stampMeetingHeld(supabase, feedbackReq);
+      try {
+        await onMeetingEnded(supabase, {
+          orgId: feedbackReq.org_id, leadId: feedbackReq.lead_id, userId: null, reason: 'held',
+        });
+      } catch (err) {
+        console.error('[api/feedback] cadência anti no-show falhou', err);
+      }
 
       // Ponto oficial de criação do card no CRM: lead com closer não gera card
       // no "Ganho" (markLeadAsWon) — só aqui, com a reunião confirmada. Usa o
@@ -311,6 +319,13 @@ export async function POST(request: Request) {
       // o lead não tem fit: o lead vira Perdido e NÃO ganha card no CRM.
       await stampMeetingHeld(supabase, feedbackReq);
       await markLeadLostByCloser(supabase, feedbackReq, comment.trim());
+      try {
+        await onMeetingEnded(supabase, {
+          orgId: feedbackReq.org_id, leadId: feedbackReq.lead_id, userId: null, reason: 'disqualified',
+        });
+      } catch (err) {
+        console.error('[api/feedback] cadência anti no-show falhou', err);
+      }
     } else if (result === 'no_show' || result === 'rescheduled') {
       // Closer signaled the meeting didn't happen — reopen the lead.
       // SDR's "Ganho" click had marked it 'won', but closer's reality wins:
@@ -367,11 +382,19 @@ export async function POST(request: Request) {
       // tends to go cold (audit 2026-06: ~1/3 of reopened leads got no
       // follow-up). Schedule a phone follow-up so it resurfaces in the SDR's
       // queue. Runs in background; never blocks/breaks the feedback response.
-      after(() =>
-        scheduleReopenFollowUp(supabase, feedbackReq, result).catch((err) =>
-          console.error('[api/feedback] reopen follow-up task error:', err),
-        ),
-      );
+      after(async () => {
+        try {
+          if (result === 'no_show') {
+            const opened = await onMeetingNoShow(supabase, {
+              orgId: feedbackReq.org_id, leadId: feedbackReq.lead_id, userId: null, source: 'sdr',
+            });
+            if (opened) return;
+          }
+          await scheduleReopenFollowUp(supabase, feedbackReq, result);
+        } catch (err) {
+          console.error('[api/feedback] reopen follow-up task error:', err);
+        }
+      });
     }
 
     // Qualificação/divergências/decisor só se aplicam a meeting_done.

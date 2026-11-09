@@ -8,9 +8,12 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 
+import { closeProspectingForMeeting, onMeetingBooked, onMeetingEnded, onMeetingRescheduled } from '@/features/anti-no-show/engine';
+import { isAntiNoShowEnabled, serviceDb } from '@/features/anti-no-show/flag';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
+import { createNotification } from '@/features/notifications/services/notification.service';
 import { createMeetingWhatsAppGroup, sendMeetingGroupMessage } from '../services/whatsapp-group.service';
 
 import type { CalendarEvent, CreateEventInput } from '../services/calendar.service';
@@ -133,11 +136,43 @@ export async function scheduleMeeting(
       .eq('id', leadId)
       .eq('org_id', orgId);
 
-    // Complete active/paused cadence enrollments — meeting scheduled means cadence is done
-    await from(supabase, 'cadence_enrollments')
-      .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-      .eq('lead_id', leadId)
-      .in('status', ['active', 'paused']);
+    // Conclui a prospecção com erro checado. A cadência anti no-show só abre com a flag da org.
+    const cadenceDb = serviceDb(supabase);
+    const closed = await closeProspectingForMeeting(cadenceDb, {
+      orgId,
+      leadId,
+      userId,
+      eventId: event.id,
+      source: 'sdr',
+    });
+    if (!closed.ok) {
+      console.error('[scheduleMeeting] prospecção não encerrada:', closed.error);
+      try {
+        await createNotification({
+          org_id: orgId,
+          user_id: userId,
+          type: 'integration_error',
+          title: 'Reunião agendada, mas a prospecção não foi encerrada',
+          body: closed.error ?? 'Erro ao concluir a cadência do lead.',
+          resource_type: 'lead',
+          resource_id: leadId,
+        });
+      } catch (err) {
+        console.error('[scheduleMeeting] aviso de fechamento falhou', err);
+      }
+    }
+    try {
+      await onMeetingBooked(cadenceDb, {
+        orgId,
+        leadId,
+        userId,
+        source: 'sdr',
+        eventId: event.id,
+        startTime: input.startTime,
+      });
+    } catch (err) {
+      console.error('[scheduleMeeting] cadência anti no-show falhou', err);
+    }
 
     // Run the post-schedule side-effects via `after()` so the Server Action
     // can return immediately without the Vercel runtime killing pending
@@ -196,6 +231,24 @@ export async function scheduleMeeting(
                 .update({ metadata: { ...meetingMetadata, whatsapp_group_jid: groupResult.groupId } } as Record<string, unknown>)
                 .eq('id', meetingInteraction.id)
                 .eq('org_id', orgId);
+            } else if (!groupResult.success) {
+              console.error('[scheduleMeeting] WhatsApp group not created:', groupResult.error);
+              try {
+                const flagDb = serviceDb(supabase);
+                if (await isAntiNoShowEnabled(flagDb, orgId)) {
+                  await createNotification({
+                    org_id: orgId,
+                    user_id: userId,
+                    type: 'meeting_reminder',
+                    title: 'Grupo de WhatsApp da reunião não foi criado',
+                    body: groupResult.error ?? 'Confira a conexão do WhatsApp do SDR.',
+                    resource_type: 'lead',
+                    resource_id: leadId,
+                  });
+                }
+              } catch (notifyErr) {
+                console.error('[scheduleMeeting] aviso do grupo falhou', notifyErr);
+              }
             }
           } catch (err) {
             console.error('[scheduleMeeting] WhatsApp group error:', err);
@@ -328,6 +381,12 @@ export async function deleteMeeting(
       .update({ meeting_scheduled_at: null } as Record<string, unknown>)
       .eq('id', leadId)
       .eq('org_id', orgId);
+
+    try {
+      await onMeetingEnded(serviceDb(supabase), { orgId, leadId, userId, reason: 'cancelled' });
+    } catch (err) {
+      console.error('[deleteMeeting] cadência anti no-show falhou', err);
+    }
   }
 
   // Delete the interaction record
@@ -454,6 +513,18 @@ export async function updateMeeting(
         event: 'meeting_rescheduled',
         message: `Reunião remarcada de ${formatMeetingDateTime(previousStartTime)} para ${formatMeetingDateTime(input.startTime)}`,
       });
+      try {
+        await onMeetingRescheduled(serviceDb(supabase), {
+          orgId,
+          leadId,
+          userId,
+          source: 'sdr',
+          eventId: event.id,
+          startTime: input.startTime,
+        });
+      } catch (err) {
+        console.error('[updateMeeting] cadência anti no-show falhou', err);
+      }
       revalidatePath(`/leads/${leadId}`);
 
       // Notify the lead's meeting WhatsApp group about the new time (best-effort,

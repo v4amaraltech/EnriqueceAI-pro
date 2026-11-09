@@ -4,6 +4,9 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { runAntiNoShowTick } from '@/features/anti-no-show/engine';
+import { readAntiNoShowFlag, suppressionPlan } from '@/features/anti-no-show/flag';
+
 import { runMeetingReminders } from '../services/meeting-reminders.service';
 import type { ReminderRunSummary } from '../types';
 
@@ -29,10 +32,25 @@ export async function runMeetingRemindersJob(): Promise<ActionResult<ReminderRun
   const nowIso = new Date().toISOString();
 
   try {
+    // A régua antiga segue igual quando a flag está desligada. Com a flag ligada,
+    // o tick novo roda primeiro. Só então a org sai da régua. Se o tick lançar,
+    // a régua antiga continua para não abrir lacuna.
+    const antiNoShow = suppressionPlan(await readAntiNoShowFlag(supabase));
+    let suppressOrgIds: 'all' | string[] | undefined;
+    if (antiNoShow.tick) {
+      try {
+        await runAntiNoShowTick(supabase, antiNoShow.orgs);
+        suppressOrgIds = antiNoShow.orgs;
+      } catch (err) {
+        console.error('[meeting-reminders] tick anti no-show falhou; régua antiga segue', err);
+      }
+    }
+
     const summary = await runMeetingReminders(supabase, {
       enabled: process.env.MEETING_REMINDERS_ENABLED === 'true',
       pilotUserIds: parseList(process.env.MEETING_REMINDERS_PILOT_USER_IDS),
       pilotContexts: parseList(process.env.MEETING_REMINDERS_PILOT_CONTEXTS),
+      suppressOrgIds,
     });
 
     try {

@@ -5,6 +5,8 @@ import { EmailService } from '@/features/integrations/services/email.service';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { from } from '@/lib/supabase/from';
 
+import { reminderRowsForOldRuler } from '@/features/anti-no-show/anti-no-show.logic';
+
 import type { ReminderDueRow, ReminderRunSummary } from '../types';
 import { resolveUserProfiles } from '@/lib/auth/user-directory';
 
@@ -153,6 +155,11 @@ interface RunOptions {
   pilotUserIds?: string[];
   /** filtro de piloto: se preenchido, só processa esses contextos. */
   pilotContexts?: string[];
+  /**
+   * Orgs cuja cadência anti no-show assumiu os lembretes neste tick.
+   * Undefined mantém a régua inteira, que é o comportamento com a flag desligada.
+   */
+  suppressOrgIds?: 'all' | string[];
   now?: Date;
 }
 
@@ -191,6 +198,7 @@ export async function runMeetingReminders(
   if (options.pilotContexts?.length) {
     rows = rows.filter((r) => options.pilotContexts!.includes(r.context));
   }
+  rows = reminderRowsForOldRuler(rows, options.suppressOrgIds);
   summary.due = rows.length;
 
   if (rows.length === 0) return summary;

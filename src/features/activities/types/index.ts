@@ -73,14 +73,15 @@ export interface PendingActivity {
   snoozeCount: number;
   /**
    * Só para atividade avulsa (`scheduled_activities`): 'return' = retorno
-   * agendado pelo SDR; 'limbo_followup' = tarefa "Definir destino" do robô
+   * agendado pelo SDR; 'limbo_followup' = tarefa "Definir destino" do robô;
+   * 'anti_no_show' = tarefa da cadência anti no-show.
    * (gravada com channel='research' por falta de canal próprio). Ausente nos
    * passos de cadência.
    */
   scheduledKind?: ScheduledActivityKind;
 }
 
-export type ScheduledActivityKind = 'return' | 'limbo_followup';
+export type ScheduledActivityKind = 'return' | 'limbo_followup' | 'anti_no_show';
 
 /** Tarefa "Definir destino" (lead parado sem próxima atividade). */
 export function isLimboFollowup(activity: Pick<PendingActivity, 'scheduledKind'>): boolean {

@@ -27,6 +27,8 @@ import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter
 import { RDStationAdapter } from '@/features/integrations/services/rdstation.adapter';
 import { KommoAdapter } from '@/features/integrations/services/kommo.adapter';
 
+import { onMeetingEnded } from '@/features/anti-no-show/engine';
+import { serviceDb } from '@/features/anti-no-show/flag';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { nextBusinessDayAt9hBRT } from '@/app/api/cron/meeting-outcome-check/route';
 
@@ -415,6 +417,12 @@ export async function markLeadAsWon(
       .update({ status: 'cancelled' } as Record<string, unknown>)
       .eq('lead_id', leadId)
       .eq('status', 'pending');
+
+    try {
+      await onMeetingEnded(serviceDb(supabase), { orgId, leadId, userId, reason: 'won' });
+    } catch (err) {
+      console.error('[markLeadAsWon] cadência anti no-show falhou', err);
+    }
 
     // 2a-bis. Feedback da reunião: cria uma tarefa de ligação (API4COM) para o
     // SDR ligar ao lead e ouvir como foi a reunião com o closer. Só na transição

@@ -322,10 +322,11 @@ export async function fetchPendingActivities(
 
   const scheduledActivities: PendingActivity[] = (scheduledRows ?? []).map((row) => {
     const isLimbo = row.kind === 'limbo_followup';
+    const isAntiNoShow = row.kind === 'anti_no_show';
     return {
       enrollmentId: `scheduled:${row.id}`,
       cadenceId: '',
-      cadenceName: isLimbo ? 'Definir destino' : 'Atividade Agendada',
+      cadenceName: isLimbo ? 'Definir destino' : isAntiNoShow ? 'Anti no-show' : 'Atividade Agendada',
       cadenceCreatedBy: null,
       stepId: row.id,
       stepOrder: 1,
@@ -349,12 +350,14 @@ export async function fetchPendingActivities(
       // A nota do robô já começa com "Definir destino:" — sem prefixo de retorno.
       activityName: isLimbo
         ? (row.notes ?? 'Definir destino')
-        : row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
+        : isAntiNoShow
+          ? (row.notes ?? 'Anti no-show')
+          : row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
       callScript: row.notes,
       // Retorno de "WhatsApp Ligação" (channel='phone' + provider) reabre o discador
       // WhatsApp na fila; os demais retornos ficam com callProvider null.
       callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
-      scheduledKind: isLimbo ? 'limbo_followup' : 'return',
+      scheduledKind: isLimbo ? 'limbo_followup' : isAntiNoShow ? 'anti_no_show' : 'return',
     };
   });
 
