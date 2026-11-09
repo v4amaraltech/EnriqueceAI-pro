@@ -60,6 +60,7 @@ describe('CallSidePanel', () => {
   it('mantém a lista de contexto e o histórico sem esconder atrás do discador', () => {
     renderPanel();
     expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
+    expect(screen.getByTestId('call-side-panel').className).toContain('sm:max-w-[380px]');
     expect(screen.getByText('Empresa Fixture Ltda')).toBeTruthy();
     expect(screen.getByText('Fixture · Outbound')).toBeTruthy();
     expect(screen.getByText('Contatado')).toBeTruthy();

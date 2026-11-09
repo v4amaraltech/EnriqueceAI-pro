@@ -134,7 +134,7 @@ export function CallSidePanel({
       aria-label="Contexto da ligação"
       data-testid="call-side-panel"
       data-slot="call-side-panel"
-      className={cn('w-full gap-0 p-0 sm:max-w-2xl', minimized && 'hidden')}
+      className={cn('w-full gap-0 p-0 sm:max-w-[380px]', minimized && 'hidden')}
       onInteractOutside={(event) => { if (inCall) event.preventDefault(); }}
       onEscapeKeyDown={(event) => { if (inCall) event.preventDefault(); }}
     >
@@ -174,9 +174,9 @@ export function CallSidePanel({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
           <dl className="space-y-1.5 text-xs">
             {facts.map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+              <div key={label}>
                 <dt className="text-muted-foreground">{label}</dt>
-                <dd className="truncate">{value}</dd>
+                <dd className="break-words">{value}</dd>
               </div>
             ))}
           </dl>
