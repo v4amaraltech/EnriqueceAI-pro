@@ -11,6 +11,8 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
 
+import { isCallDockTask } from '@/features/cockpit/utils/call-dock';
+
 import { fetchPendingActivities } from './fetch-pending-activities';
 
 // ---------------------------------------------------------------------------
@@ -134,7 +136,7 @@ describe('fetchPendingActivities', () => {
     resetMocks();
   });
 
-  it('should return empty array when no enrollments are due', async () => {
+  it('should return empty array when no enrollments are due and no return is pending', async () => {
     wireByTable({ cadence_enrollments: { data: [], error: null } });
 
     const result = await fetchPendingActivities();
@@ -430,5 +432,95 @@ describe('fetchPendingActivities', () => {
     for (const col of ['telefone', 'phones', 'socios', 'endereco', 'custom_field_values', 'assigned_to']) {
       expect(enrollmentSelect).toContain(col);
     }
+  });
+
+  // Produção 09/11/2026 17:34 BRT: retorno phone do Mercante Net, criado pelo
+  // gestor, lead qualified da Ana, sem enrollment due. A fila saía vazia.
+  const ANA_ID = '9d7f643f-ee3a-460b-a3ff-b98e8209253f';
+  const MERCANTE_RETURN = {
+    id: 'def69798-ffba-42cb-a5d3-1e70cac71ffd',
+    lead_id: '969ea854-1724-4f22-85a3-3633cd314553',
+    channel: 'phone' as const,
+    call_provider: null,
+    kind: 'return' as const,
+    scheduled_at: '2026-11-09T20:30:00Z',
+    notes: 'Teste E2E cockpit Mercante Net',
+    user_id: 'c6213fe4-manager-vinicius',
+    leads: {
+      ...mockLead,
+      id: '969ea854-1724-4f22-85a3-3633cd314553',
+      nome_fantasia: 'Mercante Net',
+      status: 'qualified' as const,
+      assigned_to: ANA_ID,
+    },
+  };
+
+  function wireManagerQueue(scheduled: unknown) {
+    let scheduledChain: ReturnType<typeof createChainMock> | undefined;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') {
+        return createChainMock({ data: { org_id: 'org-1', role: 'manager' }, error: null });
+      }
+      if (table === 'scheduled_activities') {
+        scheduledChain = createChainMock(scheduled);
+        return scheduledChain;
+      }
+      return createChainMock({ data: [], error: null });
+    });
+    return {
+      scheduledEq: () => scheduledChain?.eq as ReturnType<typeof vi.fn> | undefined,
+    };
+  }
+
+  it('mostra o retorno phone do lead qualified da Ana mesmo sem cadência vencida e com criador != assignee', async () => {
+    const { scheduledEq } = wireManagerQueue({ data: [MERCANTE_RETURN], error: null });
+
+    const result = await fetchPendingActivities({ assignedTo: ANA_ID });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toHaveLength(1);
+    const task = result.data[0]!;
+    expect(task).toMatchObject({
+      enrollmentId: 'scheduled:def69798-ffba-42cb-a5d3-1e70cac71ffd',
+      channel: 'phone',
+      callProvider: null,
+      scheduledKind: 'return',
+      nextStepDue: '2026-11-09T20:30:00Z',
+      activityName: 'Retorno: Teste E2E cockpit Mercante Net',
+    });
+    expect(task.lead.assigned_to).toBe(ANA_ID);
+    expect(task.lead.status).toBe('qualified');
+    expect(isCallDockTask(task)).toBe(true);
+    expect(scheduledEq()).toHaveBeenCalledWith('leads.assigned_to', ANA_ID);
+    expect(scheduledEq()).toHaveBeenCalledWith('status', 'pending');
+    const userIdFilter = scheduledEq()?.mock.calls.find((call) => call[0] === 'user_id');
+    expect(userIdFilter).toBeUndefined();
+  });
+
+  it('mantém o retorno quando a cadência due não gera passo (segundo corte da fila)', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') {
+        return createChainMock({ data: { org_id: 'org-1', role: 'manager' }, error: null });
+      }
+      if (table === 'cadence_enrollments') {
+        return createChainMock({
+          data: [{ ...mockEnrollment, current_step: 99, lead: { ...mockLead, assigned_to: ANA_ID } }],
+          error: null,
+        });
+      }
+      if (table === 'cadence_steps') return createChainMock({ data: [mockStep], error: null });
+      if (table === 'scheduled_activities') return createChainMock({ data: [MERCANTE_RETURN], error: null });
+      return createChainMock({ data: [], error: null });
+    });
+
+    const result = await fetchPendingActivities({ assignedTo: ANA_ID });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.enrollmentId)).toEqual([
+      'scheduled:def69798-ffba-42cb-a5d3-1e70cac71ffd',
+    ]);
+    expect(isCallDockTask(result.data[0]!)).toBe(true);
   });
 });
