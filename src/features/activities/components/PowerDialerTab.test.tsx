@@ -112,13 +112,13 @@ describe('PowerDialerTab', () => {
     expect(screen.getByText('Iniciar ligacoes')).toBeInTheDocument();
   });
 
-  it('renders sidebar preferences', () => {
+  it('does not render the preferences card in the sidebar', () => {
     renderWithProvider(
       <PowerDialerTab initialQueue={mockQueue} stats={defaultStats} preferences={defaultPrefs} />,
     );
-    expect(screen.getByText('Preferencias')).toBeInTheDocument();
-    expect(screen.getByText('Telefones simultaneos')).toBeInTheDocument();
-    expect(screen.getByText('Limite diario por lead')).toBeInTheDocument();
+    expect(screen.queryByText('Preferencias')).not.toBeInTheDocument();
+    expect(screen.queryByText('Telefones simultaneos')).not.toBeInTheDocument();
+    expect(screen.getByText('Leads fora da fila')).toBeInTheDocument();
   });
 
   it('renders sidebar stats', () => {
