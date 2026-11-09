@@ -25,6 +25,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 /** "Definir destino" é gravada com channel='research', mas não é pesquisa. */
 function activityLabel(a: { channel: string; kind: string | null }): string {
   if (a.kind === 'limbo_followup') return 'Definir destino';
+  if (a.kind === 'anti_no_show') return 'Anti no-show';
   return CHANNEL_LABELS[a.channel] ?? a.channel;
 }
 

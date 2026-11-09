@@ -9,6 +9,8 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
+import { onMeetingNoShow } from '@/features/anti-no-show/engine';
+
 import { logLeadEvent } from './log-lead-event';
 
 /** Next business day (Mon–Fri) at 09:00 BRT, as a UTC ISO string. */
@@ -102,24 +104,32 @@ export async function markMeetingNoShow(leadId: string): Promise<ActionResult<vo
   const qErr = handleQueryError(leadError, 'Erro ao registrar no-show', 'lead-noshow');
   if (qErr) return qErr;
 
-  // 3. Follow-up de telefone na fila do SDR (service role; não empilha).
+  // 3. Com a flag ligada, a recuperação substitui a tarefa solta. Desligada, o retorno de sempre.
   const serviceClient = createServiceRoleClient();
-  const { data: existing } = (await from(serviceClient, 'scheduled_activities')
-    .select('id')
-    .eq('lead_id', leadId)
-    .eq('status', 'pending')
-    .limit(1)) as { data: Array<{ id: string }> | null };
+  let recoveryOpened = false;
+  try {
+    recoveryOpened = await onMeetingNoShow(serviceClient, { orgId, leadId, userId: sdrUserId, source: 'sdr' });
+  } catch (err) {
+    console.error('[markMeetingNoShow] recuperação anti no-show falhou', err);
+  }
+  if (!recoveryOpened) {
+    const { data: existing } = (await from(serviceClient, 'scheduled_activities')
+      .select('id')
+      .eq('lead_id', leadId)
+      .eq('status', 'pending')
+      .limit(1)) as { data: Array<{ id: string }> | null };
 
-  if (!existing?.length) {
-    await from(serviceClient, 'scheduled_activities').insert({
-      org_id: orgId,
-      lead_id: leadId,
-      user_id: sdrUserId,
-      channel: 'phone',
-      scheduled_at: nextBusinessDayAt9hBRT(new Date()),
-      status: 'pending',
-      notes: 'No-show registrado pelo SDR — retomar o contato e definir Ganho/Perdido.',
-    } as Record<string, unknown>);
+    if (!existing?.length) {
+      await from(serviceClient, 'scheduled_activities').insert({
+        org_id: orgId,
+        lead_id: leadId,
+        user_id: sdrUserId,
+        channel: 'phone',
+        scheduled_at: nextBusinessDayAt9hBRT(new Date()),
+        status: 'pending',
+        notes: 'No-show registrado pelo SDR — retomar o contato e definir Ganho/Perdido.',
+      } as Record<string, unknown>);
+    }
   }
 
   // 4. Visibilidade pro gestor (exceto quem registrou).

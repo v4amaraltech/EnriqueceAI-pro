@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { closeProspectingForMeeting, markAntiNoShowConfirmed, onMeetingBooked, onMeetingEnded, onMeetingRescheduled } from '@/features/anti-no-show/engine';
 import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
 import { escapeLikePattern } from '@/lib/utils/like';
@@ -212,8 +213,17 @@ async function persistMeeting(supabase: SupabaseClient, req: MeetingRequest, ev:
     ...(closerRowId ? { closer_id: closerRowId } : {}),
   } as Record<string, unknown>).eq('id', req.lead_id).eq('org_id', req.org_id)) as { error: { message: string } | null };
   if (leadErr) console.error(`[agenda] falha ao marcar a reunião no lead ${req.lead_id}: ${leadErr.message}`);
-  await from(supabase, 'cadence_enrollments').update({ status: 'completed', completed_at: nowIso } as Record<string, unknown>).eq('lead_id', req.lead_id).in('status', ['active', 'paused']);
-  await from(supabase, 'contact_holds').upsert({ org_id: req.org_id, lead_id: req.lead_id, tipo: 'prospeccao', origem: 'reuniao_agendada' } as Record<string, unknown>, { onConflict: 'lead_id,tipo', ignoreDuplicates: true });
+  const closed = await closeProspectingForMeeting(supabase, {
+    orgId: req.org_id, leadId: req.lead_id, userId: req.closer_id, eventId: ev.eventId, source: 'bdr',
+  });
+  if (!closed.ok) console.error(`[agenda] prospecção não encerrada no lead ${req.lead_id}: ${closed.error}`);
+  try {
+    await onMeetingBooked(supabase, {
+      orgId: req.org_id, leadId: req.lead_id, userId: req.closer_id, source: 'bdr', eventId: ev.eventId, startTime: req.slot_start,
+    });
+  } catch (err) {
+    console.error('[agenda] cadência anti no-show falhou', err);
+  }
   return inter?.id ?? null;
 }
 
@@ -266,16 +276,34 @@ export async function rescheduleRequest(supabase: SupabaseClient, req: MeetingRe
   const { data } = (await from(supabase, 'meeting_requests')
     .update({ versao, estado: 'evento_criado', slot_start: start.toISOString(), slot_end: end.toISOString(), google_event_id: eventId, meet_link: meetLink, html_link: htmlLink, erro: null } as Record<string, unknown>)
     .eq('id', req.id).select('*').maybeSingle()) as { data: MeetingRequest | null };
+  try {
+    await onMeetingRescheduled(supabase, {
+      orgId: req.org_id, leadId: req.lead_id, userId: req.closer_id, source: 'bdr', eventId, startTime: start.toISOString(),
+    });
+  } catch (err) {
+    console.error('[agenda] recálculo da cadência anti no-show falhou', err);
+  }
   return data ?? req;
 }
 
 export async function cancelRequest(supabase: SupabaseClient, req: MeetingRequest, motivo: string): Promise<void> {
   await from(supabase, 'calendar_slots').delete().eq('meeting_request_id', req.id);
   await from(supabase, 'meeting_requests').update({ estado: 'cancelada', erro: motivo } as Record<string, unknown>).eq('id', req.id);
+  if (!req.google_event_id) return;
+  try {
+    await onMeetingEnded(supabase, { orgId: req.org_id, leadId: req.lead_id, userId: req.closer_id, reason: 'cancelled' });
+  } catch (err) {
+    console.error('[agenda] encerramento da cadência anti no-show falhou', err);
+  }
 }
 
 export async function confirmRequest(supabase: SupabaseClient, req: MeetingRequest): Promise<MeetingRequest> {
   if (req.estado !== 'evento_criado') throw new AgendaError('Só confirma solicitação com evento criado', 409, 'estado_invalido');
   const { data } = (await from(supabase, 'meeting_requests').update({ estado: 'confirmada' } as Record<string, unknown>).eq('id', req.id).select('*').maybeSingle()) as { data: MeetingRequest | null };
+  try {
+    await markAntiNoShowConfirmed(supabase, { orgId: req.org_id, leadId: req.lead_id, source: 'bdr_confirm' });
+  } catch (err) {
+    console.error('[agenda] confirmação da cadência anti no-show falhou', err);
+  }
   return data ?? req;
 }
