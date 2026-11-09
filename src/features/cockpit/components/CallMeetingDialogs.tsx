@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
-import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Trash2, Video } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -169,6 +169,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        showCloseButton={false}
         className="flex h-[90vh] w-[min(80vw,calc(100%-1.5rem))] max-w-[80vw] flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-[80vw]"
         data-testid="call-week-dialog"
       >
@@ -241,6 +242,12 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
                 </ul>
               )}
             </div>
+            <DialogClose
+              className="text-muted-foreground hover:text-foreground ml-3 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+              aria-label="Fechar"
+            >
+              <X className="h-4 w-4" />
+            </DialogClose>
           </div>
         </div>
         {availabilityNote && <p className="px-6 pb-2 text-xs text-amber-700">{availabilityNote}</p>}
@@ -283,7 +290,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
               </button>
             )}
           </div>
-          <Button type="button" onClick={choose} disabled={!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)}>
+          <Button type="button" className="transition-none" onClick={choose} disabled={!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)}>
             Agendar
           </Button>
         </div>

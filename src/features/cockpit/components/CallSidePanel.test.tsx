@@ -87,7 +87,9 @@ describe('CallSidePanel', () => {
     fireEvent.click(screen.getByTestId('slot-0-14'));
     fireEvent.click(screen.getByRole('button', { name: /^Closers/ }));
     fireEvent.click(screen.getByTestId('closer-closer-1'));
-    fireEvent.click(screen.getByRole('button', { name: (name) => name === 'Agendar' }));
+    const schedule = screen.getByRole('button', { name: (name) => name === 'Agendar' });
+    expect(schedule).toBeEnabled();
+    fireEvent.click(schedule);
     expect(screen.getByTestId('participant-Closer').textContent).toContain('Closer Fixture');
     expect(screen.getByTestId('participant-Organizador').textContent).toContain('sdr.fixture@example.com');
     expect(screen.getByTestId('participant-Lead').textContent).toContain('contato.fixture@example.com');
