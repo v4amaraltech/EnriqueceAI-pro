@@ -15,15 +15,17 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
-import { getAvailability, getLeadFaturamento, getLoggedUserEmail, scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
+import { getLeadFaturamento, getLoggedUserEmail, scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { WhatsAppInviteModal } from '@/features/integrations/components/WhatsAppInviteModal';
 import { getMissingMeetingFields } from '@/features/leads/actions/get-missing-meeting-fields';
 import type { MissingRequiredField } from '@/features/leads/utils/required-field-validation';
+import { getCloserAvailability } from '@/features/meetings/closer-availability.action';
+import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 
 import {
   addDays,
-  buildWeekSlots,
+  buildCloserWeekSlots,
   formatBrtMeetingWhen,
   formatBrtWallClock,
   formatWeekRange,
@@ -50,12 +52,36 @@ export interface MeetingChoice {
 export interface SchedulingPreview {
   closersAll: MeetingCloser[];
   closersSchedulable: MeetingCloser[];
+  /** Ocupação confirmada do closer da fixture. Não é a agenda do SDR. */
   busy: BusyInterval[];
+  appBusy?: BusyInterval[];
+  holidays?: string[];
+  sdrBusy?: BusyInterval[];
+  /** Quando true, a fixture mostra a grade sem dados, nunca como livre. */
+  unknownAll?: boolean;
   now: Date;
   organizerEmail: string;
   /** Fixture: não cria evento, convite nem reunião. */
   skipSubmit?: boolean;
 }
+
+interface CloserGrid {
+  calendarKnown: boolean;
+  calendarBusy: BusyInterval[];
+  appBusy: BusyInterval[];
+  holidays: string[];
+  sdrBusy: BusyInterval[];
+}
+
+const UNKNOWN_GRID: CloserGrid = {
+  calendarKnown: false,
+  calendarBusy: [],
+  appBusy: [],
+  holidays: [],
+  sdrBusy: [],
+};
+
+const CHOOSE_CLOSER_NOTE = 'Escolha um closer para ver a agenda dele. Sem closer, nenhum horário fica livre.';
 
 interface WeekDialogProps {
   open: boolean;
@@ -94,8 +120,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
   const [weekStart, setWeekStart] = useState(() => startOfWorkWeek(preview?.now ?? new Date()));
   const [liveAll, setLiveAll] = useState<MeetingCloser[]>([]);
   const [liveSchedulable, setLiveSchedulable] = useState<MeetingCloser[]>([]);
-  const [liveBusy, setLiveBusy] = useState<BusyInterval[]>([]);
-  const [availabilityNote, setAvailabilityNote] = useState<string | null>(null);
+  const [liveView, setLiveView] = useState<{ key: string; grid: CloserGrid; note: string | null } | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
@@ -114,29 +139,61 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
   }, [open, preview]);
 
   useEffect(() => {
-    if (!open || preview) return;
+    if (!open || preview || !selectedCloserId) return;
     let cancelled = false;
-    void getAvailability(weekStart.toISOString(), addDays(weekStart, 5).toISOString()).then((result) => {
+    const key = `${selectedCloserId}:${weekStart.toISOString()}`;
+    void getCloserAvailability(selectedCloserId, weekStart.toISOString(), addDays(weekStart, 5).toISOString()).then((result) => {
       if (cancelled) return;
-      if (result.success) {
-        setLiveBusy(result.data);
-        setAvailabilityNote(null);
-      } else {
-        setLiveBusy([]);
-        setAvailabilityNote(result.error);
+      if (!result.success) {
+        setLiveView({ key, grid: UNKNOWN_GRID, note: result.error });
+        return;
       }
+      setLiveView({
+        key,
+        grid: {
+          calendarKnown: result.data.calendarKnown,
+          calendarBusy: result.data.calendarBusy,
+          appBusy: result.data.appBusy,
+          holidays: result.data.holidays,
+          sdrBusy: result.data.sdrBusy,
+        },
+        note: result.data.notice,
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, [open, preview, weekStart]);
+  }, [open, preview, weekStart, selectedCloserId]);
 
   const allClosers = preview ? preview.closersAll : liveAll;
   const schedulable = preview ? preview.closersSchedulable : liveSchedulable;
   const closers = filter === 'closers' ? schedulable : allClosers;
-  const busy = preview ? preview.busy : liveBusy;
-  const slots = useMemo(() => buildWeekSlots(weekStart, busy, clock), [weekStart, busy, clock]);
+  const requestKey = selectedCloserId ? `${selectedCloserId}:${weekStart.toISOString()}` : '';
+  const grid = useMemo<CloserGrid>(() => {
+    if (preview) {
+      return {
+        calendarKnown: preview.unknownAll !== true,
+        calendarBusy: preview.busy,
+        appBusy: preview.appBusy ?? [],
+        holidays: preview.holidays ?? [],
+        sdrBusy: preview.sdrBusy ?? [],
+      };
+    }
+    return liveView?.key === requestKey ? liveView.grid : UNKNOWN_GRID;
+  }, [preview, liveView, requestKey]);
+  const availabilityNote = preview
+    ? null
+    : !selectedCloserId
+      ? CHOOSE_CLOSER_NOTE
+      : liveView?.key === requestKey
+        ? liveView.note
+        : 'Consultando a agenda deste closer. Enquanto isso, nenhum horário fica livre.';
+  const slots = useMemo(
+    () => buildCloserWeekSlots(weekStart, { ...grid, now: clock }),
+    [weekStart, grid, clock],
+  );
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? null;
+  const chosenSlot = selectedSlot && slotSelectable(selectedSlot) ? selectedSlot : null;
   const selectedCloser = closers.find((closer) => closer.id === selectedCloserId)
     ?? allClosers.find((closer) => closer.id === selectedCloserId)
     ?? null;
@@ -158,12 +215,12 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
   }
 
   function choose() {
-    if (!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)) return;
-    onChoose({ start: selectedSlot.start, end: selectedSlot.end, closer: selectedCloser });
+    if (!chosenSlot || !selectedCloser) return;
+    onChoose({ start: chosenSlot.start, end: chosenSlot.end, closer: selectedCloser });
   }
 
-  const whenLabel = selectedSlot
-    ? `${weekdayLabel(selectedSlot.dayIndex)} ${formatBrtWallClock(selectedSlot.start).dayMonth} · ${formatBrtWallClock(selectedSlot.start).time}`
+  const whenLabel = chosenSlot
+    ? `${weekdayLabel(chosenSlot.dayIndex)} ${formatBrtWallClock(chosenSlot.start).dayMonth} · ${formatBrtWallClock(chosenSlot.start).time}`
     : null;
 
   return (
@@ -176,15 +233,15 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
         <DialogHeader className="sr-only">
           <DialogTitle>Agendar reunião</DialogTitle>
           <DialogDescription>
-            Horários ocupados são os do seu Google Calendar. A agenda de cada closer não é consultada; o closer escolhido entra como responsável e participante.
+            A grade mostra a agenda do closer selecionado. Ocupado e feriado não podem ser marcados. Sem dados significa que a agenda não foi confirmada e o horário não está livre.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5 pb-3">
           <div className="flex min-w-0 items-center gap-2 text-sm">
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Semana anterior" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, -7)); setSelectedSlotId(null); }}>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Semana anterior" onClick={() => { setWeekStart((current) => addDays(current, -7)); setSelectedSlotId(null); }}>
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Próxima semana" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, 7)); setSelectedSlotId(null); }}>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Próxima semana" onClick={() => { setWeekStart((current) => addDays(current, 7)); setSelectedSlotId(null); }}>
               <ChevronRight className="h-4 w-4" />
             </button>
             <p className="truncate">{formatWeekRange(weekStart)}</p>
@@ -265,7 +322,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
                 key={hour}
                 hour={hour}
                 slots={slots.filter((slot) => slot.hour === hour)}
-                selectedId={selectedSlotId}
+                selectedId={chosenSlot?.id ?? null}
                 onSelect={setSelectedSlotId}
               />
             ))}
@@ -284,13 +341,13 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
             ) : (
               <p className="text-muted-foreground text-xs">{whenLabel ?? 'Escolha um horário e um closer'}</p>
             )}
-            {(selectedCloser || selectedSlot) && (
+            {(selectedCloser || chosenSlot) && (
               <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Limpar seleção" onClick={clearSelection}>
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
           </div>
-          <Button type="button" className="transition-none" onClick={choose} disabled={!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)}>
+          <Button type="button" className="transition-none" onClick={choose} disabled={!chosenSlot || !selectedCloser}>
             Agendar
           </Button>
         </div>
@@ -325,15 +382,22 @@ function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: W
             onClick={() => onSelect(slot.id)}
             className={cn(
               'flex h-full min-h-16 flex-col items-start gap-1 rounded-md border px-2 py-1.5 text-left',
-              slot.busy && 'bg-muted text-muted-foreground border-transparent',
-              slot.past && !slot.busy && 'bg-muted/50 border-transparent opacity-60',
+              slot.holiday && 'bg-muted text-muted-foreground border-transparent',
+              slot.busy && !slot.holiday && 'bg-muted text-muted-foreground border-transparent',
+              slot.state === 'unknown' && !slot.past && 'border-dashed border-amber-300 bg-amber-50 text-amber-950',
+              slot.past && slot.state !== 'busy' && 'bg-muted/50 border-transparent opacity-60',
               selectable && !selected && 'bg-background border-border hover:border-foreground/30',
               selected && 'bg-foreground text-background border-foreground',
             )}
           >
             <span className={cn('text-[11px] tabular-nums', selected ? 'text-background/70' : 'text-muted-foreground')}>{time}</span>
-            {slot.busy && <span className="text-xs">Ocupado</span>}
-            {slot.past && !slot.busy && <span className="sr-only">Passou</span>}
+            {slot.holiday && <span className="text-xs">Feriado</span>}
+            {slot.busy && !slot.holiday && <span className="text-xs">Ocupado</span>}
+            {slot.state === 'unknown' && !slot.past && <span className="text-xs">Sem dados</span>}
+            {slot.sdrBusy && selectable && (
+              <span className={cn('text-[10px] leading-tight', selected ? 'text-background/80' : 'text-amber-700')}>Você ocupado</span>
+            )}
+            {slot.past && !slot.busy && slot.state !== 'unknown' && <span className="sr-only">Passou</span>}
           </button>
         );
       })}
@@ -448,7 +512,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
         router.refresh();
         const connected = await checkWhatsAppConnected();
         setHasWhatsApp(connected);
-        setInvite({ title: eventInput.title, date: wall.date, time: wall.time, duration: '60', meetLink: result.data.meetLink });
+        setInvite({ title: eventInput.title, date: wall.date, time: wall.time, duration: String(MEETING_DURATION_MIN), meetLink: result.data.meetLink });
         setInviteOpen(true);
       } finally {
         inFlight.current = false;
@@ -491,6 +555,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
                   ))}
                 </select>
               </div>
+              <p className="text-muted-foreground text-xs">A confirmação consulta de novo a agenda deste closer e recusa horário ocupado, feriado ou sem dados.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="meeting-title" className="text-muted-foreground text-xs font-normal">Título do convite da reunião</Label>

@@ -13,6 +13,15 @@ import { isAntiNoShowEnabled, serviceDb } from '@/features/anti-no-show/flag';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { sendMeetingBriefingEmail } from '@/features/leads/actions/send-meeting-briefing';
+import { closerSlotMoved } from '@/features/meetings/closer-availability.logic';
+import {
+  attachCloserHold,
+  releaseCloserHold,
+  releaseCloserHoldsForMeeting,
+  reserveCloserSlot,
+  revertCloserHold,
+} from '@/features/meetings/closer-availability.service';
+import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { createMeetingWhatsAppGroup, sendMeetingGroupMessage } from '../services/whatsapp-group.service';
 
@@ -84,8 +93,23 @@ export async function scheduleMeeting(
     return { success: false, error: 'Google Calendar não conectado. Conecte em Configurações > Integrações.' };
   }
 
+  const gate = await reserveCloserSlot({
+    supabase,
+    orgId,
+    userId,
+    closerId: input.closerId,
+    leadId,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    sdrConnection: connection,
+  });
+  if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
+
+  let createdEventId: string | null = null;
   try {
     const event = await createCalendarEvent(connection, input);
+    createdEventId = event.id;
+    if (gate.holdId) await attachCloserHold(supabase, gate.holdId, event.id);
 
     // Register interaction as meeting_scheduled. Capture the row id + metadata so
     // the WhatsApp group JID can be persisted onto it once the group is created
@@ -218,7 +242,7 @@ export async function scheduleMeeting(
           leadCompanyName: leadData.nome_fantasia ?? leadData.razao_social ?? 'Lead',
           meetingTitle: input.title,
           meetingDate: startDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long' }),
-          meetingTime: `${startDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })} (60 min)`,
+          meetingTime: `${startDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })} (${MEETING_DURATION_MIN} min)`,
           meetLink: event.meetLink ?? null,
         };
         after(async () => {
@@ -278,6 +302,7 @@ export async function scheduleMeeting(
 
     return { success: true, data: event };
   } catch (err) {
+    if (gate.holdId && !createdEventId) await releaseCloserHold(supabase, gate.holdId, 'released');
     const message = err instanceof Error ? err.message : 'Erro ao criar evento';
     const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
     return { success: false, error: message, code };
@@ -335,6 +360,15 @@ export async function deleteMeeting(
 
   const meta = interaction.metadata as Record<string, unknown> | null;
   const calendarEventId = meta?.calendar_event_id as string | undefined;
+
+  await releaseCloserHoldsForMeeting({
+    supabase,
+    orgId,
+    closerId: typeof meta?.closer_id === 'string' ? meta.closer_id : null,
+    startTime: typeof meta?.start_time === 'string' ? meta.start_time : null,
+    calendarEventId: calendarEventId ?? null,
+    status: 'cancelled',
+  });
 
   // Delete from Google Calendar. Cancellation still proceeds if this ultimately
   // fails (we don't want a Google outage to block cancelling a meeting), but a
@@ -438,6 +472,33 @@ export async function updateMeeting(
     return { success: false, error: 'Google Calendar não conectado. Conecte em Configurações > Integrações.' };
   }
 
+  const previousCloserId = typeof meta?.closer_id === 'string' ? meta.closer_id : null;
+  const previousEndTime = typeof meta?.end_time === 'string' ? meta.end_time : null;
+  const slotMoved = !!input.closerId && closerSlotMoved({
+    previousCloserId,
+    previousStart: previousStartTime ?? null,
+    nextCloserId: input.closerId,
+    nextStart: input.startTime,
+  });
+  let gateHoldId: string | null = null;
+  if (input.closerId && slotMoved) {
+    const gate = await reserveCloserSlot({
+      supabase,
+      orgId,
+      userId,
+      closerId: input.closerId,
+      leadId,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      excludeLeadId: leadId,
+      retargetExisting: true,
+      sdrConnection: connection,
+    });
+    if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
+    gateHoldId = gate.holdId;
+  }
+
+  let updatedEventId: string | null = null;
   try {
     let event: CalendarEvent;
 
@@ -469,6 +530,9 @@ export async function updateMeeting(
       );
       event = await createCalendarEvent(connection, input);
     }
+
+    updatedEventId = event.id;
+    if (gateHoldId) await attachCloserHold(supabase, gateHoldId, event.id);
 
     // Update interaction record
     await from(supabase, 'interactions')
@@ -553,6 +617,18 @@ export async function updateMeeting(
 
     return { success: true, data: event };
   } catch (err) {
+    if (gateHoldId && !updatedEventId) {
+      const revertCloserId = previousCloserId ?? input.closerId ?? null;
+      if (revertCloserId && previousStartTime) {
+        await revertCloserHold(supabase, gateHoldId, {
+          closerId: revertCloserId,
+          startTime: previousStartTime,
+          endTime: previousEndTime,
+        });
+      } else {
+        await releaseCloserHold(supabase, gateHoldId, 'released');
+      }
+    }
     const message = err instanceof Error ? err.message : 'Erro ao atualizar evento';
     const code = err instanceof Error && err.name === 'GCalTokenExpired' ? 'GCAL_TOKEN_EXPIRED' : undefined;
     return { success: false, error: message, code };

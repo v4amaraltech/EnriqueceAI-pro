@@ -441,6 +441,45 @@ export async function checkFreeBusy(
   return calendarBusy?.busy ?? [];
 }
 
+export interface FreeBusyCalendarPayload {
+  busy?: BusySlot[];
+  errors?: Array<{ reason?: string; domain?: string }>;
+}
+
+/**
+ * freeBusy de calendários arbitrários. Não converte erro em lista vazia:
+ * `errors` (notFound incluso) volta no calendário pedido. HTTP não-ok lança.
+ */
+export async function queryFreeBusy(
+  connection: CalendarConnectionTokens,
+  timeMin: string,
+  timeMax: string,
+  calendarIds: string[],
+): Promise<Record<string, FreeBusyCalendarPayload>> {
+  const accessToken = await ensureValidToken(connection);
+  const response = await fetch(`${GCAL_API}/freeBusy`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(10_000),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      timeMin,
+      timeMax,
+      timeZone: 'America/Sao_Paulo',
+      items: calendarIds.map((id) => ({ id })),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Erro ao verificar disponibilidade');
+  }
+
+  const data = (await response.json()) as { calendars?: Record<string, FreeBusyCalendarPayload> };
+  return data.calendars ?? {};
+}
+
 // ─── BDR-4 ───────────────────────────────────────────────────────────────────
 
 export interface CalendarEventDetail extends CalendarEvent {

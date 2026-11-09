@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CalendarEventGoneError, checkFreeBusy, createCalendarEvent, updateCalendarEvent } from './calendar.service';
+import { CalendarEventGoneError, checkFreeBusy, createCalendarEvent, queryFreeBusy, updateCalendarEvent } from './calendar.service';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -231,6 +231,27 @@ describe('calendar.service', () => {
       await expect(
         checkFreeBusy(mockConnection, '2026-02-20T00:00:00Z', '2026-02-20T23:59:59Z'),
       ).rejects.toThrow('Erro ao verificar disponibilidade');
+    });
+
+    it('keeps notFound on the requested calendar instead of an empty free list', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          calendars: {
+            'closer@firma.com': { busy: [], errors: [{ reason: 'notFound' }] },
+          },
+        }),
+      });
+
+      const calendars = await queryFreeBusy(
+        mockConnection,
+        '2026-02-20T00:00:00Z',
+        '2026-02-20T23:59:59Z',
+        ['closer@firma.com'],
+      );
+
+      expect(calendars['closer@firma.com']?.errors?.[0]?.reason).toBe('notFound');
+      expect(calendars['closer@firma.com']?.busy ?? []).toEqual([]);
     });
   });
 });
