@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
-import { Building2, Eye, Linkedin, Mail, MessageCircle, MoreVertical, Phone, Plus, Search, Workflow } from 'lucide-react';
+import { Building2, Check, Eye, Linkedin, Mail, MessageCircle, MoreVertical, Phone, Plus, Search, Workflow } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -24,13 +24,19 @@ import { SkipStepReasonDialog } from '@/features/activities/components/SkipStepR
 import type { SkipReason } from '@/features/activities/constants/skip-reasons';
 import type { PendingActivity } from '@/features/activities/types';
 import { isOverdue } from '@/features/activities/utils/overdue';
+import type { CallState } from '@/features/activities/components/ActivityPhonePanel';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { EnrollInCadenceDialog } from '@/features/leads/components/EnrollInCadenceDialog';
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
 import { WhatsAppAutoSendCard } from '@/features/whatsapp-auto-send/components/WhatsAppAutoSendCard';
 import type { CockpitData } from '@/features/whatsapp-auto-send/utils/cockpit-summary';
 
+import { isCallDockTask } from '../utils/call-dock';
+import { callNoteKey, readCallNote } from '../utils/call-note-draft';
 import { countByChannel, filterTasks, TASK_CHANNEL_TABS, type TaskChannelKey } from '../utils/task-filters';
+import { CallSidePanel } from './CallSidePanel';
+import type { SchedulingPreview } from './CallMeetingDialogs';
+import type { CallHistoryEntry } from '../utils/call-history';
 import { NewTaskDialog } from './NewTaskDialog';
 
 const timeFmt = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
@@ -62,16 +68,26 @@ interface TasksTabProps {
   isOwn: boolean;
   dialerProvider: DialerProvider;
   targetUserId: string;
+  /** Abre o painel de ligação já na carga. Usado pela fixture visual. */
+  initialSelectedKey?: string | null;
+  /** Histórico pronto, sem consulta. Ausente = lê `interactions` do lead. */
+  callHistory?: CallHistoryEntry[];
+  /** Agenda de demonstração: não cria reunião nem convite. */
+  schedulingPreview?: SchedulingPreview;
 }
 
-export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerProvider, targetUserId }: TasksTabProps) {
+export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerProvider, targetUserId, initialSelectedKey = null, callHistory, schedulingPreview }: TasksTabProps) {
+  const previewOnly = schedulingPreview?.skipSubmit === true;
   const router = useRouter();
   const [activities, setActivities] = useState(initialActivities);
   const [channel, setChannel] = useState<TaskChannelKey>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
+  const [callMinimized, setCallMinimized] = useState(false);
+  const [callBusy, setCallBusy] = useState(false);
+  const completing = useRef(new Set<string>());
   const [lostActivity, setLostActivity] = useState<PendingActivity | null>(null);
   const [skipActivity, setSkipActivity] = useState<PendingActivity | null>(null);
   const [switchActivity, setSwitchActivity] = useState<PendingActivity | null>(null);
@@ -143,6 +159,115 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
     [skipActivity, handleDone, handleRestore],
   );
 
+  const selectTask = useCallback((key: string) => {
+    if (callBusy && key !== selectedKey) {
+      toast.error('Encerre a ligação antes de trocar de tarefa');
+      return;
+    }
+    setCallMinimized(false);
+    setSelectedKey(key);
+  }, [callBusy, selectedKey]);
+
+  const completeTask = useCallback((activity: PendingActivity, notes: string) => {
+    if (previewOnly) {
+      toast.message('Fixture de teste: nada é registrado.');
+      return;
+    }
+    const key = keyOf(activity);
+    if (completing.current.has(key)) return;
+    if (callBusy && selectedKey === key) {
+      toast.error('Encerre a ligação antes de concluir');
+      return;
+    }
+    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+    if (!isScheduled && !activity.cadenceCreatedBy) {
+      toast.error('Cadência sem usuário criador — não é possível concluir');
+      return;
+    }
+    completing.current.add(key);
+    handleDone(activity.enrollmentId, activity.stepId);
+    if (selectedKey === key) setSelectedKey(null);
+    const persist = isScheduled
+      ? import('@/features/activities/actions/execute-scheduled-activity').then(({ executeScheduledActivity }) =>
+          executeScheduledActivity({
+            scheduledActivityId: activity.stepId,
+            leadId: activity.lead.id,
+            channel: activity.channel,
+            to: '',
+            subject: '',
+            body: notes,
+            aiGenerated: false,
+          }),
+        )
+      : import('@/features/activities/actions/execute-activity').then(({ executeActivity }) =>
+          executeActivity({
+            enrollmentId: activity.enrollmentId,
+            cadenceId: activity.cadenceId,
+            stepId: activity.stepId,
+            leadId: activity.lead.id,
+            orgId: activity.lead.org_id,
+            cadenceCreatedBy: activity.cadenceCreatedBy ?? '',
+            channel: activity.channel,
+            to: '',
+            contactId: null,
+            subject: '',
+            body: notes,
+            aiGenerated: false,
+            templateId: null,
+          }),
+        );
+    void persist.then((result) => {
+      completing.current.delete(key);
+      if (!result.success) {
+        handleRestore(activity);
+        toast.error(result.error ?? 'Não foi possível registrar — atividade devolvida à fila');
+      } else {
+        toast.success('Atividade concluída');
+      }
+    }).catch(() => {
+      completing.current.delete(key);
+      handleRestore(activity);
+      toast.error('Não foi possível registrar — atividade devolvida à fila');
+    });
+  }, [callBusy, handleDone, handleRestore, previewOnly, selectedKey]);
+
+  const snoozeTask = useCallback((activity: PendingActivity) => {
+    if (previewOnly) {
+      toast.message('Fixture de teste: nada é registrado.');
+      return;
+    }
+    if (callBusy) {
+      toast.error('Encerre a ligação antes de adiar');
+      return;
+    }
+    const key = keyOf(activity);
+    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+    handleDone(activity.enrollmentId, activity.stepId);
+    if (selectedKey === key) setSelectedKey(null);
+    const persist = isScheduled
+      ? import('@/features/activities/actions/complete-scheduled-activity').then(({ postponeScheduledActivity }) =>
+          postponeScheduledActivity(activity.stepId),
+        )
+      : import('@/features/activities/actions/skip-activity').then(({ skipActivity }) => skipActivity(activity.enrollmentId));
+    void persist.then((result) => {
+      if (!result.success) {
+        handleRestore(activity);
+        if (selectedKey === key) setSelectedKey(key);
+        toast.error(result.error ?? 'Não foi possível adiar');
+      } else {
+        toast.success(isScheduled ? 'Retorno adiado' : 'Adiado para amanhã às 9h');
+      }
+    }).catch(() => {
+      handleRestore(activity);
+      if (selectedKey === key) setSelectedKey(key);
+      toast.error('Não foi possível adiar');
+    });
+  }, [callBusy, handleDone, handleRestore, previewOnly, selectedKey]);
+
+  const handleCallState = useCallback((state: CallState) => {
+    setCallBusy(state === 'calling' || state === 'connected');
+  }, []);
+
   const handleLostSuccess = useCallback(() => {
     if (!lostActivity) return;
     const lostKey = keyOf(lostActivity);
@@ -154,6 +279,9 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
   }, [lostActivity, filtered, handleDone, selectedKey]);
 
   const completedPct = progress.target > 0 ? Math.round((progress.completed / progress.target) * 100) : 0;
+  const selectedActivity = activities.find((activity) => keyOf(activity) === selectedKey) ?? null;
+  const callActivity = selectedActivity && isCallDockTask(selectedActivity) ? selectedActivity : null;
+  const sheetKey = callActivity ? null : selectedKey;
 
   return (
     <div className="space-y-6">
@@ -162,6 +290,7 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
         {autoSend && <WhatsAppAutoSendCard data={autoSend} isOwn={isOwn} />}
       </div>
 
+      <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-lg font-semibold">
           Tarefas do dia <span className="text-muted-foreground text-sm font-normal">({completedPct}% da meta feita)</span>
@@ -177,7 +306,7 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
               aria-label="Buscar tarefas"
             />
           </div>
-          <Button onClick={() => setNewTaskOpen(true)} className="shrink-0">
+          <Button onClick={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : setNewTaskOpen(true))} className="shrink-0">
             <Plus className="mr-1 h-4 w-4" /> Nova tarefa
           </Button>
         </div>
@@ -234,12 +363,14 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
                   <TaskRow
                     key={keyOf(a)}
                     activity={a}
-                    onExecute={() => setSelectedKey(keyOf(a))}
-                    onViewLead={() => router.push(`/leads/${a.lead.id}`)}
-                    onIgnore={() => handleIgnore(a)}
-                    onSkipStep={() => setSkipActivity(a)}
-                    onSwitchCadence={() => setSwitchActivity(a)}
-                    onLost={() => setLostActivity(a)}
+                    selected={keyOf(a) === selectedKey}
+                    onExecute={() => selectTask(keyOf(a))}
+                    onComplete={isCallDockTask(a) ? () => completeTask(a, readCallNote(callNoteKey(a.enrollmentId, a.stepId))) : undefined}
+                    onViewLead={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : router.push(`/leads/${a.lead.id}`))}
+                    onIgnore={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : handleIgnore(a))}
+                    onSkipStep={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : setSkipActivity(a))}
+                    onSwitchCadence={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : setSwitchActivity(a))}
+                    onLost={() => (previewOnly ? toast.message('Fixture de teste: nada é registrado.') : setLostActivity(a))}
                   />
                 ))}
               </tbody>
@@ -260,12 +391,35 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
           />
         </div>
       </div>
+      </div>
+      {callActivity && (
+        <CallSidePanel
+          key={keyOf(callActivity)}
+          activity={callActivity}
+          dialerProvider={dialerProvider}
+          minimized={callMinimized}
+          onMinimize={() => setCallMinimized(true)}
+          onRestore={() => setCallMinimized(false)}
+          onClose={() => setSelectedKey(null)}
+          onMarkDone={(notes) => completeTask(callActivity, notes)}
+          onSkip={() => snoozeTask(callActivity)}
+          onLeadLost={() => setLostActivity(callActivity)}
+          onScheduled={() => {
+            handleDone(callActivity.enrollmentId, callActivity.stepId);
+            setSelectedKey(null);
+          }}
+          onCallStateChange={handleCallState}
+          history={callHistory}
+          schedulingPreview={schedulingPreview}
+          previewOnly={previewOnly}
+        />
+      )}
 
       <ActivityExecutionSheet
         activities={filtered}
-        selectedKey={selectedKey}
+        selectedKey={sheetKey}
         onClose={() => setSelectedKey(null)}
-        onNavigate={setSelectedKey}
+        onNavigate={selectTask}
         onActivityDone={handleDone}
         onActivityRestore={handleRestore}
         onLeadLost={setLostActivity}
@@ -297,7 +451,9 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
 
 interface TaskRowProps {
   activity: PendingActivity;
+  selected?: boolean;
   onExecute: () => void;
+  onComplete?: () => void;
   onViewLead: () => void;
   onIgnore: () => void;
   onSkipStep: () => void;
@@ -305,7 +461,7 @@ interface TaskRowProps {
   onLost: () => void;
 }
 
-function TaskRow({ activity: a, onExecute, onViewLead, onIgnore, onSkipStep, onSwitchCadence, onLost }: TaskRowProps) {
+function TaskRow({ activity: a, selected, onExecute, onComplete, onViewLead, onIgnore, onSkipStep, onSwitchCadence, onLost }: TaskRowProps) {
   const Icon = CHANNEL_ICON[a.channel] ?? Workflow;
   const isScheduled = a.enrollmentId.startsWith('scheduled:');
   const due = new Date(a.nextStepDue);
@@ -318,7 +474,7 @@ function TaskRow({ activity: a, onExecute, onViewLead, onIgnore, onSkipStep, onS
   const phone = a.lead.telefone;
 
   return (
-    <tr className="border-b last:border-b-0 hover:bg-[var(--accent)]/40">
+    <tr className={cn('border-b last:border-b-0 hover:bg-[var(--accent)]/40', selected && 'bg-primary/5')} data-selected={selected ? 'true' : undefined}>
       <td className={cn('px-4 py-2.5 font-medium tabular-nums', overdue && 'text-red-500')}>{dueLabel}</td>
       <td className="px-4 py-2.5">
         <button type="button" onClick={onExecute} className="flex items-center gap-2 text-left hover:underline">
@@ -353,9 +509,14 @@ function TaskRow({ activity: a, onExecute, onViewLead, onIgnore, onSkipStep, onS
       </td>
       <td className="px-4 py-2.5">
         <div className="flex items-center justify-end gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onExecute} aria-label="Executar tarefa" title="Executar">
-            <Icon className="h-4 w-4 text-[var(--primary)]" />
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-primary" onClick={onExecute} aria-label="Executar tarefa" title="Executar">
+            <Icon className="h-4 w-4" />
           </Button>
+          {onComplete && (
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" onClick={onComplete} aria-label="Concluir tarefa" title="Concluir">
+              <Check className="h-4 w-4" />
+            </Button>
+          )}
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onViewLead} aria-label="Ver lead" title="Ver lead">
             <Eye className="h-4 w-4" />
           </Button>

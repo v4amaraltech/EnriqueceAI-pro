@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 
 import { getAppUrl } from '@/lib/utils/app-url';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo', '/demo/call-workspace'];
 const PUBLIC_PREFIXES = ['/feedback/', '/CL0/', '/docs/', '/unsubscribe/'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
 // Privileged prefixes are default-DENY: the middleware requires a valid
