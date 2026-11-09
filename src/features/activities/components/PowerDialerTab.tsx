@@ -27,6 +27,7 @@ import {
   setWebphoneCallContext,
 } from '@/features/integrations/webphone/webphone-call-context';
 import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
@@ -162,16 +163,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     onHangup: handleRemoteHangup,
   });
 
-  // Fim da ligação pelo próprio navegador: o Realtime acima só dispara quando
-  // a API4COM classifica a ligação como conectada — a não atendida continua
-  // `not_connected` e ficava "em chamada" até o SDR clicar.
-  const browserCall = webphone.call;
-  const browserCallEnded =
-    !!browserCall &&
-    browserCall.integrated &&
-    browserCall.phase === 'ended' &&
-    dialStartedAt !== null &&
-    browserCall.startedAt >= dialStartedAt;
+  // O webhook pode chegar depois do BYE. A sessão integrada desta discagem
+  // também encerra a UI; uma sessão anterior não.
+  const browserCallEnded = integratedSessionEndedThisDial(webphone.call, dialStartedAt);
   useEffect(() => {
     // Trava o fim: a ligação some do webphone ~2,5 s depois de encerrar.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- espelha um store externo (webphone)

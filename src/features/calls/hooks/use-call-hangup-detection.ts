@@ -3,6 +3,9 @@
 import { useEffect, useRef } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
+import { from } from '@/lib/supabase/from';
+
+import { hangupFromCallRow, type CallHangupRow } from './call-hangup-signal';
 
 interface UseCallHangupDetectionOptions {
   callId: string | null;
@@ -10,10 +13,15 @@ interface UseCallHangupDetectionOptions {
   onHangup: (durationSeconds: number) => void;
 }
 
+/** Leitura de segurança: o UPDATE do webhook pode chegar antes da inscrição, ou o Realtime pode não entregar. */
+export const HANGUP_POLL_INTERVAL_MS = 3_000;
+
 /**
- * Listens for Supabase Realtime UPDATE on a specific `calls` row.
- * When the webhook updates `duration_seconds` (hangup from provider),
- * this hook fires `onHangup` so the UI can transition to the ended state.
+ * Encerra a UI quando a linha desta ligação prova o fim.
+ *
+ * Ouve o UPDATE em `calls.id` e também lê a linha na hora e a cada poucos
+ * segundos. Um evento de outro id (chamada nova, id alternativo do provedor)
+ * não dispara. channel-answer não dispara.
  */
 export function useCallHangupDetection({
   callId,
@@ -28,7 +36,19 @@ export function useCallHangupDetection({
   useEffect(() => {
     if (!callId || !isActive) return;
 
+    let cancelled = false;
+    let fired = false;
     const supabase = createClient();
+
+    function consider(row: CallHangupRow | null | undefined): void {
+      if (cancelled || fired || !row) return;
+      if (row.id && row.id !== callId) return;
+      const signal = hangupFromCallRow(row);
+      if (!signal) return;
+      fired = true;
+      onHangupRef.current(signal.durationSeconds);
+    }
+
     const channel = supabase
       .channel(`call-hangup-${callId}`)
       .on(
@@ -40,21 +60,30 @@ export function useCallHangupDetection({
           filter: `id=eq.${callId}`,
         },
         (payload) => {
-          const newRecord = payload.new as { duration_seconds?: number; status?: string };
-          const duration = newRecord.duration_seconds ?? 0;
-          const status = newRecord.status;
-
-          // Only trigger hangup when the call has a final status
-          // (channel-answer also updates the row but shouldn't end the UI)
-          if (status && status !== 'not_connected') {
-            onHangupRef.current(duration);
-          }
+          consider(payload.new as CallHangupRow);
         },
       )
       .subscribe();
 
+    async function read(): Promise<void> {
+      try {
+        const { data } = (await from(supabase, 'calls')
+          .select('id, status, hangup_cause, duration_seconds')
+          .eq('id', callId)
+          .maybeSingle()) as { data: CallHangupRow | null };
+        consider(data);
+      } catch {
+        // A próxima leitura tenta de novo. Um erro de rede não pode prender a tela.
+      }
+    }
+
+    void read();
+    const timer = window.setInterval(() => void read(), HANGUP_POLL_INTERVAL_MS);
+
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
     };
   }, [callId, isActive]);
 }
