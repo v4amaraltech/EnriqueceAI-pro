@@ -1,5 +1,7 @@
 'use server';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -119,8 +121,10 @@ export async function fetchPendingActivities(
     );
   }
 
+  // Sem cadência vencida a fila de retornos ainda existe. Sair aqui escondia
+  // o retorno avulso (gestor agenda phone no lead de um SDR sem enrollment due).
   if (!enrollments || enrollments.length === 0) {
-    return { success: true, data: [] };
+    return mergeWithScheduledReturns(supabase, ownerFilter, []);
   }
 
   // 2. Collect unique cadence IDs and batch-fetch steps + templates
@@ -274,8 +278,10 @@ export async function fetchPendingActivities(
     }
   }
 
+  // Passos de cadência zerados (passo inexistente, fila da IA, WhatsApp sem
+  // número) não podem engolir o retorno pendente do mesmo SDR.
   if (candidates.length === 0) {
-    return { success: true, data: [] };
+    return mergeWithScheduledReturns(supabase, ownerFilter, []);
   }
 
   // 5. Filter out activities already executed (using optimized SQL function with composite index)
@@ -296,8 +302,19 @@ export async function fetchPendingActivities(
     .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
     .map((c) => c.activity);
 
-  // 6. Fetch pending scheduled activities (standalone return-to-lead activities).
-  // Mesma regra de posse: SDR só as suas; manager, todas.
+  return mergeWithScheduledReturns(supabase, ownerFilter, cadenceActivities);
+}
+
+/**
+ * Retornos avulsos (`scheduled_activities` pending) entram na fila mesmo sem
+ * passo de cadência. A posse é `leads.assigned_to` (SDR da carteira), nunca
+ * `scheduled_activities.user_id` (quem clicou em Agendar).
+ */
+async function mergeWithScheduledReturns(
+  supabase: SupabaseClient,
+  ownerFilter: string | null,
+  cadenceActivities: PendingActivity[],
+): Promise<ActionResult<PendingActivity[]>> {
   let scheduledQuery = from(supabase, 'scheduled_activities')
     .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${SCHEDULED_LEAD_COLUMNS})`)
     .eq('status', 'pending');
@@ -347,25 +364,19 @@ export async function fetchPendingActivities(
           ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
           ?? null,
       },
-      // A nota do robô já começa com "Definir destino:" — sem prefixo de retorno.
       activityName: isLimbo
         ? (row.notes ?? 'Definir destino')
         : isAntiNoShow
           ? (row.notes ?? 'Anti no-show')
           : row.notes ? `Retorno: ${row.notes}` : 'Retorno agendado',
       callScript: row.notes,
-      // Retorno de "WhatsApp Ligação" (channel='phone' + provider) reabre o discador
-      // WhatsApp na fila; os demais retornos ficam com callProvider null.
       callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
       scheduledKind: isLimbo ? 'limbo_followup' : isAntiNoShow ? 'anti_no_show' : 'return',
     };
   });
 
-  // 7. Merge and sort: group by lead so SDR finishes all steps for one lead before moving to the next
-  // Example: Pesquisa Lead A → Ligação Lead A → Pesquisa Lead B → Ligação Lead B
   const allActivities = [...cadenceActivities, ...scheduledActivities];
 
-  // Build a map of earliest due date per lead (for ordering leads)
   const leadEarliestDue = new Map<string, number>();
   for (const a of allActivities) {
     const due = new Date(a.nextStepDue).getTime();
@@ -376,18 +387,15 @@ export async function fetchPendingActivities(
   }
 
   const activities = allActivities.sort((a, b) => {
-    // Priority 1: Inbound leads first (they need immediate attention)
     const aInbound = a.lead.is_inbound ? 1 : 0;
     const bInbound = b.lead.is_inbound ? 1 : 0;
     if (aInbound !== bInbound) return bInbound - aInbound;
 
-    // Priority 2: Group by lead, order leads by earliest due date
     if (a.lead.id !== b.lead.id) {
       const aDue = leadEarliestDue.get(a.lead.id) ?? 0;
       const bDue = leadEarliestDue.get(b.lead.id) ?? 0;
       return aDue - bDue;
     }
-    // Within same lead: current steps first, then by step order
     if (a.isCurrentStep !== b.isCurrentStep) return a.isCurrentStep ? -1 : 1;
     return a.stepOrder - b.stepOrder;
   });

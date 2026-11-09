@@ -7,6 +7,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 
+import { activityReminderCopy } from './reminder-copy';
+
 export const maxDuration = 60;
 
 const REMINDER_WINDOW_MINUTES = 30;
@@ -88,14 +90,19 @@ export async function POST(request: Request) {
 
         const leadName = leadNameMap.get(activity.lead_id) ?? 'Lead';
         const channelLabel = activityLabel(activity);
-        const timeStr = new Date(activity.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const copy = activityReminderCopy({
+          leadName,
+          channelLabel,
+          scheduledAt: activity.scheduled_at,
+          now,
+        });
 
         await createNotification({
           org_id: activity.org_id,
           user_id: activity.user_id,
           type: 'activity_reminder',
-          title: `Atividade em ${REMINDER_WINDOW_MINUTES}min: ${channelLabel}`,
-          body: `${leadName} — agendada para ${timeStr}`,
+          title: copy.title,
+          body: copy.body,
           resource_type: 'lead',
           resource_id: activity.lead_id,
           metadata: { scheduled_activity_id: activity.id, channel: activity.channel },
