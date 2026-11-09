@@ -23,11 +23,13 @@ vi.mock('@/features/integrations/actions/schedule-meeting', () => ({
   getLoggedUserEmail: vi.fn(),
   getLeadFaturamento: vi.fn(),
 }));
+vi.mock('@/features/meetings/closer-availability.action', () => ({ getCloserAvailability: vi.fn() }));
 vi.mock('@/features/leads/actions/get-missing-meeting-fields', () => ({ getMissingMeetingFields: vi.fn() }));
 vi.mock('@/features/activities/actions/check-whatsapp-status', () => ({ checkWhatsAppConnected: vi.fn() }));
 vi.mock('@/features/integrations/actions/manage-calendar', () => ({ getCalendarAuthUrl: vi.fn() }));
 
 import { getAvailability, scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
+import { getCloserAvailability } from '@/features/meetings/closer-availability.action';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 
 const activity: PendingActivity = FIXTURE_ACTIVITY;
@@ -87,6 +89,7 @@ describe('CallSidePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Agendar reunião' }));
     expect(listClosers).not.toHaveBeenCalled();
     expect(getAvailability).not.toHaveBeenCalled();
+    expect(getCloserAvailability).not.toHaveBeenCalled();
     expect(screen.getByTestId('slot-0-11').textContent).toContain('Ocupado');
     expect(screen.getByTestId('slot-0-11').textContent).not.toContain('Livre');
     fireEvent.click(screen.getByTestId('slot-0-14'));

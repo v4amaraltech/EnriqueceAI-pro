@@ -1,15 +1,21 @@
+import { classifySlot, type BusyInterval as CloserBusyInterval } from '@/features/meetings/closer-availability.logic';
+import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
+
 /** Grade semanal em America/Sao_Paulo, sem depender do fuso do processo. */
 
 const BRT_OFFSET_MIN = -180;
 
 /** Linhas da grade: 09:00 até 16:00, inclusive. */
 export const SLOT_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16] as const;
-export const SLOT_DURATION_MIN = 60;
+/** Mesma duração de `MEETING_DURATION_MIN`. A agenda BDR continua com 45 min. */
+export const SLOT_DURATION_MIN = MEETING_DURATION_MIN;
 
 export interface BusyInterval {
   start: string;
   end: string;
 }
+
+export type SlotState = 'free' | 'busy' | 'unknown';
 
 export interface WeekSlot {
   id: string;
@@ -17,8 +23,13 @@ export interface WeekSlot {
   end: Date;
   dayIndex: number;
   hour: number;
+  /** Ocupado no calendário do closer, em reunião do app ou em feriado. */
   busy: boolean;
   past: boolean;
+  state: SlotState;
+  holiday: boolean;
+  /** Aviso da agenda do SDR. Não torna o horário do closer indisponível. */
+  sdrBusy: boolean;
 }
 
 function brtParts(d: Date) {
@@ -103,14 +114,63 @@ export function buildWeekSlots(weekStart: Date, busy: BusyInterval[], now: Date)
     for (const hour of SLOT_START_HOURS) {
       const start = fromBrt(day.y, day.m, day.day, hour, 0);
       const end = new Date(start.getTime() + SLOT_DURATION_MIN * 60_000);
+      const isBusy = busy.some((interval) => overlaps(start, end, interval));
       slots.push({
         id: start.toISOString(),
         start,
         end,
         dayIndex,
         hour,
-        busy: busy.some((interval) => overlaps(start, end, interval)),
+        busy: isBusy,
         past: start.getTime() < now.getTime(),
+        state: isBusy ? 'busy' : 'free',
+        holiday: false,
+        sdrBusy: false,
+      });
+    }
+  }
+  return slots;
+}
+
+export interface CloserWeekInput {
+  calendarKnown: boolean;
+  calendarBusy: BusyInterval[];
+  appBusy: BusyInterval[];
+  holidays: readonly string[];
+  sdrBusy: BusyInterval[];
+  now: Date;
+}
+
+/** Grade de um closer: livre, ocupado ou desconhecido. Desconhecido não é livre. */
+export function buildCloserWeekSlots(weekStart: Date, input: CloserWeekInput): WeekSlot[] {
+  const holidays = new Set(input.holidays);
+  const slots: WeekSlot[] = [];
+  for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
+    const day = brtParts(addDays(weekStart, dayIndex));
+    const dateKey = `${day.y}-${String(day.m + 1).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
+    for (const hour of SLOT_START_HOURS) {
+      const start = fromBrt(day.y, day.m, day.day, hour, 0);
+      const end = new Date(start.getTime() + SLOT_DURATION_MIN * 60_000);
+      const kind = classifySlot({
+        start,
+        end,
+        calendarKnown: input.calendarKnown,
+        calendarBusy: input.calendarBusy as CloserBusyInterval[],
+        appMeetings: input.appBusy as CloserBusyInterval[],
+        holiday: holidays.has(dateKey),
+      });
+      const state: SlotState = kind === 'unknown' ? 'unknown' : kind === 'free' ? 'free' : 'busy';
+      slots.push({
+        id: start.toISOString(),
+        start,
+        end,
+        dayIndex,
+        hour,
+        busy: state === 'busy',
+        past: start.getTime() < input.now.getTime(),
+        state,
+        holiday: kind === 'holiday',
+        sdrBusy: input.sdrBusy.some((interval) => overlaps(start, end, interval)),
       });
     }
   }
@@ -118,5 +178,5 @@ export function buildWeekSlots(weekStart: Date, busy: BusyInterval[], now: Date)
 }
 
 export function slotSelectable(slot: WeekSlot): boolean {
-  return !slot.busy && !slot.past;
+  return slot.state === 'free' && !slot.past;
 }

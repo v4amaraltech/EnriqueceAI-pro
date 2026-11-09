@@ -18,6 +18,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { cn } from '@/lib/utils';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
+import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
 import { scheduleMeeting, updateMeeting, getLoggedUserEmail, getLeadFaturamento } from '../actions/schedule-meeting';
@@ -59,7 +60,7 @@ interface ScheduleMeetingModalProps {
 
 const DURATION_OPTIONS = [
   { value: '30', label: '30 min' },
-  { value: '60', label: '1 hora' },
+  { value: String(MEETING_DURATION_MIN), label: '1 hora' },
   { value: '90', label: '1h30' },
 ];
 
@@ -113,7 +114,7 @@ export function ScheduleMeetingModal({
   const [title, setTitle] = useState(`V4 Company + ${leadName ?? 'Lead'}`);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState('09:00');
-  const [duration, setDuration] = useState('60');
+  const [duration, setDuration] = useState(String(MEETING_DURATION_MIN));
   const [customDuration, setCustomDuration] = useState('');
   const [showCustomDuration, setShowCustomDuration] = useState(false);
   const [attendeeEmails, setAttendeeEmails] = useState(leadEmail ?? '');
@@ -189,7 +190,7 @@ export function ScheduleMeetingModal({
         setTitle(defaultTitle ?? `V4 Company + ${leadName ?? 'Lead'}`);
         setSelectedDate(undefined);
         setSelectedTime('09:00');
-        setDuration('60');
+        setDuration(String(MEETING_DURATION_MIN));
         setShowCustomDuration(false);
         setGenerateMeetLink(true);
         getLoggedUserEmail().then((r) => {
