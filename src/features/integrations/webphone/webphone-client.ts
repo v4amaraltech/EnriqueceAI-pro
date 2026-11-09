@@ -7,6 +7,7 @@
 // e a página atende sozinha. Sem extensão do Chrome.
 
 import { summarizeRtcStats } from './webphone-audio-stats';
+import { toggleSessionAudio } from './webphone-audio-mute';
 import {
   INTEGRATED_CALL_HEADER,
   initialWebphoneState,
@@ -277,11 +278,15 @@ export async function hangupCall(): Promise<void> {
   }
 }
 
+/**
+ * Muta ou reativa o microfone da chamada em curso. Só age com sessão SIP
+ * `in-call`: fora disso não há faixa de saída para desligar. O evento
+ * `muted`/`unmuted` do JsSIP atualiza `call.muted` no estado.
+ */
 export function toggleMute(): void {
   if (!activeSession || state.call?.phase !== 'in-call') return;
   try {
-    if (activeSession.isMuted().audio) activeSession.unmute({ audio: true });
-    else activeSession.mute({ audio: true });
+    toggleSessionAudio(activeSession);
   } catch (err) {
     console.error('[webphone] mute failed:', err);
   }
