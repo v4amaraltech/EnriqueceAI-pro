@@ -68,6 +68,10 @@ describe('CallSidePanel', () => {
     expect(screen.getByText('Perguntar quem decide e se já houve contato anterior. Fixture.')).toBeTruthy();
     expect(screen.getByText('Respondeu · e-mail')).toBeTruthy();
     expect(screen.getByText('Envio · e-mail')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Agendar reunião' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Desqualificar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Adiar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Concluir' })).toBeNull();
   });
 
   it('guarda a anotação ao fechar o campo', () => {

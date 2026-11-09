@@ -218,20 +218,12 @@ export function CallSidePanel({
             placeholder="O que o lead disse. A nota fica nesta tarefa se você fechar o painel."
             className="min-h-16 text-xs"
           />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" className="flex-1" onClick={() => { setWeekSession((session) => session + 1); setWeekOpen(true); }} disabled={inCall}>
+          <div className="flex flex-col gap-2">
+            <Button type="button" className="h-9 w-full" onClick={() => { setWeekSession((session) => session + 1); setWeekOpen(true); }} disabled={inCall}>
               Agendar reunião
             </Button>
-            <Button type="button" variant="outline" onClick={previewOnly ? () => toast.message('Fixture de teste: nada é registrado.') : onLeadLost} disabled={inCall}>
+            <Button type="button" variant="outline" className="h-9 w-full" onClick={previewOnly ? () => toast.message('Fixture de teste: nada é registrado.') : onLeadLost} disabled={inCall}>
               Desqualificar
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={previewOnly ? () => toast.message('Fixture de teste: nada é registrado.') : onSkip} disabled={inCall}>
-              Adiar
-            </Button>
-            <Button type="button" variant="outline" className="flex-1 text-emerald-700" onClick={previewOnly ? () => toast.message('Fixture de teste: nada é registrado.') : () => onMarkDone(notes)} disabled={inCall}>
-              Concluir
             </Button>
           </div>
         </div>
