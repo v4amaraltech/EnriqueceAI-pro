@@ -33,6 +33,7 @@ import {
   releaseWebphoneCallOwner,
   setWebphoneCallContext,
 } from '@/features/integrations/webphone/webphone-call-context';
+import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
 import { DockMicControl } from './DockMicControl';
@@ -105,10 +106,13 @@ export function ActivityPhonePanel({
   const [selectedPhone, setSelectedPhone] = useState(initialPhone);
   const [availablePhones, setAvailablePhones] = useState(phones);
   const [callState, setCallState] = useState<CallState>('idle');
+  const [dialStartedAt, setDialStartedAt] = useState<number | null>(null);
   const [providerCallId, setProviderCallId] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const elapsedRef = useRef(0);
+  elapsedRef.current = elapsed;
   const [callDuration, setCallDuration] = useState(0);
   // O lead atendeu? Vem do webhook da API4COM (answered_at / hangup_cause). O
   // tempo medido na tela conta a perna do ramal — que o webphone atende na
@@ -190,6 +194,7 @@ export function ActivityPhonePanel({
       return;
     }
     inFlightRef.current = true;
+    setDialStartedAt(Date.now());
 
     setElapsed(0);
     startTransition(async () => {
@@ -209,13 +214,15 @@ export function ActivityPhonePanel({
         console.error('[ActivityPhonePanel] initiateCall failed:', result.error);
         toast.error(errorMsg, { duration: 8000 });
         setCallState('idle');
+        setDialStartedAt(null);
         inFlightRef.current = false;
         return;
       }
 
       setCallId(result.data.callId);
       setProviderCallId(result.data.providerCallId);
-      setCallState('connected');
+      // Se o ramal já caiu enquanto o POST /calls respondia, não reabre "Em chamada".
+      setCallState((prev) => (prev === 'ended' ? 'ended' : 'connected'));
       inFlightRef.current = false;
 
       // Contexto para o painel flutuante do webphone (lead, linha em `calls`).
@@ -341,6 +348,7 @@ export function ActivityPhonePanel({
     if (callId) clearWebphoneCallContext(callId);
     setCallStatus('');
     setCallState('idle');
+    setDialStartedAt(null);
     setCallId(null);
     setProviderCallId(null);
     setElapsed(0);
@@ -352,6 +360,7 @@ export function ActivityPhonePanel({
     // Keep previous attempts when dismissing (user might want to retry)
     if (callId) clearWebphoneCallContext(callId);
     setCallState('idle');
+    setDialStartedAt(null);
     setCallStatus('');
     setCallId(null);
     setProviderCallId(null);
@@ -384,6 +393,13 @@ export function ActivityPhonePanel({
     isActive: isInCall,
     onHangup: handleRemoteHangup,
   });
+
+  // BYE do ramal nesta aba: o webhook pode ainda não ter atualizado a linha.
+  // Sessão anterior a este clique não encerra a chamada nova.
+  const browserCallEnded = integratedSessionEndedThisDial(webphone.call, dialStartedAt);
+  useEffect(() => {
+    if (browserCallEnded && isInCall) handleRemoteHangup(elapsedRef.current);
+  }, [browserCallEnded, isInCall, handleRemoteHangup]);
 
   // "Concluir" no painel flutuante do webphone: abre o modal de resultado
   // daqui (com as anotações de lá) sem esperar o webhook chegar pelo Realtime.
