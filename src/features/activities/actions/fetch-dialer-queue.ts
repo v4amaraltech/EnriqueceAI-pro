@@ -8,6 +8,7 @@ import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
+import type { DialerStats } from '../schemas/dialer-preferences.schemas';
 import { countCallsByPhone, phoneKey } from '../utils/auto-dialer';
 import { entraNaFilaHumana } from '../utils/fila-humana';
 import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
@@ -56,7 +57,25 @@ export interface DialerQueueItem {
   phoneAttempts: DialerPhoneAttempt[];
 }
 
+export interface DialerQueueWithStats {
+  items: DialerQueueItem[];
+  /**
+   * Números do card "Leads fora da fila", contados com a MESMA regra que monta
+   * a fila acima (antes vinham de uma consulta à parte, com outra regra, e não
+   * batiam com a lista).
+   */
+  stats: DialerStats;
+}
+
+const EMPTY_STATS: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
+
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
+  const result = await fetchDialerQueueWithStats();
+  if (!result.success) return result;
+  return { success: true, data: result.data.items };
+}
+
+export async function fetchDialerQueueWithStats(): Promise<ActionResult<DialerQueueWithStats>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { supabase, userId, role } = auth.data;
@@ -85,12 +104,12 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     };
 
   if (error || !enrollments) {
-    return { success: true, data: [] };
+    return { success: true, data: { items: [], stats: EMPTY_STATS } };
   }
 
   // Batch-fetch all steps for these cadences (phone only + total count)
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
-  if (cadenceIds.length === 0) return { success: true, data: [] };
+  if (cadenceIds.length === 0) return { success: true, data: { items: [], stats: EMPTY_STATS } };
 
   const [phoneStepsResult, allStepsResult] = await Promise.all([
     from(supabase, 'cadence_steps')
@@ -143,6 +162,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   // (not just enrollments whose current step is phone)
   type Enrollment = (typeof enrollments)[0];
   const phoneEnrollments: Array<{ enrollment: Enrollment; stepInfo: PhoneStepInfo; phone: string; phones: DialerQueuePhone[] }> = [];
+  let leadsWithoutPhone = 0;
   for (const e of enrollments) {
     if (!e.lead || !e.cadence) continue;
     // Passos de cadência executada pela IA são discados pela Ana (V4 Call), nunca pelo SDR
@@ -153,7 +173,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     // Resolve all phones (canonical) — skip if lead has no phone at all
     const phones = resolveDialerPhones(e.lead);
     const phone = phones[0]?.formatted;
-    if (!phone) continue;
+    if (!phone) {
+      leadsWithoutPhone++;
+      continue;
+    }
 
     // Pick the nearest phone step >= current_step for context (script/activity name)
     // If none ahead, pick the first phone step in the cadence
@@ -193,6 +216,7 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   }
 
   const result: DialerQueueItem[] = [];
+  let leadsAtDailyLimit = 0;
   for (const { enrollment: e, stepInfo, phone, phones } of phoneEnrollments) {
     if (!e.lead || !e.cadence) continue;
     const phoneAttempts: DialerPhoneAttempt[] = phones.map((p) => {
@@ -200,7 +224,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
       return { phone: p.formatted, attemptsToday: a?.count ?? 0, lastAttemptAt: a?.last ?? null };
     });
     // Sai da fila só quando TODOS os números atingiram o limite do dia.
-    if (phoneAttempts.every((a) => a.attemptsToday >= dailyLimit)) continue;
+    if (phoneAttempts.every((a) => a.attemptsToday >= dailyLimit)) {
+      leadsAtDailyLimit++;
+      continue;
+    }
 
     result.push({
       enrollmentId: e.id,
@@ -224,5 +251,16 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     });
   }
 
-  return { success: true, data: result };
+  return {
+    success: true,
+    data: {
+      items: result,
+      stats: {
+        leadsWithoutPhone,
+        leadsAtDailyLimit,
+        leadsWithSnooze: 0, // ainda não existe snooze
+        totalAvailable: result.length,
+      },
+    },
+  };
 }

@@ -79,7 +79,7 @@ function browserStorage(): Storage | null {
 
 export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com' }: PowerDialerTabProps) {
   const [queue] = useState<DialerQueueItem[]>(initialQueue);
-  const [currentPreferences, setCurrentPreferences] = useState<DialerPreferences>(initialPreferences);
+  const [currentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [itemStatuses, setItemStatuses] = useState<Map<string, DialerItemStatus>>(new Map());
@@ -575,7 +575,6 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         stats={initialStats}
         preferences={currentPreferences}
         onStart={handleStart}
-        onPreferencesSaved={setCurrentPreferences}
         dialerProvider={dialerProvider}
         autoDialToggle={
           dialerProvider === 'api4com' ? (

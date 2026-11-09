@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Ban, Clock, Phone, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, Ban, Clock, Phone, Users } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import {
@@ -14,62 +14,11 @@ import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferenc
 interface DialerSidebarProps {
   preferences: DialerPreferences;
   stats: DialerStats;
-  isManager: boolean;
-  onEditPreferences: () => void;
 }
 
-export function DialerSidebar({ preferences, stats, isManager, onEditPreferences }: DialerSidebarProps) {
+export function DialerSidebar({ preferences, stats }: DialerSidebarProps) {
   return (
     <div className="w-full space-y-6 lg:w-[280px]">
-      {/* Preferences section */}
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Settings2 className="h-4 w-4" />
-            Preferencias
-          </h3>
-          {isManager && (
-            <button
-              type="button"
-              onClick={onEditPreferences}
-              className="text-xs font-medium text-[var(--primary)] hover:underline"
-            >
-              editar
-            </button>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-help text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  Telefones simultaneos
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                Quantos telefones diferentes do lead serao discados ao mesmo tempo
-              </TooltipContent>
-            </Tooltip>
-            <Badge variant="secondary" className="text-xs">{preferences.simultaneous_phones}</Badge>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-help text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  Limite diario por lead
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                Maximo de tentativas de ligacao por lead em um dia
-              </TooltipContent>
-            </Tooltip>
-            <Badge variant="secondary" className="text-xs">{preferences.daily_limit_per_lead}</Badge>
-          </div>
-        </div>
-      </div>
-
       {/* Leads fora da fila */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">

@@ -13,8 +13,7 @@ import { fetchActiveProspectingCount } from '@/features/activities/actions/fetch
 import { fetchAvailableLeadsCount } from '@/features/activities/actions/fetch-available-leads-count';
 import { fetchDailyProgress } from '@/features/activities/actions/fetch-daily-progress';
 import { fetchDialerPreferences } from '@/features/activities/actions/fetch-dialer-preferences';
-import { fetchDialerQueue } from '@/features/activities/actions/fetch-dialer-queue';
-import { fetchDialerStats } from '@/features/activities/actions/fetch-dialer-stats';
+import { fetchDialerQueueWithStats } from '@/features/activities/actions/fetch-dialer-queue';
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { ActivityQueueView } from '@/features/activities';
@@ -24,14 +23,14 @@ export default async function AtividadesPage() {
   await requireAuth();
   const managerFlag = await isManager();
 
-  const [activitiesResult, progressResult, dialerResult, availableResult, activeProspectingResult, statsResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
+  const [activitiesResult, progressResult, dialerResult, availableResult, activeProspectingResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
     fetchPendingActivities(),
     // The page uses the queue length as `pending` (below) — skip that count.
     fetchDailyProgress(undefined, { includePending: false }),
-    fetchDialerQueue(),
+    // Fila e números do card "Leads fora da fila" saem da mesma consulta.
+    fetchDialerQueueWithStats(),
     fetchAvailableLeadsCount(),
     fetchActiveProspectingCount(),
-    fetchDialerStats(),
     fetchDialerPreferences(),
     getDialerProvider(),
     fetchActiveCadenceNames(),
@@ -66,12 +65,12 @@ export default async function AtividadesPage() {
     total: progressRaw.completed + activitiesCount,
   };
 
-  const dialerQueue = dialerResult.success ? dialerResult.data : [];
+  const dialerQueue = dialerResult.success ? dialerResult.data.items : [];
   const availableLeads = availableResult.success
     ? availableResult.data
     : { count: 0, leadIds: [] as string[] };
   const activeProspectingCount = activeProspectingResult.success ? activeProspectingResult.data : 0;
-  const dialerStats = statsResult.success ? statsResult.data : undefined;
+  const dialerStats = dialerResult.success ? dialerResult.data.stats : undefined;
   const dialerPreferences = prefsResult.success ? prefsResult.data : undefined;
   const dialerProvider = providerResult.success ? providerResult.data.provider : null;
   const cadenceNames = cadenceNamesResult.success ? cadenceNamesResult.data : [];

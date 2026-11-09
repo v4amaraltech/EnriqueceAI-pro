@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
-import { useOrganization } from '@/features/auth/hooks/useOrganization';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
@@ -20,7 +19,6 @@ import {
   defaultDialerFilters,
   type DialerFilterValues,
 } from './DialerFilterBar';
-import { DialerPreferencesDialog } from './DialerPreferencesDialog';
 import { DialerQueueGrid } from './DialerQueueGrid';
 import { DialerSidebar } from './DialerSidebar';
 
@@ -29,7 +27,6 @@ interface PowerDialerIdleLayoutProps {
   stats: DialerStats;
   preferences: DialerPreferences;
   onStart: () => void;
-  onPreferencesSaved: (updated: DialerPreferences) => void;
   dialerProvider?: DialerProvider;
   /** Chave "Discagem automática" (só com API4COM). */
   autoDialToggle?: ReactNode;
@@ -40,13 +37,10 @@ export function PowerDialerIdleLayout({
   stats,
   preferences,
   onStart,
-  onPreferencesSaved,
   dialerProvider,
   autoDialToggle,
 }: PowerDialerIdleLayoutProps) {
-  const { isManager } = useOrganization();
   const router = useRouter();
-  const [prefsOpen, setPrefsOpen] = useState(false);
   const [filters, setFilters] = useState<DialerFilterValues>(defaultDialerFilters);
 
   const filteredQueue = useMemo(
@@ -110,8 +104,6 @@ export function PowerDialerIdleLayout({
         <DialerSidebar
           preferences={preferences}
           stats={stats}
-          isManager={isManager}
-          onEditPreferences={() => setPrefsOpen(true)}
         />
 
         {/* Main content */}
@@ -131,14 +123,6 @@ export function PowerDialerIdleLayout({
           />
         </div>
       </div>
-
-      {/* Preferences dialog */}
-      <DialerPreferencesDialog
-        open={prefsOpen}
-        onOpenChange={setPrefsOpen}
-        preferences={preferences}
-        onSaved={onPreferencesSaved}
-      />
     </div>
   );
 }
