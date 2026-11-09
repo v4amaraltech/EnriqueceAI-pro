@@ -6,7 +6,16 @@ import * as supabaseModule from '@/lib/supabase/service';
 import * as fromModule from '@/lib/supabase/from';
 
 vi.mock('@/lib/auth/get-org-id');
-vi.mock('@/features/contact-engine/services/number-health.service');
+vi.mock('@/features/contact-engine/services/number-health.service', async () => {
+  const actual = await vi.importActual<typeof import('@/features/contact-engine/services/number-health.service')>(
+    '@/features/contact-engine/services/number-health.service',
+  );
+  return {
+    ...actual,
+    readNumberHealthFlag: vi.fn(),
+    authorizeNumberRecovery: vi.fn(),
+  };
+});
 vi.mock('@/lib/supabase/service');
 vi.mock('@/lib/supabase/from');
 
@@ -155,6 +164,7 @@ describe('authorizeNumberRecoveryAction', () => {
                   status: 'connected',
                   health_state: 'paused',
                   health_pause_reason: 'session_disconnected',
+                  health_state_changed_at: '2026-11-08T20:00:00+00',
                 },
               ],
               error: null,
@@ -169,15 +179,18 @@ describe('authorizeNumberRecoveryAction', () => {
       data: { state: 'warming' },
     });
 
-    const result = await authorizeNumberRecoveryAction('inst-1', 'justificativa valida com mais de dez caracteres');
-    expect(result).toEqual({ success: true, data: { state: 'warming' } });
-    
-    // Verifica que authorizeNumberRecovery foi chamado com os parametros corretos
-    // (idempotencyToken e gerado server-side, entao nao verificamos o valor exato)
-    expect(numberHealthModule.authorizeNumberRecovery).toHaveBeenCalledTimes(1);
-    const call = vi.mocked(numberHealthModule.authorizeNumberRecovery).mock.calls[0]?.[0];
-    if (!call) throw new Error('authorizeNumberRecovery not called');
-    
+    const note = 'justificativa valida com mais de dez caracteres';
+    const first = await authorizeNumberRecoveryAction('inst-1', note);
+    const second = await authorizeNumberRecoveryAction('inst-1', note);
+    expect(first).toEqual({ success: true, data: { state: 'warming' } });
+    expect(second).toEqual({ success: true, data: { state: 'warming' } });
+
+    expect(numberHealthModule.authorizeNumberRecovery).toHaveBeenCalledTimes(2);
+    const calls = vi.mocked(numberHealthModule.authorizeNumberRecovery).mock.calls;
+    const call = calls[0]?.[0];
+    const again = calls[1]?.[0];
+    if (!call || !again) throw new Error('authorizeNumberRecovery not called');
+
     expect(call.orgId).toBe('org-1');
     expect(call.instanceId).toBe('inst-1');
     expect(call.actor).toEqual({
@@ -185,7 +198,9 @@ describe('authorizeNumberRecoveryAction', () => {
       orgId: 'org-1',
       role: 'manager',
     });
-    expect(call.note).toBe('justificativa valida com mais de dez caracteres');
-    expect(call.idempotencyToken).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/); // UUID v4
+    expect(call.note).toBe(note);
+    expect(call.expectedBlockedAt).toBe('2026-11-08T20:00:00+00');
+    expect(call.idempotencyToken).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(again.idempotencyToken).toBe(call.idempotencyToken);
   });
 });

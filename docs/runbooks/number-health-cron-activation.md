@@ -12,7 +12,7 @@ Este runbook documenta o processo de ativação do cron de avaliação periódic
 
 ## Pré-requisitos
 
-1. ✅ Migration `20261108110000_number_health_recovery_audit.sql` aplicada em produção
+1. ✅ Migrations `20261108200000_number_health_recovery_audit.sql` e `20261109120000_number_health_recovery_contract.sql` aplicadas em produção
 2. ✅ Flag `number_health_v1` existe em `app_flags` (criada pelo PR10)
 3. ✅ Rota `/api/cron/evaluate-number-health` deployada
 4. ✅ `CRON_SECRET` configurado nas variáveis de ambiente
@@ -45,8 +45,9 @@ curl -X POST https://app.enriqueceai.com/api/cron/evaluate-number-health \
   -H "Authorization: Bearer ${CRON_SECRET}"
 ```
 
-**Frequência recomendada**: A cada 30 minutos (`*/30 * * * *`)  
-**Justificativa**: Permite detecção rápida de problemas sem sobrecarregar o banco
+**Método**: POST. GET não autentica este job.  
+**Frequência proposta, não agendada**: a cada 30 minutos (`*/30 * * * *`).  
+**Justificativa**: detecta pausa sem avaliar a tabela inteira a cada minuto. O lote lê além das 100 primeiras linhas para não deixar org desligada ou erro prender o restante.
 
 **Exemplo de crontab** (NÃO criar ainda - apenas documentação):
 ```cron
@@ -170,10 +171,11 @@ WHERE key = 'number_health_v1';
 
 ## Limitações Conhecidas
 
-1. **Sem avaliação de Cloud API oficial**: Apenas instâncias Evolution
-2. **Lote limitado a 100 instâncias**: Executar com mais frequência se necessário
-3. **Telemetria ausente bloqueia avanço**: Não bloqueia envio dentro dos tetos atuais
-4. **Reconexão não despausa sozinha**: Gestor deve autorizar recuperação via UI
+1. **Sem avaliação de Cloud API oficial**: `whatsapp_instances` é a tabela Evolution. Não existe coluna `deleted_at` nem `provider` nessa tabela; o cron não filtra por elas.
+2. **Até 100 instâncias elegíveis por execução**: orgs fora da flag não ocupam vaga e não são gravadas. Falha de avaliação só avança `health_evaluated_at`, sem mudar estado, teto ou freio.
+3. **Histórico de recuperação**: apagar organização, usuário ou instância que tenha auditoria falha (`ON DELETE RESTRICT`). A linha de auditoria não é apagada em cascata. Não há rotina de purge.
+4. **Telemetria ausente bloqueia avanço**: Não bloqueia envio dentro dos tetos atuais
+5. **Reconexão não despausa sozinha**: Gestor deve autorizar recuperação via UI
 
 ## Contatos
 
@@ -186,3 +188,4 @@ WHERE key = 'number_health_v1';
 | Data | Versão | Autor | Mudança |
 |------|--------|-------|---------|
 | 2026-11-08 | 1.0 | Agent | Criação inicial do runbook |
+| 2026-11-09 | 1.1 | Agent | POST, lote sem deleted_at e historico RESTRICT. Sem agendar. |

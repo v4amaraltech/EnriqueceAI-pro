@@ -98,19 +98,18 @@ export function NumberHealthRecoveryButton({
         <DialogHeader>
           <DialogTitle>Recuperar {instanceName}</DialogTitle>
           <DialogDescription>
-            Autorize a recuperação do número pausado pela saúde. A recuperação volta o número para o estágio
-            warming, preservando o estágio de rampa, tetos e histórico. Reconectar sozinho não despausa.
+            Autorize a recuperação do número pausado pela saúde. A recuperação volta o número para warming e
+            preserva o estágio da rampa, os tetos e o histórico. Pausa manual da fila não é liberada. Reconectar
+            sozinho não despausa.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {pauseReason && (
-            <Alert>
-              <AlertDescription>
-                <strong>Motivo da pausa:</strong> {pauseReason}
-              </AlertDescription>
-            </Alert>
-          )}
+          <Alert>
+            <AlertDescription>
+              <strong>Motivo da pausa:</strong> {pauseReason ?? 'não registrado na instância'}
+            </AlertDescription>
+          </Alert>
 
           <div className="space-y-2">
             <Label htmlFor="note">

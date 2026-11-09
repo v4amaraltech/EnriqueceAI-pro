@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -860,9 +862,38 @@ export interface RecoveryInput {
   actor: { userId: Uuid; orgId: Uuid; role: 'manager' | 'sdr' };
   /** Justificativa registrada (revisao do motivo da pausa). */
   note: string;
-  /** Token de idempotencia (UUID v4) gerado pelo cliente. */
+  /**
+   * Token estavel do pedido. O mesmo org+instancia+ator+nota+episodio gera o
+   * mesmo UUID. Nao usar random a cada chamada: o retry precisa repetir o token.
+   */
   idempotencyToken: Uuid;
+  /** health_state_changed_at do episodio de pausa lido no banco. */
+  expectedBlockedAt: string;
   now?: Date;
+}
+
+const RECOVERY_TOKEN_NAMESPACE = '6f1d9a3e-7c4b-4e2a-9f10-2b8c5d6e7a01';
+
+function uuidV5(name: string, namespace: string): string {
+  const ns = Buffer.from(namespace.replace(/-/g, ''), 'hex');
+  const hash = createHash('sha1').update(ns).update(name, 'utf8').digest();
+  const bytes = Buffer.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** Identidade estavel do pedido de recuperacao. Mesmos campos, mesmo token. */
+export function recoveryIdempotencyToken(parts: {
+  orgId: string;
+  instanceId: string;
+  actorUserId: string;
+  note: string;
+  blockedAt: string;
+}): string {
+  const name = [parts.orgId, parts.instanceId, parts.actorUserId, parts.note.trim(), parts.blockedAt].join('\n');
+  return uuidV5(name, RECOVERY_TOKEN_NAMESPACE);
 }
 
 /**
@@ -871,9 +902,10 @@ export interface RecoveryInput {
  * nao apaga janelas e reconhece os eventos ja vistos para que nao repausem sozinhos.
  * Reconexao sozinha nunca despausa.
  * 
- * ATOMICIDADE: Usa RPC `authorize_number_recovery_with_audit` que executa UPDATE
- * da instancia, liberacao do freio da fila E INSERT de auditoria em uma UNICA
- * transacao com rollback automatico em caso de falha.
+ * ATOMICIDADE: a RPC `authorize_number_recovery_with_audit` confere o pedido,
+ * atualiza a instancia, solta so o freio `health:*` e insere a auditoria na
+ * mesma transacao. Falha no INSERT desfaz o estado. O limite de seguranca e a
+ * funcao (SECURITY DEFINER ignora RLS), nao a policy.
  */
 export async function authorizeNumberRecovery(input: RecoveryInput): Promise<ActionResult<{ state: NumberHealthState }>> {
   if (input.actor.role !== 'manager' || input.actor.orgId !== input.orgId) {
@@ -884,12 +916,14 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
   }
   const flag = await readNumberHealthFlag({ orgId: input.orgId });
   if (flag !== 'on') return { success: false, error: 'Saude por numero desativada', code: 'flag_disabled' };
+  if (!input.expectedBlockedAt) {
+    return { success: false, error: 'Episodio de pausa sem instante', code: 'episode_unbound' };
+  }
 
   try {
     const now = input.now ?? new Date();
     const db = createServiceRoleClient();
-    
-    // RPC transacional: recuperacao + auditoria atomica
+
     const result = (await db.rpc('authorize_number_recovery_with_audit' as never, {
       p_org_id: input.orgId,
       p_instance_id: input.instanceId,
@@ -897,7 +931,11 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
       p_note: input.note.trim(),
       p_idempotency_token: input.idempotencyToken,
       p_recovered_at: now.toISOString(),
-    } as never)) as unknown as { data: { success: boolean; error?: string; state?: string; audit_id?: string; duplicate?: boolean } | null; error: { message: string } | null };
+      p_expected_blocked_at: input.expectedBlockedAt,
+    } as never)) as unknown as {
+      data: { success: boolean; error?: string; state?: string; audit_id?: string; replay?: boolean } | null;
+      error: { message: string } | null;
+    };
 
     if (result.error) {
       return { success: false, error: 'Falha ao recuperar o numero', code: 'rpc_failed' };
@@ -905,19 +943,23 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
 
     const data = result.data;
     if (!data?.success) {
-      const errorCode = data?.error === 'not_found' ? 'not_found' 
-        : data?.error === 'not_blocked' ? 'not_blocked'
-        : data?.error === 'not_connected' ? 'not_connected'
-        : data?.error === 'state_conflict' ? 'state_conflict'
-        : 'rpc_failed';
-      
-      const errorMsg = data?.error === 'not_found' ? 'Numero nao encontrado'
-        : data?.error === 'not_blocked' ? 'Numero nao esta pausado pela saude'
-        : data?.error === 'not_connected' ? 'Reconecte o WhatsApp antes de recuperar'
-        : data?.error === 'state_conflict' ? 'Estado mudou, tente de novo'
-        : 'Falha ao recuperar o numero';
-
-      return { success: false, error: errorMsg, code: errorCode };
+      const known: Record<string, { code: string; error: string }> = {
+        not_found: { code: 'not_found', error: 'Numero nao encontrado' },
+        not_blocked: { code: 'not_blocked', error: 'Numero nao esta pausado pela saude' },
+        not_connected: { code: 'not_connected', error: 'Reconecte o WhatsApp antes de recuperar' },
+        state_conflict: { code: 'state_conflict', error: 'Estado mudou, tente de novo' },
+        forbidden: { code: 'forbidden', error: 'Recuperacao exige gestor ativo da organizacao' },
+        flag_disabled: { code: 'flag_disabled', error: 'Saude por numero desativada' },
+        invalid_input: { code: 'invalid_input', error: 'Informe a justificativa da recuperacao' },
+        token_conflict: { code: 'token_conflict', error: 'Token de recuperacao ja usado em outro pedido' },
+        stale_episode: { code: 'stale_episode', error: 'A pausa mudou; confirme de novo' },
+        already_recovered: { code: 'already_recovered', error: 'Este episodio de pausa ja foi recuperado' },
+      };
+      const mapped = known[data?.error ?? ''] ?? {
+        code: 'rpc_failed',
+        error: 'Falha ao recuperar o numero',
+      };
+      return { success: false, error: mapped.error, code: mapped.code };
     }
 
     logHealth('number_health_recovered', {
@@ -925,7 +967,7 @@ export async function authorizeNumberRecovery(input: RecoveryInput): Promise<Act
       instanceId: input.instanceId,
       actorUserId: input.actor.userId,
       auditId: data.audit_id ?? null,
-      duplicate: data.duplicate ?? false,
+      replay: data.replay === true,
     });
 
     return { success: true, data: { state: 'warming' } };
