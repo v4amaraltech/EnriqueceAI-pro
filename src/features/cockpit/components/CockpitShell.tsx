@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { BarChart3, Clock3, Filter, ListChecks, UserCheck } from 'lucide-react';
+import { BarChart3, Clock3, Filter, ListChecks, Phone, UserCheck } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
@@ -83,6 +83,13 @@ export function CockpitShell({ viewer, tab, children, callCard }: CockpitShellPr
               {label}
             </Link>
           ))}
+          <Link
+            href="/atividades?tab=dialer"
+            className="text-[var(--muted-foreground)] flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium hover:text-[var(--foreground)]"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Discador
+          </Link>
         </nav>
       </div>
 

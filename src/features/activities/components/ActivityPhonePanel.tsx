@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
-import { Clock, Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
+import { Clock, Mic, MicOff, Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 
@@ -43,7 +43,7 @@ import { formatDuration } from '@/lib/utils/format';
 import { formatResumeDate } from '../utils/callback-resume';
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
 
-type CallState = 'idle' | 'calling' | 'connected' | 'ended';
+export type CallState = 'idle' | 'calling' | 'connected' | 'ended';
 
 interface ActivityPhonePanelProps {
   leadName: string;
@@ -65,6 +65,16 @@ interface ActivityPhonePanelProps {
   dialerProvider?: DialerProvider;
   /** Passo de cadência da atividade (ausente em atividade avulsa/agendada). */
   cadenceStep?: { enrollmentId: string; stepId: string };
+  /**
+   * `stage` é o painel largo da gaveta. `dock` é a faixa compacta do cockpit:
+   * status, cronômetro, microfone e desligar, sem o botão central da API4COM.
+   */
+  layout?: 'stage' | 'dock';
+  /** Anotações digitadas ao lado da ligação. Entram no resultado junto com as do webphone. */
+  companionNotes?: string;
+  onCallStateChange?: (state: CallState) => void;
+  /** Fixture visual: o botão existe, mas não origina chamada. */
+  callsDisabled?: boolean;
 }
 
 export function ActivityPhonePanel({
@@ -84,6 +94,10 @@ export function ActivityPhonePanel({
   callScript,
   dialerProvider = 'api4com',
   cadenceStep,
+  layout = 'stage',
+  companionNotes,
+  onCallStateChange,
+  callsDisabled = false,
 }: ActivityPhonePanelProps) {
   // Use first resolved phone or fallback to lead.telefone
   const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
@@ -163,6 +177,10 @@ export function ActivityPhonePanel({
   }, [leadId]);
 
   function handleInitiateCall() {
+    if (callsDisabled) {
+      toast.message('Fixture de teste: nenhuma ligação é originada.');
+      return;
+    }
     if (!selectedPhone) return;
     if (inFlightRef.current) return;
     const blocked = dialingBlockReason(webphone);
@@ -388,6 +406,122 @@ export function ActivityPhonePanel({
     [],
   );
 
+  useEffect(() => {
+    onCallStateChange?.(callState);
+  }, [callState, onCallStateChange]);
+
+  const resultNotes = mergeCallNotes(companionNotes, webphoneNotes);
+  const resultModal = (
+    <CallResultModal
+      open={callState === 'ended'}
+      onClose={handleDismissModal}
+      leadName={leadName}
+      leadId={leadId}
+      leadEmail={leadEmail}
+      leadFirstName={leadFirstName}
+      phoneLabel={selectedPhone}
+      durationSeconds={resultSeconds}
+      connected={callConnected}
+      initialNotes={resultNotes}
+      isSending={isSending || isPending}
+      onRetry={canRetry ? handleRetryAttempt : undefined}
+      onMarkNoShow={canMarkNoShow ? handleMarkNoShow : undefined}
+      onLeadLost={
+        onLeadLost
+          ? () => {
+              handleDismissModal();
+              onLeadLost();
+            }
+          : undefined
+      }
+      onConclude={({ notes, returnSchedule, outcome }) =>
+        handleSubmitResult(notes, returnSchedule, outcome)
+      }
+    />
+  );
+
+  if (layout === 'dock') {
+    const statusLabel =
+      callState === 'calling' ? 'Chamando' : callState === 'connected' ? 'Em chamada' : callState === 'ended' ? 'Encerrada' : 'Pronta para ligar';
+    return (
+      <div data-testid="call-dock-controls" className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold tabular-nums">{hasAnyPhone ? selectedPhone : 'Sem telefone'}</p>
+            <p className="text-muted-foreground text-xs" data-testid="call-status">
+              {statusLabel}
+              {dialerProvider === 'api4com' ? ' · API4COM' : ''}
+              {isInCall ? ` · tentativa ${currentAttemptNumber}` : ''}
+            </p>
+          </div>
+          {isInCall && (
+            <p className="font-mono text-sm tabular-nums" aria-live="polite" data-testid="call-timer">
+              {formatDuration(elapsed)}
+            </p>
+          )}
+          <span
+            className="text-muted-foreground"
+            title={webphoneReady ? 'Microfone desta aba pronto' : 'Microfone desta aba indisponível'}
+          >
+            {webphoneReady ? <Mic className="h-4 w-4 text-emerald-600" aria-label="Microfone pronto" /> : <MicOff className="h-4 w-4" aria-label="Microfone indisponível" />}
+          </span>
+          {callState === 'idle' && hasAnyPhone && (
+            <button
+              type="button"
+              onClick={handleInitiateCall}
+              disabled={isPending}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm disabled:opacity-50"
+              aria-label="Ligar"
+            >
+              <Phone className="h-4 w-4" />
+            </button>
+          )}
+          {isInCall && (
+            <button
+              type="button"
+              onClick={handleHangup}
+              disabled={isPending}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-sm disabled:opacity-50"
+              aria-label="Encerrar ligação"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {availablePhones.length > 1 && (
+          <Select value={selectedPhone} onValueChange={setSelectedPhone} disabled={isInCall}>
+            <SelectTrigger aria-label="Telefone da ligação">
+              <SelectValue placeholder="Selecione um telefone..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePhones.map((p) => (
+                <SelectItem key={p.raw} value={p.formatted}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {!webphoneReady && dialerProvider === 'api4com' && callState === 'idle' && (
+          <p className="text-muted-foreground text-[11px]">
+            A ligação segue pela API4COM. Se o webphone desta aba não estiver verde, a extensão atende o ramal.
+          </p>
+        )}
+        {attempts.length > 0 && (
+          <ul className="text-muted-foreground space-y-0.5 text-[11px]">
+            {attempts.map((a) => (
+              <li key={a.attemptNumber}>
+                Tentativa {a.attemptNumber}: {a.status}
+                {a.notes ? ` — ${a.notes}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+        {resultModal}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* API4COM: webphone desta aba ou lembrete da extensão */}
@@ -566,33 +700,12 @@ export function ActivityPhonePanel({
         </Button>
       </div>
 
-      {/* Post-call result modal — shared component (também usado na Ligação WhatsApp) */}
-      <CallResultModal
-        open={callState === 'ended'}
-        onClose={handleDismissModal}
-        leadName={leadName}
-        leadId={leadId}
-        leadEmail={leadEmail}
-        leadFirstName={leadFirstName}
-        phoneLabel={selectedPhone}
-        durationSeconds={resultSeconds}
-        connected={callConnected}
-        initialNotes={webphoneNotes}
-        isSending={isSending || isPending}
-        onRetry={canRetry ? handleRetryAttempt : undefined}
-        onMarkNoShow={canMarkNoShow ? handleMarkNoShow : undefined}
-        onLeadLost={
-          onLeadLost
-            ? () => {
-                handleDismissModal();
-                onLeadLost();
-              }
-            : undefined
-        }
-        onConclude={({ notes, returnSchedule, outcome }) =>
-          handleSubmitResult(notes, returnSchedule, outcome)
-        }
-      />
+      {resultModal}
     </div>
   );
+}
+
+function mergeCallNotes(companion?: string, webphone?: string): string {
+  const parts = [companion?.trim(), webphone?.trim()].filter((part): part is string => Boolean(part));
+  return [...new Set(parts)].join('\n');
 }

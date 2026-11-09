@@ -124,7 +124,9 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
       return [...kept, ...newOnes];
     });
   }, [initialActivities]);
-  const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'destino' | 'dialer'>('execution');
+  const [activeTab, setActiveTab] = useState<'execution' | 'returns' | 'destino' | 'dialer'>(
+    searchParams.get('tab') === 'dialer' && showPowerDialer ? 'dialer' : 'execution',
+  );
   const [quickMode, setQuickMode] = useState(false);
   // Seed the status filter from the URL (?status=overdue|due) so the overdue
   // notification can deep-link straight into the pre-filtered queue.

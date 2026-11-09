@@ -72,6 +72,7 @@ O SDR hoje pula entre `/atividades`, `/leads`, `/dashboard` e configurações pa
 - [x] Fase 5 — aba Closers + migration `scheduling_enabled` + filtro no agendamento. Migration `20261107032426` aplicada em prod 07/11 + `pnpm gen:types`.
 - [x] Aplicar as 2 migrations em prod (OK do Vini 07/11), `pnpm gen:types`, conferir cards de etapa no preview (soma = 1.561 leads do Matheus).
 - [ ] Testar o liga/desliga de um closer na tela (não testado: escrita em produção bloqueada na sessão) e conferir que some do modal de agendar reunião.
+- [x] Complemento 09/11 — ligação de voz abre painel lateral na fila (contexto, histórico, anotações, grade semanal). E-mail, WhatsApp e ligação WhatsApp continuam no painel de execução. Sem cadência nova e sem escrita em produção.
 - [ ] Depois do merge do PR #514: rebase em `origin/main`, checagens completas, abrir PR(s) a partir de `feat/sdr-cockpit`.
 
 ## Dev Notes
@@ -100,8 +101,10 @@ O SDR hoje pula entre `/atividades`, `/leads`, `/dashboard` e configurações pa
 - `src/features/integrations/components/ScheduleMeetingModal.tsx`
 - `src/lib/supabase/types.ts` (gen:types)
 - `supabase/migrations/20261107032423_cockpit_lead_stages.sql`, `supabase/migrations/20261107032426_closers_scheduling_enabled.sql`
+- Complemento 09/11: `src/features/cockpit/components/CallSidePanel.tsx`, `CallMeetingDialogs.tsx`, `use-lead-history.ts`; `utils/call-dock.ts`, `call-history.ts`, `call-note-draft.ts`, `week-slots.ts` (+ testes); `TasksTab.tsx`; `ActivityPhonePanel.tsx` (`layout="dock"`); `CockpitShell.tsx` (atalho Discador); `ActivityQueueView.tsx` (`?tab=dialer`); fixture `src/app/demo/call-workspace/` (rota pública exata, sem envio)
 
 ## Change Log
 - 06/11/2026 — Story criada (Draft) a partir das telas de referência e das 7 decisões do Vini.
 - 06/11/2026 — Plano aprovado pelo Vini (vale como GO). @dev: 5 fases implementadas na branch `feat/sdr-cockpit` (Draft → InProgress). typecheck, lint, test:run (355 arquivos) e build passando. Migrations escritas, não aplicadas.
 - 07/11/2026 — Migrations aplicadas em prod (versões 20261107032423 e 20261107032426, arquivos renomeados para bater) e tipos regenerados.
+- 09/11/2026 — Painel lateral de ligação na aba Tarefas, reusando discador API4COM, `scheduleMeeting`, `getAvailability` e `listClosers`. A grade mostra a agenda Google do usuário logado, não a de cada closer. `scheduleMeeting` encerra a prospecção ativa e qualifica o lead; não matricula cadência anti-no-show nova.
