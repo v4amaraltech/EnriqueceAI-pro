@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Trash2, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -24,10 +24,13 @@ import { listClosers } from '@/features/settings-prospecting/actions/closers-cru
 import {
   addDays,
   buildWeekSlots,
+  formatBrtMeetingWhen,
   formatBrtWallClock,
+  formatWeekRange,
   slotSelectable,
   startOfWorkWeek,
   weekdayLabel,
+  SLOT_START_HOURS,
   type BusyInterval,
   type WeekSlot,
 } from '../utils/week-slots';
@@ -61,33 +64,54 @@ interface WeekDialogProps {
   onChoose: (choice: MeetingChoice) => void;
 }
 
+const AVATAR_TONES = [
+  'bg-rose-100 text-rose-800',
+  'bg-sky-100 text-sky-800',
+  'bg-amber-100 text-amber-800',
+  'bg-emerald-100 text-emerald-800',
+  'bg-violet-100 text-violet-800',
+];
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   const letters = parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
   return letters || '?';
 }
 
+function avatarTone(id: string): string {
+  let hash = 0;
+  for (const char of id) hash = (hash + char.charCodeAt(0)) % AVATAR_TONES.length;
+  return AVATAR_TONES[hash] ?? 'bg-muted text-foreground';
+}
+
+function mapCloser(row: { id: string; name: string; email: string }): MeetingCloser {
+  return { id: row.id, name: row.name, email: row.email };
+}
+
 export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }: WeekDialogProps) {
   const clock = useMemo(() => preview?.now ?? new Date(), [preview]);
   const [filter, setFilter] = useState<'all' | 'closers'>('closers');
   const [weekStart, setWeekStart] = useState(() => startOfWorkWeek(preview?.now ?? new Date()));
-  const [liveClosers, setLiveClosers] = useState<MeetingCloser[]>([]);
+  const [liveAll, setLiveAll] = useState<MeetingCloser[]>([]);
+  const [liveSchedulable, setLiveSchedulable] = useState<MeetingCloser[]>([]);
   const [liveBusy, setLiveBusy] = useState<BusyInterval[]>([]);
   const [availabilityNote, setAvailabilityNote] = useState<string | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => {
     if (!open || preview) return;
     let cancelled = false;
-    void listClosers({ onlySchedulable: filter === 'closers' }).then((result) => {
+    void Promise.all([listClosers(), listClosers({ onlySchedulable: true })]).then(([all, schedulable]) => {
       if (cancelled) return;
-      setLiveClosers(result.success ? result.data.map((row) => ({ id: row.id, name: row.name, email: row.email })) : []);
+      setLiveAll(all.success ? all.data.map(mapCloser) : []);
+      setLiveSchedulable(schedulable.success ? schedulable.data.map(mapCloser) : []);
     });
     return () => {
       cancelled = true;
     };
-  }, [open, filter, preview]);
+  }, [open, preview]);
 
   useEffect(() => {
     if (!open || preview) return;
@@ -107,59 +131,129 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
     };
   }, [open, preview, weekStart]);
 
-  const closers = preview ? (filter === 'closers' ? preview.closersSchedulable : preview.closersAll) : liveClosers;
+  const allClosers = preview ? preview.closersAll : liveAll;
+  const schedulable = preview ? preview.closersSchedulable : liveSchedulable;
+  const closers = filter === 'closers' ? schedulable : allClosers;
   const busy = preview ? preview.busy : liveBusy;
   const slots = useMemo(() => buildWeekSlots(weekStart, busy, clock), [weekStart, busy, clock]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? null;
-  const selectedCloser = closers.find((closer) => closer.id === selectedCloserId) ?? null;
+  const selectedCloser = closers.find((closer) => closer.id === selectedCloserId)
+    ?? allClosers.find((closer) => closer.id === selectedCloserId)
+    ?? null;
   const days = [0, 1, 2, 3, 4].map((dayIndex) => {
     const sample = slots.find((slot) => slot.dayIndex === dayIndex);
-    return { dayIndex, label: weekdayLabel(dayIndex), date: sample ? formatBrtWallClock(sample.start).dayMonth : '' };
+    return { dayIndex, label: weekdayLabel(dayIndex), date: sample ? formatBrtWallClock(sample.start).dayMonth.slice(0, 2) : '' };
   });
+
+  function applyFilter(next: 'all' | 'closers', openList = false) {
+    setFilter(next);
+    setListOpen(openList);
+    const pool = next === 'closers' ? schedulable : allClosers;
+    if (selectedCloserId && !pool.some((closer) => closer.id === selectedCloserId)) setSelectedCloserId(null);
+  }
+
+  function clearSelection() {
+    setSelectedSlotId(null);
+    setSelectedCloserId(null);
+  }
 
   function choose() {
     if (!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)) return;
     onChoose({ start: selectedSlot.start, end: selectedSlot.end, closer: selectedCloser });
   }
 
+  const whenLabel = selectedSlot
+    ? `${weekdayLabel(selectedSlot.dayIndex)} ${formatBrtWallClock(selectedSlot.start).dayMonth} · ${formatBrtWallClock(selectedSlot.start).time}`
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" data-testid="call-week-dialog">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            Agendar reunião
-          </DialogTitle>
-          <DialogDescription>Escolha um horário livre e o closer responsável.</DialogDescription>
+      <DialogContent
+        className="flex h-[90vh] w-[min(80vw,calc(100%-1.5rem))] max-w-[80vw] flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-[80vw]"
+        data-testid="call-week-dialog"
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Agendar reunião</DialogTitle>
+          <DialogDescription>
+            Horários ocupados são os do seu Google Calendar. A agenda de cada closer não é consultada; o closer escolhido entra como responsável e participante.
+          </DialogDescription>
         </DialogHeader>
-        <p className="text-muted-foreground text-xs">
-          Horários ocupados são os do seu Google Calendar. A agenda individual de cada closer não é lida nesta tela — o closer escolhido entra como responsável e participante.
-        </p>
-        {availabilityNote && <p className="text-xs text-amber-700">{availabilityNote}</p>}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <Button type="button" size="icon" variant="outline" className="h-8 w-8" aria-label="Semana anterior" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, -7)); }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5 pb-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Semana anterior" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, -7)); setSelectedSlotId(null); }}>
               <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button type="button" size="icon" variant="outline" className="h-8 w-8" aria-label="Próxima semana" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, 7)); }}>
+            </button>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Próxima semana" onClick={() => { setAvailabilityNote(null); setWeekStart((current) => addDays(current, 7)); setSelectedSlotId(null); }}>
               <ChevronRight className="h-4 w-4" />
-            </Button>
+            </button>
+            <p className="truncate">{formatWeekRange(weekStart)}</p>
           </div>
-          <div className="flex gap-1" role="group" aria-label="Filtro de closers">
-            <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Todos</FilterButton>
-            <FilterButton active={filter === 'closers'} onClick={() => setFilter('closers')}>Closers</FilterButton>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={filter === 'all'}
+              onClick={() => applyFilter('all')}
+              className={cn('bg-background h-8 rounded-md border px-2.5 text-xs', filter === 'all' ? 'border-foreground' : 'border-input text-muted-foreground')}
+            >
+              Todos
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label={`Closers ${closers.length}`}
+                aria-pressed={filter === 'closers'}
+                aria-expanded={listOpen}
+                onClick={() => {
+                  if (filter !== 'closers') {
+                    applyFilter('closers', true);
+                    return;
+                  }
+                  setListOpen((current) => !current);
+                }}
+                className={cn('bg-background flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs', filter === 'closers' ? 'border-foreground' : 'border-input text-muted-foreground')}
+              >
+                Closers
+                <span className="text-muted-foreground tabular-nums">{closers.length}</span>
+                <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
+              </button>
+              {listOpen && (
+                <ul className="border-border bg-background absolute right-0 z-10 mt-1 max-h-60 w-64 overflow-auto rounded-md border p-1 shadow-md" role="listbox" aria-label="Closers">
+                  {closers.length === 0 ? (
+                    <li className="text-muted-foreground px-2 py-2 text-xs">Nenhum closer neste filtro.</li>
+                  ) : closers.map((closer) => (
+                    <li key={closer.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        data-testid={`closer-${closer.id}`}
+                        aria-selected={closer.id === selectedCloserId}
+                        onClick={() => { setSelectedCloserId(closer.id); setListOpen(false); }}
+                        className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+                      >
+                        <Avatar id={closer.id} name={closer.name} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{closer.name}</span>
+                          <span className="text-muted-foreground block truncate">{closer.email}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[36rem] grid-cols-[3rem_repeat(5,minmax(0,1fr))] gap-1 text-xs">
+        {availabilityNote && <p className="px-6 pb-2 text-xs text-amber-700">{availabilityNote}</p>}
+        <div className="min-h-0 flex-1 overflow-auto px-6 pb-4">
+          <div className="grid h-full grid-cols-[3.25rem_repeat(5,minmax(0,1fr))] grid-rows-[auto_repeat(8,minmax(4.25rem,1fr))] gap-2">
             <div />
             {days.map((day) => (
-              <div key={day.dayIndex} className="px-1 text-center font-medium">
-                {day.label}
-                <div className="text-muted-foreground font-normal">{day.date}</div>
+              <div key={day.dayIndex} className="text-muted-foreground pb-1 text-center text-xs">
+                <div>{day.label}</div>
+                <div className="tabular-nums">{day.date}</div>
               </div>
             ))}
-            {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((hour) => (
+            {SLOT_START_HOURS.map((hour) => (
               <HourRow
                 key={hour}
                 hour={hour}
@@ -170,71 +264,50 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
             ))}
           </div>
         </div>
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Closer</p>
-          {closers.length === 0 ? (
-            <p className="text-muted-foreground text-xs">Nenhum closer neste filtro.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {closers.map((closer) => {
-                const selected = closer.id === selectedCloserId;
-                return (
-                  <li key={closer.id}>
-                    <button
-                      type="button"
-                      data-testid={`closer-${closer.id}`}
-                      aria-pressed={selected}
-                      onClick={() => setSelectedCloserId(closer.id)}
-                      className={cn(
-                        'flex items-center gap-2 rounded-full border px-2 py-1 text-left text-xs',
-                        selected ? 'border-primary bg-primary/5' : 'hover:bg-accent',
-                      )}
-                    >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[11px] font-semibold" aria-hidden>
-                        {initials(closer.name)}
-                      </span>
-                      <span>
-                        <span className="block font-medium">{closer.name}</span>
-                        <span className="text-muted-foreground block">{closer.email}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <div className="flex items-center justify-between gap-3 border-t px-6 py-4">
+          <div className="flex min-w-0 items-center gap-3 text-sm">
+            {selectedCloser ? (
+              <>
+                <Avatar id={selectedCloser.id} name={selectedCloser.name} />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{selectedCloser.name}</p>
+                  <p className="text-muted-foreground truncate text-xs">{whenLabel ?? 'Escolha um horário'}</p>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-xs">{whenLabel ?? 'Escolha um horário e um closer'}</p>
+            )}
+            {(selectedCloser || selectedSlot) && (
+              <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Limpar seleção" onClick={clearSelection}>
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <Button type="button" onClick={choose} disabled={!selectedSlot || !selectedCloser || !slotSelectable(selectedSlot)}>
             Agendar
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+function Avatar({ id, name }: { id: string; name: string }) {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn('rounded-md px-3 py-1 text-xs font-medium', active ? 'bg-primary text-primary-foreground' : 'border')}
-    >
-      {children}
-    </button>
+    <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold', avatarTone(id))} aria-hidden>
+      {initials(name)}
+    </span>
   );
 }
 
 function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: WeekSlot[]; selectedId: string | null; onSelect: (id: string) => void }) {
   return (
     <>
-      <div className="text-muted-foreground self-center text-right tabular-nums">{String(hour).padStart(2, '0')}h</div>
+      <div className="text-muted-foreground pt-2 text-right text-[11px] tabular-nums">{String(hour).padStart(2, '0')}:00</div>
       {slots.map((slot) => {
         const selectable = slotSelectable(slot);
         const selected = slot.id === selectedId;
+        const time = formatBrtWallClock(slot.start).time;
         return (
           <button
             key={slot.id}
@@ -244,14 +317,16 @@ function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: W
             data-testid={`slot-${slot.dayIndex}-${slot.hour}`}
             onClick={() => onSelect(slot.id)}
             className={cn(
-              'h-8 rounded border text-[11px]',
-              slot.busy && 'bg-muted text-muted-foreground',
-              slot.past && !slot.busy && 'text-muted-foreground/60',
-              selectable && 'hover:border-primary',
-              selected && 'border-primary bg-primary/10 font-medium',
+              'flex h-full min-h-16 flex-col items-start gap-1 rounded-md border px-2 py-1.5 text-left',
+              slot.busy && 'bg-muted text-muted-foreground border-transparent',
+              slot.past && !slot.busy && 'bg-muted/50 border-transparent opacity-60',
+              selectable && !selected && 'bg-background border-border hover:border-foreground/30',
+              selected && 'bg-foreground text-background border-foreground',
             )}
           >
-            {slot.busy ? 'Ocupado' : slot.past ? 'Passou' : 'Livre'}
+            <span className={cn('text-[11px] tabular-nums', selected ? 'text-background/70' : 'text-muted-foreground')}>{time}</span>
+            {slot.busy && <span className="text-xs">Ocupado</span>}
+            {slot.past && !slot.busy && <span className="sr-only">Passou</span>}
           </button>
         );
       })}
@@ -283,6 +358,8 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
   const [invite, setInvite] = useState<{ title: string; date: string; time: string; duration: string; meetLink?: string | null } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [hasWhatsApp, setHasWhatsApp] = useState(false);
+  const [closer, setCloser] = useState<MeetingCloser | null>(choice?.closer ?? null);
+  const [closerOptions, setCloserOptions] = useState<MeetingCloser[]>(preview?.closersAll ?? []);
 
   useEffect(() => {
     if (!open || !choice || preview) return;
@@ -296,6 +373,9 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
     void getMissingMeetingFields(leadId).then((result) => {
       if (!cancelled && result.success) setMissing(result.data);
     });
+    void listClosers().then((result) => {
+      if (!cancelled && result.success) setCloserOptions(result.data.map(mapCloser));
+    });
     return () => {
       cancelled = true;
     };
@@ -305,16 +385,17 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
     if (!open) inFlight.current = false;
   }, [open]);
 
-  if (!choice) return null;
+  if (!choice || !closer) return null;
   const wall = formatBrtWallClock(choice.start);
+  const options = closerOptions.some((item) => item.id === closer.id) ? closerOptions : [closer, ...closerOptions];
   const participants = [
-    { role: 'Closer', value: `${choice.closer.name} (${choice.closer.email})` },
-    { role: 'Organizador', value: organizerEmail || 'você' },
-    { role: 'Lead', value: leadEmail ? `${leadName} (${leadEmail})` : leadName },
+    { role: 'Closer', roleLabel: 'responsável', name: closer.name, email: closer.email },
+    { role: 'Organizador', roleLabel: 'organizador', name: organizerEmail || 'Você', email: organizerEmail },
+    { role: 'Lead', roleLabel: 'lead', name: leadName, email: leadEmail ?? '' },
   ];
 
   function submit() {
-    if (!choice || inFlight.current) return;
+    if (!choice || !closer || inFlight.current) return;
     const amount = parseMoney(faturamento);
     if (amount === null) {
       toast.error('Informe o faturamento estimado do lead (em R$) antes de agendar.');
@@ -324,7 +405,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
       toast.error(`Preencha os campos obrigatórios antes de agendar: ${missing.map((field) => field.label).join(', ')}`);
       return;
     }
-    const emails = [leadEmail, choice.closer.email, organizerEmail].map((email) => email?.trim() ?? '').filter(Boolean);
+    const emails = [leadEmail, closer.email, organizerEmail].map((email) => email?.trim() ?? '').filter(Boolean);
     const eventInput = {
       title: title.trim() || `V4 Company + ${leadName}`,
       description: description.trim() || undefined,
@@ -332,7 +413,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
       endTime: wallIso(choice.end),
       attendeeEmails: [...new Set(emails)],
       generateMeetLink,
-      closerId: choice.closer.id,
+      closerId: closer.id,
     };
     inFlight.current = true;
     if (preview?.skipSubmit) {
@@ -371,54 +452,83 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" data-testid="meeting-confirm-dialog">
-          <DialogHeader>
-            <DialogTitle>Confirmar agendamento</DialogTitle>
-            <DialogDescription>Revise dia, responsável, participantes e o convite com Meet.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <p><span className="font-medium">Quando:</span> {wall.dayMonth} às {wall.time} (60 min)</p>
-            <p><span className="font-medium">Responsável:</span> {choice.closer.name}</p>
-            <div>
-              <Label htmlFor="meeting-title">Título</Label>
-              <Input id="meeting-title" value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1" />
+        <DialogContent className="flex max-h-[90vh] w-full max-w-[480px] flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-[480px]" data-testid="meeting-confirm-dialog">
+          <div className="px-6 pt-6 pb-2">
+            <DialogHeader className="gap-0 text-left">
+              <DialogTitle className="text-base font-semibold">Detalhes da Reunião</DialogTitle>
+              <DialogDescription className="sr-only">
+                Revise responsável, convite e participantes. Confirmar grava a reunião, qualifica o lead e encerra a prospecção ativa. O histórico anterior permanece.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="min-h-0 flex-auto space-y-4 overflow-y-auto px-6 py-2">
+            <div className="bg-muted flex items-center gap-3 rounded-lg px-4 py-3 text-sm">
+              <CalendarIcon className="text-muted-foreground h-4 w-4 shrink-0" />
+              <span>{formatBrtMeetingWhen(choice.start, choice.end)}</span>
             </div>
-            <div>
-              <Label htmlFor="meeting-description">Descrição</Label>
-              <Textarea id="meeting-description" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-1" />
+            <div className="space-y-1.5">
+              <Label htmlFor="meeting-owner" className="text-muted-foreground text-xs font-normal">Responsável por conduzir a reunião *</Label>
+              <div className="border-input flex items-center gap-2 rounded-md border px-2">
+                <Avatar id={closer.id} name={closer.name} />
+                <select
+                  id="meeting-owner"
+                  value={closer.id}
+                  onChange={(event) => {
+                    const next = options.find((item) => item.id === event.target.value);
+                    if (next) setCloser(next);
+                  }}
+                  className="bg-background h-10 min-w-0 flex-1 text-sm outline-none"
+                >
+                  {options.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">Participantes</p>
-              <ul className="mt-1 space-y-1">
-                {participants.map((person) => (
-                  <li key={person.role} data-testid={`participant-${person.role}`}>
-                    <span className="text-muted-foreground">{person.role}:</span> {person.value}
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-1.5">
+              <Label htmlFor="meeting-title" className="text-muted-foreground text-xs font-normal">Título do convite da reunião</Label>
+              <Input id="meeting-title" value={title} onChange={(event) => setTitle(event.target.value)} />
+              <p className="text-muted-foreground text-xs">Será o título da reunião do convite no Google Meet</p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={generateMeetLink} onChange={(event) => setGenerateMeetLink(event.target.checked)} />
-              <Video className="h-4 w-4" />
-              Enviar convite com Google Meet
-            </label>
-            <div>
-              <Label htmlFor="meeting-revenue">Faturamento estimado (R$)</Label>
-              <Input id="meeting-revenue" value={faturamento} onChange={(event) => setFaturamento(event.target.value)} className="mt-1" inputMode="decimal" />
+            <div className="space-y-1.5">
+              <Label htmlFor="meeting-description" className="text-muted-foreground text-xs font-normal">Descrição do convite</Label>
+              <Textarea id="meeting-description" value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24" />
+              <p className="text-muted-foreground text-xs">Entra no corpo do convite enviado aos participantes.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meeting-revenue" className="text-muted-foreground text-xs font-normal">Faturamento estimado (R$) *</Label>
+              <Input id="meeting-revenue" value={faturamento} onChange={(event) => setFaturamento(event.target.value)} inputMode="decimal" />
             </div>
             {missing.length > 0 && (
               <p className="text-xs text-amber-700">Preencha antes de agendar: {missing.map((field) => field.label).join(', ')}</p>
             )}
-            <p className="text-muted-foreground text-xs">
-              Confirmar grava a reunião, qualifica o lead e encerra a prospecção ativa. O histórico anterior permanece.
-            </p>
+            <section className="space-y-1">
+              <h3 className="text-sm font-medium">Participantes</h3>
+              <ul>
+                {participants.map((person) => (
+                  <li key={person.role} data-testid={`participant-${person.role}`} className="flex items-center gap-3 py-2">
+                    <Avatar id={person.email || person.role} name={person.name} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{person.name}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {person.email ? `${person.email} · ${person.roleLabel}` : person.roleLabel}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <label className="text-muted-foreground flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={generateMeetLink} onChange={(event) => setGenerateMeetLink(event.target.checked)} />
+              <Video className="h-3.5 w-3.5" />
+              Incluir Google Meet no convite
+            </label>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Voltar</Button>
-            <Button type="button" onClick={submit} disabled={isPending || missing.length > 0} data-testid="confirm-meeting">
+          <div className="px-6 pt-2 pb-6">
+            <Button type="button" className="w-full" onClick={submit} disabled={isPending || missing.length > 0} data-testid="confirm-meeting">
               {isPending ? 'Agendando...' : 'Confirmar agendamento'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
       {invite && (

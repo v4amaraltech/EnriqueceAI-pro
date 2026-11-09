@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWeekSlots, formatBrtWallClock, slotSelectable, startOfWorkWeek } from './week-slots';
+import { buildWeekSlots, formatBrtMeetingWhen, formatBrtWallClock, formatWeekRange, slotSelectable, startOfWorkWeek } from './week-slots';
 
 describe('week slots', () => {
   const monday = new Date('2026-11-09T12:00:00.000Z');
@@ -21,7 +21,8 @@ describe('week slots', () => {
     expect(nine && slotSelectable(nine)).toBe(false);
     expect(eleven?.busy).toBe(true);
     expect(fourteen && slotSelectable(fourteen)).toBe(true);
-    expect(slots.filter((s) => s.dayIndex === 0)).toHaveLength(10);
+    expect(slots.filter((s) => s.dayIndex === 0)).toHaveLength(8);
+    expect(slots.some((s) => s.hour === 8 || s.hour === 17)).toBe(false);
   });
 
   it('formata o relógio de parede em BRT', () => {
@@ -30,5 +31,14 @@ describe('week slots', () => {
       time: '11:00',
       dayMonth: '09/11',
     });
+  });
+
+  it('escreve o intervalo da semana e o horário por extenso em BRT', () => {
+    const week = startOfWorkWeek(monday);
+    expect(formatWeekRange(week)).toBe('9 – 13 de novembro de 2026 · America/Sao_Paulo');
+    const start = new Date('2026-11-09T17:00:00.000Z');
+    expect(formatBrtMeetingWhen(start, new Date(start.getTime() + 60 * 60 * 1000))).toBe(
+      'segunda-feira, 9 de novembro · 14:00 - 15:00',
+    );
   });
 });

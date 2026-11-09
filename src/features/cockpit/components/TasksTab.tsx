@@ -290,8 +290,7 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
         {autoSend && <WhatsAppAutoSendCard data={autoSend} isOwn={isOwn} />}
       </div>
 
-      <div className="flex flex-col items-stretch gap-4 md:flex-row md:items-start">
-      <div className="min-w-0 flex-1 space-y-6">
+      <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-lg font-semibold">
           Tarefas do dia <span className="text-muted-foreground text-sm font-normal">({completedPct}% da meta feita)</span>
@@ -415,7 +414,6 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
           previewOnly={previewOnly}
         />
       )}
-      </div>
 
       <ActivityExecutionSheet
         activities={filtered}

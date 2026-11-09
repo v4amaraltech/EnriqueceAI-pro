@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { Building2, ChevronDown, Minus, X } from 'lucide-react';
+import { ChevronDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/components/ui/sheet';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import { ActivityPhonePanel, type CallState } from '@/features/activities/components/ActivityPhonePanel';
@@ -125,30 +126,30 @@ export function CallSidePanel({
   ];
 
   return (
-    <aside
-      data-testid="call-side-panel"
+    <>
+    <Sheet open={!minimized} onOpenChange={(next) => { if (!next) requestClose(); }}>
+    <SheetContent
+      side="right"
+      forceMount
       aria-label="Contexto da ligação"
-      className={cn(
-        'border-border bg-card z-30 flex w-full flex-col rounded-lg border shadow-sm md:sticky md:top-4 md:w-[320px] md:max-h-[calc(100vh-2rem)]',
-        minimized ? 'h-14' : 'max-h-[78vh] md:max-h-[calc(100vh-2rem)]',
-      )}
+      data-testid="call-side-panel"
+      data-slot="call-side-panel"
+      className={cn('w-full gap-0 p-0 sm:max-w-2xl', minimized && 'hidden')}
+      onInteractOutside={(event) => { if (inCall) event.preventDefault(); }}
+      onEscapeKeyDown={(event) => { if (inCall) event.preventDefault(); }}
     >
-      <header className="flex items-start gap-2 border-b px-3 py-2">
-        <Building2 className="mt-0.5 h-4 w-4 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{company}</p>
-          <p className="text-muted-foreground truncate text-xs">{contact}{lead.telefone ? ` · ${lead.telefone}` : ''}</p>
-        </div>
-        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={minimized ? 'Restaurar painel' : 'Minimizar painel'} onClick={minimized ? onRestore : onMinimize}>
-          {minimized ? <ChevronDown className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+      <SheetHeader className="border-b pr-16 text-left">
+        <SheetTitle className="truncate text-base">{company}</SheetTitle>
+        <SheetDescription className="truncate">
+          {contact}{lead.telefone ? ` · ${lead.telefone}` : ''}
+        </SheetDescription>
+        <Button type="button" size="icon" variant="ghost" className="absolute top-3 right-12 h-7 w-7" aria-label="Minimizar painel" onClick={onMinimize}>
+          <Minus className="h-4 w-4" />
         </Button>
-        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Fechar painel" onClick={requestClose} disabled={inCall} title={inCall ? 'Encerre a ligação antes de fechar' : 'Fechar'}>
-          <X className="h-4 w-4" />
-        </Button>
-      </header>
+      </SheetHeader>
 
-      <div className={cn('flex min-h-0 flex-1 flex-col', minimized && 'hidden')}>
-        <div className="border-b px-3 py-2">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-b px-4 py-3">
           <ActivityPhonePanel
             layout="dock"
             leadName={company}
@@ -170,7 +171,7 @@ export function CallSidePanel({
           />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
           <dl className="space-y-1.5 text-xs">
             {facts.map(([label, value]) => (
               <div key={label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
@@ -208,7 +209,7 @@ export function CallSidePanel({
           </section>
         </div>
 
-        <div className="space-y-2 border-t px-3 py-2">
+        <div className="mt-auto space-y-2 border-t px-4 py-4">
           <label className="block text-xs font-medium" htmlFor="call-notes">Anotações</label>
           <Textarea
             id="call-notes"
@@ -235,6 +236,14 @@ export function CallSidePanel({
           </div>
         </div>
       </div>
+    </SheetContent>
+    </Sheet>
+    {minimized && (
+      <button type="button" onClick={onRestore} className="bg-background fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border px-3 py-2 text-sm shadow-lg" aria-label="Restaurar painel">
+        <ChevronDown className="h-4 w-4" />
+        {company}
+      </button>
+    )}
 
       <CallMeetingWeekDialog
         key={weekSession}
@@ -261,6 +270,6 @@ export function CallSidePanel({
         onScheduled={onScheduled}
       />
       )}
-    </aside>
+    </>
   );
 }

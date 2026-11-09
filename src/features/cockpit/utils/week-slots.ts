@@ -2,7 +2,8 @@
 
 const BRT_OFFSET_MIN = -180;
 
-export const SLOT_START_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
+/** Linhas da grade: 09:00 até 16:00, inclusive. */
+export const SLOT_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16] as const;
 export const SLOT_DURATION_MIN = 60;
 
 export interface BusyInterval {
@@ -48,9 +49,33 @@ export function addDays(date: Date, days: number): Date {
 }
 
 const WEEKDAY = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'];
+const WEEKDAY_LONG = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const MONTH_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
 export function weekdayLabel(dayIndex: number): string {
   return WEEKDAY[dayIndex] ?? '';
+}
+
+/** "9 – 13 de novembro de 2026 · America/Sao_Paulo" para a semana útil. */
+export function formatWeekRange(weekStart: Date): string {
+  const start = brtParts(weekStart);
+  const end = brtParts(addDays(weekStart, 4));
+  const zone = 'America/Sao_Paulo';
+  if (start.y === end.y && start.m === end.m) {
+    return `${start.day} – ${end.day} de ${MONTH_LONG[start.m]} de ${start.y} · ${zone}`;
+  }
+  if (start.y === end.y) {
+    return `${start.day} de ${MONTH_LONG[start.m]} – ${end.day} de ${MONTH_LONG[end.m]} de ${end.y} · ${zone}`;
+  }
+  return `${start.day} de ${MONTH_LONG[start.m]} de ${start.y} – ${end.day} de ${MONTH_LONG[end.m]} de ${end.y} · ${zone}`;
+}
+
+/** "segunda-feira, 9 de novembro · 14:00 - 15:00". */
+export function formatBrtMeetingWhen(start: Date, end: Date): string {
+  const s = brtParts(start);
+  const e = brtParts(end);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${WEEKDAY_LONG[s.dow]}, ${s.day} de ${MONTH_LONG[s.m]} · ${pad(s.h)}:${pad(s.min)} - ${pad(e.h)}:${pad(e.min)}`;
 }
 
 export function formatBrtWallClock(date: Date): { date: string; time: string; dayMonth: string } {
