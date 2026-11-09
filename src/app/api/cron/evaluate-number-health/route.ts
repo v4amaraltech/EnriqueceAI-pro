@@ -3,7 +3,15 @@ import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
-import { readNumberHealthFlag, runNumberHealthEvaluation } from '@/features/contact-engine/services/number-health.service';
+import { runNumberHealthEvaluation } from '@/features/contact-engine/services/number-health.service';
+import type { FlagRow } from '@/features/contact-engine/services/flag-scope.service';
+
+import {
+  collectEligibleInstances,
+  HEALTH_EVALUATION_PAGE_SIZE,
+  HEALTH_EVALUATION_WORK_LIMIT,
+  orgEligibleForNumberHealth,
+} from './batch';
 
 export const maxDuration = 60;
 
@@ -13,90 +21,76 @@ interface EligibleInstance {
   instance_name: string;
 }
 
-interface FlagRow {
+interface FlagRead extends FlagRow {
   key: string;
-  enabled: boolean;
-  allow_org_ids: string[] | null;
 }
 
 /**
- * Cron: avalia saude periodica de numeros Evolution conforme PR10.
+ * Avalia saude de instancias Evolution em lotes.
  *
- * Somente instancias Evolution de organizacoes permitidas pela flag
- * `number_health_v1` (escopo org do PR12). Flag desligada ou ilegivel:
- * nenhuma gravacao. Avaliacao em lotes limitados, idempotente e segura
- * para concorrencia (CAS por health_state).
+ * A tabela `whatsapp_instances` nao tem soft delete. Toda linha e uma
+ * instancia Evolution. Orgs fora da flag nao entram no lote de trabalho e
+ * nao sao gravadas. Erro ou avaliacao nao aplicada avanca `health_evaluated_at`
+ * para nao prender as 100 primeiras na frente das demais.
  *
- * IMPORTANTE: agendamento NUNCA e criado/ativado por este PR. Sera
- * documentado em runbook separado e ativado somente apos aprovacao.
+ * O agendamento nao e criado aqui. O runbook descreve POST e a cadencia.
  */
 async function evaluateNumberHealth() {
   const db = createServiceRoleClient();
 
-  // 1. Le flag global e lista de organizacoes permitidas.
   const flagRes = (await from(db, 'app_flags')
-    .select('key, enabled, allow_org_ids')
+    .select('key, enabled, allow_org_ids, allow_user_ids')
     .eq('key', 'number_health_v1')
-    .limit(1)) as unknown as { data: FlagRow[] | null; error: { message: string } | null };
+    .limit(1)) as unknown as { data: FlagRead[] | null; error: { message: string } | null };
 
   if (flagRes.error || !flagRes.data?.[0]) {
     return { evaluated: 0, skipped: 'flag_unreadable' };
   }
 
   const flag = flagRes.data[0];
-  const globalEnabled = flag.enabled;
   const allowedOrgs = flag.allow_org_ids ?? [];
-
-  // Flag desligada globalmente e sem organizacoes permitidas: nao avalia nada.
-  if (!globalEnabled && allowedOrgs.length === 0) {
+  if (!flag.enabled && allowedOrgs.length === 0) {
     return { evaluated: 0, skipped: 'flag_disabled' };
   }
 
-  // 2. Busca instancias Evolution elegíveis (nao deletadas) de organizacoes permitidas.
-  // PAGINACAO: limite 100 por execucao, ordenadas por health_evaluated_at ASC
-  // (menos recentemente avaliadas primeiro) para prevenir fome.
-  // FILTRO: is('deleted_at', null) seleciona instancias ATIVAS (deleted_at IS NULL).
-  let query = from(db, 'whatsapp_instances')
-    .select('id, org_id, instance_name')
-    .is('deleted_at', null)
-    .order('health_evaluated_at', { ascending: true, nullsFirst: true });
+  const candidates: EligibleInstance[] = [];
+  let offset = 0;
+  for (;;) {
+    const pageRes = (await from(db, 'whatsapp_instances')
+      .select('id, org_id, instance_name')
+      .order('health_evaluated_at', { ascending: true, nullsFirst: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + HEALTH_EVALUATION_PAGE_SIZE - 1)) as unknown as {
+      data: EligibleInstance[] | null;
+      error: { message: string } | null;
+    };
 
-  if (!globalEnabled) {
-    // Flag desligada globalmente: filtra somente orgs da lista permitida.
-    query = query.in('org_id', allowedOrgs);
-  }
-  // Se globalEnabled, avalia todas as instancias (sem filtro de org).
+    if (pageRes.error || !pageRes.data) {
+      return { evaluated: 0, error: 'failed_to_read_instances' };
+    }
 
-  const instRes = (await query.limit(100)) as unknown as {
-    data: EligibleInstance[] | null;
-    error: { message: string } | null;
-  };
-
-  if (instRes.error || !instRes.data) {
-    return { evaluated: 0, error: 'failed_to_read_instances' };
+    candidates.push(...pageRes.data);
+    if (collectEligibleInstances(candidates, flag).length >= HEALTH_EVALUATION_WORK_LIMIT) break;
+    if (pageRes.data.length < HEALTH_EVALUATION_PAGE_SIZE) break;
+    offset += HEALTH_EVALUATION_PAGE_SIZE;
   }
 
-  const instances = instRes.data;
+  const instances = collectEligibleInstances(candidates, flag);
   if (instances.length === 0) {
-    return { evaluated: 0, skipped: 'no_eligible_instances' };
+    return { evaluated: 0, skipped: 'no_eligible_instances', scanned: candidates.length };
   }
 
-  // 3. Avalia cada instancia em lote. Telemetria ausente nao bloqueia,
-  //    mas avanco exige sinais conhecidos. Concorrencia e segura: CAS
-  //    por health_state previne atropelos.
   let evaluated = 0;
   let skipped = 0;
   let failed = 0;
 
   for (const inst of instances) {
-    try {
-      // Verifica flag por organizacao antes de avaliar.
-      const orgFlag = await readNumberHealthFlag({ orgId: inst.org_id });
-      if (orgFlag !== 'on') {
-        skipped++;
-        continue;
-      }
+    if (!orgEligibleForNumberHealth(flag, inst.org_id)) {
+      skipped++;
+      continue;
+    }
 
+    try {
       const result = await runNumberHealthEvaluation({
         orgId: inst.org_id,
         instanceId: inst.id,
@@ -104,16 +98,39 @@ async function evaluateNumberHealth() {
 
       if (result.success && result.data.applied) {
         evaluated++;
-      } else {
-        skipped++;
+        continue;
       }
+
+      if (result.success && (result.data.reason === 'flag_disabled' || result.data.reason === 'flag_unreadable')) {
+        skipped++;
+        continue;
+      }
+
+      if (!result.success) failed++;
+      else skipped++;
+      await advanceEvaluationCursor(db, inst);
     } catch (err) {
       console.error(`[evaluate-number-health] Error evaluating ${inst.instance_name}:`, err);
       failed++;
+      await advanceEvaluationCursor(db, inst);
     }
   }
 
-  return { evaluated, skipped, failed, total: instances.length };
+  return { evaluated, skipped, failed, total: instances.length, scanned: candidates.length };
+}
+
+/**
+ * Tira a instancia da frente da fila sem alterar estado, teto, rampa ou freio.
+ * So roda depois de uma tentativa elegivel que nao aplicou avaliacao.
+ */
+async function advanceEvaluationCursor(
+  db: ReturnType<typeof createServiceRoleClient>,
+  inst: EligibleInstance,
+): Promise<void> {
+  await from(db, 'whatsapp_instances')
+    .update({ health_evaluated_at: new Date().toISOString() } as never)
+    .eq('id', inst.id)
+    .eq('org_id', inst.org_id);
 }
 
 export async function POST(request: Request) {

@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_number_health_recoveries (
   -- NO ACTION: apagar o numero nao apaga o historico de auditoria.
   instance_id          uuid NOT NULL REFERENCES public.whatsapp_instances(id),
   -- Gestor que autorizou a recuperacao.
-  actor_user_id        uuid NOT NULL REFERENCES public.users(id),
+  -- auth.users: o repositorio nao tem public.users. O ator e o mesmo id de
+  -- organization_members.user_id (sessao). Nao renomear este arquivo.
+  actor_user_id        uuid NOT NULL REFERENCES auth.users(id),
   -- Justificativa fornecida pelo gestor (minimo 10 caracteres validado no servico).
   note                 text NOT NULL,
   -- Estado anterior (paused ou review).

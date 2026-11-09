@@ -16,6 +16,7 @@ import {
   MAX_RAMP_STAGE,
   rampCaps,
   recordNumberHealthSignals,
+  recoveryIdempotencyToken,
   runNumberHealthEvaluation,
   windowSignals,
   type EvaluationInstance,
@@ -80,7 +81,53 @@ function install(f: Fake) {
   };
   const rpc = async (fn: string, args: Row) => {
     f.rpcs.push({ fn, args });
-    return { data: null, error: f.rpcError ? { message: 'boom' } : null };
+    if (f.rpcError) return { data: null, error: { message: 'boom' } };
+    if (fn !== 'authorize_number_recovery_with_audit') return { data: null, error: null };
+    const row = (f.tables.whatsapp_instances ?? []).find(
+      (r) => r.id === args.p_instance_id && r.org_id === args.p_org_id,
+    );
+    if (!row) return { data: { success: false, error: 'not_found' }, error: null };
+    if (row.health_state !== 'paused' && row.health_state !== 'review') {
+      return { data: { success: false, error: 'not_blocked' }, error: null };
+    }
+    if (row.status !== 'connected') return { data: { success: false, error: 'not_connected' }, error: null };
+    if (args.p_expected_blocked_at && row.health_state_changed_at && args.p_expected_blocked_at !== row.health_state_changed_at) {
+      return { data: { success: false, error: 'stale_episode' }, error: null };
+    }
+    const recoveredAt = new Date(String(args.p_recovered_at));
+    const windowDate = healthWindowKey(recoveredAt);
+    const win = (f.tables.whatsapp_number_health_windows ?? []).find(
+      (w) => w.instance_id === args.p_instance_id && w.window_date === windowDate,
+    );
+    const pauseReason = row.health_pause_reason;
+    Object.assign(row, {
+      health_state: 'warming',
+      health_pause_reason: null,
+      health_state_changed_at: args.p_recovered_at,
+      health_recovered_at: args.p_recovered_at,
+      health_ack_window_date: windowDate,
+      health_ack_trusted_reports: win?.trusted_reports ?? 0,
+      health_ack_restrictions: win?.restriction_events ?? 0,
+      auto_send_consecutive_failures: 0,
+    });
+    if (typeof row.auto_send_pause_reason === 'string' && row.auto_send_pause_reason.startsWith('health:')) {
+      row.auto_send_paused_at = null;
+      row.auto_send_pause_reason = null;
+      row.auto_send_next_at = null;
+    }
+    const audits = (f.tables.whatsapp_number_health_recoveries ??= []);
+    audits.push({
+      instance_id: args.p_instance_id,
+      pause_reason: pauseReason,
+      note: args.p_note,
+      idempotency_token: args.p_idempotency_token,
+      blocked_at: args.p_expected_blocked_at,
+      new_state: 'warming',
+      ramp_stage: row.health_ramp_stage,
+      total_cap: row.health_total_daily_cap,
+      new_contacts_cap: row.health_new_contacts_daily_cap,
+    });
+    return { data: { success: true, state: 'warming', audit_id: 'audit-1', replay: false }, error: null };
   };
   vi.mocked(createServiceRoleClient).mockReturnValue({ from, rpc } as never);
 }
@@ -452,7 +499,7 @@ describe('flag number_health_v1 desligada: sem efeito', () => {
       expect(await recordNumberHealthSignals({ orgId: 'org-1', instanceId: 'inst-A', now: NOW, delta: { sentNewContacts: 1 } })).toEqual({ success: true, data: { recorded: false } });
       const run = await runNumberHealthEvaluation({ orgId: 'org-1', instanceId: 'inst-A', now: NOW });
       expect(run).toMatchObject({ success: true, data: { applied: false, reason: 'flag_disabled' } });
-      expect(await authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: { userId: 'm', orgId: 'org-1', role: 'manager' }, note: 'revisao concluida', idempotencyToken: 'token-1', now: NOW })).toMatchObject({ success: false, code: 'flag_disabled' });
+      expect(await authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: { userId: 'm', orgId: 'org-1', role: 'manager' }, note: 'revisao concluida', idempotencyToken: 'token-1', expectedBlockedAt: '2026-11-12T10:00:00.000Z', now: NOW })).toMatchObject({ success: false, code: 'flag_disabled' });
       onlyFlagRead();
       expect(db.updates).toEqual([]);
       expect(db.rpcs).toEqual([]);
@@ -629,11 +676,31 @@ describe('avaliacao persistida', () => {
 
 describe('desconexao e recuperacao autorizada', () => {
   const manager = { userId: 'mgr-1', orgId: 'org-1', role: 'manager' as const };
+  const blockedAt = '2026-11-12T10:00:00.000Z';
   const recover = (over: Partial<Parameters<typeof authorizeNumberRecovery>[0]> = {}) =>
-    authorizeNumberRecovery({ orgId: 'org-1', instanceId: 'inst-A', actor: manager, note: 'numero reconectado e revisado', idempotencyToken: over.idempotencyToken ?? 'token-default', now: NOW, ...over });
+    authorizeNumberRecovery({
+      orgId: 'org-1',
+      instanceId: 'inst-A',
+      actor: manager,
+      note: 'numero reconectado e revisado',
+      idempotencyToken: over.idempotencyToken ?? 'token-default',
+      expectedBlockedAt: over.expectedBlockedAt ?? blockedAt,
+      now: NOW,
+      ...over,
+    });
 
   const paused = (over: Row = {}) =>
-    instanceRow({ health_state: 'paused', health_ramp_stage: 2, health_total_daily_cap: 60, health_new_contacts_daily_cap: 30, auto_send_paused_at: '2026-11-12T10:00:00Z', auto_send_pause_reason: 'health:session_disconnected', ...over });
+    instanceRow({
+      health_state: 'paused',
+      health_pause_reason: 'session_disconnected',
+      health_state_changed_at: blockedAt,
+      health_ramp_stage: 2,
+      health_total_daily_cap: 60,
+      health_new_contacts_daily_cap: 30,
+      auto_send_paused_at: '2026-11-12T10:00:00Z',
+      auto_send_pause_reason: 'health:session_disconnected',
+      ...over,
+    });
 
   it('reconectar sozinho nao despausa', async () => {
     setup(true, { whatsapp_instances: [paused()], whatsapp_number_health_windows: ['2026-11-11', '2026-11-10', '2026-11-09'].map((d) => winRow(d)) });
@@ -694,6 +761,21 @@ describe('garantias de codigo', () => {
     expect(src).not.toMatch(/\.in\(\s*'id'/);
   });
 
+  it('token do pedido e estavel e muda com nota ou episodio', () => {
+    const base = {
+      orgId: 'org-1',
+      instanceId: 'inst-A',
+      actorUserId: 'mgr-1',
+      note: 'numero reconectado e revisado',
+      blockedAt: '2026-11-12T10:00:00.000Z',
+    };
+    const token = recoveryIdempotencyToken(base);
+    expect(token).toBe(recoveryIdempotencyToken(base));
+    expect(token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(recoveryIdempotencyToken({ ...base, note: 'outra justificativa valida' })).not.toBe(token);
+    expect(recoveryIdempotencyToken({ ...base, blockedAt: '2026-11-13T10:00:00.000Z' })).not.toBe(token);
+  });
+
   it('a migration nao concede DELETE e as flags nascem desligadas', () => {
     const sql = readFileSync(
       join(__dirname, '../../../../supabase/migrations/20261107200000_number_health.sql'),
@@ -705,5 +787,20 @@ describe('garantias de codigo', () => {
     expect(sql).toMatch(/health_new_contacts_daily_cap INTEGER NOT NULL DEFAULT 10/);
     expect(sql).toMatch(/health_state TEXT NOT NULL DEFAULT 'onboarding'/);
     expect(sql).not.toMatch(/DROP TABLE|TRUNCATE|DELETE FROM/i);
+  });
+
+  it('o contrato novo nao usa ON CONFLICT depois do update nem unique(instance, previous_state)', () => {
+    const sql = readFileSync(
+      join(__dirname, '../../../../supabase/migrations/20261109120000_number_health_recovery_contract.sql'),
+      'utf8',
+    );
+    expect(sql).not.toMatch(/ON CONFLICT/i);
+    expect(sql).not.toMatch(/unique\s*\(\s*instance_id\s*,\s*previous_state\s*\)/i);
+    expect(sql).toMatch(/instance_id, blocked_at/);
+    expect(sql).toMatch(/ON DELETE RESTRICT/);
+    expect(sql).toMatch(/token_conflict/);
+    expect(sql).toMatch(/stale_episode/);
+    expect(sql).not.toMatch(/GRANT[^\n;]*\bDELETE\b/i);
+    expect(sql).toMatch(/REFERENCES auth\.users\(id\)/);
   });
 });
