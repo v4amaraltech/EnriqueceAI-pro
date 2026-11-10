@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -142,7 +143,13 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
                 key={value}
                 variant={channelFilter === value ? 'default' : 'outline'}
                 size="sm"
-                className="h-7 text-xs"
+                aria-pressed={channelFilter === value}
+                className={cn(
+                  'h-7 border text-xs',
+                  channelFilter === value
+                    ? ''
+                    : 'border-border bg-background text-foreground dark:border-foreground/50',
+                )}
                 onClick={() => setChannelFilter(value)}
               >
                 <Icon className="mr-1 h-3 w-3" />

@@ -103,7 +103,7 @@ export function InlineEditField({
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="group flex w-full items-center gap-1.5 min-w-0 overflow-hidden rounded-md bg-[var(--muted)] px-3 py-2 text-base text-left hover:ring-1 hover:ring-[var(--ring)] transition-shadow"
+          className="group flex w-full items-center gap-1.5 min-w-0 overflow-hidden rounded-md border border-border bg-[var(--muted)] px-3 py-2 text-base text-left hover:ring-1 hover:ring-[var(--ring)] transition-shadow"
         >
           <span className={`flex-1 truncate ${mono ? 'font-mono text-sm' : ''} ${!value ? 'text-[var(--muted-foreground)] italic' : ''}`}>
             {value || placeholder}
