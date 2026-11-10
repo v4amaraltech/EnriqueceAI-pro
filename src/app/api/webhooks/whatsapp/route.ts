@@ -13,6 +13,8 @@ import {
 } from '@/lib/webhooks';
 import { captureInboundMessageConsent } from '@/features/contact-engine/services/consent-capture.service';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { appendStatusByProviderMessage, storeOrQuarantine } from '@/features/lead-messages/inbound';
+import { metaCloudMedia } from '@/features/lead-messages/meta-media';
 
 export const maxDuration = 60;
 
@@ -34,6 +36,11 @@ interface WhatsAppWebhookPayload {
           type: string;
           text?: { body: string };
           timestamp: string;
+          image?: { id?: string; mime_type?: string };
+          audio?: { id?: string; mime_type?: string };
+          video?: { id?: string; mime_type?: string };
+          document?: { id?: string; mime_type?: string };
+          sticker?: { id?: string; mime_type?: string };
         }[];
       };
     }[];
@@ -135,6 +142,24 @@ export async function POST(request: Request) {
               } as Record<string, unknown>)
               .eq('external_id', status.id);
 
+            const phoneNumberId = value.metadata?.phone_number_id;
+            if (phoneNumberId) {
+              const { data: statusConnections } = (await from(sb, 'whatsapp_connections')
+                .select('org_id')
+                .eq('phone_number_id', phoneNumberId)
+                .limit(2)) as { data: { org_id: string }[] | null };
+              const statusOrg = statusConnections?.length === 1 ? statusConnections[0]?.org_id : null;
+              if (statusOrg) {
+                await appendStatusByProviderMessage({
+                  orgId: statusOrg,
+                  providerMessageId: status.id,
+                  status: status.status,
+                  occurredAt: new Date(Number(status.timestamp) * 1000).toISOString(),
+                  raw: status.errors ? { errors: status.errors } : null,
+                });
+              }
+            }
+
             // Dispatch webhook for sent/failed
             if (status.status === 'sent' || status.status === 'failed') {
               const { data: interaction } = (await from(sb, 'interactions')
@@ -195,7 +220,18 @@ export async function POST(request: Request) {
 
 async function processIncomingMessage(
   supabase: ReturnType<typeof createServiceRoleClient>,
-  message: { from: string; id: string; type: string; text?: { body: string } },
+  message: {
+    from: string;
+    id: string;
+    type: string;
+    text?: { body: string };
+    timestamp?: string;
+    image?: { id?: string; mime_type?: string };
+    audio?: { id?: string; mime_type?: string };
+    video?: { id?: string; mime_type?: string };
+    document?: { id?: string; mime_type?: string };
+    sticker?: { id?: string; mime_type?: string };
+  },
   phoneNumberId: string | null,
 ) {
   // Normalize the incoming phone: Meta sends "55XXXXXXXXXXX"
@@ -226,6 +262,24 @@ async function processIncomingMessage(
     return;
   }
   const connectionOrgId = connections[0].org_id;
+
+  try {
+    await storeOrQuarantine({
+      db: supabase,
+      orgId: connectionOrgId,
+      channel: 'whatsapp',
+      provider: 'meta',
+      phone,
+      connectionId: phoneNumberId,
+      bodyText: message.text?.body ?? '',
+      media: metaCloudMedia(message),
+      providerMessageId: message.id,
+      direction: 'inbound',
+      occurredAt: message.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : null,
+    });
+  } catch (err) {
+    logger.warn('Captura em lead_messages falhou', { message_id: message.id, error: err instanceof Error ? err.message : String(err) });
+  }
 
   const { data: lead } = (await from(supabase, 'leads')
     .select('id, org_id, nome_fantasia, razao_social, assigned_to')

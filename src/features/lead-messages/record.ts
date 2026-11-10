@@ -58,6 +58,14 @@ export async function recordLeadMessage(draft: LeadMessageDraft): Promise<void> 
   try {
     if (!(await isLeadMessagesCaptureEnabled(draft.orgId))) return;
     const db = createServiceRoleClient();
+    const { data: prior } = (await from(db, 'lead_messages')
+      .select('id')
+      .eq('org_id', draft.orgId)
+      .eq('channel', draft.channel)
+      .eq('provider_message_id', providerMessageId)
+      .limit(1)
+      .maybeSingle()) as { data: { id: string } | null };
+    if (prior) return;
     const occurredAt = draft.occurredAt ?? new Date().toISOString();
     const { error } = await from(db, 'lead_messages').upsert(
       {

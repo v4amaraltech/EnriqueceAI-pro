@@ -7,6 +7,10 @@ const sql = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20261110210000_lead_messages.sql'),
   'utf8',
 );
+const phoneSql = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20261110213000_lead_message_phone_match.sql'),
+  'utf8',
+);
 
 describe('tabela de conversas do lead', () => {
   it('nasce com a flag desligada e não mexe em interactions', () => {
@@ -56,5 +60,13 @@ describe('tabela de conversas do lead', () => {
     expect(sql).toContain('GRANT SELECT, INSERT ON public.lead_messages TO service_role');
     expect(sql).not.toContain('GRANT UPDATE');
     expect(sql).not.toContain('GRANT DELETE');
+  });
+
+  it('o casamento de telefone só roda no service role e lê lead_contacts', () => {
+    expect(phoneSql).toContain('match_lead_contacts_by_phone');
+    expect(phoneSql).toContain('public.lead_contacts');
+    expect(phoneSql).toContain('REVOKE ALL ON FUNCTION public.match_lead_contacts_by_phone(uuid, text[]) FROM PUBLIC, anon, authenticated');
+    expect(phoneSql).toContain('GRANT EXECUTE ON FUNCTION public.match_lead_contacts_by_phone(uuid, text[]) TO service_role');
+    expect(phoneSql).not.toMatch(/ALTER TABLE public\.interactions/i);
   });
 });

@@ -49,6 +49,71 @@ function headerValue(headers: Array<{ name: string; value: string }> | undefined
   return headers?.find((h) => h.name.toLowerCase() === name)?.value;
 }
 
+function classifyThreadMessage(
+  message: GmailThreadMessage | undefined,
+  ourAddresses: Set<string>,
+): 'bounce' | 'reply' | 'skip' {
+  const headers = message?.payload?.headers ?? [];
+  const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
+  const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+  const fromAddress = extractAddress(fromHeader?.value);
+  if (fromAddress && ourAddresses.has(fromAddress)) return 'skip';
+  if (fromHeader && BOUNCE_SENDERS.some((sender) => fromHeader.value.toLowerCase().includes(sender))) return 'bounce';
+  const isAutoReplyHeader = headers.some((h) => {
+    const name = h.name.toLowerCase();
+    if (AUTO_REPLY_HEADERS.includes(name)) return true;
+    if (name === 'auto-submitted' && h.value.toLowerCase() !== 'no') return true;
+    if (name === 'x-auto-response-suppress') return true;
+    return false;
+  });
+  if (isAutoReplyHeader) return 'skip';
+  if (subjectHeader && AUTO_REPLY_SUBJECTS.some((pattern) => subjectHeader.value.toLowerCase().includes(pattern))) {
+    return 'skip';
+  }
+  return 'reply';
+}
+
+export interface GmailReplyLocator {
+  messageId: string;
+  from: string | null;
+  subject: string | null;
+}
+
+/** Primeira resposta de verdade no fio, para gravar o texto. A detecção da cadência não usa isto. */
+export async function locateGenuineReply(
+  threadId: string,
+  accessToken: string,
+  sentMessageId?: string | null,
+): Promise<GmailReplyLocator | null> {
+  const response = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id,payload(headers))`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) return null;
+  const data = (await response.json()) as { messages?: GmailThreadMessage[] };
+  const messages = data.messages ?? [];
+  const ourAddresses = new Set<string>();
+  const firstFrom = extractAddress(headerValue(messages[0]?.payload?.headers, 'from'));
+  if (firstFrom) ourAddresses.add(firstFrom);
+  const sentIndex = sentMessageId ? messages.findIndex((m) => m.id === sentMessageId) : -1;
+  if (sentIndex >= 0) {
+    const sentFrom = extractAddress(headerValue(messages[sentIndex]?.payload?.headers, 'from'));
+    if (sentFrom) ourAddresses.add(sentFrom);
+  }
+  const start = sentIndex >= 0 ? sentIndex + 1 : 1;
+  for (let i = start; i < messages.length; i++) {
+    const message = messages[i];
+    if (classifyThreadMessage(message, ourAddresses) !== 'reply' || !message?.id) continue;
+    const headers = message.payload?.headers ?? [];
+    return {
+      messageId: message.id,
+      from: extractAddress(headerValue(headers, 'from')),
+      subject: headerValue(headers, 'subject') ?? null,
+    };
+  }
+  return null;
+}
+
 /** "Nome <a@b.com>" → "a@b.com" (lower-case); null when there is no address. */
 function extractAddress(value: string | undefined): string | null {
   if (!value) return null;
@@ -117,42 +182,9 @@ export async function checkThreadForReplyOrBounce(
 
     // Check each message that came after ours
     for (let i = start; i < messages.length; i++) {
-      const msg = messages[i];
-      const headers = msg?.payload?.headers ?? [];
-
-      const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
-      const subjectHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
-
-      const fromAddress = extractAddress(fromHeader?.value);
-      if (fromAddress && ourAddresses.has(fromAddress)) continue;
-
-      // Check bounce
-      if (fromHeader) {
-        const fromLower = fromHeader.value.toLowerCase();
-        if (BOUNCE_SENDERS.some((sender) => fromLower.includes(sender))) {
-          return 'bounce';
-        }
-      }
-
-      // Check auto-reply headers (X-Autoreply, Auto-Submitted, etc.)
-      const isAutoReplyHeader = headers.some((h) => {
-        const name = h.name.toLowerCase();
-        if (AUTO_REPLY_HEADERS.includes(name)) return true;
-        if (name === 'auto-submitted' && h.value.toLowerCase() !== 'no') return true;
-        if (name === 'x-auto-response-suppress') return true;
-        return false;
-      });
-      if (isAutoReplyHeader) continue;
-
-      // Check auto-reply subject patterns
-      if (subjectHeader) {
-        const subjectLower = subjectHeader.value.toLowerCase();
-        const isAutoReplySubject = AUTO_REPLY_SUBJECTS.some((pattern) => subjectLower.includes(pattern));
-        if (isAutoReplySubject) continue;
-      }
-
-      // This message looks like a genuine reply
-      hasGenuineReply = true;
+      const kind = classifyThreadMessage(messages[i], ourAddresses);
+      if (kind === 'bounce') return 'bounce';
+      if (kind === 'reply') hasGenuineReply = true;
     }
 
     return hasGenuineReply ? 'reply' : 'none';

@@ -224,16 +224,13 @@ describe('WhatsApp Webhook POST — Reply Detection', () => {
     // update enrollment
     const updateChain = createChainMock({ data: null });
 
-    let callIndex = 0;
-    mockFrom.mockImplementation(() => {
-      callIndex++;
-      if (callIndex === 1) return connChain;
-      if (callIndex === 2) return leadsChain;
-      if (callIndex === 3) return enrollmentChain;
-      if (callIndex === 4) return stepChain;
-      if (callIndex === 5) return insertChain;
-      if (callIndex === 6) return updateChain;
-      return createChainMock({ data: null });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'whatsapp_connections') return connChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'cadence_steps') return stepChain;
+      if (table === 'interactions') return insertChain;
+      return updateChain;
     });
 
     const body = {
