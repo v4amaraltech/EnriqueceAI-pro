@@ -27,4 +27,10 @@ export const CHAT_COPY = {
   invalidChannel: 'Canal inválido',
   invalidLead: 'Lead inválido',
   invalidPage: 'Página inválida',
+  mediaImage: 'Mídia: imagem',
+  mediaAudio: 'Mídia: áudio',
+  mediaVideo: 'Mídia: vídeo',
+  mediaDocument: 'Mídia: documento',
+  mediaSticker: 'Mídia: figurinha',
+  mediaOther: 'Mídia: arquivo',
 } as const;

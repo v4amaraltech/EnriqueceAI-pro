@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   enabled: true,
+  capture: false,
   rows: [] as unknown[],
+  events: [] as unknown[],
   error: null as { message: string } | null,
   filters: [] as string[],
+  reads: 0,
 }));
 
 function chain() {
@@ -13,8 +16,12 @@ function chain() {
     state.filters.push(`${name}:${args.map(String).join(',')}`);
     return c;
   };
-  for (const name of ['select', 'eq', 'order', 'limit', 'or']) c[name] = pass(name);
-  c.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: state.rows, error: state.error }).then(resolve);
+  for (const name of ['select', 'eq', 'order', 'limit', 'or', 'in']) c[name] = pass(name);
+  c.then = (resolve: (value: unknown) => unknown) => {
+    state.reads += 1;
+    const data = state.reads === 1 ? state.rows : state.events;
+    return Promise.resolve({ data, error: state.error }).then(resolve);
+  };
   return c;
 }
 
@@ -30,6 +37,9 @@ vi.mock('@/lib/supabase/from', () => ({
 vi.mock('./flag', () => ({
   isLeadChannelChatEnabled: () => Promise.resolve(state.enabled),
 }));
+vi.mock('@/features/lead-messages/flag', () => ({
+  isLeadMessagesCaptureEnabled: () => Promise.resolve(state.capture),
+}));
 
 import { CHANNEL_PAGE_SIZE } from './constants';
 import { fetchLeadChannelPage } from './read';
@@ -38,9 +48,12 @@ const LEAD = '11111111-1111-4111-8111-111111111111';
 
 beforeEach(() => {
   state.enabled = true;
+  state.capture = false;
   state.rows = [];
+  state.events = [];
   state.error = null;
   state.filters = [];
+  state.reads = 0;
 });
 
 describe('leitura da conversa', () => {
@@ -100,6 +113,28 @@ describe('leitura da conversa', () => {
     expect(state.filters).toContain(
       'or:created_at.lt."2026-11-10T15:00:00.000Z",and(created_at.eq."2026-11-10T15:00:00.000Z",id.lt."22222222-2222-4222-8222-222222222222")',
     );
+  });
+
+  it('com a captura ligada lê lead_messages e o tique do evento', async () => {
+    state.capture = true;
+    state.rows = [{
+      id: '33333333-3333-4333-8333-333333333333',
+      channel: 'whatsapp',
+      direction: 'outbound',
+      body_text: '',
+      body_html: null,
+      subject: null,
+      media: { type: 'image' },
+      thread_id: null,
+      ai_generated: false,
+      occurred_at: '2026-11-10T15:00:00.000Z',
+    }];
+    state.events = [{ message_id: '33333333-3333-4333-8333-333333333333', status: 'delivered', occurred_at: '2026-11-10T15:01:00.000Z' }];
+    const result = await fetchLeadChannelPage({ leadId: LEAD, channel: 'whatsapp' });
+    if (!result.success || !result.data.enabled) throw new Error('pagina');
+    expect(result.data.messages[0]).toMatchObject({ text: 'Mídia: imagem', delivery: '✓✓ Entregue' });
+    expect(state.filters).toContain('eq:channel,whatsapp');
+    expect(state.filters.some((filter) => filter.startsWith('limit:50'))).toBe(false);
   });
 
   it('recusa lead inválido sem consultar', async () => {
