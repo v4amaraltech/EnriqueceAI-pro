@@ -76,6 +76,19 @@ export async function POST(request: Request) {
       message_content: q.texto, external_id: q.messageId, performed_by: lead.assigned_to, ai_generated: false,
       metadata: { source: 'ana_ia_whatsapp', opt_out: q.optOut, bloqueio: tipo },
     } as Record<string, unknown>).select('id').maybeSingle()) as { data: { id: string } | null };
+    if (q.messageId) {
+      await recordLeadMessage({
+        orgId: auth.orgId,
+        leadId: lead.id,
+        channel: 'whatsapp',
+        direction: 'inbound',
+        provider: 'ana_n8n',
+        bodyText: q.texto,
+        providerMessageId: q.messageId,
+        sentBy: lead.assigned_to,
+        status: null,
+      });
+    }
     return NextResponse.json({ success: true, data: { estado: 'registrada', bloqueio: tipo, interaction_id: inter?.id ?? null } });
   }
 

@@ -16,13 +16,15 @@ vi.mock('@/lib/supabase/service', () => ({
 function chain(table: string) {
   const c: Record<string, unknown> = {};
   const pass = () => c;
-  for (const name of ['select', 'eq', 'maybeSingle']) c[name] = pass;
+  for (const name of ['select', 'eq', 'limit', 'maybeSingle']) c[name] = pass;
   c.upsert = (row: Record<string, unknown>, options?: { onConflict?: string }) => {
     state.upserts.push({ table, row, onConflict: options?.onConflict });
     return c;
   };
   c.then = (resolve: (value: unknown) => unknown) => Promise.resolve({
-    data: table === 'lead_messages' ? { id: 'msg-1' } : null,
+    data: table === 'lead_messages' && state.upserts.some((item) => item.table === 'lead_messages')
+      ? { id: 'msg-1' }
+      : null,
     error: null,
   }).then(resolve);
   return c;

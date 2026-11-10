@@ -11,6 +11,7 @@ import {
   type GmailConnection,
   refreshAccessToken,
 } from '@/features/integrations/services/email.service';
+import { captureGmailReply } from '@/features/lead-messages/gmail-reply';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
@@ -89,14 +90,16 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   // un-bounce. The same query brings the lead owner (mailbox fallback).
   const sentLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id))];
   const { data: sentLeads } = (await from(supabase, 'leads')
-    .select('id, assigned_to, email_bounced_at')
+    .select('id, org_id, assigned_to, email_bounced_at')
     .in('id', sentLeadIds)) as {
-    data: Array<{ id: string; assigned_to: string | null; email_bounced_at: string | null }> | null;
+    data: Array<{ id: string; org_id?: string; assigned_to: string | null; email_bounced_at: string | null }> | null;
   };
   const leadOwner = new Map<string, string | null>();
+  const leadOrg = new Map<string, string>();
   const bouncedLeadIds = new Set<string>();
   for (const l of sentLeads ?? []) {
     leadOwner.set(l.id, l.assigned_to);
+    if (l.org_id) leadOrg.set(l.id, l.org_id);
     if (l.email_bounced_at) bouncedLeadIds.add(l.id);
   }
   if (bouncedLeadIds.size > 0) {
@@ -183,6 +186,16 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
         console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
       } else {
         await recordReply(supabase, interaction);
+        const orgId = leadOrg.get(interaction.lead_id);
+        if (orgId) {
+          await captureGmailReply({
+            orgId,
+            leadId: interaction.lead_id,
+            accessToken,
+            threadId,
+            sentMessageId: interaction.external_id,
+          });
+        }
         found++;
         console.warn(`[reply-check] Reply found: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
       }
