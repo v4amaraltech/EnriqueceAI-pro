@@ -14,6 +14,7 @@ import { buildLeadTemplateVariables } from '@/features/cadences/utils/build-temp
 import { renderTemplate } from '@/features/cadences/utils/render-template';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
+import { recordLeadMessage } from '@/features/lead-messages/record';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
@@ -398,7 +399,7 @@ async function sendItem(
   });
 
   if (send.success) {
-    await onSent(supabase, now, instance, item, message, send.messageId ?? null, !leadReplied);
+    await onSent(supabase, now, instance, item, message, send.messageId ?? null, !leadReplied, phone.raw);
     return 'sent';
   }
 
@@ -518,6 +519,7 @@ async function onSent(
   message: BuiltMessage,
   externalId: string | null,
   countsTowardLimit: boolean,
+  leadAddress: string,
 ): Promise<void> {
   await from(supabase, 'whatsapp_send_queue' as never)
     .update({
@@ -569,6 +571,22 @@ async function onSent(
   }
 
   markLeadContacted(supabase as never, item.lead_id).catch(() => {});
+  if (externalId) {
+    await recordLeadMessage({
+      orgId: item.org_id,
+      leadId: item.lead_id,
+      channel: 'whatsapp',
+      direction: 'outbound',
+      provider: 'evolution',
+      connectionId: instance.id,
+      leadAddress,
+      bodyText: message.body,
+      providerMessageId: externalId,
+      sentBy: item.sender_user_id,
+      aiGenerated: message.aiGenerated,
+      status: 'sent',
+    });
+  }
   await advance(supabase, item);
 }
 

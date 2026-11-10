@@ -7,6 +7,7 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { EmailService } from '@/features/integrations/services/email.service';
+import { recordLeadMessage } from '@/features/lead-messages/record';
 
 interface SendManualEmailInput {
   to: string;
@@ -73,6 +74,24 @@ export async function sendManualEmail(
       .eq('id', interaction.id);
 
     return { success: false, error: result.error ?? 'Erro ao enviar email' };
+  }
+
+  if (result.messageId) {
+    await recordLeadMessage({
+      orgId,
+      leadId,
+      channel: 'email',
+      direction: 'outbound',
+      provider: 'gmail',
+      leadAddress: input.to,
+      bodyText: input.body,
+      subject: input.subject,
+      providerMessageId: result.messageId,
+      threadId: result.threadId ?? null,
+      rfcMessageId: result.rfcMessageId ?? null,
+      sentBy: userId,
+      status: 'sent',
+    });
   }
 
   // Update lead status to contacted if still new

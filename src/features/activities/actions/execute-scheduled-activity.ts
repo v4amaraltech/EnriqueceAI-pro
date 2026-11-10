@@ -9,6 +9,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
+import { recordLeadMessage } from '@/features/lead-messages/record';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { WhatsAppService } from '@/features/integrations/services/whatsapp.service';
@@ -107,6 +108,19 @@ export async function executeScheduledActivity(
       await from(supabase, 'interactions')
         .update({ external_id: waResult.messageId } as Record<string, unknown>)
         .eq('id', interaction.id);
+      await recordLeadMessage({
+        orgId,
+        leadId,
+        channel: 'whatsapp',
+        direction: 'outbound',
+        provider: hasMetaConnection ? 'meta' : 'evolution',
+        connectionId: hasMetaConnection?.id ?? null,
+        leadAddress: to,
+        bodyText: body,
+        providerMessageId: waResult.messageId,
+        sentBy: userId,
+        status: 'sent',
+      });
     } else {
       await from(supabase, 'interactions')
         .update({ type: 'failed', metadata: { error: waResult.error ?? 'whatsapp_send_error' } } as Record<string, unknown>)
@@ -139,6 +153,21 @@ export async function executeScheduledActivity(
       await from(supabase, 'interactions')
         .update(updateData)
         .eq('id', interaction.id);
+      await recordLeadMessage({
+        orgId,
+        leadId,
+        channel: 'email',
+        direction: 'outbound',
+        provider: 'gmail',
+        leadAddress: to,
+        bodyHtml: body,
+        subject: subject || null,
+        providerMessageId: emailResult.messageId,
+        threadId: emailResult.threadId ?? null,
+        rfcMessageId: emailResult.rfcMessageId ?? null,
+        sentBy: userId,
+        status: 'sent',
+      });
     } else {
       await from(supabase, 'interactions')
         .update({ type: 'failed', metadata: { error: emailResult.error ?? 'email_send_error' } } as Record<string, unknown>)
