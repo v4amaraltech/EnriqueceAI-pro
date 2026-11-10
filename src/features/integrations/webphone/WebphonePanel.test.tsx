@@ -178,8 +178,12 @@ describe('WebphonePanel — "Ligação finalizada" continua, sem avaliação com
     fireEvent.click(screen.getByRole('button', { name: /Concluir atividade/ }));
 
     expect(actions.scheduleActivity).toHaveBeenCalledTimes(1);
-    expect(actions.scheduleActivity.mock.calls[0]?.[0].pauseCadenceUntilReturn).toBeUndefined();
-    expect(actions.scheduleActivity.mock.calls[0]?.[0].completeEnrollments).toBeUndefined();
+    expect(actions.scheduleActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ leadId: '11111111-1111-1111-1111-111111111111', channel: 'phone' }),
+    );
+    expect(actions.scheduleActivity).toHaveBeenCalledWith(
+      expect.not.objectContaining({ pauseCadenceUntilReturn: expect.anything(), completeEnrollments: expect.anything() }),
+    );
   });
 
   it('o dono conclui pelo próprio modal com o painel em "Ligação finalizada": o painel some, sem estrelas', async () => {
