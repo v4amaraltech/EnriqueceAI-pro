@@ -41,7 +41,7 @@ describe('applySdrCallResult', () => {
       via: 'power_dialer',
     });
 
-    expect(r).toEqual({ success: true, data: { callId: CALL_ID, leadId: 'lead-1' } });
+    expect(r).toEqual({ success: true, data: { callId: CALL_ID, leadId: 'lead-1', notesApplied: true } });
     expect(inserts).toHaveLength(1);
     expect(inserts[0]).toMatchObject({
       table: 'interactions',
@@ -53,5 +53,50 @@ describe('applySdrCallResult', () => {
     const { client, inserts } = fake({ id: 'int-1', metadata: { callId: CALL_ID }, message_content: 'x' });
     await applySdrCallResult(client, { orgId: 'org', userId: 'u1', callId: CALL_ID, clientDurationSeconds: 0, via: 'webphone' });
     expect(inserts).toEqual([]);
+  });
+
+  it('revisão velha não substitui a nota nem apaga o desfecho', async () => {
+    const updates: Array<{ table: string; payload: Record<string, unknown> }> = [];
+    const client = {
+      from(table: string) {
+        const chain: Record<string, unknown> = {};
+        for (const method of ['select', 'eq', 'contains', 'limit']) chain[method] = () => chain;
+        chain.single = () =>
+          Promise.resolve({
+            data: { id: CALL_ID, duration_seconds: 28, lead_id: 'lead-1', org_id: 'org', hangup_cause: 'NORMAL_CLEARING' },
+            error: null,
+          });
+        chain.maybeSingle = () =>
+          Promise.resolve({
+            data: { id: 'int-1', metadata: { callId: CALL_ID, webphone_notes: 'texto novo', webphone_notes_rev: 5 }, message_content: 'texto novo' },
+            error: null,
+          });
+        chain.update = (payload: Record<string, unknown>) => {
+          updates.push({ table, payload });
+          const updated: Record<string, unknown> = { eq: () => updated, then: (resolve: (value: unknown) => void) => resolve({ error: null }) };
+          return updated;
+        };
+        return chain;
+      },
+    };
+
+    const result = await applySdrCallResult(client as unknown as SupabaseClient, {
+      orgId: 'org',
+      userId: 'u1',
+      callId: CALL_ID,
+      clientDurationSeconds: 0,
+      notes: 'texto velho',
+      notesRev: 3,
+      sdrOutcome: 'technical_failure',
+      via: 'webphone',
+    });
+
+    expect(result.success && result.data.notesApplied).toBe(false);
+    const callUpdate = updates.find((update) => update.table === 'calls');
+    expect(callUpdate?.payload.notes).toBeUndefined();
+    expect(callUpdate?.payload.status).toBeUndefined();
+    expect(callUpdate?.payload.sdr_disposition).toBe('technical_failure');
+    const interaction = updates.find((update) => update.table === 'interactions');
+    expect(JSON.stringify(interaction?.payload)).not.toContain('texto velho');
   });
 });

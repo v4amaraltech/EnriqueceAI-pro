@@ -22,10 +22,12 @@ import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebph
 import {
   clearWebphoneCallContext,
   getWebphoneCallContextState,
+  notesRevisionForSubmit,
   onWebphoneConcludeRequested,
   releaseWebphoneCallOwner,
   setWebphoneCallContext,
 } from '@/features/integrations/webphone/webphone-call-context';
+import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
 import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
@@ -207,6 +209,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     }
     inFlightRef.current = true;
     setDialStartedAt(Date.now());
+    const reserved = reserveWebphoneDial(phoneToCall);
 
     return new Promise<DialResult>((resolve) => {
       startTransition(async () => {
@@ -219,6 +222,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         });
 
         if (!result.success) {
+          cancelWebphoneDial(reserved.token);
           const looksLikeNoPhone = result.error?.includes('ramal') || result.error?.includes('offline') || result.error?.includes('not registered') || result.error?.includes('503');
           if (looksLikeNoPhone && !canReceiveCalls(getWebphoneState())) {
             toast.error('Abra a extensão API4COM (webphone) antes de ligar', { duration: 5000 });
@@ -239,14 +243,17 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         setCallState((prev) => (prev === 'ended' ? 'ended' : 'connected'));
         inFlightRef.current = false;
 
-        setWebphoneCallContext({
-          callId: result.data.callId,
-          providerCallId: result.data.providerCallId,
-          leadId: item?.leadId ?? null,
-          leadName: item?.leadName ?? null,
-          phone: phoneToCall,
-          ownerHandlesResult: true,
-        });
+        publishWebphoneDial(reserved.seq, () =>
+          setWebphoneCallContext({
+            callId: result.data.callId,
+            providerCallId: result.data.providerCallId,
+            leadId: item?.leadId ?? null,
+            leadName: item?.leadName ?? null,
+            phone: phoneToCall,
+            ownerHandlesResult: true,
+            dialToken: reserved.token,
+          }),
+        );
         resolve({ ok: true });
       });
     });
@@ -280,6 +287,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           notes: args.notes,
           durationSeconds: args.durationSeconds,
           callId: callId ?? undefined,
+          notesRev: callId && args.notes.trim() ? notesRevisionForSubmit(callId, args.notes) : undefined,
           sdrOutcome: args.sdrOutcome,
           aiOutcomePending: args.aiOutcomePending,
         });
