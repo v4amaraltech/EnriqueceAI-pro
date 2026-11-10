@@ -1,3 +1,5 @@
+import { isInternalChannelLog } from './audience';
+
 export interface LegacyInteraction {
   id: string;
   org_id: string;
@@ -37,7 +39,7 @@ function text(value: unknown): string | null {
 export function legacyInteractionToMessage(row: LegacyInteraction): LegacyLeadMessage | null {
   if (row.channel !== 'whatsapp' && row.channel !== 'email') return null;
   if (row.type === 'meeting_scheduled') return null;
-  if (typeof row.metadata?.system_event === 'string') return null;
+  if (isInternalChannelLog(row.metadata, row.message_content)) return null;
   const inbound = row.type === 'replied';
   const outbound = ['sent', 'delivered', 'opened', 'clicked', 'bounced', 'failed'].includes(row.type);
   if (!inbound && !outbound) return null;

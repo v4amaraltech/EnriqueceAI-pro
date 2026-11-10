@@ -30,6 +30,12 @@ describe('cópia das interactions antigas', () => {
     });
     expect(legacyInteractionToMessage(row({ channel: 'phone', type: 'sent' }))).toBeNull();
     expect(legacyInteractionToMessage(row({ metadata: { system_event: 'step_skipped' } }))).toBeNull();
+    expect(legacyInteractionToMessage(row({
+      channel: 'whatsapp',
+      type: 'sent',
+      message_content: 'WhatsApp de solicitação de feedback enviado para Vinicius Mercante',
+      metadata: { source: 'closer_feedback', recipient_kind: 'closer', recipient: '11945705316' },
+    }))).toBeNull();
   });
 
   it('é idempotente pelo id externo e traduz o status sem baixar mídia', () => {

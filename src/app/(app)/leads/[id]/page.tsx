@@ -19,7 +19,11 @@ interface LeadDetailPageProps {
 }
 
 export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
-  await requireAuth();
+  const user = await requireAuth();
+  const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+  const senderName = (typeof meta.full_name === 'string' && meta.full_name.trim())
+    || (typeof meta.name === 'string' && meta.name.trim())
+    || 'você';
 
   const { id } = await params;
   const auth = await getAuthOrgIdResult();
@@ -58,6 +62,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       standardFieldSettings={standardFieldSettings}
       isManager={managerFlag}
       channelChatEnabled={channelChatEnabled}
+      senderName={senderName}
     />
   );
 }

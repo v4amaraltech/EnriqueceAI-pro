@@ -81,6 +81,21 @@ describe('captura da conversa', () => {
     });
   });
 
+  it('não grava aviso interno de feedback no lead', async () => {
+    state.enabled = true;
+    await recordLeadMessage({
+      orgId: 'org-1',
+      leadId: 'lead-1',
+      channel: 'whatsapp',
+      direction: 'outbound',
+      provider: 'evolution',
+      providerMessageId: 'fb-1',
+      leadAddress: '11945705316',
+      bodyText: 'WhatsApp de solicitação de feedback enviado para Vinicius Mercante',
+    });
+    expect(state.upserts).toEqual([]);
+  });
+
   it('o metadado de mídia não aceita url nem base64', () => {
     expect(mediaMetadata({ type: 'image', provider_media_id: 'a', mime: 'image/png' })).toEqual({
       type: 'image',

@@ -1,3 +1,5 @@
+import { isLeadConversation, type ConversationCheck } from '@/features/lead-messages/audience';
+
 import { messageBody, plainText } from './body';
 import { CHAT_COPY } from './constants';
 
@@ -30,6 +32,7 @@ export interface ChatMessage {
   missingBody: boolean;
   createdAt: string;
   delivery: string | null;
+  deliveryTick: 'sent' | 'delivered' | 'read' | 'failed' | null;
   threadId: string | null;
   subject: string | null;
   aiGenerated: boolean;
@@ -67,9 +70,37 @@ export function deliveryLabel(channel: ChatChannel, type: string): string | null
   return null;
 }
 
-export function toChatMessage(row: ChatSourceRow): ChatMessage | null {
+function metaString(metadata: Record<string, unknown> | null, key: string): string | null {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function storedBody(row: ChatSourceRow) {
+  const htmlBody = metaString(row.metadata, 'html_body');
+  const primary = messageBody({ html: htmlBody, text: row.message_content });
+  if (primary.text) return primary;
+  const extra = ['body', 'text', 'message', 'rendered_text', 'template_text']
+    .map((key) => metaString(row.metadata, key))
+    .find((value) => value);
+  return extra ? messageBody({ text: extra }) : primary;
+}
+
+export function toChatMessage(
+  row: ChatSourceRow,
+  audience?: Pick<ConversationCheck, 'leadPhones' | 'leadEmails' | 'phonesKnown' | 'emailsKnown'> | null,
+): ChatMessage | null {
   if (row.type === 'meeting_scheduled') return null;
-  if (row.metadata && typeof row.metadata.system_event === 'string') return null;
+  if (!isLeadConversation({
+    channel: row.channel,
+    metadata: row.metadata,
+    content: row.message_content,
+    leadPhones: audience?.leadPhones ?? [],
+    leadEmails: audience?.leadEmails ?? [],
+    phonesKnown: audience?.phonesKnown ?? false,
+    emailsKnown: audience?.emailsKnown ?? false,
+  })) {
+    return null;
+  }
   const inbound = row.type === 'replied';
   if (!inbound && !OUTBOUND.has(row.type)) return null;
 
@@ -77,12 +108,22 @@ export function toChatMessage(row: ChatSourceRow): ChatMessage | null {
   const subjectRaw = row.metadata?.subject;
   const threadId = typeof threadRaw === 'string' && threadRaw.trim() ? threadRaw.trim() : null;
   const subject = typeof subjectRaw === 'string' && subjectRaw.trim() ? subjectRaw.trim() : null;
-  const htmlBody = typeof row.metadata?.html_body === 'string' ? row.metadata.html_body : null;
-  const body = messageBody({ html: htmlBody, text: row.message_content });
+  const body = storedBody(row);
+  const templateName = metaString(row.metadata, 'template_name')
+    ?? metaString(row.metadata, 'templateName')
+    ?? metaString(row.metadata, 'template');
   const missingBody = body.text.length === 0;
   const note = row.metadata?.is_note === true;
   const text = missingBody
-    ? (inbound ? CHAT_COPY.missingReply : CHAT_COPY.missingOutbound)
+    ? (inbound
+      ? CHAT_COPY.missingReply
+      : row.channel === 'whatsapp' && row.metadata?.error === 'not_whatsapp'
+        ? CHAT_COPY.notWhatsapp
+        : row.channel === 'whatsapp' && templateName
+          ? `Template ${templateName} (texto não gravado)`
+          : row.channel === 'whatsapp'
+            ? CHAT_COPY.templateUnstored
+            : CHAT_COPY.missingOutbound)
     : note
       ? `${CHAT_COPY.note}: ${body.text}`
       : body.text;
@@ -96,10 +137,30 @@ export function toChatMessage(row: ChatSourceRow): ChatMessage | null {
     missingBody,
     createdAt: row.created_at,
     delivery: inbound ? null : deliveryLabel(row.channel, row.type),
+    deliveryTick: inbound ? null : deliveryTick(row.channel, row.type),
     threadId,
     subject,
     aiGenerated: row.ai_generated === true,
   };
+}
+
+export function deliveryTick(channel: ChatChannel, type: string): ChatMessage['deliveryTick'] {
+  if (type === 'sent') return 'sent';
+  if (type === 'delivered') return 'delivered';
+  if (type === 'opened' && channel === 'whatsapp') return 'read';
+  if (type === 'failed' || type === 'bounced') return 'failed';
+  return null;
+}
+
+export function groupRuns(messages: ChatMessage[]): ChatMessage[][] {
+  const runs: ChatMessage[][] = [];
+  for (const message of messages) {
+    const last = runs[runs.length - 1];
+    const previous = last?.[last.length - 1];
+    if (last && previous && previous.direction === message.direction) last.push(message);
+    else runs.push([message]);
+  }
+  return runs;
 }
 
 const MEDIA_COPY: Record<string, string> = {
@@ -153,6 +214,9 @@ export function storedLeadMessageToChat(row: StoredLeadMessage, status: string |
     missingBody,
     createdAt: row.occurred_at,
     delivery: inbound ? null : statusTick(row.channel, status),
+    deliveryTick: inbound || (status !== 'sent' && status !== 'delivered' && status !== 'read' && status !== 'failed')
+      ? null
+      : status,
     threadId: row.thread_id,
     subject: row.subject,
     aiGenerated: row.ai_generated === true,
