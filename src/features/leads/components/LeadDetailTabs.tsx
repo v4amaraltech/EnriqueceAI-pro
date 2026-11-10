@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadTimeline } from '@/features/cadences/components/LeadTimeline';
+import { ChannelChat } from '@/features/lead-channel-chat/ChannelChat';
 import { deleteMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { descriptionFromMeetingRecord } from '@/features/integrations/meeting-invite-description';
@@ -44,6 +45,7 @@ interface LeadDetailTabsProps {
   timeline: TimelineEntry[];
   showMeeting: boolean;
   onShowMeetingChange: (open: boolean) => void;
+  channelChatEnabled?: boolean;
 }
 
 type ChannelFilter = 'all' | 'research' | 'whatsapp' | 'email' | 'phone' | 'linkedin';
@@ -57,7 +59,7 @@ const channelFilters: { value: ChannelFilter; label: string; icon: typeof Mail }
   { value: 'linkedin', label: 'LinkedIn', icon: Linkedin },
 ];
 
-export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChange }: LeadDetailTabsProps) {
+export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChange, channelChatEnabled = false }: LeadDetailTabsProps) {
   const router = useRouter();
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [editingMeeting, setEditingMeeting] = useState<TimelineEntry | null>(null);
@@ -151,8 +153,11 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
             ))}
           </div>
 
-          {/* Timeline */}
-          <LeadTimeline entries={filteredTimeline} />
+          {channelChatEnabled && (channelFilter === 'whatsapp' || channelFilter === 'email') ? (
+            <ChannelChat key={`${lead.id}-${channelFilter}`} leadId={lead.id} channel={channelFilter} />
+          ) : (
+            <LeadTimeline entries={filteredTimeline} />
+          )}
         </TabsContent>
 
         {/* Agendar atividade Tab */}
