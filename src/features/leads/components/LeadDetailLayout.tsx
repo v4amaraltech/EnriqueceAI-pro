@@ -109,9 +109,10 @@ interface LeadDetailLayoutProps {
   jobTitleOptions?: { value: string; label: string }[];
   standardFieldSettings?: StandardFieldSettingRow[];
   isManager?: boolean;
+  channelChatEnabled?: boolean;
 }
 
-export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings, isManager = false }: LeadDetailLayoutProps) {
+export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDefs, leadSourceOptions, jobTitleOptions, standardFieldSettings, isManager = false, channelChatEnabled = false }: LeadDetailLayoutProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -839,7 +840,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
 
       <div className="flex gap-6 min-w-0">
         <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} customFieldDefs={customFieldDefs} leadSourceOptions={leadSourceOptions} jobTitleOptions={jobTitleOptions} standardFieldSettings={standardFieldSettings} />
-        <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
+        <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} channelChatEnabled={channelChatEnabled} />
       </div>
 
       {/* Loss reason dialog */}

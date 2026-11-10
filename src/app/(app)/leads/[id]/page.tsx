@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation';
 
+import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { isManager } from '@/lib/auth/require-manager';
 
 import { fetchLeadTimeline } from '@/features/cadences/actions/fetch-interactions';
+import { isLeadChannelChatEnabled } from '@/features/lead-channel-chat/flag';
 import { fetchLead } from '@/features/leads/actions/fetch-lead';
 import { fetchLeadEnrollment } from '@/features/leads/actions/fetch-lead-enrollment';
 import { getJobTitleOptions } from '@/features/leads/actions/get-job-title-options';
@@ -20,6 +22,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   await requireAuth();
 
   const { id } = await params;
+  const auth = await getAuthOrgIdResult();
+  const channelChatEnabled = auth.success ? await isLeadChannelChatEnabled(auth.data.orgId) : false;
+
   const [leadResult, timelineResult, enrollmentResult, customFieldsResult, leadSourceOptions, jobTitleOptions, stdFieldsResult, managerFlag] = await Promise.all([
     fetchLead(id),
     fetchLeadTimeline(id),
@@ -52,6 +57,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       jobTitleOptions={jobTitleOptions}
       standardFieldSettings={standardFieldSettings}
       isManager={managerFlag}
+      channelChatEnabled={channelChatEnabled}
     />
   );
 }
