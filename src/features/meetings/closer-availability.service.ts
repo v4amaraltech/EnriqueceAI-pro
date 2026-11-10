@@ -5,6 +5,10 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import type { Database } from '@/lib/supabase/types';
 import { BR_NATIONAL_HOLIDAYS } from '@/lib/utils/br-holidays';
 
+import { loadCloserOwnConnection } from '@/features/closer-calendar/db';
+import { isCloserCalendarConnectEnabled } from '@/features/closer-calendar/flag';
+import { calendarReadPlan } from '@/features/closer-calendar/plan';
+import { readCloserOwnFreeBusy } from '@/features/closer-calendar/read';
 import {
   getCalendarConnection,
   getCalendarConnectionWith,
@@ -16,7 +20,6 @@ import {
   availabilityNotice,
   bookingDecision,
   brtDateKeyFromInstant,
-  chooseCalendarSource,
   classifySlot,
   fallbackBlocks,
   interpretFreeBusyEntry,
@@ -227,16 +230,36 @@ export async function loadCloserAvailability(args: {
     ? await getCalendarConnection(args.userId, args.orgId)
     : args.sdrConnection;
 
-  let source = chooseCalendarSource({
+  let ownConnection: Awaited<ReturnType<typeof loadCloserOwnConnection>> = null;
+  try {
+    if (await isCloserCalendarConnectEnabled(args.orgId)) {
+      ownConnection = await loadCloserOwnConnection(args.orgId, args.closerId);
+    }
+  } catch (err) {
+    console.error('[closer-availability] conexão própria do closer indisponível', err);
+  }
+  const plan = calendarReadPlan({
+    ownConnected: ownConnection?.status === 'connected',
     closerUserId,
-    closerHasConnection: !!closerConnection,
+    closerHasPlatformConnection: !!closerConnection,
     sdrHasConnection: !!sdrConnection,
   });
 
   const timeMinIso = range.start.toISOString();
   const timeMaxIso = range.end.toISOString();
+  let source: AvailabilitySource = plan === 'own' || plan === 'platform' ? 'closer_token' : plan === 'sdr' ? 'sdr_token' : 'none';
   let calendar: CalendarRead = { known: false, reason: 'sem_conexao' };
-  if (source === 'closer_token' && closerConnection) {
+  if (plan === 'own' && ownConnection) {
+    calendar = await readCloserOwnFreeBusy(ownConnection, timeMinIso, timeMaxIso);
+    if (!calendar.known && sdrConnection && closerEmail) {
+      const fallback = await readCalendars(sdrConnection, timeMinIso, timeMaxIso, [closerEmail]);
+      const second = fallback[closerEmail];
+      if (second?.known) {
+        calendar = second;
+        source = 'sdr_token';
+      }
+    }
+  } else if (source === 'closer_token' && closerConnection) {
     const reads = await readCalendars(closerConnection, timeMinIso, timeMaxIso, [closerConnection.calendar_email]);
     calendar = reads[closerConnection.calendar_email] ?? { known: false, reason: 'sem_resposta' };
     if (!calendar.known && sdrConnection && closerEmail) {

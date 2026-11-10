@@ -5,14 +5,14 @@ import { createServerClient } from '@supabase/ssr';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/setup-password', '/demo', '/demo/call-workspace'];
-const PUBLIC_PREFIXES = ['/feedback/', '/CL0/', '/docs/', '/unsubscribe/'];
+const PUBLIC_PREFIXES = ['/feedback/', '/CL0/', '/docs/', '/unsubscribe/', '/conectar-agenda/'];
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
 // Privileged prefixes are default-DENY: the middleware requires a valid
 // service-role or cron-secret Bearer before the request reaches the handler
 // (belt-and-suspenders over each route's own verifyServiceRole/verifyCronSecret,
 // so a new route that forgets the guard is not silently exposed).
 const PRIVILEGED_API_PREFIXES = ['/api/admin', '/api/workers'];
-const API_PUBLIC_PREFIXES = ['/api/health', '/api/version', '/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1', '/api/feedback', '/api/unsubscribe'];
+const API_PUBLIC_PREFIXES = ['/api/health', '/api/version', '/api/webhooks', '/api/track', '/api/auth/callback', '/api/auth/confirm', '/api/v1', '/api/feedback', '/api/unsubscribe', '/api/closer-calendar'];
 
 /** Constant-time string compare (Edge-safe, no node:crypto). */
 function safeEqual(a: string, b: string): boolean {

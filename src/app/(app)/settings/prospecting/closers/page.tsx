@@ -1,3 +1,4 @@
+import { listCloserCalendarBoard } from '@/features/closer-calendar/actions';
 import { requireManager } from '@/lib/auth/require-manager';
 
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
@@ -16,5 +17,13 @@ export default async function ClosersPage() {
     );
   }
 
-  return <ClosersSettings initial={result.data} />;
+  const calendar = await listCloserCalendarBoard();
+
+  return (
+    <ClosersSettings
+      initial={result.data}
+      calendarConnectEnabled={calendar.enabled}
+      calendarByCloser={calendar.byCloser}
+    />
+  );
 }
