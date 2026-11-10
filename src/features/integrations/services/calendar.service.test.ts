@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '../meeting-invite-description';
 import { CalendarEventGoneError, checkFreeBusy, createCalendarEvent, queryFreeBusy, updateCalendarEvent } from './calendar.service';
 
 const mockFetch = vi.fn();
@@ -86,6 +87,36 @@ describe('calendar.service', () => {
 
       expect(result.id).toBe('event-456');
       expect(result.meetLink).toBeNull();
+    });
+
+    it('coloca a descrição no corpo do evento do Google Calendar', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'event-789',
+          htmlLink: 'https://calendar.google.com/event/789',
+          hangoutLink: 'https://meet.google.com/abc-defg-hij',
+          status: 'confirmed',
+          summary: 'V4 Company + Lead',
+          start: { dateTime: '2026-11-11T11:00:00-03:00' },
+          end: { dateTime: '2026-11-11T12:00:00-03:00' },
+        }),
+      });
+
+      await createCalendarEvent(mockConnection, {
+        title: 'V4 Company + Lead',
+        description: DEFAULT_MEETING_INVITE_DESCRIPTION,
+        startTime: '2026-11-11T14:00:00Z',
+        endTime: '2026-11-11T15:00:00Z',
+        generateMeetLink: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/calendars/primary/events'),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify(DEFAULT_MEETING_INVITE_DESCRIPTION).slice(1, -1)),
+        }),
+      );
     });
 
     it('should throw on API error', async () => {

@@ -32,6 +32,7 @@ import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadTimeline } from '@/features/cadences/components/LeadTimeline';
 import { deleteMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
+import { descriptionFromMeetingRecord } from '@/features/integrations/meeting-invite-description';
 
 import { ScheduleActivityForm } from '@/features/activities/components/ScheduleActivityForm';
 
@@ -319,7 +320,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           return {
             interactionId: editingMeeting.id,
             title: (meta?.subject as string) ?? editingMeeting.subject ?? '',
-            description: undefined,
+            description: descriptionFromMeetingRecord(editingMeeting.message_content) ?? undefined,
             date: dateStr,
             startTime: timeStr,
             duration: durationStr,

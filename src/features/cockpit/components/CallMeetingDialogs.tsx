@@ -16,6 +16,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { getLeadFaturamento, getLoggedUserEmail, scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
+import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '@/features/integrations/meeting-invite-description';
 import { WhatsAppInviteModal } from '@/features/integrations/components/WhatsAppInviteModal';
 import { getMissingMeetingFields } from '@/features/leads/actions/get-missing-meeting-fields';
 import type { MissingRequiredField } from '@/features/leads/utils/required-field-validation';
@@ -421,7 +422,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
   const [isPending, startTransition] = useTransition();
   const inFlight = useRef(false);
   const [title, setTitle] = useState(`V4 Company + ${leadName}`);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(DEFAULT_MEETING_INVITE_DESCRIPTION);
   const [faturamento, setFaturamento] = useState(preview ? 'R$ 1.500.000,00' : '');
   const [generateMeetLink, setGenerateMeetLink] = useState(true);
   const [organizerEmail, setOrganizerEmail] = useState(preview?.organizerEmail ?? '');
@@ -479,7 +480,7 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
     const emails = [leadEmail, closer.email, organizerEmail].map((email) => email?.trim() ?? '').filter(Boolean);
     const eventInput = {
       title: title.trim() || `V4 Company + ${leadName}`,
-      description: description.trim() || undefined,
+      description,
       startTime: `${wall.date}T${wall.time}:00`,
       endTime: wallIso(choice.end),
       attendeeEmails: [...new Set(emails)],
