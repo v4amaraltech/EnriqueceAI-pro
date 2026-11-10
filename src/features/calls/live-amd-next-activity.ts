@@ -2,7 +2,7 @@ import { OPENROUTER_BASE_URL, openRouterHeaders } from '@/features/calls/service
 
 import type { NextActivitySuggestion } from '@/features/integrations/webphone/live-amd-session';
 
-export const LIVE_AMD_ACTIVITY_MODEL = 'openai/gpt-4.1-mini';
+export const LIVE_AMD_ACTIVITY_MODEL = 'openai/gpt-5-nano';
 
 export interface NextActivityResult {
   suggestion: NextActivitySuggestion;
@@ -15,8 +15,9 @@ const SUGGESTIONS = new Set<NextActivitySuggestion>(['schedule_meeting', 'schedu
 /**
  * Lê a transcrição acumulada e devolve só uma sugestão. Não cria atividade
  * nem agenda. Sem OPENROUTER_API_KEY, devolve null e a ligação segue normal.
- * Modelo: gpt-4.1-mini via OpenRouter (cerca de US$ 0,40 / US$ 1,60 por 1M
- * de tokens, latência perto de 1 s). Fonte: https://openrouter.ai/openai/gpt-4.1-mini
+ * Modelo: gpt-5-nano via OpenRouter (US$ 0,05 / US$ 0,40 por 1M de tokens
+ * na tabela de 10/11/2026). Se o modelo falhar, devolve null.
+ * Fonte: https://openrouter.ai/openai/gpt-5-nano
  */
 export async function suggestNextActivity(
   input: { transcript: string; prediction: string },

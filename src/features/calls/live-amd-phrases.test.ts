@@ -33,7 +33,33 @@ describe('classifyLiveAmd', () => {
       transcript: 'Encaminhada para a caixa postal. Grave a sua mensagem após o sinal.',
     });
     expect(decision.label).toBe('voicemail');
-    expect(decision.phrase).toBe('encaminhada para a caixa postal');
+    expect(decision.phrase).toBe('grave a sua mensagem apos o sinal');
+  });
+
+  it('reconhece a caixa postal real da operadora e o texto cortado', () => {
+    const full = 'Vamos entregar o seu recado assim que o celular estiver disponível';
+    expect(classifyLiveAmd({ transcript: full, elapsedMs: 4_000 })).toEqual({
+      label: 'voicemail',
+      phrase: 'vamos entregar o seu recado assim que o celular estiver disponivel',
+      confidence: 0.92,
+    });
+    expect(classifyLiveAmd({ transcript: 'vamos entregar o seu recado assim que o' }).label).toBe('voicemail');
+    expect(classifyLiveAmd({ transcript: 'entregar o seu recado' }).phrase).toBe('entregar o seu recado');
+    expect(classifyLiveAmd({ transcript: 'o celular estiver DISPONÍVEL' }).phrase).toBe('o celular estiver disponivel');
+    expect(classifyLiveAmd({ transcript: 'recado assim que estiver disponivel' })).toMatchObject({
+      label: 'voicemail',
+      phrase: 'recado disponivel',
+    });
+    expect(classifyLiveAmd({ transcript: 'entregar o seu recad assim que estiver disponiv' }).label).toBe('voicemail');
+  });
+
+  it('reconhece recado, cobertura e número inexistente das operadoras', () => {
+    expect(classifyLiveAmd({ transcript: 'A pessoa chamada não pode atender no momento.' }).label).toBe('voicemail');
+    expect(classifyLiveAmd({ transcript: 'Deixe seu recado após o sinal.' }).label).toBe('voicemail');
+    expect(classifyLiveAmd({ transcript: 'Grave sua mensagem.' }).phrase).toBe('grave sua mensagem');
+    expect(classifyLiveAmd({ transcript: 'O celular está desligado ou fora da área.' }).phrase).toBe('o celular esta desligado ou fora da area');
+    expect(classifyLiveAmd({ transcript: 'Está fora da área de cobertura.' }).phrase).toBe('esta fora da area de cobertura');
+    expect(classifyLiveAmd({ transcript: 'O número chamado não existe.' }).label).toBe('number_not_exist');
   });
 
   it('não trata fala de pessoa como recado de operadora', () => {
@@ -51,6 +77,11 @@ describe('classifyLiveAmd', () => {
       label: 'no_answer',
       phrase: null,
       confidence: 0.7,
+    });
+    expect(classifyLiveAmd({ transcript: '', elapsedMs: LIVE_AMD_LISTEN_MS, hadEnergy: true })).toEqual({
+      label: 'unknown',
+      phrase: null,
+      confidence: 0,
     });
   });
 

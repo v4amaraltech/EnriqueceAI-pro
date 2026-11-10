@@ -54,6 +54,18 @@ describe('janela dos últimos 15 segundos', () => {
     expect(late.requestNextActivity).toBe(false);
   });
 
+  it('áudio com energia e texto vazio não vira não atendido', () => {
+    const session = createLiveAmdSession(() => 5_000);
+    const loud = new Int16Array(16_000).fill(8_000);
+    let sawNoAnswer = false;
+    for (let second = 0; second < 16; second++) {
+      const effect = session.onPcm(loud);
+      if (effect.view?.prediction === 'no_answer') sawNoAnswer = true;
+    }
+    expect(sawNoAnswer).toBe(false);
+    expect(session.onCallEnded().view?.prediction).toBe('unknown');
+  });
+
   it('classifica a fala recente e continua a escuta', () => {
     const session = createLiveAmdSession(() => 2_000);
     session.onPcm(seconds(1, 8_000));

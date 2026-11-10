@@ -23,7 +23,7 @@ describe('sugestão de próxima atividade', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('pede o gpt-4.1-mini com a chave só no header', async () => {
+  it('pede o gpt-5-nano com a chave só no header', async () => {
     process.env.OPENROUTER_API_KEY = 'chave-openrouter';
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ choices: [{ message: { content: '{"suggestion":"schedule_callback","reason":"Pediu para ligar depois.","confidence":0.66}' } }] }), { status: 200 }),
