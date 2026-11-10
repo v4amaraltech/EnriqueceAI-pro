@@ -8,6 +8,9 @@ import { toast } from 'sonner';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 
+import { CloserCalendarControls } from '@/features/closer-calendar/CloserCalendarControls';
+import type { CloserCalendarCard } from '@/features/closer-calendar/status';
+
 import {
   addCloser,
   deleteCloser,
@@ -17,9 +20,11 @@ import {
 
 interface ClosersSettingsProps {
   initial: CloserRow[];
+  calendarConnectEnabled?: boolean;
+  calendarByCloser?: Record<string, CloserCalendarCard>;
 }
 
-export function ClosersSettings({ initial }: ClosersSettingsProps) {
+export function ClosersSettings({ initial, calendarConnectEnabled = false, calendarByCloser = {} }: ClosersSettingsProps) {
   const [closers, setClosers] = useState<CloserRow[]>(initial);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -174,16 +179,21 @@ export function ClosersSettings({ initial }: ClosersSettingsProps) {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium">{closer.name}</span>
-                      <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                        {closer.email}
-                      </span>
-                      {closer.phone && (
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">{closer.name}</span>
                         <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                          📱 {closer.phone}
+                          {closer.email}
                         </span>
-                      )}
+                        {closer.phone && (
+                          <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                            📱 {closer.phone}
+                          </span>
+                        )}
+                      </div>
+                      {calendarConnectEnabled ? (
+                        <CloserCalendarControls closerId={closer.id} card={calendarByCloser[closer.id]} />
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
