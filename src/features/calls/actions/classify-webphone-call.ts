@@ -26,12 +26,14 @@ const classifyInputSchema = z.object({
   sdrOutcome: callDispositionSchema.optional(),
   clientDurationSeconds: z.number().int().min(0),
   notes: z.string().optional(),
+  /** Revisão do texto. Menor que a já gravada não substitui a nota. */
+  notesRev: z.number().int().min(0).optional(),
   leadId: z.string().uuid().optional(),
 });
 
 export async function classifyWebphoneCall(
   input: z.infer<typeof classifyInputSchema>,
-): Promise<ActionResult<{ callId: string }>> {
+): Promise<ActionResult<{ callId: string; notesApplied: boolean }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
@@ -41,7 +43,7 @@ export async function classifyWebphoneCall(
     return { success: false, error: 'Dados inválidos' };
   }
 
-  const { callId, sdrOutcome, clientDurationSeconds, notes, leadId } = parsed.data;
+  const { callId, sdrOutcome, clientDurationSeconds, notes, notesRev, leadId } = parsed.data;
 
   const result = await applySdrCallResult(supabase, {
     orgId,
@@ -50,10 +52,11 @@ export async function classifyWebphoneCall(
     sdrOutcome,
     clientDurationSeconds,
     notes,
+    notesRev,
     leadId,
     via: 'webphone',
   });
   if (!result.success) return result;
 
-  return { success: true, data: { callId } };
+  return { success: true, data: { callId, notesApplied: result.data.notesApplied } };
 }

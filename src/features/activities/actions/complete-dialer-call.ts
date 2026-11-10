@@ -27,6 +27,8 @@ const completeDialerCallSchema = z.object({
   phone: z.string().min(8),
   callStatus: z.string().optional(),
   notes: z.string(),
+  /** Revisão da nota. Uma gravação anterior não substitui texto mais novo. */
+  notesRev: z.number().int().min(0).optional(),
   durationSeconds: z.number().int().nonnegative().optional(),
   /**
    * Linha de `calls` criada pelo `initiateCall` desta ligação. Com ela, o
@@ -56,7 +58,7 @@ export async function completeDialerCall(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
-  const { enrollmentId, cadenceId, stepId, leadId, phone, notes, durationSeconds, callId, sdrOutcome, aiOutcomePending } = parsed.data;
+  const { enrollmentId, cadenceId, stepId, leadId, phone, notes, notesRev, durationSeconds, callId, sdrOutcome, aiOutcomePending } = parsed.data;
 
   // 1. Registrar a ligação.
   let recordedCallId: string;
@@ -70,6 +72,7 @@ export async function completeDialerCall(
       sdrOutcome,
       clientDurationSeconds: durationSeconds ?? 0,
       notes: notes || undefined,
+      notesRev,
       leadId,
       interactionFields: { cadence_id: cadenceId, step_id: stepId },
       via: 'power_dialer',

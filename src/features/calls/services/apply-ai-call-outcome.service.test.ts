@@ -71,7 +71,7 @@ const NOW = () => new Date('2026-11-05T17:05:00.000Z');
 
 describe('applyAiCallOutcome', () => {
   beforeEach(() => {
-    vi.mocked(applySdrCallResult).mockReset().mockResolvedValue({ success: true, data: { callId: CALL.id, leadId: 'lead-1' } });
+    vi.mocked(applySdrCallResult).mockReset().mockResolvedValue({ success: true, data: { callId: CALL.id, leadId: 'lead-1', notesApplied: true } });
     vi.mocked(scheduleCallbackActivity).mockReset().mockResolvedValue({ id: 'sched-1' });
   });
 

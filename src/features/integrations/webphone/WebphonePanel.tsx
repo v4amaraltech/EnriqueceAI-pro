@@ -32,12 +32,18 @@ import { useWebphonePanelHost } from './WebphonePanelHost';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
 import { effectiveCallSeconds, hangupReasonLabel, leadConnected, type LeadAnswer } from './webphone-lead-answer';
 import {
-  ackHeldWebphoneNotes,
+  editHeldWebphoneNotes,
+  notesRevisionForSubmit,
+  parkWebphoneCallNotes,
+  rehydrateWebphonePendingNotes,
+  reportHeldWebphoneNotes,
+  requestWebphoneConclude,
+  retryHeldWebphoneNotes,
+  setWebphoneCallNotes,
   clearWebphoneCallContext,
   contextMatchesCall,
-  requestWebphoneConclude,
-  setWebphoneCallNotes,
   type WebphoneCallContext,
+  type WebphoneNotesAnchor,
 } from './webphone-call-context';
 import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-panel-follow';
 import { answerCall, hangupCall as hangupWebphoneLeg, toggleMute } from './webphone-client';
@@ -92,6 +98,7 @@ interface FinishedCall {
   audioStats: WebphoneAudioStats | null;
   startedAt: number;
   endedAt: number;
+  dialToken: string | null;
   /** Contexto conhecido quando acabou (pode ser null: inbound sem `initiateCall`). */
   context: WebphoneCallContext | null;
 }
@@ -112,6 +119,7 @@ function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext |
     audioStats: call.audioStats,
     startedAt: call.startedAt,
     endedAt,
+    dialToken: call.dialToken ?? null,
     context: null,
   };
   return { ...draft, context: context && contextBelongsToFinished(context, draft) ? context : null };
@@ -127,6 +135,7 @@ function finishedFromContext(context: WebphoneCallContext, answered: boolean, ta
     audioStats: null,
     startedAt: context.startedAt,
     endedAt: context.startedAt + seconds * 1000,
+    dialToken: context.dialToken,
     context,
   };
 }
@@ -138,6 +147,9 @@ function viewportSize() {
 export function WebphonePanel() {
   const webphone = useApi4ComWebphone();
   const ctxState = useWebphoneCallContext();
+  useEffect(() => {
+    rehydrateWebphonePendingNotes();
+  }, []);
   const [stage, setStage] = useState<PanelStage>({ kind: 'idle', doneCallId: null, doneContextId: null });
   const liveCall = webphone.call && webphone.call.phase !== 'ended' ? webphone.call : null;
   // Contexto que de fato pertence à ligação em andamento (um esquecido não conta).
@@ -205,32 +217,44 @@ export function WebphonePanel() {
       .catch((err: unknown) => console.warn('[webphone] audio_stats not saved:', err));
   }, [stage]);
 
-  // Notas que saíram da tela com a ligação seguinte. Grava na chamada antiga,
-  // sem desfecho e sem concluir atividade. Falha avisa e mantém o texto na aba.
+  // Nota que saiu da tela. Só grava quando existe callId, sem desfecho e sem
+  // concluir atividade. Sem id, o texto fica editável e não é enviado.
   const heldNotes = ctxState.heldNotes;
+  const concludedRev = ctxState.concludedRev;
   useEffect(() => {
-    if (heldNotes.length === 0) return;
     let cancelled = false;
     for (const item of heldNotes) {
+      if (!item.callId || item.saveError) continue;
+      if ((concludedRev[item.callId] ?? 0) >= item.rev) continue;
+      const sent = { holdId: item.holdId, callId: item.callId, rev: item.rev, notes: item.notes, leadId: item.leadId };
       void classifyWebphoneCall({
-        callId: item.callId,
+        callId: sent.callId,
         clientDurationSeconds: 0,
-        notes: item.notes,
-        leadId: item.leadId ?? undefined,
+        notes: sent.notes,
+        notesRev: sent.rev,
+        leadId: sent.leadId ?? undefined,
       })
         .then((r) => {
           if (cancelled) return;
-          if (r.success) ackHeldWebphoneNotes(item.callId);
-          else toast.error('Não consegui guardar a anotação da ligação anterior. Ela continua nesta aba.');
+          if (r.success && r.data.notesApplied === false) {
+            reportHeldWebphoneNotes(
+              sent.holdId,
+              sent.rev,
+              false,
+              'Esta nota não substituiu uma anotação mais recente da mesma ligação. O texto continua aqui.',
+            );
+            return;
+          }
+          reportHeldWebphoneNotes(sent.holdId, sent.rev, r.success, r.success ? undefined : r.error);
         })
         .catch(() => {
-          if (!cancelled) toast.error('Não consegui guardar a anotação da ligação anterior. Ela continua nesta aba.');
+          if (!cancelled) reportHeldWebphoneNotes(sent.holdId, sent.rev, false);
         });
     }
     return () => {
       cancelled = true;
     };
-  }, [heldNotes]);
+  }, [heldNotes, concludedRev]);
 
   // Contexto vivo da ligação fotografada (o dono pode ter liberado ou limpado).
   const liveContext = finishedCallId && context?.callId === finishedCallId ? context : null;
@@ -244,7 +268,7 @@ export function WebphonePanel() {
 
   function finish(call: FinishedCall) {
     if (call.context) clearWebphoneCallContext(call.context.callId);
-    else setWebphoneCallNotes('');
+    else parkWebphoneCallNotes();
     setStage({ kind: 'idle', doneCallId: endedCall?.id ?? call.id, doneContextId: call.context?.callId ?? null });
   }
 
@@ -285,11 +309,13 @@ export function WebphonePanel() {
   function handleOwnResult(call: FinishedCall, args: { notes: string; returnSchedule: { scheduledAt: string; channel: 'phone' | 'whatsapp' | 'email'; callProvider: 'whatsapp' | null } | null; outcome: Parameters<typeof classifyWebphoneCall>[0]['sdrOutcome'] }) {
     const ctx = call.context;
     if (!ctx) return;
+    const notesRev = notesRevisionForSubmit(ctx.callId, args.notes);
     classifyWebphoneCall({
       callId: ctx.callId,
       sdrOutcome: args.outcome,
       clientDurationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
       notes: args.notes || undefined,
+      notesRev,
       leadId: ctx.leadId ?? undefined,
     })
       .then((r) => {
@@ -317,7 +343,9 @@ export function WebphonePanel() {
   // Sem ligação o painel some (como no CRM da matriz): só aparece quando o SDR
   // liga. O pill parado fica apenas para problema que impede ligar.
   const showingDialing = Boolean(followNew && context);
-  const idle = !liveCall && !showingDialing && stage.kind === 'idle';
+  const orphanDraft = !liveCall && !showingDialing && stage.kind === 'idle' && Boolean(ctxState.notes.trim());
+  const hasRecoverableNotes = ctxState.heldNotes.length > 0 || Boolean(ctxState.persistWarning) || Boolean(ctxState.saveNotice) || orphanDraft;
+  const idle = !liveCall && !showingDialing && stage.kind === 'idle' && !hasRecoverableNotes;
   const idleProblem = webphone.registration === 'error' || webphone.mic === 'denied';
 
   const shell = (
@@ -328,7 +356,7 @@ export function WebphonePanel() {
           context={liveCallContext}
           leadAnswer={leadAnswer}
           notes={ctxState.notes}
-          onNotesChange={setWebphoneCallNotes}
+          onNotesChange={(value) => setWebphoneCallNotes(value, anchorFrom(liveCallContext, liveCall.remoteNumber, liveCall.dialToken ?? null))}
           onHangup={handleHangup}
         />
       ) : showingDialing && context ? (
@@ -336,16 +364,36 @@ export function WebphonePanel() {
           context={context}
           leadAnswer={leadAnswer}
           notes={ctxState.notes}
-          onNotesChange={setWebphoneCallNotes}
+          noteStatus={noteStatus(ctxState.notes, context.callId)}
+          onNotesChange={(value) => setWebphoneCallNotes(value, anchorFrom(context, context.phone, context.dialToken))}
           onHangup={handleHangup}
         />
       ) : stage.kind === 'finished' ? (
-        <FinishedView call={stage.call} leadAnswer={leadAnswer} hangupCause={hangupCause} notes={ctxState.notes} onNotesChange={setWebphoneCallNotes} onConclude={handleConclude} />
+        <FinishedView
+          call={stage.call}
+          leadAnswer={leadAnswer}
+          hangupCause={hangupCause}
+          notes={ctxState.notes}
+          noteStatus={noteStatus(ctxState.notes, stage.call.context?.callId ?? null)}
+          onNotesChange={(value) =>
+            setWebphoneCallNotes(value, anchorFrom(stage.call.context, stage.call.context?.phone ?? stage.call.remoteNumber, stage.call.dialToken))
+          }
+          onConclude={handleConclude}
+        />
       ) : stage.kind === 'result' ? (
         <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
+      ) : orphanDraft ? (
+        <div className="space-y-2">
+          <p className="text-xs text-[var(--muted-foreground)]">{noteStatus(ctxState.notes, ctxState.notesAnchor?.callId ?? null)}</p>
+          <NotesField
+            notes={ctxState.notes}
+            onChange={(value) => setWebphoneCallNotes(value, ctxState.notesAnchor)}
+          />
+        </div>
       ) : (
         <IdlePill state={webphone} />
       )}
+      <RecoverableNotes holds={ctxState.heldNotes} warning={ctxState.persistWarning} notice={ctxState.saveNotice} />
     </DraggableShell>
   );
 
@@ -501,6 +549,22 @@ function IdlePill({ state }: { state: WebphoneState }) {
   );
 }
 
+function anchorFrom(context: WebphoneCallContext | null, phone: string | null, dialToken: string | null): WebphoneNotesAnchor {
+  return {
+    callId: context?.callId ?? null,
+    leadId: context?.leadId ?? null,
+    dialToken: context?.dialToken ?? dialToken,
+    phone: context?.phone ?? phone,
+    leadName: context?.leadName ?? null,
+  };
+}
+
+function noteStatus(notes: string, callId: string | null): string | null {
+  if (!notes.trim()) return null;
+  if (!callId) return 'Anotação sem ligação vinculada. Não foi gravada no histórico.';
+  return 'Ainda não gravada na ligação.';
+}
+
 function LiveCallView({
   call,
   context,
@@ -574,12 +638,14 @@ function DialingView({
   context,
   leadAnswer,
   notes,
+  noteStatus: status,
   onNotesChange,
   onHangup,
 }: {
   context: WebphoneCallContext;
   leadAnswer: LeadAnswer;
   notes: string;
+  noteStatus: string | null;
   onNotesChange: (notes: string) => void;
   onHangup: () => void;
 }) {
@@ -618,6 +684,7 @@ function DialingView({
           <PhoneOff className="h-4 w-4" /> Desligar
         </Button>
       </div>
+      {status && <p className="text-xs text-[var(--muted-foreground)]">{status}</p>}
       <NotesField notes={notes} onChange={onNotesChange} />
     </>
   );
@@ -628,6 +695,7 @@ function FinishedView({
   leadAnswer,
   hangupCause,
   notes,
+  noteStatus: status,
   onNotesChange,
   onConclude,
 }: {
@@ -635,6 +703,7 @@ function FinishedView({
   leadAnswer: LeadAnswer;
   hangupCause: string | null;
   notes: string;
+  noteStatus: string | null;
   onNotesChange: (notes: string) => void;
   onConclude: () => void;
 }) {
@@ -658,6 +727,7 @@ function FinishedView({
           {reason}
         </p>
       )}
+      {status && <p className="text-xs text-[var(--muted-foreground)]">{status}</p>}
       <NotesField notes={notes} onChange={onNotesChange} autoFocus />
       <Button size="sm" className="w-full" onClick={onConclude}>
         Concluir
@@ -666,15 +736,56 @@ function FinishedView({
   );
 }
 
-function NotesField({ notes, onChange, autoFocus }: { notes: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+function NotesField({ notes, onChange, autoFocus, label = 'Anotações da ligação' }: { notes: string; onChange: (v: string) => void; autoFocus?: boolean; label?: string }) {
   return (
     <Textarea
       value={notes}
       onChange={(e) => onChange(e.target.value)}
       placeholder="Anotações da ligação…"
       className="min-h-[64px] max-h-40 resize-y text-sm"
-      aria-label="Anotações da ligação"
+      aria-label={label}
       autoFocus={autoFocus}
     />
+  );
+}
+
+function RecoverableNotes({
+  holds,
+  warning,
+  notice,
+}: {
+  holds: Array<{ holdId: string; callId: string | null; phone: string | null; leadName: string | null; notes: string; saveError: string | null }>;
+  warning: string | null;
+  notice: string | null;
+}) {
+  if (holds.length === 0 && !warning && !notice) return null;
+  return (
+    <div className="space-y-2 border-t border-[var(--border)] pt-2">
+      {notice && <p role="status">{notice}</p>}
+      {warning && <p role="status">{warning}</p>}
+      {holds.map((hold) => {
+        const linked = Boolean(hold.callId);
+        return (
+          <div key={hold.holdId} className="space-y-1">
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {linked
+                ? `Anotação ainda não salva${hold.leadName ? ` de ${hold.leadName}` : hold.phone ? ` do número ${hold.phone}` : ''}.`
+                : 'Anotação sem ligação vinculada. Não foi gravada no histórico.'}
+            </p>
+            <NotesField
+              notes={hold.notes}
+              label={linked ? 'Anotação pendente da ligação anterior' : 'Anotação sem ligação vinculada'}
+              onChange={(value) => editHeldWebphoneNotes(hold.holdId, value)}
+            />
+            {hold.saveError && <p role="status">{hold.saveError}</p>}
+            {linked && hold.saveError && (
+              <Button type="button" size="sm" variant="outline" onClick={() => retryHeldWebphoneNotes(hold.holdId)}>
+                Tentar gravar de novo
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

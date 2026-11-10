@@ -23,6 +23,8 @@ export interface WebphoneCall {
   muted: boolean;
   /** Último resumo de `getStats()` da conexão WebRTC (bloco 3); null até a mídia fluir. */
   audioStats: WebphoneAudioStats | null;
+  /** Discagem desta aba que originou o INVITE, quando deu para correlacionar. */
+  dialToken?: string | null;
 }
 
 export interface WebphoneState {
@@ -40,7 +42,7 @@ export type WebphoneEvent =
   | { type: 'disconnected'; error?: string }
   | { type: 'registration_failed'; cause: string }
   | { type: 'mic'; granted: boolean }
-  | { type: 'call_new'; id: string; remoteNumber: string; direction: 'incoming' | 'outgoing'; integrated: boolean; at: number }
+  | { type: 'call_new'; id: string; remoteNumber: string; direction: 'incoming' | 'outgoing'; integrated: boolean; at: number; dialToken?: string | null }
   | { type: 'call_accepted'; id: string; at: number }
   | { type: 'call_ended'; id: string; at: number; cause: string | null }
   | { type: 'call_muted'; id: string; muted: boolean }
@@ -87,6 +89,7 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
           endCause: null,
           muted: false,
           audioStats: null,
+          dialToken: event.dialToken ?? null,
         },
       };
     }

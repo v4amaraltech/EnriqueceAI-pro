@@ -19,6 +19,7 @@ export function contextForSuccessfulLeadCall(
   result: LeadDialSuccess | LeadDialFailure,
   lead: { id: string; nome_fantasia?: string | null; razao_social?: string | null },
   phone: string,
+  dialToken: string,
 ): Omit<WebphoneCallContext, 'startedAt'> | null {
   if (!result.success) return null;
   return {
@@ -28,5 +29,6 @@ export function contextForSuccessfulLeadCall(
     leadName: lead.nome_fantasia ?? lead.razao_social ?? null,
     phone,
     ownerHandlesResult: false,
+    dialToken,
   };
 }

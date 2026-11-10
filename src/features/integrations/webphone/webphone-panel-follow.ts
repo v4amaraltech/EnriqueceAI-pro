@@ -1,28 +1,22 @@
-import { CONTEXT_MATCH_WINDOW_MS, type WebphoneCallContext } from './webphone-call-context';
-
-/**
- * O POST /calls pode responder pouco depois de a perna SIP cair (ligação curta).
- * Nesse intervalo o contexto ainda é desta chamada, não da próxima.
- */
-export const FINISHED_CONTEXT_GRACE_MS = CONTEXT_MATCH_WINDOW_MS;
+import type { WebphoneCallContext } from './webphone-call-context';
 
 export interface FinishedCallIdentity {
   startedAt: number;
   endedAt: number;
+  /** Token gravado na perna SIP quando o INVITE foi desta discagem. */
+  dialToken: string | null;
   context: { callId: string } | null;
 }
 
 /**
- * O contexto publicado ainda é o desta ligação já encerrada?
- * Com `callId` no snapshot, a identidade é o id. Sem ele (o HTTP chegou depois
- * do fim), vale a janela de tempo. Um contexto mais novo não pertence.
+ * O contexto publicado ainda é esta ligação já encerrada?
+ * Vale o `callId` do snapshot ou o token da mesma discagem. Horário e telefone,
+ * sozinhos, não bastam: outra ligação pode começar 1s depois, no mesmo número.
  */
 export function contextBelongsToFinished(context: WebphoneCallContext, finished: FinishedCallIdentity): boolean {
-  if (finished.context) return finished.context.callId === context.callId;
-  return (
-    context.startedAt >= finished.startedAt - CONTEXT_MATCH_WINDOW_MS &&
-    context.startedAt <= finished.endedAt + FINISHED_CONTEXT_GRACE_MS
-  );
+  if (finished.context?.callId && finished.context.callId === context.callId) return true;
+  if (finished.dialToken && context.dialToken && finished.dialToken === context.dialToken) return true;
+  return false;
 }
 
 /**

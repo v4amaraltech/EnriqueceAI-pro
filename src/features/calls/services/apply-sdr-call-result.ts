@@ -14,6 +14,12 @@ export interface ApplySdrCallResultInput {
   /** Segundos medidos na tela (reserva enquanto o webhook não fechou a ligação). */
   clientDurationSeconds: number;
   notes?: string;
+  /**
+   * Revisão do texto no cliente. Uma gravação com revisão menor não substitui
+   * nota mais nova nem apaga desfecho. Sem o campo, o comportamento anterior
+   * permanece.
+   */
+  notesRev?: number;
   leadId?: string;
   /**
    * Campos extras da interação de telefone desta ligação (ex.: `cadence_id` e
@@ -39,8 +45,8 @@ export interface ApplySdrCallResultInput {
 export async function applySdrCallResult(
   supabase: SupabaseClient,
   input: ApplySdrCallResultInput,
-): Promise<ActionResult<{ callId: string; leadId: string | null }>> {
-  const { orgId, userId, callId, sdrOutcome, clientDurationSeconds, notes, leadId, interactionFields, via } = input;
+): Promise<ActionResult<{ callId: string; leadId: string | null; notesApplied: boolean }>> {
+  const { orgId, userId, callId, sdrOutcome, clientDurationSeconds, notes, notesRev, leadId, interactionFields, via } = input;
 
   const { data: call } = (await from(supabase, 'calls')
     .select('id, duration_seconds, lead_id, org_id, hangup_cause')
@@ -54,11 +60,29 @@ export async function applySdrCallResult(
     return { success: false, error: 'Ligação não encontrada' };
   }
 
+  // A interaction é lida antes da escrita para uma revisão velha não cobrir
+  // nota mais nova. Desfecho, quando vem, continua sendo aplicado.
+  const effectiveLeadIdForRev = leadId ?? call.lead_id;
+  let existingForRev: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null = null;
+  if (effectiveLeadIdForRev && notesRev != null) {
+    const { data: existingEarly } = (await from(supabase, 'interactions')
+      .select('id, metadata, message_content')
+      .eq('lead_id', effectiveLeadIdForRev)
+      .eq('channel', 'phone')
+      .contains('metadata', { callId })
+      .limit(1)
+      .maybeSingle()) as { data: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null };
+    existingForRev = existingEarly;
+  }
+  const previousRev = typeof existingForRev?.metadata?.webphone_notes_rev === 'number' ? existingForRev.metadata.webphone_notes_rev : 0;
+  const notesStale = notesRev != null && notesRev < previousRev;
+  const notesToWrite = notes && !notesStale ? notes : undefined;
+
   // `status` DELIBERADAMENTE omitido — quem manda nele é o webhook do API4COM.
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-  if (notes) updates.notes = notes;
+  if (notesToWrite) updates.notes = notesToWrite;
   if (sdrOutcome) updates.sdr_disposition = sdrOutcome;
   if (call.duration_seconds === 0 && clientDurationSeconds > 0 && !call.hangup_cause) {
     updates.duration_seconds = clientDurationSeconds;
@@ -74,41 +98,43 @@ export async function applySdrCallResult(
   // virar 2 ou 3 no contador de "atividades realizadas" (27/05/2026: 257
   // interactions fantasmas em 302 ligações reais na V4 Amaral).
   const effectiveLeadId = leadId ?? call.lead_id;
-  if (effectiveLeadId) {
-    const { data: existing } = (await from(supabase, 'interactions')
-      .select('id, metadata, message_content')
-      .eq('lead_id', effectiveLeadId)
-      .eq('channel', 'phone')
-      .contains('metadata', { callId })
-      .limit(1)
-      .maybeSingle()) as { data: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null };
+  if (effectiveLeadId && (notesToWrite || sdrOutcome || interactionFields || !existingForRev)) {
+    const existing =
+      existingForRev ??
+      ((await from(supabase, 'interactions')
+        .select('id, metadata, message_content')
+        .eq('lead_id', effectiveLeadId)
+        .eq('channel', 'phone')
+        .contains('metadata', { callId })
+        .limit(1)
+        .maybeSingle()) as { data: { id: string; metadata: Record<string, unknown> | null; message_content: string | null } | null }).data;
 
     if (existing) {
       const mergedMeta = {
         ...(existing.metadata ?? {}),
         classified_via: via,
-        ...(notes ? { webphone_notes: notes } : {}),
+        ...(notesToWrite ? { webphone_notes: notesToWrite, ...(notesRev != null ? { webphone_notes_rev: notesRev } : {}) } : {}),
       };
       await from(supabase, 'interactions')
         .update({
           ...(interactionFields ?? {}),
-          ...(notes && !existing.message_content ? { message_content: notes } : {}),
+          ...(notesToWrite && !existing.message_content ? { message_content: notesToWrite } : {}),
           metadata: mergedMeta,
         } as Record<string, unknown>)
         .eq('id', existing.id);
-    } else {
+    } else if (notesToWrite || sdrOutcome || interactionFields) {
       await from(supabase, 'interactions').insert({
         org_id: orgId,
         lead_id: effectiveLeadId,
         channel: 'phone',
         type: 'sent',
-        message_content: notes || null,
-        metadata: { callId, source: via },
+        message_content: notesToWrite || null,
+        metadata: { callId, source: via, ...(notesRev != null && notesToWrite ? { webphone_notes_rev: notesRev } : {}) },
         performed_by: userId,
         ...(interactionFields ?? {}),
       } as Record<string, unknown>);
     }
   }
 
-  return { success: true, data: { callId, leadId: effectiveLeadId } };
+  return { success: true, data: { callId, leadId: effectiveLeadId, notesApplied: !notes || Boolean(notesToWrite) } };
 }

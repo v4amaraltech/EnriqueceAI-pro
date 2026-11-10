@@ -11,6 +11,7 @@ describe('contextForSuccessfulLeadCall', () => {
         { success: true, data: { callId: 'adb23762-4673-4663-a9ed-5d1855f4f04d', providerCallId: 'prov-b' } },
         lead,
         '11954958486',
+        'token-b',
       ),
     ).toEqual({
       callId: 'adb23762-4673-4663-a9ed-5d1855f4f04d',
@@ -19,10 +20,11 @@ describe('contextForSuccessfulLeadCall', () => {
       leadName: 'Mercante Net',
       phone: '11954958486',
       ownerHandlesResult: false,
+      dialToken: 'token-b',
     });
   });
 
   it('falha do POST não publica contexto e portanto não substitui o resultado pendente', () => {
-    expect(contextForSuccessfulLeadCall({ success: false, error: 'ramal ocupado' }, lead, '11954958486')).toBeNull();
+    expect(contextForSuccessfulLeadCall({ success: false, error: 'ramal ocupado' }, lead, '11954958486', 'token-b')).toBeNull();
   });
 });

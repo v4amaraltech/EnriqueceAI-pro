@@ -31,6 +31,7 @@ vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({
 }));
 vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({
   clearWebphoneCallContext: vi.fn(),
+  notesRevisionForSubmit: () => 1,
   onWebphoneConcludeRequested: () => () => {},
   releaseWebphoneCallOwner: vi.fn(),
   setWebphoneCallContext: vi.fn(),

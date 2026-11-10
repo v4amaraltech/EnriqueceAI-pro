@@ -30,10 +30,12 @@ import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebph
 import { effectiveCallSeconds, leadConnected } from '@/features/integrations/webphone/webphone-lead-answer';
 import {
   clearWebphoneCallContext,
+  notesRevisionForSubmit,
   onWebphoneConcludeRequested,
   releaseWebphoneCallOwner,
   setWebphoneCallContext,
 } from '@/features/integrations/webphone/webphone-call-context';
+import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
@@ -198,6 +200,7 @@ export function ActivityPhonePanel({
     setDialStartedAt(Date.now());
 
     setElapsed(0);
+    const reserved = reserveWebphoneDial(selectedPhone);
     startTransition(async () => {
       setCallState('calling');
 
@@ -209,6 +212,7 @@ export function ActivityPhonePanel({
       });
 
       if (!result.success) {
+        cancelWebphoneDial(reserved.token);
         // Show backend error if present, otherwise generic guidance
         const errorMsg =
           result.error || (webphoneReady ? 'Não foi possível iniciar a ligação. Tente novamente.' : 'Verifique se a extensão API4COM está aberta e tente novamente.');
@@ -228,14 +232,17 @@ export function ActivityPhonePanel({
 
       // Contexto para o painel flutuante do webphone (lead, linha em `calls`).
       // Este painel continua dono do resultado enquanto estiver montado.
-      setWebphoneCallContext({
-        callId: result.data.callId,
-        providerCallId: result.data.providerCallId,
-        leadId,
-        leadName,
-        phone: selectedPhone,
-        ownerHandlesResult: true,
-      });
+      publishWebphoneDial(reserved.seq, () =>
+        setWebphoneCallContext({
+          callId: result.data.callId,
+          providerCallId: result.data.providerCallId,
+          leadId,
+          leadName,
+          phone: selectedPhone,
+          ownerHandlesResult: true,
+          dialToken: reserved.token,
+        }),
+      );
     });
   }
 
@@ -272,10 +279,12 @@ export function ActivityPhonePanel({
     // Persist notes + duration. Call status (significant/not_connected/etc)
     // is owned by the API4COM webhook now — we don't pass it here.
     if (callId) {
+      const notesRev = notesRevisionForSubmit(callId, attemptNotes);
       classifyWebphoneCall({
         callId,
         clientDurationSeconds: resultSeconds,
         notes: attemptNotes || undefined,
+        notesRev: attemptNotes.trim() ? notesRev : undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
       clearWebphoneCallContext(callId);
@@ -315,11 +324,13 @@ export function ActivityPhonePanel({
     // `calls.status` continua sendo do webhook do API4COM (medição objetiva).
     // O desfecho do SDR vai para `calls.sdr_outcome`, em coluna separada.
     if (callId) {
+      const notesRev = notesRevisionForSubmit(callId, resultNotes);
       classifyWebphoneCall({
         callId,
         sdrOutcome: outcome,
         clientDurationSeconds: resultSeconds,
         notes: resultNotes || undefined,
+        notesRev: resultNotes.trim() ? notesRev : undefined,
         leadId,
       }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
     }

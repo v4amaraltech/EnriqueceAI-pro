@@ -8,6 +8,7 @@
 
 import { summarizeRtcStats } from './webphone-audio-stats';
 import { toggleSessionAudio } from './webphone-audio-mute';
+import { claimWebphoneDial } from './webphone-dial-correlation';
 import {
   INTEGRATED_CALL_HEADER,
   initialWebphoneState,
@@ -145,15 +146,17 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   const id = `wp-${Date.now()}-${++callSeq}`;
   const incoming = session.direction === 'incoming';
   const integrated = incoming && isIntegratedCallHeader(request.getHeader(INTEGRATED_CALL_HEADER));
+  const remoteNumber = remoteNumberFromUri(session.remote_identity?.uri?.user);
   activeSession = session;
   activeCallId = id;
 
   dispatch({
     type: 'call_new',
     id,
-    remoteNumber: remoteNumberFromUri(session.remote_identity?.uri?.user),
+    remoteNumber,
     direction: incoming ? 'incoming' : 'outgoing',
     integrated,
+    dialToken: claimWebphoneDial(remoteNumber, integrated),
     at: Date.now(),
   });
 

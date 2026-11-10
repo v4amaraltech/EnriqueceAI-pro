@@ -57,9 +57,14 @@ export function useWebphoneCallOutcome(callId: string | null, untilHangup = fals
           durationSeconds: result.data.durationSeconds,
         });
         const settled = untilHangup ? Boolean(result.data.hangupCause) : result.data.leadAnswer !== 'unknown';
-        if (settled) return;
+        if (settled || cancelled) return;
       }
-      if (polls < LEAD_ANSWER_MAX_POLLS) timer = window.setTimeout(() => void tick(), LEAD_ANSWER_POLL_INTERVAL_MS);
+      if (cancelled) return;
+      // Sem SIP o painel precisa do hangup, que pode passar de 2 min.
+      // O teto antigo fica só na consulta que para no atendimento.
+      // Unmount, troca de id ou hangup cancelam o próximo timeout.
+      const capped = !untilHangup && polls >= LEAD_ANSWER_MAX_POLLS;
+      if (!capped) timer = window.setTimeout(() => void tick(), LEAD_ANSWER_POLL_INTERVAL_MS);
     }
 
     void tick();
