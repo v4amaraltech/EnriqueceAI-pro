@@ -14,6 +14,8 @@ export const CHAT_COPY = {
   unthreaded: 'Mensagem sem conversa',
   noSubject: 'Conversa sem assunto',
   note: 'Nota',
+  you: 'Você',
+  lead: 'Lead',
   ai: 'IA',
   sent: 'Enviada',
   delivered: 'Entregue',

@@ -1,4 +1,7 @@
+import { messageBody, plainText } from './body';
 import { CHAT_COPY } from './constants';
+
+export { plainText };
 
 export type ChatChannel = 'whatsapp' | 'email';
 export type ChatDirection = 'in' | 'out';
@@ -23,6 +26,7 @@ export interface ChatMessage {
   channel: ChatChannel;
   direction: ChatDirection;
   text: string;
+  html: string | null;
   missingBody: boolean;
   createdAt: string;
   delivery: string | null;
@@ -53,27 +57,6 @@ const timeFormat = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
 });
 
-export function plainText(value: string | null | undefined): string {
-  if (!value) return '';
-  return value
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function textOf(metadata: Record<string, unknown> | null, content: string | null): string {
-  const fromContent = plainText(content);
-  if (fromContent) return fromContent;
-  const html = typeof metadata?.html_body === 'string' ? metadata.html_body : null;
-  return plainText(html);
-}
-
 export function deliveryLabel(channel: ChatChannel, type: string): string | null {
   if (type === 'sent') return CHAT_COPY.sent;
   if (type === 'delivered') return CHAT_COPY.delivered;
@@ -94,19 +77,22 @@ export function toChatMessage(row: ChatSourceRow): ChatMessage | null {
   const subjectRaw = row.metadata?.subject;
   const threadId = typeof threadRaw === 'string' && threadRaw.trim() ? threadRaw.trim() : null;
   const subject = typeof subjectRaw === 'string' && subjectRaw.trim() ? subjectRaw.trim() : null;
-  const body = textOf(row.metadata, row.message_content);
-  const missingBody = body.length === 0;
+  const htmlBody = typeof row.metadata?.html_body === 'string' ? row.metadata.html_body : null;
+  const body = messageBody({ html: htmlBody, text: row.message_content });
+  const missingBody = body.text.length === 0;
+  const note = row.metadata?.is_note === true;
   const text = missingBody
     ? (inbound ? CHAT_COPY.missingReply : CHAT_COPY.missingOutbound)
-    : row.metadata?.is_note === true
-      ? `${CHAT_COPY.note}: ${body}`
-      : body;
+    : note
+      ? `${CHAT_COPY.note}: ${body.text}`
+      : body.text;
 
   return {
     id: row.id,
     channel: row.channel,
     direction: inbound ? 'in' : 'out',
     text,
+    html: missingBody || note ? null : body.html,
     missingBody,
     createdAt: row.created_at,
     delivery: inbound ? null : deliveryLabel(row.channel, row.type),
