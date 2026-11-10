@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { findMessageByRfcId } from '@/features/email-conversations/services/gmail-inbox.service';
+import { recordLeadMessage } from '@/features/lead-messages/record';
 import { EmailService, refreshAccessToken, type GmailConnection } from '@/features/integrations/services/email.service';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { WhatsAppService } from '@/features/integrations/services/whatsapp.service';
@@ -74,6 +75,20 @@ export function createMetaCloudAdapter(deps: MetaCloudAdapterDeps = {}): Provide
           db(),
         );
         if (result.success) {
+          if (result.messageId && req.leadId) {
+            await recordLeadMessage({
+              orgId: req.orgId,
+              leadId: req.leadId,
+              channel: 'whatsapp',
+              direction: 'outbound',
+              provider: 'meta',
+              leadAddress: req.to,
+              bodyText: payload.body,
+              providerMessageId: result.messageId,
+              sentBy: payload.senderUserId,
+              status: 'sent',
+            });
+          }
           return result.messageId ? { kind: 'accepted', externalId: result.messageId } : ambiguous('accepted_without_message_id');
         }
         const error = result.error ?? '';
@@ -132,6 +147,21 @@ export function createEvolutionAdapter(deps: EvolutionAdapterDeps = {}): Provide
           body: req.payload.body,
         });
         if (result.success) {
+          if (result.messageId && req.leadId) {
+            await recordLeadMessage({
+              orgId: req.orgId,
+              leadId: req.leadId,
+              channel: 'whatsapp',
+              direction: 'outbound',
+              provider: 'evolution',
+              connectionId: instanceId,
+              leadAddress: req.to,
+              bodyText: req.payload.body,
+              providerMessageId: result.messageId,
+              sentBy: instance.user_id,
+              status: 'sent',
+            });
+          }
           return result.messageId ? { kind: 'accepted', externalId: result.messageId } : ambiguous('accepted_without_message_id');
         }
         if (result.code) return rejected(`evolution_${result.code}`);

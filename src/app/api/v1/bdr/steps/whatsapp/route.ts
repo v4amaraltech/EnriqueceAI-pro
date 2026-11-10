@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 
+import { recordLeadMessage } from '@/features/lead-messages/record';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
@@ -109,6 +110,21 @@ export async function POST(request: Request) {
     const evento = q.status === 'enviado' ? 'whatsapp_enviado' : q.status === 'falhou' ? 'whatsapp_falhou' : 'whatsapp_incerto';
     const conteudo = q.status === 'enviado' ? q.texto : `WhatsApp da Ana ${q.status === 'falhou' ? 'não enviado (falha)' : 'com envio incerto'}${q.erro ? `: ${q.erro}` : ''}.`;
     const c = await confirmar(evento, conteudo, { texto: q.texto, erro: q.erro }, q.messageId);
+    if (q.status === 'enviado' && q.texto) {
+      await recordLeadMessage({
+        orgId: auth.orgId,
+        leadId: lead.id,
+        channel: 'whatsapp',
+        direction: 'outbound',
+        provider: 'ana_n8n',
+        leadAddress: escolherCelular(lead.telefone, lead.phones),
+        bodyText: q.texto,
+        providerMessageId: q.messageId || `ana-exec:${q.executionId}`,
+        sentBy: lead.assigned_to,
+        aiGenerated: true,
+        status: q.status === 'enviado' ? 'sent' : null,
+      });
+    }
     return NextResponse.json({ success: true, data: c });
   }
 

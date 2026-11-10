@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { recordLeadMessage } from '@/features/lead-messages/record';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -418,6 +419,26 @@ export class EmailService {
       } catch {
         // threadId fetch failed — reply tracking will use fallback
       }
+    }
+
+    if (params.leadId) {
+      await recordLeadMessage({
+        orgId,
+        leadId: params.leadId,
+        channel: 'email',
+        direction: 'outbound',
+        provider: 'gmail',
+        connectionId: connection.id,
+        ourAddress: connection.email_address,
+        leadAddress: params.to,
+        bodyHtml: params.htmlBody,
+        subject: params.subject,
+        providerMessageId: result.id,
+        threadId: threadId ?? params.threadId ?? null,
+        rfcMessageId,
+        sentBy: userId,
+        status: 'sent',
+      });
     }
 
     return { success: true, messageId: result.id, threadId, rfcMessageId };
