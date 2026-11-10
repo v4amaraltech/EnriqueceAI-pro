@@ -36,7 +36,7 @@ import { formatDuration } from '@/lib/utils/format';
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
 
-export type CallState = 'idle' | 'calling' | 'connected' | 'ended';
+export type CallState = 'idle' | 'calling' | 'awaiting-session' | 'connected' | 'releasing' | 'ended';
 
 interface DialerCallPanelProps {
   item: DialerQueueItem;
@@ -133,7 +133,8 @@ export function DialerCallPanel({
     setAttempts([]);
   }
 
-  const isInCall = callState === 'calling' || callState === 'connected';
+  const isInCall = callState === 'calling' || callState === 'connected' || callState === 'awaiting-session';
+  const showConnectedTimer = callState === 'connected';
   // Não atendeu → tentar de novo é o caminho mais comum: vira o botão principal.
   const notAnswered = leadAnswer === 'not_answered';
 
@@ -234,7 +235,7 @@ export function DialerCallPanel({
             </p>
 
             {/* Timer display during call */}
-            {isInCall && (
+            {showConnectedTimer && (
               <p className="mb-2 text-lg font-mono tabular-nums text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 {formatDuration(elapsed)}
               </p>
@@ -257,7 +258,7 @@ export function DialerCallPanel({
                 </button>
               )}
 
-              {callState === 'calling' && (
+              {(callState === 'calling' || callState === 'awaiting-session') && (
                 <>
                   <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-yellow-500 text-white'}`}>
                     {dialerProvider === 'api4com' ? (
@@ -301,6 +302,8 @@ export function DialerCallPanel({
                     ? 'Iniciando ligação...'
                     : 'Clique para ligar via API4COM')}
               {callState === 'calling' && 'Chamando...'}
+              {callState === 'awaiting-session' && 'Aguardando o webphone desta aba. O retorno da operadora ainda não é a ligação conectada.'}
+              {callState === 'releasing' && 'Aguardando a liberação do ramal antes da próxima tentativa.'}
               {callState === 'connected' && 'Em chamada'}
               {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
             </p>
