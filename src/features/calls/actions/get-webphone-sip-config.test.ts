@@ -25,7 +25,10 @@ describe('getWebphoneSipConfig', () => {
   it('devolve domínio, ramal e senha quando o webphone está liberado', async () => {
     service.createServiceRoleClient.mockReturnValue(clientWith(base));
     const r = await getWebphoneSipConfig();
-    expect(r).toEqual({ success: true, data: { enabled: true, sipDomain: 'v4amaral.api4com.com', ramal: '1014', sipPassword: 'segredo' } });
+    expect(r).toEqual({
+      success: true,
+      data: { enabled: true, sipDomain: 'v4amaral.api4com.com', ramal: '1014', sipPassword: 'segredo', liveListen: false },
+    });
   });
 
   it('desligado para quem o gestor não liberou', async () => {

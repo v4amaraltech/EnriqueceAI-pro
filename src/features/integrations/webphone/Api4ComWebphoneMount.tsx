@@ -21,7 +21,12 @@ export function Api4ComWebphoneMount() {
       .then((r) => {
         if (cancelled || !r.success || !r.data.enabled) return;
         setEnabled(true);
-        return startWebphone({ sipDomain: r.data.sipDomain, ramal: r.data.ramal, sipPassword: r.data.sipPassword });
+        return startWebphone({
+          sipDomain: r.data.sipDomain,
+          ramal: r.data.ramal,
+          sipPassword: r.data.sipPassword,
+          liveListen: r.data.liveListen,
+        });
       })
       .catch((err: unknown) => console.error('[webphone] start failed:', err));
     return () => {
