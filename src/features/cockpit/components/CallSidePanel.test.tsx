@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PendingActivity } from '@/features/activities/types';
 
 import { FIXTURE_ACTIVITY, FIXTURE_HISTORY, FIXTURE_PREVIEW } from '@/app/demo/call-workspace/fixture';
+import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '@/features/integrations/meeting-invite-description';
 
 import { callNoteKey, readCallNote } from '../utils/call-note-draft';
 
@@ -101,6 +102,8 @@ describe('CallSidePanel', () => {
     expect(screen.getByTestId('participant-Closer').textContent).toContain('Closer Fixture');
     expect(screen.getByTestId('participant-Organizador').textContent).toContain('sdr.fixture@example.com');
     expect(screen.getByTestId('participant-Lead').textContent).toContain('contato.fixture@example.com');
+    expect(screen.getByLabelText('Descrição do convite')).toHaveValue(DEFAULT_MEETING_INVITE_DESCRIPTION);
+    expect(screen.getByLabelText('Título do convite da reunião')).toHaveValue('V4 Company + Empresa Fixture Ltda');
     const confirm = screen.getByTestId('confirm-meeting');
     fireEvent.click(confirm);
     fireEvent.click(confirm);

@@ -8,12 +8,14 @@ import { Calendar, Video } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import { Textarea } from '@/shared/components/ui/textarea';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
 import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected, getLeadFaturamento } from '@/features/integrations/actions/schedule-meeting';
 import { getMissingMeetingFields } from '../actions/get-missing-meeting-fields';
 import type { MissingRequiredField } from '../utils/required-field-validation';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
+import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '@/features/integrations/meeting-invite-description';
 
 function parseFaturamentoInput(input: string): number | null {
   const cleaned = input.replace(/[^\d,]/g, '').replace(',', '.');
@@ -43,6 +45,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
   const [meetingTime, setMeetingTime] = useState('09:00');
   const [meetingDuration, setMeetingDuration] = useState('30');
   const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingDescription, setMeetingDescription] = useState(DEFAULT_MEETING_INVITE_DESCRIPTION);
   const [meetingAttendee, setMeetingAttendee] = useState('');
   const [meetingMeetLink, setMeetingMeetLink] = useState(true);
   const [isMeetingPending, startMeetingTransition] = useTransition();
@@ -111,6 +114,17 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
           placeholder={defaultTitle}
           className="mt-1"
         />
+      </div>
+
+      <div>
+        <Label htmlFor="lead-meeting-description" className="text-xs">Descrição do convite</Label>
+        <Textarea
+          id="lead-meeting-description"
+          value={meetingDescription}
+          onChange={(e) => setMeetingDescription(e.target.value)}
+          className="mt-1 min-h-28"
+        />
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1">Entra no corpo do convite enviado aos participantes.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -259,6 +273,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
           startMeetingTransition(async () => {
             const result = await scheduleMeeting(leadId, {
               title,
+              description: meetingDescription,
               startTime: startIso,
               endTime: endIso,
               attendeeEmails: (meetingAttendee || leadEmail)
@@ -273,6 +288,7 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
               toast.success(`Reunião agendada!${meetInfo}`);
               setMeetingDate('');
               setMeetingTitle('');
+              setMeetingDescription(DEFAULT_MEETING_INVITE_DESCRIPTION);
               setSelectedCloserId('');
               setMeetingAttendee('');
               router.refresh();

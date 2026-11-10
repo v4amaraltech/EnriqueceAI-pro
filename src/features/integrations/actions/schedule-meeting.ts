@@ -35,6 +35,7 @@ import {
   updateCalendarEvent,
 } from '../services/calendar.service';
 import type { BusySlot } from '../services/calendar.service';
+import { meetingInviteDescription } from '../meeting-invite-description';
 import { formatMeetingDateTime } from '../utils/format-meeting-datetime';
 
 export async function scheduleMeeting(
@@ -106,8 +107,10 @@ export async function scheduleMeeting(
   if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
 
   let createdEventId: string | null = null;
+  const description = meetingInviteDescription(input.description);
+  const calendarInput = { ...input, description };
   try {
-    const event = await createCalendarEvent(connection, input);
+    const event = await createCalendarEvent(connection, calendarInput);
     createdEventId = event.id;
     if (gate.holdId) await attachCloserHold(supabase, gate.holdId, event.id);
 
@@ -132,7 +135,7 @@ export async function scheduleMeeting(
         channel: 'calendar',
         message_content: [
           input.title,
-          input.description ?? '',
+          description,
           event.meetLink ? `Google Meet: ${event.meetLink}` : '',
           `Horário: ${new Date(event.startTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} - ${new Date(event.endTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].filter(Boolean).join('\n'),

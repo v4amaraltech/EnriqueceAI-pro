@@ -16,9 +16,11 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import { Textarea } from '@/shared/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
 import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
+import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '../meeting-invite-description';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
 import { scheduleMeeting, updateMeeting, getLoggedUserEmail, getLeadFaturamento } from '../actions/schedule-meeting';
@@ -105,13 +107,14 @@ export function ScheduleMeetingModal({
   editData,
   inline = false,
   defaultTitle,
-  defaultDescription: _defaultDescription,
+  defaultDescription,
   onScheduled,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const isEditing = !!editData;
   const [title, setTitle] = useState(`V4 Company + ${leadName ?? 'Lead'}`);
+  const [description, setDescription] = useState(defaultDescription ?? DEFAULT_MEETING_INVITE_DESCRIPTION);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [duration, setDuration] = useState(String(MEETING_DURATION_MIN));
@@ -179,6 +182,7 @@ export function ScheduleMeetingModal({
     if (open) {
       if (editData) {
         setTitle(editData.title);
+        setDescription(editData.description ?? defaultDescription ?? DEFAULT_MEETING_INVITE_DESCRIPTION);
         setSelectedDate(editData.date ? new Date(editData.date + 'T12:00:00') : undefined);
         setSelectedTime(editData.startTime);
         setDuration(editData.duration);
@@ -188,6 +192,7 @@ export function ScheduleMeetingModal({
         getLoggedUserEmail().then((r) => { if (r.success) setSdrEmail(r.data); });
       } else {
         setTitle(defaultTitle ?? `V4 Company + ${leadName ?? 'Lead'}`);
+        setDescription(defaultDescription ?? DEFAULT_MEETING_INVITE_DESCRIPTION);
         setSelectedDate(undefined);
         setSelectedTime('09:00');
         setDuration(String(MEETING_DURATION_MIN));
@@ -244,6 +249,7 @@ export function ScheduleMeetingModal({
       const emails = attendeeEmails.split(',').map((e) => e.trim()).filter(Boolean);
       const eventInput = {
         title,
+        description,
         startTime: startIso,
         endTime: endIso,
         attendeeEmails: emails.length > 0 ? emails : undefined,
@@ -308,6 +314,17 @@ export function ScheduleMeetingModal({
           <div>
             <Label className="text-sm font-semibold">Título:</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
+          </div>
+
+          <div>
+            <Label htmlFor="schedule-meeting-description" className="text-sm font-semibold">Descrição do convite:</Label>
+            <Textarea
+              id="schedule-meeting-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-1 min-h-28"
+            />
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">Entra no corpo do convite enviado aos participantes.</p>
           </div>
 
           {/* Closer (Responsável) */}
