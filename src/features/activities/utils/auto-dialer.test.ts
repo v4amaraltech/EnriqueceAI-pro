@@ -117,6 +117,24 @@ describe('reduceAutoDial — pausas e falhas', () => {
     expect(isAutoDialRunning(run([...toInCall, { type: 'call_ended' }, { type: 'answer_timeout' }]))).toBe(false);
     expect(isAutoDialRunning(initialAutoDialState)).toBe(false);
   });
+
+  it('POST aceito sem sessão fica aguardando e a falta da sessão pausa sem concluir', () => {
+    const waiting = run([{ type: 'start' }, { type: 'dial_now' }, { type: 'awaiting_session' }]);
+    expect(waiting).toEqual({ phase: 'awaiting-session' });
+    expect(isAutoDialRunning(waiting)).toBe(true);
+    expect(describeAutoDial(waiting)).toMatch(/webphone desta aba/);
+    const paused = run([{ type: 'session_missing', message: 'sem sessão' }], waiting);
+    expect(paused).toEqual({ phase: 'paused', reason: 'blocked', message: 'sem sessão' });
+    expect(run([{ type: 'session_confirmed' }], waiting)).toEqual({ phase: 'in-call' });
+  });
+
+  it('424 espera uma vez e a nova discagem volta a discar; não conclui a atividade', () => {
+    const releasing = run([{ type: 'start' }, { type: 'dial_now' }, { type: 'ramal_busy', until: 15_000 }]);
+    expect(releasing).toEqual({ phase: 'releasing', until: 15_000 });
+    expect(isAutoDialRunning(releasing)).toBe(true);
+    expect(run([{ type: 'ramal_retry' }], releasing)).toEqual({ phase: 'dialing' });
+    expect(run([{ type: 'call_ended' }, { type: 'lead_answer', answer: 'not_answered', then: 'complete' }], releasing)).toEqual(releasing);
+  });
 });
 
 function item(id: string, over: Partial<DialerQueueItem> = {}): DialerQueueItem {

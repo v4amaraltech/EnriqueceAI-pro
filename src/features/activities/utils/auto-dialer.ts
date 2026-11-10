@@ -4,11 +4,14 @@
 // Máquina de estados PURA: decide o que vem depois; os efeitos (discar,
 // concluir, temporizadores) ficam no `PowerDialerTab`. Um lead por vez:
 //
-//   countdown(5s) → dialing → in-call → resolving ─┬─ atendeu → auto-completing(answered) → countdown
-//                                                  ├─ não atendeu, outro número livre → countdown (mesmo lead)
-//                                                  ├─ não atendeu, números em espera → advancing → countdown | waiting
-//                                                  ├─ não atendeu, última tentativa do dia → auto-completing(no_answer)
-//                                                  └─ 20 s sem sinal → awaiting-sdr
+//   countdown(5s) → dialing → awaiting-session → in-call → resolving
+//        ├─ atendeu → auto-completing(answered) → countdown
+//        ├─ não atendeu, outro número livre → countdown (mesmo lead)
+//        ├─ não atendeu, números em espera → advancing → countdown | waiting
+//        ├─ não atendeu, última tentativa do dia → auto-completing(no_answer)
+//        ├─ 20 s sem sinal → awaiting-sdr
+//        ├─ POST ok sem a sessão desta aba → pausa (não conclui)
+//        └─ 424 do ramal → releasing (uma espera) → dialing | pausa
 //
 // Rodadas (decisão do Vini, 05/11/2026): cada número do lead é discado 1x por
 // rodada (nº1, nº2… e segue para o próximo lead), até `limit` vezes por número
@@ -37,6 +40,8 @@ export type AutoDialState =
   | { phase: 'off' }
   | { phase: 'countdown'; secondsLeft: number }
   | { phase: 'dialing' }
+  /** POST aceito, ainda sem a sessão SIP deste dialToken nesta aba. */
+  | { phase: 'awaiting-session' }
   | { phase: 'in-call' }
   | { phase: 'resolving' }
   | { phase: 'auto-completing'; outcome: 'answered' | 'no_answer' }
@@ -44,6 +49,8 @@ export type AutoDialState =
   | { phase: 'advancing' }
   /** Ninguém liberado agora (intervalo de 1 h): espera até `until` (ms). */
   | { phase: 'waiting'; until: number }
+  /** 424: a chamada não nasceu e o ramal ainda pode estar ocupado. Uma espera, um novo POST. */
+  | { phase: 'releasing'; until: number }
   | { phase: 'awaiting-sdr'; reason: 'answered' | 'timeout' }
   | { phase: 'paused'; reason: AutoDialPauseReason; message: string | null };
 
@@ -53,6 +60,11 @@ export type AutoDialEvent =
   | { type: 'tick' }
   | { type: 'dial_now' }
   | { type: 'dial_started' }
+  | { type: 'awaiting_session' }
+  | { type: 'session_confirmed' }
+  | { type: 'session_missing'; message: string }
+  | { type: 'ramal_busy'; until: number }
+  | { type: 'ramal_retry' }
   | { type: 'dial_failed'; message: string | null }
   | { type: 'call_ended' }
   /** `then` só vale para "não atendeu"; sem ele, conclui (comportamento antigo). */
@@ -93,13 +105,22 @@ export function reduceAutoDial(state: AutoDialState, event: AutoDialEvent): Auto
       return state;
     case 'dialing':
       if (event.type === 'dial_started') return { phase: 'in-call' };
+      if (event.type === 'awaiting_session') return { phase: 'awaiting-session' };
+      if (event.type === 'ramal_busy') return { phase: 'releasing', until: event.until };
       if (event.type === 'dial_failed') return { phase: 'paused', reason: 'dial_failed', message: event.message };
       // Nada para discar agora (todos em espera): o efeito redireciona.
       if (event.type === 'next_lead') return countdown();
       if (event.type === 'wait') return { phase: 'waiting', until: event.until };
       return state;
+    case 'awaiting-session':
+      if (event.type === 'session_confirmed' || event.type === 'dial_started') return { phase: 'in-call' };
+      if (event.type === 'session_missing') return { phase: 'paused', reason: 'blocked', message: event.message };
+      return state;
     case 'in-call':
       return event.type === 'call_ended' ? { phase: 'resolving' } : state;
+    case 'releasing':
+      if (event.type === 'ramal_retry') return { phase: 'dialing' };
+      return state;
     case 'resolving':
       if (event.type === 'lead_answer') {
         if (event.answer === 'answered') return { phase: 'auto-completing', outcome: 'answered' };
@@ -137,7 +158,9 @@ export function isAutoDialRunning(state: AutoDialState): boolean {
   return (
     state.phase === 'countdown' ||
     state.phase === 'dialing' ||
+    state.phase === 'awaiting-session' ||
     state.phase === 'in-call' ||
+    state.phase === 'releasing' ||
     state.phase === 'resolving' ||
     state.phase === 'auto-completing' ||
     state.phase === 'advancing' ||
@@ -309,8 +332,12 @@ export function describeAutoDial(state: AutoDialState): string | null {
       return `Próxima ligação em ${state.secondsLeft} s`;
     case 'dialing':
       return 'Discando…';
+    case 'awaiting-session':
+      return 'Aguardando o webphone desta aba…';
     case 'in-call':
       return 'Em ligação';
+    case 'releasing':
+      return 'O ramal ainda está ocupado na operadora. A próxima tentativa espera a liberação.';
     case 'resolving':
       return 'Conferindo se o lead atendeu…';
     case 'auto-completing':

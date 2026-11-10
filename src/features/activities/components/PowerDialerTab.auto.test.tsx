@@ -24,7 +24,10 @@ const phone = vi.hoisted(() => {
     },
   };
 });
-vi.mock('@/features/integrations/webphone/webphone-client', () => ({ getWebphoneState: () => phone.get() }));
+vi.mock('@/features/integrations/webphone/webphone-client', () => ({
+  getWebphoneState: () => phone.get(),
+  hangupCall: () => actions.localHangup(),
+}));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({
   useApi4ComWebphone: () => useSyncExternalStore(phone.subscribe, phone.get, phone.get),
 }));
@@ -39,17 +42,27 @@ vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({
 const actions = vi.hoisted(() => ({
   initiateCall: vi.fn(),
   hangupCall: vi.fn(),
+  localHangup: vi.fn(),
   completeDialerCall: vi.fn(),
 }));
 vi.mock('@/features/calls/actions/initiate-call', () => ({ initiateCall: actions.initiateCall, hangupCall: actions.hangupCall }));
 vi.mock('../actions/complete-dialer-call', () => ({ completeDialerCall: actions.completeDialerCall }));
-vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({ useCallHangupDetection: () => {} }));
+const providerHangup = vi.hoisted(() => ({
+  fire: null as null | ((durationSeconds: number) => void),
+}));
+vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({
+  useCallHangupDetection: (opts: { isActive: boolean; onHangup: (durationSeconds: number) => void }) => {
+    providerHangup.fire = opts.isActive ? opts.onHangup : null;
+  },
+}));
 vi.mock('@/features/auth/hooks/useOrganization', () => ({
   useOrganization: () => ({ isManager: true, organization: {}, currentMember: {}, members: [], loading: false }),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { clearWebphoneCallContext, setWebphoneCallNotes } from '@/features/integrations/webphone/webphone-call-context';
+import { claimWebphoneDial, resetWebphoneDialCorrelation } from '@/features/integrations/webphone/webphone-dial-correlation';
+import { LOCAL_SESSION_GRACE_MS, RAMAL_RELEASE_WINDOW_MS, SESSION_MISSING_MESSAGE } from '../utils/power-dialer-webphone-sync';
 
 import { PowerDialerTab } from './PowerDialerTab';
 
@@ -104,24 +117,37 @@ async function advance(ms: number) {
   }
 }
 
+function attachThisSession(phoneNumber: string, phase: 'in-call' | 'ended' | 'ringing' = 'in-call') {
+  const token = claimWebphoneDial(phoneNumber, true);
+  const current = phone.get() as WebphoneState;
+  phone.set({
+    ...ready,
+    call: {
+      id: `wp-${dialSeq}`,
+      remoteNumber: phoneNumber.replace(/\D/g, ''),
+      direction: 'incoming',
+      integrated: true,
+      dialToken: token,
+      phase,
+      startedAt: current.call?.startedAt ?? Date.now(),
+      answeredAt: phase === 'ringing' ? null : Date.now(),
+      endedAt: phase === 'ended' ? Date.now() : null,
+      endCause: phase === 'ended' ? 'Terminated' : null,
+      muted: false,
+      audioStats: null,
+    },
+  });
+  return token;
+}
+
 /** A ligação integrada desta discagem acabou no navegador. */
 async function endBrowserCall() {
   await act(async () => {
+    const current = phone.get() as WebphoneState;
+    if (!current.call) return;
     phone.set({
-      ...ready,
-      call: {
-        id: `wp-${dialSeq}`,
-        remoteNumber: '',
-        direction: 'incoming',
-        integrated: true,
-        phase: 'ended',
-        startedAt: Date.now(),
-        answeredAt: Date.now(),
-        endedAt: Date.now(),
-        endCause: 'Terminated',
-        muted: false,
-        audioStats: null,
-      },
+      ...current,
+      call: { ...current.call, phase: 'ended', endedAt: Date.now(), endCause: 'Terminated' },
     });
   });
 }
@@ -130,11 +156,16 @@ describe('PowerDialerTab — discagem automática', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: false });
     window.localStorage.setItem(AUTO_DIAL_STORAGE_KEY, '1');
+    resetWebphoneDialCorrelation();
+    clearWebphoneCallContext();
     phone.set(ready);
     answer.value = 'unknown';
     dialSeq = 0;
-    actions.initiateCall.mockReset().mockImplementation(async () => {
+    actions.localHangup.mockReset();
+    actions.hangupCall.mockReset().mockResolvedValue({ success: true });
+    actions.initiateCall.mockReset().mockImplementation(async (input: { phone: string }) => {
       dialSeq += 1;
+      attachThisSession(input.phone);
       return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
     });
     actions.completeDialerCall.mockReset().mockResolvedValue({ success: true, data: { callId: 'x' } });
@@ -304,5 +335,250 @@ describe('PowerDialerTab — discagem automática', () => {
     expect(actions.completeDialerCall).toHaveBeenCalledWith(
       expect.objectContaining({ callId: '00000000-0000-4000-8000-000000000001', notes: expect.stringContaining('pediu proposta por e-mail') }),
     );
+  });
+
+  it('POST aceito sem INVITE não declara Em chamada, não conclui e não disca de novo', async () => {
+    actions.initiateCall.mockImplementation(async () => {
+      dialSeq += 1;
+      return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
+    });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Em chamada')).not.toBeInTheDocument();
+    expect(screen.queryByText('Em ligação')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mutar|Mudo/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Aguardando o webphone desta aba/).length).toBeGreaterThan(0);
+
+    await advance(LOCAL_SESSION_GRACE_MS);
+    expect(screen.getByText(new RegExp(SESSION_MISSING_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+    await advance(60_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Concluir atividade/ })).not.toBeInTheDocument();
+  });
+
+  it('fim no servidor sem a sessão desta aba não conclui e não disca de novo', async () => {
+    actions.initiateCall.mockImplementation(async () => {
+      dialSeq += 1;
+      return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
+    });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    await act(async () => {
+      providerHangup.fire?.(0);
+    });
+    await advance(30_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+    expect(screen.queryByText('Em chamada')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Concluir atividade/ })).not.toBeInTheDocument();
+  });
+
+  it('o botão Ligar desta página também espera o INVITE e o Desligar desta tentativa não inventa mudo', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    actions.initiateCall.mockImplementation(async () => {
+      dialSeq += 1;
+      return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
+    });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    await advance(10);
+
+    expect(screen.queryByText('Em chamada')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mutar|Mudo/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Desligar'));
+    await advance(10);
+    expect(actions.localHangup).not.toHaveBeenCalled();
+    expect(actions.hangupCall).toHaveBeenCalledWith('api4com', 'p1');
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('INVITE depois do POST confirma só o token desta discagem', async () => {
+    let dialed = '';
+    actions.initiateCall.mockImplementation(async (input: { phone: string }) => {
+      dialSeq += 1;
+      dialed = input.phone;
+      return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
+    });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    expect(screen.queryByText('Em chamada')).not.toBeInTheDocument();
+
+    await act(async () => {
+      phone.set({
+        ...ready,
+        call: {
+          id: 'wp-outro',
+          remoteNumber: '11900010000',
+          direction: 'incoming',
+          integrated: true,
+          dialToken: 'dial-antigo',
+          phase: 'in-call',
+          startedAt: Date.now(),
+          answeredAt: Date.now(),
+          endedAt: null,
+          endCause: null,
+          muted: false,
+          audioStats: null,
+        },
+      });
+    });
+    expect(screen.queryByText('Em chamada')).not.toBeInTheDocument();
+
+    await act(async () => {
+      attachThisSession(dialed);
+    });
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+    expect(screen.getByText('Em ligação')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mutar|Mudo/ })).not.toBeInTheDocument();
+  });
+
+  it('INVITE antes do HTTP entra em chamada e um token antigo não encerra esta discagem', async () => {
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+
+    const current = phone.get() as WebphoneState;
+    await act(async () => {
+      phone.set({
+        ...current,
+        call: { ...current.call!, dialToken: 'dial-antigo', phase: 'ended' },
+      });
+    });
+    await advance(30_000);
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('BYE atrasado segura a rotação e o fim do servidor com a sessão no ar não disca por cima', async () => {
+    renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+
+    await act(async () => {
+      providerHangup.fire?.(12);
+    });
+    await advance(30_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+
+    answer.value = 'not_answered';
+    await endBrowserCall();
+    await advance(20_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('424 espera a folga do ramal, tenta uma vez e para sem concluir', async () => {
+    actions.initiateCall.mockResolvedValue({ success: false, error: 'ramal ocupado', code: 'ramal_busy' });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/A próxima tentativa espera a liberação/)).toBeInTheDocument();
+
+    await advance(RAMAL_RELEASE_WINDOW_MS - 1000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    await advance(1000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/parou para não discar por cima/)).toBeInTheDocument();
+    await advance(60_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(2);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('erro cujo resultado é desconhecido não repete o POST', async () => {
+    actions.initiateCall.mockResolvedValue({ success: false, error: 'A API4COM demorou para responder.' });
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    await advance(60_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('exceção no POST não repete o pedido', async () => {
+    actions.initiateCall.mockRejectedValue(new Error('socket hang up'));
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    await advance(30_000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+
+  it('perda do registro antes da discagem pausa e não chama a operadora', async () => {
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(2000);
+    await act(async () => {
+      phone.set({ ...ready, registration: 'disconnected' });
+    });
+    await advance(10_000);
+    expect(actions.initiateCall).not.toHaveBeenCalled();
+    expect(screen.getByText(/não está pronto nesta aba/)).toBeInTheDocument();
+  });
+
+  it('duplo clique com o pedido em voo faz um único POST', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    let release: (() => void) | null = null;
+    actions.initiateCall.mockImplementation(
+      (input: { phone: string }) =>
+        new Promise((resolve) => {
+          release = () => {
+            dialSeq += 1;
+            attachThisSession(input.phone);
+            resolve({ success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } });
+          };
+        }),
+    );
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    const button = screen.getByTitle('Ligar via API4COM');
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await act(async () => {
+      release?.();
+    });
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('trocar de lead ou pular durante a sessão não conclui e não disca por cima', async () => {
+    renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5000);
+    fireEvent.click(screen.getByRole('button', { name: /Joao Santos/ }));
+    await advance(30_000);
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
+    expect(actions.localHangup).not.toHaveBeenCalled();
+  });
+
+  it('Desligar com a sessão desta aba pede o fim local e só encerra no BYE', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    await advance(10);
+    fireEvent.click(screen.getByTitle('Desligar'));
+    await advance(10);
+    expect(actions.localHangup).toHaveBeenCalledTimes(1);
+    expect(actions.hangupCall).toHaveBeenCalledWith('api4com', 'p1');
+    expect(screen.getByText('Em chamada')).toBeInTheDocument();
+    await endBrowserCall();
+    expect(screen.getByText(/Chamada encerrada/)).toBeInTheDocument();
+    expect(actions.completeDialerCall).not.toHaveBeenCalled();
   });
 });
