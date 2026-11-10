@@ -55,9 +55,32 @@ describe('conversa do canal', () => {
       metadata: { html_body: '<p>Oi <script>alert(1)</script></p>', thread_id: 'th-1', subject: 'Proposta' },
     }));
     expect(html?.text).toBe('Oi');
+    expect(html?.html).toContain('<p>');
+    expect(html?.html).not.toMatch(/script|alert/i);
     expect(html?.threadId).toBe('th-1');
     expect(html?.subject).toBe('Proposta');
     expect(plainText('<b>A&amp;B</b>')).toBe('A&B');
+
+    const rich = toChatMessage(row({
+      channel: 'email',
+      message_content: 'texto plano que não deve ganhar',
+      metadata: {
+        html_body: '<p>Olá Sandro, tudo bem?</p><p>Att,<br><strong>Vinicius Mercante</strong><br><a href="https://v4company.com">https://v4company.com</a></p>',
+      },
+    }));
+    expect(rich?.text).toContain('Vinicius Mercante');
+    expect(rich?.html).toContain('<strong>Vinicius Mercante</strong>');
+    expect(rich?.html).toContain('href="https://v4company.com"');
+    expect(rich?.html).toContain('rel="noopener noreferrer"');
+    expect(rich?.html).not.toContain('texto plano');
+
+    const lines = toChatMessage(row({
+      channel: 'whatsapp',
+      message_content: 'Oi Lucas\n\nTudo bem?\nhttps://v4company.com',
+    }));
+    expect(lines?.text).toContain('\n\n');
+    expect(lines?.html).toContain('<br>');
+    expect(lines?.html).toContain('href="https://v4company.com"');
   });
 
   it('agrupa e-mail pelo thread e separa o dia em Brasília', () => {
