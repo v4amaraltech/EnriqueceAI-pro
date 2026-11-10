@@ -28,8 +28,9 @@ describe('item ativo do menu', () => {
         <div>app</div>
       </AppSidebar>,
     );
-    const dashboard = screen.getAllByRole('link', { name: 'Dashboard' })[0];
-    const leads = screen.getAllByRole('link', { name: 'Leads' })[0];
+    const dashboard = screen.getAllByRole('link', { name: 'Dashboard' }).at(0);
+    const leads = screen.getAllByRole('link', { name: 'Leads' }).at(0);
+    if (!dashboard || !leads) throw new Error('item do menu');
     expect(dashboard.className).toContain('border-l-2');
     expect(dashboard.className).toContain('border-l-primary');
     expect(leads.className).toContain('border-l-transparent');
