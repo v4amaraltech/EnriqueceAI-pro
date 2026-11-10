@@ -27,37 +27,67 @@ export interface WebphoneCallContext {
   startedAt: number;
 }
 
+/** Anotação de uma ligação que saiu da tela antes de o SDR concluir. */
+export interface HeldWebphoneNotes {
+  callId: string;
+  leadId: string | null;
+  notes: string;
+}
+
 export interface WebphoneCallContextState {
   context: WebphoneCallContext | null;
   /** Anotações digitadas no painel flutuante durante/depois da ligação. */
   notes: string;
+  /**
+   * Notas da ligação anterior, ainda não gravadas. A ligação nova zera o campo
+   * visível, mas não apaga o texto: o painel grava na chamada antiga sem
+   * desfecho e sem concluir atividade.
+   */
+  heldNotes: HeldWebphoneNotes[];
 }
 
 export type WebphoneCallContextAction =
   | { type: 'set'; context: WebphoneCallContext }
   | { type: 'notes'; notes: string }
   | { type: 'release_owner'; callId: string }
-  | { type: 'clear'; callId?: string };
+  | { type: 'clear'; callId?: string }
+  | { type: 'ack_held_notes'; callId: string };
 
-export const initialWebphoneCallContextState: WebphoneCallContextState = { context: null, notes: '' };
+export const initialWebphoneCallContextState: WebphoneCallContextState = { context: null, notes: '', heldNotes: [] };
 
 export function reduceWebphoneCallContext(
   state: WebphoneCallContextState,
   action: WebphoneCallContextAction,
 ): WebphoneCallContextState {
   switch (action.type) {
-    case 'set':
-      // Ligação nova: as anotações da anterior não vazam.
-      return { context: action.context, notes: state.context?.callId === action.context.callId ? state.notes : '' };
+    case 'set': {
+      const sameCall = state.context?.callId === action.context.callId;
+      const leaving = !sameCall ? state.context : null;
+      const note = state.notes.trim();
+      const heldNotes =
+        leaving && note && !state.heldNotes.some((held) => held.callId === leaving.callId)
+          ? [...state.heldNotes, { callId: leaving.callId, leadId: leaving.leadId, notes: note }]
+          : state.heldNotes;
+      return { context: action.context, notes: sameCall ? state.notes : '', heldNotes };
+    }
     case 'notes':
       return state.notes === action.notes ? state : { ...state, notes: action.notes };
     case 'release_owner':
       if (!state.context || state.context.callId !== action.callId || !state.context.ownerHandlesResult) return state;
       return { ...state, context: { ...state.context, ownerHandlesResult: false } };
-    case 'clear':
-      if (!state.context) return state.notes ? { ...state, notes: '' } : state;
+    case 'clear': {
+      if (!state.context) {
+        if (!state.notes) return state;
+        return state.heldNotes.length === 0 ? initialWebphoneCallContextState : { ...state, notes: '' };
+      }
       if (action.callId && state.context.callId !== action.callId) return state;
-      return initialWebphoneCallContextState;
+      if (state.heldNotes.length === 0) return initialWebphoneCallContextState;
+      return { context: null, notes: '', heldNotes: state.heldNotes };
+    }
+    case 'ack_held_notes': {
+      if (!state.heldNotes.some((held) => held.callId === action.callId)) return state;
+      return { ...state, heldNotes: state.heldNotes.filter((held) => held.callId !== action.callId) };
+    }
     default:
       return state;
   }
@@ -122,6 +152,11 @@ export function releaseWebphoneCallOwner(callId: string): void {
 /** Ligação concluída (ou descartada) por quem cuidava dela. Com `callId`, só limpa se for a mesma. */
 export function clearWebphoneCallContext(callId?: string): void {
   dispatch({ type: 'clear', callId });
+}
+
+/** A anotação retida da ligação `callId` já foi gravada (ou não havia o que gravar). */
+export function ackHeldWebphoneNotes(callId: string): void {
+  dispatch({ type: 'ack_held_notes', callId });
 }
 
 // ---------------------------------------------------------------------------

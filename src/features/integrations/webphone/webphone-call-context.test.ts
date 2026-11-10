@@ -29,7 +29,36 @@ function run(actions: WebphoneCallContextAction[], from: WebphoneCallContextStat
 describe('reduceWebphoneCallContext', () => {
   it('set publica o contexto e zera anotações de outra ligação', () => {
     const s = run([{ type: 'notes', notes: 'rascunho antigo' }, { type: 'set', context: ctx }]);
-    expect(s).toEqual({ context: ctx, notes: '' });
+    expect(s).toEqual({ context: ctx, notes: '', heldNotes: [] });
+  });
+
+  it('trocar de ligação guarda a anotação da anterior em vez de apagar', () => {
+    const previous = { ...ctx, callId: 'call-a', phone: '1151350071' };
+    const next = { ...ctx, callId: 'call-b', phone: '11954958486', leadId: 'lead-b' };
+    const s = run([
+      { type: 'set', context: previous },
+      { type: 'notes', notes: '  pediu retorno  ' },
+      { type: 'set', context: next },
+    ]);
+    expect(s.notes).toBe('');
+    expect(s.context?.callId).toBe('call-b');
+    expect(s.heldNotes).toEqual([{ callId: 'call-a', leadId: 'lead-1', notes: 'pediu retorno' }]);
+    expect(reduceWebphoneCallContext(s, { type: 'ack_held_notes', callId: 'call-a' }).heldNotes).toEqual([]);
+  });
+
+  it('anotação em branco não é retida, e limpar a ligação atual não descarta a retida', () => {
+    const previous = { ...ctx, callId: 'call-a' };
+    const next = { ...ctx, callId: 'call-b' };
+    const blank = run([{ type: 'set', context: previous }, { type: 'notes', notes: '   ' }, { type: 'set', context: next }]);
+    expect(blank.heldNotes).toEqual([]);
+    const held = run([
+      { type: 'set', context: previous },
+      { type: 'notes', notes: 'nota' },
+      { type: 'set', context: next },
+      { type: 'clear', callId: 'call-b' },
+    ]);
+    expect(held.context).toBeNull();
+    expect(held.heldNotes).toEqual([{ callId: 'call-a', leadId: 'lead-1', notes: 'nota' }]);
   });
 
   it('set da MESMA ligação (ex.: dono republica) preserva as anotações', () => {

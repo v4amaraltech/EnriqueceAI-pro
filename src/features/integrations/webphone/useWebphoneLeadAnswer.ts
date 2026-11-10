@@ -10,13 +10,15 @@ export interface WebphoneCallOutcomeView {
   leadAnswer: LeadAnswer;
   /** `calls.hangup_cause` gravado pelo webhook (null até ele chegar). */
   hangupCause: string | null;
+  /** `calls.duration_seconds` já gravado. 0 enquanto a ligação não fechou. */
+  durationSeconds: number;
 }
 
 interface LeadAnswerState extends WebphoneCallOutcomeView {
   callId: string | null;
 }
 
-const UNKNOWN_OUTCOME: WebphoneCallOutcomeView = { leadAnswer: 'unknown', hangupCause: null };
+const UNKNOWN_OUTCOME: WebphoneCallOutcomeView = { leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 };
 const UNKNOWN: LeadAnswerState = { callId: null, ...UNKNOWN_OUTCOME };
 
 /**
@@ -28,8 +30,13 @@ export function useWebphoneLeadAnswer(callId: string | null): LeadAnswer {
   return useWebphoneCallOutcome(callId).leadAnswer;
 }
 
-/** Igual a `useWebphoneLeadAnswer`, mas também devolve a causa do fim da ligação. */
-export function useWebphoneCallOutcome(callId: string | null): WebphoneCallOutcomeView {
+/**
+ * Igual a `useWebphoneLeadAnswer`, mas também devolve a causa do fim da ligação.
+ * `untilHangup` continua consultando depois que o lead atende, até o webhook
+ * gravar a causa. O painel usa isso quando ainda não há sessão SIP da chamada
+ * nova: "atendeu" não é o fim da ligação.
+ */
+export function useWebphoneCallOutcome(callId: string | null, untilHangup = false): WebphoneCallOutcomeView {
   const [state, setState] = useState<LeadAnswerState>(UNKNOWN);
 
   useEffect(() => {
@@ -43,8 +50,14 @@ export function useWebphoneCallOutcome(callId: string | null): WebphoneCallOutco
       const result = await getWebphoneCallOutcome({ callId }).catch(() => null);
       if (cancelled) return;
       if (result?.success) {
-        setState({ callId, leadAnswer: result.data.leadAnswer, hangupCause: result.data.hangupCause });
-        if (result.data.leadAnswer !== 'unknown') return;
+        setState({
+          callId,
+          leadAnswer: result.data.leadAnswer,
+          hangupCause: result.data.hangupCause,
+          durationSeconds: result.data.durationSeconds,
+        });
+        const settled = untilHangup ? Boolean(result.data.hangupCause) : result.data.leadAnswer !== 'unknown';
+        if (settled) return;
       }
       if (polls < LEAD_ANSWER_MAX_POLLS) timer = window.setTimeout(() => void tick(), LEAD_ANSWER_POLL_INTERVAL_MS);
     }
@@ -54,7 +67,7 @@ export function useWebphoneCallOutcome(callId: string | null): WebphoneCallOutco
       cancelled = true;
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [callId]);
+  }, [callId, untilHangup]);
 
   if (!callId || state.callId !== callId) return UNKNOWN_OUTCOME;
   return state;

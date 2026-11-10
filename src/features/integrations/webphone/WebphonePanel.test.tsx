@@ -33,11 +33,14 @@ vi.mock('./webphone-client', () => ({
 const answer = vi.hoisted(() => ({
   value: 'not_answered' as 'unknown' | 'answered' | 'not_answered',
   hangupCause: null as string | null,
+  durationSeconds: 0,
 }));
 vi.mock('./useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: (callId: string | null) => (callId ? answer.value : 'unknown'),
   useWebphoneCallOutcome: (callId: string | null) =>
-    callId ? { leadAnswer: answer.value, hangupCause: answer.hangupCause } : { leadAnswer: 'unknown', hangupCause: null },
+    callId
+      ? { leadAnswer: answer.value, hangupCause: answer.hangupCause, durationSeconds: answer.durationSeconds }
+      : { leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 },
 }));
 
 const actions = vi.hoisted(() => ({
@@ -244,5 +247,218 @@ describe('WebphonePanel — motivo quando o lead não atende', () => {
     await endCall(Date.now());
 
     expect(screen.queryByTestId('webphone-hangup-reason')).not.toBeInTheDocument();
+  });
+});
+
+const CALL_A = '559d0ad0-0000-4000-8000-0000000000a1';
+const CALL_B = 'adb23762-4673-4663-a9ed-5d1855f4f04d';
+
+describe('WebphonePanel — ligação nova substitui o resultado pendente', () => {
+  beforeEach(() => {
+    clearWebphoneCallContext();
+    setWebphoneCallNotes('');
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    answer.durationSeconds = 0;
+    for (const fn of Object.values(actions)) fn.mockClear();
+    phone.set(ready);
+  });
+
+  async function finishA() {
+    const started = Date.now() - 20_000;
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_A,
+        providerCallId: 'prov-a',
+        leadId: '6455684e-1111-4111-8111-111111111111',
+        leadName: null,
+        phone: '1151350071',
+        ownerHandlesResult: false,
+        startedAt: started,
+      });
+      phone.set({ ...ready, call: { ...sipCall('ended', started), id: 'sip-a', remoteNumber: '1151350071' } });
+    });
+  }
+
+  it('mantém a finalizada de A quando a discagem nova falha e ninguém publica outro contexto', async () => {
+    render(<WebphonePanel />);
+    await finishA();
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByText('1151350071')).toBeInTheDocument();
+    expect(actions.classifyWebphoneCall).not.toHaveBeenCalled();
+    expect(actions.scheduleActivity).not.toHaveBeenCalled();
+  });
+
+  it('A encerrada e B publicada: a tela segue B, sem gravar desfecho nem concluir A', async () => {
+    render(<WebphonePanel />);
+    await finishA();
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+
+    expect(screen.getByText('Chamando…')).toBeInTheDocument();
+    expect(screen.getByText('Mercante Net')).toBeInTheDocument();
+    expect(screen.getByText('11954958486')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Desligar' })).toBeInTheDocument();
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    expect(screen.queryByText('1151350071')).not.toBeInTheDocument();
+    expect(actions.classifyWebphoneCall).not.toHaveBeenCalled();
+    expect(actions.scheduleActivity).not.toHaveBeenCalled();
+
+    await act(async () => {
+      phone.set({ ...ready, call: { ...sipCall('ended', Date.now() - 20_000), id: 'sip-a', remoteNumber: '1151350071' } });
+    });
+    expect(screen.getByText('11954958486')).toBeInTheDocument();
+    expect(screen.queryByText('1151350071')).not.toBeInTheDocument();
+  });
+
+  it('anotação pendente de A é gravada sem desfecho quando B começa', async () => {
+    render(<WebphonePanel />);
+    await finishA();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Anotações da ligação' }), { target: { value: 'combinou retorno' } });
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+
+    expect(screen.getByText('Chamando…')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toHaveValue('');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callId: CALL_A,
+        clientDurationSeconds: 0,
+        notes: 'combinou retorno',
+        leadId: '6455684e-1111-4111-8111-111111111111',
+      }),
+    );
+    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(expect.not.objectContaining({ sdrOutcome: expect.anything() }));
+    expect(actions.scheduleActivity).not.toHaveBeenCalled();
+  });
+
+  it('sem A, o contexto de B aparece antes da sessão SIP', async () => {
+    render(<WebphonePanel />);
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+    expect(screen.getByText('Chamando…')).toBeInTheDocument();
+    expect(screen.getByText('11954958486')).toBeInTheDocument();
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+  });
+
+  it('sessão SIP de B assume timer e desligar; o fim de B não grava desfecho', async () => {
+    render(<WebphonePanel />);
+    await finishA();
+    const started = Date.now();
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+        startedAt: started,
+      });
+      phone.set({ ...ready, call: { ...sipCall('in-call', started), id: 'sip-b', remoteNumber: '11954958486' } });
+    });
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    expect(screen.getByText('11954958486')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Desligar' })).toBeInTheDocument();
+
+    await act(async () => {
+      phone.set({ ...ready, call: { ...sipCall('ended', started), id: 'sip-b', remoteNumber: '11954958486' } });
+    });
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByText('11954958486')).toBeInTheDocument();
+    expect(screen.queryByText('1151350071')).not.toBeInTheDocument();
+    expect(actions.classifyWebphoneCall).not.toHaveBeenCalled();
+    expect(actions.scheduleActivity).not.toHaveBeenCalled();
+  });
+
+  it('webhook de B encerra a tela de B mesmo sem sessão SIP nova', async () => {
+    render(<WebphonePanel />);
+    await finishA();
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+    expect(screen.getByText('Chamando…')).toBeInTheDocument();
+    answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
+    answer.durationSeconds = 28;
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByText('00:28')).toBeInTheDocument();
+    expect(screen.queryByText('1151350071')).not.toBeInTheDocument();
+    expect(actions.classifyWebphoneCall).not.toHaveBeenCalled();
+  });
+
+  it('sessão SIP ainda em curso não é substituída pelo contexto seguinte', async () => {
+    const started = Date.now();
+    setWebphoneCallContext({
+      callId: CALL_A,
+      providerCallId: 'prov-a',
+      leadId: '6455684e-1111-4111-8111-111111111111',
+      leadName: null,
+      phone: '1151350071',
+      ownerHandlesResult: false,
+      startedAt: started,
+    });
+    render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: { ...sipCall('in-call', started), id: 'sip-a', remoteNumber: '1151350071' } });
+    });
+    await act(async () => {
+      setWebphoneCallContext({
+        callId: CALL_B,
+        providerCallId: 'prov-b',
+        leadId: '969ea854-1724-4f22-85a3-3633cd314553',
+        leadName: 'Mercante Net',
+        phone: '11954958486',
+        ownerHandlesResult: false,
+      });
+    });
+    expect(screen.getByRole('button', { name: 'Desligar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mutar' })).toBeInTheDocument();
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chamando…')).not.toBeInTheDocument();
   });
 });

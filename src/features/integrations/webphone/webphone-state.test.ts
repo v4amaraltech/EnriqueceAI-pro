@@ -65,6 +65,17 @@ describe('reduceWebphone — ligação', () => {
     expect(s.call?.id).toBe('c1');
   });
 
+  it('depois de encerrada, a nova entra e evento atrasado da anterior não derruba nem muta', () => {
+    const ended = run([incoming, { type: 'call_ended', id: 'c1', at: 2000, cause: 'Terminated' }]);
+    const next = reduceWebphone(ended, { ...incoming, id: 'c2', remoteNumber: '11954958486', at: 5000 });
+    expect(next.call).toMatchObject({ id: 'c2', phase: 'ringing', remoteNumber: '11954958486', muted: false });
+    const lateEnd = reduceWebphone(next, { type: 'call_ended', id: 'c1', at: 8000, cause: 'Terminated' });
+    const lateMute = reduceWebphone(lateEnd, { type: 'call_muted', id: 'c1', muted: true });
+    const lateClear = reduceWebphone(lateMute, { type: 'call_cleared', id: 'c1' });
+    expect(lateClear.call).toMatchObject({ id: 'c2', phase: 'ringing', muted: false });
+    expect(lateClear).toBe(lateMute);
+  });
+
   it('depois de encerrada e limpa, uma nova ligação entra', () => {
     const s = run([
       incoming,
@@ -139,5 +150,7 @@ describe('dialingBlockReason', () => {
       { type: 'call_new', id: 'c1', remoteNumber: '1', direction: 'incoming', integrated: true, at: 1 },
     ]);
     expect(dialingBlockReason(inCall)).toMatch(/em andamento/);
+    const ended = reduceWebphone(inCall, { type: 'call_ended', id: 'c1', at: 50, cause: 'Terminated' });
+    expect(dialingBlockReason(ended)).toBeNull();
   });
 });

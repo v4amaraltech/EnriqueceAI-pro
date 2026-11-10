@@ -131,6 +131,8 @@ export interface CallResultModalProps {
    * atividade e por isso passa outra frase.
    */
   returnReadyMessage?: string;
+  /** O painel flutuante espelha o texto aqui para não perder a nota se outra ligação começar. */
+  onNotesChange?: (notes: string) => void;
 }
 
 /**
@@ -160,6 +162,7 @@ export function CallResultModal({
   onMarkNoShow,
   onConclude,
   returnReadyMessage = 'A cadência fica pausada até o retorno e a atividade de retorno é criada.',
+  onNotesChange,
 }: CallResultModalProps) {
   const [notes, setNotes] = useState(initialNotes);
   const [outcome, setOutcome] = useState<CallDisposition | null>(() => defaultOutcome(connected));
@@ -407,7 +410,10 @@ export function CallResultModal({
             </div>
             <Textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                onNotesChange?.(e.target.value);
+              }}
               placeholder="Faça anotações sobre a ligação..."
               className="min-h-[80px] resize-y"
             />
