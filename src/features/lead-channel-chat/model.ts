@@ -133,17 +133,23 @@ export function statusTick(channel: ChatChannel, status: string | null): string 
 
 export function storedLeadMessageToChat(row: StoredLeadMessage, status: string | null): ChatMessage {
   const inbound = row.direction === 'inbound';
-  const body = plainText(row.body_text) || plainText(row.body_html);
+  const body = messageBody({ html: row.body_html, text: row.body_text });
   const mediaLabel = row.media?.type ? (MEDIA_COPY[row.media.type] ?? CHAT_COPY.mediaOther) : null;
-  const missingBody = body.length === 0 && !mediaLabel;
-  const text = body
-    ? (mediaLabel ? `${body}\n${mediaLabel}` : body)
-    : (mediaLabel ?? (inbound ? CHAT_COPY.missingReply : CHAT_COPY.missingOutbound));
+  const missingBody = body.text.length === 0 && !mediaLabel;
+  const text = missingBody
+    ? (inbound ? CHAT_COPY.missingReply : CHAT_COPY.missingOutbound)
+    : mediaLabel
+      ? (body.text ? `${body.text}\n${mediaLabel}` : mediaLabel)
+      : body.text;
+  const html = !body.html || missingBody
+    ? null
+    : (mediaLabel ? `${body.html}<p>${mediaLabel}</p>` : body.html);
   return {
     id: row.id,
     channel: row.channel,
     direction: inbound ? 'in' : 'out',
     text,
+    html,
     missingBody,
     createdAt: row.occurred_at,
     delivery: inbound ? null : statusTick(row.channel, status),

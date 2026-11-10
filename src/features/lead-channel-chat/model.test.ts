@@ -140,6 +140,32 @@ describe('conversa do canal', () => {
       occurred_at: '2026-11-10T15:00:00.000Z',
     }, 'read');
     expect(message.text).toBe('Mídia: áudio');
+    expect(message.html).toBeNull();
     expect(message.delivery).toBeNull();
+  });
+
+  it('grava o HTML do lead_messages no cartão, sem achatar a assinatura', () => {
+    const message = storedLeadMessageToChat({
+      id: 'm2',
+      channel: 'email',
+      direction: 'outbound',
+      body_text: 'Olá Sandro, tudo bem? Att, Vinicius Mercante',
+      body_html: '<p>Olá Sandro, tudo bem?</p><p>Att,<br><strong>Vinicius Mercante</strong><br><a href="https://v4company.com">https://v4company.com</a></p><script>alert(1)</script><img src="https://evil.test/a.png">',
+      subject: 'Gazin Tech + V4 Company (Reunião)',
+      media: { type: 'document' },
+      thread_id: 'th-1',
+      ai_generated: false,
+      occurred_at: '2026-11-10T11:13:00.000Z',
+    }, 'sent');
+    expect(message.html).toContain('<p>Olá Sandro, tudo bem?</p>');
+    expect(message.html).toContain('<strong>Vinicius Mercante</strong>');
+    expect(message.html).toContain('href="https://v4company.com"');
+    expect(message.html).toContain('rel="noopener noreferrer"');
+    expect(message.html).toContain('<p>Mídia: documento</p>');
+    expect(message.html).not.toMatch(/script|alert|evil\.test|<img/i);
+    expect(message.text).toContain('Vinicius Mercante');
+    expect(message.text.endsWith('Mídia: documento')).toBe(true);
+    expect(message.delivery).toBe('✓ Enviada');
+    expect(message.subject).toBe('Gazin Tech + V4 Company (Reunião)');
   });
 });
