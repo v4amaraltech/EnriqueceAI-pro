@@ -23,7 +23,7 @@ export function MeetimeFieldRow({ label, value, href, mono, multiline }: Meetime
   return (
     <div className="space-y-1">
       <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
-      <div className={`min-w-0 rounded-md bg-[var(--muted)] px-3 py-2 text-base ${multiline ? '' : 'overflow-hidden'}`}>{content}</div>
+      <div className={`min-w-0 rounded-md border border-border bg-[var(--muted)] px-3 py-2 text-base ${multiline ? '' : 'overflow-hidden'}`}>{content}</div>
     </div>
   );
 }

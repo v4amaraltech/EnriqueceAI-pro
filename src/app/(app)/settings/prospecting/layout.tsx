@@ -79,10 +79,10 @@ export default function ProspectingSettingsLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                  'flex items-center gap-2 rounded-md border-l-2 px-3 py-2 text-sm transition-colors',
                   isActive
-                    ? 'bg-[var(--accent)] font-medium text-[var(--accent-foreground)]'
-                    : 'text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
+                    ? 'border-l-primary bg-primary/10 font-medium text-[var(--accent-foreground)]'
+                    : 'border-l-transparent text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
                 )}
               >
                 <Icon className="h-4 w-4" />

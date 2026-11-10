@@ -93,10 +93,10 @@ function NavLink({
       prefetch
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+        'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors',
         isActive
-          ? 'bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)]'
-          : 'text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]',
+          ? 'border-l-primary bg-primary/10 text-[var(--sidebar-accent-foreground)]'
+          : 'border-l-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]',
         collapsed && 'justify-center px-2',
       )}
     >
