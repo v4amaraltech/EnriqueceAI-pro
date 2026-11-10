@@ -55,6 +55,23 @@ let callSeq = 0;
 let startGeneration = 0;
 let liveListenEnabled = false;
 let stopRemoteTap: (() => void) | null = null;
+let remoteTrack: MediaStreamTrack | null = null;
+const remoteTrackListeners = new Set<() => void>();
+
+function publishRemoteTrack(track: MediaStreamTrack | null): void {
+  remoteTrack = track;
+  for (const listener of remoteTrackListeners) listener();
+}
+
+/** Faixa remota atual. O piloto de escuta assina isso e não manda áudio se a flag estiver desligada. */
+export function getRemoteAudioTrack(): MediaStreamTrack | null {
+  return remoteTrack;
+}
+
+export function subscribeRemoteAudioTrack(listener: () => void): () => void {
+  remoteTrackListeners.add(listener);
+  return () => remoteTrackListeners.delete(listener);
+}
 
 function stopRemoteTapNow(): void {
   const stop = stopRemoteTap;
@@ -181,6 +198,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
     peerconnection.addEventListener('track', (ev: RTCTrackEvent) => {
       const stream = ev.streams[0] ?? new MediaStream([ev.track]);
       attachRemoteStream(stream);
+      if (ev.track.kind === 'audio') publishRemoteTrack(ev.track);
       if (!shouldTapRemoteAudio(liveListenEnabled, ev.track.kind)) return;
       stopRemoteTapNow();
       stopRemoteTap = watchRemoteTrack(ev.track, id);
@@ -196,6 +214,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   const onEnd = (e: { cause?: string }) => {
     stopStatsSampling();
     stopRemoteTapNow();
+    publishRemoteTrack(null);
     dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null });
     clearEndedCallLater(id);
   };
@@ -253,6 +272,7 @@ export function stopWebphone(): void {
   startGeneration++;
   liveListenEnabled = false;
   stopRemoteTapNow();
+  publishRemoteTrack(null);
   stopStatsSampling();
   activePeerConnection = null;
   if (activeSession) {

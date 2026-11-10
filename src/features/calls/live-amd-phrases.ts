@@ -1,6 +1,7 @@
 // Classifica o texto parcial de uma ligação a partir de frases de operadora
 // em português. Não lê áudio, não chama fornecedor e não grava no CRM.
-// A decisão de silêncio (ninguém atendeu) só entra depois da janela de escuta.
+// A decisão de silêncio (ninguém atendeu) só entra depois de 15 segundos sem fala
+// na janela dos últimos 15 segundos.
 
 export const LIVE_AMD_LISTEN_MS = 15_000;
 
@@ -14,7 +15,7 @@ export interface LiveAmdDecision {
 
 export interface LiveAmdInput {
   transcript: string;
-  /** Tempo desde o primeiro áudio remoto. Sem esse dado, silêncio não vira no_answer. */
+  /** Tempo sem fala dentro da janela dos últimos 15 segundos. Sem esse dado, silêncio não vira no_answer. */
   elapsedMs?: number;
 }
 
