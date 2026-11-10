@@ -7,11 +7,10 @@ import { CallOutcomeSelector } from './CallOutcomeSelector';
 describe('CallOutcomeSelector', () => {
   it('renderiza as 6 opções de desfecho', () => {
     render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
-    // Asserta por value do radio (não por rótulo): `voicemail` e `no_answer`
-    // compartilham o rótulo "Não atendeu" — na UI real só um aparece por vez
-    // (telemetria filtra), mas o default renderiza os dois.
     const values = screen.getAllByRole('radio').map((r) => r.getAttribute('value'));
     expect(values).toEqual(DISPOSITION_OPTIONS.map((o) => o.value));
+    expect(screen.getByRole('radio', { name: /Caixa postal/ })).toHaveAttribute('value', 'voicemail');
+    expect(screen.getByRole('radio', { name: /^Não atendeu/ })).toHaveAttribute('value', 'no_answer');
   });
 
   it('mostra a consequência (hint) de cada desfecho — o SDR precisa ver antes de escolher', () => {

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
+import { mapDispositionToAction } from '@/features/calls/disposition';
 import type { CallDisposition } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
@@ -344,7 +345,11 @@ export function ActivityPhonePanel({
         .catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
     }
 
-    onMarkDone(aggregatedNotes);
+    // "Falha técnica" registra a ligação e devolve a tarefa à fila. Concluir
+    // aqui avançaria a cadência e tiraria a atividade pendente.
+    if (mapDispositionToAction(outcome) !== 'none') {
+      onMarkDone(aggregatedNotes);
+    }
     if (callId) clearWebphoneCallContext(callId);
     setCallStatus('');
     setCallState('idle');

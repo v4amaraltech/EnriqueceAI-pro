@@ -154,6 +154,34 @@ describe('WebphonePanel — "Ligação finalizada" continua, sem avaliação com
     expect(actions.saveWebphoneCallAudio).not.toHaveBeenCalledWith(expect.objectContaining({ audioQuality: expect.anything() }));
   });
 
+  it('página do lead: retorno cria a atividade sem afirmar que a cadência pausa', async () => {
+    const started = Date.now();
+    publish(false);
+    render(<WebphonePanel />);
+
+    await endCall(started);
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Pediu para ligar depois/ }));
+    expect(screen.queryByText(/fica pausada/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+    const day = new Date().getDate();
+    const today = screen.getAllByRole('button').find((button) => {
+      const name = button.getAttribute('aria-label') ?? '';
+      return new RegExp(`\\b${day}\\b`).test(name) && name.includes(String(new Date().getFullYear())) && !button.hasAttribute('disabled');
+    });
+    if (!today) throw new Error('dia de hoje não encontrado no calendário');
+    fireEvent.click(today);
+
+    expect(screen.getByText('A atividade de retorno é criada.')).toBeInTheDocument();
+    expect(screen.queryByText(/fica pausada/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Concluir atividade/ }));
+
+    expect(actions.scheduleActivity).toHaveBeenCalledTimes(1);
+    expect(actions.scheduleActivity.mock.calls[0]?.[0].pauseCadenceUntilReturn).toBeUndefined();
+    expect(actions.scheduleActivity.mock.calls[0]?.[0].completeEnrollments).toBeUndefined();
+  });
+
   it('o dono conclui pelo próprio modal com o painel em "Ligação finalizada": o painel some, sem estrelas', async () => {
     const started = Date.now();
     publish(true);

@@ -125,6 +125,12 @@ export interface CallResultModalProps {
     returnSchedule: CallReturnSchedule | null;
     outcome: CallDisposition;
   }) => void;
+  /**
+   * Texto quando a data do retorno já foi escolhida. O cockpit e o WhatsApp
+   * pausam a cadência. O painel flutuante, quando ele é o dono, só cria a
+   * atividade e por isso passa outra frase.
+   */
+  returnReadyMessage?: string;
 }
 
 /**
@@ -153,6 +159,7 @@ export function CallResultModal({
   onLeadLost,
   onMarkNoShow,
   onConclude,
+  returnReadyMessage = 'A cadência fica pausada até o retorno e a atividade de retorno é criada.',
 }: CallResultModalProps) {
   const [notes, setNotes] = useState(initialNotes);
   const [outcome, setOutcome] = useState<CallDisposition | null>(() => defaultOutcome(connected));
@@ -207,6 +214,7 @@ export function CallResultModal({
   // Atendida obriga o SDR a escolher o desfecho antes de concluir. Na não
   // atendida `outcome` já vem preenchido (no_contact), então nunca bloqueia.
   const missingOutcome = showOutcome && outcome === null;
+  const keepsTaskOpen = outcome !== null && mapDispositionToAction(outcome) === 'none';
   // A API4COM marca como atendida também quando a CAIXA POSTAL pega a linha —
   // não há sinal que separe as duas. Abaixo do piso de conversa (50s) o selo
   // avisa em vez de afirmar; o SDR diz o que foi no desfecho.
@@ -384,9 +392,7 @@ export function CallResultModal({
                 </div>
               </div>
               <p className="text-xs text-[var(--muted-foreground)]">
-                {missingReturnDate
-                  ? 'Escolha a data para concluir.'
-                  : 'A cadência será encerrada e a atividade de retorno criada.'}
+                {missingReturnDate ? 'Escolha a data para concluir.' : returnReadyMessage}
               </p>
             </div>
           )}
@@ -456,7 +462,7 @@ export function CallResultModal({
               ) : (
                 <CheckCircle2 className="mr-2 h-4 w-4" />
               )}
-              Concluir atividade
+              {keepsTaskOpen ? 'Registrar e voltar à fila' : 'Concluir atividade'}
             </Button>
           </div>
         </DialogFooter>

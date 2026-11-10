@@ -9,6 +9,16 @@ vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({
   ScheduleMeetingModal: () => null,
 }));
 
+function todayButton(): HTMLElement {
+  const day = new Date().getDate();
+  const match = screen.getAllByRole('button').find((button) => {
+    const name = button.getAttribute('aria-label') ?? '';
+    return new RegExp(`\\b${day}\\b`).test(name) && name.includes(String(new Date().getFullYear())) && !button.hasAttribute('disabled');
+  });
+  if (!match) throw new Error('dia de hoje não encontrado no calendário');
+  return match;
+}
+
 function renderModal(overrides: Partial<CallResultModalProps> = {}) {
   const props: CallResultModalProps = {
     open: true,
@@ -48,16 +58,14 @@ describe('CallResultModal', () => {
   });
 
   describe('trava por telemetria — o formulário não contradiz o que o sistema já sabe', () => {
-    it('atendida: não oferece o no_answer real, mas oferece "Não atendeu" via caixa postal (voicemail)', () => {
+    it('atendida: não oferece no_answer e rotula voicemail como Caixa postal', () => {
       renderModal({ connected: true, durationSeconds: 120 });
       expect(screen.getByRole('radio', { name: /Conversa relevante/ })).toBeInTheDocument();
       const values = screen.getAllByRole('radio').map((r) => r.getAttribute('value'));
-      // Guard: numa ligação atendida o SDR não pode marcar o "não atendeu" cru
-      // (contradiz a telemetria)...
       expect(values).not.toContain('no_answer');
-      // ...mas há um "Não atendeu" rotulado assim que grava `voicemail` (a linha
-      // atendeu, mas era caixa postal/secretária — não um humano).
       expect(values).toContain('voicemail');
+      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toHaveAttribute('value', 'voicemail');
+      expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
     });
 
     it('não atendida: "Registrar outro desfecho" revela só "Não atendeu" e "Falha técnica"', async () => {
@@ -102,7 +110,8 @@ describe('CallResultModal', () => {
       expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
       expect(screen.queryByText('Atendida')).not.toBeInTheDocument();
       // O SDR continua escolhendo o desfecho.
-      expect(screen.getByRole('radio', { name: /Não atendeu/ })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
     });
 
     it('a partir de 50s volta a ser "Atendida"', () => {
@@ -129,6 +138,22 @@ describe('CallResultModal', () => {
 
       await user.click(screen.getByRole('radio', { name: /Pediu para ligar depois/ }));
       expect(screen.getByText('Quando ligar de novo')).toBeInTheDocument();
+      expect(screen.getByText('Escolha a data para concluir.')).toBeInTheDocument();
+      expect(screen.queryByText(/será encerrada/)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Data' }));
+      await user.click(todayButton());
+      expect(screen.getByText('A cadência fica pausada até o retorno e a atividade de retorno é criada.')).toBeInTheDocument();
+    });
+
+    it('falha técnica troca o botão para voltar à fila e ainda entrega o desfecho', async () => {
+      const user = userEvent.setup();
+      const onConclude = vi.fn();
+      renderModal({ connected: true, onConclude });
+      await user.click(screen.getByRole('radio', { name: /Falha técnica/ }));
+      expect(screen.queryByRole('button', { name: /Concluir atividade/ })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Registrar e voltar à fila/ }));
+      expect(onConclude).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'technical_failure', returnSchedule: null }));
     });
   });
 
