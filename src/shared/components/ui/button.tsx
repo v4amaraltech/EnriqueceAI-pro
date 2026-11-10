@@ -12,11 +12,10 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        // Dark --input is oklch(0.20) on a oklch(0.10) page, so border-input is invisible.
         outline:
-          "border border-border bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-foreground/50 dark:bg-foreground/5 dark:hover:bg-accent dark:hover:text-accent-foreground",
+          "border border-border bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground",
         secondary:
-          "border border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80 dark:border-foreground/50",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",

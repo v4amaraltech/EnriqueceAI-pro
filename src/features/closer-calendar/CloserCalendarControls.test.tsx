@@ -42,7 +42,8 @@ describe('CloserCalendarControls', () => {
     render(<CloserCalendarControls closerId={CLOSER} />);
     expect(screen.getByText('Agenda não conectada').className).toContain('text-amber-950');
     const button = screen.getByRole('button', { name: 'Convidar para conectar agenda' });
-    expect(button.className).toContain('dark:border-foreground/50');
+    expect(button.className).toContain('border-border');
+    expect(button.className).toContain('text-foreground');
     expect(button.querySelector('svg')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Revogar convite' })).toBeNull();
   });
