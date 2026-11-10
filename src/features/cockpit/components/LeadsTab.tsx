@@ -23,6 +23,7 @@ import { Input } from '@/shared/components/ui/input';
 
 import type { CockpitLeadsData } from '../services/cockpit-leads.service';
 import { LEAD_STAGES, leadStageLabel, type LeadStageKey, type LeadTemperature } from '../utils/lead-insights';
+import { type PortfolioFilters, type PortfolioPeriod } from '../utils/portfolio-period';
 
 const STAGE_ICON: Record<LeadStageKey, typeof Building2> = {
   desqualificado: UserX,
@@ -50,10 +51,19 @@ const TEMPERATURE: Record<LeadTemperature, { label: string; className: string }>
   frio: { label: 'Frio', className: 'border-sky-500/50 text-sky-500' },
 };
 
+const PERIOD_OPTIONS: Array<{ key: PortfolioPeriod | null; label: string }> = [
+  { key: null, label: 'Tudo' },
+  { key: 'today', label: 'Hoje' },
+  { key: '7d', label: '7 dias' },
+  { key: '30d', label: '30 dias' },
+  { key: 'month', label: 'Este mês' },
+  { key: 'custom', label: 'Personalizado' },
+];
+
 const dateFmt = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit' });
 const timeFmt = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 
-export function LeadsTab({ data, search }: { data: CockpitLeadsData; search: string }) {
+export function LeadsTab({ data, search, filters }: { data: CockpitLeadsData; search: string; filters: PortfolioFilters }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -82,29 +92,92 @@ export function LeadsTab({ data, search }: { data: CockpitLeadsData; search: str
 
   return (
     <div className="space-y-6">
-      {data.stageCounts && (
-        <section className="space-y-3">
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-base font-semibold">Carteira</h2>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Período da carteira">
+            {PERIOD_OPTIONS.map(({ key, label }) => {
+              const active = filters.period === key;
+              return (
+                <Link
+                  key={label}
+                  href={hrefWith(key === 'custom'
+                    ? { period: 'custom', page: null }
+                    : key
+                      ? { period: key, from: null, to: null, page: null }
+                      : { period: null, from: null, to: null, page: null })}
+                  aria-current={active ? 'true' : undefined}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs',
+                    active ? 'bg-[var(--foreground)] text-[var(--background)]' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        {filters.period === 'custom' && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1.5">
+              De
+              <input
+                type="date"
+                value={filters.from ?? ''}
+                aria-label="De"
+                onChange={(event) => router.replace(hrefWith({ period: 'custom', from: event.target.value || null, page: null }))}
+                className="border-input h-8 rounded-md border bg-transparent px-2"
+              />
+            </label>
+            <label className="flex items-center gap-1.5">
+              Até
+              <input
+                type="date"
+                value={filters.to ?? ''}
+                aria-label="Até"
+                onChange={(event) => router.replace(hrefWith({ period: 'custom', to: event.target.value || null, page: null }))}
+                className="border-input h-8 rounded-md border bg-transparent px-2"
+              />
+            </label>
+          </div>
+        )}
+        {data.stageCounts && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
             {LEAD_STAGES.map(({ key, label }) => {
               const Icon = STAGE_ICON[key];
+              const active = filters.stage === key;
               return (
-                <div key={key} className="rounded-lg border bg-[var(--card)] p-4" data-testid={`stage-${key}`}>
+                <Link
+                  key={key}
+                  href={hrefWith({ stage: active ? null : key, page: null })}
+                  aria-current={active ? 'true' : undefined}
+                  data-testid={`stage-${key}`}
+                  className={cn(
+                    'rounded-lg border bg-[var(--card)] p-4 text-left',
+                    active && 'ring-2 ring-[var(--foreground)]',
+                  )}
+                >
                   <span className="flex h-7 w-7 items-center justify-center rounded-md border">
                     <Icon className="h-4 w-4" />
                   </span>
                   <div className="mt-3 text-2xl font-semibold tabular-nums">{data.stageCounts?.[key] ?? 0}</div>
                   <div className="text-muted-foreground text-xs">{label}</div>
-                </div>
+                </Link>
               );
             })}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           Meus Leads <span className="rounded border px-1.5 text-xs font-normal tabular-nums">{data.total}</span>
+          {filters.stage && (
+            <Button asChild variant="outline" size="sm" className="h-7">
+              <Link href={hrefWith({ stage: null, page: null })}>Limpar</Link>
+            </Button>
+          )}
         </h2>
         <div className="relative w-full md:w-80">
           <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />

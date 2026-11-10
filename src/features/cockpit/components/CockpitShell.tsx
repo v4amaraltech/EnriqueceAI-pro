@@ -35,10 +35,15 @@ export function CockpitShell({ viewer, tab, children, callCard }: CockpitShellPr
 
   function hrefFor(next: Partial<{ tab: CockpitTab; sdr: string }>) {
     const params = new URLSearchParams();
-    params.set('tab', next.tab ?? tab);
+    const nextTab = next.tab ?? tab;
+    params.set('tab', nextTab);
     if (viewer.isManager) params.set('sdr', next.sdr ?? viewer.targetUserId);
     const month = searchParams.get('month');
-    if (month && (next.tab ?? tab) === tab) params.set('month', month);
+    if (month && nextTab === tab) params.set('month', month);
+    for (const key of ['period', 'from', 'to', 'stage', 'q'] as const) {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    }
     return `${pathname}?${params.toString()}`;
   }
 

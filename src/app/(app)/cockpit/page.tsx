@@ -23,6 +23,7 @@ import { fetchCockpitLeads } from '@/features/cockpit/services/cockpit-leads.ser
 import { resolveCockpitViewer } from '@/features/cockpit/services/resolve-cockpit-viewer';
 import type { CockpitTab, CockpitViewer } from '@/features/cockpit/types';
 import { parseCockpitTab } from '@/features/cockpit/utils/cockpit-target';
+import { parsePortfolioFilters } from '@/features/cockpit/utils/portfolio-period';
 import { isMonth } from '@/features/cockpit/utils/month';
 import { getSdrPaceData } from '@/features/dashboard/actions/get-sdr-pace-data';
 import { currentMonthBrt } from '@/features/dashboard/utils/brt-now';
@@ -33,7 +34,18 @@ export const dynamic = 'force-dynamic';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CockpitPageProps {
-  searchParams: Promise<{ tab?: string; sdr?: string; month?: string; q?: string; page?: string; skip?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    sdr?: string;
+    month?: string;
+    q?: string;
+    page?: string;
+    skip?: string;
+    period?: string;
+    from?: string;
+    to?: string;
+    stage?: string;
+  }>;
 }
 
 export default async function CockpitPage({ searchParams }: CockpitPageProps) {
@@ -133,19 +145,28 @@ const LEADS_PER_PAGE = 10;
 async function LeadsTabServer({ viewer, params }: { viewer: CockpitViewer; params: CockpitParams }) {
   const page = Math.max(1, Number.parseInt(params.page ?? '1', 10) || 1);
   const search = (params.q ?? '').trim();
+  const filters = parsePortfolioFilters(params);
   const result = await fetchCockpitLeads({
     orgId: viewer.orgId,
     userId: viewer.targetUserId,
     page,
     perPage: LEADS_PER_PAGE,
     search,
+    filters,
   });
 
   if (!result.success) {
     return <EmptyState icon={AlertTriangle} title="Erro ao carregar leads" description={result.error} />;
   }
 
-  return <LeadsTab key={`${viewer.targetUserId}:${search}`} data={result.data} search={search} />;
+  return (
+    <LeadsTab
+      key={`${viewer.targetUserId}:${search}:${filters.period ?? ''}:${filters.stage ?? ''}:${filters.from ?? ''}:${filters.to ?? ''}`}
+      data={result.data}
+      search={search}
+      filters={filters}
+    />
+  );
 }
 
 /** Mês pedido (`YYYY-MM`) sem passar do atual; padrão = mês atual em BRT. */
