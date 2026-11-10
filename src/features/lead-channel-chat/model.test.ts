@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { CHAT_COPY } from './constants';
 import {
   deliveryLabel,
+  statusTick,
+  storedLeadMessageToChat,
   formatChatDay,
   formatChatTime,
   groupByDay,
@@ -97,5 +99,24 @@ describe('conversa do canal', () => {
     const older = toChatMessage(row({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', created_at: '2026-11-10T12:00:00.000Z' }))!;
     const merged = mergeOlder([newer], [older, newer]);
     expect(merged.map((message) => message.id)).toEqual([older.id, newer.id]);
+  });
+
+  it('mostra a mídia e o tique que veio do evento, sem inventar leitura', () => {
+    expect(statusTick('whatsapp', 'read')).toBe('✓✓ Lida');
+    expect(statusTick('email', 'sent')).toBe('✓ Enviada');
+    const message = storedLeadMessageToChat({
+      id: 'm1',
+      channel: 'whatsapp',
+      direction: 'inbound',
+      body_text: null,
+      body_html: null,
+      subject: null,
+      media: { type: 'audio' },
+      thread_id: null,
+      ai_generated: false,
+      occurred_at: '2026-11-10T15:00:00.000Z',
+    }, 'read');
+    expect(message.text).toBe('Mídia: áudio');
+    expect(message.delivery).toBeNull();
   });
 });

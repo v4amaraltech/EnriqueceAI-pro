@@ -116,6 +116,57 @@ export function toChatMessage(row: ChatSourceRow): ChatMessage | null {
   };
 }
 
+const MEDIA_COPY: Record<string, string> = {
+  image: CHAT_COPY.mediaImage,
+  audio: CHAT_COPY.mediaAudio,
+  video: CHAT_COPY.mediaVideo,
+  document: CHAT_COPY.mediaDocument,
+  sticker: CHAT_COPY.mediaSticker,
+};
+
+export interface StoredLeadMessage {
+  id: string;
+  channel: ChatChannel;
+  direction: 'inbound' | 'outbound';
+  body_text: string | null;
+  body_html: string | null;
+  subject: string | null;
+  media: { type?: string } | null;
+  thread_id: string | null;
+  ai_generated: boolean;
+  occurred_at: string;
+}
+
+export function statusTick(channel: ChatChannel, status: string | null): string | null {
+  if (status === 'sent') return `✓ ${CHAT_COPY.sent}`;
+  if (status === 'delivered') return `✓✓ ${CHAT_COPY.delivered}`;
+  if (status === 'read') return `✓✓ ${channel === 'email' ? CHAT_COPY.openedEmail : CHAT_COPY.readWhatsapp}`;
+  if (status === 'failed') return CHAT_COPY.failed;
+  return null;
+}
+
+export function storedLeadMessageToChat(row: StoredLeadMessage, status: string | null): ChatMessage {
+  const inbound = row.direction === 'inbound';
+  const body = plainText(row.body_text) || plainText(row.body_html);
+  const mediaLabel = row.media?.type ? (MEDIA_COPY[row.media.type] ?? CHAT_COPY.mediaOther) : null;
+  const missingBody = body.length === 0 && !mediaLabel;
+  const text = body
+    ? (mediaLabel ? `${body}\n${mediaLabel}` : body)
+    : (mediaLabel ?? (inbound ? CHAT_COPY.missingReply : CHAT_COPY.missingOutbound));
+  return {
+    id: row.id,
+    channel: row.channel,
+    direction: inbound ? 'in' : 'out',
+    text,
+    missingBody,
+    createdAt: row.occurred_at,
+    delivery: inbound ? null : statusTick(row.channel, status),
+    threadId: row.thread_id,
+    subject: row.subject,
+    aiGenerated: row.ai_generated === true,
+  };
+}
+
 export function chronological(messages: ChatMessage[]): ChatMessage[] {
   return [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
