@@ -2,6 +2,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { LEAD_MESSAGE_CHANNELS, LEAD_MESSAGE_DIRECTIONS, LEAD_MESSAGE_PROVIDERS, LEAD_MESSAGE_STATUSES } from './constants';
+import { isInternalChannelLog } from './audience';
 import { isLeadMessagesCaptureEnabled } from './flag';
 
 type Channel = (typeof LEAD_MESSAGE_CHANNELS)[number];
@@ -55,6 +56,7 @@ export function mediaMetadata(input: LeadMessageMedia | null | undefined): LeadM
 export async function recordLeadMessage(draft: LeadMessageDraft): Promise<void> {
   const providerMessageId = draft.providerMessageId.trim();
   if (!providerMessageId || !draft.leadId || !draft.orgId) return;
+  if (isInternalChannelLog(null, draft.bodyText) || isInternalChannelLog(null, draft.bodyHtml)) return;
   try {
     if (!(await isLeadMessagesCaptureEnabled(draft.orgId))) return;
     const db = createServiceRoleClient();

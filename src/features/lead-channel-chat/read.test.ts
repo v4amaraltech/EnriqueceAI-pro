@@ -10,17 +10,24 @@ const state = vi.hoisted(() => ({
   reads: 0,
 }));
 
-function chain() {
+function chain(table: string) {
   const c: Record<string, unknown> = {};
   const pass = (name: string) => (...args: unknown[]) => {
     state.filters.push(`${name}:${args.map(String).join(',')}`);
     return c;
   };
-  for (const name of ['select', 'eq', 'order', 'limit', 'or', 'in']) c[name] = pass(name);
+  for (const name of ['select', 'eq', 'order', 'limit', 'or', 'in', 'maybeSingle']) c[name] = pass(name);
   c.then = (resolve: (value: unknown) => unknown) => {
     state.reads += 1;
-    const data = state.reads === 1 ? state.rows : state.events;
-    return Promise.resolve({ data, error: state.error }).then(resolve);
+    const data = table === 'leads'
+      ? { telefone: '11999998888', phones: null, email: 'lead@acme.com', emails: null }
+      : table === 'lead_contacts'
+        ? []
+        : table === 'lead_message_status_events'
+          ? state.events
+          : state.rows;
+    const error = table === 'leads' || table === 'lead_contacts' ? null : state.error;
+    return Promise.resolve({ data, error }).then(resolve);
   };
   return c;
 }
@@ -28,11 +35,11 @@ function chain() {
 vi.mock('@/lib/auth/get-org-id', () => ({
   getAuthOrgIdResult: vi.fn(() => Promise.resolve({
     success: true,
-    data: { orgId: 'org-1', userId: 'u-1', supabase: { from: () => chain() } },
+    data: { orgId: 'org-1', userId: 'u-1', supabase: { from: (table: string) => chain(table) } },
   })),
 }));
 vi.mock('@/lib/supabase/from', () => ({
-  from: (supabase: { from: () => unknown }) => supabase.from(),
+  from: (supabase: { from: (table: string) => unknown }, table: string) => supabase.from(table),
 }));
 vi.mock('./flag', () => ({
   isLeadChannelChatEnabled: () => Promise.resolve(state.enabled),
@@ -135,6 +142,32 @@ describe('leitura da conversa', () => {
     expect(result.data.messages[0]).toMatchObject({ text: 'Mídia: imagem', delivery: '✓✓ Entregue' });
     expect(state.filters).toContain('eq:channel,whatsapp');
     expect(state.filters.some((filter) => filter.startsWith('limit:50'))).toBe(false);
+  });
+
+  it('não mostra aviso interno nem WhatsApp enviado ao closer', async () => {
+    state.rows = [
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        type: 'sent',
+        channel: 'whatsapp',
+        message_content: 'WhatsApp de solicitação de feedback enviado para Vinicius Mercante',
+        metadata: { source: 'closer_feedback', recipient_kind: 'closer', recipient: '11945705316' },
+        ai_generated: false,
+        created_at: '2026-11-10T12:12:00.000Z',
+      },
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        type: 'sent',
+        channel: 'whatsapp',
+        message_content: 'Oi Roberta, tudo bem?',
+        metadata: null,
+        ai_generated: false,
+        created_at: '2026-11-10T12:00:00.000Z',
+      },
+    ];
+    const result = await fetchLeadChannelPage({ leadId: LEAD, channel: 'whatsapp' });
+    if (!result.success || !result.data.enabled) throw new Error('pagina');
+    expect(result.data.messages.map((message) => message.text)).toEqual(['Oi Roberta, tudo bem?']);
   });
 
   it('recusa lead inválido sem consultar', async () => {

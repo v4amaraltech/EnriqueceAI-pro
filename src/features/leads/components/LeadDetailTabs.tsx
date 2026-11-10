@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadTimeline } from '@/features/cadences/components/LeadTimeline';
 import { ChannelChat } from '@/features/lead-channel-chat/ChannelChat';
+import { chatPeerFromLead } from '@/features/lead-channel-chat/peer';
 import { deleteMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { descriptionFromMeetingRecord } from '@/features/integrations/meeting-invite-description';
@@ -47,6 +48,7 @@ interface LeadDetailTabsProps {
   showMeeting: boolean;
   onShowMeetingChange: (open: boolean) => void;
   channelChatEnabled?: boolean;
+  senderName?: string;
 }
 
 type ChannelFilter = 'all' | 'research' | 'whatsapp' | 'email' | 'phone' | 'linkedin';
@@ -60,7 +62,7 @@ const channelFilters: { value: ChannelFilter; label: string; icon: typeof Mail }
   { value: 'linkedin', label: 'LinkedIn', icon: Linkedin },
 ];
 
-export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChange, channelChatEnabled = false }: LeadDetailTabsProps) {
+export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChange, channelChatEnabled = false, senderName = 'você' }: LeadDetailTabsProps) {
   const router = useRouter();
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [editingMeeting, setEditingMeeting] = useState<TimelineEntry | null>(null);
@@ -161,7 +163,13 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           </div>
 
           {channelChatEnabled && (channelFilter === 'whatsapp' || channelFilter === 'email') ? (
-            <ChannelChat key={`${lead.id}-${channelFilter}`} leadId={lead.id} channel={channelFilter} />
+            <ChannelChat
+              key={`${lead.id}-${channelFilter}`}
+              leadId={lead.id}
+              channel={channelFilter}
+              peer={chatPeerFromLead(lead, channelFilter)}
+              senderName={senderName}
+            />
           ) : (
             <LeadTimeline entries={filteredTimeline} />
           )}

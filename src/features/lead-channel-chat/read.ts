@@ -6,6 +6,7 @@ import { from } from '@/lib/supabase/from';
 import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { isUuid } from '@/lib/utils/uuid';
 
+import { isLeadConversation } from '@/features/lead-messages/audience';
 import { isLeadMessagesCaptureEnabled } from '@/features/lead-messages/flag';
 
 import { CHANNEL_PAGE_SIZE, CHAT_COPY } from './constants';
@@ -26,6 +27,76 @@ export interface ChannelPage {
   messages: ChatMessage[];
   hasMore: boolean;
   cursor: ChatCursor | null;
+}
+
+interface LeadAudience {
+  leadPhones: string[];
+  leadEmails: string[];
+  phonesKnown: boolean;
+  emailsKnown: boolean;
+}
+
+const EMPTY_AUDIENCE: LeadAudience = {
+  leadPhones: [],
+  leadEmails: [],
+  phonesKnown: false,
+  emailsKnown: false,
+};
+
+function pushPhone(value: unknown, into: string[]) {
+  if (typeof value === 'string' && value.trim()) into.push(value.trim());
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const numero = (item as { numero?: unknown; number?: unknown }).numero
+      ?? (item as { number?: unknown }).number;
+    if (typeof numero === 'string' && numero.trim()) into.push(numero.trim());
+  }
+}
+
+function pushEmail(value: unknown, into: string[]) {
+  if (typeof value === 'string' && value.includes('@')) into.push(value.trim());
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const email = (item as { email?: unknown }).email;
+    if (typeof email === 'string' && email.includes('@')) into.push(email.trim());
+  }
+}
+
+async function loadAudience(
+  supabase: Parameters<typeof from>[0],
+  orgId: string,
+  leadId: string,
+): Promise<LeadAudience> {
+  try {
+    const leadRes = (await from(supabase, 'leads')
+      .select('telefone, phones, email, emails')
+      .eq('id', leadId)
+      .eq('org_id', orgId)
+      .maybeSingle()) as { data: Record<string, unknown> | null; error: { message: string } | null };
+    const contactRes = (await from(supabase, 'lead_contacts')
+      .select('phones, emails')
+      .eq('lead_id', leadId)
+      .eq('org_id', orgId)) as { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
+    if (leadRes.error) return EMPTY_AUDIENCE;
+    const leadPhones: string[] = [];
+    const leadEmails: string[] = [];
+    if (leadRes.data) {
+      pushPhone(leadRes.data.telefone, leadPhones);
+      pushPhone(leadRes.data.phones, leadPhones);
+      pushEmail(leadRes.data.email, leadEmails);
+      pushEmail(leadRes.data.emails, leadEmails);
+    }
+    for (const contact of contactRes.data ?? []) {
+      pushPhone(contact.phones, leadPhones);
+      pushEmail(contact.emails, leadEmails);
+    }
+    return { leadPhones, leadEmails, phonesKnown: true, emailsKnown: true };
+  } catch (err) {
+    console.error('[lead-chat] telefones do lead:', err instanceof Error ? err.message : err);
+    return EMPTY_AUDIENCE;
+  }
 }
 
 function quote(value: string): string {
@@ -51,18 +122,21 @@ export async function fetchLeadChannelPage(input: {
     return { success: true, data: { enabled: false } };
   }
 
+  const audience = await loadAudience(auth.data.supabase, auth.data.orgId, input.leadId);
+
   if (await isLeadMessagesCaptureEnabled(auth.data.orgId)) {
-    const stored = await fetchStoredMessages(auth.data.supabase, auth.data.orgId, input);
+    const stored = await fetchStoredMessages(auth.data.supabase, auth.data.orgId, input, audience);
     if (stored) return stored;
   }
 
-  return fetchInteractions(auth.data.supabase, auth.data.orgId, input);
+  return fetchInteractions(auth.data.supabase, auth.data.orgId, input, audience);
 }
 
 async function fetchInteractions(
   supabase: Parameters<typeof from>[0],
   orgId: string,
   input: { leadId: string; channel: ChatChannel; before?: ChatCursor | null },
+  audience: LeadAudience,
 ): Promise<ActionResult<ChannelPage>> {
   let query = from(supabase, 'interactions')
     .select('id, type, channel, message_content, metadata, ai_generated, created_at')
@@ -90,7 +164,7 @@ async function fetchInteractions(
   const page = rows.slice(0, CHANNEL_PAGE_SIZE);
   const messages = chronological(
     page.flatMap((row) => {
-      const message = toChatMessage({ ...row, channel: input.channel });
+      const message = toChatMessage({ ...row, channel: input.channel }, audience);
       return message ? [message] : [];
     }),
   );
@@ -110,10 +184,11 @@ async function fetchStoredMessages(
   supabase: Parameters<typeof from>[0],
   orgId: string,
   input: { leadId: string; channel: ChatChannel; before?: ChatCursor | null },
+  audience: LeadAudience,
 ): Promise<ActionResult<ChannelPage> | null> {
   try {
     let query = from(supabase, 'lead_messages')
-      .select('id, channel, direction, body_text, body_html, subject, media, thread_id, ai_generated, occurred_at')
+      .select('id, channel, direction, body_text, body_html, subject, media, thread_id, ai_generated, occurred_at, lead_address')
       .eq('lead_id', input.leadId)
       .eq('org_id', orgId)
       .eq('channel', input.channel)
@@ -127,7 +202,10 @@ async function fetchStoredMessages(
       query = query.or(`occurred_at.lt.${at},and(occurred_at.eq.${at},id.lt.${id})`);
     }
 
-    const { data, error } = (await query) as { data: StoredLeadMessage[] | null; error: { message: string } | null };
+    const { data, error } = (await query) as {
+      data: Array<StoredLeadMessage & { lead_address?: string | null }> | null;
+      error: { message: string } | null;
+    };
     if (error) return null;
 
     const rows = data ?? [];
@@ -152,10 +230,15 @@ async function fetchStoredMessages(
       success: true,
       data: {
         enabled: true,
-        messages: chronological(page.map((row) => storedLeadMessageToChat(
-          { ...row, channel: input.channel },
-          statuses.get(row.id) ?? null,
-        ))),
+        messages: chronological(page.flatMap((row) => {
+          if (!isLeadConversation({
+            channel: input.channel,
+            content: row.body_text,
+            explicitAddress: row.lead_address,
+            ...audience,
+          })) return [];
+          return [storedLeadMessageToChat({ ...row, channel: input.channel }, statuses.get(row.id) ?? null)];
+        })),
         hasMore,
         cursor: oldest ? { createdAt: oldest.occurred_at, id: oldest.id } : null,
       },

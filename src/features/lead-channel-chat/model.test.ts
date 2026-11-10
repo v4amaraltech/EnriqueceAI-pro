@@ -168,4 +168,40 @@ describe('conversa do canal', () => {
     expect(message.delivery).toBe('✓ Enviada');
     expect(message.subject).toBe('Gazin Tech + V4 Company (Reunião)');
   });
+
+  it('esconde o feedback ao closer e não usa a frase de atividade como texto', () => {
+    expect(toChatMessage(row({
+      channel: 'whatsapp',
+      message_content: 'WhatsApp de solicitação de feedback enviado para Vinicius Mercante',
+      metadata: { source: 'closer_feedback', recipient_kind: 'closer', recipient: '11945705316' },
+    }))).toBeNull();
+    const known = {
+      leadPhones: ['11988887777'],
+      leadEmails: [],
+      phonesKnown: true,
+      emailsKnown: true,
+    };
+    expect(toChatMessage(row({
+      channel: 'whatsapp',
+      message_content: 'oi',
+      metadata: { recipient: '11945705316' },
+    }), known)).toBeNull();
+    const empty = toChatMessage(row({ channel: 'whatsapp', message_content: null, metadata: { error: 'not_whatsapp' }, type: 'failed' }));
+    expect(empty?.text).toBe('Número sem WhatsApp. Nenhum texto foi enviado.');
+    expect(empty?.missingBody).toBe(true);
+    expect(empty?.deliveryTick).toBe('failed');
+    const template = toChatMessage(row({
+      channel: 'whatsapp',
+      message_content: null,
+      metadata: { template_name: 'abertura_v4' },
+    }));
+    expect(template?.text).toBe('Template abertura_v4 (texto não gravado)');
+    const real = toChatMessage(row({
+      channel: 'whatsapp',
+      message_content: null,
+      metadata: { body: 'Roberta, vi que vocês atendem em São Paulo.' },
+    }));
+    expect(real?.text).toBe('Roberta, vi que vocês atendem em São Paulo.');
+    expect(real?.missingBody).toBe(false);
+  });
 });
