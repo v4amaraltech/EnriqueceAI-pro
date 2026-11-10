@@ -272,6 +272,7 @@ export function WebphonePanel() {
           connected={leadConnected(leadAnswer, resultCall.answered)}
           dismissible={false}
           initialNotes={ctxState.notes}
+          returnReadyMessage="A atividade de retorno é criada."
           onConclude={(args) => handleOwnResult(resultCall, args)}
         />
       )}

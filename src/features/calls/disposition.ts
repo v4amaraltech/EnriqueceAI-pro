@@ -56,20 +56,18 @@ export interface DispositionOption {
 export const DISPOSITION_OPTIONS: DispositionOption[] = [
   { value: 'relevant_conversation', label: 'Conversa relevante', hint: 'Avança a cadência' },
   { value: 'answered_no_progress', label: 'Atendeu, sem avanço', hint: 'Avança a cadência' },
-  // Caixa postal/secretária, mas rotulada "Não atendeu" para o SDR: do ponto de
-  // vista dele ninguém atendeu, e o modelo mental é binário (atendeu/não). O
-  // valor gravado continua `voicemail`, então histórico e relatórios mostram o
-  // rótulo preciso ("Caixa postal", via call-attempt) e a métrica de % caixa
-  // postal fica preservada. Só aparece na tela ATENDIDA (o `no_answer` real fica
-  // escondido lá), então nunca há dois "Não atendeu" no mesmo grid.
-  { value: 'voicemail', label: 'Não atendeu', hint: 'Segue a cadência' },
+  // Caixa postal grava `voicemail`, nunca `no_answer`. O rótulo da escolha é
+  // "Caixa postal" para não parecer o "Não atendeu" da ligação sem resposta.
+  // Relatórios usam o mesmo nome. Só aparece quando a telemetria diz que a
+  // linha atendeu.
+  { value: 'voicemail', label: 'Caixa postal', hint: 'Segue a cadência' },
   { value: 'callback_requested', label: 'Pediu para ligar depois', hint: 'Agenda o retorno combinado' },
   { value: 'no_answer', label: 'Não atendeu', hint: 'Segue a cadência' },
   { value: 'technical_failure', label: 'Falha técnica', hint: 'Volta para a fila' },
 ];
 
-// Rótulos para RELATÓRIOS, na ordem de exibição. Diferem do seletor num ponto:
-// `voicemail` aparece como "Caixa postal" (o preciso), não como "Não atendeu".
+// Rótulos para RELATÓRIOS, na ordem de exibição. `voicemail` e `no_answer`
+// continuam valores diferentes; os dois textos também são diferentes.
 export const DISPOSITION_REPORT_LABELS: Record<CallDisposition, string> = {
   relevant_conversation: 'Conversa relevante',
   answered_no_progress: 'Atendeu, sem avanço',

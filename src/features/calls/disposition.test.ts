@@ -41,6 +41,8 @@ describe('mapDispositionToAction', () => {
       'no_answer',
       'technical_failure',
     ]);
+    expect(DISPOSITION_OPTIONS.find((o) => o.value === 'voicemail')?.label).toBe('Caixa postal');
+    expect(DISPOSITION_OPTIONS.find((o) => o.value === 'no_answer')?.label).toBe('Não atendeu');
   });
 });
 
