@@ -120,6 +120,8 @@ describe('CallSidePanel', () => {
     renderPanel();
     expect(screen.queryByTestId('call-lead-card')).toBeNull();
     expect(screen.queryByTestId('call-history-collapse')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Histórico de contatos' }).textContent).toContain('Respondeu · e-mail');
+    expect(screen.getAllByText('Respondeu · e-mail')).toHaveLength(1);
     expect(screen.getByText('Enriquecido')).toBeTruthy();
     expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
     expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();
@@ -182,8 +184,10 @@ describe('CallSidePanel', () => {
     expect(screen.getByTestId('call-lead-opening').textContent).toContain('Seria um problema retomarmos em 2 minutos?');
     expect(screen.queryByText('Enriquecido')).toBeNull();
     expect(screen.getByText('Perguntar quem decide e se já houve contato anterior. Fixture.')).toBeTruthy();
-    expect(screen.getByTestId('call-history-collapse')).toBeTruthy();
-    expect(screen.getByText('Respondeu · e-mail')).toBeTruthy();
+    const history = screen.getByTestId('call-history-collapse');
+    expect(history.textContent).toContain('Respondeu · e-mail');
+    expect(screen.getAllByText('Respondeu · e-mail')).toHaveLength(1);
+    expect(screen.queryByText('Enriquecido')).toBeNull();
 
     expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
     expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();

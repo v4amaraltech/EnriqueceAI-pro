@@ -55,7 +55,7 @@ interface ActivityQueueViewProps {
   isManager?: boolean;
   /** Active org members, for labeling and scoping the per-SDR filter. */
   members?: Array<{ userId: string; name: string; role: 'manager' | 'sdr' }>;
-  /** Flag `call_lead_card_v1`. Ligada, Executar abre o painel lateral. Desligada, a gaveta de hoje. */
+  /** Flag `call_lead_card_v1`. Ligada, a fila oferece o painel lateral. O Executar continua na gaveta. */
   leadCardEnabled?: boolean;
 }
 
@@ -299,10 +299,11 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   };
 
   const executeTask = (activity: PendingActivity) => {
-    if (leadCardEnabled) {
-      openCallPanel(activity);
+    if (callBusy) {
+      toast.error('Encerre a ligação antes de trocar de tarefa');
       return;
     }
+    setCallPanelKey(null);
     setSelectedKey(keyOf(activity));
   };
 
@@ -387,6 +388,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   };
 
   const callPanelActivity = activities.find((activity) => keyOf(activity) === callPanelKey) ?? null;
+  const selectedForPanel = activities.find((activity) => keyOf(activity) === selectedKey) ?? null;
 
   // Show all activities (current + future within 24h window) grouped by lead
   const visibleActivities = useMemo(() => activities, [activities]);
@@ -480,6 +482,9 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   const handleToggleQuickMode = useCallback(() => {
     const newMode = !quickMode;
     setQuickMode(newMode);
+    if (newMode) {
+      setCallPanelKey(null);
+    }
     if (newMode && selectedKey === null) {
       // sheetActivities is recomputed when quickMode flips, but here we
       // re-derive synchronously from filtered to avoid a stale ref.
@@ -642,6 +647,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onViewLead={handleViewLead}
             onLeadWon={handleLeadWon}
             onLeadLost={handleLeadLost}
+            onOpenCallPanel={leadCardEnabled ? openCallPanel : undefined}
           />
           <ActivityExecutionSheet
             activities={visibleActivities}
@@ -653,6 +659,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onLeadLost={handleLeadLost}
             dialerProvider={dialerProvider}
             quickMode={false}
+            onOpenCallPanel={leadCardEnabled && selectedForPanel ? () => openCallPanel(selectedForPanel) : undefined}
           />
         </>
       ) : activeTab === 'dialer' && showPowerDialer ? (
@@ -743,6 +750,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                           onLeadLost={() => handleLeadLost(activity)}
                           onSkipStep={() => handleSkipStep(activity)}
                           onSwitchCadence={() => handleSwitchCadence(activity)}
+                          onOpenCallPanel={leadCardEnabled ? () => openCallPanel(activity) : undefined}
                         />
                       ))}
                     </div>
@@ -771,6 +779,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                   onLeadLost={() => handleLeadLost(activity)}
                   onSkipStep={() => handleSkipStep(activity)}
                   onSwitchCadence={() => handleSwitchCadence(activity)}
+                  onOpenCallPanel={leadCardEnabled ? () => openCallPanel(activity) : undefined}
                 />
               ))}
               <ActivityPagination
@@ -795,6 +804,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onSwitchCadence={handleSwitchCadence}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
+            onOpenCallPanel={leadCardEnabled && selectedForPanel ? () => openCallPanel(selectedForPanel) : undefined}
           />
         </>
       )}

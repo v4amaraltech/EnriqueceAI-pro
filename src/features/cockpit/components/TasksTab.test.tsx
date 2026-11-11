@@ -67,7 +67,7 @@ describe('TasksTab painel de ligação', () => {
     expect(screen.getByTestId('execution-sheet').textContent).toContain(emailActivity.enrollmentId);
   });
 
-  it('com a flag ligada Executar abre o painel pela lista, também no e-mail', () => {
+  it('com a flag ligada o e-mail continua só na gaveta', () => {
     render(
       <TasksTab
         initialActivities={[emailActivity]}
@@ -80,8 +80,8 @@ describe('TasksTab painel de ligação', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Executar tarefa' }));
-    expect(screen.getByTestId('call-side-panel').textContent).toContain('Empresa Fixture Ltda');
-    expect(screen.getByTestId('execution-sheet').textContent).toBe('closed');
+    expect(screen.queryByTestId('call-side-panel')).toBeNull();
+    expect(screen.getByTestId('execution-sheet').textContent).toContain(emailActivity.enrollmentId);
   });
 
   it('concluir a ligação registra a atividade uma vez', async () => {

@@ -284,7 +284,7 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
 
   const completedPct = progress.target > 0 ? Math.round((progress.completed / progress.target) * 100) : 0;
   const selectedActivity = activities.find((activity) => keyOf(activity) === selectedKey) ?? null;
-  const callActivity = selectedActivity && (leadCardEnabled || isCallDockTask(selectedActivity)) ? selectedActivity : null;
+  const callActivity = selectedActivity && isCallDockTask(selectedActivity) ? selectedActivity : null;
   const sheetKey = callActivity ? null : selectedKey;
 
   return (

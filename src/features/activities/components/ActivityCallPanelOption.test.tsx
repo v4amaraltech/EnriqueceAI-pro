@@ -13,8 +13,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }));
 vi.mock('./ActivityExecutionSheet', () => ({
-  ActivityExecutionSheet: ({ selectedKey }: { selectedKey: string | null }) => (
-    <div data-testid="execution-sheet">{selectedKey ?? 'closed'}</div>
+  ActivityExecutionSheet: ({ selectedKey, onOpenCallPanel }: { selectedKey: string | null; onOpenCallPanel?: () => void }) => (
+    <div data-testid="execution-sheet" data-has-panel={onOpenCallPanel ? 'yes' : 'no'}>{selectedKey ?? 'closed'}</div>
   ),
 }));
 vi.mock('@/features/cockpit/components/CallSidePanel', () => ({
@@ -37,27 +37,39 @@ function renderQueue(leadCardEnabled: boolean) {
     <ActivityQueueView
       initialActivities={[FIXTURE_ACTIVITY]}
       progress={{ completed: 0, pending: 1, total: 1, target: 20, guardrails: EMPTY_GUARDRAILS }}
+      showPowerDialer={false}
       leadCardEnabled={leadCardEnabled}
     />,
   );
 }
 
 describe('execução pela lista de atividades', () => {
-  it('com a flag desligada Executar abre a gaveta e não o painel', async () => {
+  it('com a flag desligada Executar abre a gaveta e não oferece o painel', async () => {
     const user = userEvent.setup();
     renderQueue(false);
     await user.click(screen.getByRole('button', { name: 'Executar' }));
     expect(screen.getByTestId('execution-sheet').textContent).not.toBe('closed');
+    expect(screen.getByTestId('execution-sheet').getAttribute('data-has-panel')).toBe('no');
     expect(screen.queryByTestId('call-side-panel')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Mais ações' }));
     expect(screen.queryByRole('menuitem', { name: 'Abrir painel lateral' })).toBeNull();
   });
 
-  it('com a flag ligada Executar abre o painel e deixa a gaveta fechada', async () => {
+  it('com a flag ligada Executar abre só a gaveta e o item abre só o painel', async () => {
     const user = userEvent.setup();
     renderQueue(true);
     await user.click(screen.getByRole('button', { name: 'Executar' }));
+    expect(screen.getByTestId('execution-sheet').textContent).not.toBe('closed');
+    expect(screen.getByTestId('execution-sheet').getAttribute('data-has-panel')).toBe('yes');
+    expect(screen.queryByTestId('call-side-panel')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Mais ações' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Abrir painel lateral' }));
     expect(screen.getByTestId('call-side-panel')).toBeTruthy();
     expect(screen.getByTestId('execution-sheet').textContent).toBe('closed');
+
+    await user.click(screen.getByRole('button', { name: 'Executar' }));
+    expect(screen.getByTestId('execution-sheet').textContent).not.toBe('closed');
+    expect(screen.queryByTestId('call-side-panel')).toBeNull();
   });
 });

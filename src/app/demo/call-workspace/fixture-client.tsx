@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 
+import { ActivityQueueView } from '@/features/activities/components/ActivityQueueView';
 import { TasksTab } from '@/features/cockpit/components/TasksTab';
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 
@@ -36,19 +37,45 @@ function cardActivity() {
 /**
  * Fixture visual. `leadCard` só muda o meio do painel. Não disca e não grava.
  */
-export function CallWorkspaceFixture({ leadCard, theme }: { leadCard: boolean; theme: 'light' | 'dark' }) {
+export function CallWorkspaceFixture({
+  leadCard,
+  theme,
+  view,
+}: {
+  leadCard: boolean;
+  theme: 'light' | 'dark';
+  view: 'painel' | 'fila';
+}) {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     return () => document.documentElement.classList.remove('dark');
   }, [theme]);
 
   const activity = leadCard ? cardActivity() : FIXTURE_ACTIVITY;
+  const banner = (
+    <p className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+      Fixture de teste. Empresa, telefone, closer e histórico são fictícios. Nenhum convite ou ligação é enviado.
+    </p>
+  );
+
+  if (view === 'fila') {
+    return (
+      <main className="bg-background text-foreground min-h-screen p-4 md:p-6">
+        {banner}
+        <ActivityQueueView
+          initialActivities={[activity]}
+          progress={{ completed: 1, pending: 1, total: 2, target: 20, guardrails: EMPTY_GUARDRAILS }}
+          showPowerDialer={false}
+          dialerProvider="api4com"
+          leadCardEnabled={leadCard}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="bg-background text-foreground min-h-screen p-4 md:p-6">
-      <p className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-        Fixture de teste. Empresa, telefone, closer e histórico são fictícios. Nenhum convite ou ligação é enviado.
-      </p>
+      {banner}
       <TasksTab
         initialActivities={[activity]}
         progress={{ completed: 1, pending: 1, total: 2, target: 20, guardrails: EMPTY_GUARDRAILS }}

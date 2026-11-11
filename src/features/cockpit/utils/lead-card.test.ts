@@ -126,6 +126,7 @@ describe('cartão do lead', () => {
     expect(sql).not.toMatch(/'call_lead_card_v1',\s*true,/);
     expect(sql).toContain(CALL_LEAD_CARD_ORG_ID);
     expect(sql).toContain('ON CONFLICT (key) DO NOTHING');
+    expect(sql).not.toMatch(/lead_channel_chat|lead_messages/);
     expect(sql.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi)).toEqual([CALL_LEAD_CARD_ORG_ID]);
 
     const row = { enabled: false, allow_org_ids: [CALL_LEAD_CARD_ORG_ID], allow_user_ids: [] as string[] };
