@@ -8,6 +8,9 @@
  *   pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid> --apply
  *   pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid> --apply \
  *     --from-cursor <id> --limit 25 --days 90
+ *   pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid> --since 2026-10-12
+ *
+ * Janela: --days N (padrão 90) ou --since <ISO> (data ou timestamp; prevalece sobre --days).
  *
  * Paginação keyset por id (sem offset). O log imprime o cursor para retomar.
  * Idempotente: ligações já validadas (metadata.recording_persist_status = 'ok') são puladas.
@@ -15,28 +18,50 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-import { repairRecordingsPage } from '../src/features/calls/services/recording-repair.service';
+import {
+  type RepairSource,
+  repairRecordingsPage,
+  resolveRepairSinceIso,
+} from '../src/features/calls/services/recording-repair.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function parseArgs(argv: string[]) {
+  if (argv.includes('--execute')) {
+    throw new Error('--execute não é uma flag deste script. Use --apply para gravar.');
+  }
   const get = (flag: string) => {
     const i = argv.indexOf(flag);
     return i >= 0 ? argv[i + 1] : undefined;
   };
+  const since = get('--since');
+  if (since !== undefined && Number.isNaN(Date.parse(since))) {
+    throw new Error(
+      `--since inválido: ${since}. Use ISO, ex.: 2026-10-12 ou 2026-10-12T03:00:00Z.`,
+    );
+  }
   return {
     org: get('--org'),
     apply: argv.includes('--apply'),
     cursor: get('--from-cursor') ?? null,
     limit: Number(get('--limit') ?? 25) || 25,
     days: Number(get('--days') ?? 90) || 90,
+    since: since ?? null,
   };
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  let args: ReturnType<typeof parseArgs>;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
   if (!args.org || !UUID.test(args.org)) {
-    console.error('Uso: --org <uuid> [--apply] [--from-cursor <id>] [--limit N] [--days N]');
+    console.error(
+      'Uso: --org <uuid> [--apply] [--from-cursor <id>] [--limit N] [--days N | --since <ISO>]',
+    );
     process.exit(1);
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,10 +71,14 @@ async function main() {
     process.exit(1);
   }
   const supabase = createClient(url, key, { auth: { persistSession: false } });
-  const sinceIso = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000).toISOString();
+  const sinceIso = resolveRepairSinceIso({ since: args.since, days: args.days }) ?? undefined;
 
-  console.warn(args.apply ? 'MODO APPLY: vai gravar no Storage.' : 'DRY-RUN: nada será gravado (use --apply).');
+  console.warn(
+    args.apply ? 'MODO APPLY: vai gravar no Storage.' : 'DRY-RUN: nada será gravado (use --apply).',
+  );
   let cursor = args.cursor;
+  const totals: Record<string, number> = {};
+  const totalSources: Record<RepairSource, number> = { recording_url: 0, api4com: 0 };
   do {
     const page = await repairRecordingsPage(supabase, {
       orgId: args.org,
@@ -58,9 +87,15 @@ async function main() {
       apply: args.apply,
       sinceIso,
     });
-    console.warn(`scanned=${page.scanned} ${JSON.stringify(page.counts)} nextCursor=${page.nextCursor ?? '-'}`);
+    console.warn(
+      `scanned=${page.scanned} counts=${JSON.stringify(page.counts)} sources=${JSON.stringify(page.sources)} ` +
+        `nextCursor=${page.nextCursor ?? '-'}`,
+    );
+    for (const [k, v] of Object.entries(page.counts)) totals[k] = (totals[k] ?? 0) + v;
+    for (const k of Object.keys(totalSources) as RepairSource[]) totalSources[k] += page.sources[k];
     cursor = page.nextCursor;
   } while (cursor);
+  console.warn(`TOTAL counts=${JSON.stringify(totals)} sources=${JSON.stringify(totalSources)}`);
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {

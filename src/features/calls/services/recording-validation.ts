@@ -28,7 +28,40 @@ export function classifyRecordingDuration(
 ): RecordingPersistStatus {
   if (audioSeconds === null || !Number.isFinite(audioSeconds)) return 'unverified';
   if (!callSeconds || callSeconds <= 0) return 'unverified';
-  return Math.abs(audioSeconds - callSeconds) <= recordingToleranceSeconds(callSeconds) ? 'ok' : 'mismatch';
+  return Math.abs(audioSeconds - callSeconds) <= recordingToleranceSeconds(callSeconds)
+    ? 'ok'
+    : 'mismatch';
+}
+
+/** Até esta duração (segundos) a ligação é "curta" e pode cair em `borderline_short`. */
+export const REPAIR_SHORT_CALL_MAX_SECONDS = 30;
+/** Folga mínima (segundos) acima da tolerância normal para uma ligação curta. */
+export const REPAIR_BORDERLINE_FLOOR_SECONDS = 15;
+/** Folga relativa acima da tolerância normal para uma ligação curta. */
+export const REPAIR_BORDERLINE_RATIO = 0.5;
+
+export type RepairDurationStatus = RecordingPersistStatus | 'borderline_short';
+
+/** Folga em segundos: o MAIOR entre 15 s e 50% da duração da ligação. */
+export function recordingBorderlineSlackSeconds(callSeconds: number): number {
+  return Math.max(REPAIR_BORDERLINE_FLOOR_SECONDS, callSeconds * REPAIR_BORDERLINE_RATIO);
+}
+
+/**
+ * Como `classifyRecordingDuration`, mas ligação curta (até 30 s) cuja diferença
+ * passa da tolerância e cabe na folga vira `borderline_short`, não `mismatch`.
+ * Ex.: 12 s contra 20 s é `borderline_short`; 12 s contra 365 s é `mismatch`.
+ */
+export function classifyRepairDuration(
+  audioSeconds: number | null,
+  callSeconds: number | null | undefined,
+): RepairDurationStatus {
+  const base = classifyRecordingDuration(audioSeconds, callSeconds);
+  if (base !== 'mismatch' || audioSeconds === null || !callSeconds) return base;
+  if (callSeconds > REPAIR_SHORT_CALL_MAX_SECONDS) return base;
+  return Math.abs(audioSeconds - callSeconds) <= recordingBorderlineSlackSeconds(callSeconds)
+    ? 'borderline_short'
+    : 'mismatch';
 }
 
 /** `true` só quando o áudio foi medido e NÃO bate. `unverified` não conta como ruim. */
@@ -73,7 +106,8 @@ export function findReusedRecordingOwner(
     if (!sameRamal) continue;
     if (identity.url && other.recording_url === identity.url) return other.id;
     const otherEtag = other.metadata?.recording_etag;
-    if (identity.etag && typeof otherEtag === 'string' && otherEtag === identity.etag) return other.id;
+    if (identity.etag && typeof otherEtag === 'string' && otherEtag === identity.etag)
+      return other.id;
   }
   return null;
 }

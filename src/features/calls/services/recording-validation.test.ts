@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   classifyRecordingDuration,
+  classifyRepairDuration,
   findReusedRecordingOwner,
   isDurationStable,
   recordingDurationMismatches,
@@ -78,5 +79,27 @@ describe('proxy: shouldServeStoredRecording', () => {
   });
   it('sem path não serve', () => {
     expect(shouldServeStoredRecording({ ...base, recording_storage_path: null })).toBe(false);
+  });
+});
+
+describe('classifyRepairDuration (borderline_short)', () => {
+  it('curta perto da tolerância é borderline_short', () => {
+    expect(classifyRecordingDuration(20, 12)).toBe('mismatch');
+    expect(classifyRepairDuration(20, 12)).toBe('borderline_short');
+    expect(classifyRepairDuration(27, 12)).toBe('borderline_short');
+  });
+
+  it('curta claramente trocada continua mismatch', () => {
+    expect(classifyRepairDuration(365, 12)).toBe('mismatch');
+    expect(classifyRepairDuration(28, 12)).toBe('mismatch');
+  });
+
+  it('ligação acima de 30 s não tem borderline', () => {
+    expect(classifyRepairDuration(70, 40)).toBe('mismatch');
+  });
+
+  it('dentro da tolerância segue ok e sem medida segue unverified', () => {
+    expect(classifyRepairDuration(14, 12)).toBe('ok');
+    expect(classifyRepairDuration(null, 12)).toBe('unverified');
   });
 });

@@ -3,22 +3,26 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 
 import {
+  PERSIST_CALL_COLUMNS,
+  type PersistCallRow,
   downloadAudio,
   flagRecordingStatus,
   measureStoredRecording,
-  PERSIST_CALL_COLUMNS,
-  type PersistCallRow,
   uploadValidatedRecording,
 } from './recording-storage.service';
-import { lookupRecordingFromApi4Com } from './recover-recording.service';
-import { classifyRecordingDuration } from './recording-validation';
+import { classifyRepairDuration } from './recording-validation';
+import { lookupRecordingCandidatesFromApi4Com } from './recover-recording.service';
 
 export type RepairOutcome =
   | 'skipped_ok' // já validada (flag ok) ou cópia atual bate com a duração
   | 'skipped_not_candidate' // sem cópia e sem flag de problema: cabe ao persist-pending
-  | 'would_repair' // dry-run: a cópia durável bate e seria gravada
+  | 'would_repair' // dry-run: uma cópia que bate seria gravada
   | 'repaired'
+  | 'borderline_short' // ligação curta perto da tolerância: não é mismatch automático
   | 'unrepairable'; // não achou áudio que bata com a duração
+
+/** De onde veio a cópia correta. */
+export type RepairSource = 'recording_url' | 'api4com';
 
 export interface RepairPageOptions {
   orgId: string;
@@ -31,58 +35,133 @@ export interface RepairPageOptions {
   sinceIso?: string;
 }
 
+export interface RepairCallResult {
+  outcome: RepairOutcome;
+  audioSeconds?: number | null;
+  source?: RepairSource;
+}
+
 export interface RepairPageResult {
   scanned: number;
   nextCursor: string | null;
   counts: Record<RepairOutcome, number>;
-  details: Array<{ callId: string; outcome: RepairOutcome; audioSeconds?: number | null }>;
+  /** Fonte da cópia correta (would_repair e repaired). */
+  sources: Record<RepairSource, number>;
+  details: Array<{ callId: string } & RepairCallResult>;
 }
 
 export const REPAIR_DEFAULT_LIMIT = 25;
 export const REPAIR_MAX_LIMIT = 100;
+/** Teto de downloads de candidatos da API4COM por ligação. */
+export const REPAIR_MAX_API4COM_DOWNLOADS = 4;
 
 function emptyCounts(): Record<RepairOutcome, number> {
-  return { skipped_ok: 0, skipped_not_candidate: 0, would_repair: 0, repaired: 0, unrepairable: 0 };
+  return {
+    skipped_ok: 0,
+    skipped_not_candidate: 0,
+    would_repair: 0,
+    repaired: 0,
+    borderline_short: 0,
+    unrepairable: 0,
+  };
+}
+
+/** `since` (ISO) prevalece sobre `days`. Devolve null se `since` for inválido. */
+export function resolveRepairSinceIso(
+  opts: { since?: string | null; days?: number },
+  now = Date.now(),
+): string | null {
+  if (opts.since) {
+    const time = Date.parse(opts.since);
+    return Number.isNaN(time) ? null : new Date(time).toISOString();
+  }
+  return new Date(now - (opts.days ?? 90) * 24 * 60 * 60 * 1000).toISOString();
 }
 
 /**
- * Repara UMA ligação: mede a cópia atual, e se não bate busca o link durável,
- * valida a duração e faz upsert no Storage. Em dry-run nunca escreve.
+ * Repara UMA ligação. Se a cópia do Storage não bate, tenta nesta ordem:
+ * 1) o `recording_url` já salvo; 2) a API4COM (por id, depois por janela de data).
+ * Em dry-run nunca escreve. Ligação curta perto da tolerância vira
+ * `borderline_short` e não é marcada como mismatch.
  */
 export async function repairCallRecording(
   supabase: SupabaseClient,
   call: PersistCallRow,
   apply: boolean,
-): Promise<{ outcome: RepairOutcome; audioSeconds?: number | null }> {
+): Promise<RepairCallResult> {
   const meta = call.metadata ?? {};
   if (meta.recording_persist_status === 'ok') return { outcome: 'skipped_ok' };
 
+  let borderlineSeconds: number | null = null;
+  let sawBorderline = false;
+
   if (call.recording_storage_path) {
     const storedSeconds = await measureStoredRecording(supabase, call.recording_storage_path);
-    const storedStatus = classifyRecordingDuration(storedSeconds, call.duration_seconds);
-    if (storedStatus !== 'mismatch') {
+    const storedStatus = classifyRepairDuration(storedSeconds, call.duration_seconds);
+    if (storedStatus === 'ok' || storedStatus === 'unverified') {
       if (apply) await flagRecordingStatus(supabase, call.id, storedStatus, storedSeconds);
       return { outcome: 'skipped_ok', audioSeconds: storedSeconds };
+    }
+    if (storedStatus === 'borderline_short') {
+      sawBorderline = true;
+      borderlineSeconds = storedSeconds;
     }
   } else if (meta.recording_persist_status !== 'mismatch') {
     return { outcome: 'skipped_not_candidate' };
   }
 
-  const durable = await lookupRecordingFromApi4Com(supabase, call as Parameters<typeof lookupRecordingFromApi4Com>[1]);
-  const audio = durable ? await downloadAudio(durable) : null;
-  const status = audio ? classifyRecordingDuration(audio.seconds, call.duration_seconds) : 'mismatch';
+  let lastSeconds: number | null = borderlineSeconds;
+  const tried = new Set<string>();
 
-  if (!audio || status === 'mismatch') {
-    if (apply && call.recording_storage_path) {
-      // Garante a flag para o proxy não servir a cópia ruim.
-      await flagRecordingStatus(supabase, call.id, 'mismatch', null);
+  // Devolve o resultado se a URL tem áudio que bate; senão registra e segue.
+  const tryUrl = async (url: string, source: RepairSource): Promise<RepairCallResult | null> => {
+    if (tried.has(url)) return null;
+    tried.add(url);
+    const audio = await downloadAudio(url);
+    if (!audio) return null;
+    const status = classifyRepairDuration(audio.seconds, call.duration_seconds);
+    if (status === 'borderline_short') {
+      sawBorderline = true;
+      lastSeconds = audio.seconds;
+      return null;
     }
-    return { outcome: 'unrepairable', audioSeconds: audio?.seconds ?? null };
-  }
-  if (!apply) return { outcome: 'would_repair', audioSeconds: audio.seconds };
+    if (status === 'mismatch') {
+      lastSeconds = audio.seconds;
+      return null;
+    }
+    if (!apply) return { outcome: 'would_repair', audioSeconds: audio.seconds, source };
+    const saved = await uploadValidatedRecording(supabase, call, audio, status, {
+      durableUrl: source === 'api4com' ? url : null,
+    });
+    return { outcome: saved.ok ? 'repaired' : 'unrepairable', audioSeconds: audio.seconds, source };
+  };
 
-  const saved = await uploadValidatedRecording(supabase, call, audio, status, { durableUrl: durable });
-  return { outcome: saved.ok ? 'repaired' : 'unrepairable', audioSeconds: audio.seconds };
+  // 1) link já salvo na linha (S3 durável, listener ou outro host)
+  if (call.recording_url) {
+    const hit = await tryUrl(call.recording_url, 'recording_url');
+    if (hit) return hit;
+  }
+
+  // 2) API4COM, só se o link salvo não resolveu
+  let downloads = 0;
+  for await (const url of lookupRecordingCandidatesFromApi4Com(
+    supabase,
+    call as Parameters<typeof lookupRecordingCandidatesFromApi4Com>[1],
+  )) {
+    if (tried.has(url)) continue;
+    const hit = await tryUrl(url, 'api4com');
+    if (hit) return hit;
+    if (++downloads >= REPAIR_MAX_API4COM_DOWNLOADS) break;
+  }
+
+  // Perto da tolerância: não marca mismatch e não mexe no Storage.
+  if (sawBorderline) return { outcome: 'borderline_short', audioSeconds: lastSeconds };
+
+  if (apply && call.recording_storage_path) {
+    // Garante a flag para o proxy não servir a cópia ruim.
+    await flagRecordingStatus(supabase, call.id, 'mismatch', null);
+  }
+  return { outcome: 'unrepairable', audioSeconds: lastSeconds };
 }
 
 /**
@@ -110,10 +189,14 @@ export async function repairRecordingsPage(
   const rows = data ?? [];
 
   const counts = emptyCounts();
+  const sources: RepairPageResult['sources'] = { recording_url: 0, api4com: 0 };
   const details: RepairPageResult['details'] = [];
   for (const call of rows) {
     const result = await repairCallRecording(supabase, call, apply);
     counts[result.outcome]++;
+    if (result.source && (result.outcome === 'would_repair' || result.outcome === 'repaired')) {
+      sources[result.source]++;
+    }
     details.push({ callId: call.id, ...result });
   }
 
@@ -122,6 +205,7 @@ export async function repairRecordingsPage(
     scanned: rows.length,
     nextCursor: rows.length === limit && last ? last.id : null,
     counts,
+    sources,
     details,
   };
 }
