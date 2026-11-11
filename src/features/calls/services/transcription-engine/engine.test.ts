@@ -147,6 +147,21 @@ describe('processEngineCall', () => {
     expect(writes).toHaveLength(0);
   });
 
+  it('qualificação concluída chama o pós-processamento (CRM) e falha nele não muda o resultado', async () => {
+    const { db } = fakeDb(CALL);
+    const afterQualification = vi.fn().mockRejectedValue(new Error('boom'));
+    const { deps } = makeDeps(db, { afterQualification });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(afterQualification).toHaveBeenCalledWith('call-1');
+  });
+
+  it('pós-processamento padrão com flags ausentes não grava nada fora do motor', async () => {
+    const { db, writes } = fakeDb(CALL);
+    const { deps } = makeDeps(db);
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(writes.every((w) => w.table === 'call_transcripts_v2' || w.table === 'call_qualifications')).toBe(true);
+  });
+
   it('duração < 30s: grava skipped sem chamar provedor', async () => {
     const { db, tables } = fakeDb({ ...CALL, duration_seconds: 20 });
     const { deps, transcribe } = makeDeps(db);

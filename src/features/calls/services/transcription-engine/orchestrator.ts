@@ -4,6 +4,7 @@ import { fetchPublicHttps } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { runCrmAutoUpdate } from '../crm-auto-update/shadow.service';
 import { lookupRecordingFromApi4Com } from '../recover-recording.service';
 import {
   type AssemblyAiClient,
@@ -46,6 +47,11 @@ export interface EngineDeps {
   assemblyAi: () => AssemblyAiClient | null;
   jev: () => JevClient | null;
   now: () => number;
+  /**
+   * Chamado depois que a qualificação está completed. Atualização automática do CRM
+   * (crm_auto_update_v1). Com a flag desligada não grava nada. Nunca muda o resultado do motor.
+   */
+  afterQualification?: (callId: string) => Promise<unknown>;
 }
 
 export interface CallRow {
@@ -104,7 +110,20 @@ export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
       return apiKey ? createJevClient({ apiKey }) : null;
     },
     now: () => Date.now(),
+    afterQualification: (callId) => runCrmAutoUpdate(db, callId),
   };
+}
+
+/** Falha no pós-processamento nunca afeta o motor. */
+async function runAfterQualification(deps: EngineDeps, callId: string): Promise<void> {
+  if (!deps.afterQualification) return;
+  try {
+    await deps.afterQualification(callId);
+  } catch (err) {
+    console.error(
+      `[transcription-engine] pós-qualificação falhou para a ligação ${callId}: ${err instanceof Error ? err.message : 'unknown'}`,
+    );
+  }
 }
 
 type Table = 'call_transcripts_v2' | 'call_qualifications';
@@ -345,7 +364,10 @@ export async function processEngineCall(
     transcript_id: transcript.id,
   });
   if ('blocked' in qClaim) {
-    if (qClaim.blocked === 'completed') return 'completed';
+    if (qClaim.blocked === 'completed') {
+      if (qClaim.row?.status === 'completed') await runAfterQualification(deps, call.id);
+      return 'completed';
+    }
     return qClaim.blocked === 'gave_up' ? 'gave_up' : 'in_progress';
   }
   const qId = qClaim.row.id;
@@ -390,6 +412,7 @@ export async function processEngineCall(
       cost_usd: q.costUsd,
       latency_ms: deps.now() - qStarted,
     });
+    await runAfterQualification(deps, call.id);
     return 'completed';
   } catch (err) {
     await finish(deps, 'call_qualifications', qId, {
