@@ -1,0 +1,71 @@
+/**
+ * Reparo de gravações cuja cópia no Storage não bate com `calls.duration_seconds`.
+ * Não roda no CI e não grava sem --apply (dry-run por padrão).
+ *
+ *   NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+ *     pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid>
+ *
+ *   pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid> --apply
+ *   pnpm dlx tsx scripts/repair-mismatched-recordings.ts --org <uuid> --apply \
+ *     --from-cursor <id> --limit 25 --days 90
+ *
+ * Paginação keyset por id (sem offset). O log imprime o cursor para retomar.
+ * Idempotente: ligações já validadas (metadata.recording_persist_status = 'ok') são puladas.
+ * Equivalente HTTP: /api/cron/repair-mismatched-recordings (não está no vercel.json).
+ */
+import { createClient } from '@supabase/supabase-js';
+
+import { repairRecordingsPage } from '../src/features/calls/services/recording-repair.service';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseArgs(argv: string[]) {
+  const get = (flag: string) => {
+    const i = argv.indexOf(flag);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
+  return {
+    org: get('--org'),
+    apply: argv.includes('--apply'),
+    cursor: get('--from-cursor') ?? null,
+    limit: Number(get('--limit') ?? 25) || 25,
+    days: Number(get('--days') ?? 90) || 90,
+  };
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.org || !UUID.test(args.org)) {
+    console.error('Uso: --org <uuid> [--apply] [--from-cursor <id>] [--limit N] [--days N]');
+    process.exit(1);
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error('NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios.');
+    process.exit(1);
+  }
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const sinceIso = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000).toISOString();
+
+  console.warn(args.apply ? 'MODO APPLY: vai gravar no Storage.' : 'DRY-RUN: nada será gravado (use --apply).');
+  let cursor = args.cursor;
+  do {
+    const page = await repairRecordingsPage(supabase, {
+      orgId: args.org,
+      cursor,
+      limit: args.limit,
+      apply: args.apply,
+      sinceIso,
+    });
+    console.warn(`scanned=${page.scanned} ${JSON.stringify(page.counts)} nextCursor=${page.nextCursor ?? '-'}`);
+    cursor = page.nextCursor;
+  } while (cursor);
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

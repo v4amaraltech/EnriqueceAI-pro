@@ -22,8 +22,9 @@ const MAX_AGE_DAYS = 60;
  * Backfill: download recordings that have a recording_url but were never
  * persisted to our Storage bucket (recording_storage_path IS NULL), in batches.
  * persistCallRecording re-resolves a durable URL via the API4COM API when the
- * stored listener link has already expired. Forward calls are persisted by the
- * webhook; this drains the historical backlog and self-heals any misses.
+ * stored listener link has already expired. A cópia só é gravada se a duração do
+ * áudio bater com calls.duration_seconds (ver recording-validation.ts). Forward calls are persisted by the
+ * webhook (só no hangup); this drains the historical backlog and self-heals any misses.
  */
 export async function POST(request: Request) {
   if (!verifyServiceRole(request) && !verifyCronSecret(request)) {
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
       .select('id, created_at')
       .is('recording_storage_path', null)
       .not('recording_url', 'is', null)
+      // Já recusadas por duração divergente: quem trata é o reparo (repair-mismatched-recordings).
+      .or('metadata->>recording_persist_status.is.null,metadata->>recording_persist_status.neq.mismatch')
       .gt('duration_seconds', 0)
       .gte('created_at', cutoffIso);
 

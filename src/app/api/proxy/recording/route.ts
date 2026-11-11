@@ -4,6 +4,7 @@ import { getAuthOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { CALL_RECORDINGS_BUCKET } from '@/features/calls/services/recording-storage.service';
+import { shouldServeStoredRecording } from '@/features/calls/services/recording-proxy';
 
 export const maxDuration = 60;
 
@@ -82,16 +83,23 @@ export async function GET(request: Request) {
   // Preferred path: by callId → Storage first, then live URL fallback.
   if (callId) {
     const { data: call } = (await from(supabase, 'calls')
-      .select('id, recording_storage_path, recording_url')
+      .select('id, recording_storage_path, recording_url, duration_seconds, metadata')
       .eq('org_id', orgId)
       .eq('id', callId)
       .maybeSingle()) as {
-      data: { id: string; recording_storage_path: string | null; recording_url: string | null } | null;
+      data: {
+        id: string;
+        recording_storage_path: string | null;
+        recording_url: string | null;
+        duration_seconds: number | null;
+        metadata: Record<string, unknown> | null;
+      } | null;
     };
 
     if (!call) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    if (call.recording_storage_path) {
+    // Cópia flagada como divergente (ou medida fora da tolerância) não é servida.
+    if (call.recording_storage_path && shouldServeStoredRecording(call)) {
       const stored = await streamFromStorage(supabase, call.recording_storage_path);
       if (stored) return stored;
       // Storage miss — fall through to the URL if we have one.
