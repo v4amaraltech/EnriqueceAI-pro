@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   devIndicators: false,
+  // mpg123-decoder (WASM, usado só no worker do motor de transcrição) não pode
+  // ser empacotado pelo Turbopack: o bundle puxa um import dinâmico de web-worker.
+  serverExternalPackages: ['mpg123-decoder', '@wasm-audio-decoders/common', '@eshaz/web-worker'],
   turbopack: {
     root: projectRoot,
   },

@@ -16,6 +16,7 @@ import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4co
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import type { CallStatus } from '@/features/calls/types';
 import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
+import { triggerTranscriptionEngine } from '@/features/calls/services/transcription-engine/trigger';
 import { shouldPersistRecordingOnEvent } from '@/features/calls/recording-trigger';
 import {
   classifyApi4ComCall,
@@ -243,6 +244,15 @@ async function processApi4ComEvent(
         if (shouldPersistRecordingOnEvent(body.eventType, { recordUrl: body.recordUrl })) {
           triggerPersistRecording(result.call.id);
         }
+        // Motor paralelo também neste ramo: o hangup auto-criado não passa por updateCallFromWebhook.
+        void triggerTranscriptionEngine({
+          callId: result.call.id,
+          orgId: result.orgId,
+          answered: !!body.answeredAt,
+          durationSeconds: Number(body.duration) || 0,
+          appUrl: getAppUrl(),
+          serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        });
         // createCallFromWebhook already applied the classifier — no need to
         // re-run updateCallFromWebhook (was a stale "fix up after default
         // insert" left over from the old not_connected default).
@@ -490,6 +500,16 @@ async function updateCallFromWebhook(
   if (shouldTranscribeOnHangup({ recordUrl: payload.recordUrl, durationSeconds: payload.duration, metadata: callMetadata })) {
     triggerTranscription(callId);
   }
+
+  // Motor paralelo (AssemblyAI + JEV): worker separado, só com a flag da org ligada.
+  void triggerTranscriptionEngine({
+    callId,
+    orgId,
+    answered: !!(answeredAtUtc ?? payload.answeredAt),
+    durationSeconds: Number(payload.duration) || 0,
+    appUrl: getAppUrl(),
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
 }
 
 /** Fire-and-forget: download + persist the recording to our Storage bucket so
