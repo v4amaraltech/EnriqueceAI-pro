@@ -1370,6 +1370,260 @@ export type Database = {
           },
         ];
       };
+      anti_no_show_enrollments: {
+        Row: {
+          booked_at: string;
+          calendar_event_id: string | null;
+          completed_at: string | null;
+          completed_reason: string | null;
+          confirmation_source: string | null;
+          confirmed_at: string | null;
+          context: string;
+          created_at: string;
+          enrolled_at: string;
+          id: string;
+          lead_id: string;
+          meeting_starts_at: string;
+          org_id: string;
+          phase: string;
+          recovery_opened_at: string | null;
+          sdr_user_id: string | null;
+          source: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          booked_at?: string;
+          calendar_event_id?: string | null;
+          completed_at?: string | null;
+          completed_reason?: string | null;
+          confirmation_source?: string | null;
+          confirmed_at?: string | null;
+          context: string;
+          created_at?: string;
+          enrolled_at?: string;
+          id?: string;
+          lead_id: string;
+          meeting_starts_at: string;
+          org_id: string;
+          phase: string;
+          recovery_opened_at?: string | null;
+          sdr_user_id?: string | null;
+          source: string;
+          status: string;
+          updated_at?: string;
+        };
+        Update: {
+          booked_at?: string;
+          calendar_event_id?: string | null;
+          completed_at?: string | null;
+          completed_reason?: string | null;
+          confirmation_source?: string | null;
+          confirmed_at?: string | null;
+          context?: string;
+          created_at?: string;
+          enrolled_at?: string;
+          id?: string;
+          lead_id?: string;
+          meeting_starts_at?: string;
+          org_id?: string;
+          phase?: string;
+          recovery_opened_at?: string | null;
+          sdr_user_id?: string | null;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_enrollments_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      anti_no_show_runs: {
+        Row: {
+          created_at: string;
+          detail: string | null;
+          enrollment_id: string;
+          id: string;
+          meeting_starts_at: string;
+          org_id: string;
+          scheduled_activity_id: string | null;
+          status: string;
+          step_key: string;
+        };
+        Insert: {
+          created_at?: string;
+          detail?: string | null;
+          enrollment_id: string;
+          id?: string;
+          meeting_starts_at: string;
+          org_id: string;
+          scheduled_activity_id?: string | null;
+          status: string;
+          step_key: string;
+        };
+        Update: {
+          created_at?: string;
+          detail?: string | null;
+          enrollment_id?: string;
+          id?: string;
+          meeting_starts_at?: string;
+          org_id?: string;
+          scheduled_activity_id?: string | null;
+          status?: string;
+          step_key?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'anti_no_show_runs_enrollment_id_fkey';
+            columns: ['enrollment_id'];
+            isOneToOne: false;
+            referencedRelation: 'anti_no_show_enrollments';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_runs_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      anti_no_show_steps: {
+        Row: {
+          active: boolean;
+          anchor: string;
+          business_day_offset: number | null;
+          channel: string;
+          clock_hour: number | null;
+          clock_minute: number | null;
+          context: string;
+          created_at: string;
+          id: string;
+          message_template_id: string | null;
+          min_hours_before_meeting: number | null;
+          mode: string;
+          not_before_hour_brt: number | null;
+          offset_minutes: number | null;
+          only_if_unconfirmed: boolean;
+          org_id: string;
+          phase: string;
+          quiet_hours_exempt: boolean;
+          skip_if_booked_within_hours: number | null;
+          step_key: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          anchor: string;
+          business_day_offset?: number | null;
+          channel: string;
+          clock_hour?: number | null;
+          clock_minute?: number | null;
+          context: string;
+          created_at?: string;
+          id?: string;
+          message_template_id?: string | null;
+          min_hours_before_meeting?: number | null;
+          mode: string;
+          not_before_hour_brt?: number | null;
+          offset_minutes?: number | null;
+          only_if_unconfirmed?: boolean;
+          org_id: string;
+          phase: string;
+          quiet_hours_exempt?: boolean;
+          skip_if_booked_within_hours?: number | null;
+          step_key: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          anchor?: string;
+          business_day_offset?: number | null;
+          channel?: string;
+          clock_hour?: number | null;
+          clock_minute?: number | null;
+          context?: string;
+          created_at?: string;
+          id?: string;
+          message_template_id?: string | null;
+          min_hours_before_meeting?: number | null;
+          mode?: string;
+          not_before_hour_brt?: number | null;
+          offset_minutes?: number | null;
+          only_if_unconfirmed?: boolean;
+          org_id?: string;
+          phase?: string;
+          quiet_hours_exempt?: boolean;
+          skip_if_booked_within_hours?: number | null;
+          step_key?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'anti_no_show_steps_message_template_id_fkey';
+            columns: ['message_template_id'];
+            isOneToOne: false;
+            referencedRelation: 'message_templates';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'anti_no_show_steps_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       api_keys: {
         Row: {
           created_at: string;
@@ -2338,6 +2592,175 @@ export type Database = {
           },
         ];
       };
+      call_qualifications: {
+        Row: {
+          answers: Json | null;
+          attempts: number;
+          call_id: string;
+          confidence: number | null;
+          cost_usd: number | null;
+          created_at: string;
+          error: string | null;
+          id: string;
+          interest: string | null;
+          latency_ms: number | null;
+          model: string | null;
+          needs_review: boolean;
+          needs_review_reasons: string[] | null;
+          next_step_suggestion: string | null;
+          objections: Json | null;
+          org_id: string;
+          outcome: string | null;
+          provider: string;
+          status: string;
+          summary: string | null;
+          transcript_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          answers?: Json | null;
+          attempts?: number;
+          call_id: string;
+          confidence?: number | null;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          interest?: string | null;
+          latency_ms?: number | null;
+          model?: string | null;
+          needs_review?: boolean;
+          needs_review_reasons?: string[] | null;
+          next_step_suggestion?: string | null;
+          objections?: Json | null;
+          org_id: string;
+          outcome?: string | null;
+          provider: string;
+          status: string;
+          summary?: string | null;
+          transcript_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          answers?: Json | null;
+          attempts?: number;
+          call_id?: string;
+          confidence?: number | null;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          interest?: string | null;
+          latency_ms?: number | null;
+          model?: string | null;
+          needs_review?: boolean;
+          needs_review_reasons?: string[] | null;
+          next_step_suggestion?: string | null;
+          objections?: Json | null;
+          org_id?: string;
+          outcome?: string | null;
+          provider?: string;
+          status?: string;
+          summary?: string | null;
+          transcript_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'call_qualifications_call_id_fkey';
+            columns: ['call_id'];
+            isOneToOne: false;
+            referencedRelation: 'calls';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'call_qualifications_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'call_qualifications_transcript_id_fkey';
+            columns: ['transcript_id'];
+            isOneToOne: false;
+            referencedRelation: 'call_transcripts_v2';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      call_transcripts_v2: {
+        Row: {
+          attempts: number;
+          audio_seconds: number | null;
+          call_id: string;
+          cost_usd: number | null;
+          created_at: string;
+          error: string | null;
+          id: string;
+          latency_ms: number | null;
+          model: string | null;
+          org_id: string;
+          provider: string;
+          speakers_count: number | null;
+          status: string;
+          text: string | null;
+          updated_at: string;
+          utterances: Json | null;
+        };
+        Insert: {
+          attempts?: number;
+          audio_seconds?: number | null;
+          call_id: string;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          latency_ms?: number | null;
+          model?: string | null;
+          org_id: string;
+          provider: string;
+          speakers_count?: number | null;
+          status: string;
+          text?: string | null;
+          updated_at?: string;
+          utterances?: Json | null;
+        };
+        Update: {
+          attempts?: number;
+          audio_seconds?: number | null;
+          call_id?: string;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          latency_ms?: number | null;
+          model?: string | null;
+          org_id?: string;
+          provider?: string;
+          speakers_count?: number | null;
+          status?: string;
+          text?: string | null;
+          updated_at?: string;
+          utterances?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'call_transcripts_v2_call_id_fkey';
+            columns: ['call_id'];
+            isOneToOne: false;
+            referencedRelation: 'calls';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'call_transcripts_v2_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       callface_events: {
         Row: {
           call_id: string | null;
@@ -2511,6 +2934,270 @@ export type Database = {
           },
           {
             foreignKeyName: 'calls_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      closer_booking_holds: {
+        Row: {
+          calendar_event_id: string | null;
+          closer_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          lead_id: string | null;
+          org_id: string;
+          released_at: string | null;
+          slot_end: string;
+          slot_start: string;
+          status: string;
+        };
+        Insert: {
+          calendar_event_id?: string | null;
+          closer_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          lead_id?: string | null;
+          org_id: string;
+          released_at?: string | null;
+          slot_end: string;
+          slot_start: string;
+          status?: string;
+        };
+        Update: {
+          calendar_event_id?: string | null;
+          closer_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          lead_id?: string | null;
+          org_id?: string;
+          released_at?: string | null;
+          slot_end?: string;
+          slot_start?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'closer_booking_holds_closer_id_fkey';
+            columns: ['closer_id'];
+            isOneToOne: false;
+            referencedRelation: 'closers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'closer_booking_holds_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      closer_calendar_connections: {
+        Row: {
+          access_token_encrypted: string;
+          calendar_email: string;
+          closer_id: string;
+          connected_at: string;
+          created_at: string;
+          id: string;
+          last_error_at: string | null;
+          org_id: string;
+          refresh_token_encrypted: string;
+          status: string;
+          status_detail: string | null;
+          token_expires_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          access_token_encrypted: string;
+          calendar_email: string;
+          closer_id: string;
+          connected_at?: string;
+          created_at?: string;
+          id?: string;
+          last_error_at?: string | null;
+          org_id: string;
+          refresh_token_encrypted: string;
+          status: string;
+          status_detail?: string | null;
+          token_expires_at: string;
+          updated_at?: string;
+        };
+        Update: {
+          access_token_encrypted?: string;
+          calendar_email?: string;
+          closer_id?: string;
+          connected_at?: string;
+          created_at?: string;
+          id?: string;
+          last_error_at?: string | null;
+          org_id?: string;
+          refresh_token_encrypted?: string;
+          status?: string;
+          status_detail?: string | null;
+          token_expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'closer_calendar_connections_closer_id_fkey';
+            columns: ['closer_id'];
+            isOneToOne: false;
+            referencedRelation: 'closers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_calendar_connections_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      closer_calendar_events: {
+        Row: {
+          actor_user_id: string | null;
+          closer_id: string;
+          created_at: string;
+          detail: string | null;
+          id: string;
+          kind: string;
+          org_id: string;
+        };
+        Insert: {
+          actor_user_id?: string | null;
+          closer_id: string;
+          created_at?: string;
+          detail?: string | null;
+          id?: string;
+          kind: string;
+          org_id: string;
+        };
+        Update: {
+          actor_user_id?: string | null;
+          closer_id?: string;
+          created_at?: string;
+          detail?: string | null;
+          id?: string;
+          kind?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'closer_calendar_events_closer_id_fkey';
+            columns: ['closer_id'];
+            isOneToOne: false;
+            referencedRelation: 'closers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_calendar_events_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      closer_calendar_invites: {
+        Row: {
+          closer_id: string;
+          created_at: string;
+          created_by: string | null;
+          expires_at: string;
+          id: string;
+          oauth_state_expires_at: string | null;
+          oauth_state_hash: string | null;
+          org_id: string;
+          revoked_at: string | null;
+          token_hash: string;
+          used_at: string | null;
+        };
+        Insert: {
+          closer_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at: string;
+          id?: string;
+          oauth_state_expires_at?: string | null;
+          oauth_state_hash?: string | null;
+          org_id: string;
+          revoked_at?: string | null;
+          token_hash: string;
+          used_at?: string | null;
+        };
+        Update: {
+          closer_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string;
+          id?: string;
+          oauth_state_expires_at?: string | null;
+          oauth_state_hash?: string | null;
+          org_id?: string;
+          revoked_at?: string | null;
+          token_hash?: string;
+          used_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'closer_calendar_invites_closer_id_fkey';
+            columns: ['closer_id'];
+            isOneToOne: false;
+            referencedRelation: 'closers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'closer_calendar_invites_org_id_fkey';
             columns: ['org_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
@@ -3289,6 +3976,118 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'copiloto_app_users';
             referencedColumns: ['user_id'];
+          },
+        ];
+      };
+      crm_auto_update_shadow_log: {
+        Row: {
+          call_id: string;
+          created_at: string;
+          id: string;
+          input_snapshot: Json;
+          lead_id: string | null;
+          mode: string;
+          org_id: string;
+          proposed_changes: Json | null;
+          qualification_completed_at: string | null;
+          qualification_id: string;
+          rules_version: string;
+          skip_reason: string | null;
+          verdict: string;
+        };
+        Insert: {
+          call_id: string;
+          created_at?: string;
+          id?: string;
+          input_snapshot?: Json;
+          lead_id?: string | null;
+          mode: string;
+          org_id: string;
+          proposed_changes?: Json | null;
+          qualification_completed_at?: string | null;
+          qualification_id: string;
+          rules_version: string;
+          skip_reason?: string | null;
+          verdict: string;
+        };
+        Update: {
+          call_id?: string;
+          created_at?: string;
+          id?: string;
+          input_snapshot?: Json;
+          lead_id?: string | null;
+          mode?: string;
+          org_id?: string;
+          proposed_changes?: Json | null;
+          qualification_completed_at?: string | null;
+          qualification_id?: string;
+          rules_version?: string;
+          skip_reason?: string | null;
+          verdict?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_call_id_fkey';
+            columns: ['call_id'];
+            isOneToOne: true;
+            referencedRelation: 'calls';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_qualification_id_fkey';
+            columns: ['qualification_id'];
+            isOneToOne: false;
+            referencedRelation: 'call_qualifications';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -4804,6 +5603,236 @@ export type Database = {
           },
         ];
       };
+      lead_message_status_events: {
+        Row: {
+          created_at: string;
+          id: string;
+          message_id: string;
+          occurred_at: string;
+          org_id: string;
+          raw: Json | null;
+          status: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          message_id: string;
+          occurred_at: string;
+          org_id: string;
+          raw?: Json | null;
+          status: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          message_id?: string;
+          occurred_at?: string;
+          org_id?: string;
+          raw?: Json | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_message_status_events_message_id_fkey';
+            columns: ['message_id'];
+            isOneToOne: false;
+            referencedRelation: 'lead_messages';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_message_status_events_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      lead_message_unmatched: {
+        Row: {
+          body_text: string | null;
+          channel: string;
+          connection_id: string | null;
+          created_at: string;
+          id: string;
+          media: Json | null;
+          occurred_at: string;
+          org_id: string;
+          our_address: string | null;
+          provider: string;
+          provider_message_id: string;
+          reason: string;
+          their_address: string | null;
+        };
+        Insert: {
+          body_text?: string | null;
+          channel: string;
+          connection_id?: string | null;
+          created_at?: string;
+          id?: string;
+          media?: Json | null;
+          occurred_at: string;
+          org_id: string;
+          our_address?: string | null;
+          provider: string;
+          provider_message_id: string;
+          reason: string;
+          their_address?: string | null;
+        };
+        Update: {
+          body_text?: string | null;
+          channel?: string;
+          connection_id?: string | null;
+          created_at?: string;
+          id?: string;
+          media?: Json | null;
+          occurred_at?: string;
+          org_id?: string;
+          our_address?: string | null;
+          provider?: string;
+          provider_message_id?: string;
+          reason?: string;
+          their_address?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_message_unmatched_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      lead_messages: {
+        Row: {
+          ai_generated: boolean;
+          body_html: string | null;
+          body_text: string | null;
+          channel: string;
+          connection_id: string | null;
+          created_at: string;
+          direction: string;
+          id: string;
+          lead_address: string | null;
+          lead_contact_id: string | null;
+          lead_id: string;
+          media: Json | null;
+          occurred_at: string;
+          org_id: string;
+          our_address: string | null;
+          provider: string;
+          provider_message_id: string;
+          rfc_message_id: string | null;
+          sent_by: string | null;
+          subject: string | null;
+          thread_id: string | null;
+        };
+        Insert: {
+          ai_generated?: boolean;
+          body_html?: string | null;
+          body_text?: string | null;
+          channel: string;
+          connection_id?: string | null;
+          created_at?: string;
+          direction: string;
+          id?: string;
+          lead_address?: string | null;
+          lead_contact_id?: string | null;
+          lead_id: string;
+          media?: Json | null;
+          occurred_at: string;
+          org_id: string;
+          our_address?: string | null;
+          provider: string;
+          provider_message_id: string;
+          rfc_message_id?: string | null;
+          sent_by?: string | null;
+          subject?: string | null;
+          thread_id?: string | null;
+        };
+        Update: {
+          ai_generated?: boolean;
+          body_html?: string | null;
+          body_text?: string | null;
+          channel?: string;
+          connection_id?: string | null;
+          created_at?: string;
+          direction?: string;
+          id?: string;
+          lead_address?: string | null;
+          lead_contact_id?: string | null;
+          lead_id?: string;
+          media?: Json | null;
+          occurred_at?: string;
+          org_id?: string;
+          our_address?: string | null;
+          provider?: string;
+          provider_message_id?: string;
+          rfc_message_id?: string | null;
+          sent_by?: string | null;
+          subject?: string | null;
+          thread_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_messages_lead_contact_id_fkey';
+            columns: ['lead_contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'lead_contacts';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'lead_messages_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       leadbroker_sdr_rotation: {
         Row: {
           next_sdr: string;
@@ -5072,6 +6101,7 @@ export type Database = {
           resposta_at: string | null;
           segmento: string | null;
           tel: string | null;
+          variante: string | null;
           wamid: string | null;
         };
         Insert: {
@@ -5098,6 +6128,7 @@ export type Database = {
           resposta_at?: string | null;
           segmento?: string | null;
           tel?: string | null;
+          variante?: string | null;
           wamid?: string | null;
         };
         Update: {
@@ -5124,6 +6155,7 @@ export type Database = {
           resposta_at?: string | null;
           segmento?: string | null;
           tel?: string | null;
+          variante?: string | null;
           wamid?: string | null;
         };
         Relationships: [];
@@ -6977,6 +8009,75 @@ export type Database = {
           },
         ];
       };
+      whatsapp_number_health_recoveries: {
+        Row: {
+          actor_user_id: string;
+          blocked_at: string;
+          created_at: string;
+          id: string;
+          idempotency_token: string;
+          instance_id: string;
+          new_contacts_cap: number;
+          new_state: string;
+          note: string;
+          org_id: string;
+          pause_reason: string | null;
+          previous_state: string;
+          ramp_stage: number;
+          recovered_at: string;
+          total_cap: number;
+        };
+        Insert: {
+          actor_user_id: string;
+          blocked_at: string;
+          created_at?: string;
+          id?: string;
+          idempotency_token: string;
+          instance_id: string;
+          new_contacts_cap: number;
+          new_state: string;
+          note: string;
+          org_id: string;
+          pause_reason?: string | null;
+          previous_state: string;
+          ramp_stage: number;
+          recovered_at: string;
+          total_cap: number;
+        };
+        Update: {
+          actor_user_id?: string;
+          blocked_at?: string;
+          created_at?: string;
+          id?: string;
+          idempotency_token?: string;
+          instance_id?: string;
+          new_contacts_cap?: number;
+          new_state?: string;
+          note?: string;
+          org_id?: string;
+          pause_reason?: string | null;
+          previous_state?: string;
+          ramp_stage?: number;
+          recovered_at?: string;
+          total_cap?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_number_health_recoveries_instance_id_fkey';
+            columns: ['instance_id'];
+            isOneToOne: false;
+            referencedRelation: 'whatsapp_instances';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'whatsapp_number_health_recoveries_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       whatsapp_number_health_windows: {
         Row: {
           created_at: string;
@@ -7222,6 +8323,159 @@ export type Database = {
       };
     };
     Views: {
+      call_transcription_engine_daily: {
+        Row: {
+          attempted: number | null;
+          completed: number | null;
+          day: string | null;
+          duration_mismatches: number | null;
+          empty_transcripts: number | null;
+          failed: number | null;
+          failure_rate: number | null;
+          latency_ms_p50: number | null;
+          latency_ms_p95: number | null;
+          needs_review: number | null;
+          org_id: string | null;
+          qualification_cost_usd: number | null;
+          skipped: number | null;
+          transcript_cost_usd: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'call_transcripts_v2_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      crm_auto_update_shadow_agreement_daily: {
+        Row: {
+          agreed: number | null;
+          agreement_rate: number | null;
+          compared: number | null;
+          day: string | null;
+          diverged: number | null;
+          group_agreement_rate: number | null;
+          logged: number | null;
+          next_activity_agreement_rate: number | null;
+          org_id: string | null;
+          pending_sdr: number | null;
+          skipped: number | null;
+          skipped_already_dispositioned: number | null;
+          skipped_low_confidence: number | null;
+          skipped_needs_review: number | null;
+          skipped_no_lead: number | null;
+          skipped_unmapped_outcome: number | null;
+          would_apply: number | null;
+          would_apply_agreement_rate: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      crm_auto_update_shadow_comparison: {
+        Row: {
+          ai_confidence: number | null;
+          ai_outcome: string | null;
+          call_id: string | null;
+          call_started_at: string | null;
+          decided_at: string | null;
+          disposition_comparison: string | null;
+          group_comparison: string | null;
+          lead_id: string | null;
+          lead_status_now: string | null;
+          legacy_ai_applied: boolean | null;
+          log_id: string | null;
+          mode: string | null;
+          next_activity_comparison: string | null;
+          org_id: string | null;
+          proposed_disposition: string | null;
+          proposed_group: string | null;
+          proposed_lead_status: string | null;
+          proposed_next_activity: string | null;
+          qualification_id: string | null;
+          rules_version: string | null;
+          sdr_disposition: string | null;
+          sdr_disposition_at_decision: string | null;
+          sdr_group: string | null;
+          sdr_scheduled_callback: boolean | null;
+          skip_reason: string | null;
+          verdict: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_call_id_fkey';
+            columns: ['call_id'];
+            isOneToOne: true;
+            referencedRelation: 'calls';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads_no_active_enrollment';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_leads_cadence_limbo';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_meeting_webhook_candidates';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_reminders_due';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'vw_callface_reciclagem';
+            referencedColumns: ['lead_id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'crm_auto_update_shadow_log_qualification_id_fkey';
+            columns: ['qualification_id'];
+            isOneToOne: false;
+            referencedRelation: 'call_qualifications';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       leads_no_active_enrollment: {
         Row: {
           archived_at: string | null;
@@ -7953,6 +9207,18 @@ export type Database = {
         };
         Returns: string;
       };
+      authorize_number_recovery_with_audit: {
+        Args: {
+          p_actor_user_id: string;
+          p_expected_blocked_at: string;
+          p_idempotency_token: string;
+          p_instance_id: string;
+          p_note: string;
+          p_org_id: string;
+          p_recovered_at: string;
+        };
+        Returns: Json;
+      };
       bdr_step_execution_id: {
         Args: { p_attempt: number; p_enrollment_id: string; p_step_id: string };
         Returns: string;
@@ -8452,6 +9718,10 @@ export type Database = {
         Args: { p_month: number; p_year: number };
         Returns: Json;
       };
+      get_sdr_leads_abertos_v2: {
+        Args: { p_api_token: string; p_month: number; p_year: number };
+        Returns: Json;
+      };
       get_sdr_leads_para_abrir: {
         Args: never;
         Returns: {
@@ -8531,6 +9801,13 @@ export type Database = {
       marcar_resposta_no_show: {
         Args: { p_resposta: string; p_telefone?: string; p_wamid: string };
         Returns: Json;
+      };
+      match_lead_contacts_by_phone: {
+        Args: { p_org_id: string; p_variants: string[] };
+        Returns: {
+          lead_contact_id: string;
+          lead_id: string;
+        }[];
       };
       merge_interactions_metadata: { Args: { p_items: Json }; Returns: number };
       normalizar_celular_br: { Args: { p_tel: string }; Returns: string };
@@ -8703,6 +9980,7 @@ export type Database = {
         };
         Returns: boolean;
       };
+      seed_anti_no_show_steps: { Args: { p_org: string }; Returns: undefined };
       send_outbox_suppression_reason: {
         Args: {
           p_channel: string;
@@ -8723,18 +10001,25 @@ export type Database = {
         Args: { p_lead_id: string };
         Returns: undefined;
       };
+      tallis_empresa_msg: { Args: { p: string }; Returns: string };
       tallis_proximos: {
         Args: { p_qtd?: number };
         Returns: {
           e164: string;
           empresa: string;
+          empresa_msg: string;
           id: string;
           nome: string;
           ordem: number;
         }[];
       };
       tallis_registrar_envio: {
-        Args: { p_erro?: string; p_id: string; p_wamid: string };
+        Args: {
+          p_erro?: string;
+          p_id: string;
+          p_variante?: string;
+          p_wamid: string;
+        };
         Returns: boolean;
       };
       tallis_resposta: {
