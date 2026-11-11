@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 
+import { DURATION_MISMATCH_PREFIX } from './constants';
+
 export interface TranscriptMetricRow {
   org_id: string;
   created_at: string;
@@ -80,7 +82,7 @@ export function aggregateDaily(
         emptyTranscripts: t.filter(
           (r) => r.status === 'completed' && r.text_length === 0 && (r.audio_seconds ?? 0) >= 30,
         ).length,
-        durationMismatches: t.filter((r) => r.error?.startsWith('duration_mismatch')).length,
+        durationMismatches: t.filter((r) => r.error?.startsWith(DURATION_MISMATCH_PREFIX)).length,
         latencyP50: percentile(lat, 0.5),
         latencyP95: percentile(lat, 0.95),
         transcriptCostUsd: t.reduce((s, r) => s + (r.cost_usd ?? 0), 0),

@@ -1,4 +1,6 @@
 import {
+  DURATION_LONGER_SLACK_MIN_SECONDS,
+  DURATION_LONGER_SLACK_RATIO,
   DURATION_TOLERANCE_MIN_SECONDS,
   DURATION_TOLERANCE_RATIO,
 } from './constants';
@@ -17,7 +19,11 @@ interface Pcm {
 }
 
 function isWav(buf: Buffer): boolean {
-  return buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WAVE';
+  return (
+    buf.length > 12 &&
+    buf.toString('ascii', 0, 4) === 'RIFF' &&
+    buf.toString('ascii', 8, 12) === 'WAVE'
+  );
 }
 
 /** Decodifica WAV PCM 16 bits (o que a telefonia entrega quando não é mp3). */
@@ -37,7 +43,8 @@ function decodeWav(buf: Buffer): Pcm {
       sampleRate = buf.readUInt32LE(body + 4);
       bits = buf.readUInt16LE(body + 14);
     } else if (id === 'data') {
-      if (format !== 1 || bits !== 16 || channelsCount < 1) throw new Error('wav_unsupported_format');
+      if (format !== 1 || bits !== 16 || channelsCount < 1)
+        throw new Error('wav_unsupported_format');
       const end = Math.min(body + size, buf.length);
       const frames = Math.floor((end - body) / (2 * channelsCount));
       const channels = Array.from({ length: channelsCount }, () => new Float32Array(frames));
@@ -118,8 +125,37 @@ export async function prepareMonoAudio(input: Buffer): Promise<MonoAudio> {
   };
 }
 
-/** O áudio baixado cobre a ligação? Tolerância: o maior entre 15% e 5 s. */
+export interface AudioDurationAssessment {
+  accepted: boolean;
+  /** Aceito, mas o áudio é maior que o registrado: transcrever com aviso. */
+  warning: boolean;
+}
+
+/**
+ * O áudio baixado cobre a ligação? Match justo: diferença até o maior entre 10 s e 25%.
+ * Áudio maior que o banco ainda é aceito com aviso, dentro do teto
+ * max(30 s, 50%). Áudio menor ou muito diferente é recusado.
+ */
+export function assessAudioDuration(
+  callSeconds: number,
+  audioSeconds: number,
+): AudioDurationAssessment {
+  const tolerance = Math.max(
+    DURATION_TOLERANCE_MIN_SECONDS,
+    callSeconds * DURATION_TOLERANCE_RATIO,
+  );
+  const diff = audioSeconds - callSeconds;
+  if (Math.abs(diff) <= tolerance) return { accepted: true, warning: false };
+  const slack = Math.max(
+    DURATION_LONGER_SLACK_MIN_SECONDS,
+    callSeconds * DURATION_LONGER_SLACK_RATIO,
+  );
+  if (diff > 0 && diff <= slack) return { accepted: true, warning: true };
+  return { accepted: false, warning: false };
+}
+
+/** Match justo (sem aviso). */
 export function durationMatches(callSeconds: number, audioSeconds: number): boolean {
-  const tolerance = Math.max(DURATION_TOLERANCE_MIN_SECONDS, callSeconds * DURATION_TOLERANCE_RATIO);
-  return Math.abs(callSeconds - audioSeconds) <= tolerance;
+  const a = assessAudioDuration(callSeconds, audioSeconds);
+  return a.accepted && !a.warning;
 }

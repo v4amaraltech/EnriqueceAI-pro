@@ -5,16 +5,22 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { lookupRecordingFromApi4Com } from '../recover-recording.service';
-import { computeAssemblyAiCostUsd, createAssemblyAiClient, type AssemblyAiClient } from './assemblyai.client';
-import { durationMatches, prepareMonoAudio, type MonoAudio } from './audio';
 import {
+  type AssemblyAiClient,
+  computeAssemblyAiCostUsd,
+  createAssemblyAiClient,
+} from './assemblyai.client';
+import { type MonoAudio, assessAudioDuration, prepareMonoAudio } from './audio';
+import {
+  DURATION_MISMATCH_PREFIX,
+  DURATION_WARNING_PREFIX,
   ENGINE_MIN_DURATION_SECONDS,
   ENGINE_PROVIDER_QUALIFICATION,
   ENGINE_PROVIDER_TRANSCRIPT,
   MAX_ATTEMPTS,
 } from './constants';
 import { isTranscriptionEngineEnabled } from './flag';
-import { createJevClient, resolveJevApiKey, type JevClient } from './jev.client';
+import { type JevClient, createJevClient, resolveJevApiKey } from './jev.client';
 
 /** `processing` parado há mais que isso é execução que morreu. */
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
@@ -83,7 +89,8 @@ export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
     db,
     isEnabled: isTranscriptionEngineEnabled,
     downloadAudio: defaultDownload,
-    lookupRecording: (call) => lookupRecordingFromApi4Com(db, { ...call, duration_seconds: call.duration_seconds ?? 0 }),
+    lookupRecording: (call) =>
+      lookupRecordingFromApi4Com(db, { ...call, duration_seconds: call.duration_seconds ?? 0 }),
     prepareAudio: prepareMonoAudio,
     assemblyAi: () => {
       const apiKey = process.env.ASSEMBLYAI_API_KEY;
@@ -98,7 +105,9 @@ export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
 }
 
 type Table = 'call_transcripts_v2' | 'call_qualifications';
-type Claim = { row: EngineRow } | { blocked: 'in_progress' | 'gave_up' | 'completed'; row?: EngineRow };
+type Claim =
+  | { row: EngineRow }
+  | { blocked: 'in_progress' | 'gave_up' | 'completed'; row?: EngineRow };
 
 /**
  * Reserva a linha (call_id, provider). Uma linha por par: status transita
@@ -121,8 +130,18 @@ async function claim(
 
   if (!existing) {
     const res = (await from(deps.db, table)
-      .insert({ call_id: call.id, org_id: call.org_id, provider, status: 'processing', attempts: 1, ...extra })
-      .select('id, status, attempts, updated_at')) as { data: EngineRow[] | null; error?: { code?: string } | null };
+      .insert({
+        call_id: call.id,
+        org_id: call.org_id,
+        provider,
+        status: 'processing',
+        attempts: 1,
+        ...extra,
+      })
+      .select('id, status, attempts, updated_at')) as {
+      data: EngineRow[] | null;
+      error?: { code?: string } | null;
+    };
     if (res.error || !res.data?.[0]) return { blocked: 'in_progress' };
     return { row: res.data[0] };
   }
@@ -175,9 +194,11 @@ async function fetchAndPrepare(
   deps: EngineDeps,
   call: CallRow,
   expectedSeconds: number,
-): Promise<{ audio: MonoAudio } | { error: string; terminal: boolean }> {
+): Promise<{ audio: MonoAudio; warning?: string } | { error: string; terminal: boolean }> {
   const tried = new Set<string>();
   let mismatch: string | null = null;
+  // Áudio maior que o banco, aceitável: só vale se nenhum candidato der match justo.
+  let fallback: { audio: MonoAudio; warning: string } | null = null;
   const candidates: Array<() => Promise<string | null>> = [
     async () => call.recording_url,
     () => deps.lookupRecording(call),
@@ -192,11 +213,21 @@ async function fetchAndPrepare(
     try {
       audio = await deps.prepareAudio(buf);
     } catch (err) {
-      return { error: `audio_decode_failed: ${err instanceof Error ? err.message : 'unknown'}`, terminal: false };
+      return {
+        error: `audio_decode_failed: ${err instanceof Error ? err.message : 'unknown'}`,
+        terminal: false,
+      };
     }
-    if (durationMatches(expectedSeconds, audio.durationSeconds)) return { audio };
-    mismatch = `duration_mismatch: call=${expectedSeconds}s audio=${audio.durationSeconds.toFixed(1)}s`;
+    const verdict = assessAudioDuration(expectedSeconds, audio.durationSeconds);
+    const detail = `call=${expectedSeconds}s audio=${audio.durationSeconds.toFixed(1)}s`;
+    if (verdict.accepted && !verdict.warning) return { audio };
+    if (verdict.accepted) {
+      fallback ??= { audio, warning: `${DURATION_WARNING_PREFIX}: ${detail}` };
+    } else {
+      mismatch = `${DURATION_MISMATCH_PREFIX}: ${detail}`;
+    }
   }
+  if (fallback) return fallback;
   if (mismatch) return { error: mismatch, terminal: true };
   return { error: 'no_recording', terminal: false };
 }
@@ -206,10 +237,19 @@ async function fetchAndPrepare(
  * reexecutável: cada etapa só roda se a linha ainda não estiver completed.
  * Escreve apenas em call_transcripts_v2 e call_qualifications; calls é só leitura.
  */
-export async function processEngineCall(callId: string, overrides: Partial<EngineDeps> = {}): Promise<EngineOutcome> {
-  const deps: EngineDeps = { ...defaultEngineDeps(overrides.db ?? createServiceRoleClient()), ...overrides };
+export async function processEngineCall(
+  callId: string,
+  overrides: Partial<EngineDeps> = {},
+): Promise<EngineOutcome> {
+  const deps: EngineDeps = {
+    ...defaultEngineDeps(overrides.db ?? createServiceRoleClient()),
+    ...overrides,
+  };
 
-  const { data: call } = (await from(deps.db, 'calls').select(CALL_COLUMNS).eq('id', callId).single()) as {
+  const { data: call } = (await from(deps.db, 'calls')
+    .select(CALL_COLUMNS)
+    .eq('id', callId)
+    .single()) as {
     data: CallRow | null;
   };
   if (!call) return 'call_not_found';
@@ -239,7 +279,10 @@ export async function processEngineCall(callId: string, overrides: Partial<Engin
     }
     const assembly = deps.assemblyAi();
     if (!assembly) {
-      await finish(deps, 'call_transcripts_v2', rowId, { status: 'failed', error: 'assemblyai_not_configured' });
+      await finish(deps, 'call_transcripts_v2', rowId, {
+        status: 'failed',
+        error: 'assemblyai_not_configured',
+      });
       return 'transcript_failed';
     }
     try {
@@ -248,7 +291,8 @@ export async function processEngineCall(callId: string, overrides: Partial<Engin
       const billedSeconds = result.audioSeconds || prepared.audio.durationSeconds;
       await finish(deps, 'call_transcripts_v2', rowId, {
         status: 'completed',
-        error: null,
+        // Aviso de duração (áudio maior que o banco) fica no error; sucesso sem aviso zera.
+        error: prepared.warning ?? null,
         model: result.model,
         text: result.text,
         utterances: result.utterances,
@@ -269,7 +313,11 @@ export async function processEngineCall(callId: string, overrides: Partial<Engin
   } else if (tClaim.blocked === 'completed' && tClaim.row) {
     const r = tClaim.row;
     if (r.status === 'skipped') return 'skipped';
-    transcript = { id: r.id, text: r.text ?? '', utterances: Array.isArray(r.utterances) ? r.utterances : [] };
+    transcript = {
+      id: r.id,
+      text: r.text ?? '',
+      utterances: Array.isArray(r.utterances) ? r.utterances : [],
+    };
   } else {
     return tClaim.blocked === 'gave_up' ? 'gave_up' : 'in_progress';
   }
@@ -285,12 +333,18 @@ export async function processEngineCall(callId: string, overrides: Partial<Engin
   }
   const qId = qClaim.row.id;
   if (transcript.text.trim().length === 0) {
-    await finish(deps, 'call_qualifications', qId, { status: 'skipped', error: 'empty_transcript' });
+    await finish(deps, 'call_qualifications', qId, {
+      status: 'skipped',
+      error: 'empty_transcript',
+    });
     return 'completed';
   }
   const jev = deps.jev();
   if (!jev) {
-    await finish(deps, 'call_qualifications', qId, { status: 'failed', error: 'jev_not_configured' });
+    await finish(deps, 'call_qualifications', qId, {
+      status: 'failed',
+      error: 'jev_not_configured',
+    });
     return 'qualification_failed';
   }
   const qStarted = deps.now();
@@ -328,7 +382,11 @@ export async function processEngineCall(callId: string, overrides: Partial<Engin
 }
 
 /** Ids de ligações com trabalho pendente: transcrição/qualificação pending, failed ou processing parado. */
-export async function findDrainCandidates(db: SupabaseClient, limit: number, nowMs = Date.now()): Promise<string[]> {
+export async function findDrainCandidates(
+  db: SupabaseClient,
+  limit: number,
+  nowMs = Date.now(),
+): Promise<string[]> {
   const staleBefore = new Date(nowMs - STALE_PROCESSING_MS).toISOString();
   const ids = new Set<string>();
   for (const table of ['call_transcripts_v2', 'call_qualifications'] as const) {
@@ -354,7 +412,9 @@ export async function findDrainCandidates(db: SupabaseClient, limit: number, now
     .limit(limit * 3)) as { data: Array<{ call_id: string }> | null };
   const doneIds = (done.data ?? []).map((r) => r.call_id);
   if (doneIds.length) {
-    const quals = (await from(db, 'call_qualifications').select('call_id').in('call_id', doneIds)) as {
+    const quals = (await from(db, 'call_qualifications')
+      .select('call_id')
+      .in('call_id', doneIds)) as {
       data: Array<{ call_id: string }> | null;
     };
     const have = new Set((quals.data ?? []).map((r) => r.call_id));
