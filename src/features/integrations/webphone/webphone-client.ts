@@ -6,6 +6,7 @@
 // a API4COM manda o INVITE para o ramal com `X-Api4comintegratedcall: true`
 // e a página atende sozinha. Sem extensão do Chrome.
 
+import { shouldTapRemoteAudio, watchRemoteTrack } from './remote-audio-log';
 import { summarizeRtcStats } from './webphone-audio-stats';
 import { toggleSessionAudio } from './webphone-audio-mute';
 import { claimWebphoneDial } from './webphone-dial-correlation';
@@ -23,6 +24,8 @@ export interface WebphoneSipConfig {
   sipDomain: string;
   ramal: string;
   sipPassword: string;
+  /** Piloto: observa a faixa remota e só registra a chegada no console. */
+  liveListen?: boolean;
 }
 
 import type { RTCSession } from 'jssip/lib/RTCSession';
@@ -50,6 +53,19 @@ let callSeq = 0;
 // Geração do start: um stop (ou um novo start) invalida um start ainda em
 // andamento — o StrictMode do React monta/desmonta duas vezes em dev.
 let startGeneration = 0;
+let liveListenEnabled = false;
+let stopRemoteTap: (() => void) | null = null;
+
+function stopRemoteTapNow(): void {
+  const stop = stopRemoteTap;
+  stopRemoteTap = null;
+  if (!stop) return;
+  try {
+    stop();
+  } catch {
+    /* ignore */
+  }
+}
 
 function dispatch(event: WebphoneEvent): void {
   const next = reduceWebphone(state, event);
@@ -165,6 +181,9 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
     peerconnection.addEventListener('track', (ev: RTCTrackEvent) => {
       const stream = ev.streams[0] ?? new MediaStream([ev.track]);
       attachRemoteStream(stream);
+      if (!shouldTapRemoteAudio(liveListenEnabled, ev.track.kind)) return;
+      stopRemoteTapNow();
+      stopRemoteTap = watchRemoteTrack(ev.track, id);
     });
   });
   session.on('accepted', () => dispatch({ type: 'call_accepted', id, at: Date.now() }));
@@ -176,6 +195,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   session.on('unmuted', () => dispatch({ type: 'call_muted', id, muted: false }));
   const onEnd = (e: { cause?: string }) => {
     stopStatsSampling();
+    stopRemoteTapNow();
     dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null });
     clearEndedCallLater(id);
   };
@@ -193,6 +213,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
 export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
   if (typeof window === 'undefined') return;
   stopWebphone();
+  liveListenEnabled = config.liveListen === true;
   const generation = ++startGeneration;
 
   const JsSIP = await import('jssip');
@@ -230,6 +251,8 @@ export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
 
 export function stopWebphone(): void {
   startGeneration++;
+  liveListenEnabled = false;
+  stopRemoteTapNow();
   stopStatsSampling();
   activePeerConnection = null;
   if (activeSession) {

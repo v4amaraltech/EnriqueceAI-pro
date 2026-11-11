@@ -5,10 +5,11 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { decrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { isWebphoneLiveAmdEnabled } from '@/features/integrations/webphone/live-amd-flag';
 
 export type WebphoneSipConfig =
   | { enabled: false; reason: 'no_connection' | 'not_enabled' | 'missing_sip' }
-  | { enabled: true; sipDomain: string; ramal: string; sipPassword: string };
+  | { enabled: true; sipDomain: string; ramal: string; sipPassword: string; liveListen: boolean };
 
 /**
  * Credenciais SIP do PRÓPRIO usuário para o webphone no navegador. Só o
@@ -51,6 +52,7 @@ export async function getWebphoneSipConfig(): Promise<ActionResult<WebphoneSipCo
     return { success: true, data: { enabled: false, reason: 'missing_sip' } };
   }
 
+  const liveListen = await isWebphoneLiveAmdEnabled({ orgId, userId });
   return {
     success: true,
     data: {
@@ -58,6 +60,7 @@ export async function getWebphoneSipConfig(): Promise<ActionResult<WebphoneSipCo
       sipDomain: data.sip_domain.trim().toLowerCase(),
       ramal: data.ramal,
       sipPassword: decrypt(data.sip_password_encrypted),
+      liveListen,
     },
   };
 }
