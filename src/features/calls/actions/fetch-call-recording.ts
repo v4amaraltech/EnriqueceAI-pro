@@ -8,7 +8,10 @@ import { from } from '@/lib/supabase/from';
 import { getAppUrl } from '@/lib/utils/app-url';
 
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
-import { lookupRecordingFromApi4Com } from '../services/recover-recording.service';
+import {
+  INTERACTIVE_LOOKUP_WAIT_MS,
+  lookupRecordingFromApi4Com,
+} from '../services/recover-recording.service';
 
 const callIdSchema = z.string().uuid('ID inválido');
 
@@ -29,7 +32,9 @@ export async function fetchCallRecording(
 
   // 1. Get the call
   const { data: call } = (await from(supabase, 'calls')
-    .select('id, org_id, recording_url, metadata, destination, started_at, created_at, user_id, origin, duration_seconds')
+    .select(
+      'id, org_id, recording_url, metadata, destination, started_at, created_at, user_id, origin, duration_seconds',
+    )
     .eq('id', callId)
     .single()) as {
     data: {
@@ -54,7 +59,10 @@ export async function fetchCallRecording(
   }
 
   // 2. Resolve a durable URL from the API4COM API
-  const recordingUrl = await lookupRecordingFromApi4Com(supabase, call);
+  // O SDR está esperando: com o limite de taxa cheio, desiste em vez de travar.
+  const recordingUrl = await lookupRecordingFromApi4Com(supabase, call, {
+    waitBudgetMs: INTERACTIVE_LOOKUP_WAIT_MS,
+  });
 
   // 3. Update local call if we found a recording
   if (recordingUrl) {
@@ -74,7 +82,9 @@ export async function fetchCallRecording(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ callId }),
-        }).catch((err) => console.error('[fetch-call-recording] Failed to trigger transcription:', err));
+        }).catch((err) =>
+          console.error('[fetch-call-recording] Failed to trigger transcription:', err),
+        );
       }
     }
 

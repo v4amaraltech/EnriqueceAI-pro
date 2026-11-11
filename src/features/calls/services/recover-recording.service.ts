@@ -1,10 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { getApi4ComCallsLimiter } from '@/features/integrations/services/api4com-rate-limit';
+import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 import type { createServiceRoleClient } from '@/lib/supabase/service';
 
-import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
-import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
-import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
+import {
+  type RecordingSearchEvent,
+  defaultSleep,
+  searchRecordingCandidates,
+} from './api4com-recording-search';
 
 interface CallForRecovery {
   id: string;
@@ -15,7 +19,52 @@ interface CallForRecovery {
   duration_seconds: number;
   user_id: string;
   org_id: string;
-  metadata: Record<string, string> | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/** Teto de espera por requisição em caminhos interativos (o usuário está aguardando). */
+export const INTERACTIVE_LOOKUP_WAIT_MS = 8_000;
+
+export interface LookupOptions {
+  /**
+   * Espera máxima (limitador de 15/min + backoff) por requisição à API4COM.
+   * Caminhos interativos (proxy, botão do SDR) passam um teto curto; script e
+   * crons esperam o necessário.
+   */
+  waitBudgetMs?: number;
+}
+
+/**
+ * Candidatos de `record_url` na API4COM, em ordem: primeiro por id do provedor
+ * (`api4com_call_id` e `alt_api4com_ids`), depois por janela de data em torno do
+ * início da ligação. Somente leitura (GET), limitado a 15 GET /calls por minuto por
+ * token (compartilhado no processo) e com backoff em 429/503.
+ * Também avisa quando a janela é ambígua (`kind: 'ambiguous_window'`) e quando a
+ * API falhou e a busca ficou incompleta (`kind: 'lookup_failed'`).
+ * O chamador decide quando parar (ex.: o reparo baixa e mede cada um).
+ */
+export async function* lookupRecordingCandidatesFromApi4Com(
+  supabase: SupabaseClient,
+  call: CallForRecovery,
+  opts: LookupOptions = {},
+): AsyncGenerator<RecordingSearchEvent> {
+  // Credential of the account: org token, else any legacy user token of the org.
+  const creds = await getOrgApiCredentials(
+    call.org_id,
+    supabase as ReturnType<typeof createServiceRoleClient>,
+  );
+  if (!creds) return;
+  yield* searchRecordingCandidates(
+    {
+      fetchFn: fetch,
+      sleep: defaultSleep,
+      apiKey: creds.apiKey,
+      baseUrl: creds.baseUrl,
+      limiter: getApi4ComCallsLimiter(creds.apiKey),
+      waitBudgetMs: opts.waitBudgetMs,
+    },
+    call,
+  );
 }
 
 /**
@@ -23,66 +72,16 @@ interface CallForRecovery {
  * Used by the cron that catches calls whose channel-hangup webhook arrived before
  * the recording was ready (~86% of API4COM hangups in this org).
  *
- * Returns the recording URL if found, or null if not found / API4COM unreachable.
+ * Returns the first candidate URL, or null if not found / API4COM unreachable.
  * Does NOT update the DB — caller is responsible.
  */
 export async function lookupRecordingFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
+  opts: LookupOptions = {},
 ): Promise<string | null> {
-  // Credential of the account: org token, else any legacy user token of the org.
-  const creds = await getOrgApiCredentials(call.org_id, supabase as ReturnType<typeof createServiceRoleClient>);
-  if (!creds) return null;
-
-  const { apiKey, baseUrl } = creds;
-
-  const api4comCallId = call.metadata?.api4com_call_id;
-  const destKey = call.destination.replace(/\D/g, '').slice(-8);
-  const originKey = (call.origin ?? '').replace(/\D/g, '').slice(-4);
-  const localTime = new Date(call.started_at ?? call.created_at).getTime();
-
-  // Search recent pages from API4COM (most recent first); cap at 10 pages to stay bounded.
-  for (let page = 1; page <= 10; page++) {
-    const response = await fetch(`${baseUrl}/calls?page=${page}`, {
-      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
-    });
-
-    if (!response.ok) break;
-
-    const data = (await response.json()) as Api4ComCallListResponse;
-    const records = data.data ?? [];
-
-    for (const record of records) {
-      // 1. Direct ID match takes priority
-      if (api4comCallId && record.id === api4comCallId && record.record_url) {
-        return record.record_url;
-      }
-
-      // 2. Phone + timestamp + duration match (same heuristics used by the user-facing fetchCallRecording)
-      if (record.record_url) {
-        const rawTo = (record.to ?? '').replace(/\D/g, '');
-        const rawFrom = (record.from ?? '').replace(/\D/g, '');
-        const phoneKey = rawTo.slice(-8);
-        const fromKey = rawFrom.slice(-8);
-        const phoneMatch = phoneKey === destKey || (originKey.length >= 3 && fromKey.endsWith(originKey));
-
-        if (phoneMatch) {
-          const remoteDate = parseApi4ComTimestamp(record.started_at);
-          const remoteTime = remoteDate ? remoteDate.getTime() : NaN;
-          const timeDiff = Math.abs(remoteTime - localTime);
-          const durationMatch = record.duration > 0 && call.duration_seconds > 0
-            ? Math.abs(record.duration - call.duration_seconds) / Math.max(record.duration, call.duration_seconds) < 0.3
-            : true;
-
-          if (timeDiff < 10 * 60 * 1000 && durationMatch) {
-            return record.record_url;
-          }
-        }
-      }
-    }
-
-    if (!data.metadata?.nextPage) break;
+  for await (const event of lookupRecordingCandidatesFromApi4Com(supabase, call, opts)) {
+    if (event.kind === 'candidate') return event.url;
   }
-
   return null;
 }
