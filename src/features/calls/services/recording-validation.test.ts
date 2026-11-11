@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { shouldPersistRecordingOnEvent } from '../recording-trigger';
-import { shouldServeStoredRecording } from './recording-proxy';
+import { isRecordingHidden, shouldServeStoredRecording } from './recording-proxy';
 import {
   callfaceRecordingMatchesCall,
   classifyRecordingDuration,
@@ -107,6 +107,29 @@ describe('proxy: shouldServeStoredRecording', () => {
         metadata: { recording_duration_divergent: true, recording_audio_seconds: 12 },
       }),
     ).toBe(true);
+  });
+});
+
+describe('proxy: isRecordingHidden', () => {
+  it('esconde só com recording_hidden junto de mismatch', () => {
+    expect(
+      isRecordingHidden({ recording_persist_status: 'mismatch', recording_hidden: true }),
+    ).toBe(true);
+    expect(isRecordingHidden({ recording_persist_status: 'mismatch' })).toBe(false);
+    expect(isRecordingHidden({ recording_persist_status: 'ok', recording_hidden: true })).toBe(
+      false,
+    );
+    expect(isRecordingHidden(null)).toBe(false);
+  });
+
+  it('Callface com duração divergente nunca é escondido', () => {
+    expect(
+      isRecordingHidden({
+        recording_persist_status: 'mismatch',
+        recording_hidden: true,
+        recording_duration_divergent: true,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   fakeAudioResponse,
   makeFakeSupabase,
 } from './recording-fake-supabase.testutil';
+import { isRecordingHidden, shouldServeStoredRecording } from './recording-proxy';
 import { repairRecordingsPage } from './recording-repair.service';
 
 const mocks = vi.hoisted(() => ({ fetchPublicHttps: vi.fn(), candidates: vi.fn() }));
@@ -38,11 +39,25 @@ function call(over: Row = {}): Row {
   };
 }
 
+type Match = 'provider_id' | 'destination' | 'unique_in_window';
+const cand = (url: string, match: Match = 'destination') => ({
+  kind: 'candidate' as const,
+  url,
+  phase: match === 'provider_id' ? ('id' as const) : ('window' as const),
+  match,
+});
+
+/** A API4COM devolve estes eventos, em ordem. */
+function api4comYields(...events: unknown[]) {
+  mocks.candidates.mockImplementation(async function* () {
+    for (const e of events) yield e;
+  });
+}
+
 beforeEach(() => {
   mocks.fetchPublicHttps.mockReset().mockResolvedValue(fakeAudioResponse(365));
-  mocks.candidates.mockReset().mockImplementation(async function* () {
-    yield DURABLE;
-  });
+  mocks.candidates.mockReset();
+  api4comYields(cand(DURABLE));
 });
 
 /** Cada URL responde com a duração indicada; as demais dão 404. */
@@ -259,7 +274,7 @@ describe('repairRecordingsPage', () => {
 
     it('outra ligação com a mesma URL e duração que também bate: ambiguous_shared_url, nada gravado', async () => {
       respondBy({ [LISTENER]: 365 });
-      mocks.candidates.mockImplementation(async function* () {});
+      api4comYields();
       const fake = makeFakeSupabase([sibling({ duration_seconds: 360 }), call()], {
         [PATH]: fakeAudio(12),
       });
@@ -303,6 +318,192 @@ describe('repairRecordingsPage', () => {
         outcome: 'would_repair',
         source: 'api4com',
       });
+    });
+  });
+
+  describe('URL compartilhada liberada pelo id próprio', () => {
+    const sibling = (over: Row = {}) =>
+      call({
+        id: 'call-0',
+        recording_storage_path: null,
+        duration_seconds: 365,
+        metadata: { recording_persist_status: 'ok' },
+        ...over,
+      });
+
+    it('API4COM devolve pelo id da ligação a mesma URL compartilhada: would_repair, não ambígua', async () => {
+      respondBy({ [LISTENER]: 365 });
+      api4comYields(cand(LISTENER, 'provider_id'));
+      const fake = makeFakeSupabase([sibling(), call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details.find((x) => x.callId === 'call-1')).toMatchObject({
+        outcome: 'would_repair',
+        source: 'recording_url',
+        match: 'provider_id',
+      });
+      expect(page.counts.ambiguous_shared_url).toBe(0);
+      expect(fake.uploads).toHaveLength(0);
+    });
+
+    it('URL compartilhada vinda pelo id direto da API4COM não consulta irmãs', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 365 });
+      api4comYields(cand(DURABLE, 'provider_id'));
+      const fake = makeFakeSupabase([sibling({ recording_url: DURABLE }), call()], {
+        [PATH]: fakeAudio(12),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details.find((x) => x.callId === 'call-1')).toMatchObject({
+        outcome: 'would_repair',
+        source: 'api4com',
+        match: 'provider_id',
+      });
+    });
+
+    it('URL compartilhada que só aparece pela janela continua retida', async () => {
+      respondBy({ [LISTENER]: 365 });
+      api4comYields(cand(LISTENER, 'destination'));
+      const fake = makeFakeSupabase([sibling(), call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.counts.ambiguous_shared_url).toBe(1);
+      expect(fake.uploads).toHaveLength(0);
+    });
+  });
+
+  describe('janela da API4COM', () => {
+    it('janela ambígua (vários candidatos só pelo ramal): ambiguous_window, apply não grava nem esconde', async () => {
+      respondBy({ [LISTENER]: 20 });
+      api4comYields({ kind: 'ambiguous_window', candidates: 8 });
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'ambiguous_window', windowCandidates: 8 });
+      expect(page.counts.unrepairable).toBe(0);
+      expect(fake.uploads).toHaveLength(0);
+      expect(fake.updates).toHaveLength(0);
+    });
+
+    it('candidato da janela pelo fone de destino repara', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 365 });
+      api4comYields(cand(DURABLE, 'destination'));
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details[0]).toMatchObject({
+        outcome: 'would_repair',
+        source: 'api4com',
+        match: 'destination',
+      });
+    });
+
+    it('candidato único da janela repara (match unique_in_window)', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 365 });
+      api4comYields(cand(DURABLE, 'unique_in_window'));
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'would_repair', match: 'unique_in_window' });
+    });
+  });
+
+  describe('unrepairable esconde a gravação errada (só em apply)', () => {
+    it('apply marca mismatch + recording_hidden; proxy não serve nem Storage nem link; nada apagado', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 20 });
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'unrepairable', hidden: true });
+      const row = fake.calls[0] as Row;
+      const meta = row.metadata as Row;
+      expect(meta.recording_persist_status).toBe('mismatch');
+      expect(meta.recording_hidden).toBe(true);
+      expect(meta.recording_hidden_reason).toBe('repair_unrepairable');
+      // nada apagado: arquivo, caminho e link continuam
+      expect(row.recording_storage_path).toBe(PATH);
+      expect(row.recording_url).toBe(LISTENER);
+      expect(fake.storage.get(PATH)!.toString()).toBe('dur:12');
+      expect(isRecordingHidden(meta)).toBe(true);
+    });
+
+    it('dry-run não esconde', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 20 });
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'unrepairable' });
+      expect(page.details[0]!.hidden).toBeUndefined();
+      expect(fake.updates).toHaveLength(0);
+    });
+
+    it('reparo posterior com cópia certa libera (status ok)', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 365 });
+      const fake = makeFakeSupabase(
+        [call({ metadata: { recording_persist_status: 'mismatch', recording_hidden: true } })],
+        { [PATH]: fakeAudio(12) },
+      );
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.counts.repaired).toBe(1);
+      expect(isRecordingHidden(fake.calls[0]!.metadata as Row)).toBe(false);
+    });
+
+    it('duration_divergent (Callface) em apply não é escondida e continua servida', async () => {
+      const CALLFACE =
+        'https://s3.sa-east-1.amazonaws.com/pbx-prod-callface/recordings/2026/11/11/OUT-X-TEL-5511999999999-DT-20261111-HR-0700-CALLID-abc.mp3';
+      respondBy({ [CALLFACE]: 140 });
+      const fake = makeFakeSupabase(
+        [
+          call({
+            recording_url: CALLFACE,
+            started_at: '2026-11-11T10:00:30Z',
+            duration_seconds: 60,
+            metadata: { recording_persist_status: 'mismatch', recording_hidden: true },
+          }),
+        ],
+        { [PATH]: fakeAudio(140) },
+      );
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.counts.duration_divergent).toBe(1);
+      expect(page.counts.unrepairable).toBe(0);
+      const row = fake.calls[0] as Row;
+      const meta = row.metadata as Row;
+      expect(meta.recording_hidden).toBe(false);
+      expect(meta.recording_duration_divergent).toBe(true);
+      expect(isRecordingHidden(meta)).toBe(false);
+      expect(
+        shouldServeStoredRecording({
+          recording_storage_path: PATH,
+          duration_seconds: 60,
+          metadata: meta,
+        }),
+      ).toBe(true);
+      expect(mocks.candidates).not.toHaveBeenCalled();
+    });
+
+    it('ligação já marcada duration_divergent que cai em unrepairable não é escondida', async () => {
+      mocks.fetchPublicHttps.mockResolvedValue(new Response(null, { status: 404 }));
+      api4comYields();
+      const fake = makeFakeSupabase([call({ metadata: { recording_duration_divergent: true } })], {
+        [PATH]: fakeAudio(12),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.counts.unrepairable).toBe(1);
+      expect(fake.updates).toHaveLength(0);
     });
   });
 });

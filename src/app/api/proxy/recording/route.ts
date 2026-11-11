@@ -4,7 +4,7 @@ import { getAuthOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { CALL_RECORDINGS_BUCKET } from '@/features/calls/services/recording-storage.service';
-import { shouldServeStoredRecording } from '@/features/calls/services/recording-proxy';
+import { isRecordingHidden, shouldServeStoredRecording } from '@/features/calls/services/recording-proxy';
 
 export const maxDuration = 60;
 
@@ -98,6 +98,11 @@ export async function GET(request: Request) {
 
     if (!call) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    // Reparo não achou a gravação certa: não serve a errada (nem Storage nem link).
+    if (isRecordingHidden(call.metadata)) {
+      return NextResponse.json({ error: 'No recording' }, { status: 404 });
+    }
+
     // Cópia flagada como divergente (ou medida fora da tolerância) não é servida.
     if (call.recording_storage_path && shouldServeStoredRecording(call)) {
       const stored = await streamFromStorage(supabase, call.recording_storage_path);
@@ -117,14 +122,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Domain not allowed' }, { status: 403 });
   }
 
-  const { data: call } = (await from(supabase, 'calls')
-    .select('id')
+  const { data: owners } = (await from(supabase, 'calls')
+    .select('id, metadata')
     .eq('org_id', orgId)
     .eq('recording_url', url)
-    .limit(1)
-    .maybeSingle()) as { data: { id: string } | null };
+    .limit(5)) as { data: Array<{ id: string; metadata: Record<string, unknown> | null }> | null };
 
-  if (!call) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!owners || owners.length === 0) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Todas as ligações com este link estão escondidas pelo reparo: não serve.
+  if (owners.every((owner) => isRecordingHidden(owner.metadata))) {
+    return NextResponse.json({ error: 'No recording' }, { status: 404 });
+  }
 
   return streamFromUrl(url);
 }

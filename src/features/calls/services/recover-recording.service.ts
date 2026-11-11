@@ -3,7 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 import type { createServiceRoleClient } from '@/lib/supabase/service';
 
-import { defaultSleep, searchRecordingCandidates } from './api4com-recording-search';
+import {
+  type RecordingSearchEvent,
+  defaultSleep,
+  searchRecordingCandidates,
+} from './api4com-recording-search';
 
 interface CallForRecovery {
   id: string;
@@ -21,12 +25,13 @@ interface CallForRecovery {
  * Candidatos de `record_url` na API4COM, em ordem: primeiro por id do provedor
  * (`api4com_call_id` e `alt_api4com_ids`), depois por janela de data em torno do
  * início da ligação. Somente leitura (GET) e com backoff em 429/503.
+ * Também avisa quando a janela é ambígua (`kind: 'ambiguous_window'`).
  * O chamador decide quando parar (ex.: o reparo baixa e mede cada um).
  */
 export async function* lookupRecordingCandidatesFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
-): AsyncGenerator<string> {
+): AsyncGenerator<RecordingSearchEvent> {
   // Credential of the account: org token, else any legacy user token of the org.
   const creds = await getOrgApiCredentials(
     call.org_id,
@@ -51,6 +56,8 @@ export async function lookupRecordingFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
 ): Promise<string | null> {
-  for await (const url of lookupRecordingCandidatesFromApi4Com(supabase, call)) return url;
+  for await (const event of lookupRecordingCandidatesFromApi4Com(supabase, call)) {
+    if (event.kind === 'candidate') return event.url;
+  }
   return null;
 }

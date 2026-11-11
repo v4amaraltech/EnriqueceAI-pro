@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   BACKOFF_MAX_ATTEMPTS,
+  type RecordingSearchEvent,
   SEARCH_MAX_WINDOW_PAGES,
   type SearchCall,
   type SearchDeps,
   getWithBackoff,
   retryWaitMs,
+  samePhone,
   searchRecordingCandidates,
+  selectWindowCandidates,
 } from './api4com-recording-search';
 
 const BASE = 'https://api.api4com.com/api/v1';
@@ -50,9 +53,9 @@ function makeCall(over: Partial<SearchCall> = {}): SearchCall {
   };
 }
 
-async function collect(gen: AsyncGenerator<string>) {
+async function collect(gen: AsyncGenerator<RecordingSearchEvent>) {
   const out: string[] = [];
-  for await (const url of gen) out.push(url);
+  for await (const event of gen) if (event.kind === 'candidate') out.push(event.url);
   return out;
 }
 
@@ -81,7 +84,10 @@ describe('searchRecordingCandidates', () => {
     const first = await gen.next();
     const second = await gen.next();
 
-    expect([first.value, second.value]).toEqual(['https://x/a.mp3', 'https://x/b.mp3']);
+    expect([first.value, second.value]).toEqual([
+      { kind: 'candidate', url: 'https://x/a.mp3', phase: 'id', match: 'provider_id' },
+      { kind: 'candidate', url: 'https://x/b.mp3', phase: 'id', match: 'provider_id' },
+    ]);
     // parou antes da janela: só as duas buscas por id
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
@@ -91,7 +97,19 @@ describe('searchRecordingCandidates', () => {
       const p = Number(new URL(String(url)).searchParams.get('page'));
       if (p === 1)
         return Promise.resolve(
-          json(page([record({ id: 'x', to: '5511000000000', from: '2000', record_url: 'https://x/no.mp3' })], 2)),
+          json(
+            page(
+              [
+                record({
+                  id: 'x',
+                  to: '5511000000000',
+                  from: '2000',
+                  record_url: 'https://x/no.mp3',
+                }),
+              ],
+              2,
+            ),
+          ),
         );
       if (p === 2) return Promise.resolve(json(page([record()], 3)));
       return Promise.resolve(
@@ -137,6 +155,88 @@ describe('searchRecordingCandidates', () => {
     for (const [, init] of fetchFn.mock.calls as unknown as Array<[string, RequestInit]>) {
       expect(init.method).toBe('GET');
     }
+  });
+});
+
+describe('samePhone', () => {
+  it('normaliza DDI, zero à esquerda, máscara e nono dígito', () => {
+    expect(samePhone('+55 (11) 99999-9999', '11999999999')).toBe(true);
+    expect(samePhone('011999999999', '5511999999999')).toBe(true);
+    expect(samePhone('1199999999', '11999999999')).toBe(true); // sem o nono dígito
+    expect(samePhone('5511999999999', '5511888888888')).toBe(false);
+    expect(samePhone('1001', '5511999999999')).toBeNull(); // ramal: não comparável
+    expect(samePhone('', '5511999999999')).toBeNull();
+  });
+});
+
+describe('selectWindowCandidates (janela: ramal sozinho não basta)', () => {
+  // ramal 1001 e horário batem; o fone de destino decide
+  const other = (id: string, to: string) =>
+    record({ id, to, record_url: `https://x/${id}.mp3` }) as never;
+
+  it('aceita o candidato cujo fone de destino bate, mesmo com outros do ramal na janela', () => {
+    const events = selectWindowCandidates(
+      [
+        other('o1', '5511888888888'),
+        other('mine', '+55 11 99999-9999'),
+        other('o2', '5511777777777'),
+      ],
+      makeCall(),
+    );
+    expect(events).toEqual([
+      { kind: 'candidate', url: 'https://x/mine.mp3', phase: 'window', match: 'destination' },
+    ]);
+  });
+
+  it('candidato único na janela sem fone que contradiga: aceito', () => {
+    const events = selectWindowCandidates([other('u', '')], makeCall());
+    expect(events).toEqual([
+      { kind: 'candidate', url: 'https://x/u.mp3', phase: 'window', match: 'unique_in_window' },
+    ]);
+  });
+
+  it('vários candidatos só pelo ramal: ambíguo, nenhuma URL', () => {
+    const events = selectWindowCandidates(
+      [other('a', '5511888888888'), other('b', '5511777777777'), other('c', '')],
+      makeCall(),
+    );
+    expect(events).toEqual([{ kind: 'ambiguous_window', candidates: 3 }]);
+  });
+
+  it('candidato único, mas com fone de outro lead: ambíguo, não aceita', () => {
+    const events = selectWindowCandidates([other('a', '5511888888888')], makeCall());
+    expect(events).toEqual([{ kind: 'ambiguous_window', candidates: 1 }]);
+  });
+
+  it('registro com o id da própria ligação não conta como concorrente', () => {
+    const events = selectWindowCandidates(
+      [record({ id: 'own', to: '', record_url: null }) as never, other('u', '')],
+      makeCall({ metadata: { api4com_call_id: 'own' } }),
+    );
+    expect(events).toEqual([
+      { kind: 'candidate', url: 'https://x/u.mp3', phase: 'window', match: 'unique_in_window' },
+    ]);
+  });
+
+  it('fora do horário ou da duração não é candidato', () => {
+    const events = selectWindowCandidates(
+      [
+        record({ id: 'late', to: '', started_at: '2026-11-11T07:30:00.000Z' }) as never,
+        record({ id: 'short', to: '', duration: 10 }) as never,
+      ],
+      makeCall(),
+    );
+    expect(events).toEqual([]);
+  });
+
+  it('searchRecordingCandidates repassa o aviso de janela ambígua', async () => {
+    const fetchFn = vi.fn(() =>
+      Promise.resolve(json(page([other('a', '5511888888888'), other('b', '5511777777777')]))),
+    );
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+    const events: RecordingSearchEvent[] = [];
+    for await (const e of searchRecordingCandidates(deps, makeCall())) events.push(e);
+    expect(events).toEqual([{ kind: 'ambiguous_window', candidates: 2 }]);
   });
 });
 

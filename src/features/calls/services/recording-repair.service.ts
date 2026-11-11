@@ -2,7 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 
+import { RECORDING_HIDDEN_KEY } from './recording-proxy';
 import {
+  type DownloadedAudio,
   PERSIST_CALL_COLUMNS,
   type PersistCallRow,
   downloadAudio,
@@ -22,7 +24,8 @@ export type RepairOutcome =
   | 'borderline_short' // ligação curta perto da tolerância: não é mismatch automático
   | 'duration_divergent' // gravação do Callface é desta ligação (fone+hora); a duração é que diverge
   | 'ambiguous_shared_url' // a cópia que bate está numa URL de outra ligação que também bate: segura
-  | 'unrepairable'; // não achou áudio que bata com a duração
+  | 'ambiguous_window' // janela da API4COM com vários candidatos só pelo ramal: segura
+  | 'unrepairable'; // não achou áudio que bata; apply esconde a gravação errada
 
 /** De onde veio a cópia correta. */
 export type RepairSource = 'recording_url' | 'api4com';
@@ -44,6 +47,12 @@ export interface RepairCallResult {
   source?: RepairSource;
   /** ambiguous_shared_url: outras ligações com a mesma URL cuja duração também bate. */
   sharedWith?: string[];
+  /** Como a cópia foi casada com a ligação (fonte api4com, ou URL liberada pelo id próprio). */
+  match?: 'provider_id' | 'destination' | 'unique_in_window';
+  /** ambiguous_window: quantos candidatos do ramal havia na janela. */
+  windowCandidates?: number;
+  /** unrepairable em apply: gravação marcada como escondida para o SDR. */
+  hidden?: boolean;
 }
 
 export interface RepairPageResult {
@@ -69,6 +78,7 @@ function emptyCounts(): Record<RepairOutcome, number> {
     borderline_short: 0,
     duration_divergent: 0,
     ambiguous_shared_url: 0,
+    ambiguous_window: 0,
     unrepairable: 0,
   };
 }
@@ -121,6 +131,10 @@ export async function findSharedUrlMatches(
  * 1) o `recording_url` já salvo; 2) a API4COM (por id, depois por janela de data).
  * Em dry-run nunca escreve. Ligação curta perto da tolerância vira
  * `borderline_short` e não é marcada como mismatch.
+ * URL compartilhada com outra ligação que também bate fica retida, a menos que a
+ * API4COM a devolva pelo id da própria ligação. Janela com vários candidatos só
+ * pelo ramal vira `ambiguous_window`. Em apply, `unrepairable` esconde a gravação
+ * (metadata `recording_hidden`); nunca apaga arquivo nem linha.
  */
 export async function repairCallRecording(
   supabase: SupabaseClient,
@@ -153,9 +167,41 @@ export async function repairCallRecording(
   const tried = new Set<string>();
   const measured = new Map<string, number | null>();
   let ambiguous: RepairCallResult | null = null;
+  /** Áudio que bate mas ficou retido por URL compartilhada; o id próprio pode liberar. */
+  const heldShared = new Map<
+    string,
+    { audio: DownloadedAudio; status: 'ok' | 'unverified'; source: RepairSource }
+  >();
+  let windowCandidates: number | null = null;
+
+  const commit = async (
+    audio: DownloadedAudio,
+    status: 'ok' | 'unverified',
+    source: RepairSource,
+    url: string,
+    match?: RepairCallResult['match'],
+  ): Promise<RepairCallResult> => {
+    const extra = match ? { match } : {};
+    if (!apply) return { outcome: 'would_repair', audioSeconds: audio.seconds, source, ...extra };
+    const saved = await uploadValidatedRecording(supabase, call, audio, status, {
+      durableUrl: source === 'api4com' ? url : null,
+    });
+    return {
+      outcome: saved.ok ? 'repaired' : 'unrepairable',
+      audioSeconds: audio.seconds,
+      source,
+      ...extra,
+    };
+  };
 
   // Devolve o resultado se a URL tem áudio que bate; senão registra e segue.
-  const tryUrl = async (url: string, source: RepairSource): Promise<RepairCallResult | null> => {
+  // `ownedById`: a API4COM devolveu esta URL pelo id da própria ligação, então
+  // outra ligação com a mesma URL não a torna ambígua.
+  const tryUrl = async (
+    url: string,
+    source: RepairSource,
+    match?: RepairCallResult['match'],
+  ): Promise<RepairCallResult | null> => {
     if (tried.has(url)) return null;
     tried.add(url);
     const audio = await downloadAudio(url);
@@ -171,22 +217,21 @@ export async function repairCallRecording(
       lastSeconds = audio.seconds;
       return null;
     }
-    // Mesma URL em outra ligação que também bate: dono ambíguo, segura (não grava).
-    const sharedWith = await findSharedUrlMatches(supabase, call, url, audio.seconds);
-    if (sharedWith.length > 0) {
-      ambiguous ??= {
-        outcome: 'ambiguous_shared_url',
-        audioSeconds: audio.seconds,
-        source,
-        sharedWith,
-      };
-      return null;
+    if (match !== 'provider_id') {
+      // Mesma URL em outra ligação que também bate: dono ambíguo, segura (não grava).
+      const sharedWith = await findSharedUrlMatches(supabase, call, url, audio.seconds);
+      if (sharedWith.length > 0) {
+        heldShared.set(url, { audio, status, source });
+        ambiguous ??= {
+          outcome: 'ambiguous_shared_url',
+          audioSeconds: audio.seconds,
+          source,
+          sharedWith,
+        };
+        return null;
+      }
     }
-    if (!apply) return { outcome: 'would_repair', audioSeconds: audio.seconds, source };
-    const saved = await uploadValidatedRecording(supabase, call, audio, status, {
-      durableUrl: source === 'api4com' ? url : null,
-    });
-    return { outcome: saved.ok ? 'repaired' : 'unrepairable', audioSeconds: audio.seconds, source };
+    return commit(audio, status, source, url, match);
   };
 
   // 1) link já salvo na linha (S3 durável, listener ou outro host)
@@ -217,6 +262,7 @@ export async function repairCallRecording(
         ...(meta.recording_persist_status === 'mismatch'
           ? { recording_persist_status: 'unverified' }
           : {}),
+        ...(meta[RECORDING_HIDDEN_KEY] === true ? { [RECORDING_HIDDEN_KEY]: false } : {}),
       });
     }
     return { outcome: 'duration_divergent', audioSeconds: urlSeconds };
@@ -224,12 +270,21 @@ export async function repairCallRecording(
 
   // 2) API4COM, só se o link salvo não resolveu
   let downloads = 0;
-  for await (const url of lookupRecordingCandidatesFromApi4Com(
+  for await (const event of lookupRecordingCandidatesFromApi4Com(
     supabase,
     call as Parameters<typeof lookupRecordingCandidatesFromApi4Com>[1],
   )) {
+    if (event.kind === 'ambiguous_window') {
+      windowCandidates = event.candidates;
+      continue;
+    }
+    const { url, match } = event;
+    // A busca pelo id da própria ligação devolveu a URL retida como compartilhada:
+    // a gravação é desta ligação, não é ambígua para ela.
+    const held = match === 'provider_id' ? heldShared.get(url) : undefined;
+    if (held) return commit(held.audio, held.status, held.source, url, 'provider_id');
     if (tried.has(url)) continue;
-    const hit = await tryUrl(url, 'api4com');
+    const hit = await tryUrl(url, 'api4com', match);
     if (hit) return hit;
     if (++downloads >= REPAIR_MAX_API4COM_DOWNLOADS) break;
   }
@@ -237,12 +292,23 @@ export async function repairCallRecording(
   // Cópia que bate existe, mas numa URL de dono ambíguo: não grava nem marca mismatch.
   if (ambiguous) return ambiguous;
 
+  // Vários candidatos só pelo ramal na janela: pode ser de outro lead. Não grava nem esconde.
+  if (windowCandidates !== null) {
+    return { outcome: 'ambiguous_window', audioSeconds: lastSeconds, windowCandidates };
+  }
+
   // Perto da tolerância: não marca mismatch e não mexe no Storage.
   if (sawBorderline) return { outcome: 'borderline_short', audioSeconds: lastSeconds };
 
-  if (apply && call.recording_storage_path) {
-    // Garante a flag para o proxy não servir a cópia ruim.
-    await flagRecordingStatus(supabase, call.id, 'mismatch', null);
+  // Sem cópia certa: esconde a gravação errada do SDR (o proxy respeita a flag).
+  // Nada é apagado: arquivo, link e linha ficam; só a metadata ganha a marca.
+  // Callface já confirmado como desta ligação (duração divergente) continua servido.
+  if (apply && meta.recording_duration_divergent !== true) {
+    await flagRecordingStatus(supabase, call.id, 'mismatch', null, {
+      [RECORDING_HIDDEN_KEY]: true,
+      recording_hidden_reason: 'repair_unrepairable',
+    });
+    return { outcome: 'unrepairable', audioSeconds: lastSeconds, hidden: true };
   }
   return { outcome: 'unrepairable', audioSeconds: lastSeconds };
 }
