@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ChevronDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,7 +17,9 @@ import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import { callNoteKey, readCallNote, writeCallNote } from '../utils/call-note-draft';
 import { usefulCallScript, type CallHistoryEntry } from '../utils/call-history';
+import { leadCardFromActivity } from '../utils/lead-card';
 
+import { CallLeadCard } from './CallLeadCard';
 import { CallMeetingConfirmDialog, CallMeetingWeekDialog, type MeetingChoice, type SchedulingPreview } from './CallMeetingDialogs';
 import { useLeadHistory } from './use-lead-history';
 
@@ -62,6 +64,13 @@ interface CallSidePanelProps {
   schedulingPreview?: SchedulingPreview;
   /** Fixture visual: não origina ligação nem abre diálogos que gravam lead. */
   previewOnly?: boolean;
+  /**
+   * Flag `call_lead_card_v1`. Desligada: o meio do painel fica exatamente como
+   * hoje. Ligada: o cartão substitui a lista de fatos e o histórico recolhe.
+   */
+  leadCardEnabled?: boolean;
+  /** Relógio do cartão (tempo de perda). Ausente = agora. */
+  cardNow?: Date;
 }
 
 export function CallSidePanel({
@@ -79,6 +88,8 @@ export function CallSidePanel({
   history,
   schedulingPreview,
   previewOnly = false,
+  leadCardEnabled = false,
+  cardNow,
 }: CallSidePanelProps) {
   const lead = activity.lead;
   const company = lead.nome_fantasia ?? lead.razao_social ?? lead.cnpj;
@@ -113,17 +124,20 @@ export function CallSidePanel({
   }
 
   const resolvedEmail = (lead.socios ?? []).flatMap((socio) => socio.emails ?? []).sort((a, b) => a.ranking - b.ranking)[0]?.email ?? lead.email;
+  const leadCard = leadCardEnabled ? leadCardFromActivity(activity, resolvedEmail, cardNow) : null;
   const dayLabel = activity.stepDay ? `Dia ${activity.stepDay}` : null;
-  const facts = [
-    ['Origem', [lead.lead_source, lead.canal].filter(Boolean).join(' · ') || 'sem origem'],
-    ['Etapa', lead.status ? (STATUS_LABEL[lead.status] ?? lead.status) : 'sem etapa'],
-    ['Cadência', [activity.cadenceName, dayLabel, `tarefa ${activity.stepOrder}/${activity.totalSteps}`].filter(Boolean).join(' · ')],
-    ['Enriquecimento', lead.enrichment_status ? (ENRICHMENT_LABEL[lead.enrichment_status] ?? lead.enrichment_status) : 'sem dado'],
-    ['Segmento', lead.segmento || 'sem dado'],
-    ['Porte', lead.porte || 'sem dado'],
-    ['E-mail', resolvedEmail || 'sem dado'],
-    ['Site', lead.website || 'sem dado'],
-  ];
+  const facts = leadCard
+    ? null
+    : [
+        ['Origem', [lead.lead_source, lead.canal].filter(Boolean).join(' · ') || 'sem origem'],
+        ['Etapa', lead.status ? (STATUS_LABEL[lead.status] ?? lead.status) : 'sem etapa'],
+        ['Cadência', [activity.cadenceName, dayLabel, `tarefa ${activity.stepOrder}/${activity.totalSteps}`].filter(Boolean).join(' · ')],
+        ['Enriquecimento', lead.enrichment_status ? (ENRICHMENT_LABEL[lead.enrichment_status] ?? lead.enrichment_status) : 'sem dado'],
+        ['Segmento', lead.segmento || 'sem dado'],
+        ['Porte', lead.porte || 'sem dado'],
+        ['E-mail', resolvedEmail || 'sem dado'],
+        ['Site', lead.website || 'sem dado'],
+      ];
 
   return (
     <>
@@ -172,14 +186,18 @@ export function CallSidePanel({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <dl className="space-y-1.5 text-xs">
-            {facts.map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="break-words">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          {leadCard ? (
+            <CallLeadCard model={leadCard} />
+          ) : (
+            <dl className="space-y-1.5 text-xs">
+              {facts?.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="break-words">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
           {script && (
             <section>
@@ -188,25 +206,17 @@ export function CallSidePanel({
             </section>
           )}
 
-          <section aria-label="Histórico de contatos">
-            <h3 className="text-xs font-semibold">Histórico</h3>
-            {timeline.status === 'loading' && <p className="text-muted-foreground mt-1 text-xs">Carregando histórico...</p>}
-            {timeline.status === 'error' && <p className="mt-1 text-xs text-amber-700">Não foi possível carregar o histórico.</p>}
-            {timeline.status === 'ready' && timeline.entries.length === 0 && (
-              <p className="text-muted-foreground mt-1 text-xs">Nenhum contato registrado ainda.</p>
-            )}
-            {timeline.status === 'ready' && timeline.entries.length > 0 && (
-              <ol className="mt-2 space-y-2">
-                {timeline.entries.map((entry) => (
-                  <li key={entry.id} className="border-l-2 border-primary/40 pl-2">
-                    <p className="text-[11px] font-medium">{entry.title}</p>
-                    <p className="text-muted-foreground text-[10px]">{timeFmt.format(new Date(entry.at))}</p>
-                    {entry.detail && <p className="text-xs">{entry.detail}</p>}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          {leadCard ? (
+            <details data-testid="call-history-collapse" className="rounded-md border px-3 py-2">
+              <summary className="cursor-pointer text-xs font-semibold">Histórico</summary>
+              <HistoryBody timeline={timeline} />
+            </details>
+          ) : (
+            <section aria-label="Histórico de contatos">
+              <h3 className="text-xs font-semibold">Histórico</h3>
+              <HistoryBody timeline={timeline} />
+            </section>
+          )}
         </div>
 
         <div className="mt-auto space-y-2 border-t px-4 py-4">
@@ -261,6 +271,29 @@ export function CallSidePanel({
         }}
         onScheduled={onScheduled}
       />
+      )}
+    </>
+  );
+}
+
+function HistoryBody({ timeline }: { timeline: ReturnType<typeof useLeadHistory> }): ReactNode {
+  return (
+    <>
+      {timeline.status === 'loading' && <p className="text-muted-foreground mt-1 text-xs">Carregando histórico...</p>}
+      {timeline.status === 'error' && <p className="mt-1 text-xs text-amber-700">Não foi possível carregar o histórico.</p>}
+      {timeline.status === 'ready' && timeline.entries.length === 0 && (
+        <p className="text-muted-foreground mt-1 text-xs">Nenhum contato registrado ainda.</p>
+      )}
+      {timeline.status === 'ready' && timeline.entries.length > 0 && (
+        <ol className="mt-2 space-y-2">
+          {timeline.entries.map((entry) => (
+            <li key={entry.id} className="border-l-2 border-primary/40 pl-2">
+              <p className="text-[11px] font-medium">{entry.title}</p>
+              <p className="text-muted-foreground text-[10px]">{timeFmt.format(new Date(entry.at))}</p>
+              {entry.detail && <p className="text-xs">{entry.detail}</p>}
+            </li>
+          ))}
+        </ol>
       )}
     </>
   );

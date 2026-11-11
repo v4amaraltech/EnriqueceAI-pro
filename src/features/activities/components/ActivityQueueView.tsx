@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { Button } from '@/shared/components/ui/button';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import { CallSidePanel } from '@/features/cockpit/components/CallSidePanel';
+import type { CallState } from '@/features/activities/components/ActivityPhonePanel';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import { fetchDailyProgress, type DailyProgress } from '../actions/fetch-daily-progress';
@@ -53,6 +55,8 @@ interface ActivityQueueViewProps {
   isManager?: boolean;
   /** Active org members, for labeling and scoping the per-SDR filter. */
   members?: Array<{ userId: string; name: string; role: 'manager' | 'sdr' }>;
+  /** Flag `call_lead_card_v1`. Desligada, a fila não oferece o painel lateral. */
+  leadCardEnabled?: boolean;
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -98,7 +102,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [], leadCardEnabled = false }: ActivityQueueViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
@@ -107,6 +111,9 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   // reorders the list (new enrollments arriving on top, scheduled activities, etc.),
   // a numeric selection silently slides to a different lead.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [callPanelKey, setCallPanelKey] = useState<string | null>(null);
+  const [callMinimized, setCallMinimized] = useState(false);
+  const [callBusy, setCallBusy] = useState(false);
 
   // Sync with server data when revalidatePath triggers a re-render with fresh
   // activities — but preserve the SDR's local ordering. Each executeActivity
@@ -267,7 +274,8 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
     if (selectedKey === lostKey) {
       setSelectedKey(nextActivity ? keyOf(nextActivity) : null);
     }
-  }, [lostDialogActivity, handleActivityDone, activities, selectedKey]);
+    if (callPanelKey === lostKey) setCallPanelKey(null);
+  }, [lostDialogActivity, handleActivityDone, activities, selectedKey, callPanelKey]);
 
   const handleClose = useCallback(() => {
     setSelectedKey(null);
@@ -278,6 +286,101 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   }, []);
 
   const keyOf = (a: PendingActivity) => `${a.enrollmentId}:${a.stepId}`;
+
+  const openCallPanel = (activity: PendingActivity) => {
+    if (!leadCardEnabled) return;
+    const key = keyOf(activity);
+    if (callBusy && callPanelKey && callPanelKey !== key) {
+      toast.error('Encerre a ligação antes de trocar de tarefa');
+      return;
+    }
+    setCallMinimized(false);
+    setCallPanelKey(key);
+    setSelectedKey(null);
+  };
+
+  const completePanelTask = (activity: PendingActivity, notes: string) => {
+    const key = keyOf(activity);
+    if (callBusy && callPanelKey === key) {
+      toast.error('Encerre a ligação antes de concluir');
+      return;
+    }
+    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    if (callPanelKey === key) setCallPanelKey(null);
+    const persist = isScheduled
+      ? import('../actions/execute-scheduled-activity').then(({ executeScheduledActivity }) =>
+          executeScheduledActivity({
+            scheduledActivityId: activity.stepId,
+            leadId: activity.lead.id,
+            channel: activity.channel,
+            to: '',
+            subject: '',
+            body: notes,
+            aiGenerated: false,
+          }),
+        )
+      : import('../actions/execute-activity').then(({ executeActivity }) =>
+          executeActivity({
+            enrollmentId: activity.enrollmentId,
+            cadenceId: activity.cadenceId,
+            stepId: activity.stepId,
+            leadId: activity.lead.id,
+            orgId: activity.lead.org_id,
+            cadenceCreatedBy: activity.cadenceCreatedBy ?? '',
+            channel: activity.channel,
+            to: '',
+            contactId: null,
+            subject: '',
+            body: notes,
+            aiGenerated: false,
+            templateId: null,
+          }),
+        );
+    void persist.then((result) => {
+      if (!result.success) {
+        handleActivityRestore(activity);
+        toast.error(result.error ?? 'Não foi possível registrar. Atividade devolvida à fila');
+      } else {
+        toast.success('Atividade concluída');
+      }
+    }).catch(() => {
+      handleActivityRestore(activity);
+      toast.error('Não foi possível registrar. Atividade devolvida à fila');
+    });
+  };
+
+  const snoozePanelTask = (activity: PendingActivity) => {
+    if (callBusy) {
+      toast.error('Encerre a ligação antes de adiar');
+      return;
+    }
+    const key = keyOf(activity);
+    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    if (callPanelKey === key) setCallPanelKey(null);
+    const persist = isScheduled
+      ? import('../actions/complete-scheduled-activity').then(({ postponeScheduledActivity }) =>
+          postponeScheduledActivity(activity.stepId),
+        )
+      : import('../actions/skip-activity').then(({ skipActivity }) => skipActivity(activity.enrollmentId));
+    void persist.then((result) => {
+      if (!result.success) {
+        handleActivityRestore(activity);
+        if (callPanelKey === key) setCallPanelKey(key);
+        toast.error(result.error ?? 'Não foi possível adiar');
+      } else {
+        toast.success(isScheduled ? 'Retorno adiado' : 'Adiado para amanhã às 9h');
+      }
+    }).catch(() => {
+      handleActivityRestore(activity);
+      if (callPanelKey === key) setCallPanelKey(key);
+      toast.error('Não foi possível adiar');
+    });
+  };
+
+  const callPanelActivity = activities.find((activity) => keyOf(activity) === callPanelKey) ?? null;
+  const selectedForPanel = activities.find((activity) => keyOf(activity) === selectedKey) ?? null;
 
   // Show all activities (current + future within 24h window) grouped by lead
   const visibleActivities = useMemo(() => activities, [activities]);
@@ -533,6 +636,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onViewLead={handleViewLead}
             onLeadWon={handleLeadWon}
             onLeadLost={handleLeadLost}
+            onOpenCallPanel={leadCardEnabled ? openCallPanel : undefined}
           />
           <ActivityExecutionSheet
             activities={visibleActivities}
@@ -544,6 +648,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onLeadLost={handleLeadLost}
             dialerProvider={dialerProvider}
             quickMode={false}
+            onOpenCallPanel={leadCardEnabled && selectedForPanel ? () => openCallPanel(selectedForPanel) : undefined}
           />
         </>
       ) : activeTab === 'dialer' && showPowerDialer ? (
@@ -634,6 +739,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                           onLeadLost={() => handleLeadLost(activity)}
                           onSkipStep={() => handleSkipStep(activity)}
                           onSwitchCadence={() => handleSwitchCadence(activity)}
+                          onOpenCallPanel={leadCardEnabled ? () => openCallPanel(activity) : undefined}
                         />
                       ))}
                     </div>
@@ -662,6 +768,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                   onLeadLost={() => handleLeadLost(activity)}
                   onSkipStep={() => handleSkipStep(activity)}
                   onSwitchCadence={() => handleSwitchCadence(activity)}
+                  onOpenCallPanel={leadCardEnabled ? () => openCallPanel(activity) : undefined}
                 />
               ))}
               <ActivityPagination
@@ -686,8 +793,29 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onSwitchCadence={handleSwitchCadence}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
+            onOpenCallPanel={leadCardEnabled && selectedForPanel ? () => openCallPanel(selectedForPanel) : undefined}
           />
         </>
+      )}
+      {callPanelActivity && (
+        <CallSidePanel
+          key={keyOf(callPanelActivity)}
+          activity={callPanelActivity}
+          dialerProvider={dialerProvider}
+          minimized={callMinimized}
+          onMinimize={() => setCallMinimized(true)}
+          onRestore={() => setCallMinimized(false)}
+          onClose={() => setCallPanelKey(null)}
+          onMarkDone={(notes) => completePanelTask(callPanelActivity, notes)}
+          onSkip={() => snoozePanelTask(callPanelActivity)}
+          onLeadLost={() => setLostDialogActivity(callPanelActivity)}
+          onScheduled={() => {
+            handleActivityDone(callPanelActivity.enrollmentId, callPanelActivity.stepId);
+            setCallPanelKey(null);
+          }}
+          onCallStateChange={(state: CallState) => setCallBusy(state === 'calling' || state === 'connected')}
+          leadCardEnabled
+        />
       )}
       <StartNewLeadsModal open={startNewLeadsOpen} onOpenChange={setStartNewLeadsOpen} />
       <SkipStepReasonDialog

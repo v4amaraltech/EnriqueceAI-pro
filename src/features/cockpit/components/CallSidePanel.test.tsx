@@ -110,4 +110,74 @@ describe('CallSidePanel', () => {
     expect(onScheduled).toHaveBeenCalledTimes(1);
     expect(scheduleMeeting).not.toHaveBeenCalled();
   });
+
+  it('com a flag desligada o meio do painel continua a lista de hoje', () => {
+    renderPanel();
+    expect(screen.queryByTestId('call-lead-card')).toBeNull();
+    expect(screen.queryByTestId('call-history-collapse')).toBeNull();
+    expect(screen.getByText('Enriquecido')).toBeTruthy();
+    expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
+    expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();
+    expect(screen.getByLabelText('Anotações')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Agendar reunião' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Desqualificar' })).toBeTruthy();
+  });
+
+  it('com a flag ligada troca só o meio e mantém topo, rodapé e agendamento', () => {
+    const lostActivity: PendingActivity = {
+      ...activity,
+      stepOrder: 3,
+      totalSteps: 3,
+      lead: {
+        ...activity.lead,
+        lost_at: '2026-04-17T10:22:48.000Z',
+        loss_reason_name: 'Deixou de responder',
+        loss_notes: 'Cadência concluída sem resposta',
+        job_title: 'Coordenador',
+      },
+    };
+    render(
+      <CallSidePanel
+        activity={lostActivity}
+        dialerProvider="api4com"
+        minimized={false}
+        onMinimize={vi.fn()}
+        onRestore={vi.fn()}
+        onClose={vi.fn()}
+        onMarkDone={vi.fn()}
+        onSkip={vi.fn()}
+        onLeadLost={vi.fn()}
+        onScheduled={vi.fn()}
+        history={FIXTURE_HISTORY}
+        schedulingPreview={FIXTURE_PREVIEW}
+        leadCardEnabled
+        cardNow={new Date('2026-11-11T15:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByTestId('call-lead-card')).toBeTruthy();
+    expect(screen.getByTestId('call-lead-attempt').textContent).toBe('TENTATIVA 3/3');
+    const leadName = screen.getByRole('heading', { name: 'Contato de Teste' });
+    expect(leadName.className).toContain('uppercase');
+    expect(leadName.className).toContain('font-black');
+    expect(screen.getByTestId('lead-card-telefone').textContent).toContain('11900000000');
+    expect(screen.getByTestId('lead-card-cargo').textContent).toContain('Coordenador');
+    expect(screen.getByTestId('lead-card-temperatura').textContent).toContain('perdido há 6,8 meses');
+    expect(screen.getByTestId('lead-card-temperatura').textContent).not.toMatch(/quente|morno|frio/i);
+    expect(screen.queryByTestId('lead-card-sdr')).toBeNull();
+    expect(screen.getByTestId('call-lead-opening').textContent).toContain('Seria um problema retomarmos em 2 minutos?');
+    expect(screen.queryByText('Enriquecido')).toBeNull();
+    expect(screen.getByText('Perguntar quem decide e se já houve contato anterior. Fixture.')).toBeTruthy();
+    expect(screen.getByTestId('call-history-collapse')).toBeTruthy();
+    expect(screen.getByText('Respondeu · e-mail')).toBeTruthy();
+
+    expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
+    expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();
+    expect(screen.getByLabelText('Anotações')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Desqualificar' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Agendar reunião' }));
+    expect(screen.getByTestId('slot-0-14')).toBeTruthy();
+    expect(listClosers).not.toHaveBeenCalled();
+    expect(scheduleMeeting).not.toHaveBeenCalled();
+  });
 });

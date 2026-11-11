@@ -38,6 +38,15 @@ export interface ActivityLead {
   segmento: string | null;
   assigned_to: string | null;
   custom_field_values: Record<string, string> | null;
+  /**
+   * Preenchidos só quando a flag `call_lead_card_v1` pede o cartão.
+   * Com a flag desligada a fila não seleciona estas colunas.
+   */
+  lost_at?: string | null;
+  loss_notes?: string | null;
+  loss_reason_id?: string | null;
+  loss_reason_name?: string | null;
+  enrollment_loss_notes?: string | null;
 }
 
 // A single pending activity derived from enrollment + step + cadence
