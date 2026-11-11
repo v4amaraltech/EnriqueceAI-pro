@@ -11,6 +11,11 @@ import { callNoteKey, readCallNote } from '../utils/call-note-draft';
 import { CallSidePanel } from './CallSidePanel';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('next/image', () => ({
+  default: (props: { alt: string; src: string; height?: number }) => (
+    <span role="presentation" data-src={props.src} data-height={props.height} />
+  ),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('@/features/activities/components/ActivityPhonePanel', () => ({
   ActivityPhonePanel: ({ layout, companionNotes }: { layout?: string; companionNotes?: string }) => (
@@ -156,6 +161,15 @@ describe('CallSidePanel', () => {
     );
 
     expect(screen.getByTestId('call-lead-card')).toBeTruthy();
+    expect(screen.getByText('EnriqueceAI')).toBeTruthy();
+    const brand = screen.getByTestId('call-lead-brand');
+    expect(brand.querySelector('[data-src]')?.getAttribute('data-src')).toBe('/logos/logo-ea-red.png');
+    expect(brand.querySelector('[data-height]')?.getAttribute('data-height')).toBe('18');
+    expect(screen.getByTestId('call-lead-card').textContent?.toLowerCase()).not.toContain('company');
+    const email = screen.getByTestId('lead-card-email');
+    expect(email.querySelectorAll('span')).toHaveLength(2);
+    expect(email.querySelector('span')?.textContent).toBe('contato.fixture');
+    expect(email.querySelector('p[title]')?.getAttribute('title')).toBe('contato.fixture@example.com');
     expect(screen.getByTestId('call-lead-attempt').textContent).toBe('TENTATIVA 3/3');
     const leadName = screen.getByRole('heading', { name: 'Contato de Teste' });
     expect(leadName.className).toContain('uppercase');

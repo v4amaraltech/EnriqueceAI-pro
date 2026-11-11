@@ -6,7 +6,6 @@ import { FIXTURE_ACTIVITY } from '@/app/demo/call-workspace/fixture';
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 
 import { ActivityQueueView } from './ActivityQueueView';
-import { ActivityRow } from './ActivityRow';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -14,8 +13,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }));
 vi.mock('./ActivityExecutionSheet', () => ({
-  ActivityExecutionSheet: ({ selectedKey, onOpenCallPanel }: { selectedKey: string | null; onOpenCallPanel?: () => void }) => (
-    <div data-testid="execution-sheet" data-has-panel={onOpenCallPanel ? 'yes' : 'no'}>{selectedKey ?? 'closed'}</div>
+  ActivityExecutionSheet: ({ selectedKey }: { selectedKey: string | null }) => (
+    <div data-testid="execution-sheet">{selectedKey ?? 'closed'}</div>
   ),
 }));
 vi.mock('@/features/cockpit/components/CallSidePanel', () => ({
@@ -43,11 +42,10 @@ function renderQueue(leadCardEnabled: boolean) {
   );
 }
 
-describe('opção do painel lateral em atividades', () => {
-  it('com a flag desligada a fila não oferece o painel', async () => {
+describe('execução pela lista de atividades', () => {
+  it('com a flag desligada Executar abre a gaveta e não o painel', async () => {
     const user = userEvent.setup();
     renderQueue(false);
-    expect(screen.getByTestId('execution-sheet').getAttribute('data-has-panel')).toBe('no');
     await user.click(screen.getByRole('button', { name: 'Executar' }));
     expect(screen.getByTestId('execution-sheet').textContent).not.toBe('closed');
     expect(screen.queryByTestId('call-side-panel')).toBeNull();
@@ -55,36 +53,10 @@ describe('opção do painel lateral em atividades', () => {
     expect(screen.queryByRole('menuitem', { name: 'Abrir painel lateral' })).toBeNull();
   });
 
-  it('a linha mantém Executar e oferece o painel quando a opção existe', async () => {
-    const user = userEvent.setup();
-    const onExecute = vi.fn();
-    const onOpen = vi.fn();
-    render(
-      <ActivityRow
-        activity={FIXTURE_ACTIVITY}
-        onExecute={onExecute}
-        onIgnore={vi.fn()}
-        onViewLead={vi.fn()}
-        onLeadWon={vi.fn()}
-        onLeadLost={vi.fn()}
-        onOpenCallPanel={onOpen}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: 'Executar' }));
-    expect(onExecute).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'Mais ações' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Abrir painel lateral' }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it('com a flag ligada o painel abre sem substituir a gaveta', async () => {
+  it('com a flag ligada Executar abre o painel e deixa a gaveta fechada', async () => {
     const user = userEvent.setup();
     renderQueue(true);
     await user.click(screen.getByRole('button', { name: 'Executar' }));
-    expect(screen.getByTestId('execution-sheet').getAttribute('data-has-panel')).toBe('yes');
-    expect(screen.getByTestId('execution-sheet').textContent).not.toBe('closed');
-    await user.click(screen.getByRole('button', { name: 'Mais ações' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Abrir painel lateral' }));
     expect(screen.getByTestId('call-side-panel')).toBeTruthy();
     expect(screen.getByTestId('execution-sheet').textContent).toBe('closed');
   });

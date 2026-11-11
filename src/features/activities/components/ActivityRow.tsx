@@ -5,7 +5,6 @@ import {
   ChevronDown,
   Compass,
   Eye,
-  PanelRight,
   Linkedin,
   Mail,
   MessageSquare,
@@ -45,8 +44,6 @@ interface ActivityRowProps {
   onSkipStep?: () => void;
   /** Move o lead para outra cadência (só linhas de cadência). */
   onSwitchCadence?: () => void;
-  /** Abre o painel lateral de ligação sem substituir o Executar. Ausente = some. */
-  onOpenCallPanel?: () => void;
 }
 
 export function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean } {
@@ -101,7 +98,7 @@ function formatScheduledTime(dateStr: string): string {
   return `${date} ${time}`;
 }
 
-export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost, onSkipStep, onSwitchCadence, onOpenCallPanel }: ActivityRowProps) {
+export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost, onSkipStep, onSwitchCadence }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
   const isScheduled = activity.enrollmentId.startsWith('scheduled:');
   // "Definir destino" é gravada com channel='research', mas não é pesquisa.
@@ -180,12 +177,6 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {onOpenCallPanel && (
-              <DropdownMenuItem onClick={onOpenCallPanel}>
-                <PanelRight className="mr-2 h-3.5 w-3.5" />
-                Abrir painel lateral
-              </DropdownMenuItem>
-            )}
             {isScheduled ? (
               /* Retorno agendado: cancelar não gera limbo — só descarta o retorno. */
               <DropdownMenuItem onClick={onIgnore}>

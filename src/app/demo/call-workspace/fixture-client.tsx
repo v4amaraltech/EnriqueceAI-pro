@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { TasksTab } from '@/features/cockpit/components/TasksTab';
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 
-import { FIXTURE_ACTIVITY, FIXTURE_HISTORY, FIXTURE_PREVIEW, FIXTURE_TASK_KEY } from './fixture';
+import { FIXTURE_ACTIVITY, FIXTURE_HISTORY, FIXTURE_PREVIEW } from './fixture';
 
 const CARD_NOW = new Date('2026-11-11T15:00:00.000Z');
 
@@ -56,7 +56,6 @@ export function CallWorkspaceFixture({ leadCard, theme }: { leadCard: boolean; t
         isOwn
         dialerProvider="api4com"
         targetUserId="55555555-5555-4555-8555-555555555555"
-        initialSelectedKey={FIXTURE_TASK_KEY}
         callHistory={FIXTURE_HISTORY}
         schedulingPreview={FIXTURE_PREVIEW}
         leadCardEnabled={leadCard}

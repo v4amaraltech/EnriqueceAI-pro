@@ -1,22 +1,22 @@
-import { LEAD_CARD_COLORS as color } from '../utils/lead-card-colors';
-import type { LeadCardModel } from '../utils/lead-card';
+import Image from 'next/image';
 
-function V4Mark() {
+import { LEAD_CARD_COLORS as color } from '../utils/lead-card-colors';
+import type { LeadCardField, LeadCardModel } from '../utils/lead-card';
+
+function FieldValue({ field }: { field: LeadCardField }) {
+  const at = field.id === 'email' ? field.value.lastIndexOf('@') : -1;
+  if (at > 0) {
+    return (
+      <p className="mt-0.5 text-[13px] font-semibold leading-snug" title={field.value} style={{ color: color.value }}>
+        <span className="block break-all">{field.value.slice(0, at)}</span>
+        <span className="block break-all">{field.value.slice(at)}</span>
+      </p>
+    );
+  }
   return (
-    <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" className="shrink-0">
-      <rect width="32" height="32" rx="6" fill="#ffffff" />
-      <text
-        x="16"
-        y="24"
-        textAnchor="middle"
-        fontFamily="Arial Black, Arial, sans-serif"
-        fontSize="22"
-        fontWeight="800"
-        fill={color.headerBackground}
-      >
-        4
-      </text>
-    </svg>
+    <p className="mt-0.5 truncate text-[13px] font-semibold leading-snug" title={field.value} style={{ color: color.value }}>
+      {field.value}
+    </p>
   );
 }
 
@@ -28,10 +28,17 @@ export function CallLeadCard({ model }: { model: LeadCardModel }) {
         style={{ backgroundColor: color.cardBackground, borderColor: color.headerBackground }}
       >
         <header className="flex items-center justify-between gap-2 px-3 py-2.5" style={{ backgroundColor: color.headerBackground }}>
-          <div className="flex min-w-0 items-center gap-2">
-            <V4Mark />
-            <span className="truncate text-sm font-black tracking-[0.14em]" style={{ color: color.headerText }}>
-              COMPANY
+          <div data-testid="call-lead-brand" className="flex min-w-0 items-center gap-1.5">
+            <Image
+              src="/logos/logo-ea-red.png"
+              alt=""
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] shrink-0 rounded-full ring-1 ring-white"
+              unoptimized
+            />
+            <span className="truncate text-sm font-black leading-none tracking-wide" style={{ color: color.headerText }}>
+              EnriqueceAI
             </span>
           </div>
           <span
@@ -73,9 +80,7 @@ export function CallLeadCard({ model }: { model: LeadCardModel }) {
               <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: color.label }}>
                 {field.label}
               </p>
-              <p className="mt-0.5 text-[13px] font-semibold leading-snug break-words" style={{ color: color.value }}>
-                {field.value}
-              </p>
+              <FieldValue field={field} />
             </div>
           ))}
         </div>

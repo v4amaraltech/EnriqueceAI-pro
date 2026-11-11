@@ -15,8 +15,6 @@ interface ReturnsTabProps {
   onViewLead: (leadId: string) => void;
   onLeadWon: (activity: PendingActivity) => void;
   onLeadLost: (activity: PendingActivity) => void;
-  /** Opção extra. Ausente, a linha não mostra o painel lateral. */
-  onOpenCallPanel?: (activity: PendingActivity) => void;
   /** Textos do estado vazio — a mesma lista serve à aba "Definir destino". */
   emptyTitle?: string;
   emptyDescription?: string;
@@ -29,7 +27,6 @@ export function ReturnsTab({
   onViewLead,
   onLeadWon,
   onLeadLost,
-  onOpenCallPanel,
   emptyTitle = 'Nenhum retorno pendente',
   emptyDescription = 'Retornos agendados durante a execução de atividades aparecerão aqui.',
 }: ReturnsTabProps) {
@@ -71,7 +68,6 @@ export function ReturnsTab({
           onViewLead={() => onViewLead(activity.lead.id)}
           onLeadWon={() => onLeadWon(activity)}
           onLeadLost={() => onLeadLost(activity)}
-          onOpenCallPanel={onOpenCallPanel ? () => onOpenCallPanel(activity) : undefined}
         />
       ))}
       <ActivityPagination
