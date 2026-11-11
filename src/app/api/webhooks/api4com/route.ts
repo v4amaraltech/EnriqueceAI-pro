@@ -16,6 +16,7 @@ import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4co
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import type { CallStatus } from '@/features/calls/types';
 import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
+import { shouldPersistRecordingOnEvent } from '@/features/calls/recording-trigger';
 import {
   classifyApi4ComCall,
   getSignificantThreshold,
@@ -238,8 +239,10 @@ async function processApi4ComEvent(
       if (result?.call) {
         logger.info('Auto-created external call', { callId: result.call.id, api4comId: body.id, leadId: result.leadId });
 
-        // Persist the recording to our Storage while the listener link is alive.
-        if (body.recordUrl) triggerPersistRecording(result.call.id);
+        // Persist the recording to our Storage (hangup: the file is closed by now).
+        if (shouldPersistRecordingOnEvent(body.eventType, { recordUrl: body.recordUrl })) {
+          triggerPersistRecording(result.call.id);
+        }
         // createCallFromWebhook already applied the classifier — no need to
         // re-run updateCallFromWebhook (was a stale "fix up after default
         // insert" left over from the old not_connected default).
@@ -310,7 +313,9 @@ async function processApi4ComEvent(
       updates.started_at = startedIso;
     }
     await from(supabase, 'calls').update(updates).eq('id', call.id);
-    if (body.recordUrl) triggerPersistRecording(call.id);
+    // Sem cópia para o Storage aqui: no answer o arquivo remoto ainda está sendo
+    // gravado (cópia truncada) ou o listener serve a ligação anterior do ramal.
+    // A cópia é feita só no channel-hangup.
     logger.info('Call updated from channel-answer', {
       callId: call.id,
       api4comId: body.id,
@@ -320,7 +325,7 @@ async function processApi4ComEvent(
   }
 
   // channel-hangup: full update
-  await updateCallFromWebhook(supabase, call.id, call.status, body, call.org_id, call.metadata);
+  await updateCallFromWebhook(supabase, call.id, call.status, body, call.org_id, call.metadata, call.recording_url);
   logger.info('Call updated', { callId: call.id, api4comId: body.id });
 }
 
@@ -426,6 +431,7 @@ async function updateCallFromWebhook(
   payload: Api4ComWebhookPayload,
   orgId: string,
   callMetadata: unknown,
+  existingRecordingUrl: string | null = null,
 ) {
   const updates: Record<string, unknown> = {
     duration_seconds: payload.duration,
@@ -470,8 +476,9 @@ async function updateCallFromWebhook(
     .eq('id', callId);
 
   // Persist the recording to our Storage (any duration) before the listener
-  // link expires — independent of the transcription minimum below.
-  if (payload.recordUrl) {
+  // link expires, independent of the transcription minimum below. Também quando
+  // a URL já foi salva no answer e o hangup veio sem recordUrl.
+  if (shouldPersistRecordingOnEvent(payload.eventType, { recordUrl: payload.recordUrl, existingRecordingUrl })) {
     triggerPersistRecording(callId);
   }
 
