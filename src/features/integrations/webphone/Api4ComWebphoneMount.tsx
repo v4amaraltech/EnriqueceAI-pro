@@ -14,6 +14,7 @@ import { startWebphone, stopWebphone } from './webphone-client';
  */
 export function Api4ComWebphoneMount() {
   const [enabled, setEnabled] = useState(false);
+  const [liveListen, setLiveListen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,6 +22,7 @@ export function Api4ComWebphoneMount() {
       .then((r) => {
         if (cancelled || !r.success || !r.data.enabled) return;
         setEnabled(true);
+        setLiveListen(r.data.liveListen);
         return startWebphone({
           sipDomain: r.data.sipDomain,
           ramal: r.data.ramal,
@@ -36,5 +38,5 @@ export function Api4ComWebphoneMount() {
   }, []);
 
   if (!enabled) return null;
-  return <WebphonePanel />;
+  return <WebphonePanel liveListen={liveListen} />;
 }

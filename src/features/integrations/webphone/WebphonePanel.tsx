@@ -46,7 +46,10 @@ import {
   type WebphoneNotesAnchor,
 } from './webphone-call-context';
 import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-panel-follow';
-import { answerCall, hangupCall as hangupWebphoneLeg, toggleMute } from './webphone-client';
+import { LiveAmdHint } from './LiveAmdHint';
+import { startLiveAmdBrowser } from './live-amd-browser';
+import type { LiveAmdView } from './live-amd-session';
+import { answerCall, getRemoteAudioTrack, hangupCall as hangupWebphoneLeg, subscribeRemoteAudioTrack, toggleMute } from './webphone-client';
 import {
   clampPanelPosition,
   loadPanelPosition,
@@ -144,7 +147,7 @@ function viewportSize() {
   return { width: window.innerWidth, height: window.innerHeight };
 }
 
-export function WebphonePanel() {
+export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) {
   const webphone = useApi4ComWebphone();
   const ctxState = useWebphoneCallContext();
   useEffect(() => {
@@ -155,6 +158,8 @@ export function WebphonePanel() {
   // Contexto que de fato pertence à ligação em andamento (um esquecido não conta).
   const liveCallContext = liveCall && contextMatchesCall(ctxState.context, liveCall) ? ctxState.context : null;
   const liveContextCallId = liveCallContext?.callId ?? null;
+  const [liveAmd, setLiveAmd] = useState<LiveAmdView | null>(null);
+  const [liveAmdCallId, setLiveAmdCallId] = useState<string | null>(null);
 
   const context = ctxState.context;
   const followNew = shouldFollowNewContext(
@@ -163,6 +168,31 @@ export function WebphonePanel() {
     liveCall,
   );
   const finishedCallId = stage.kind === 'idle' ? null : stage.call.context?.callId ?? null;
+  const amdCallId = (followNew && context?.callId) || liveContextCallId || null;
+  if (liveAmdCallId !== amdCallId) {
+    setLiveAmdCallId(amdCallId);
+    setLiveAmd(null);
+  }
+
+  useEffect(() => {
+    if (!liveListen || !amdCallId) return;
+    if (webphone.call?.phase === 'ended') return;
+    let stop = () => undefined as void;
+    let started = false;
+    const arm = () => {
+      if (started) return;
+      const track = getRemoteAudioTrack();
+      if (!track) return;
+      started = true;
+      stop = startLiveAmdBrowser({ track, callId: amdCallId, onView: setLiveAmd });
+    };
+    arm();
+    const unsubscribe = subscribeRemoteAudioTrack(arm);
+    return () => {
+      unsubscribe();
+      stop();
+    };
+  }, [liveListen, amdCallId, webphone.call?.phase]);
   // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.) Na ligação
   // que o painel acompanha sem SIP, a consulta segue até o desligamento.
   const outcome = useWebphoneCallOutcome(followNew && context ? context.callId : (liveContextCallId ?? finishedCallId), followNew);
@@ -350,6 +380,7 @@ export function WebphonePanel() {
 
   const shell = (
     <DraggableShell compact={idle}>
+      <LiveAmdHint view={liveAmd} />
       {liveCall ? (
         <LiveCallView
           call={liveCall}

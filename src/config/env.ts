@@ -35,6 +35,12 @@ const envSchema = z.object({
   EVOLUTION_API_URL: z.string().url().optional(),
   EVOLUTION_API_KEY: z.string().min(1).optional(),
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // Piloto de escuta ao vivo. Só o servidor lê a chave. Nunca usar NEXT_PUBLIC_.
+  ASSEMBLYAI_API_KEY: z.string().min(1).optional(),
+  ASSEMBLYAI_STREAMING_REGION: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.enum(['eu', 'us']).optional(),
+  ),
   // T3: Previously unvalidated env vars (used via process.env directly)
   KOMMO_CLIENT_ID: z.string().min(1).optional(),
   KOMMO_CLIENT_SECRET: z.string().min(1).optional(),
