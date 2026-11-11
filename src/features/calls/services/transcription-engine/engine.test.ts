@@ -200,6 +200,11 @@ describe('processEngineCall', () => {
       status: 'completed',
       error: 'duration_warning: call=66s audio=85.2s',
     });
+    expect(tables.call_qualifications?.[0]).toMatchObject({
+      status: 'completed',
+      needs_review: true,
+      needs_review_reasons: ['duration_warning'],
+    });
   });
 
   it('áudio maior aceitável é fallback: match justo da busca durável tem preferência', async () => {
@@ -240,6 +245,7 @@ describe('processEngineCall', () => {
       outcome: 'callback',
       interest: 'medium',
       needs_review: false,
+      needs_review_reasons: [],
     });
     expect(writes.every((w) => w.table !== 'calls')).toBe(true);
   });
@@ -372,6 +378,7 @@ describe('mapJevResponse', () => {
     );
     expect(q.needsReview).toBe(true);
     expect(q.confidence).toBe(0.3);
+    expect(q.needsReviewReasons).toContain('outcome_low_confidence');
   });
 
   const high = (over: Partial<Record<string, unknown>> = {}) =>
@@ -384,6 +391,7 @@ describe('mapJevResponse', () => {
   it('caso Ismael: outcome e next altos, noul indeciso, não marca revisão', () => {
     const q = mapJevResponse(high({ has_objections: { type: 'noul', noul: 0.38 } }), input);
     expect(q.needsReview).toBe(false);
+    expect(q.needsReviewReasons).toEqual([]);
   });
 
   it('outcome e next altos com objection_type de baixa confiança: sem revisão e sem puxar confiança', () => {

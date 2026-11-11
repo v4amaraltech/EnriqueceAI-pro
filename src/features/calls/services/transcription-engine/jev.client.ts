@@ -1,12 +1,15 @@
 import type { Utterance } from './assemblyai.client';
 import {
-  JEV_HIGH_CONFIDENCE,
-  JEV_LOW_CONFIDENCE,
   JEV_MODEL,
-  JEV_NOUL_UNDECIDED_BAND,
   JEV_URL,
   JEV_USD_PER_INPUT_MTOK,
 } from './constants';
+import {
+  evaluateNeedsReview,
+  isTrustedNotConnected,
+  stripIcpAnswers,
+  type NeedsReviewReason,
+} from './review';
 
 export const OUTCOME_OPTIONS = {
   meeting_booked: 'O cliente aceitou ou marcou reunião/demonstração com data ou horário combinado.',
@@ -90,6 +93,9 @@ export interface JevInput {
   utterances: Utterance[];
   durationSeconds: number;
   callType: 'inbound' | 'outbound';
+  /** Aviso de duração no áudio transcrito (prefixo duration_warning). */
+  durationWarning?: boolean;
+  speakersCount?: number | null;
 }
 
 export interface JevQualification {
@@ -101,6 +107,7 @@ export interface JevQualification {
   answers: unknown;
   confidence: number;
   needsReview: boolean;
+  needsReviewReasons: NeedsReviewReason[];
   model: string;
   inputTokens: number;
   costUsd: number;
@@ -362,37 +369,24 @@ export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualifica
   const hasObjections = hasObj.noul >= 0.5;
   const mainType = hasObjections ? (objType?.choice ?? 'other') : 'none';
 
-  const outcomeConf = outcome.confidence;
-  const nextConf = next.confidence;
-  const hasConf = (c: number | undefined): c is number => typeof c === 'number';
-  const outcomeNextHigh =
-    hasConf(outcomeConf) &&
-    hasConf(nextConf) &&
-    outcomeConf >= JEV_HIGH_CONFIDENCE &&
-    nextConf >= JEV_HIGH_CONFIDENCE;
+  const review = evaluateNeedsReview({
+    outcome: outcome.choice,
+    nextStep: next.choice,
+    outcomeConf: outcome.confidence,
+    nextConf: next.confidence,
+    interestConf: interest.confidence,
+    objectionTypeConf: objType?.confidence,
+    hasObjections,
+    noul: hasObj.noul,
+    durationWarning: input.durationWarning === true,
+    transcript: input.transcript,
+    speakersCount: input.speakersCount,
+  });
 
-  // Só entram na confiança as perguntas que valem para esta ligação.
-  const confs: number[] = [outcomeConf, nextConf, interest.confidence].filter(hasConf);
-  // Com outcome e next_step altos, objection_type não puxa a confiança para baixo.
-  if (!outcomeNextHigh && hasObjections && hasConf(objType?.confidence))
-    confs.push(objType.confidence);
-  const confidence = confs.length ? Math.min(...confs) : 0;
-
-  let needsReview: boolean;
-  if (
-    !hasConf(outcomeConf) ||
-    outcomeConf < JEV_LOW_CONFIDENCE ||
-    !hasConf(nextConf) ||
-    nextConf < JEV_LOW_CONFIDENCE
-  ) {
-    needsReview = true;
-  } else if (outcomeNextHigh) {
-    needsReview = false;
-  } else {
-    // Regra conservadora: confiança baixa em qualquer pergunta ou noul indeciso (perto de 0,5).
-    const ambiguousNoul = Math.abs(hasObj.noul - 0.5) < JEV_NOUL_UNDECIDED_BAND;
-    needsReview = confs.length === 0 || confidence < JEV_LOW_CONFIDENCE || ambiguousNoul;
-  }
+  const dropIcp = isTrustedNotConnected(outcome.choice, outcome.confidence);
+  const persistedAnswers = dropIcp
+    ? { ...resp, answers: stripIcpAnswers(a), usage: resp.usage }
+    : { ...resp, usage: resp.usage };
 
   const base = {
     outcome: outcome.choice,
@@ -406,11 +400,12 @@ export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualifica
     summary: buildSummary(
       base,
       transcriptExtract(input.utterances, input.transcript),
-      icpFromAnswers(a),
+      dropIcp ? undefined : icpFromAnswers(a),
     ),
-    answers: { ...resp, usage: resp.usage },
-    confidence,
-    needsReview,
+    answers: persistedAnswers,
+    confidence: review.confidence,
+    needsReview: review.needsReview,
+    needsReviewReasons: review.reasons,
     model: resp.model ?? JEV_MODEL,
     inputTokens,
     costUsd: computeJevCostUsd(inputTokens),

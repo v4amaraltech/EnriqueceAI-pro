@@ -1,0 +1,1479 @@
+[
+  {
+    "call_prefix": "d9017b4e",
+    "duration_seconds": 124,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Deixe a sua mensagem na caixa postal. O que que é isso aqui? O que que virou essa pomba? Você vai pegar quantos nhoques? Um sozinho, né? Pegar dois. Um para casa e outro para família. Deus te abençoe, pai. Com o quê, pai? Com o quê? Vai chorar não, né? Você tá com carinha que vai chorar, pai. Você vai chorar, você vai chorar, você vai chorar. Vou fazer garganta profunda, vou ser lacrimejo. Não pode. Aí você nunca não, porque É porque já foi duas. Coloca outra, porque duas fizeram essa aqui, uns vilão. Eu te dou asas para voar. Nossa, tá louco! Quebra o teu braço! Vem cá, safadinha! E foi a fala que você pegou do vídeo lá, né? Foi a fala que você pegou do vídeo lá, né? Olha lá, tá vendo? Às vezes Deus usa o capacitado para capacitar os outros, né?",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 1511,
+        "output_tokens": 222
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.74,
+          "probabilities": {
+            "other": 0.12,
+            "callback": 0,
+            "not_connected": 0.78,
+            "meeting_booked": 0.01,
+            "not_interested": 0.01,
+            "interested_no_next_step": 0.08
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 1.5,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.06,
+          "probabilities": {
+            "0": 0.3,
+            "1": 0.13,
+            "2": 0.36,
+            "3": 0.21
+          }
+        },
+        "has_objections": {
+          "noul": 0.45,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.88,
+          "probabilities": {
+            "none": 0.9,
+            "other": 0.07,
+            "price": 0.02,
+            "timing": 0,
+            "no_need": 0.01,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.07,
+          "probabilities": {
+            "none": 0.23,
+            "meeting": 0.26,
+            "callback": 0.21,
+            "not_connected": 0.3
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_connected",
+    "stored_next_step": "not_connected",
+    "stored_confidence": "0.06",
+    "old_needs_review": true,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "next_step_low_confidence",
+      "suspicious_audio_voicemail_unrelated"
+    ]
+  },
+  {
+    "call_prefix": "fc790ab7",
+    "duration_seconds": 365,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Não tem nada a ver com pacote. Fala, Guilherme, boa tarde. Quem é? Prazer, eu sou Fogaça, falo aqui da V4 Company. Você é o responsável aí da JVN Fabricação de Sacolas? Fogaça, da onde? V4 Company. Conhece a nossa empresa? Não. Boa. Ah, nós somos responsáveis aí pelo marketing, estratégia de vendas da XP Investimentos, né? Spotify, aplicativo de música. Estamos fazendo um trabalho forte aqui com empresas da indústria e a sua empresa me chamou a atenção. Eu vejo bastante potencial aqui para a gente potencializar a sua receita. Eu gostaria de entender mais sobre o seu cenário hoje, Guilherme. Tem um instante para a gente conversar? Pode falar, pode falar. Boa, boa. Hoje, por qual canal vocês adquirem seus novos clientes? Hoje o meu momento é prefeitura. Perfeito. Então é licitação o papel de vocês, para vocês conquistarem novas prefeituras é licitação, é isso? Vocês atuam nível Brasil, como que é? Não entendi. Vocês atuam nível Brasil ou vocês estão mais regionalizados? Eu tô com todas as prefeituras hoje, no momento eu trabalho com todas as prefeituras. Boa. E você hoje vê potencial da sua empresa aumentar esse faturamento? Você tá no seu limite de produção? Como que tá essa parte, Guilherme? Já tô no meu limite já. Entendi. Então, se fosse, por exemplo, a gente implementar uma estratégia para você aumentar sua receita vendendo para supermercados, criando uma nova fonte de receita ali para ti hoje, você conseguiria atender ou não? Então, mas eu faço saco de lixo, não tô fazendo sacola hoje, entendeu? Perfeito, entendi. Você atende mais essa questão de coletas então, né? Isso, eu tô fazendo muito saco de lixo. Saco de lixo, entendi. Isso, a cola descartável eu não tô fazendo ainda no momento. Entendi, entendi. É, então a gente teria que fazer um trabalho para entender, né, como que você poderia atingir um novo mercado para daí você aumentar sua receita. Mas aí a dúvida que sempre a gente, que eu chego junto com o pessoal da indústria, é a seguinte: você conseguiria atender essa nova demanda? Então eu preciso saber a quantidade, eu preciso saber tudo, entendeu? Eu preciso saber quantidade, eu preciso saber de quanto em quanto tempo vocês vão pedir, que não adianta eu te falar assim, eu vou atender você, aí você me vem com uma quantidade aí de 10 mil, 10 mil sacos de lixo mensal. Só que assim, eu tenho que atender você e tem que atender outros clientes. Não adianta eu te falar um sim e deixar meus outros clientes na mão, entendeu? Com certeza, com certeza. Então a ideia é que Não, é só essa logística que eu tenho que fazer, entendeu? Não adianta eu falar para você assim, ó, eu vou te atender, e você vim com a quantidade de 20, vamos pôr exemplo, vai, que hoje, hoje graças a Deus tá vindo bastante. Mas se você colocar 50, 100 mil aí de saco de lixo, aí eu não atendo os outros clientes, aí eu vou acabar me prejudicando, entendeu? Entendi. Entendi, boa. Então assim, só para eu entender, que hoje aumentar sua receita, seu faturamento, não é uma prioridade para você? Você tá bem estabelecido, é isso? Hoje, fora o saco de lixo, a gente também trabalha com papel higiênico, entendeu? Papel higiênico, interfolha. Então eu tenho outros materiais também. Rapaz, eu tô extrapolado aqui, entendi. Você tá várias demandas, tá precisando organizar hoje. Entendi. E considerando então esse ecossistema que você tem aí dentro desse nicho de limpeza e tudo mais, né? Certo. O que que você vê que você poderia melhorar no seu processo de vendas? Você conseguiria atender novos clientes? Porque o nosso trabalho é o quê? Entender qual que é o melhor comprador aí seu, entendeu? E gerar mais demanda para ti. Entendi. Gerar mais demanda, aumentar seu faturamento. Esse meu papo aqui é mais para fazer um filtro, entender se o seu perfil tem as características, né, da empresa que a gente consegue ajudar. Aí eu entendendo que sim, aí eu vou te colocar numa reunião com o nosso especialista, aonde a gente vai fazer um diagnóstico de mercado, entender, ó, a JVN aqui ela tem esse, esse produto, nesse produto ela tem uma margem maior, porém ela não vende tanto. Como que a gente pode te ajudar a vender mais isso aqui? Entendi. Entendeu? Esse é o nosso trabalho. Certo. Você é um vendedor externo então, praticamente é aquele que capta o fornecedor para mandar para o consumidor. Isso, veja bem, hoje nós conseguimos estruturar tanto a questão de marketing, posicionamento da sua empresa, quanto a questão de estrutura comercial. Então vamos colocar que a gente entende que você precisa vender mais B2B e começar a colocar o seu produto para distribuir em atacados, ok? Certo, certo. Criando uma suposição aqui, beleza. Aí você fala assim, pô, mas eu não tenho hoje um time interno para fazer isso, para receber essa demanda. Bom, a gente consegue colocar um time interno aqui na V4 para atender você. Aí o que vai chegar, a gente vai fazer o anúncio, vamos fazer a venda, E vamos te passar para você faturar esse pedido, entendeu? Você consegue me chamar no Zap, né, nesse número mesmo, e mandar esses áudios aqui para mim, que eu já vou mandar isso aí para minha mulher, que a minha mulher que comanda isso daí, né, hoje. E eu já passo para ela e a gente conversa. Vamos ver se a gente, vamos ver o que a gente consegue desenrolar nisso daí. Perfeito, Guilherme, vou te mandar uma mensagem então. A gente vai Vai se entendendo melhor ali. Vamos caminhando, que aí ela vai falando, ela fala também, eu vejo aqui a questão e te mando aí para a gente ver o que que vai melhorar. Perfeito, Guilherme, perfeito. Vou te mandar um alô aqui, pega conversa. Agradeço, abraço, falou, tchau tchau.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 5838,
+        "output_tokens": 224
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "interested_no_next_step",
+          "confidence": 0.47,
+          "probabilities": {
+            "other": 0.21,
+            "callback": 0.19,
+            "not_connected": 0,
+            "meeting_booked": 0.04,
+            "not_interested": 0,
+            "interested_no_next_step": 0.56
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 1.6,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.51,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.42,
+            "2": 0.52,
+            "3": 0.05
+          }
+        },
+        "has_objections": {
+          "noul": 0.93,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "other",
+          "confidence": 0.5,
+          "probabilities": {
+            "none": 0.01,
+            "other": 0.57,
+            "price": 0,
+            "timing": 0.13,
+            "no_need": 0.07,
+            "authority": 0.22,
+            "competitor": 0
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "meeting",
+          "confidence": 0.69,
+          "probabilities": {
+            "none": 0.03,
+            "meeting": 0.77,
+            "callback": 0.19,
+            "not_connected": 0.01
+          }
+        }
+      }
+    },
+    "stored_outcome": "interested_no_next_step",
+    "stored_next_step": "meeting",
+    "stored_confidence": "0.47",
+    "old_needs_review": true,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "outcome_low_confidence",
+      "interest_low_confidence",
+      "objection_type_low_confidence"
+    ]
+  },
+  {
+    "call_prefix": "8944be80",
+    "duration_seconds": 528,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Alô, alô, Dani. Oi, Dani, bom dia, prazer, Giovanni. Tudo certo? Bom, Giovanni, tudo certo. Correria como sempre, mas faz parte da vida, né, meu amigo? Ô, Dani, quero ser bem objetivo, cara, para não tomar teu tempo. Eu sou gerente de relacionamento aqui da empresa V4 Company. Eu fico justamente com a parte de cuidar ali no pós-atendimento, algo do tipo. E eu observei que você já teve ali um contato com um dos meus especialistas, que a gente acabou não evoluindo. Eu tô aqui só para colocar um feedback mesmo, entender se foi um mau atendimento, se foi um produto que não fez sentido, se foi preço que não encaixou, não foi negociado. Você pode me direcionar, por favor? Então, cara, é que eu tô num momento agora de muita dúvida aqui, sabe, no que eu tô mexendo na empresa. Aí eu falei, ah, vou esperar mais para frente para ver que amadureceu a ideia, ver o que eu vou fazer, alguma coisa assim. E é mais dúvida tua mesmo. E quando você se cadastrou ali no nosso site, o que mais chamou atenção ali nos nossos serviços? Aí tentar bater o volume de ligação. Ah, cara, é mais a parte assim, a estrutura da gente. Entendi. Tanto vocês têm quanto divulgações, né, marketing, essa parte de venda mesmo. Legal. Hoje a parte de vendas é um desafio dentro da tua operação hoje, ô Deni? De aquisição de novos clientes? Ah, eu acho que sim. Entendi. E hoje, o que que você tá fazendo já para resolver esse ponto? Ah, é remédio caseiro, né? Entendi. O que que seria o remédio caseiro? Médias assim meio, quase tem umas pessoas que a gente paga para mexer, às vezes o resultado não é esperado, né, não dá o que a gente espera. Entendi. Então, então no caso ali é você tá investindo com algumas pessoas, mas você não tem ideia de como mensurar isso em resultados reais, do quanto que tá investindo, quanto tá retornando. Entendi. Como que você analisa isso, cara, de colocar teu dinheiro ali, não saber para onde ele tá indo, se vai voltar? Não, análise é ruim, né? Porque até porque a gente coloca pouco, né? Mas mesmo coloca pouco, porque tem medo de entrar no programa, de colocar bastante Meu negócio não rodar, não fluir. Então isso é muito por conta de você não ter confiança na estratégia que te passaram, concorda? Não te passaram previsibilidade, números. E marketing é isso, cara. Se você— eu aqui na V4 a gente fala que marketing é marketing a partir do momento que eu gero uma receita para dentro da empresa. Marketing é isso, é colocar o mercado em movimento. Então eu construí uma estratégia para conseguir chegar no objetivo final, que é o quê? Te trazer um cliente novo. Se o marketing ele não vende, ele não é marketing, ele é apenas publicidade. É a mesma coisa de eu pegar, se eu não tiver uma previsibilidade de investir e saber o quanto tá retornando, é a mesma coisa de eu jogar num tigrinho da vida, botar o dinheiro lá e não saber se eu posso ganhar ou não. É uma probabilidade. Mas não, marketing ele é assertividade. Então acredito que você não investe mais porque você não se sente seguro com a estratégia de hoje, que não te traz segurança do quanto vai retornar, correto? E é justamente nesse viés que a V4 entra, Denis. Hoje a V4 Company, ela é uma empresa que ela é focada em estratégias de vendas e marketing. Por que primeiro vendas? Porque hoje nós atuamos de uma forma modular. Então dentro de mais de 60 soluções que a gente tem, todas elas são voltadas para um único objetivo: eu conseguir construir um motor ali de vendas para impulsionar ali o teu negócio. Esse é o nosso único objetivo, tá? E talvez, não sei quem que te atendeu ali, mas não trouxe uma visão muito clara, por isso talvez não fez sentido. Mas que que eu gostaria de entender, ô Denis, se faz sentido eu te levar para uma reunião com meu especialista para ele fazer um diagnóstico e te mostrar ali os pontos que eu consigo te ajudar no que você não tá tendo resultado hoje. Faz sentido para ti? Ah, sim, faz sentido o que você tá falando aí, sim. Bacana. Denis, como que funciona, cara? Eu preciso agendar uma reunião com o meu especialista, eu vou abrir agenda dele. Normalmente a nossa reunião dura em torno de 1 hora, tá? Seria por via Google Meet, ou seja, online, e eu preciso desse time ali na tua agenda. Hoje tem algum horário que a gente consiga encaixar? Cara, só a partir de segunda-feira agora. Segunda-feira hoje, tá. Ali na segunda-feira fica melhor para ti no período da manhã ou da tarde? Da tarde, tá. Da tarde, ó, eu vou ter um horário a partir das 2 horas. Como que fica esse horário para ti? Tá bom, fica bom, perfeito. Cara, o que que eu vou te pedir? Eu vou te mandar uma mensagem no teu WhatsApp neste momento. É o mesmo número que eu tô falando contigo? Legal. Vou pedir para você me encaminhar um email, por favor. Para quê? Para a gente travar a agenda do meu especialista e travar a tua também, para a gente Cumprir ele com horário na segunda-feira às 2 horas, pode ser? Pode ser. Perfeito, então vem, você consegue me encaminhar esse email para eu já deixar a agenda dele travada aqui para nós? Vamos ver. Ô Denis, oi, eu tenho um email aqui comigo, acho que quando você se cadastrou apareceu, que é o seguinte: dernival9876gomes@gmail.com. É esse mesmo? Ah, legal, excelente. O que eu vou fazer, eu vou gerar ali o link da nossa reunião, tá? Que que eu peço para ti, para na segunda-feira você acessar pelo computador, que a nossa reunião diagnóstico real ali ela é bastante visível, bastante interativa, tá? Não é só aquele spam import chato que a maioria das empresas apresenta. Para você já reservar na tua agenda esse horário ali na segunda-feira, às 2 horas, combinado? Perfeito então, meu amigo. Muito obrigado, tá? Segunda-feira a gente se encontra ali. Um ótimo fim de semana para ti também, irmão. Valeu, obrigado. Tchau, tchau.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 4964,
+        "output_tokens": 223
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "meeting_booked",
+          "confidence": 1,
+          "probabilities": {
+            "other": 0,
+            "callback": 0,
+            "not_connected": 0,
+            "meeting_booked": 1,
+            "not_interested": 0,
+            "interested_no_next_step": 0
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 2.87,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.87,
+          "probabilities": {
+            "0": 0,
+            "1": 0.01,
+            "2": 0.11,
+            "3": 0.88
+          }
+        },
+        "has_objections": {
+          "noul": 0.84,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "timing",
+          "confidence": 0.46,
+          "probabilities": {
+            "none": 0.02,
+            "other": 0.34,
+            "price": 0.05,
+            "timing": 0.54,
+            "no_need": 0.05,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "meeting",
+          "confidence": 1,
+          "probabilities": {
+            "none": 0,
+            "meeting": 1,
+            "callback": 0,
+            "not_connected": 0
+          }
+        }
+      }
+    },
+    "stored_outcome": "meeting_booked",
+    "stored_next_step": "meeting",
+    "stored_confidence": "0.46",
+    "old_needs_review": true,
+    "expected_needs_review": false,
+    "expected_reasons": []
+  },
+  {
+    "call_prefix": "b32ce707",
+    "duration_seconds": 634,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Oi, Michael. Oi, boa tarde, é o Ismael da V4 Company. Opa, tudo bom, amigo? Beleza, bom demais. Tô tentando falar contigo ali no período da manhã, mas eu não tava conseguindo, por isso que eu tô te ligando agora de tarde. Cadastro ali, Exposound, da tua empresa, a gente consegue falar agora? 5 minutos. Consegue, consegue sim. Tá, qual que é o intuito, tá? É entender o que que te motivou a cadastrar, ou seja, entender do seu lado qual que é a dificuldade que você tá tendo do marketing e vendas até a ponto de você vir procurar a V4 Company. Por que que a gente faz isso? Só alinhando também que a V4 tem mais de 50 soluções, só que a venda do serviço, da mão de obra, vai ser em cima de uma necessidade sua. Então a gente consegue te ajudar de forma mais personalizada do que aquele pacote de serviço que você compra. Muitas das vezes você não usa o serviço e aí não faz sentido. Então é muito mais personalizado, eu tenho toda a mão de obra que você precisa, tem mais de 50 soluções. Só que mediante o que você tá buscando resolver, qual que é o foco hoje da tua empresa, a gente vende ou oferece ali uma solução que atenda essa sua demanda, certo? Entendi, entendi. Deixou de falar. Hoje o marketing mesmo meu é porque eu fui ali, eu acho que eu solicitei vocês pelo pessoal, não foi nem pelo Instagram da empresa. É mais um marketing mesmo em rede social e a parte de venda no e-commerce que eu tô assim tartaruga ainda, tô engatilhando. Seria dar um pulo nessa empresa, seria em que sentido? Vender mais pelo seu site, pelo seu Instagram? Vender mais pelo, tanto pelo Instagram quanto pelo Mercado Livre, pelas plataformas que temos hoje, né? Hoje você não vende através de plataforma nem nada? Vendo, vendo, já vendo sim, mas como eu lhe falei, tá bem lento ainda. Como que tá o, deixa eu ver se eu acho aqui. Como que tá o Instagram de você? Site? Eu não consegui encontrar pelo telefone. Fale comigo no Zap que eu te mando agora aí. Te mandei o aí. Chegou aqui, deixa eu mandar agora aí. Deixa eu te explicar o que que eu trabalho. Eu tenho, eu tenho tanto a parte de serviço quanto a parte de distribuição também de material, novos e seminovos também, de parte de sonhos para casa, certo? Tô entendendo. E aí hoje você vende através do seu, você tem um ponto de venda e mais pelo marketplace? Isso, tem um ponto de venda também pelo marketplace. Aí, o seu principal cliente hoje, quem que é? O cliente final? É outras empresas que compram para revender? Outras empresas também, e também eu vendo para o cliente final também, os dois, ambos. Ah, você me mandou aqui, ó, Instagram de vocês. Deixa eu dar uma olhada. Era esse aqui mesmo que eu tava. E hoje, qual que é a tua média de faturamento? Mês, mês, mês. Eu tô na casa de 150 a 170 mês. 150, 170 mês. E aí, como que funciona? Você compra essas peças usadas e novas e revende para o cara que vai revender? Isso, isso. As usadas é mais para consumidor final. As novas, eu tenho uma parte de distribuição também que eu vendo para quem vai revender também. Entendi. E hoje, desse faturamento que você tem, que que você tá fazendo de um lucro que sobra? Você tá buscando reinvestir? Entendi. Ô, Maicon, e me conta uma coisa, só o Instagram aqui que você tem, né? Não tem site, não tem no marketplace? Como que tá nos outros marketplace? É porque quem toma conta não sou eu. Quem que é? É Tayara, minha esposa, e uma funcionária minha que é Hillary, todas as duas. Sim, mas você é o dono da empresa, você sabe o nome pelo menos de como que tá lá? Tá o mesmo nome do Instagram mesmo aí, se você olha aí. Porque eu queria entender de você qual que é a média de faturamento lá nos marketplace, que que vende lá? Tá muito pouco ainda, lá deve estar na casa de uns 10 a 15 mil. Mais ou menos, muito pouco. Então de lá é 10 a 15 mil. E aí do seu ponto de venda aí, aonde você tá, né, localizado, qual que é por esse restante todo aí? Mais ou menos nessa casa de 150 eu vendo por aqui, tá? Se no marketplace você vende 10 mil, seu faturamento é de 150, no seu ponto de venda você tá vendendo 140 mil. Isso, tá. E aí, como que é hoje? Como que é organizado aí dentro hoje? Você vende através de um vendedor? É você que vai atrás das vendas? A pessoa vai até você no seu ponto de venda? Como que faz isso hoje? Hoje, 70% das pessoas que vem até a mim mesmo. Outros 30% é aqueles clientes já que a gente já tem um tempo que a gente vai até ele para atender. Mas a maioria, os clientes que vem atrás da gente mesmo. Entendi. Então 70% basicamente é indicação, é venda que você já fez para alguém, essa pessoa indicou. Isso aí, tá. Uma dúvida: hoje você tem sócio? É só você que toma conta da sua empresa? Não tenho sócio não, sou eu mesmo, tá. E ainda assim, cara, você basicamente tem empresa quanto tempo? Tempo? 1 ano, 2, 10? Eu tenho no meu ramo já, já tem mais ou menos 15 anos já de seguimento. 15 anos. Se você puder resumir em uma frase aí, uma palavra, que que é o que você tá buscando resolver? Eu quero aprender muito, muito o e-commerce mesmo, organizar para faturar mais, né? Tá. E aí vamos lá, se eu conseguir te ajudar, é uma prioridade hoje para você querer resolver isso? Tem que hoje é daqui para frente é onde vai acontecer as vendas, vai ser por aí mesmo, né, por esse canal mesmo. Entendi. Mas aí a prioridade de 0 a 5 aí, qual que é? De 0 a 5, vamos dizer que tem que ser de 4, 5. Show. Porque o que eu quero fazer aqui, enquanto lembra que a gente tava falando, primeira etapa você falou A primeira etapa do comercial. Segunda etapa do comercial basicamente é você falar com o meu especialista. Então aqui inclusive ele vai vir trazendo uma solução para o que você tá me trazendo aqui de, pô, tô buscando resolver, que é o que você falou, vender mais ali no marketplace, só que eu não sei como eu faço isso, eu não sei qual é o melhor investimento, eu não sei qual que é o tempo de retorno, eu não sei qual é a comunicação que eu tenho que você, né, no digital, para alcançar o cara lá que tem distribuidora também, não é só cliente final. Como que eu faço isso? Hoje você não tem isso e está buscando isso de forma profissional, certo? Isso, correto. Então o meu especialista, ele vai apresentar para você essa solução. Então, cara, mediante essas informações, é isso aqui que a gente consegue te ajudar. Faz sentido, Michael? Você que depois vai avaliar na reunião. É isso que eu tô buscando resolver, isso aí que eu quero mesmo, é esse time aí que eu quero para fazer aqui na minha empresa. Quanto que é V4? Aí na própria reunião vocês conseguem negociar. Então, questão de negociação de valores é qual a melhor forma de pagamento para você, que que você costuma fazer pagamento, é boleto, Pix, cartão, qual que é a melhor forma? E aí tentar chegar num um valor que fique bom para você e para nós também. Entendido, correto. Tá, então vamos fazer o seguinte, eu tô com agenda aberta. Como que tá o horário aí para você hoje para a gente falar? Eu tenho um horário agora às 4, tá? Agora quase 4, às 4 eu consigo estar presente. Às 4 horas tem um cliente aqui, 4:30 eu tô liberado. É que às 4, 5 horas já temos uma reunião. Então se começar 4:30, a reunião no mínimo leva 1 hora, senão a gente consegue apresentar aí com profundidade, que é a solução. 4 horas da tarde você consegue ou não? 4 horas, eu vou ter que tentar aqui ligar para ele para tentar marcar ele para 5. Então eu creio que eu consigo fazer isso aqui, tá? Então vou deixar travado o horário. Posso? Você me dê só 5 minutinhos aqui só para ligar para ele, já combino com ele aqui para ficar mais um pouquinho mais tarde. Não, tranquilo. Tira só uma dúvida: você consegue participar de um computador? Consigo até na live assim. Então é importante porque o que a gente vai apresentar é muito visual e por telefone fica pequeno, você recebe ligação, perde atenção, e aí não é legal. Pelo computador é o melhor dos mundos. Entendido, top. Então vou deixar, vou marcar com ele aqui para um pouco mais tarde, deixa preparado então, tá? Então você me dá um retorno em 5, ó, já são 3:30, me dá um retorno em 2 minutos aqui que eu já travo agenda. Tô, ok, combinado. Continue. Tchau, guarda-livre. Valeu. Tchau, joia.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 8535,
+        "output_tokens": 222
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "meeting_booked",
+          "confidence": 0.96,
+          "probabilities": {
+            "other": 0,
+            "callback": 0.01,
+            "not_connected": 0,
+            "meeting_booked": 0.97,
+            "not_interested": 0,
+            "interested_no_next_step": 0.02
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 2.99,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.99,
+          "probabilities": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.99
+          }
+        },
+        "has_objections": {
+          "noul": 0.38,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.53,
+          "probabilities": {
+            "none": 0.6,
+            "other": 0.01,
+            "price": 0.07,
+            "timing": 0.32,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "meeting",
+          "confidence": 0.97,
+          "probabilities": {
+            "none": 0,
+            "meeting": 0.98,
+            "callback": 0.02,
+            "not_connected": 0
+          }
+        }
+      }
+    },
+    "stored_outcome": "meeting_booked",
+    "stored_next_step": "meeting",
+    "stored_confidence": "0.96",
+    "old_needs_review": true,
+    "expected_needs_review": false,
+    "expected_reasons": []
+  },
+  {
+    "call_prefix": "4a7b820a",
+    "duration_seconds": 66,
+    "speakers_count": 2,
+    "transcript_error": "duration_warning: call=66s audio=85.2s",
+    "transcript": "É só, era para ter chegado antes só por causa do processo de transferência. Aí eu preciso ir no Procon, eu preciso ir, né? Então, filha da puta, não respondeu o e-mail. Vou botar no pau, pai. Eu vou perguntar. Bom dia, quem eu falo? Bom dia, aqui é dentista. Oi, tudo bem? Com quem eu falo? Com quem você quer falar? Com a Verônica. Sou eu mesma, pode falar. Ah, bom dia, tudo bem? Tudo bem. Que bom. Tá meio ocupada agora, não, Verônica? Sim. Tá, você quer que eu retorno depois? Como que é? É sobre o quê? Eu sou gerente aqui da matriz da empresa V4 Company, não sei se você já ouviu falar. Não, nunca ouvi falar. Nossa, moça, meu Deus. Você dá um Google aí, você vai encontrar a gente. A gente é bem famoso no mercado. Mas basicamente, a minha unidade aqui, a gente trabalha com bastante clínicas de odontologia, enfim, questão de aumentar consulta, aumentar as vendas, ter um melhor posicionamento ali através do marketing. Aí eu não sei se você já tem alguma equipe interna, se já trabalha com alguma agência, ou se esse é o seu foco agora. Você acha interessante a gente estar conversando, ou se não é o momento? Não, agora não é o momento. Ah, perfeito então, Verônica. Muito obrigado, sucesso para você, viu?",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 3121,
+        "output_tokens": 577
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_interested",
+          "confidence": 0.95,
+          "probabilities": {
+            "other": 0.01,
+            "callback": 0.03,
+            "not_connected": 0,
+            "meeting_booked": 0,
+            "not_interested": 0.96,
+            "interested_no_next_step": 0
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.35,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.66,
+          "probabilities": {
+            "0": 0.66,
+            "1": 0.34,
+            "2": 0,
+            "3": 0
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "no": 0.95,
+            "yes": 0.01,
+            "not_mentioned": 0.04
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.52,
+          "probabilities": {
+            "no": 0.32,
+            "yes": 0,
+            "not_mentioned": 0.68
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.28,
+          "probabilities": {
+            "no": 0.52,
+            "yes": 0.02,
+            "not_mentioned": 0.46
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.35,
+          "probabilities": {
+            "no": 0.28,
+            "yes": 0.57,
+            "not_mentioned": 0.15
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "uncertain",
+          "confidence": 0.44,
+          "probabilities": {
+            "no": 0.14,
+            "yes": 0.23,
+            "uncertain": 0.63
+          }
+        },
+        "has_objections": {
+          "noul": 0.84,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "timing",
+          "confidence": 1,
+          "probabilities": {
+            "none": 0,
+            "other": 0,
+            "price": 0,
+            "timing": 1,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.45,
+          "probabilities": {
+            "low": 0.21,
+            "high": 0.06,
+            "medium": 0.14,
+            "unknown": 0.59
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "callback",
+          "confidence": 0.61,
+          "probabilities": {
+            "none": 0.24,
+            "meeting": 0.03,
+            "callback": 0.71,
+            "not_connected": 0.02
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_interested",
+    "stored_next_step": "callback",
+    "stored_confidence": "0.61",
+    "old_needs_review": false,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "incoherent_outcome_next_step",
+      "duration_warning"
+    ]
+  },
+  {
+    "call_prefix": "c434ac49",
+    "duration_seconds": 112,
+    "speakers_count": 3,
+    "transcript_error": null,
+    "transcript": "Olá, se você disser seu nome e o motivo da ligação, poderei ver se esta pessoa está disponível. Mateus, urgente. Permaneça na linha. Alô, alô, oi, opa, bom dia, Adriano, bom dia. É isso, ô querida, que que tá falando? É o Matheus, se lembra de mim? Não, não, eu tava falando com Fernando Cardoso ontem, cara. O Matheus aqui da V4, eu tava falando com Fernando Cardoso ontem. Ah, é o Matheus aqui da V4, eu falei com ele, cara, acabei lembrando de você. Não sei se você se recorda, lá no começo do ano a gente quase fechou uma parceria, só que acabou que você tava com outra empresa. Fazer o contrato e acaba aí novembro. Deixa eu resumir, eu não tô morando mais aqui no Brasil, fui embora. Ah, sério? É, tô aqui no Paraguai. Ah, e a Desfruta? A Desfruta ela foi arrendada, só que o pessoal que administra lá também não fica na sede. Ela foi feita uma parceria com um grupo aí. Na verdade eu não vendi, ela tá arrendada. Entendi, mas você continua como dono ainda? Não, hoje quem que tá? Eu posso falar que não sei te dizer. Eu só devo para Receita Federal agora, fui obrigado a sair fora de lá. Caramba, cara! É por aí, Brasil, cara, todo mundo fazendo L, eu caí no bolso, fui junto. Caraca! É isso, querido, mas obrigado por ter contextualizado aí. Valeu, Adriano! De nada, fica com Deus, tchau tchau!",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 3521,
+        "output_tokens": 576
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "other",
+          "confidence": 0.65,
+          "probabilities": {
+            "other": 0.71,
+            "callback": 0,
+            "not_connected": 0.02,
+            "meeting_booked": 0,
+            "not_interested": 0.12,
+            "interested_no_next_step": 0.15
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.87,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.13,
+          "probabilities": {
+            "0": 0.47,
+            "1": 0.21,
+            "2": 0.3,
+            "3": 0.02
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.25,
+          "probabilities": {
+            "no": 0.44,
+            "yes": 0.06,
+            "not_mentioned": 0.5
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.62,
+          "probabilities": {
+            "no": 0.25,
+            "yes": 0,
+            "not_mentioned": 0.75
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.2,
+          "probabilities": {
+            "no": 0.24,
+            "yes": 0.47,
+            "not_mentioned": 0.29
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.26,
+          "probabilities": {
+            "no": 0.51,
+            "yes": 0.11,
+            "not_mentioned": 0.38
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "uncertain",
+          "confidence": 0.44,
+          "probabilities": {
+            "no": 0.34,
+            "yes": 0.03,
+            "uncertain": 0.63
+          }
+        },
+        "has_objections": {
+          "noul": 0.36,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.25,
+          "probabilities": {
+            "none": 0.36,
+            "other": 0.16,
+            "price": 0,
+            "timing": 0.01,
+            "no_need": 0.01,
+            "authority": 0.1,
+            "competitor": 0.36
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.87,
+          "probabilities": {
+            "low": 0.09,
+            "high": 0,
+            "medium": 0.01,
+            "unknown": 0.9
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.52,
+          "probabilities": {
+            "none": 0.64,
+            "meeting": 0.07,
+            "callback": 0.25,
+            "not_connected": 0.04
+          }
+        }
+      }
+    },
+    "stored_outcome": "other",
+    "stored_next_step": "none",
+    "stored_confidence": "0.13",
+    "old_needs_review": true,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "next_step_low_confidence",
+      "interest_low_confidence",
+      "ambiguous_noul"
+    ]
+  },
+  {
+    "call_prefix": "44d730bb",
+    "duration_seconds": 51,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Olá, se você disser seu nome e o motivo da chamada, poderei ver se esta pessoa está disponível. Mateus, urgente. Permaneça na linha. Esta pessoa não está disponível. Se desejar, deixe outra mensagem após o sinal.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 1952,
+        "output_tokens": 579
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 1,
+          "probabilities": {
+            "other": 0,
+            "callback": 0,
+            "not_connected": 1,
+            "meeting_booked": 0,
+            "not_interested": 0,
+            "interested_no_next_step": 0
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.62,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.4,
+          "probabilities": {
+            "0": 0.74,
+            "1": 0.05,
+            "2": 0.08,
+            "3": 0.13
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.35,
+          "probabilities": {
+            "no": 0.04,
+            "yes": 0.39,
+            "not_mentioned": 0.57
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "no": 0,
+            "yes": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.85,
+          "probabilities": {
+            "no": 0.03,
+            "yes": 0.9,
+            "not_mentioned": 0.07
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.58,
+          "probabilities": {
+            "no": 0.27,
+            "yes": 0.01,
+            "not_mentioned": 0.72
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.37,
+          "probabilities": {
+            "no": 0.58,
+            "yes": 0,
+            "uncertain": 0.42
+          }
+        },
+        "has_objections": {
+          "noul": 0.08,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.91,
+          "probabilities": {
+            "none": 0.92,
+            "other": 0.01,
+            "price": 0,
+            "timing": 0.05,
+            "no_need": 0,
+            "authority": 0.02,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.83,
+          "probabilities": {
+            "low": 0.03,
+            "high": 0,
+            "medium": 0.1,
+            "unknown": 0.87
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.89,
+          "probabilities": {
+            "none": 0.01,
+            "meeting": 0,
+            "callback": 0.07,
+            "not_connected": 0.92
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_connected",
+    "stored_next_step": "not_connected",
+    "stored_confidence": "0.4",
+    "old_needs_review": false,
+    "expected_needs_review": false,
+    "expected_reasons": []
+  },
+  {
+    "call_prefix": "536acfe2",
+    "duration_seconds": 284,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Alô? Oi, Mônica, bom dia, bom dia, tudo bem? Acho que caiu sua ligação com Matheus aqui da V4 Company. Tudo bom, Matheus? Tudo bem, graças a Deus. Correria como sempre, né, Mônica? Dá para a gente conversar 5 minutos agora? Você acha que é um momento? Eu retorno para você um outro horário. Tá, um minutinho. Mônica, é só para entender, né, você já conhece aqui nossa empresa, V4 Company, já tem um breve contexto, você acho que chegou a fazer uma reunião conosco. Eu, como fico parte da frente aqui do comercial, vim aqui pessoalmente para entender se teve alguma coisa da nossa parte que deixou a desejar, seja valores, seja atendimento, seja produto, até para a gente melhorar como empresa também, tá? Então, eu não sei se eu tinha falado com você, eu não fechei porque o valor do serviço prestado por você não cabe, não cabia no meu orçamento, né? Não cabe para minha empresa pequena, né? Então assim, foi por isso que eu não tinha, não fechei naquele momento. Não, sem problema. Isso é até um ponto para melhorar aqui, questão interna, porque eu sempre falo aqui, principalmente para o time comercial, é muito difícil alguém não fechar com a nossa empresa. Só não fecha se ela realmente não quiser, porque em relação de preço é totalmente personalizado para cada um de empresa, né? Acho que já comentaram com você que a gente tem aqui um top cliente famoso do mercado, que é uma XP Investimentos. IFood, eles pagam em torno para nós é cerca de R$200.000, R$100.000 por mês, tá, dependendo, porque o porte da empresa daquele. Então não faz sentido cobrar um valor exuberante para uma empresa que não tá no patamar que ainda tem capacidade de pagar aquele valor. Com certeza que não faz sentido isso, tá. E até para ter mais contexto da sua reunião, qual que foi o valor cobrado de você e o que que foi a pessoa? Se você se você lembrar? Nossa, não vou lembrar, né? Já tem muito tempo, né? Então assim, para falar, foi o ano passado. Então assim, foi bastante tempo. Mas em relação à média, foi cobrado um valor mensal, tipo R$5.000, R$10.000 por mês? Eu falei assim, para mim não, fora da minha realidade, né? O restaurante de vocês é o Toca do Chico, não é? É Toca do Chico. Toca do Chico, top demais. Aí seria só em relação à gestão de tráfego e essas coisas, certo? Que vocês estavam procurando para fazer? Foi o que ofereceram, né, esse serviço, mas nesse valor. Então não faz sentido eu nem fazer uma reunião com vocês, algo que eu não tenho, não tem como, né? É igual eu assim, né, para ficar até mais claro, é a mesma coisa que eu não tenho dinheiro para ali comprar Ferrari, não tem por que eu entrar na loja, gente. É, não é? Com certeza. Sim, tem que ser algo que realmente faz sentido. Quando você buscou a V4, agora entendendo de você, o que que você procurava? O que que você tava buscando assim? Você conheceu a gente porque é um pouco famoso no mercado? Foi uma indicação? Como que foi? Não, não, a gente começa a olhar, procurar, né? Você vê com relação, né? Mas eu vou ser bem sincera assim, eu não tenho Zero insatisfação com todas as empresas de tráfego, sabe? Uma coisa assim que é, para mim nunca funcionou. Então assim, sabe quando você fala assim, ah, é muito fácil vender, né? Porque todo mundo que chega até a gente quer vender, mas entregar mesmo que é bom, nada. Então é bem complicado, né? Oi.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 4209,
+        "output_tokens": 574
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_interested",
+          "confidence": 0.9,
+          "probabilities": {
+            "other": 0.01,
+            "callback": 0.04,
+            "not_connected": 0,
+            "meeting_booked": 0.01,
+            "not_interested": 0.92,
+            "interested_no_next_step": 0.02
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.44,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.57,
+          "probabilities": {
+            "0": 0.59,
+            "1": 0.39,
+            "2": 0.02,
+            "3": 0
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.26,
+          "probabilities": {
+            "no": 0.39,
+            "yes": 0.51,
+            "not_mentioned": 0.1
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.98,
+            "yes": 0.02,
+            "not_mentioned": 0
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.5,
+          "probabilities": {
+            "no": 0.33,
+            "yes": 0,
+            "not_mentioned": 0.67
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.83,
+          "probabilities": {
+            "no": 0.04,
+            "yes": 0.89,
+            "not_mentioned": 0.07
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.76,
+          "probabilities": {
+            "no": 0.03,
+            "yes": 0.84,
+            "uncertain": 0.13
+          }
+        },
+        "has_objections": {
+          "noul": 0.98,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "price",
+          "confidence": 1,
+          "probabilities": {
+            "none": 0,
+            "other": 0,
+            "price": 1,
+            "timing": 0,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.58,
+          "probabilities": {
+            "above_150k": 0.21,
+            "below_150k": 0.07,
+            "not_mentioned": 0.72
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.15,
+          "probabilities": {
+            "low": 0.26,
+            "high": 0.16,
+            "medium": 0.22,
+            "unknown": 0.36
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.31,
+          "probabilities": {
+            "none": 0.48,
+            "meeting": 0.19,
+            "callback": 0.31,
+            "not_connected": 0.02
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_interested",
+    "stored_next_step": "none",
+    "stored_confidence": "0.31",
+    "old_needs_review": true,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "next_step_low_confidence",
+      "interest_low_confidence"
+    ]
+  },
+  {
+    "call_prefix": "9123b95e",
+    "duration_seconds": 41,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Olá, se você disser seu nome e o motivo da chamada, poderei ver se esta pessoa está disponível. Guilherme Zuckerman, parece, né? Permaneça na linha, Guilherme Zuckerman. Alô.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 2011,
+        "output_tokens": 584
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.78,
+          "probabilities": {
+            "other": 0.16,
+            "callback": 0,
+            "not_connected": 0.82,
+            "meeting_booked": 0,
+            "not_interested": 0,
+            "interested_no_next_step": 0.02
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.76,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.24,
+          "probabilities": {
+            "0": 0.45,
+            "1": 0.35,
+            "2": 0.19,
+            "3": 0.01
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.94,
+          "probabilities": {
+            "no": 0.03,
+            "yes": 0.01,
+            "not_mentioned": 0.96
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "no": 0,
+            "yes": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.02,
+            "yes": 0,
+            "not_mentioned": 0.98
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.83,
+          "probabilities": {
+            "no": 0.11,
+            "yes": 0,
+            "not_mentioned": 0.89
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "uncertain",
+          "confidence": 0.6,
+          "probabilities": {
+            "no": 0.27,
+            "yes": 0,
+            "uncertain": 0.73
+          }
+        },
+        "has_objections": {
+          "noul": 0.07,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 1,
+          "probabilities": {
+            "none": 1,
+            "other": 0,
+            "price": 0,
+            "timing": 0,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.93,
+          "probabilities": {
+            "low": 0.02,
+            "high": 0,
+            "medium": 0.03,
+            "unknown": 0.95
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.85,
+          "probabilities": {
+            "none": 0.02,
+            "meeting": 0.06,
+            "callback": 0.03,
+            "not_connected": 0.89
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_connected",
+    "stored_next_step": "not_connected",
+    "stored_confidence": "0.24",
+    "old_needs_review": true,
+    "expected_needs_review": false,
+    "expected_reasons": []
+  },
+  {
+    "call_prefix": "57c5bb55",
+    "duration_seconds": 81,
+    "speakers_count": 1,
+    "transcript_error": null,
+    "transcript": "Sua chamada foi encaminhada para o correio de voz, pois a pessoa que você está tentando contatar não está disponível. Grave a sua mensagem após o sinal. Você pode desligar quando terminar a gravação.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 1846,
+        "output_tokens": 582
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 1,
+          "probabilities": {
+            "other": 0,
+            "callback": 0,
+            "not_connected": 1,
+            "meeting_booked": 0,
+            "not_interested": 0,
+            "interested_no_next_step": 0
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 0.02,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.98,
+          "probabilities": {
+            "0": 0.99,
+            "1": 0,
+            "2": 0.01,
+            "3": 0
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.89,
+          "probabilities": {
+            "no": 0.07,
+            "yes": 0,
+            "not_mentioned": 0.93
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "no": 0,
+            "yes": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.91,
+          "probabilities": {
+            "no": 0.06,
+            "yes": 0,
+            "not_mentioned": 0.94
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.74,
+          "probabilities": {
+            "no": 0.17,
+            "yes": 0,
+            "not_mentioned": 0.83
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.26,
+          "probabilities": {
+            "no": 0.51,
+            "yes": 0,
+            "uncertain": 0.49
+          }
+        },
+        "has_objections": {
+          "noul": 0.04,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "none",
+          "confidence": 0.98,
+          "probabilities": {
+            "none": 0.98,
+            "other": 0,
+            "price": 0,
+            "timing": 0.02,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.96,
+          "probabilities": {
+            "low": 0.02,
+            "high": 0,
+            "medium": 0.01,
+            "unknown": 0.97
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "not_connected",
+          "confidence": 0.92,
+          "probabilities": {
+            "none": 0,
+            "meeting": 0,
+            "callback": 0.06,
+            "not_connected": 0.94
+          }
+        }
+      }
+    },
+    "stored_outcome": "not_connected",
+    "stored_next_step": "not_connected",
+    "stored_confidence": "0.92",
+    "old_needs_review": false,
+    "expected_needs_review": false,
+    "expected_reasons": []
+  },
+  {
+    "call_prefix": "b971b09a",
+    "duration_seconds": 68,
+    "speakers_count": 2,
+    "transcript_error": null,
+    "transcript": "Olá, bom dia. Alô, opa, sou eu. Fala, é Fogaça, gerente aqui da V4 Company. Tudo bem contigo? Bem, boa. Tentei ligar para o senhor ali às 17:30 na segunda-feira, a gente não conseguiu falar. Tô retornando hoje, como é que tá aí? Conseguimos conversar um pouquinho, Jamil? Meu, agora eu tô ocupado, sem problema. Mas nota aqui, me deixa um contato, eu te dou um retorno. Boa! Você quer que eu te mando o aluno no WhatsApp, esse número mesmo? Você prefere que eu te fale aqui? Não, pode mandar no WhatsApp mesmo. Boa! Ó, mandei aqui agora. Boa. Vou dar um resumo ali do motivo do nosso assunto, tá, que a gente vai conversar sobre o assunto. Aí a gente terminar uma posição, quando o senhor tiver tranquilo, eu te retorno. Beleza, beleza. Obrigado, Jamil. Um abraço.",
+    "jev_response": {
+      "model": "jev-1.14.0",
+      "usage": {
+        "input_tokens": 2864,
+        "output_tokens": 583
+      },
+      "answers": {
+        "outcome": {
+          "type": "choice",
+          "choice": "callback",
+          "confidence": 0.83,
+          "probabilities": {
+            "other": 0.03,
+            "callback": 0.86,
+            "not_connected": 0,
+            "meeting_booked": 0,
+            "not_interested": 0,
+            "interested_no_next_step": 0.11
+          }
+        },
+        "interest": {
+          "type": "score",
+          "score": 1.43,
+          "legend": {
+            "0": "Nenhum interesse.",
+            "1": "Interesse baixo, educado mas frio.",
+            "2": "Interesse médio, fez perguntas ou ouviu com atenção.",
+            "3": "Interesse alto, quer avançar."
+          },
+          "confidence": 0.56,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.61,
+            "2": 0.33,
+            "3": 0.05
+          }
+        },
+        "bant_need": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.86,
+          "probabilities": {
+            "no": 0.07,
+            "yes": 0.02,
+            "not_mentioned": 0.91
+          }
+        },
+        "headcount": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "over_5": 0,
+            "up_to_5": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_budget": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "no": 0,
+            "yes": 0,
+            "not_mentioned": 1
+          }
+        },
+        "bant_timeline": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.67,
+          "probabilities": {
+            "no": 0.22,
+            "yes": 0,
+            "not_mentioned": 0.78
+          }
+        },
+        "bant_authority": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 0.46,
+          "probabilities": {
+            "no": 0.26,
+            "yes": 0.1,
+            "not_mentioned": 0.64
+          }
+        },
+        "decision_maker": {
+          "type": "choice",
+          "choice": "uncertain",
+          "confidence": 0.77,
+          "probabilities": {
+            "no": 0.12,
+            "yes": 0.03,
+            "uncertain": 0.85
+          }
+        },
+        "has_objections": {
+          "noul": 0.71,
+          "type": "noul"
+        },
+        "objection_type": {
+          "type": "choice",
+          "choice": "timing",
+          "confidence": 1,
+          "probabilities": {
+            "none": 0,
+            "other": 0,
+            "price": 0,
+            "timing": 1,
+            "no_need": 0,
+            "authority": 0,
+            "competitor": 0
+          }
+        },
+        "monthly_revenue": {
+          "type": "choice",
+          "choice": "not_mentioned",
+          "confidence": 1,
+          "probabilities": {
+            "above_150k": 0,
+            "below_150k": 0,
+            "not_mentioned": 1
+          }
+        },
+        "digital_maturity": {
+          "type": "choice",
+          "choice": "unknown",
+          "confidence": 0.48,
+          "probabilities": {
+            "low": 0.07,
+            "high": 0.01,
+            "medium": 0.31,
+            "unknown": 0.61
+          }
+        },
+        "next_step_suggestion": {
+          "type": "choice",
+          "choice": "callback",
+          "confidence": 0.61,
+          "probabilities": {
+            "none": 0.01,
+            "meeting": 0.13,
+            "callback": 0.71,
+            "not_connected": 0.15
+          }
+        }
+      }
+    },
+    "stored_outcome": "callback",
+    "stored_next_step": "callback",
+    "stored_confidence": "0.56",
+    "old_needs_review": true,
+    "expected_needs_review": true,
+    "expected_reasons": [
+      "interest_low_confidence"
+    ]
+  }
+]
