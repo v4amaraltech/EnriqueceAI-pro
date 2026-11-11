@@ -533,6 +533,7 @@ describe('fetchPendingActivities', () => {
           loss_notes: 'nota da cadência',
           lead: {
             ...mockLead,
+            id: '11111111-1111-4111-8111-111111111111',
             lost_at: '2026-04-17T10:22:48.000Z',
             loss_notes: null,
             loss_reason_id: reasonId,
@@ -544,6 +545,7 @@ describe('fetchPendingActivities', () => {
       message_templates: { data: [mockTemplate] },
       scheduled_activities: { data: [], error: null },
       loss_reasons: { data: [{ id: reasonId, name: 'Deixou de responder' }], error: null },
+      interactions: { data: [{ lead_id: '11111111-1111-4111-8111-111111111111', created_at: '2026-11-10T15:00:00.000Z' }], error: null },
     });
 
     const plain = await fetchPendingActivities();
@@ -557,5 +559,7 @@ describe('fetchPendingActivities', () => {
     expect(withCard.data[0]?.lead.loss_reason_name).toBe('Deixou de responder');
     expect(withCard.data[0]?.lead.enrollment_loss_notes).toBe('nota da cadência');
     expect(withCard.data[0]?.lead.lost_at).toBe('2026-04-17T10:22:48.000Z');
+    expect(withCard.data[0]?.lead.last_interaction_at).toBe('2026-11-10T15:00:00.000Z');
+    expect(plain.data[0]?.lead).not.toHaveProperty('last_interaction_at');
   });
 });

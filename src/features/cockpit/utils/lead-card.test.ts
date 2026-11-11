@@ -10,11 +10,14 @@ import { CALL_LEAD_CARD_FLAG, CALL_LEAD_CARD_ORG_ID } from '../services/call-lea
 import { contrastRatio, LEAD_CARD_TEXT_PAIRS } from './lead-card-colors';
 import {
   buildLeadCard,
+  formatAgo,
+  formatCardTemperature,
   formatLostAgo,
   leadCardFromActivity,
   leadTemperatureLabel,
   openingLine,
   openingTemplates,
+  suggestedOpening,
   type LeadCardInput,
 } from './lead-card';
 
@@ -69,7 +72,7 @@ describe('cartão do lead', () => {
     expect(field(model, 'cnpj')?.value).toBe('00.000.000/0001-91');
     expect(field(model, 'email')?.value).toBe('contato.fixture@example.com');
     expect(field(model, 'origem')?.value).toBe('Blackbox / Google');
-    expect(field(model, 'temperatura')?.value).toBe('perdido há 6,8 meses');
+    expect(field(model, 'temperatura')).toMatchObject({ value: 'perdido há 6,8 meses', fullWidth: false });
     expect(field(model, 'sdr')).toBeUndefined();
     expect(field(model, 'motivo')?.value).toBe('Deixou de responder');
     expect(field(model, 'notas')).toMatchObject({ value: 'Cadência concluída sem resposta', fullWidth: true });
@@ -117,6 +120,74 @@ describe('cartão do lead', () => {
     for (const line of [...openingTemplates(), openingLine('Deixou de responder', 'Willian') ?? '']) {
       expect(line).not.toMatch(/[—–]/);
     }
+  });
+
+  it('lead ativo sempre mostra temperatura e abertura, e esconde a perda', () => {
+    const model = buildLeadCard(input({
+      lostAt: null,
+      lossReasonName: null,
+      lossNotes: null,
+      enrollmentLossNotes: null,
+      createdAt: '2026-11-01T12:00:00.000Z',
+      lastInteractionAt: null,
+      callScript: null,
+    }));
+
+    expect(field(model, 'temperatura')).toMatchObject({ value: 'cadastrado há 10 dias', fullWidth: true });
+    expect(field(model, 'motivo')).toBeUndefined();
+    expect(field(model, 'notas')).toBeUndefined();
+    expect(model.opening).toBe(
+      'Contato, esta é a tentativa 3 de 3. A empresa está no segmento Indústria. Seria um problema eu falar por 2 minutos?',
+    );
+    expect(model.opening).not.toMatch(/[—–]/);
+    expect(field(model, 'temperatura')?.value).not.toMatch(/quente|morno|frio/i);
+  });
+
+  it('temperatura usa o último contato e cai em Sem dados quando não há data', () => {
+    expect(formatAgo('2026-11-10T15:00:00.000Z', NOW)).toBe('há 1 dia');
+    expect(formatCardTemperature({
+      lostAt: null,
+      lastInteractionAt: '2026-11-10T15:00:00.000Z',
+      createdAt: '2026-11-01T12:00:00.000Z',
+      now: NOW,
+    })).toBe('último contato há 1 dia');
+    expect(formatCardTemperature({
+      lostAt: '2026-04-17T10:22:48.000Z',
+      lastInteractionAt: '2026-11-10T15:00:00.000Z',
+      createdAt: '2026-11-01T12:00:00.000Z',
+      now: NOW,
+    })).toBe('perdido há 6,8 meses');
+    expect(formatCardTemperature({ lostAt: null, lastInteractionAt: null, createdAt: null, now: NOW })).toBe('Sem dados');
+    expect(formatAgo(new Date(NOW.getTime() + 60_000).toISOString(), NOW)).toBeNull();
+  });
+
+  it('abertura de lead ativo usa o roteiro e restrição não pede retorno', () => {
+    expect(suggestedOpening({
+      firstName: 'Contato',
+      segmento: 'Varejo',
+      lossReasonName: null,
+      stepOrder: 7,
+      totalSteps: 28,
+      callScript: 'Perguntar quem decide.',
+    })).toBe(
+      'Contato, na tentativa 7 de 28, o passo pede: Perguntar quem decide. Seria um problema eu seguir por 2 minutos?',
+    );
+    expect(suggestedOpening({
+      firstName: 'Ana',
+      segmento: 'Indústria',
+      lossReasonName: 'Blocklist',
+      stepOrder: 2,
+      totalSteps: 5,
+      callScript: 'Ligar mesmo assim.',
+    })).toBe('Ana, este cadastro está em uma restrição. Não retome a conversa.');
+    expect(suggestedOpening({
+      firstName: null,
+      segmento: null,
+      lossReasonName: null,
+      stepOrder: 1,
+      totalSteps: 4,
+      callScript: '   ',
+    })).toBe('Esta é a tentativa 1 de 4. Seria um problema eu explicar em 2 minutos o motivo do contato?');
   });
 
   it('a flag nasce desligada e só liga a V4 Company Amaral', () => {
