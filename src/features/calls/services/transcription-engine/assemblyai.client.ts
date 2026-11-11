@@ -1,5 +1,6 @@
 import {
   ASSEMBLYAI_BASE_URL,
+  ASSEMBLYAI_KEYTERMS_PROMPT,
   ASSEMBLYAI_LANGUAGE,
   ASSEMBLYAI_SPEECH_MODEL,
   ASSEMBLYAI_USD_PER_AUDIO_HOUR,
@@ -65,7 +66,10 @@ export function createAssemblyAiClient(opts: Options): AssemblyAiClient {
   async function call<T>(url: string, init: RequestInit): Promise<T> {
     const res = await doFetch(url, {
       ...init,
-      headers: { authorization: opts.apiKey, ...(init.headers as Record<string, string> | undefined) },
+      headers: {
+        authorization: opts.apiKey,
+        ...(init.headers as Record<string, string> | undefined),
+      },
     });
     if (!res.ok) throw new AssemblyAiError(`assemblyai_http_${res.status}`);
     return (await res.json()) as T;
@@ -86,16 +90,21 @@ export function createAssemblyAiClient(opts: Options): AssemblyAiClient {
           speech_models: [ASSEMBLYAI_SPEECH_MODEL],
           language_code: ASSEMBLYAI_LANGUAGE,
           speaker_labels: true,
+          keyterms_prompt: ASSEMBLYAI_KEYTERMS_PROMPT,
         }),
       });
 
       const deadline = Date.now() + timeoutMs;
       let current = created;
       while (current.status !== 'completed') {
-        if (current.status === 'error') throw new AssemblyAiError(`assemblyai_error: ${current.error ?? 'unknown'}`);
+        if (current.status === 'error')
+          throw new AssemblyAiError(`assemblyai_error: ${current.error ?? 'unknown'}`);
         if (Date.now() > deadline) throw new AssemblyAiError('assemblyai_timeout');
         await sleep(pollMs);
-        current = await call<TranscriptResponse>(`${ASSEMBLYAI_BASE_URL}/transcript/${created.id}`, { method: 'GET' });
+        current = await call<TranscriptResponse>(
+          `${ASSEMBLYAI_BASE_URL}/transcript/${created.id}`,
+          { method: 'GET' },
+        );
       }
 
       const utterances = (current.utterances ?? []).map((u) => ({

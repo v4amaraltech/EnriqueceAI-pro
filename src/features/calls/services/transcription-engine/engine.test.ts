@@ -1,21 +1,37 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AssemblyAiClient } from './assemblyai.client';
-import { downmixToMonoPcm16, durationMatches, encodeWavMono16, prepareMonoAudio } from './audio';
+import { type AssemblyAiClient, createAssemblyAiClient } from './assemblyai.client';
+import {
+  assessAudioDuration,
+  downmixToMonoPcm16,
+  durationMatches,
+  encodeWavMono16,
+  prepareMonoAudio,
+} from './audio';
+import { ASSEMBLYAI_KEYTERMS_PROMPT } from './constants';
 import { shouldTriggerEngineOnHangup } from './flag';
-import { mapJevResponse, type JevClient, type JevResponse } from './jev.client';
+import {
+  type JevClient,
+  type JevResponse,
+  buildJevQuestions,
+  buildSummary,
+  mapJevResponse,
+} from './jev.client';
 import { aggregateDaily } from './monitoring';
-import { processEngineCall, type EngineDeps } from './orchestrator';
+import { type EngineDeps, processEngineCall } from './orchestrator';
 import { triggerTranscriptionEngine } from './trigger';
 
 type Row = Record<string, unknown>;
 
 /** Banco em memória com o mínimo do builder do Supabase usado pelo orquestrador. */
 function fakeDb(call: Row | null, seed: Record<string, Row[]> = {}) {
-  const tables: Record<string, Row[]> = { call_transcripts_v2: [], call_qualifications: [], ...seed };
+  const tables: Record<string, Row[]> = {
+    call_transcripts_v2: [],
+    call_qualifications: [],
+    ...seed,
+  };
   const writes: Array<{ table: string; op: string; data: Row }> = [];
   let seq = 0;
   const db = {
@@ -103,7 +119,14 @@ function makeDeps(db: unknown, over: Partial<EngineDeps> = {}) {
     isEnabled: vi.fn().mockResolvedValue(true),
     downloadAudio: vi.fn().mockResolvedValue(Buffer.from('x')),
     lookupRecording: vi.fn().mockResolvedValue(null),
-    prepareAudio: vi.fn().mockResolvedValue({ wav: Buffer.from('w'), durationSeconds: 60, sampleRate: 8000, sourceChannels: 2 }),
+    prepareAudio: vi
+      .fn()
+      .mockResolvedValue({
+        wav: Buffer.from('w'),
+        durationSeconds: 60,
+        sampleRate: 8000,
+        sourceChannels: 2,
+      }),
     assemblyAi: () => assembly,
     jev: () => jev,
     now: () => Date.now(),
@@ -115,7 +138,9 @@ function makeDeps(db: unknown, over: Partial<EngineDeps> = {}) {
 describe('processEngineCall', () => {
   it('flag off: não chama provedores nem grava', async () => {
     const { db, writes } = fakeDb(CALL);
-    const { deps, transcribe, qualify } = makeDeps(db, { isEnabled: vi.fn().mockResolvedValue(false) });
+    const { deps, transcribe, qualify } = makeDeps(db, {
+      isEnabled: vi.fn().mockResolvedValue(false),
+    });
     expect(await processEngineCall('call-1', deps)).toBe('flag_off');
     expect(transcribe).not.toHaveBeenCalled();
     expect(qualify).not.toHaveBeenCalled();
@@ -127,7 +152,10 @@ describe('processEngineCall', () => {
     const { deps, transcribe } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('skipped');
     expect(transcribe).not.toHaveBeenCalled();
-    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ status: 'skipped', error: 'duration_too_short' });
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      status: 'skipped',
+      error: 'duration_too_short',
+    });
   });
 
   it('não atendida: sem linha', async () => {
@@ -140,18 +168,72 @@ describe('processEngineCall', () => {
   it('divergência de duração: não transcreve e registra duration_mismatch', async () => {
     const { db, tables } = fakeDb(CALL);
     const { deps, transcribe } = makeDeps(db, {
-      prepareAudio: vi.fn().mockResolvedValue({ wav: Buffer.from('w'), durationSeconds: 20, sampleRate: 8000, sourceChannels: 1 }),
+      prepareAudio: vi
+        .fn()
+        .mockResolvedValue({
+          wav: Buffer.from('w'),
+          durationSeconds: 20,
+          sampleRate: 8000,
+          sourceChannels: 1,
+        }),
     });
     expect(await processEngineCall('call-1', deps)).toBe('skipped');
     expect(transcribe).not.toHaveBeenCalled();
     expect(String(tables.call_transcripts_v2?.[0]?.error)).toMatch(/^duration_mismatch/);
   });
 
+  it('áudio maior que o banco (66s vs 85,2s): transcreve e grava duration_warning', async () => {
+    const { db, tables } = fakeDb({ ...CALL, duration_seconds: 66 });
+    const { deps, transcribe } = makeDeps(db, {
+      prepareAudio: vi
+        .fn()
+        .mockResolvedValue({
+          wav: Buffer.from('w'),
+          durationSeconds: 85.2,
+          sampleRate: 8000,
+          sourceChannels: 1,
+        }),
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(transcribe).toHaveBeenCalled();
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      status: 'completed',
+      error: 'duration_warning: call=66s audio=85.2s',
+    });
+  });
+
+  it('áudio maior aceitável é fallback: match justo da busca durável tem preferência', async () => {
+    const { db, tables } = fakeDb({ ...CALL, duration_seconds: 66 });
+    const prepare = vi
+      .fn()
+      .mockResolvedValueOnce({
+        wav: Buffer.from('w'),
+        durationSeconds: 85.2,
+        sampleRate: 8000,
+        sourceChannels: 1,
+      })
+      .mockResolvedValueOnce({
+        wav: Buffer.from('w'),
+        durationSeconds: 67,
+        sampleRate: 8000,
+        sourceChannels: 1,
+      });
+    const lookup = vi.fn().mockResolvedValue('https://rec.example.com/durable.mp3');
+    const { deps } = makeDeps(db, { prepareAudio: prepare, lookupRecording: lookup });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(lookup).toHaveBeenCalled();
+    expect(tables.call_transcripts_v2?.[0]?.error).toBeNull();
+  });
+
   it('caminho feliz: grava as duas linhas e não escreve em calls', async () => {
     const { db, tables, writes } = fakeDb(CALL);
     const { deps } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('completed');
-    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ status: 'completed', provider: 'assemblyai', speakers_count: 2 });
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      status: 'completed',
+      provider: 'assemblyai',
+      speakers_count: 2,
+    });
     expect(tables.call_qualifications?.[0]).toMatchObject({
       status: 'completed',
       provider: 'jev',
@@ -168,9 +250,23 @@ describe('processEngineCall', () => {
     const lookup = vi.fn().mockResolvedValue('https://rec.example.com/durable.mp3');
     const prepare = vi
       .fn()
-      .mockResolvedValueOnce({ wav: Buffer.from('w'), durationSeconds: 20, sampleRate: 8000, sourceChannels: 1 })
-      .mockResolvedValueOnce({ wav: Buffer.from('w'), durationSeconds: 59, sampleRate: 8000, sourceChannels: 1 });
-    const { deps } = makeDeps(db, { downloadAudio: download, lookupRecording: lookup, prepareAudio: prepare });
+      .mockResolvedValueOnce({
+        wav: Buffer.from('w'),
+        durationSeconds: 20,
+        sampleRate: 8000,
+        sourceChannels: 1,
+      })
+      .mockResolvedValueOnce({
+        wav: Buffer.from('w'),
+        durationSeconds: 59,
+        sampleRate: 8000,
+        sourceChannels: 1,
+      });
+    const { deps } = makeDeps(db, {
+      downloadAudio: download,
+      lookupRecording: lookup,
+      prepareAudio: prepare,
+    });
     expect(await processEngineCall('call-1', deps)).toBe('completed');
     expect(download.mock.calls.map((c) => c[0])).toEqual([
       'https://rec.example.com/a.mp3',
@@ -192,19 +288,37 @@ describe('processEngineCall', () => {
   it('retry de linha failed reaproveita a mesma linha', async () => {
     const { db, tables } = fakeDb(CALL, {
       call_transcripts_v2: [
-        { id: 't1', call_id: 'call-1', provider: 'assemblyai', status: 'failed', attempts: 1, updated_at: '2026-11-11T10:00:00Z' },
+        {
+          id: 't1',
+          call_id: 'call-1',
+          provider: 'assemblyai',
+          status: 'failed',
+          attempts: 1,
+          updated_at: '2026-11-11T10:00:00Z',
+        },
       ],
     });
     const { deps } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('completed');
     expect(tables.call_transcripts_v2).toHaveLength(1);
-    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ id: 't1', status: 'completed', attempts: 2 });
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      id: 't1',
+      status: 'completed',
+      attempts: 2,
+    });
   });
 
   it('desiste após MAX_ATTEMPTS', async () => {
     const { db } = fakeDb(CALL, {
       call_transcripts_v2: [
-        { id: 't1', call_id: 'call-1', provider: 'assemblyai', status: 'failed', attempts: 3, updated_at: 'x' },
+        {
+          id: 't1',
+          call_id: 'call-1',
+          provider: 'assemblyai',
+          status: 'failed',
+          attempts: 3,
+          updated_at: 'x',
+        },
       ],
     });
     const { deps, transcribe } = makeDeps(db);
@@ -215,9 +329,14 @@ describe('processEngineCall', () => {
   it('falha do AssemblyAI vira failed com erro', async () => {
     const { db, tables } = fakeDb(CALL);
     const { deps, qualify } = makeDeps(db);
-    deps.assemblyAi = () => ({ transcribe: vi.fn().mockRejectedValue(new Error('assemblyai_http_500')) });
+    deps.assemblyAi = () => ({
+      transcribe: vi.fn().mockRejectedValue(new Error('assemblyai_http_500')),
+    });
     expect(await processEngineCall('call-1', deps)).toBe('transcript_failed');
-    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ status: 'failed', error: 'assemblyai_http_500' });
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      status: 'failed',
+      error: 'assemblyai_http_500',
+    });
     expect(qualify).not.toHaveBeenCalled();
   });
 });
@@ -247,9 +366,109 @@ describe('mapJevResponse', () => {
   });
 
   it('baixa confiança marca needs_review', () => {
-    const q = mapJevResponse(jevOk({ outcome: { type: 'choice', choice: 'other', confidence: 0.3 } }), input);
+    const q = mapJevResponse(
+      jevOk({ outcome: { type: 'choice', choice: 'other', confidence: 0.3 } }),
+      input,
+    );
     expect(q.needsReview).toBe(true);
     expect(q.confidence).toBe(0.3);
+  });
+
+  const high = (over: Partial<Record<string, unknown>> = {}) =>
+    jevOk({
+      outcome: { type: 'choice', choice: 'meeting_booked', confidence: 0.96 },
+      next_step_suggestion: { type: 'choice', choice: 'meeting', confidence: 0.96 },
+      ...over,
+    });
+
+  it('caso Ismael: outcome e next altos, noul indeciso, não marca revisão', () => {
+    const q = mapJevResponse(high({ has_objections: { type: 'noul', noul: 0.38 } }), input);
+    expect(q.needsReview).toBe(false);
+  });
+
+  it('outcome e next altos com objection_type de baixa confiança: sem revisão e sem puxar confiança', () => {
+    const q = mapJevResponse(
+      high({
+        has_objections: { type: 'noul', noul: 0.95 },
+        objection_type: { type: 'choice', choice: 'price', confidence: 0.3 },
+        interest: { type: 'score', score: 2, confidence: 0.9 },
+      }),
+      input,
+    );
+    expect(q.needsReview).toBe(false);
+    expect(q.confidence).toBe(0.9);
+  });
+
+  it('next_step com baixa confiança e outcome alto marca revisão', () => {
+    const q = mapJevResponse(
+      high({ next_step_suggestion: { type: 'choice', choice: 'meeting', confidence: 0.5 } }),
+      input,
+    );
+    expect(q.needsReview).toBe(true);
+  });
+
+  it('sem confiança de outcome marca revisão', () => {
+    expect(
+      mapJevResponse(high({ outcome: { type: 'choice', choice: 'callback' } }), input).needsReview,
+    ).toBe(true);
+  });
+
+  it('sem outcome/next altos, noul indeciso ainda marca revisão', () => {
+    const q = mapJevResponse(
+      jevOk({
+        outcome: { type: 'choice', choice: 'callback', confidence: 0.7 },
+        has_objections: { type: 'noul', noul: 0.45 },
+      }),
+      input,
+    );
+    expect(q.needsReview).toBe(true);
+  });
+
+  it('perguntas de ICP são opcionais e entram no resumo quando informadas', () => {
+    expect(() => mapJevResponse(jevOk(), input)).not.toThrow();
+    expect(Object.keys(buildJevQuestions())).toEqual(
+      expect.arrayContaining([
+        'monthly_revenue',
+        'headcount',
+        'digital_maturity',
+        'decision_maker',
+        'bant_budget',
+        'bant_authority',
+        'bant_need',
+        'bant_timeline',
+      ]),
+    );
+    const q = mapJevResponse(
+      jevOk({
+        monthly_revenue: { type: 'choice', choice: 'above_150k' },
+        headcount: { type: 'choice', choice: 'over_5' },
+        decision_maker: { type: 'choice', choice: 'yes' },
+        digital_maturity: { type: 'choice', choice: 'unknown' },
+        bant_budget: { type: 'choice', choice: 'not_mentioned' },
+      }),
+      input,
+    );
+    expect(q.summary).toContain('faturamento acima de R$ 150 mil/mês');
+    expect(q.summary).toContain('porte mais de 5 funcionários');
+    expect(q.summary).toContain('decisor na ligação: sim');
+    expect(q.summary).not.toContain('maturidade');
+    expect(q.summary).not.toContain('BANT');
+  });
+
+  it('resumo antigo quando todo o ICP é não mencionado', () => {
+    const base = {
+      outcome: 'callback',
+      interest: 'low',
+      objections: { has_objections: false, probability: 0, main_type: 'none' },
+      nextStepSuggestion: 'callback',
+    };
+    const withIcp = buildSummary(base, 'x', {
+      monthlyRevenue: 'not_mentioned',
+      headcount: 'not_mentioned',
+      decisionMaker: undefined,
+    });
+    expect(withIcp).toBe(buildSummary(base, 'x'));
+    expect(withIcp).not.toContain('ICP');
   });
 
   it('resposta incompleta lança', () => {
@@ -260,17 +479,44 @@ describe('mapJevResponse', () => {
 describe('hangup trigger', () => {
   const base = { callId: 'c', orgId: 'o', appUrl: 'https://app', serviceRoleKey: 'k' };
   it('helper puro', () => {
-    expect(shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 30, flagEnabled: true })).toBe(true);
-    expect(shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 29, flagEnabled: true })).toBe(false);
-    expect(shouldTriggerEngineOnHangup({ answered: false, durationSeconds: 60, flagEnabled: true })).toBe(false);
-    expect(shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 60, flagEnabled: false })).toBe(false);
+    expect(
+      shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 30, flagEnabled: true }),
+    ).toBe(true);
+    expect(
+      shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 29, flagEnabled: true }),
+    ).toBe(false);
+    expect(
+      shouldTriggerEngineOnHangup({ answered: false, durationSeconds: 60, flagEnabled: true }),
+    ).toBe(false);
+    expect(
+      shouldTriggerEngineOnHangup({ answered: true, durationSeconds: 60, flagEnabled: false }),
+    ).toBe(false);
   });
   it('só faz fetch com a flag ligada', async () => {
     const f = vi.fn().mockResolvedValue({ ok: true });
-    expect(await triggerTranscriptionEngine({ ...base, answered: true, durationSeconds: 60, isEnabled: async () => false, fetchImpl: f })).toBe(false);
+    expect(
+      await triggerTranscriptionEngine({
+        ...base,
+        answered: true,
+        durationSeconds: 60,
+        isEnabled: async () => false,
+        fetchImpl: f,
+      }),
+    ).toBe(false);
     expect(f).not.toHaveBeenCalled();
-    expect(await triggerTranscriptionEngine({ ...base, answered: true, durationSeconds: 60, isEnabled: async () => true, fetchImpl: f })).toBe(true);
-    expect(f).toHaveBeenCalledWith('https://app/api/workers/transcribe-qualify-call', expect.anything());
+    expect(
+      await triggerTranscriptionEngine({
+        ...base,
+        answered: true,
+        durationSeconds: 60,
+        isEnabled: async () => true,
+        fetchImpl: f,
+      }),
+    ).toBe(true);
+    expect(f).toHaveBeenCalledWith(
+      'https://app/api/workers/transcribe-qualify-call',
+      expect.anything(),
+    );
   });
   it('não lê a flag para ligação curta', async () => {
     const isEnabled = vi.fn();
@@ -297,7 +543,11 @@ describe('monitoramento', () => {
         t({}),
         t({ latency_ms: 3000 }),
         t({ status: 'failed', latency_ms: null, error: 'x' }),
-        t({ status: 'skipped', error: 'duration_mismatch: call=60s audio=20.0s', latency_ms: null }),
+        t({
+          status: 'skipped',
+          error: 'duration_mismatch: call=60s audio=20.0s',
+          latency_ms: null,
+        }),
         t({ text_length: 0 }),
       ] as never,
       [{ org_id: 'o', created_at: '2026-11-11T15:00:00Z', cost_usd: 0.001, needs_review: true }],
@@ -348,6 +598,41 @@ describe('áudio', () => {
     expect(durationMatches(60, 55)).toBe(true);
     expect(durationMatches(60, 30)).toBe(false);
     expect(durationMatches(600, 520)).toBe(true);
+  });
+
+  it('áudio maior dentro do teto é aceito com aviso; menor ou absurdo é recusado', () => {
+    expect(assessAudioDuration(66, 85.2)).toEqual({ accepted: true, warning: true });
+    expect(assessAudioDuration(60, 55)).toEqual({ accepted: true, warning: false });
+    expect(assessAudioDuration(600, 520)).toEqual({ accepted: true, warning: false });
+    expect(assessAudioDuration(60, 30).accepted).toBe(false);
+    expect(assessAudioDuration(60, 20).accepted).toBe(false);
+    expect(assessAudioDuration(60, 300).accepted).toBe(false);
+  });
+});
+
+describe('assemblyai keyterms', () => {
+  it('envia keyterms_prompt no POST /transcript', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      const json = (v: unknown) => ({ ok: true, json: async () => v }) as Response;
+      if (u.endsWith('/upload')) return json({ upload_url: 'https://up/x' });
+      if (u.endsWith('/transcript')) {
+        bodies.push(JSON.parse(String(init?.body)));
+        return json({
+          id: 't1',
+          status: 'completed',
+          text: 'oi',
+          audio_duration: 60,
+          utterances: [],
+        });
+      }
+      throw new Error(`url inesperada ${u}`);
+    }) as unknown as typeof fetch;
+    const client = createAssemblyAiClient({ apiKey: 'k', fetchImpl });
+    await client.transcribe(Buffer.from('x'));
+    expect(bodies[0]?.keyterms_prompt).toEqual(ASSEMBLYAI_KEYTERMS_PROMPT);
+    expect(bodies[0]).not.toHaveProperty('prompt');
   });
 });
 

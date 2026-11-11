@@ -1,5 +1,12 @@
-import { JEV_LOW_CONFIDENCE, JEV_MODEL, JEV_URL, JEV_USD_PER_INPUT_MTOK } from './constants';
 import type { Utterance } from './assemblyai.client';
+import {
+  JEV_HIGH_CONFIDENCE,
+  JEV_LOW_CONFIDENCE,
+  JEV_MODEL,
+  JEV_NOUL_UNDECIDED_BAND,
+  JEV_URL,
+  JEV_USD_PER_INPUT_MTOK,
+} from './constants';
 
 export const OUTCOME_OPTIONS = {
   meeting_booked: 'O cliente aceitou ou marcou reunião/demonstração com data ou horário combinado.',
@@ -27,6 +34,55 @@ export const NEXT_STEP_OPTIONS = {
   callback: 'Ligar de novo.',
   not_connected: 'Tentar contato novamente, pois não houve conversa.',
   none: 'Nenhum próximo passo faz sentido.',
+} as const;
+
+/** Perguntas de ICP da V4 (opcionais). Chaves estáveis em `answers`. */
+export const REVENUE_OPTIONS = {
+  below_150k: 'Faturamento mensal estimado abaixo de R$ 150 mil.',
+  above_150k: 'Faturamento mensal estimado acima de R$ 150 mil.',
+  not_mentioned: 'Faturamento não foi mencionado.',
+} as const;
+
+export const HEADCOUNT_OPTIONS = {
+  up_to_5: 'Empresa com até 5 funcionários.',
+  over_5: 'Empresa com mais de 5 funcionários.',
+  not_mentioned: 'Porte ou número de funcionários não mencionado.',
+} as const;
+
+export const DIGITAL_MATURITY_OPTIONS = {
+  low: 'Maturidade digital baixa: pouca presença online, sem processos ou ferramentas.',
+  medium: 'Maturidade digital média: alguma presença e ferramentas, mas sem estratégia clara.',
+  high: 'Maturidade digital alta: já investe em marketing digital, mídia paga e métricas.',
+  unknown: 'Não dá para saber a maturidade digital.',
+} as const;
+
+export const DECISION_MAKER_OPTIONS = {
+  yes: 'A pessoa na ligação é quem decide a contratação.',
+  no: 'A pessoa na ligação não decide.',
+  uncertain: 'Não ficou claro se a pessoa decide.',
+} as const;
+
+export const BANT_OPTIONS = {
+  budget: {
+    yes: 'Há orçamento ou disposição de investir.',
+    no: 'Não há orçamento.',
+    not_mentioned: 'Orçamento não mencionado.',
+  },
+  authority: {
+    yes: 'Há autoridade de decisão na conversa.',
+    no: 'Sem autoridade de decisão.',
+    not_mentioned: 'Autoridade não mencionada.',
+  },
+  need: {
+    yes: 'O cliente demonstrou necessidade clara.',
+    no: 'O cliente não tem necessidade.',
+    not_mentioned: 'Necessidade não mencionada.',
+  },
+  timeline: {
+    yes: 'Há prazo ou urgência definidos.',
+    no: 'Sem prazo ou urgência.',
+    not_mentioned: 'Prazo não mencionado.',
+  },
 } as const;
 
 export interface JevInput {
@@ -110,6 +166,47 @@ export function buildJevQuestions() {
       instructions: 'Qual o próximo passo mais adequado para o SDR, com base só no que foi dito?',
       criteria: NEXT_STEP_OPTIONS,
     },
+    monthly_revenue: {
+      type: 'choice',
+      instructions:
+        'O faturamento mensal estimado da empresa foi mencionado? Ele fica abaixo ou acima de R$ 150 mil?',
+      criteria: REVENUE_OPTIONS,
+    },
+    headcount: {
+      type: 'choice',
+      instructions: 'Qual o porte da empresa em número de funcionários, segundo o que foi dito?',
+      criteria: HEADCOUNT_OPTIONS,
+    },
+    digital_maturity: {
+      type: 'choice',
+      instructions: 'Qual a maturidade digital da empresa, com base só no que foi dito?',
+      criteria: DIGITAL_MATURITY_OPTIONS,
+    },
+    decision_maker: {
+      type: 'choice',
+      instructions: 'A pessoa que atendeu a ligação é quem decide a contratação?',
+      criteria: DECISION_MAKER_OPTIONS,
+    },
+    bant_budget: {
+      type: 'choice',
+      instructions: 'BANT, orçamento: o cliente tem orçamento ou disposição de investir?',
+      criteria: BANT_OPTIONS.budget,
+    },
+    bant_authority: {
+      type: 'choice',
+      instructions: 'BANT, autoridade: há poder de decisão na conversa?',
+      criteria: BANT_OPTIONS.authority,
+    },
+    bant_need: {
+      type: 'choice',
+      instructions: 'BANT, necessidade: o cliente demonstrou necessidade real?',
+      criteria: BANT_OPTIONS.need,
+    },
+    bant_timeline: {
+      type: 'choice',
+      instructions: 'BANT, prazo: há prazo ou urgência para decidir?',
+      criteria: BANT_OPTIONS.timeline,
+    },
   };
 }
 
@@ -121,7 +218,12 @@ const OUTCOME_LABEL: Record<string, string> = {
   interested_no_next_step: 'interessado, sem próximo passo',
   other: 'outro desfecho',
 };
-const INTEREST_LABEL: Record<string, string> = { none: 'nenhum', low: 'baixo', medium: 'médio', high: 'alto' };
+const INTEREST_LABEL: Record<string, string> = {
+  none: 'nenhum',
+  low: 'baixo',
+  medium: 'médio',
+  high: 'alto',
+};
 const OBJECTION_LABEL: Record<string, string> = {
   price: 'preço',
   timing: 'momento',
@@ -151,9 +253,59 @@ export function transcriptExtract(utterances: Utterance[], transcript: string): 
   return picks.map((u) => `[${u.speaker}] ${clip(u.text)}`).join(' | ');
 }
 
+export interface IcpAnswers {
+  monthlyRevenue?: string;
+  headcount?: string;
+  digitalMaturity?: string;
+  decisionMaker?: string;
+  bant?: { budget?: string; authority?: string; need?: string; timeline?: string };
+}
+
+const REVENUE_LABEL: Record<string, string> = {
+  below_150k: 'abaixo de R$ 150 mil/mês',
+  above_150k: 'acima de R$ 150 mil/mês',
+};
+const HEADCOUNT_LABEL: Record<string, string> = {
+  up_to_5: 'até 5 funcionários',
+  over_5: 'mais de 5 funcionários',
+};
+const MATURITY_LABEL: Record<string, string> = { low: 'baixa', medium: 'média', high: 'alta' };
+const DECISION_LABEL: Record<string, string> = { yes: 'sim', no: 'não', uncertain: 'incerto' };
+const BANT_YN_LABEL: Record<string, string> = { yes: 'sim', no: 'não' };
+
+/** Trecho de ICP só com valores úteis; vazio se tudo for "não mencionado". */
+export function buildIcpSummary(icp: IcpAnswers | undefined): string {
+  if (!icp) return '';
+  const parts: string[] = [];
+  const revenue = icp.monthlyRevenue && REVENUE_LABEL[icp.monthlyRevenue];
+  if (revenue) parts.push(`faturamento ${revenue}`);
+  const headcount = icp.headcount && HEADCOUNT_LABEL[icp.headcount];
+  if (headcount) parts.push(`porte ${headcount}`);
+  const maturity = icp.digitalMaturity && MATURITY_LABEL[icp.digitalMaturity];
+  if (maturity) parts.push(`maturidade digital ${maturity}`);
+  const decision = icp.decisionMaker && DECISION_LABEL[icp.decisionMaker];
+  if (decision) parts.push(`decisor na ligação: ${decision}`);
+  const bantNames: Array<[keyof NonNullable<IcpAnswers['bant']>, string]> = [
+    ['budget', 'orçamento'],
+    ['authority', 'autoridade'],
+    ['need', 'necessidade'],
+    ['timeline', 'prazo'],
+  ];
+  const bant = bantNames
+    .map(([k, label]) => {
+      const v = icp.bant?.[k];
+      const text = v && BANT_YN_LABEL[v];
+      return text ? `${label} ${text}` : null;
+    })
+    .filter((x): x is string => x !== null);
+  if (bant.length) parts.push(`BANT: ${bant.join(', ')}`);
+  return parts.length ? `ICP: ${parts.join('; ')}. ` : '';
+}
+
 export function buildSummary(
   q: Pick<JevQualification, 'outcome' | 'interest' | 'objections' | 'nextStepSuggestion'>,
   extract: string,
+  icp?: IcpAnswers,
 ): string {
   const objection = q.objections.has_objections
     ? `objeção principal: ${OBJECTION_LABEL[q.objections.main_type] ?? q.objections.main_type}`
@@ -163,12 +315,37 @@ export function buildSummary(
     `Interesse: ${INTEREST_LABEL[q.interest] ?? q.interest}. ` +
     `${objection[0]?.toUpperCase()}${objection.slice(1)}. ` +
     `Próximo passo sugerido: ${NEXT_LABEL[q.nextStepSuggestion] ?? q.nextStepSuggestion}. ` +
+    buildIcpSummary(icp) +
     `Trechos: ${extract}`
   );
 }
 
 export function computeJevCostUsd(inputTokens: number): number {
   return Number(((inputTokens / 1_000_000) * JEV_USD_PER_INPUT_MTOK).toFixed(8));
+}
+
+function optionalChoice(
+  answers: NonNullable<JevResponse['answers']>,
+  key: string,
+): string | undefined {
+  const v = answers[key];
+  return v?.type === 'choice' ? v.choice : undefined;
+}
+
+/** ICP é opcional: se o Jev não devolver, fica vazio e nada lança. */
+function icpFromAnswers(a: NonNullable<JevResponse['answers']>): IcpAnswers {
+  return {
+    monthlyRevenue: optionalChoice(a, 'monthly_revenue'),
+    headcount: optionalChoice(a, 'headcount'),
+    digitalMaturity: optionalChoice(a, 'digital_maturity'),
+    decisionMaker: optionalChoice(a, 'decision_maker'),
+    bant: {
+      budget: optionalChoice(a, 'bant_budget'),
+      authority: optionalChoice(a, 'bant_authority'),
+      need: optionalChoice(a, 'bant_need'),
+      timeline: optionalChoice(a, 'bant_timeline'),
+    },
+  };
 }
 
 /** Mapeia a resposta crua do Jev para o formato da tabela. Pura, sem rede. */
@@ -185,15 +362,37 @@ export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualifica
   const hasObjections = hasObj.noul >= 0.5;
   const mainType = hasObjections ? (objType?.choice ?? 'other') : 'none';
 
+  const outcomeConf = outcome.confidence;
+  const nextConf = next.confidence;
+  const hasConf = (c: number | undefined): c is number => typeof c === 'number';
+  const outcomeNextHigh =
+    hasConf(outcomeConf) &&
+    hasConf(nextConf) &&
+    outcomeConf >= JEV_HIGH_CONFIDENCE &&
+    nextConf >= JEV_HIGH_CONFIDENCE;
+
   // Só entram na confiança as perguntas que valem para esta ligação.
-  const confs: number[] = [outcome.confidence, interest.confidence, next.confidence].filter(
-    (c): c is number => typeof c === 'number',
-  );
-  if (hasObjections && typeof objType?.confidence === 'number') confs.push(objType.confidence);
+  const confs: number[] = [outcomeConf, nextConf, interest.confidence].filter(hasConf);
+  // Com outcome e next_step altos, objection_type não puxa a confiança para baixo.
+  if (!outcomeNextHigh && hasObjections && hasConf(objType?.confidence))
+    confs.push(objType.confidence);
   const confidence = confs.length ? Math.min(...confs) : 0;
-  // Noul perto de 0,5 é indecisão.
-  const ambiguousNoul = Math.abs(hasObj.noul - 0.5) < 0.15;
-  const needsReview = confs.length === 0 || confidence < JEV_LOW_CONFIDENCE || ambiguousNoul;
+
+  let needsReview: boolean;
+  if (
+    !hasConf(outcomeConf) ||
+    outcomeConf < JEV_LOW_CONFIDENCE ||
+    !hasConf(nextConf) ||
+    nextConf < JEV_LOW_CONFIDENCE
+  ) {
+    needsReview = true;
+  } else if (outcomeNextHigh) {
+    needsReview = false;
+  } else {
+    // Regra conservadora: confiança baixa em qualquer pergunta ou noul indeciso (perto de 0,5).
+    const ambiguousNoul = Math.abs(hasObj.noul - 0.5) < JEV_NOUL_UNDECIDED_BAND;
+    needsReview = confs.length === 0 || confidence < JEV_LOW_CONFIDENCE || ambiguousNoul;
+  }
 
   const base = {
     outcome: outcome.choice,
@@ -204,7 +403,11 @@ export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualifica
   const inputTokens = resp.usage?.input_tokens ?? 0;
   return {
     ...base,
-    summary: buildSummary(base, transcriptExtract(input.utterances, input.transcript)),
+    summary: buildSummary(
+      base,
+      transcriptExtract(input.utterances, input.transcript),
+      icpFromAnswers(a),
+    ),
     answers: { ...resp, usage: resp.usage },
     confidence,
     needsReview,
