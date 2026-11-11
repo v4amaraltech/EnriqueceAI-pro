@@ -68,7 +68,7 @@ describe('CallSidePanel', () => {
   it('mantém a lista de contexto e o histórico sem esconder atrás do discador', () => {
     renderPanel();
     expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
-    expect(screen.getByTestId('call-side-panel').className).toContain('sm:max-w-[380px]');
+    expect(screen.getByTestId('call-side-panel').className).toContain('sm:max-w-[480px]');
     expect(screen.getByText('Empresa Fixture Ltda')).toBeTruthy();
     expect(screen.getByText('Fixture · Outbound')).toBeTruthy();
     expect(screen.getByText('Contatado')).toBeTruthy();
@@ -169,9 +169,10 @@ describe('CallSidePanel', () => {
     expect(brand.querySelector('[data-height]')?.getAttribute('data-height')).toBe('18');
     expect(screen.getByTestId('call-lead-card').textContent?.toLowerCase()).not.toContain('company');
     const email = screen.getByTestId('lead-card-email');
-    expect(email.querySelectorAll('span')).toHaveLength(2);
-    expect(email.querySelector('span')?.textContent).toBe('contato.fixture');
-    expect(email.querySelector('p[title]')?.getAttribute('title')).toBe('contato.fixture@example.com');
+    const emailValue = email.querySelector('p[title]');
+    expect(emailValue?.textContent).toBe('contato.fixture@example.com');
+    expect(emailValue?.className).toContain('truncate');
+    expect(emailValue?.getAttribute('title')).toBe('contato.fixture@example.com');
     expect(screen.getByTestId('call-lead-attempt').textContent).toBe('TENTATIVA 3/3');
     const leadName = screen.getByRole('heading', { name: 'Contato de Teste' });
     expect(leadName.className).toContain('uppercase');

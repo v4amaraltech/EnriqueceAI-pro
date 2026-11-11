@@ -148,7 +148,7 @@ export function CallSidePanel({
       aria-label="Contexto da ligação"
       data-testid="call-side-panel"
       data-slot="call-side-panel"
-      className={cn('w-full gap-0 p-0 sm:max-w-[380px]', minimized && 'hidden')}
+      className={cn('w-full gap-0 p-0 sm:max-w-[480px]', minimized && 'hidden')}
       onInteractOutside={(event) => { if (inCall) event.preventDefault(); }}
       onEscapeKeyDown={(event) => { if (inCall) event.preventDefault(); }}
     >
