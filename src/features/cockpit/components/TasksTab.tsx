@@ -74,9 +74,13 @@ interface TasksTabProps {
   callHistory?: CallHistoryEntry[];
   /** Agenda de demonstração: não cria reunião nem convite. */
   schedulingPreview?: SchedulingPreview;
+  /** Flag `call_lead_card_v1`. Desligada, o painel de ligação fica como hoje. */
+  leadCardEnabled?: boolean;
+  /** Relógio do cartão na fixture. Ausente = agora. */
+  cardNow?: Date;
 }
 
-export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerProvider, targetUserId, initialSelectedKey = null, callHistory, schedulingPreview }: TasksTabProps) {
+export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerProvider, targetUserId, initialSelectedKey = null, callHistory, schedulingPreview, leadCardEnabled = false, cardNow }: TasksTabProps) {
   const previewOnly = schedulingPreview?.skipSubmit === true;
   const router = useRouter();
   const [activities, setActivities] = useState(initialActivities);
@@ -412,6 +416,8 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
           history={callHistory}
           schedulingPreview={schedulingPreview}
           previewOnly={previewOnly}
+          leadCardEnabled={leadCardEnabled}
+          cardNow={cardNow}
         />
       )}
 

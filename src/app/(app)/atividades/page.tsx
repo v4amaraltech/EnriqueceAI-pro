@@ -18,13 +18,16 @@ import { fetchPendingActivities } from '@/features/activities/actions/fetch-pend
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { ActivityQueueView } from '@/features/activities';
 import { fetchActiveCadenceNames } from '@/features/cadences/actions/fetch-cadence-names';
+import { isCallLeadCardEnabledForViewer } from '@/features/cockpit/services/call-lead-card-flag';
 
 export default async function AtividadesPage() {
   await requireAuth();
   const managerFlag = await isManager();
 
+  const leadCardEnabled = await isCallLeadCardEnabledForViewer();
+
   const [activitiesResult, progressResult, dialerResult, availableResult, activeProspectingResult, prefsResult, providerResult, cadenceNamesResult, membersResult] = await Promise.all([
-    fetchPendingActivities(),
+    fetchPendingActivities({ includeLeadCard: leadCardEnabled }),
     // The page uses the queue length as `pending` (below) — skip that count.
     fetchDailyProgress(undefined, { includePending: false }),
     // Fila e números do card "Leads fora da fila" saem da mesma consulta.
@@ -94,6 +97,7 @@ export default async function AtividadesPage() {
         allCadenceNames={cadenceNames}
         isManager={managerFlag}
         members={members}
+        leadCardEnabled={leadCardEnabled}
       />
     </div>
   );

@@ -523,4 +523,39 @@ describe('fetchPendingActivities', () => {
     ]);
     expect(isCallDockTask(result.data[0]!)).toBe(true);
   });
+
+  it('com includeLeadCard anexa o motivo e não muda a fila quando a opção falta', async () => {
+    const reasonId = '863d2e55-7160-4d2a-818c-94846d3040da';
+    wireByTable({
+      cadence_enrollments: {
+        data: [{
+          ...mockEnrollment,
+          loss_notes: 'nota da cadência',
+          lead: {
+            ...mockLead,
+            lost_at: '2026-04-17T10:22:48.000Z',
+            loss_notes: null,
+            loss_reason_id: reasonId,
+          },
+        }],
+        error: null,
+      },
+      cadence_steps: { data: [mockStep] },
+      message_templates: { data: [mockTemplate] },
+      scheduled_activities: { data: [], error: null },
+      loss_reasons: { data: [{ id: reasonId, name: 'Deixou de responder' }], error: null },
+    });
+
+    const plain = await fetchPendingActivities();
+    expect(plain.success).toBe(true);
+    if (!plain.success) return;
+    expect(plain.data[0]?.lead).not.toHaveProperty('loss_reason_name');
+
+    const withCard = await fetchPendingActivities({ includeLeadCard: true });
+    expect(withCard.success).toBe(true);
+    if (!withCard.success) return;
+    expect(withCard.data[0]?.lead.loss_reason_name).toBe('Deixou de responder');
+    expect(withCard.data[0]?.lead.enrollment_loss_notes).toBe('nota da cadência');
+    expect(withCard.data[0]?.lead.lost_at).toBe('2026-04-17T10:22:48.000Z');
+  });
 });

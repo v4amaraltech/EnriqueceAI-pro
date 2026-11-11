@@ -67,6 +67,23 @@ describe('TasksTab painel de ligação', () => {
     expect(screen.getByTestId('execution-sheet').textContent).toContain(emailActivity.enrollmentId);
   });
 
+  it('com a flag ligada o e-mail continua só na gaveta', () => {
+    render(
+      <TasksTab
+        initialActivities={[emailActivity]}
+        progress={{ completed: 0, pending: 1, total: 1, target: 20, guardrails: EMPTY_GUARDRAILS }}
+        autoSend={null}
+        isOwn
+        dialerProvider="api4com"
+        targetUserId="55555555-5555-4555-8555-555555555555"
+        leadCardEnabled
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Executar tarefa' }));
+    expect(screen.queryByTestId('call-side-panel')).toBeNull();
+    expect(screen.getByTestId('execution-sheet').textContent).toContain(emailActivity.enrollmentId);
+  });
+
   it('concluir a ligação registra a atividade uma vez', async () => {
     renderTab([FIXTURE_ACTIVITY]);
     const conclude = screen.getByRole('button', { name: 'Concluir tarefa' });

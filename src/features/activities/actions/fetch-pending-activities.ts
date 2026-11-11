@@ -60,6 +60,9 @@ interface RawLead {
   custom_field_values: Record<string, string> | null;
   whatsapp_invalid_at: string | null;
   email_bounced_at?: string | null;
+  lost_at?: string | null;
+  loss_notes?: string | null;
+  loss_reason_id?: string | null;
 }
 
 interface EnrollmentRow {
@@ -70,12 +73,13 @@ interface EnrollmentRow {
   status: string;
   next_step_due: string | null;
   snooze_count: number | null;
+  loss_notes?: string | null;
   lead: RawLead;
   cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'> & { executor?: string | null };
 }
 
 export async function fetchPendingActivities(
-  options: { assignedTo?: string } = {},
+  options: { assignedTo?: string; includeLeadCard?: boolean } = {},
 ): Promise<ActionResult<PendingActivity[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -83,6 +87,11 @@ export async function fetchPendingActivities(
   // Dono dos leads da fila: SDR sempre a própria; gestor pode pedir um SDR
   // (Cockpit) — assim o teto de 1500/100 vale para aquele SDR, não para a org.
   const ownerFilter = role !== 'manager' ? userId : isUuid(options.assignedTo) ? options.assignedTo : null;
+  const includeLeadCard = options.includeLeadCard === true;
+  const queueLeadColumns = includeLeadCard
+    ? `${QUEUE_LEAD_COLUMNS}, lost_at, loss_notes, loss_reason_id`
+    : QUEUE_LEAD_COLUMNS;
+  const enrollmentLossColumn = includeLeadCard ? 'loss_notes, ' : '';
 
   // 1. Fetch active enrollments whose current step is actually due (next_step_due <= now()).
   // Without this filter the queue ignores the cadence's configured delay_days — every step
@@ -102,7 +111,7 @@ export async function fetchPendingActivities(
   let enrollQuery = from(supabase, 'cadence_enrollments')
     // Only the lead columns the queue uses (ActivityLead + whatsapp_invalid_at for
     // the WhatsApp skip below) — `*` shipped every column of up to ~1.500 leads.
-    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(${QUEUE_LEAD_COLUMNS}), cadence:cadences(id, name, total_steps, created_by, type, executor)`)
+    .select(`id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, ${enrollmentLossColumn}lead:leads!inner(${queueLeadColumns}), cadence:cadences(id, name, total_steps, created_by, type, executor)`)
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
@@ -195,15 +204,7 @@ export async function fetchPendingActivities(
 
     const currentStepOrder = enrollment.current_step;
 
-    // Build lead data once per enrollment
-    const leadData = {
-      ...enrollment.lead,
-      municipio: (enrollment.lead.endereco as Record<string, string> | null)?.municipio ?? null,
-      uf: (enrollment.lead.endereco as Record<string, string> | null)?.uf ?? null,
-      primeiro_nome: enrollment.lead.first_name
-        ?? enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
-        ?? null,
-    };
+    const leadData = toQueueLead(enrollment.lead, includeLeadCard, enrollment.loss_notes);
 
     let cumulativeHours = 0;
 
@@ -281,7 +282,7 @@ export async function fetchPendingActivities(
   // Passos de cadência zerados (passo inexistente, fila da IA, WhatsApp sem
   // número) não podem engolir o retorno pendente do mesmo SDR.
   if (candidates.length === 0) {
-    return mergeWithScheduledReturns(supabase, ownerFilter, []);
+    return mergeWithScheduledReturns(supabase, ownerFilter, [], includeLeadCard);
   }
 
   // 5. Filter out activities already executed (using optimized SQL function with composite index)
@@ -302,7 +303,45 @@ export async function fetchPendingActivities(
     .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
     .map((c) => c.activity);
 
-  return mergeWithScheduledReturns(supabase, ownerFilter, cadenceActivities);
+  return mergeWithScheduledReturns(supabase, ownerFilter, cadenceActivities, includeLeadCard);
+}
+
+function toQueueLead(lead: RawLead, includeLeadCard: boolean, enrollmentLossNotes?: string | null) {
+  const base = {
+    ...lead,
+    municipio: (lead.endereco as Record<string, string> | null)?.municipio ?? null,
+    uf: (lead.endereco as Record<string, string> | null)?.uf ?? null,
+    primeiro_nome: lead.first_name
+      ?? lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
+      ?? null,
+  };
+  if (!includeLeadCard) return base;
+  return {
+    ...base,
+    lost_at: lead.lost_at ?? null,
+    loss_notes: lead.loss_notes ?? null,
+    loss_reason_id: lead.loss_reason_id ?? null,
+    loss_reason_name: null,
+    enrollment_loss_notes: enrollmentLossNotes ?? null,
+  };
+}
+
+async function attachLossReasonNames(supabase: SupabaseClient, activities: PendingActivity[]) {
+  const ids = [...new Set(activities.map((activity) => activity.lead.loss_reason_id).filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return;
+  try {
+    const { data, error } = (await from(supabase, 'loss_reasons')
+      .select('id, name')
+      .in('id', ids)) as { data: Array<{ id: string; name: string }> | null; error: { message: string } | null };
+    if (error || !data) return;
+    const names = new Map(data.map((row) => [row.id, row.name]));
+    for (const activity of activities) {
+      const id = activity.lead.loss_reason_id;
+      if (id) activity.lead.loss_reason_name = names.get(id) ?? null;
+    }
+  } catch (err) {
+    console.error('[activities] loss_reasons query error:', err);
+  }
 }
 
 /**
@@ -314,9 +353,13 @@ async function mergeWithScheduledReturns(
   supabase: SupabaseClient,
   ownerFilter: string | null,
   cadenceActivities: PendingActivity[],
+  includeLeadCard = false,
 ): Promise<ActionResult<PendingActivity[]>> {
+  const scheduledLeadColumns = includeLeadCard
+    ? `${SCHEDULED_LEAD_COLUMNS}, lost_at, loss_notes, loss_reason_id`
+    : SCHEDULED_LEAD_COLUMNS;
   let scheduledQuery = from(supabase, 'scheduled_activities')
-    .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${SCHEDULED_LEAD_COLUMNS})`)
+    .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${scheduledLeadColumns})`)
     .eq('status', 'pending');
   if (ownerFilter) scheduledQuery = scheduledQuery.eq('leads.assigned_to', ownerFilter);
   const scheduledResult = (await scheduledQuery
@@ -356,14 +399,7 @@ async function mergeWithScheduledReturns(
       nextStepDue: row.scheduled_at,
       isCurrentStep: true,
       snoozeCount: 0,
-      lead: {
-        ...row.leads,
-        municipio: (row.leads.endereco as Record<string, string> | null)?.municipio ?? null,
-        uf: (row.leads.endereco as Record<string, string> | null)?.uf ?? null,
-        primeiro_nome: row.leads.first_name
-          ?? row.leads.socios?.[0]?.nome?.trim().split(/\s+/)[0]
-          ?? null,
-      },
+      lead: toQueueLead(row.leads, includeLeadCard),
       activityName: isLimbo
         ? (row.notes ?? 'Definir destino')
         : isAntiNoShow
@@ -376,6 +412,7 @@ async function mergeWithScheduledReturns(
   });
 
   const allActivities = [...cadenceActivities, ...scheduledActivities];
+  if (includeLeadCard) await attachLossReasonNames(supabase, allActivities);
 
   const leadEarliestDue = new Map<string, number>();
   for (const a of allActivities) {

@@ -9,6 +9,7 @@ import { fetchPendingActivities } from '@/features/activities/actions/fetch-pend
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { NextCallCard } from '@/features/cockpit/components/NextCallCard';
+import { isCallLeadCardEnabled } from '@/features/cockpit/services/call-lead-card-flag';
 import { isCallCockpitOutcomesEnabled } from '@/features/cockpit/services/cockpit-outcomes-flag';
 import { fetchNextCallCard } from '@/features/cockpit/services/next-call-card.service';
 import { ClosersTab } from '@/features/cockpit/components/ClosersTab';
@@ -101,8 +102,9 @@ async function CockpitTabContent({ tab, viewer, params }: { tab: CockpitTab; vie
 
 async function TasksTabServer({ viewer }: { viewer: CockpitViewer }) {
   const isOwn = viewer.targetUserId === viewer.viewerId;
+  const leadCardEnabled = await isCallLeadCardEnabled(viewer.orgId);
   const [activitiesResult, progressResult, autoSendResult, providerResult] = await Promise.all([
-    fetchPendingActivities({ assignedTo: viewer.targetUserId }),
+    fetchPendingActivities({ assignedTo: viewer.targetUserId, includeLeadCard: leadCardEnabled }),
     fetchDailyProgress(isOwn ? undefined : viewer.targetUserId, { includePending: false }),
     fetchCockpit(),
     getDialerProvider(),
@@ -136,6 +138,7 @@ async function TasksTabServer({ viewer }: { viewer: CockpitViewer }) {
       isOwn={isOwn}
       dialerProvider={providerResult.success ? providerResult.data.provider : null}
       targetUserId={viewer.targetUserId}
+      leadCardEnabled={leadCardEnabled}
     />
   );
 }

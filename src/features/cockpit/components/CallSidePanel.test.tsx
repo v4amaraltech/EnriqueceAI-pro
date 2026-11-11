@@ -11,6 +11,11 @@ import { callNoteKey, readCallNote } from '../utils/call-note-draft';
 import { CallSidePanel } from './CallSidePanel';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('next/image', () => ({
+  default: (props: { alt: string; src: string; height?: number }) => (
+    <span role="presentation" data-src={props.src} data-height={props.height} />
+  ),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('@/features/activities/components/ActivityPhonePanel', () => ({
   ActivityPhonePanel: ({ layout, companionNotes }: { layout?: string; companionNotes?: string }) => (
@@ -108,6 +113,89 @@ describe('CallSidePanel', () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     expect(onScheduled).toHaveBeenCalledTimes(1);
+    expect(scheduleMeeting).not.toHaveBeenCalled();
+  });
+
+  it('com a flag desligada o meio do painel continua a lista de hoje', () => {
+    renderPanel();
+    expect(screen.queryByTestId('call-lead-card')).toBeNull();
+    expect(screen.queryByTestId('call-history-collapse')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Histórico de contatos' }).textContent).toContain('Respondeu · e-mail');
+    expect(screen.getAllByText('Respondeu · e-mail')).toHaveLength(1);
+    expect(screen.getByText('Enriquecido')).toBeTruthy();
+    expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
+    expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();
+    expect(screen.getByLabelText('Anotações')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Agendar reunião' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Desqualificar' })).toBeTruthy();
+  });
+
+  it('com a flag ligada troca só o meio e mantém topo, rodapé e agendamento', () => {
+    const lostActivity: PendingActivity = {
+      ...activity,
+      stepOrder: 3,
+      totalSteps: 3,
+      lead: {
+        ...activity.lead,
+        lost_at: '2026-04-17T10:22:48.000Z',
+        loss_reason_name: 'Deixou de responder',
+        loss_notes: 'Cadência concluída sem resposta',
+        job_title: 'Coordenador',
+      },
+    };
+    render(
+      <CallSidePanel
+        activity={lostActivity}
+        dialerProvider="api4com"
+        minimized={false}
+        onMinimize={vi.fn()}
+        onRestore={vi.fn()}
+        onClose={vi.fn()}
+        onMarkDone={vi.fn()}
+        onSkip={vi.fn()}
+        onLeadLost={vi.fn()}
+        onScheduled={vi.fn()}
+        history={FIXTURE_HISTORY}
+        schedulingPreview={FIXTURE_PREVIEW}
+        leadCardEnabled
+        cardNow={new Date('2026-11-11T15:00:00.000Z')}
+      />,
+    );
+
+    expect(screen.getByTestId('call-lead-card')).toBeTruthy();
+    expect(screen.getByText('EnriqueceAI')).toBeTruthy();
+    const brand = screen.getByTestId('call-lead-brand');
+    expect(brand.querySelector('[data-src]')?.getAttribute('data-src')).toBe('/logos/logo-ea-red.png');
+    expect(brand.querySelector('[data-height]')?.getAttribute('data-height')).toBe('18');
+    expect(screen.getByTestId('call-lead-card').textContent?.toLowerCase()).not.toContain('company');
+    const email = screen.getByTestId('lead-card-email');
+    expect(email.querySelectorAll('span')).toHaveLength(2);
+    expect(email.querySelector('span')?.textContent).toBe('contato.fixture');
+    expect(email.querySelector('p[title]')?.getAttribute('title')).toBe('contato.fixture@example.com');
+    expect(screen.getByTestId('call-lead-attempt').textContent).toBe('TENTATIVA 3/3');
+    const leadName = screen.getByRole('heading', { name: 'Contato de Teste' });
+    expect(leadName.className).toContain('uppercase');
+    expect(leadName.className).toContain('font-black');
+    expect(screen.getByTestId('lead-card-telefone').textContent).toContain('11900000000');
+    expect(screen.getByTestId('lead-card-cargo').textContent).toContain('Coordenador');
+    expect(screen.getByTestId('lead-card-temperatura').textContent).toContain('perdido há 6,8 meses');
+    expect(screen.getByTestId('lead-card-temperatura').textContent).not.toMatch(/quente|morno|frio/i);
+    expect(screen.queryByTestId('lead-card-sdr')).toBeNull();
+    expect(screen.getByTestId('call-lead-opening').textContent).toContain('Seria um problema retomarmos em 2 minutos?');
+    expect(screen.queryByText('Enriquecido')).toBeNull();
+    expect(screen.getByText('Perguntar quem decide e se já houve contato anterior. Fixture.')).toBeTruthy();
+    const history = screen.getByTestId('call-history-collapse');
+    expect(history.textContent).toContain('Respondeu · e-mail');
+    expect(screen.getAllByText('Respondeu · e-mail')).toHaveLength(1);
+    expect(screen.queryByText('Enriquecido')).toBeNull();
+
+    expect(screen.getByTestId('phone-dock').getAttribute('data-layout')).toBe('dock');
+    expect(screen.getByRole('button', { name: 'Minimizar painel' })).toBeTruthy();
+    expect(screen.getByLabelText('Anotações')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Desqualificar' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Agendar reunião' }));
+    expect(screen.getByTestId('slot-0-14')).toBeTruthy();
+    expect(listClosers).not.toHaveBeenCalled();
     expect(scheduleMeeting).not.toHaveBeenCalled();
   });
 });

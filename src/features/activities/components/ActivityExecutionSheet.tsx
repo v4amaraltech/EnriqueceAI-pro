@@ -39,6 +39,8 @@ interface ActivityExecutionSheetProps {
   onSwitchCadence?: (activity: PendingActivity) => void;
   dialerProvider?: DialerProvider;
   quickMode?: boolean;
+  /** Abre o painel lateral e a gaveta fecha. Ausente, a gaveta segue sozinha. */
+  onOpenCallPanel?: () => void;
 }
 
 const keyOf = (a: PendingActivity) => `${a.enrollmentId}:${a.stepId}`;
@@ -54,6 +56,7 @@ export function ActivityExecutionSheet({
   onSwitchCadence,
   dialerProvider,
   quickMode = false,
+  onOpenCallPanel,
 }: ActivityExecutionSheetProps) {
   // Limite de adiamentos atingido: em vez de adiar, obriga uma saída.
   const [snoozeLimitOpen, setSnoozeLimitOpen] = useState(false);
@@ -439,7 +442,12 @@ export function ActivityExecutionSheet({
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="flex flex-1 justify-end">
+                <div className={onOpenCallPanel ? 'flex flex-1 items-center justify-end gap-2' : 'flex flex-1 justify-end'}>
+                  {onOpenCallPanel && (
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={onOpenCallPanel}>
+                      Abrir painel lateral
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
