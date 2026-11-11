@@ -111,3 +111,79 @@ export function findReusedRecordingOwner(
   }
   return null;
 }
+
+/** Folga entre o horário no nome do arquivo do Callface e o início da ligação. */
+export const CALLFACE_MATCH_TOLERANCE_MS = 2 * 60 * 1000;
+/** Fuso do nome do arquivo do Callface (DT/HR em horário de Brasília, sem horário de verão). */
+const CALLFACE_UTC_OFFSET_HOURS = -3;
+
+export interface CallfaceRecordingName {
+  phone: string;
+  /** Início da gravação (resolução de minuto). */
+  at: Date;
+}
+
+/**
+ * Lê telefone e horário do nome de uma gravação do Callface no S3
+ * (`.../pbx-prod-callface/...-TEL-<fone>-DT-<AAAAMMDD>-HR-<HHMM>-...`).
+ * Null para qualquer outra URL.
+ */
+export function parseCallfaceRecordingUrl(
+  url: string | null | undefined,
+): CallfaceRecordingName | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || !/(^|\.)amazonaws\.com$/.test(parsed.hostname)) return null;
+  let path: string;
+  try {
+    path = decodeURIComponent(parsed.pathname);
+  } catch {
+    path = parsed.pathname;
+  }
+  if (!path.includes('/pbx-prod-callface/')) return null;
+  const m = /TEL-(\d+)-DT-(\d{4})(\d{2})(\d{2})-HR-(\d{2})(\d{2})/.exec(path);
+  if (!m) return null;
+  const [, phone, y, mo, d, h, mi] = m as unknown as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  const at = new Date(
+    Date.UTC(
+      Number(y),
+      Number(mo) - 1,
+      Number(d),
+      Number(h) - CALLFACE_UTC_OFFSET_HOURS,
+      Number(mi),
+    ),
+  );
+  if (Number.isNaN(at.getTime())) return null;
+  return { phone, at };
+}
+
+/**
+ * A gravação do Callface é desta ligação? Telefone (8 últimos dígitos) e horário
+ * (até 2 min) do nome do arquivo batem com a ligação. Quando bate, a diferença de
+ * duração é da ligação (`duration_seconds`), não do áudio: não é gravação trocada.
+ */
+export function callfaceRecordingMatchesCall(
+  url: string | null | undefined,
+  call: { destination: string; started_at: string | null; created_at: string },
+): boolean {
+  const name = parseCallfaceRecordingUrl(url);
+  if (!name) return false;
+  const dest = call.destination.replace(/\D/g, '').slice(-8);
+  if (dest.length < 8 || name.phone.slice(-8) !== dest) return false;
+  const start = new Date(call.started_at ?? call.created_at).getTime();
+  if (Number.isNaN(start)) return false;
+  return Math.abs(start - name.at.getTime()) <= CALLFACE_MATCH_TOLERANCE_MS;
+}

@@ -185,4 +185,124 @@ describe('repairRecordingsPage', () => {
     expect(p2.details.map((d) => d.callId)).toEqual(['c']);
     expect(p2.nextCursor).toBeNull();
   });
+
+  describe('Callface (S3) com fone e hora batendo: duration_divergent', () => {
+    const CALLFACE =
+      'https://s3.sa-east-1.amazonaws.com/pbx-prod-callface/recordings/2026/11/11/OUT-X-TEL-5511999999999-DT-20261111-HR-0700-CALLID-abc.mp3';
+    const cf = (over: Row = {}) =>
+      call({
+        recording_url: CALLFACE,
+        started_at: '2026-11-11T10:00:30Z',
+        duration_seconds: 60,
+        ...over,
+      });
+
+    it('dry-run classifica duration_divergent sem buscar na API4COM', async () => {
+      respondBy({ [CALLFACE]: 140 });
+      const fake = makeFakeSupabase([cf()], { [PATH]: fakeAudio(140) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.counts.duration_divergent).toBe(1);
+      expect(page.counts.unrepairable).toBe(0);
+      expect(mocks.candidates).not.toHaveBeenCalled();
+      expect(fake.updates).toHaveLength(0);
+    });
+
+    it('apply não marca mismatch, grava só a flag e mantém a cópia servida', async () => {
+      respondBy({ [CALLFACE]: 140 });
+      const fake = makeFakeSupabase([cf({ metadata: { recording_persist_status: 'mismatch' } })], {
+        [PATH]: fakeAudio(140),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.counts.duration_divergent).toBe(1);
+      expect(fake.uploads).toHaveLength(0);
+      const meta = fake.calls[0]!.metadata as Row;
+      expect(meta.recording_persist_status).toBe('unverified');
+      expect(meta.recording_duration_divergent).toBe(true);
+      expect(meta.recording_audio_seconds).toBeUndefined();
+    });
+
+    it('telefone diferente continua unrepairable', async () => {
+      respondBy({ [CALLFACE]: 140 });
+      const fake = makeFakeSupabase([cf({ destination: '5511888888888' })], {
+        [PATH]: fakeAudio(140),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.counts.unrepairable).toBe(1);
+      expect(page.counts.duration_divergent).toBe(0);
+    });
+
+    it('Storage com áudio diferente do Callface não vira duration_divergent', async () => {
+      respondBy({ [CALLFACE]: 140 });
+      const fake = makeFakeSupabase([cf()], { [PATH]: fakeAudio(300) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.counts.duration_divergent).toBe(0);
+      expect(page.counts.unrepairable).toBe(1);
+    });
+  });
+
+  describe('URL compartilhada entre ligações', () => {
+    const sibling = (over: Row = {}) =>
+      call({
+        id: 'call-0',
+        recording_storage_path: null,
+        metadata: { recording_persist_status: 'ok' },
+        ...over,
+      });
+
+    it('outra ligação com a mesma URL e duração que também bate: ambiguous_shared_url, nada gravado', async () => {
+      respondBy({ [LISTENER]: 365 });
+      mocks.candidates.mockImplementation(async function* () {});
+      const fake = makeFakeSupabase([sibling({ duration_seconds: 360 }), call()], {
+        [PATH]: fakeAudio(12),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      const d = page.details.find((x) => x.callId === 'call-1')!;
+      expect(d).toMatchObject({
+        outcome: 'ambiguous_shared_url',
+        source: 'recording_url',
+        sharedWith: ['call-0'],
+      });
+      expect(page.counts.ambiguous_shared_url).toBe(1);
+      expect(fake.uploads).toHaveLength(0);
+      expect((fake.calls[1]!.metadata as Row).recording_persist_status).toBeUndefined();
+    });
+
+    it('irmã com duração que não bate: caso claro, repara', async () => {
+      respondBy({ [LISTENER]: 365 });
+      const fake = makeFakeSupabase([sibling({ duration_seconds: 20 }), call()], {
+        [PATH]: fakeAudio(12),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details.find((x) => x.callId === 'call-1')).toMatchObject({
+        outcome: 'would_repair',
+        source: 'recording_url',
+      });
+    });
+
+    it('ambígua no link salvo mas a API4COM acha cópia própria: repara pela API4COM', async () => {
+      respondBy({ [LISTENER]: 365, [DURABLE]: 365 });
+      const fake = makeFakeSupabase([sibling({ duration_seconds: 365 }), call()], {
+        [PATH]: fakeAudio(12),
+      });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details.find((x) => x.callId === 'call-1')).toMatchObject({
+        outcome: 'would_repair',
+        source: 'api4com',
+      });
+    });
+  });
 });

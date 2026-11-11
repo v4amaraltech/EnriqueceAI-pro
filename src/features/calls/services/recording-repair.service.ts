@@ -8,9 +8,10 @@ import {
   downloadAudio,
   flagRecordingStatus,
   measureStoredRecording,
+  mergeCallMetadata,
   uploadValidatedRecording,
 } from './recording-storage.service';
-import { classifyRepairDuration } from './recording-validation';
+import { callfaceRecordingMatchesCall, classifyRepairDuration } from './recording-validation';
 import { lookupRecordingCandidatesFromApi4Com } from './recover-recording.service';
 
 export type RepairOutcome =
@@ -19,6 +20,8 @@ export type RepairOutcome =
   | 'would_repair' // dry-run: uma cópia que bate seria gravada
   | 'repaired'
   | 'borderline_short' // ligação curta perto da tolerância: não é mismatch automático
+  | 'duration_divergent' // gravação do Callface é desta ligação (fone+hora); a duração é que diverge
+  | 'ambiguous_shared_url' // a cópia que bate está numa URL de outra ligação que também bate: segura
   | 'unrepairable'; // não achou áudio que bata com a duração
 
 /** De onde veio a cópia correta. */
@@ -39,6 +42,8 @@ export interface RepairCallResult {
   outcome: RepairOutcome;
   audioSeconds?: number | null;
   source?: RepairSource;
+  /** ambiguous_shared_url: outras ligações com a mesma URL cuja duração também bate. */
+  sharedWith?: string[];
 }
 
 export interface RepairPageResult {
@@ -62,6 +67,8 @@ function emptyCounts(): Record<RepairOutcome, number> {
     would_repair: 0,
     repaired: 0,
     borderline_short: 0,
+    duration_divergent: 0,
+    ambiguous_shared_url: 0,
     unrepairable: 0,
   };
 }
@@ -76,6 +83,37 @@ export function resolveRepairSinceIso(
     return Number.isNaN(time) ? null : new Date(time).toISOString();
   }
   return new Date(now - (opts.days ?? 90) * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** Teto de ligações irmãs consultadas por URL compartilhada. */
+export const REPAIR_SHARED_URL_LOOKUP_LIMIT = 20;
+
+interface SharedUrlRow {
+  id: string;
+  duration_seconds: number | null;
+}
+
+/**
+ * Outras ligações da org com a MESMA URL de gravação cuja duração também bate com o
+ * áudio. Se houver, o dono do áudio é ambíguo (listener serviu a mesma gravação para
+ * ligações seguidas do ramal). Somente leitura.
+ */
+export async function findSharedUrlMatches(
+  supabase: SupabaseClient,
+  call: Pick<PersistCallRow, 'id' | 'org_id'>,
+  url: string,
+  audioSeconds: number | null,
+): Promise<string[]> {
+  if (audioSeconds === null) return [];
+  const { data } = (await from(supabase, 'calls')
+    .select('id, duration_seconds')
+    .eq('org_id', call.org_id)
+    .eq('recording_url', url)
+    .neq('id', call.id)
+    .limit(REPAIR_SHARED_URL_LOOKUP_LIMIT)) as { data: SharedUrlRow[] | null };
+  return (data ?? [])
+    .filter((row) => classifyRepairDuration(audioSeconds, row.duration_seconds) === 'ok')
+    .map((row) => row.id);
 }
 
 /**
@@ -94,9 +132,10 @@ export async function repairCallRecording(
 
   let borderlineSeconds: number | null = null;
   let sawBorderline = false;
+  let storedSeconds: number | null = null;
 
   if (call.recording_storage_path) {
-    const storedSeconds = await measureStoredRecording(supabase, call.recording_storage_path);
+    storedSeconds = await measureStoredRecording(supabase, call.recording_storage_path);
     const storedStatus = classifyRepairDuration(storedSeconds, call.duration_seconds);
     if (storedStatus === 'ok' || storedStatus === 'unverified') {
       if (apply) await flagRecordingStatus(supabase, call.id, storedStatus, storedSeconds);
@@ -112,6 +151,8 @@ export async function repairCallRecording(
 
   let lastSeconds: number | null = borderlineSeconds;
   const tried = new Set<string>();
+  const measured = new Map<string, number | null>();
+  let ambiguous: RepairCallResult | null = null;
 
   // Devolve o resultado se a URL tem áudio que bate; senão registra e segue.
   const tryUrl = async (url: string, source: RepairSource): Promise<RepairCallResult | null> => {
@@ -119,6 +160,7 @@ export async function repairCallRecording(
     tried.add(url);
     const audio = await downloadAudio(url);
     if (!audio) return null;
+    measured.set(url, audio.seconds);
     const status = classifyRepairDuration(audio.seconds, call.duration_seconds);
     if (status === 'borderline_short') {
       sawBorderline = true;
@@ -127,6 +169,17 @@ export async function repairCallRecording(
     }
     if (status === 'mismatch') {
       lastSeconds = audio.seconds;
+      return null;
+    }
+    // Mesma URL em outra ligação que também bate: dono ambíguo, segura (não grava).
+    const sharedWith = await findSharedUrlMatches(supabase, call, url, audio.seconds);
+    if (sharedWith.length > 0) {
+      ambiguous ??= {
+        outcome: 'ambiguous_shared_url',
+        audioSeconds: audio.seconds,
+        source,
+        sharedWith,
+      };
       return null;
     }
     if (!apply) return { outcome: 'would_repair', audioSeconds: audio.seconds, source };
@@ -142,6 +195,33 @@ export async function repairCallRecording(
     if (hit) return hit;
   }
 
+  // 1b) gravação do Callface (S3) cujo nome bate fone e hora com a ligação, e é a
+  // mesma que está no Storage: o áudio é desta ligação, a duração é que diverge.
+  // Não é troca: continua servida, sem mismatch e sem busca na API4COM.
+  const urlSeconds = call.recording_url ? (measured.get(call.recording_url) ?? null) : null;
+  if (
+    !ambiguous &&
+    call.recording_url &&
+    urlSeconds !== null &&
+    (storedSeconds === null || Math.abs(urlSeconds - storedSeconds) < 1) &&
+    callfaceRecordingMatchesCall(call.recording_url, call)
+  ) {
+    if (sawBorderline) return { outcome: 'borderline_short', audioSeconds: lastSeconds };
+    if (apply) {
+      await mergeCallMetadata(supabase, call.id, {
+        // Chave própria: recording_audio_seconds divergente faria o proxy esconder a cópia.
+        recording_duration_divergent: true,
+        recording_divergent_audio_seconds: Math.round(urlSeconds * 10) / 10,
+        recording_persist_checked_at: new Date().toISOString(),
+        // Se uma rodada anterior escondeu a cópia, volta a servir.
+        ...(meta.recording_persist_status === 'mismatch'
+          ? { recording_persist_status: 'unverified' }
+          : {}),
+      });
+    }
+    return { outcome: 'duration_divergent', audioSeconds: urlSeconds };
+  }
+
   // 2) API4COM, só se o link salvo não resolveu
   let downloads = 0;
   for await (const url of lookupRecordingCandidatesFromApi4Com(
@@ -153,6 +233,9 @@ export async function repairCallRecording(
     if (hit) return hit;
     if (++downloads >= REPAIR_MAX_API4COM_DOWNLOADS) break;
   }
+
+  // Cópia que bate existe, mas numa URL de dono ambíguo: não grava nem marca mismatch.
+  if (ambiguous) return ambiguous;
 
   // Perto da tolerância: não marca mismatch e não mexe no Storage.
   if (sawBorderline) return { outcome: 'borderline_short', audioSeconds: lastSeconds };
