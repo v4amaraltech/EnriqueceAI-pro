@@ -21,6 +21,7 @@ import {
 } from './constants';
 import { isTranscriptionEngineEnabled } from './flag';
 import { type JevClient, createJevClient, resolveJevApiKey } from './jev.client';
+import { hasDurationWarning } from './review';
 
 /** `processing` parado há mais que isso é execução que morreu. */
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
@@ -69,6 +70,8 @@ interface EngineRow {
   updated_at: string | null;
   text?: string | null;
   utterances?: unknown;
+  error?: string | null;
+  speakers_count?: number | null;
 }
 
 const CALL_COLUMNS =
@@ -122,7 +125,7 @@ async function claim(
   extra: Record<string, unknown> = {},
 ): Promise<Claim> {
   const { data } = (await from(deps.db, table)
-    .select('id, status, attempts, updated_at, text, utterances')
+    .select('id, status, attempts, updated_at, text, utterances, error, speakers_count')
     .eq('call_id', call.id)
     .eq('provider', provider)
     .limit(1)) as { data: EngineRow[] | null };
@@ -264,7 +267,13 @@ export async function processEngineCall(
 
   // Etapa 1: transcrição.
   const tClaim = await claim(deps, 'call_transcripts_v2', call, ENGINE_PROVIDER_TRANSCRIPT);
-  let transcript: { id: string; text: string; utterances: unknown[] } | null = null;
+  let transcript: {
+    id: string;
+    text: string;
+    utterances: unknown[];
+    error?: string | null;
+    speakersCount?: number | null;
+  } | null = null;
 
   if (!('blocked' in tClaim)) {
     const started = deps.now();
@@ -301,7 +310,13 @@ export async function processEngineCall(
         cost_usd: computeAssemblyAiCostUsd(billedSeconds),
         latency_ms: deps.now() - started,
       });
-      transcript = { id: rowId, text: result.text, utterances: result.utterances };
+      transcript = {
+        id: rowId,
+        text: result.text,
+        utterances: result.utterances,
+        error: prepared.warning ?? null,
+        speakersCount: result.speakersCount,
+      };
     } catch (err) {
       await finish(deps, 'call_transcripts_v2', rowId, {
         status: 'failed',
@@ -317,6 +332,8 @@ export async function processEngineCall(
       id: r.id,
       text: r.text ?? '',
       utterances: Array.isArray(r.utterances) ? r.utterances : [],
+      error: r.error ?? null,
+      speakersCount: r.speakers_count ?? null,
     };
   } else {
     return tClaim.blocked === 'gave_up' ? 'gave_up' : 'in_progress';
@@ -354,6 +371,8 @@ export async function processEngineCall(
       utterances: transcript.utterances as never,
       durationSeconds: callSeconds,
       callType: call.type === 'inbound' ? 'inbound' : 'outbound',
+      durationWarning: hasDurationWarning(transcript.error),
+      speakersCount: transcript.speakersCount,
     });
     await finish(deps, 'call_qualifications', qId, {
       status: 'completed',
@@ -367,6 +386,7 @@ export async function processEngineCall(
       answers: q.answers,
       confidence: q.confidence,
       needs_review: q.needsReview,
+      needs_review_reasons: q.needsReviewReasons,
       cost_usd: q.costUsd,
       latency_ms: deps.now() - qStarted,
     });
