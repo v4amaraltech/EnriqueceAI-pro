@@ -25,6 +25,7 @@ export type RepairOutcome =
   | 'duration_divergent' // gravação do Callface é desta ligação (fone+hora); a duração é que diverge
   | 'ambiguous_shared_url' // a cópia que bate está numa URL de outra ligação que também bate: segura
   | 'ambiguous_window' // janela da API4COM com vários candidatos só pelo ramal: segura
+  | 'lookup_failed' // API4COM não respondeu (limite, rede, erro): busca incompleta, não esconde nada
   | 'unrepairable'; // não achou áudio que bata; apply esconde a gravação errada
 
 /** De onde veio a cópia correta. */
@@ -39,6 +40,10 @@ export interface RepairPageOptions {
   apply?: boolean;
   /** Ignora ligações criadas antes disto (ISO). */
   sinceIso?: string;
+  /** Chamado depois de cada ligação (o script grava o cursor para retomar). */
+  onCallDone?: (callId: string, result: RepairCallResult) => void | Promise<void>;
+  /** true interrompe a página entre duas ligações (ex.: Ctrl+C no script). */
+  shouldStop?: () => boolean;
 }
 
 export interface RepairCallResult {
@@ -57,6 +62,8 @@ export interface RepairCallResult {
 
 export interface RepairPageResult {
   scanned: number;
+  /** Parou antes do fim da página (shouldStop); `nextCursor` é a última processada. */
+  stopped?: boolean;
   nextCursor: string | null;
   counts: Record<RepairOutcome, number>;
   /** Fonte da cópia correta (would_repair e repaired). */
@@ -79,6 +86,7 @@ function emptyCounts(): Record<RepairOutcome, number> {
     duration_divergent: 0,
     ambiguous_shared_url: 0,
     ambiguous_window: 0,
+    lookup_failed: 0,
     unrepairable: 0,
   };
 }
@@ -133,8 +141,10 @@ export async function findSharedUrlMatches(
  * `borderline_short` e não é marcada como mismatch.
  * URL compartilhada com outra ligação que também bate fica retida, a menos que a
  * API4COM a devolva pelo id da própria ligação. Janela com vários candidatos só
- * pelo ramal vira `ambiguous_window`. Em apply, `unrepairable` esconde a gravação
- * (metadata `recording_hidden`); nunca apaga arquivo nem linha.
+ * pelo ramal vira `ambiguous_window`. Se a API4COM falhou (limite de taxa esgotado,
+ * rede, erro HTTP) e nada bateu, vira `lookup_failed`: não conclui nem esconde.
+ * Em apply, `unrepairable` esconde a gravação (metadata `recording_hidden`);
+ * nunca apaga arquivo nem linha.
  */
 export async function repairCallRecording(
   supabase: SupabaseClient,
@@ -173,6 +183,7 @@ export async function repairCallRecording(
     { audio: DownloadedAudio; status: 'ok' | 'unverified'; source: RepairSource }
   >();
   let windowCandidates: number | null = null;
+  let lookupFailed = false;
 
   const commit = async (
     audio: DownloadedAudio,
@@ -268,7 +279,7 @@ export async function repairCallRecording(
     return { outcome: 'duration_divergent', audioSeconds: urlSeconds };
   }
 
-  // 2) API4COM, só se o link salvo não resolveu
+  // 2) API4COM, só se o link salvo não resolveu: id do provedor antes da janela
   let downloads = 0;
   for await (const event of lookupRecordingCandidatesFromApi4Com(
     supabase,
@@ -276,6 +287,10 @@ export async function repairCallRecording(
   )) {
     if (event.kind === 'ambiguous_window') {
       windowCandidates = event.candidates;
+      continue;
+    }
+    if (event.kind === 'lookup_failed') {
+      lookupFailed = true;
       continue;
     }
     const { url, match } = event;
@@ -296,6 +311,10 @@ export async function repairCallRecording(
   if (windowCandidates !== null) {
     return { outcome: 'ambiguous_window', audioSeconds: lastSeconds, windowCandidates };
   }
+
+  // Busca na API4COM incompleta: não dá para afirmar que não há cópia certa.
+  // Não grava nem esconde; uma nova rodada (retomando pelo cursor) tenta de novo.
+  if (lookupFailed) return { outcome: 'lookup_failed', audioSeconds: lastSeconds };
 
   // Perto da tolerância: não marca mismatch e não mexe no Storage.
   if (sawBorderline) return { outcome: 'borderline_short', audioSeconds: lastSeconds };
@@ -340,19 +359,34 @@ export async function repairRecordingsPage(
   const counts = emptyCounts();
   const sources: RepairPageResult['sources'] = { recording_url: 0, api4com: 0 };
   const details: RepairPageResult['details'] = [];
+  let processed = 0;
+  let stopped = false;
   for (const call of rows) {
+    if (opts.shouldStop?.()) {
+      stopped = true;
+      break;
+    }
     const result = await repairCallRecording(supabase, call, apply);
     counts[result.outcome]++;
     if (result.source && (result.outcome === 'would_repair' || result.outcome === 'repaired')) {
       sources[result.source]++;
     }
     details.push({ callId: call.id, ...result });
+    processed++;
+    await opts.onCallDone?.(call.id, result);
   }
 
-  const last = rows[rows.length - 1];
+  const last = rows[processed - 1];
+  // Parada no meio: retoma depois da última processada (ou do cursor recebido).
+  const nextCursor = stopped
+    ? (last?.id ?? opts.cursor ?? null)
+    : rows.length === limit && last
+      ? last.id
+      : null;
   return {
-    scanned: rows.length,
-    nextCursor: rows.length === limit && last ? last.id : null,
+    scanned: processed,
+    ...(stopped ? { stopped } : {}),
+    nextCursor,
     counts,
     sources,
     details,

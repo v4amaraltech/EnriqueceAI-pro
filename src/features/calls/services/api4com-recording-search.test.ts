@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { SlidingWindowRateLimiter } from '@/features/integrations/services/api4com-rate-limit';
+
 import {
   BACKOFF_MAX_ATTEMPTS,
   type RecordingSearchEvent,
@@ -32,8 +34,17 @@ function record(over: Record<string, unknown> = {}) {
   };
 }
 
+/** Formato atual da API4COM: paginação em `meta`. */
 function page(data: unknown[], nextPage: number | null = null) {
-  return { data, metadata: { nextPage } };
+  return { data, meta: { nextPage } };
+}
+
+function fakeClock() {
+  let t = 0;
+  const sleep = vi.fn(async (ms: number) => {
+    t += ms;
+  });
+  return { now: () => t, sleep };
 }
 
 function makeDeps(fetchFn: SearchDeps['fetchFn']) {
@@ -130,6 +141,85 @@ describe('searchRecordingCandidates', () => {
     expect(decodedWhere(firstUrl)).toEqual({
       started_at: { gte: '2026-11-11T06:40:00.000Z', lte: '2026-11-11T07:20:00.000Z' },
     });
+  });
+
+  it('pagina por meta.nextPage; metadata só como fallback', async () => {
+    const pagesSeen: number[] = [];
+    const fetchFn = vi.fn((url: string | URL | Request) => {
+      const p = Number(new URL(String(url)).searchParams.get('page'));
+      pagesSeen.push(p);
+      if (p === 1) return Promise.resolve(json({ data: [], meta: { nextPage: 2 } }));
+      // resposta antiga, sem meta: segue pelo metadata
+      if (p === 2) return Promise.resolve(json({ data: [], metadata: { nextPage: 3 } }));
+      // meta diz fim e prevalece sobre metadata
+      return Promise.resolve(
+        json({ data: [], meta: { nextPage: null }, metadata: { nextPage: 4 } }),
+      );
+    });
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+    await collect(searchRecordingCandidates(deps, makeCall()));
+
+    expect(pagesSeen).toEqual([1, 2, 3]);
+  });
+
+  it('id do provedor antes da janela, e a janela só se o id não resolveu', async () => {
+    const urls: string[] = [];
+    const fetchFn = vi.fn((url: string | URL | Request) => {
+      urls.push(String(url));
+      return Promise.resolve(json(page([])));
+    });
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+    await collect(
+      searchRecordingCandidates(deps, makeCall({ metadata: { api4com_call_id: 'A' } })),
+    );
+
+    expect(decodedWhere(urls[0]!)).toEqual({ id: 'A' });
+    expect(decodedWhere(urls[1]!)).toHaveProperty('started_at');
+  });
+
+  it('API falhou: avisa lookup_failed e, com a janela incompleta, não aceita candidato único', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(json(page([record({ id: 'u', to: '' })], 2)))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+    const events: RecordingSearchEvent[] = [];
+    for await (const e of searchRecordingCandidates(deps, makeCall())) events.push(e);
+
+    expect(events).toEqual([{ kind: 'lookup_failed', phase: 'window' }]);
+  });
+
+  it('janela incompleta ainda entrega o candidato pelo fone de destino', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(json(page([record()], 2)))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+    const events: RecordingSearchEvent[] = [];
+    for await (const e of searchRecordingCandidates(deps, makeCall())) events.push(e);
+
+    expect(events.map((e) => e.kind)).toEqual(['candidate', 'lookup_failed']);
+  });
+
+  it('falha na busca por id avisa e segue para a janela', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValue(json(page([record()])));
+    const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+    const events: RecordingSearchEvent[] = [];
+    for await (const e of searchRecordingCandidates(
+      deps,
+      makeCall({ metadata: { api4com_call_id: 'A' } }),
+    ))
+      events.push(e);
+
+    expect(events.map((e) => e.kind)).toEqual(['lookup_failed', 'candidate']);
   });
 
   it('não passa do teto de páginas da janela', async () => {
@@ -289,7 +379,132 @@ describe('getWithBackoff', () => {
   });
 });
 
+describe('getWithBackoff com limitador (15 GET /calls por minuto)', () => {
+  function limitedDeps(fetchFn: SearchDeps['fetchFn'], perMinute = 15, waitBudgetMs?: number) {
+    const clock = fakeClock();
+    const limiter = new SlidingWindowRateLimiter(perMinute, 60_000, clock);
+    const deps: SearchDeps = {
+      fetchFn,
+      sleep: clock.sleep,
+      apiKey: 'tok',
+      baseUrl: BASE,
+      limiter,
+      now: clock.now,
+      waitBudgetMs,
+    };
+    return { deps, clock };
+  }
+
+  it('40 requisições nunca passam de 15 em qualquer minuto', async () => {
+    const { deps, clock } = limitedDeps(vi.fn(() => Promise.resolve(json(page([])))));
+    const stamps: number[] = [];
+    const fetchFn = deps.fetchFn;
+    deps.fetchFn = ((...a: Parameters<typeof fetch>) => {
+      stamps.push(clock.now());
+      return fetchFn(...a);
+    }) as typeof fetch;
+
+    for (let i = 0; i < 40; i++) expect(await getWithBackoff(deps, `${BASE}/calls`)).not.toBeNull();
+
+    for (const t of stamps) {
+      expect(stamps.filter((s) => s >= t && s < t + 60_000).length).toBeLessThanOrEqual(15);
+    }
+  });
+
+  it('429 com RateLimit-Reset pausa o token e repete depois do reset', async () => {
+    const stamps: number[] = [];
+    const responses = [
+      new Response(null, { status: 429, headers: { 'RateLimit-Reset': '42' } }),
+      json({ ok: true }),
+    ];
+    const { deps, clock } = limitedDeps(
+      vi.fn(() => {
+        stamps.push(clock.now());
+        return Promise.resolve(responses.shift()!);
+      }),
+    );
+
+    const res = await getWithBackoff(deps, `${BASE}/calls`);
+
+    expect(res?.ok).toBe(true);
+    expect(stamps).toEqual([0, 42_000]);
+  });
+
+  it('429 com Retry-After também vale para a próxima requisição do token', async () => {
+    const stamps: number[] = [];
+    const responses = [
+      new Response(null, { status: 429, headers: { 'Retry-After': '10' } }),
+      json({}),
+      json({}),
+    ];
+    const { deps, clock } = limitedDeps(
+      vi.fn(() => {
+        stamps.push(clock.now());
+        return Promise.resolve(responses.shift()!);
+      }),
+    );
+
+    await getWithBackoff(deps, `${BASE}/calls`);
+    await getWithBackoff(deps, `${BASE}/calls`);
+
+    expect(stamps).toEqual([0, 10_000, 10_000]);
+  });
+
+  it('RateLimit-Remaining 0 pausa antes de estourar', async () => {
+    const stamps: number[] = [];
+    const responses = [
+      json({}, { headers: { 'RateLimit-Remaining': '0', 'RateLimit-Reset': '30' } }),
+      json({}),
+    ];
+    const { deps, clock } = limitedDeps(
+      vi.fn(() => {
+        stamps.push(clock.now());
+        return Promise.resolve(responses.shift()!);
+      }),
+    );
+
+    await getWithBackoff(deps, `${BASE}/calls`);
+    await getWithBackoff(deps, `${BASE}/calls`);
+
+    expect(stamps).toEqual([0, 30_000]);
+  });
+
+  it('sem cabeçalho, backoff exponencial via limitador (1s, 2s)', async () => {
+    const stamps: number[] = [];
+    const responses = [
+      new Response(null, { status: 429 }),
+      new Response(null, { status: 503 }),
+      json({}),
+    ];
+    const { deps, clock } = limitedDeps(
+      vi.fn(() => {
+        stamps.push(clock.now());
+        return Promise.resolve(responses.shift()!);
+      }),
+    );
+
+    expect(await getWithBackoff(deps, `${BASE}/calls`)).not.toBeNull();
+    expect(stamps).toEqual([0, 1_000, 3_000]);
+  });
+
+  it('orçamento de espera curto: desiste em vez de esperar o limite', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(json({})));
+    const { deps, clock } = limitedDeps(fetchFn, 1, 8_000);
+
+    expect(await getWithBackoff(deps, `${BASE}/calls`)).not.toBeNull();
+    expect(await getWithBackoff(deps, `${BASE}/calls`)).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(clock.now()).toBe(0);
+  });
+});
+
 describe('retryWaitMs', () => {
+  it('RateLimit-Reset em epoch (segundos) vira espera relativa', () => {
+    const now = Date.parse('2026-11-11T10:00:00Z');
+    const epoch = String(Math.floor(now / 1000) + 25);
+    expect(retryWaitMs(new Headers({ 'ratelimit-reset': epoch }), now)).toBe(25_000);
+  });
+
   it('lê segundos, RateLimit-Reset e data HTTP', () => {
     expect(retryWaitMs(new Headers({ 'retry-after': '3' }))).toBe(3000);
     expect(retryWaitMs(new Headers({ 'ratelimit-reset': '2' }))).toBe(2000);

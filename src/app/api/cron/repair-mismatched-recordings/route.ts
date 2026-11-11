@@ -12,6 +12,10 @@
  *
  * Parâmetros: org_id (obrigatório), apply=1, cursor, limit (1 a 100), days (janela, padrão 90),
  * since (ISO, ex. 2026-10-12; prevalece sobre days).
+ * A busca na API4COM passa pelo limitador de 15 GET /calls por minuto do token (por
+ * instância); com o limite cheio, use limit pequeno para caber nos 300s. Ligação
+ * cuja busca falhou (limite esgotado, rede) volta como `lookup_failed`, sem escrita.
+ * Para rodar por horas, prefira o script (retoma pelo cursor com --state).
  * Versão em linha de comando: scripts/repair-mismatched-recordings.ts
  */
 import { NextResponse } from 'next/server';

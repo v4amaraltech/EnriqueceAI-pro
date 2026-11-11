@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { getApi4ComCallsLimiter } from '@/features/integrations/services/api4com-rate-limit';
 import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 import type { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -21,16 +22,31 @@ interface CallForRecovery {
   metadata: Record<string, unknown> | null;
 }
 
+/** Teto de espera por requisição em caminhos interativos (o usuário está aguardando). */
+export const INTERACTIVE_LOOKUP_WAIT_MS = 8_000;
+
+export interface LookupOptions {
+  /**
+   * Espera máxima (limitador de 15/min + backoff) por requisição à API4COM.
+   * Caminhos interativos (proxy, botão do SDR) passam um teto curto; script e
+   * crons esperam o necessário.
+   */
+  waitBudgetMs?: number;
+}
+
 /**
  * Candidatos de `record_url` na API4COM, em ordem: primeiro por id do provedor
  * (`api4com_call_id` e `alt_api4com_ids`), depois por janela de data em torno do
- * início da ligação. Somente leitura (GET) e com backoff em 429/503.
- * Também avisa quando a janela é ambígua (`kind: 'ambiguous_window'`).
+ * início da ligação. Somente leitura (GET), limitado a 15 GET /calls por minuto por
+ * token (compartilhado no processo) e com backoff em 429/503.
+ * Também avisa quando a janela é ambígua (`kind: 'ambiguous_window'`) e quando a
+ * API falhou e a busca ficou incompleta (`kind: 'lookup_failed'`).
  * O chamador decide quando parar (ex.: o reparo baixa e mede cada um).
  */
 export async function* lookupRecordingCandidatesFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
+  opts: LookupOptions = {},
 ): AsyncGenerator<RecordingSearchEvent> {
   // Credential of the account: org token, else any legacy user token of the org.
   const creds = await getOrgApiCredentials(
@@ -39,7 +55,14 @@ export async function* lookupRecordingCandidatesFromApi4Com(
   );
   if (!creds) return;
   yield* searchRecordingCandidates(
-    { fetchFn: fetch, sleep: defaultSleep, apiKey: creds.apiKey, baseUrl: creds.baseUrl },
+    {
+      fetchFn: fetch,
+      sleep: defaultSleep,
+      apiKey: creds.apiKey,
+      baseUrl: creds.baseUrl,
+      limiter: getApi4ComCallsLimiter(creds.apiKey),
+      waitBudgetMs: opts.waitBudgetMs,
+    },
     call,
   );
 }
@@ -55,8 +78,9 @@ export async function* lookupRecordingCandidatesFromApi4Com(
 export async function lookupRecordingFromApi4Com(
   supabase: SupabaseClient,
   call: CallForRecovery,
+  opts: LookupOptions = {},
 ): Promise<string | null> {
-  for await (const event of lookupRecordingCandidatesFromApi4Com(supabase, call)) {
+  for await (const event of lookupRecordingCandidatesFromApi4Com(supabase, call, opts)) {
     if (event.kind === 'candidate') return event.url;
   }
   return null;

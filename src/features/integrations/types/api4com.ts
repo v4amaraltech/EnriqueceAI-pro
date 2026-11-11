@@ -53,17 +53,23 @@ export interface Api4ComCallRecord {
   metadata: Record<string, string>;
 }
 
-// Paginated response from GET /calls
+export interface Api4ComPaginationMeta {
+  totalItemCount?: number;
+  totalPageCount?: number;
+  itemsPerPage?: number;
+  currentPage?: number;
+  nextPage?: number | null;
+  previousPage?: number | null;
+}
+
+// Paginated response from GET /calls. A API devolve a paginação em `meta`;
+// `metadata` é o nome da documentação antiga e fica só como fallback.
+// Leia sempre via `api4comPagination` / `api4comNextPage`.
 export interface Api4ComCallListResponse {
   data: Api4ComCallRecord[];
-  metadata: {
-    totalItemCount: number;
-    totalPageCount: number;
-    itemsPerPage: number;
-    currentPage: number;
-    nextPage: number | null;
-    previousPage: number | null;
-  };
+  meta?: Api4ComPaginationMeta;
+  /** @deprecated formato antigo; use `meta` (via api4comPagination). */
+  metadata?: Api4ComPaginationMeta;
 }
 
 // Common hangup causes from FreeSWITCH

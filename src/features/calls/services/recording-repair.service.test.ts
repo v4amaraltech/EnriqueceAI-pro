@@ -506,4 +506,94 @@ describe('repairRecordingsPage', () => {
       expect(fake.updates).toHaveLength(0);
     });
   });
+
+  describe('API4COM indisponível (limite esgotado, rede, erro)', () => {
+    it('busca incompleta sem cópia certa: lookup_failed, apply não grava nem esconde', async () => {
+      respondBy({ [LISTENER]: 20 });
+      api4comYields({ kind: 'lookup_failed', phase: 'window' });
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1', apply: true });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'lookup_failed' });
+      expect(page.details[0]!.hidden).toBeUndefined();
+      expect(page.counts.lookup_failed).toBe(1);
+      expect(page.counts.unrepairable).toBe(0);
+      expect(fake.updates).toHaveLength(0);
+    });
+
+    it('falha numa fase mas candidato que bate na outra: repara', async () => {
+      respondBy({ [LISTENER]: 20, [DURABLE]: 365 });
+      api4comYields({ kind: 'lookup_failed', phase: 'id' }, cand(DURABLE));
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'would_repair', source: 'api4com' });
+    });
+
+    it('recording_url salvo que bate não consulta a API4COM', async () => {
+      respondBy({ [LISTENER]: 365 });
+      const fake = makeFakeSupabase([call()], { [PATH]: fakeAudio(12) });
+
+      const page = await repairRecordingsPage(fake.client, { orgId: 'org-1' });
+
+      expect(page.details[0]).toMatchObject({ outcome: 'would_repair', source: 'recording_url' });
+      expect(mocks.candidates).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('execução longa: cursor por ligação', () => {
+    const two = () => [call(), call({ id: 'call-2', recording_storage_path: 'org-1/call-2.mp3' })];
+
+    it('onCallDone recebe cada ligação na ordem', async () => {
+      respondBy({ [LISTENER]: 365 });
+      const fake = makeFakeSupabase(two(), {
+        [PATH]: fakeAudio(12),
+        'org-1/call-2.mp3': fakeAudio(12),
+      });
+      const done: string[] = [];
+
+      await repairRecordingsPage(fake.client, {
+        orgId: 'org-1',
+        onCallDone: (id) => {
+          done.push(id);
+        },
+      });
+
+      expect(done).toEqual(['call-1', 'call-2']);
+    });
+
+    it('shouldStop para entre ligações e devolve o cursor da última processada', async () => {
+      respondBy({ [LISTENER]: 365 });
+      const fake = makeFakeSupabase(two(), {
+        [PATH]: fakeAudio(12),
+        'org-1/call-2.mp3': fakeAudio(12),
+      });
+      let stop = false;
+
+      const page = await repairRecordingsPage(fake.client, {
+        orgId: 'org-1',
+        limit: 25,
+        shouldStop: () => stop,
+        onCallDone: () => {
+          stop = true;
+        },
+      });
+
+      expect(page).toMatchObject({ scanned: 1, stopped: true, nextCursor: 'call-1' });
+    });
+
+    it('parada antes da primeira ligação mantém o cursor recebido', async () => {
+      const fake = makeFakeSupabase(two(), {});
+
+      const page = await repairRecordingsPage(fake.client, {
+        orgId: 'org-1',
+        cursor: 'call-0',
+        shouldStop: () => true,
+      });
+
+      expect(page).toMatchObject({ scanned: 0, stopped: true, nextCursor: 'call-0' });
+    });
+  });
 });

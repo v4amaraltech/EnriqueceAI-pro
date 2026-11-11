@@ -7,7 +7,15 @@
  *  b) por janela de data em torno do início da ligação, paginando só dentro dela.
  *     Na janela, o ramal sozinho não basta: precisa do fone de destino ou de um
  *     candidato único (ver `selectWindowCandidates`).
+ *
+ * Limite de taxa: a API4COM aceita 15 GET /calls por minuto por token. Com
+ * `deps.limiter`, toda requisição (inclusive retentativa) reserva uma vaga antes;
+ * 429/503 pausa o token pelo `Retry-After` / `RateLimit-Reset` e repete com backoff.
+ * Falha da API (limite esgotado, rede, erro HTTP) vira o evento `lookup_failed`:
+ * a busca ficou incompleta e o chamador não deve concluir que não há gravação.
  */
+import { api4comNextPage } from '@/features/integrations/services/api4com-pagination';
+import type { CallsRateLimiter } from '@/features/integrations/services/api4com-rate-limit';
 import {
   parseApi4ComTimestamp,
   toApi4ComFilterTimestamp,
@@ -25,15 +33,22 @@ export const SEARCH_PAGE_LIMIT = 100;
 export const SEARCH_MAX_WINDOW_PAGES = 5;
 /** Teto de requisições (sem contar retentativas) por ligação. */
 export const SEARCH_MAX_REQUESTS = 12;
-export const BACKOFF_MAX_ATTEMPTS = 4;
+export const BACKOFF_MAX_ATTEMPTS = 5;
 export const BACKOFF_BASE_MS = 1000;
-export const BACKOFF_MAX_WAIT_MS = 30_000;
+/** A janela do limite é de 1 min; o reset nunca deveria passar disso (com folga). */
+export const BACKOFF_MAX_WAIT_MS = 65_000;
+export const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface SearchDeps {
   fetchFn: typeof fetch;
   sleep: (ms: number) => Promise<void>;
   apiKey: string;
   baseUrl: string;
+  /** Limitador do token (15/min). Sem ele, só o backoff em 429/503. */
+  limiter?: CallsRateLimiter;
+  /** Espera máxima somada (limitador + backoff) por requisição. Padrão: sem teto. */
+  waitBudgetMs?: number;
+  now?: () => number;
 }
 
 export interface SearchCall {
@@ -57,35 +72,78 @@ export function buildCallsUrl(
   return `${baseUrl}/calls?page=${page}&limit=${SEARCH_PAGE_LIMIT}&filter=${filter}`;
 }
 
-/** Espera pedida pelo servidor (`Retry-After` ou `RateLimit-Reset`, em segundos ou data), em ms. */
+/**
+ * Espera pedida pelo servidor (`Retry-After` ou `RateLimit-Reset`), em ms.
+ * Aceita segundos até o reset, data HTTP ou epoch em segundos.
+ */
 export function retryWaitMs(headers: Headers, now = Date.now()): number | null {
-  for (const name of ['retry-after', 'ratelimit-reset']) {
+  for (const name of ['retry-after', 'ratelimit-reset', 'x-ratelimit-reset']) {
     const raw = headers.get(name);
     if (!raw) continue;
     const seconds = Number(raw);
-    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    if (Number.isFinite(seconds)) {
+      // epoch em segundos (ex.: 1762862400) em vez de "segundos até o reset"
+      if (seconds > 1e9) return Math.max(0, seconds * 1000 - now);
+      return Math.max(0, seconds * 1000);
+    }
     const date = Date.parse(raw);
     if (!Number.isNaN(date)) return Math.max(0, date - now);
   }
   return null;
 }
 
-/** GET com retentativa em 429/503: respeita o cabeçalho, senão backoff exponencial (1s, 2s, 4s). */
+/** Cota do token acabou nesta janela (`RateLimit-Remaining: 0`)? Devolve a espera até o reset. */
+function exhaustedQuotaWaitMs(headers: Headers, now: number): number | null {
+  const remaining = headers.get('ratelimit-remaining') ?? headers.get('x-ratelimit-remaining');
+  if (remaining === null || Number(remaining) > 0) return null;
+  const reset = headers.get('ratelimit-reset') ?? headers.get('x-ratelimit-reset');
+  if (!reset) return null;
+  return retryWaitMs(new Headers({ 'ratelimit-reset': reset }), now);
+}
+
+/**
+ * GET com limite de taxa e retentativa em 429/503. Antes de cada tentativa
+ * reserva uma vaga no limitador; em 429/503 respeita o cabeçalho, senão backoff
+ * exponencial (1s, 2s, 4s, 8s). Devolve null se não conseguiu (teto de tentativas,
+ * espera acima do orçamento, rede ou erro HTTP).
+ */
 export async function getWithBackoff(deps: SearchDeps, url: string): Promise<Response | null> {
+  const now = deps.now ?? Date.now;
+  let budget = deps.waitBudgetMs ?? Infinity;
   for (let attempt = 0; attempt < BACKOFF_MAX_ATTEMPTS; attempt++) {
+    if (deps.limiter) {
+      const before = now();
+      if (!(await deps.limiter.acquire(budget))) return null;
+      budget -= now() - before;
+    }
     let response: Response;
     try {
       response = await deps.fetchFn(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json', Authorization: deps.apiKey },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
       return null;
     }
-    if (response.status !== 429 && response.status !== 503) return response.ok ? response : null;
+    if (response.status !== 429 && response.status !== 503) {
+      const quotaWait = deps.limiter ? exhaustedQuotaWaitMs(response.headers, now()) : null;
+      if (quotaWait !== null) deps.limiter!.pauseFor(Math.min(quotaWait, BACKOFF_MAX_WAIT_MS));
+      return response.ok ? response : null;
+    }
     if (attempt === BACKOFF_MAX_ATTEMPTS - 1) return null;
-    const wait = retryWaitMs(response.headers) ?? BACKOFF_BASE_MS * 2 ** attempt;
-    await deps.sleep(Math.min(wait, BACKOFF_MAX_WAIT_MS));
+    const wait = Math.min(
+      retryWaitMs(response.headers, now()) ?? BACKOFF_BASE_MS * 2 ** attempt,
+      BACKOFF_MAX_WAIT_MS,
+    );
+    if (deps.limiter) {
+      // A pausa vale para todas as chamadas do token; o acquire seguinte espera.
+      deps.limiter.pauseFor(wait);
+      continue;
+    }
+    if (wait > budget) return null;
+    budget -= wait;
+    await deps.sleep(wait);
   }
   return null;
 }
@@ -143,7 +201,9 @@ export type RecordingSearchEvent =
        *  unique_in_window: único candidato do ramal na janela, sem fone que contradiga. */
       match: 'provider_id' | 'destination' | 'unique_in_window';
     }
-  | { kind: 'ambiguous_window'; candidates: number };
+  | { kind: 'ambiguous_window'; candidates: number }
+  /** A API não respondeu (limite esgotado, rede, erro HTTP): busca incompleta. */
+  | { kind: 'lookup_failed'; phase: 'id' | 'window' };
 
 /** Formas comparáveis de um telefone: variantes BR (com/sem DDI e nono dígito) ou os dígitos. */
 function phoneForms(raw: string | null | undefined): string[] {
@@ -232,7 +292,8 @@ export function selectWindowCandidates(
  * Gera, em ordem, os candidatos: primeiro pelo id do provedor, depois os da janela
  * (ver `selectWindowCandidates`). Nunca repete URL e respeita `SEARCH_MAX_REQUESTS`:
  * uma ligação não varre o histórico da conta. A janela inteira é lida antes de
- * decidir, para saber se o candidato é único.
+ * decidir, para saber se o candidato é único. Se alguma leitura falha, avisa com
+ * `lookup_failed`; com a janela incompleta só sai candidato pelo fone de destino.
  */
 export async function* searchRecordingCandidates(
   deps: SearchDeps,
@@ -241,12 +302,16 @@ export async function* searchRecordingCandidates(
   const seen = new Set<string>();
   let requests = 0;
 
-  // a) busca pontual por id
+  // a) busca pontual por id (1 requisição por id, antes de qualquer varredura)
   for (const id of providerIds(call.metadata)) {
     if (requests >= SEARCH_MAX_REQUESTS) return;
     requests++;
     const page = await readPage(deps, buildCallsUrl(deps.baseUrl, { id }, 1));
-    for (const record of page?.data ?? []) {
+    if (!page) {
+      yield { kind: 'lookup_failed', phase: 'id' };
+      continue;
+    }
+    for (const record of page.data ?? []) {
       if (record.id === id && record.record_url && !seen.has(record.record_url)) {
         seen.add(record.record_url);
         yield { kind: 'candidate', url: record.record_url, phase: 'id', match: 'provider_id' };
@@ -265,21 +330,29 @@ export async function* searchRecordingCandidates(
     },
   };
   const records: Api4ComCallRecord[] = [];
-  for (let pageNumber = 1, pages = 0; pages < SEARCH_MAX_WINDOW_PAGES; pageNumber++, pages++) {
+  let windowFailed = false;
+  for (let pageNumber = 1, pages = 0; pages < SEARCH_MAX_WINDOW_PAGES; pages++) {
     if (requests >= SEARCH_MAX_REQUESTS) break;
     requests++;
     const page = await readPage(deps, buildCallsUrl(deps.baseUrl, where, pageNumber));
-    if (!page) break;
+    if (!page) {
+      windowFailed = true;
+      break;
+    }
     records.push(...(page.data ?? []));
-    const next = page.metadata?.nextPage;
-    if (!next) break;
-    pageNumber = next - 1;
+    // paginação em `meta` (formato atual); `metadata` só como fallback
+    const next = api4comNextPage(page);
+    if (!next || next <= pageNumber) break;
+    pageNumber = next;
   }
   for (const event of selectWindowCandidates(records, call)) {
+    // Janela incompleta: unicidade e ambiguidade não valem; só o destino decide.
+    if (windowFailed && (event.kind !== 'candidate' || event.match !== 'destination')) continue;
     if (event.kind === 'candidate') {
       if (seen.has(event.url)) continue;
       seen.add(event.url);
     }
     yield event;
   }
+  if (windowFailed) yield { kind: 'lookup_failed', phase: 'window' };
 }

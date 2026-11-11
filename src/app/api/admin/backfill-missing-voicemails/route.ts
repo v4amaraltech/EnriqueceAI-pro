@@ -142,12 +142,15 @@ export async function POST(request: Request) {
           errors++;
           break pageLoop;
         }
-        const json = (await res.json()) as Api4ComCall[] | { data?: Api4ComCall[]; meta?: ApiMeta };
+        const json = (await res.json()) as
+          | Api4ComCall[]
+          | { data?: Api4ComCall[]; meta?: ApiMeta; metadata?: ApiMeta };
         if (Array.isArray(json)) {
           pageCalls = json;
         } else {
           pageCalls = json.data ?? [];
-          const meta = json.meta;
+          // `meta` é o formato atual da API4COM; `metadata` só como fallback.
+          const meta = json.meta ?? json.metadata;
           if (meta?.totalPageCount != null) totalPageCount = meta.totalPageCount;
           if (meta?.nextPage === null) totalPageCount = page;
         }
