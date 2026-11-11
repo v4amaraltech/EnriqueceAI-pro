@@ -10,8 +10,8 @@ import { FIXTURE_ACTIVITY, FIXTURE_HISTORY, FIXTURE_PREVIEW } from './fixture';
 
 const CARD_NOW = new Date('2026-11-11T15:00:00.000Z');
 
-function cardActivity() {
-  return {
+function cardActivity(active: boolean) {
+  const lost = {
     ...FIXTURE_ACTIVITY,
     stepOrder: 3,
     totalSteps: 3,
@@ -32,6 +32,19 @@ function cardActivity() {
       loss_notes: 'Cadência concluída sem resposta',
     },
   };
+  if (!active) return lost;
+  return {
+    ...lost,
+    callScript: null,
+    lead: {
+      ...lost.lead,
+      lost_at: null,
+      loss_reason_name: null,
+      loss_notes: null,
+      enrollment_loss_notes: null,
+      last_interaction_at: null,
+    },
+  };
 }
 
 /**
@@ -39,10 +52,12 @@ function cardActivity() {
  */
 export function CallWorkspaceFixture({
   leadCard,
+  activeLead,
   theme,
   view,
 }: {
   leadCard: boolean;
+  activeLead: boolean;
   theme: 'light' | 'dark';
   view: 'painel' | 'fila';
 }) {
@@ -51,7 +66,7 @@ export function CallWorkspaceFixture({
     return () => document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  const activity = leadCard ? cardActivity() : FIXTURE_ACTIVITY;
+  const activity = leadCard ? cardActivity(activeLead) : FIXTURE_ACTIVITY;
   const banner = (
     <p className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
       Fixture de teste. Empresa, telefone, closer e histórico são fictícios. Nenhum convite ou ligação é enviado.

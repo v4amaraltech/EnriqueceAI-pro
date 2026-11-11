@@ -344,6 +344,29 @@ async function attachLossReasonNames(supabase: SupabaseClient, activities: Pendi
   }
 }
 
+/** Última interação só entra com o cartão. Erro de leitura não esvazia a fila. */
+async function attachLastInteractionAt(supabase: SupabaseClient, activities: PendingActivity[]) {
+  const ids = [...new Set(activities.map((activity) => activity.lead.id).filter((id) => isUuid(id)))];
+  if (ids.length === 0) return;
+  try {
+    const { data, error } = (await from(supabase, 'interactions')
+      .select('lead_id, created_at')
+      .in('lead_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(1000)) as { data: Array<{ lead_id: string; created_at: string }> | null; error: { message: string } | null };
+    if (error || !data) return;
+    const latest = new Map<string, string>();
+    for (const row of data) {
+      if (row.lead_id && row.created_at && !latest.has(row.lead_id)) latest.set(row.lead_id, row.created_at);
+    }
+    for (const activity of activities) {
+      activity.lead.last_interaction_at = latest.get(activity.lead.id) ?? null;
+    }
+  } catch (err) {
+    console.error('[activities] interactions query error:', err);
+  }
+}
+
 /**
  * Retornos avulsos (`scheduled_activities` pending) entram na fila mesmo sem
  * passo de cadência. A posse é `leads.assigned_to` (SDR da carteira), nunca
@@ -412,7 +435,10 @@ async function mergeWithScheduledReturns(
   });
 
   const allActivities = [...cadenceActivities, ...scheduledActivities];
-  if (includeLeadCard) await attachLossReasonNames(supabase, allActivities);
+  if (includeLeadCard) {
+    await attachLossReasonNames(supabase, allActivities);
+    await attachLastInteractionAt(supabase, allActivities);
+  }
 
   const leadEarliestDue = new Map<string, number>();
   for (const a of allActivities) {

@@ -42,6 +42,7 @@ export interface ActivityLead {
    * Preenchidos só quando a flag `call_lead_card_v1` pede o cartão.
    * Com a flag desligada a fila não seleciona estas colunas.
    */
+  last_interaction_at?: string | null;
   lost_at?: string | null;
   loss_notes?: string | null;
   loss_reason_id?: string | null;
