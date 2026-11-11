@@ -4,15 +4,6 @@ import { LEAD_CARD_COLORS as color } from '../utils/lead-card-colors';
 import type { LeadCardField, LeadCardModel } from '../utils/lead-card';
 
 function FieldValue({ field }: { field: LeadCardField }) {
-  const at = field.id === 'email' ? field.value.lastIndexOf('@') : -1;
-  if (at > 0) {
-    return (
-      <p className="mt-0.5 text-[13px] font-semibold leading-snug" title={field.value} style={{ color: color.value }}>
-        <span className="block break-all">{field.value.slice(0, at)}</span>
-        <span className="block break-all">{field.value.slice(at)}</span>
-      </p>
-    );
-  }
   return (
     <p className="mt-0.5 truncate text-[13px] font-semibold leading-snug" title={field.value} style={{ color: color.value }}>
       {field.value}
@@ -71,7 +62,7 @@ export function CallLeadCard({ model }: { model: LeadCardModel }) {
             <div
               key={field.id}
               data-testid={`lead-card-${field.id}`}
-              className={field.fullWidth ? 'col-span-2 px-3 py-2' : 'px-3 py-2'}
+              className={field.fullWidth ? 'col-span-2 min-w-0 px-3 py-2' : 'min-w-0 px-3 py-2'}
               style={{
                 borderRight: `1px solid ${color.gridLine}`,
                 borderBottom: `1px solid ${color.gridLine}`,

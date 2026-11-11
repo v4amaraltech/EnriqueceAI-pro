@@ -23,7 +23,7 @@ function cardActivity() {
       telefone: '+5511900000000',
       job_title: 'Coordenador',
       segmento: 'Indústria',
-      email: 'contato.fixture@example.com',
+      email: 'vinicius.contato@email.com',
       lead_source: 'Blackbox',
       canal: 'Google',
       cnpj: '00000000000191',
