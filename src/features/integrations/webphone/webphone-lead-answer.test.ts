@@ -47,11 +47,16 @@ describe('hangupReasonLabel', () => {
   });
 
   it('traduz as causas de número ruim, ocupado e não atendeu', () => {
-    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Número mudou ou foi desativado.');
     expect(hangupReasonLabel('UNALLOCATED_NUMBER')).toBe('Este número não existe.');
     expect(hangupReasonLabel('USER_BUSY')).toBe('Linha ocupada.');
     expect(hangupReasonLabel('NO_ANSWER')).toBe('O lead não atendeu.');
     expect(hangupReasonLabel('VOICEMAIL')).toBe('Caiu na caixa postal.');
+  });
+
+  it('NUMBER_CHANGED é caixa postal no guia da API4COM, e ALLOTTED_TIMEOUT é tempo expirado', () => {
+    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Caiu na caixa postal.');
+    expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).toBe('Tempo expirado.');
+    expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).not.toBe('A operadora não completou a ligação.');
   });
 
   it('aceita minúsculas/espaços e cai num texto genérico para causa desconhecida', () => {

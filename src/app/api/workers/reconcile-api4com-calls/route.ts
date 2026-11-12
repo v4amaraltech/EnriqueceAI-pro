@@ -18,6 +18,11 @@ import {
   pickFallbackCandidate,
 } from '@/features/integrations/services/api4com-reconcile-matching';
 import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
+import { getApi4ComCallsLimiter } from '@/features/integrations/services/api4com-rate-limit';
+import {
+  RECONCILE_MAX_RATE_LIMIT_RETRIES,
+  fetchReconcileCallsPage,
+} from '@/features/integrations/services/api4com-reconcile-fetch';
 
 export const maxDuration = 800;
 
@@ -30,11 +35,10 @@ const ADAPTIVE_OVERLAP_HOURS = 0.5;
 // without anyone accidentally requesting "last 5 years".
 const MAX_WINDOW_HOURS = 1440;
 const MAX_PAGES = 100; // 100 pages × ~100 calls = 10k calls per org per window
-// 500ms throttle = 120 req/min, comfortably under API4COM's per-minute cap.
-// The previous 200ms hit 429 on page 16 of a 60-day reingest. 800ms (the
-// original) was over-conservative — at 4k+ calls per reingest the throttle
-// alone added ~30s of pure idle time. 500ms is the empirical sweet spot.
-const PAGE_DELAY_MS = 500;
+// Limite de taxa: o teto oficial da API4COM é 15 GET /calls por minuto por
+// token. Cada página passa pelo limitador do token (getApi4ComCallsLimiter,
+// janela deslizante) e o 429 respeita RateLimit-Reset / Retry-After; ver
+// fetchReconcileCallsPage. Não há mais pausa fixa entre páginas.
 // Batch size for parallel upserts within one fetched page. The Supabase
 // pooler comfortably handles 10 concurrent queries; bigger batches don't
 // proportionally speed up since each upsert is dominated by a single round
@@ -43,16 +47,6 @@ const UPSERT_CONCURRENCY = 10;
 // Rows fetched per fallback lookup. SDRs rarely redial the same number more
 // than a handful of times within ±10min; 25 leaves plenty of headroom.
 const FALLBACK_CANDIDATE_LIMIT = 25;
-const RATE_LIMIT_RETRY_MS = 12_000; // exponential-ish backoff per retry
-// 3 retries covers transient rate-limit spikes during long backfills; with
-// 1 retry the worker bailed after a single 429 burst on page 16 of a 60d
-// reingest, leaking the trailing 30+ pages.
-const MAX_RATE_LIMIT_RETRIES = 3;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // API4COM REST schema (confirmed via dry-run 2026-05-13). Snake_case fields
 // and `call_type` instead of `direction`.
 interface Api4ComCall {
@@ -217,6 +211,8 @@ export async function POST(request: Request) {
       continue;
     }
     const calls: Api4ComCall[] = [];
+    // Limitador compartilhado do token (15/min), o mesmo do reparo de gravações.
+    const limiter = getApi4ComCallsLimiter(apiKey);
 
     // Fetch once per org — we'll thread the org's threshold into the
     // classifier instead of running the old hardcoded 50s gate.
@@ -254,72 +250,69 @@ export async function POST(request: Request) {
       let pageCalls: Api4ComCall[] = [];
       let succeeded = false;
 
-      // Retry on 429 with backoff. Surfaces final failure after the cap.
-      for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-        try {
-          const res = await fetch(url.toString(), {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: apiKey,
-            },
-            signal: AbortSignal.timeout(30_000),
-          });
+      // Vaga no limitador antes de cada GET; 429 pausa o token e repete.
+      const fetched = await fetchReconcileCallsPage(
+        { fetchFn: fetch, limiter },
+        url.toString(),
+        apiKey,
+      );
 
-          if (res.status === 429) {
-            if (attempt === MAX_RATE_LIMIT_RETRIES) {
-              orgResult.errors.push(`http_429 page=${page}: rate limit persisted after ${MAX_RATE_LIMIT_RETRIES} retries`);
-              break pageLoop;
-            }
-            await sleep(RATE_LIMIT_RETRY_MS * (attempt + 1));
-            continue;
+      if (fetched.kind === 'fetch_failed') {
+        orgResult.errors.push(`fetch_failed page=${page}: ${fetched.error.message}`);
+        break pageLoop;
+      }
+      if (fetched.kind === 'rate_limited') {
+        orgResult.errors.push(
+          `http_429 page=${page}: rate limit persisted after ${RECONCILE_MAX_RATE_LIMIT_RETRIES} retries`,
+        );
+        break pageLoop;
+      }
+
+      const res = fetched.response;
+      try {
+        if (!res.ok) {
+          const text = await res.text();
+          orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
+
+          // Auth failure: mark the connection broken so the manager gets a
+          // visible signal in the integrations UI. Without this an expired
+          // API key just makes the reconcile silently log errors forever.
+          // The credential is the org's, so every ramal of the org is affected.
+          if (res.status === 401 || res.status === 403) {
+            await from(supabase, 'api4com_connections' as never)
+              .update({ status: 'error' } as Record<string, unknown>)
+              .eq('org_id', orgId)
+              .eq('status', 'connected');
           }
 
-          if (!res.ok) {
-            const text = await res.text();
-            orgResult.errors.push(`http_${res.status} page=${page}: ${text.slice(0, 200)}`);
-
-            // Auth failure: mark the connection broken so the manager gets a
-            // visible signal in the integrations UI. Without this an expired
-            // API key just makes the reconcile silently log errors forever.
-            // The credential is the org's, so every ramal of the org is affected.
-            if (res.status === 401 || res.status === 403) {
-              await from(supabase, 'api4com_connections' as never)
-                .update({ status: 'error' } as Record<string, unknown>)
-                .eq('org_id', orgId)
-                .eq('status', 'connected');
-            }
-
-            break pageLoop;
-          }
-
-          type ApiMeta = { totalPageCount?: number; currentPage?: number; nextPage?: number | null };
-          const json = (await res.json()) as
-            | Api4ComCall[]
-            | { data?: Api4ComCall[]; calls?: Api4ComCall[]; meta?: ApiMeta; metadata?: ApiMeta };
-          if (Array.isArray(json)) {
-            pageCalls = json;
-          } else {
-            pageCalls = json.data ?? json.calls ?? [];
-            // API4COM returns the pagination object as `meta` (confirmed via
-            // probe 2026-05-18). Older docs called it `metadata` — keep both
-            // paths so legacy responses still parse.
-            const meta = json.meta ?? json.metadata;
-            if (meta?.totalPageCount != null) {
-              totalPageCount = meta.totalPageCount;
-            }
-            if (meta?.nextPage === null) {
-              // Last page reached — same effect as totalPageCount === page,
-              // but explicit signal from API. Used as definitive stop.
-              totalPageCount = page;
-            }
-          }
-          succeeded = true;
-          break;
-        } catch (err) {
-          orgResult.errors.push(`fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`);
           break pageLoop;
         }
+
+        type ApiMeta = { totalPageCount?: number; currentPage?: number; nextPage?: number | null };
+        const json = (await res.json()) as
+          | Api4ComCall[]
+          | { data?: Api4ComCall[]; calls?: Api4ComCall[]; meta?: ApiMeta; metadata?: ApiMeta };
+        if (Array.isArray(json)) {
+          pageCalls = json;
+        } else {
+          pageCalls = json.data ?? json.calls ?? [];
+          // API4COM returns the pagination object as `meta` (confirmed via
+          // probe 2026-05-18). Older docs called it `metadata`, so keep both
+          // paths so legacy responses still parse.
+          const meta = json.meta ?? json.metadata;
+          if (meta?.totalPageCount != null) {
+            totalPageCount = meta.totalPageCount;
+          }
+          if (meta?.nextPage === null) {
+            // Last page reached, same effect as totalPageCount === page,
+            // but explicit signal from API. Used as definitive stop.
+            totalPageCount = page;
+          }
+        }
+        succeeded = true;
+      } catch (err) {
+        orgResult.errors.push(`fetch_failed page=${page}: ${err instanceof Error ? err.message : 'unknown'}`);
+        break pageLoop;
       }
 
       if (!succeeded) break;
@@ -362,9 +355,6 @@ export async function POST(request: Request) {
       if (sawOlderThanWindow) break;
       if (totalPageCount !== null && page >= totalPageCount) break;
       if (pageCalls.length === 0) break;
-
-      // Throttle: stay under the per-minute call cap.
-      await sleep(PAGE_DELAY_MS);
     }
 
     orgResult.fetched = calls.length;

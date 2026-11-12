@@ -15,7 +15,10 @@
  * a busca ficou incompleta e o chamador não deve concluir que não há gravação.
  */
 import { api4comNextPage } from '@/features/integrations/services/api4com-pagination';
-import type { CallsRateLimiter } from '@/features/integrations/services/api4com-rate-limit';
+import {
+  type CallsRateLimiter,
+  retryWaitMs,
+} from '@/features/integrations/services/api4com-rate-limit';
 import {
   parseApi4ComTimestamp,
   toApi4ComFilterTimestamp,
@@ -60,6 +63,10 @@ export interface SearchCall {
   metadata: Record<string, unknown> | null;
 }
 
+// Reexportado: o helper mora no módulo do limitador (compartilhado com o
+// reconcile e com a mensagem de erro do POST /calls).
+export { retryWaitMs };
+
 export const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -70,26 +77,6 @@ export function buildCallsUrl(
 ): string {
   const filter = encodeURIComponent(JSON.stringify({ where }));
   return `${baseUrl}/calls?page=${page}&limit=${SEARCH_PAGE_LIMIT}&filter=${filter}`;
-}
-
-/**
- * Espera pedida pelo servidor (`Retry-After` ou `RateLimit-Reset`), em ms.
- * Aceita segundos até o reset, data HTTP ou epoch em segundos.
- */
-export function retryWaitMs(headers: Headers, now = Date.now()): number | null {
-  for (const name of ['retry-after', 'ratelimit-reset', 'x-ratelimit-reset']) {
-    const raw = headers.get(name);
-    if (!raw) continue;
-    const seconds = Number(raw);
-    if (Number.isFinite(seconds)) {
-      // epoch em segundos (ex.: 1762862400) em vez de "segundos até o reset"
-      if (seconds > 1e9) return Math.max(0, seconds * 1000 - now);
-      return Math.max(0, seconds * 1000);
-    }
-    const date = Date.parse(raw);
-    if (!Number.isNaN(date)) return Math.max(0, date - now);
-  }
-  return null;
 }
 
 /** Cota do token acabou nesta janela (`RateLimit-Remaining: 0`)? Devolve a espera até o reset. */

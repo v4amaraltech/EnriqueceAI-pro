@@ -72,15 +72,25 @@ export interface Api4ComCallListResponse {
   metadata?: Api4ComPaginationMeta;
 }
 
-// Common hangup causes from FreeSWITCH
+// Hangup causes do FreeSWITCH que a API4COM repassa e que o classificador
+// (api4com-classification) ou o rótulo do webphone (hangupReasonLabel) conhecem.
+// NUMBER_CHANGED e ALLOTTED_TIMEOUT seguem o guia oficial da API4COM
+// ("caixa postal" e "tempo expirado"), não o sentido literal do FreeSWITCH.
 export type Api4ComHangupCause =
   | 'NORMAL_CLEARING'
   | 'USER_BUSY'
+  | 'BUSY'
   | 'NO_ANSWER'
   | 'NO_USER_RESPONSE'
+  | 'MISSED'
   | 'CALL_REJECTED'
   | 'UNALLOCATED_NUMBER'
   | 'INVALID_NUMBER_FORMAT'
   | 'ORIGINATOR_CANCEL'
   | 'NORMAL_TEMPORARY_FAILURE'
-  | 'RECOVERY_ON_TIMER_EXPIRE';
+  | 'RECOVERY_ON_TIMER_EXPIRE'
+  | 'NETWORK_OUT_OF_ORDER'
+  | 'EXCHANGE_ROUTING_ERROR'
+  | 'VOICEMAIL'
+  | 'NUMBER_CHANGED'
+  | 'ALLOTTED_TIMEOUT';

@@ -14,6 +14,7 @@ import {
 
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import { maskCalledForLog } from '@/features/integrations/services/api4com-log-mask';
 import type { CallStatus } from '@/features/calls/types';
 import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
 import { triggerTranscriptionEngine } from '@/features/calls/services/transcription-engine/trigger';
@@ -297,10 +298,11 @@ async function processApi4ComEvent(
         return;
       }
     }
+    // `called` é o telefone do lead: no log só vai mascarado (últimos 4 dígitos).
     logger.warn('No matching call found', {
       api4comId: body.id,
       caller: body.caller,
-      called: body.called,
+      called: maskCalledForLog(body.called),
       eventType: body.eventType,
     });
     return;
