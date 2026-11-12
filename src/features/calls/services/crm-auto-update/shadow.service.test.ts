@@ -140,6 +140,43 @@ describe('runCrmAutoUpdate (shadow)', () => {
     expect(sdr.writes.map((w) => w.table)).toEqual(['crm_auto_update_shadow_log']);
   });
 
+  it('opt-out: skip opt_out_requested, proposta só documental e nenhuma escrita fora do log', async () => {
+    const s = seed({ qualification: { outcome: 'not_interested', next_step_suggestion: 'none', confidence: 0.91 } });
+    s.call_transcripts_v2 = [{ id: 't-1', text: 'Não tenho interesse. Tira meu e-mail, elimina meu telefone.' }];
+    const { db, writes, tables } = fakeDb(s);
+    expect(await runCrmAutoUpdate(db, 'call-1')).toBe('logged');
+    expect(writes.map((w) => w.table)).toEqual(['crm_auto_update_shadow_log']);
+    const row = tables.crm_auto_update_shadow_log?.[0];
+    expect(row).toMatchObject({
+      verdict: 'skip',
+      skip_reason: 'opt_out_requested',
+      rules_version: 'v1.1',
+      proposed_changes: {
+        disposition: 'answered_no_progress',
+        opt_out: {
+          requested: true,
+          channels: ['email', 'phone'],
+          applied: false,
+          suggested_actions: expect.arrayContaining([
+            expect.objectContaining({ target: 'email_suppressions', channel: 'email' }),
+            expect.objectContaining({ target: 'contact_consent_evidence', channel: 'phone' }),
+          ]),
+        },
+      },
+      input_snapshot: expect.objectContaining({ opt_out_requested: true, opt_out_channels: ['email', 'phone'] }),
+    });
+    // O texto da ligação nunca é copiado para o log.
+    expect(JSON.stringify(row)).not.toContain('elimina meu telefone');
+  });
+
+  it('sem opt-out: proposed_changes sem chave opt_out e snapshot com opt_out_requested false', async () => {
+    const { db, tables } = fakeDb(seed());
+    await runCrmAutoUpdate(db, 'call-1');
+    const row = tables.crm_auto_update_shadow_log?.[0] as Record<string, Record<string, unknown>>;
+    expect(row.proposed_changes).not.toHaveProperty('opt_out');
+    expect(row.input_snapshot).toMatchObject({ opt_out_requested: false, opt_out_channels: [] });
+  });
+
   it('modo live também só registra nesta versão', async () => {
     const { db, writes, tables } = fakeDb(
       seed({

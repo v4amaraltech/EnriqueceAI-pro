@@ -8367,6 +8367,7 @@ export type Database = {
           skipped_low_confidence: number | null;
           skipped_needs_review: number | null;
           skipped_no_lead: number | null;
+          skipped_opt_out_requested: number | null;
           skipped_unmapped_outcome: number | null;
           would_apply: number | null;
           would_apply_agreement_rate: number | null;

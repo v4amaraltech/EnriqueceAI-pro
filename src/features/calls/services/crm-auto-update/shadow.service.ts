@@ -17,6 +17,7 @@ import {
   decideCrmAutoUpdate,
   resolveCrmAutoUpdateMode,
 } from './decision';
+import { suggestOptOutActions } from './opt-out';
 
 export const CRM_SHADOW_LOG_TABLE = 'crm_auto_update_shadow_log';
 
@@ -46,6 +47,7 @@ interface QualificationState {
   confidence: number | null;
   needs_review: boolean;
   needs_review_reasons: string[] | null;
+  summary?: string | null;
   transcript_id: string | null;
   updated_at: string | null;
 }
@@ -87,6 +89,20 @@ export function buildShadowLogRow(args: {
   legacyApplied: boolean;
 }): Record<string, unknown> {
   const { call, qualification: q, decision } = args;
+  const optOut = decision.opt_out;
+  // Opt-out: só PROPOSTA documental (applied = false). Nada é suprimido, apagado ou gravado.
+  const proposedChanges = optOut.requested
+    ? {
+        ...(decision.proposed ?? {}),
+        opt_out: {
+          requested: true,
+          channels: optOut.channels,
+          patterns: optOut.patterns,
+          suggested_actions: suggestOptOutActions(optOut),
+          applied: false,
+        },
+      }
+    : decision.proposed;
   return {
     call_id: call.id,
     org_id: call.org_id,
@@ -95,7 +111,7 @@ export function buildShadowLogRow(args: {
     mode: args.mode,
     verdict: decision.verdict,
     skip_reason: decision.skip_reason,
-    proposed_changes: decision.proposed,
+    proposed_changes: proposedChanges,
     rules_version: CRM_AUTO_UPDATE_RULES_VERSION,
     input_snapshot: {
       outcome: q.outcome,
@@ -107,6 +123,8 @@ export function buildShadowLogRow(args: {
       sdr_disposition: call.sdr_disposition,
       legacy_ai_outcome_applied: args.legacyApplied,
       lead_status: args.leadStatus,
+      opt_out_requested: optOut.requested,
+      opt_out_channels: optOut.channels,
     },
     qualification_completed_at: q.updated_at,
   };
@@ -135,7 +153,7 @@ export async function runCrmAutoUpdate(db: SupabaseClient, callId: string): Prom
 
   const { data: quals } = (await from(db, 'call_qualifications')
     .select(
-      'id, status, outcome, next_step_suggestion, interest, confidence, needs_review, needs_review_reasons, transcript_id, updated_at',
+      'id, status, outcome, next_step_suggestion, interest, confidence, needs_review, needs_review_reasons, summary, transcript_id, updated_at',
     )
     .eq('call_id', call.id)
     .eq('provider', CRM_AUTO_UPDATE_QUALIFICATION_PROVIDER)
@@ -186,6 +204,7 @@ export async function runCrmAutoUpdate(db: SupabaseClient, callId: string): Prom
     },
     lead: leadStatus ? { status: leadStatus } : null,
     transcript_text: transcriptText,
+    qualification_summary: qualification.summary ?? null,
   });
 
   const row = buildShadowLogRow({ call, qualification, mode, decision, leadStatus, legacyApplied });
