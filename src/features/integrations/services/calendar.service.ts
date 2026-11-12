@@ -3,6 +3,13 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import {
+  CALENDAR_EVENT_FIELDS,
+  isCalendarAccessDeniedError,
+  isInsufficientCalendarScopeError,
+  type GoogleCalendarEventItem,
+} from '@/features/closer-calendar/events';
+
 import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 
 const GCAL_API = 'https://www.googleapis.com/calendar/v3';
@@ -487,6 +494,85 @@ export async function queryFreeBusy(
 ): Promise<Record<string, FreeBusyCalendarPayload>> {
   const accessToken = await ensureValidToken(connection);
   return queryFreeBusyWithToken(accessToken, timeMin, timeMax, calendarIds);
+}
+
+export type CalendarEventsErrorKind = 'insufficient_scope' | 'no_access' | 'failed';
+
+/** Falha do events.list já classificada. Não carrega token nem corpo da resposta. */
+export class CalendarEventsError extends Error {
+  constructor(
+    public readonly kind: CalendarEventsErrorKind,
+    public readonly status: number | null,
+  ) {
+    super(`events.list falhou (${kind}${status ? `, HTTP ${status}` : ''})`);
+    this.name = 'CalendarEventsError';
+  }
+}
+
+/** Teto de páginas do events.list. Uma semana raramente passa de uma página. */
+export const CALENDAR_EVENTS_MAX_PAGES = 10;
+
+/**
+ * Eventos de um calendário na janela, já expandidos (singleEvents). Pede só
+ * os campos que a grade usa. Erro HTTP vira CalendarEventsError, com o tipo
+ * (escopo, sem acesso ou falha genérica) para quem chamou decidir o fallback.
+ */
+export async function listCalendarEventsWithToken(
+  accessToken: string,
+  calendarId: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<GoogleCalendarEventItem[]> {
+  const items: GoogleCalendarEventItem[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < CALENDAR_EVENTS_MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      timeMin,
+      timeMax,
+      timeZone: 'America/Sao_Paulo',
+      maxResults: '250',
+      fields: CALENDAR_EVENT_FIELDS,
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    let response: Response;
+    try {
+      response = await fetch(`${GCAL_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch {
+      throw new CalendarEventsError('failed', null);
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      if (isInsufficientCalendarScopeError(response.status, body)) {
+        throw new CalendarEventsError('insufficient_scope', response.status);
+      }
+      if (isCalendarAccessDeniedError(response.status, body)) {
+        throw new CalendarEventsError('no_access', response.status);
+      }
+      throw new CalendarEventsError('failed', response.status);
+    }
+    const data = (await response.json()) as { items?: GoogleCalendarEventItem[]; nextPageToken?: string };
+    items.push(...(data.items ?? []));
+    pageToken = data.nextPageToken || undefined;
+    if (!pageToken) return items;
+  }
+  // Lista incompleta deixaria horário ocupado parecer livre. Quem chama cai no freeBusy.
+  console.warn(`[gcal] events.list passou do teto de ${CALENDAR_EVENTS_MAX_PAGES} páginas`);
+  throw new CalendarEventsError('failed', null);
+}
+
+export async function listCalendarEvents(
+  connection: CalendarConnectionTokens,
+  calendarId: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<GoogleCalendarEventItem[]> {
+  const accessToken = await ensureValidToken(connection);
+  return listCalendarEventsWithToken(accessToken, calendarId, timeMin, timeMax);
 }
 
 // ─── BDR-4 ───────────────────────────────────────────────────────────────────

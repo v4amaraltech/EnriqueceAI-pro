@@ -10,15 +10,25 @@ import { MEETING_DURATION_MIN } from './meeting-duration';
  *
  * Horário desconhecido (freeBusy falhou, calendário notFound, ou sem conexão)
  * não é livre: a grade não deixa selecionar e o servidor recusa o evento.
+ *
+ * Ocupação do Google (`calendar_busy`) é diferente de reunião já marcada no
+ * Enriquece (`busy`). A primeira pode ser marcada por cima quando o SDR
+ * confirma (`allowOverlap`). A segunda, o feriado e o desconhecido continuam
+ * recusados sempre.
  */
 
 export type AvailabilitySource = 'closer_token' | 'sdr_token' | 'none';
-export type SlotKind = 'free' | 'busy' | 'unknown' | 'holiday';
+/** `busy` = reunião do app ou trava interna. `calendar_busy` = só o Google. */
+export type SlotKind = 'free' | 'busy' | 'calendar_busy' | 'unknown' | 'holiday';
 
 export interface BusyInterval {
   start: string;
   end: string;
   leadId?: string;
+  /** Título do evento do Google. Ausente quando veio só do freeBusy. */
+  title?: string;
+  /** Id do evento no Google, quando lido via events.list. */
+  eventId?: string;
 }
 
 export interface FreeBusyEntry {
@@ -112,16 +122,27 @@ export function classifySlot(input: {
   if (input.holiday) return 'holiday';
   if (input.appMeetings.some((meeting) => intervalsOverlap(input.start, input.end, meeting))) return 'busy';
   if (!input.calendarKnown) return 'unknown';
-  if (input.calendarBusy.some((meeting) => intervalsOverlap(input.start, input.end, meeting))) return 'busy';
+  if (input.calendarBusy.some((meeting) => intervalsOverlap(input.start, input.end, meeting))) return 'calendar_busy';
   return 'free';
 }
 
-export function bookingDecision(kind: SlotKind): { allow: boolean; code: string; error: string } {
+/**
+ * `allowOverlap` só libera a ocupação do Google. Reunião do Enriquece,
+ * feriado e agenda desconhecida continuam recusados mesmo com a flag.
+ */
+export function bookingDecision(
+  kind: SlotKind,
+  options: { allowOverlap?: boolean } = {},
+): { allow: boolean; code: string; error: string } {
   if (kind === 'free') return { allow: true, code: '', error: '' };
   if (kind === 'holiday') {
     return { allow: false, code: 'CLOSER_HOLIDAY', error: 'Este dia é feriado. Escolha outro horário.' };
   }
   if (kind === 'busy') {
+    return { allow: false, code: 'CLOSER_BUSY', error: 'Este closer já tem reunião marcada no Enriquece neste horário.' };
+  }
+  if (kind === 'calendar_busy') {
+    if (options.allowOverlap === true) return { allow: true, code: '', error: '' };
     return { allow: false, code: 'CLOSER_BUSY', error: 'Este closer já está ocupado neste horário.' };
   }
   return {

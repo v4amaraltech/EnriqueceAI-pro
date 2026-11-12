@@ -232,3 +232,91 @@ describe('duração e remarcação', () => {
     })).toBe(true);
   });
 });
+
+describe('ocupado no Google x reunião do Enriquece', () => {
+  const googleBusy = [{ start: '2026-11-16T14:00:00.000Z', end: '2026-11-16T15:00:00.000Z', title: 'Dentista' }];
+  const appMeeting = [{ start: '2026-11-16T14:00:00.000Z', end: '2026-11-16T15:00:00.000Z', leadId: 'lead-2' }];
+
+  it('ocupação só do Google é calendar_busy, separada da reunião do app', () => {
+    expect(classifySlot({ start, end, calendarKnown: true, calendarBusy: googleBusy, appMeetings: [], holiday: false })).toBe('calendar_busy');
+    expect(classifySlot({ start, end, calendarKnown: true, calendarBusy: googleBusy, appMeetings: appMeeting, holiday: false })).toBe('busy');
+    expect(classifySlot({ start, end, calendarKnown: true, calendarBusy: googleBusy, appMeetings: appMeeting, holiday: true })).toBe('holiday');
+    expect(classifySlot({ start, end, calendarKnown: false, calendarBusy: googleBusy, appMeetings: [], holiday: false })).toBe('unknown');
+  });
+
+  it('Google ocupado: bloqueia sem a flag e permite com allowOverlap', () => {
+    expect(bookingDecision('calendar_busy')).toMatchObject({ allow: false, code: 'CLOSER_BUSY' });
+    expect(bookingDecision('calendar_busy', { allowOverlap: false })).toMatchObject({ allow: false, code: 'CLOSER_BUSY' });
+    expect(bookingDecision('calendar_busy', { allowOverlap: true })).toMatchObject({ allow: true });
+  });
+
+  it('reunião do app, feriado e desconhecido continuam bloqueados mesmo com allowOverlap', () => {
+    const app = bookingDecision('busy', { allowOverlap: true });
+    expect(app).toMatchObject({ allow: false, code: 'CLOSER_BUSY' });
+    expect(app.error).toContain('Enriquece');
+    expect(bookingDecision('holiday', { allowOverlap: true })).toMatchObject({ allow: false, code: 'CLOSER_HOLIDAY' });
+    expect(bookingDecision('unknown', { allowOverlap: true })).toMatchObject({ allow: false, code: 'CLOSER_UNKNOWN' });
+    expect(bookingDecision('free', { allowOverlap: true })).toMatchObject({ allow: true });
+    expect(bookingDecision('free')).toMatchObject({ allow: true });
+  });
+
+  it('slotSelectable: Google ocupado futuro sim; app, feriado, passado e sem dados não', () => {
+    const week = startOfWorkWeek(new Date('2026-11-16T15:00:00.000Z'));
+    const now = new Date('2026-11-16T12:30:00.000Z');
+    const slots = buildCloserWeekSlots(week, {
+      calendarKnown: true,
+      calendarBusy: [
+        { start: '2026-11-16T12:00:00.000Z', end: '2026-11-16T13:00:00.000Z', title: 'Passado' },
+        { start: '2026-11-16T14:00:00.000Z', end: '2026-11-16T15:00:00.000Z', title: 'Dentista' },
+        { start: '2026-11-16T15:00:00.000Z', end: '2026-11-16T16:00:00.000Z', title: 'Por baixo da reunião' },
+      ],
+      appBusy: [{ start: '2026-11-16T15:00:00.000Z', end: '2026-11-16T16:00:00.000Z' }],
+      holidays: ['2026-11-20'],
+      sdrBusy: [],
+      now,
+    });
+    const at = (day: number, hour: number) => slots.find((slot) => slot.dayIndex === day && slot.hour === hour);
+    const google = at(0, 11);
+    expect(google).toMatchObject({ state: 'busy', busySource: 'calendar', title: 'Dentista', extraEventCount: 0 });
+    expect(google && slotSelectable(google)).toBe(true);
+    const app = at(0, 12);
+    expect(app?.busySource).toBe('app');
+    expect(app?.title).toBe('Por baixo da reunião');
+    expect(app && slotSelectable(app)).toBe(false);
+    const past = at(0, 9);
+    expect(past?.busySource).toBe('calendar');
+    expect(past && slotSelectable(past)).toBe(false);
+    const holiday = at(4, 11);
+    expect(holiday?.busySource).toBe('holiday');
+    expect(holiday?.title).toBeUndefined();
+    expect(holiday && slotSelectable(holiday)).toBe(false);
+
+    const unknown = buildCloserWeekSlots(week, {
+      calendarKnown: false,
+      calendarBusy: [{ start: '2026-11-16T14:00:00.000Z', end: '2026-11-16T15:00:00.000Z', title: 'Dentista' }],
+      appBusy: [],
+      holidays: [],
+      sdrBusy: [],
+      now,
+    }).find((slot) => slot.dayIndex === 0 && slot.hour === 11);
+    expect(unknown?.state).toBe('unknown');
+    expect(unknown?.title).toBeUndefined();
+    expect(unknown && slotSelectable(unknown)).toBe(false);
+  });
+
+  it('freeBusy sem título continua ocupado selecionável, sem título', () => {
+    const week = startOfWorkWeek(new Date('2026-11-16T15:00:00.000Z'));
+    const slot = buildCloserWeekSlots(week, {
+      calendarKnown: true,
+      calendarBusy: [{ start: '2026-11-16T14:00:00.000Z', end: '2026-11-16T15:00:00.000Z' }],
+      appBusy: [],
+      holidays: [],
+      sdrBusy: [],
+      now: new Date('2026-11-16T12:00:00.000Z'),
+    }).find((item) => item.dayIndex === 0 && item.hour === 11);
+    expect(slot?.busySource).toBe('calendar');
+    expect(slot?.title).toBeUndefined();
+    expect(slot?.extraEventCount).toBeUndefined();
+    expect(slot && slotSelectable(slot)).toBe(true);
+  });
+});

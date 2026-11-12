@@ -38,10 +38,20 @@ import type { BusySlot } from '../services/calendar.service';
 import { meetingInviteDescription } from '../meeting-invite-description';
 import { formatMeetingDateTime } from '../utils/format-meeting-datetime';
 
+/**
+ * Opções do agendamento que não vão para o Google. `allowOverlap`: o SDR
+ * confirmou marcar por cima de um compromisso do closer no Google. Não libera
+ * reunião do Enriquece, trava, feriado nem agenda desconhecida.
+ */
+export interface MeetingBookingOptions {
+  allowOverlap?: boolean;
+}
+
 export async function scheduleMeeting(
   leadId: string,
   input: CreateEventInput,
   faturamentoEstimado: number,
+  options?: MeetingBookingOptions,
 ): Promise<ActionResult<CalendarEvent>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -103,6 +113,7 @@ export async function scheduleMeeting(
     startTime: input.startTime,
     endTime: input.endTime,
     sdrConnection: connection,
+    allowOverlap: options?.allowOverlap === true,
   });
   if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
 
@@ -447,6 +458,7 @@ export async function updateMeeting(
   interactionId: string,
   leadId: string,
   input: CreateEventInput,
+  options?: MeetingBookingOptions,
 ): Promise<ActionResult<CalendarEvent>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -496,6 +508,7 @@ export async function updateMeeting(
       excludeLeadId: leadId,
       retargetExisting: true,
       sdrConnection: connection,
+      allowOverlap: options?.allowOverlap === true,
     });
     if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
     gateHoldId = gate.holdId;

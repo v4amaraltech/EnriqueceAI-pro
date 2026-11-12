@@ -105,4 +105,38 @@ describe('CallMeetingConfirmDialog descrição do convite', () => {
     const input = vi.mocked(scheduleMeeting).mock.calls[0]?.[1] as { startTime: string; endTime: string };
     expect(new Date(input.endTime).getTime() - new Date(input.startTime).getTime()).toBe(60 * 60 * 1000);
   });
+
+  it('com allowOverlap envia a opção à parte, fora do input do Google, e mostra o lembrete', async () => {
+    render(
+      <CallMeetingConfirmDialog
+        open
+        choice={{ ...choice, allowOverlap: true, overlapTitle: 'Dentista' }}
+        leadId="lead-1"
+        leadName="Mercante Net"
+        leadEmail="contato@mercante.example"
+        preview={preview}
+        onOpenChange={vi.fn()}
+        onScheduled={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('overlap-reminder').textContent).toContain('Dentista');
+    fireEvent.click(screen.getByTestId('confirm-meeting'));
+    await waitFor(() => expect(scheduleMeeting).toHaveBeenCalledTimes(1));
+    expect(scheduleMeeting).toHaveBeenCalledWith(
+      'lead-1',
+      expect.objectContaining({ description: DEFAULT_MEETING_INVITE_DESCRIPTION, closerId: 'closer-1' }),
+      1_500_000,
+      { allowOverlap: true },
+    );
+    const input = vi.mocked(scheduleMeeting).mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(input).not.toHaveProperty('allowOverlap');
+  });
+
+  it('sem allowOverlap não manda o quarto argumento', async () => {
+    renderDialog();
+    expect(screen.queryByTestId('overlap-reminder')).toBeNull();
+    fireEvent.click(screen.getByTestId('confirm-meeting'));
+    await waitFor(() => expect(scheduleMeeting).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(scheduleMeeting).mock.calls[0]).toHaveLength(3);
+  });
 });
