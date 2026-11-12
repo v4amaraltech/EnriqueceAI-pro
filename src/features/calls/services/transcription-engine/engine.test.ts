@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { type AssemblyAiClient, createAssemblyAiClient } from './assemblyai.client';
+import { type AssemblyAiClient, AssemblyAiError, createAssemblyAiClient } from './assemblyai.client';
 import {
   assessAudioDuration,
   downmixToMonoPcm16,
@@ -77,6 +77,7 @@ const CALL = {
   org_id: 'org-1',
   user_id: 'u1',
   recording_url: 'https://rec.example.com/a.mp3',
+  recording_storage_path: null,
   duration_seconds: 60,
   answered_at: '2026-11-11T10:00:00Z',
   started_at: '2026-11-11T10:00:00Z',
@@ -118,6 +119,7 @@ function makeDeps(db: unknown, over: Partial<EngineDeps> = {}) {
     db: db as never,
     isEnabled: vi.fn().mockResolvedValue(true),
     downloadAudio: vi.fn().mockResolvedValue(Buffer.from('x')),
+    downloadStoredAudio: vi.fn().mockResolvedValue(null),
     lookupRecording: vi.fn().mockResolvedValue(null),
     prepareAudio: vi
       .fn()
@@ -265,8 +267,13 @@ describe('processEngineCall', () => {
     expect(writes.every((w) => w.table !== 'calls')).toBe(true);
   });
 
-  it('usa recording_url e nunca o Storage; mismatch tenta busca durável', async () => {
-    const { db } = fakeDb(CALL);
+  it('sem gravação persistida ok: usa recording_url e depois busca durável, sem Storage', async () => {
+    const { db } = fakeDb({
+      ...CALL,
+      recording_storage_path: 'org-1/call-1.mp3',
+      metadata: { recording_persist_status: 'unverified' },
+    });
+    const stored = vi.fn().mockResolvedValue(Buffer.from('s'));
     const download = vi.fn().mockResolvedValue(Buffer.from('x'));
     const lookup = vi.fn().mockResolvedValue('https://rec.example.com/durable.mp3');
     const prepare = vi
@@ -285,10 +292,12 @@ describe('processEngineCall', () => {
       });
     const { deps } = makeDeps(db, {
       downloadAudio: download,
+      downloadStoredAudio: stored,
       lookupRecording: lookup,
       prepareAudio: prepare,
     });
     expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(stored).not.toHaveBeenCalled();
     expect(download.mock.calls.map((c) => c[0])).toEqual([
       'https://rec.example.com/a.mp3',
       'https://rec.example.com/durable.mp3',
@@ -345,6 +354,172 @@ describe('processEngineCall', () => {
     const { deps, transcribe } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('gave_up');
     expect(transcribe).not.toHaveBeenCalled();
+  });
+
+  it('sem recording_storage_path: Storage não é usado mesmo com status ok', async () => {
+    const { db } = fakeDb({ ...CALL, metadata: { recording_persist_status: 'ok' } });
+    const { deps } = makeDeps(db);
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(deps.downloadStoredAudio).not.toHaveBeenCalled();
+    expect(deps.downloadAudio).toHaveBeenCalledWith('https://rec.example.com/a.mp3');
+  });
+
+  it('link expirado e busca durável morta: recupera pela gravação persistida no Storage', async () => {
+    const { db, tables, writes } = fakeDb({
+      ...CALL,
+      recording_storage_path: 'org-1/call-1.mp3',
+      metadata: { recording_persist_status: 'ok' },
+    });
+    const download = vi.fn().mockResolvedValue(null);
+    const lookup = vi.fn().mockResolvedValue('https://rec.example.com/dead.mp3');
+    const stored = vi.fn().mockResolvedValue(Buffer.from('stored'));
+    const { deps, transcribe } = makeDeps(db, {
+      downloadAudio: download,
+      lookupRecording: lookup,
+      downloadStoredAudio: stored,
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(stored).toHaveBeenCalledWith('org-1/call-1.mp3');
+    expect(deps.prepareAudio).toHaveBeenCalledWith(Buffer.from('stored'));
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ status: 'completed', error: null });
+    expect(writes.every((w) => w.table !== 'calls')).toBe(true);
+  });
+
+  it('Storage ok é tentado primeiro; se vier vazio segue para url e busca durável', async () => {
+    const { db } = fakeDb({
+      ...CALL,
+      recording_storage_path: 'org-1/call-1.mp3',
+      metadata: { recording_persist_status: 'ok' },
+    });
+    const order: string[] = [];
+    const stored = vi.fn().mockImplementation(async () => (order.push('storage'), null));
+    const download = vi.fn().mockImplementation(async (u: string) => (order.push(u), null));
+    const lookup = vi.fn().mockImplementation(async () => (order.push('lookup'), null));
+    const { deps, transcribe } = makeDeps(db, {
+      downloadStoredAudio: stored,
+      downloadAudio: download,
+      lookupRecording: lookup,
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('transcript_failed');
+    expect(order).toEqual(['storage', 'https://rec.example.com/a.mp3', 'lookup']);
+    expect(transcribe).not.toHaveBeenCalled();
+  });
+
+  it('Storage com mismatch não impede match justo do recording_url', async () => {
+    const { db, tables } = fakeDb({
+      ...CALL,
+      recording_storage_path: 'org-1/call-1.mp3',
+      metadata: { recording_persist_status: 'ok' },
+    });
+    const prepare = vi
+      .fn()
+      .mockResolvedValueOnce({ wav: Buffer.from('w'), durationSeconds: 20, sampleRate: 8000, sourceChannels: 1 })
+      .mockResolvedValueOnce({ wav: Buffer.from('w'), durationSeconds: 60, sampleRate: 8000, sourceChannels: 1 });
+    const { deps } = makeDeps(db, {
+      downloadStoredAudio: vi.fn().mockResolvedValue(Buffer.from('s')),
+      prepareAudio: prepare,
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({ status: 'completed', error: null });
+  });
+
+  it('throw inesperado depois do claim (busca durável): linha vira failed com causa, nunca processing', async () => {
+    const { db, tables } = fakeDb(CALL);
+    const cause = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    const { deps, transcribe } = makeDeps(db, {
+      downloadAudio: vi.fn().mockResolvedValue(null),
+      lookupRecording: vi.fn().mockRejectedValue(new TypeError('fetch failed', { cause })),
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('transcript_failed');
+    expect(transcribe).not.toHaveBeenCalled();
+    const row = tables.call_transcripts_v2?.[0];
+    expect(row?.status).toBe('failed');
+    expect(row?.attempts).toBe(1);
+    expect(String(row?.error)).toBe('fetch failed (cause: ECONNRESET: read ECONNRESET)');
+  });
+
+  it('throw no download depois do claim de linha failed: volta a failed, attempts sobe', async () => {
+    const { db, tables } = fakeDb(CALL, {
+      call_transcripts_v2: [
+        { id: 't1', call_id: 'call-1', provider: 'assemblyai', status: 'failed', attempts: 1, updated_at: 'x' },
+      ],
+    });
+    const { deps } = makeDeps(db, {
+      downloadAudio: vi.fn().mockRejectedValue(new Error('worker crash')),
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('transcript_failed');
+    expect(tables.call_transcripts_v2?.[0]).toMatchObject({
+      id: 't1',
+      status: 'failed',
+      attempts: 2,
+      error: 'worker crash',
+    });
+  });
+
+  it('throw inesperado depois do claim da qualificação: linha de qualificação vira failed', async () => {
+    const { db, tables } = fakeDb(CALL);
+    const { deps } = makeDeps(db, {
+      jev: () => {
+        throw new Error('jev_factory_crash');
+      },
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('qualification_failed');
+    expect(tables.call_transcripts_v2?.[0]?.status).toBe('completed');
+    expect(tables.call_qualifications?.[0]).toMatchObject({
+      status: 'failed',
+      error: 'jev_factory_crash',
+    });
+  });
+
+  it('erro de rede do AssemblyAI após retries: failed com causa e marcador de timeout', async () => {
+    const { db, tables } = fakeDb(CALL);
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), {
+      name: 'TimeoutError',
+    });
+    const err = new AssemblyAiError('assemblyai_request_timeout: upload after 3 attempts', {
+      cause: timeout,
+    });
+    const { deps } = makeDeps(db, {
+      assemblyAi: () => ({ transcribe: vi.fn().mockRejectedValue(err) }),
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('transcript_failed');
+    const row = tables.call_transcripts_v2?.[0];
+    expect(row?.status).toBe('failed');
+    expect(String(row?.error)).toMatch(/^assemblyai_request_timeout: upload after 3 attempts \(cause: TimeoutError/);
+  });
+
+  it('linhas completed não são tocadas: sem UPDATE, sem transcribe', async () => {
+    const transcriptRow = {
+      id: 't1',
+      call_id: 'call-1',
+      provider: 'assemblyai',
+      status: 'completed',
+      attempts: 1,
+      text: 'texto original',
+      utterances: [],
+      error: null,
+      updated_at: '2026-11-11T10:00:00Z',
+    };
+    const qualRow = {
+      id: 'q1',
+      call_id: 'call-1',
+      provider: 'jev',
+      status: 'completed',
+      attempts: 1,
+      updated_at: '2026-11-11T10:00:00Z',
+    };
+    const { db, tables, writes } = fakeDb(CALL, {
+      call_transcripts_v2: [{ ...transcriptRow }],
+      call_qualifications: [{ ...qualRow }],
+    });
+    const { deps, transcribe, qualify } = makeDeps(db);
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(qualify).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
+    expect(tables.call_transcripts_v2?.[0]).toEqual(transcriptRow);
+    expect(tables.call_qualifications?.[0]).toEqual(qualRow);
   });
 
   it('falha do AssemblyAI vira failed com erro', async () => {

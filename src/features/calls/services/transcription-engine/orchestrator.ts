@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { runCrmAutoUpdate } from '../crm-auto-update/shadow.service';
+import { CALL_RECORDINGS_BUCKET } from '../recording-storage.service';
 import { lookupRecordingFromApi4Com } from '../recover-recording.service';
 import {
   type AssemblyAiClient,
@@ -20,6 +21,7 @@ import {
   ENGINE_PROVIDER_TRANSCRIPT,
   MAX_ATTEMPTS,
 } from './constants';
+import { formatEngineError } from './errors';
 import { isTranscriptionEngineEnabled } from './flag';
 import { type JevClient, createJevClient, resolveJevApiKey } from './jev.client';
 import { hasDurationWarning } from './review';
@@ -42,6 +44,8 @@ export interface EngineDeps {
   db: SupabaseClient;
   isEnabled: (orgId: string) => Promise<boolean>;
   downloadAudio: (url: string) => Promise<Buffer | null>;
+  /** Baixa a gravação já persistida no bucket call-recordings (service role). Null se não houver. */
+  downloadStoredAudio: (path: string) => Promise<Buffer | null>;
   lookupRecording: (call: CallRow) => Promise<string | null>;
   prepareAudio: (input: Buffer) => Promise<MonoAudio>;
   assemblyAi: () => AssemblyAiClient | null;
@@ -59,6 +63,7 @@ export interface CallRow {
   org_id: string;
   user_id: string;
   recording_url: string | null;
+  recording_storage_path: string | null;
   duration_seconds: number | null;
   answered_at: string | null;
   started_at: string | null;
@@ -81,7 +86,7 @@ interface EngineRow {
 }
 
 const CALL_COLUMNS =
-  'id, org_id, user_id, recording_url, duration_seconds, answered_at, started_at, created_at, destination, origin, type, metadata';
+  'id, org_id, user_id, recording_url, recording_storage_path, duration_seconds, answered_at, started_at, created_at, destination, origin, type, metadata';
 
 async function defaultDownload(url: string): Promise<Buffer | null> {
   try {
@@ -93,11 +98,23 @@ async function defaultDownload(url: string): Promise<Buffer | null> {
   }
 }
 
+/** Mesmo padrão de measureStoredRecording: download direto pelo service role, sem URL assinada. */
+async function defaultDownloadStored(db: SupabaseClient, path: string): Promise<Buffer | null> {
+  try {
+    const { data, error } = await db.storage.from(CALL_RECORDINGS_BUCKET).download(path);
+    if (error || !data) return null;
+    return Buffer.from(await (data as Blob).arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
   return {
     db,
     isEnabled: isTranscriptionEngineEnabled,
     downloadAudio: defaultDownload,
+    downloadStoredAudio: (path) => defaultDownloadStored(db, path),
     lookupRecording: (call) =>
       lookupRecordingFromApi4Com(db, { ...call, duration_seconds: call.duration_seconds ?? 0 }),
     prepareAudio: prepareMonoAudio,
@@ -195,6 +212,30 @@ async function finish(
   await from(deps.db, table).update(patch).eq('id', id);
 }
 
+/**
+ * Erro inesperado depois do claim: a linha nunca pode ficar em processing.
+ * Só mexe em linha ainda processing (nunca em completed/skipped) e nunca lança.
+ */
+async function failClaimed(
+  deps: EngineDeps,
+  table: Table,
+  id: string,
+  err: unknown,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await from(deps.db, table)
+      .update({ status: 'failed', error: formatEngineError(err), ...extra })
+      .eq('id', id)
+      .eq('status', 'processing');
+  } catch (finishErr) {
+    // Se nem isso gravar, o drain pega a linha como processing parado (> 15 min).
+    console.error(
+      `[transcription-engine] não foi possível marcar ${table} ${id} como failed: ${formatEngineError(finishErr)}`,
+    );
+  }
+}
+
 async function insertSkipped(deps: EngineDeps, call: CallRow, reason: string): Promise<void> {
   const { data } = (await from(deps.db, 'call_transcripts_v2')
     .select('id')
@@ -211,7 +252,16 @@ async function insertSkipped(deps: EngineDeps, call: CallRow, reason: string): P
   });
 }
 
-/** Resolve áudio por recording_url, depois por busca durável na API4COM. Nunca o Storage. */
+/**
+ * Resolve o áudio nesta ordem (calls é só leitura; nada é gravado em calls nem no Storage):
+ *   1. Gravação já persistida no nosso Storage, se calls.recording_storage_path existir E
+ *      metadata.recording_persist_status === 'ok' (durável e já validada na persistência).
+ *   2. calls.recording_url (link do API4COM, pode ter expirado).
+ *   3. Busca durável na API4COM (lookupRecording).
+ * Candidato ausente/nulo segue para o próximo. Match justo de duração encerra; duration_warning
+ * fica como fallback se nenhum candidato posterior der match; duration_mismatch de um candidato
+ * não impede os seguintes. Sem nenhum áudio: no_recording (não terminal, o drain tenta de novo).
+ */
 async function fetchAndPrepare(
   deps: EngineDeps,
   call: CallRow,
@@ -221,15 +271,22 @@ async function fetchAndPrepare(
   let mismatch: string | null = null;
   // Áudio maior que o banco, aceitável: só vale se nenhum candidato der match justo.
   let fallback: { audio: MonoAudio; warning: string } | null = null;
-  const candidates: Array<() => Promise<string | null>> = [
-    async () => call.recording_url,
-    () => deps.lookupRecording(call),
-  ];
-  for (const getUrl of candidates) {
-    const url = await getUrl();
-    if (!url || tried.has(url)) continue;
+  const fromUrl = async (url: string | null): Promise<Buffer | null> => {
+    if (!url || tried.has(url)) return null;
     tried.add(url);
-    const buf = await deps.downloadAudio(url);
+    return deps.downloadAudio(url);
+  };
+  const storagePath =
+    call.recording_storage_path && call.metadata?.recording_persist_status === 'ok'
+      ? call.recording_storage_path
+      : null;
+  const candidates: Array<() => Promise<Buffer | null>> = [
+    async () => (storagePath ? deps.downloadStoredAudio(storagePath) : null),
+    () => fromUrl(call.recording_url),
+    async () => fromUrl(await deps.lookupRecording(call)),
+  ];
+  for (const getAudio of candidates) {
+    const buf = await getAudio();
     if (!buf) continue;
     let audio: MonoAudio;
     try {
@@ -295,26 +352,37 @@ export async function processEngineCall(
   } | null = null;
 
   if (!('blocked' in tClaim)) {
-    const started = deps.now();
     const rowId = tClaim.row.id;
-    const prepared = await fetchAndPrepare(deps, call, callSeconds);
-    if ('error' in prepared) {
-      await finish(deps, 'call_transcripts_v2', rowId, {
-        status: prepared.terminal ? 'skipped' : 'failed',
-        error: prepared.error,
-      });
-      return prepared.terminal ? 'skipped' : 'transcript_failed';
-    }
-    const assembly = deps.assemblyAi();
-    if (!assembly) {
-      await finish(deps, 'call_transcripts_v2', rowId, {
-        status: 'failed',
-        error: 'assemblyai_not_configured',
-      });
-      return 'transcript_failed';
-    }
+    const started = deps.now();
+    // Daqui em diante a linha está em processing: qualquer throw vira failed (nunca fica presa).
     try {
-      const result = await assembly.transcribe(prepared.audio.wav);
+      const prepared = await fetchAndPrepare(deps, call, callSeconds);
+      if ('error' in prepared) {
+        await finish(deps, 'call_transcripts_v2', rowId, {
+          status: prepared.terminal ? 'skipped' : 'failed',
+          error: prepared.error,
+        });
+        return prepared.terminal ? 'skipped' : 'transcript_failed';
+      }
+      const assembly = deps.assemblyAi();
+      if (!assembly) {
+        await finish(deps, 'call_transcripts_v2', rowId, {
+          status: 'failed',
+          error: 'assemblyai_not_configured',
+        });
+        return 'transcript_failed';
+      }
+      let result: Awaited<ReturnType<AssemblyAiClient['transcribe']>>;
+      try {
+        result = await assembly.transcribe(prepared.audio.wav);
+      } catch (err) {
+        await finish(deps, 'call_transcripts_v2', rowId, {
+          status: 'failed',
+          error: formatEngineError(err, 'assemblyai_unknown_error'),
+          latency_ms: deps.now() - started,
+        });
+        return 'transcript_failed';
+      }
       // Cobrado sobre o áudio mono enviado; estéreo custaria 2x.
       const billedSeconds = result.audioSeconds || prepared.audio.durationSeconds;
       await finish(deps, 'call_transcripts_v2', rowId, {
@@ -337,9 +405,7 @@ export async function processEngineCall(
         speakersCount: result.speakersCount,
       };
     } catch (err) {
-      await finish(deps, 'call_transcripts_v2', rowId, {
-        status: 'failed',
-        error: err instanceof Error ? err.message : 'assemblyai_unknown_error',
+      await failClaimed(deps, 'call_transcripts_v2', rowId, err, {
         latency_ms: deps.now() - started,
       });
       return 'transcript_failed';
@@ -371,31 +437,42 @@ export async function processEngineCall(
     return qClaim.blocked === 'gave_up' ? 'gave_up' : 'in_progress';
   }
   const qId = qClaim.row.id;
-  if (transcript.text.trim().length === 0) {
-    await finish(deps, 'call_qualifications', qId, {
-      status: 'skipped',
-      error: 'empty_transcript',
-    });
-    return 'completed';
-  }
-  const jev = deps.jev();
-  if (!jev) {
-    await finish(deps, 'call_qualifications', qId, {
-      status: 'failed',
-      error: 'jev_not_configured',
-    });
-    return 'qualification_failed';
-  }
   const qStarted = deps.now();
+  // Linha de qualificação em processing: qualquer throw vira failed.
   try {
-    const q = await jev.qualify({
-      transcript: transcript.text,
-      utterances: transcript.utterances as never,
-      durationSeconds: callSeconds,
-      callType: call.type === 'inbound' ? 'inbound' : 'outbound',
-      durationWarning: hasDurationWarning(transcript.error),
-      speakersCount: transcript.speakersCount,
-    });
+    if (transcript.text.trim().length === 0) {
+      await finish(deps, 'call_qualifications', qId, {
+        status: 'skipped',
+        error: 'empty_transcript',
+      });
+      return 'completed';
+    }
+    const jev = deps.jev();
+    if (!jev) {
+      await finish(deps, 'call_qualifications', qId, {
+        status: 'failed',
+        error: 'jev_not_configured',
+      });
+      return 'qualification_failed';
+    }
+    let q: Awaited<ReturnType<JevClient['qualify']>>;
+    try {
+      q = await jev.qualify({
+        transcript: transcript.text,
+        utterances: transcript.utterances as never,
+        durationSeconds: callSeconds,
+        callType: call.type === 'inbound' ? 'inbound' : 'outbound',
+        durationWarning: hasDurationWarning(transcript.error),
+        speakersCount: transcript.speakersCount,
+      });
+    } catch (err) {
+      await finish(deps, 'call_qualifications', qId, {
+        status: 'failed',
+        error: formatEngineError(err, 'jev_unknown_error'),
+        latency_ms: deps.now() - qStarted,
+      });
+      return 'qualification_failed';
+    }
     await finish(deps, 'call_qualifications', qId, {
       status: 'completed',
       error: null,
@@ -412,16 +489,14 @@ export async function processEngineCall(
       cost_usd: q.costUsd,
       latency_ms: deps.now() - qStarted,
     });
-    await runAfterQualification(deps, call.id);
-    return 'completed';
   } catch (err) {
-    await finish(deps, 'call_qualifications', qId, {
-      status: 'failed',
-      error: err instanceof Error ? err.message : 'jev_unknown_error',
+    await failClaimed(deps, 'call_qualifications', qId, err, {
       latency_ms: deps.now() - qStarted,
     });
     return 'qualification_failed';
   }
+  await runAfterQualification(deps, call.id);
+  return 'completed';
 }
 
 /** Ids de ligações com trabalho pendente: transcrição/qualificação pending, failed ou processing parado. */
