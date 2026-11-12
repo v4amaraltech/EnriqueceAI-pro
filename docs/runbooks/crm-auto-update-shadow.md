@@ -1,7 +1,8 @@
 # Atualização automática do CRM pela IA (modo shadow)
 
 Código: `src/features/calls/services/crm-auto-update/`. Migrations: `supabase/migrations/20261111200000_crm_auto_update_shadow.sql`
-(v1) e `supabase/migrations/20261112120000_crm_auto_update_shadow_opt_out.sql` (v1.1, só depois do PR aprovado).
+(v1), `supabase/migrations/20261112120000_crm_auto_update_shadow_opt_out.sql` (v1.1) e
+`supabase/migrations/20261112200000_crm_auto_update_live_voicemail.sql` (escrita live, só depois do PR aprovado).
 
 ## O que acontece
 
@@ -21,7 +22,7 @@ WHERE key = 'crm_auto_update_v1'
   AND NOT ('c2727473-1df8-4faa-9264-a9fc1759fe3b'::uuid = ANY (allow_org_ids));
 ```
 
-Não use `enabled = true` (ligaria todas as orgs). Não mexa em `crm_auto_update_v1_live`.
+Não use `enabled = true` (ligaria todas as orgs). Não mexa em `crm_auto_update_v1_live` (ver "Escrita live" abaixo).
 
 ## Desligar
 
@@ -104,3 +105,72 @@ as demais ligações seguem normais). Aplique a migration junto com o deploy, de
 propondo `not_interested → answered_no_progress`, próxima atividade `none`. Não mudamos porque a
 transcrição não diz QUEM falou cada frase: "daqui uns dias eu te ligo" do SDR viraria retorno para quem
 recusou. Revisar quando houver atribuição de speaker.
+
+## Escrita live: só caixa postal
+
+Desde a migration `20261112200000`, o modo live escreve no CRM, com escopo estreito. Todo o resto segue
+só no log, igual ao shadow.
+
+### Escopo
+
+Escreve se, e somente se (`shouldApplyLiveVoicemail` em `decision.ts`):
+
+- a org está em `allow_org_ids` de `crm_auto_update_v1` E de `crm_auto_update_v1_live` (modo `live`);
+- a decisão é `would_apply` (já passou por opt-out, needs_review, confiança 0,75, SDR já registrado, sem lead);
+- o desfecho JEV é exatamente `voicemail`. `not_connected` também propõe `voicemail`, mas NÃO escreve;
+- confiança >= 0,85 (`CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE`). 0,84 fica só no log como `would_apply`.
+
+O corte 0,75 do `would_apply` no log não mudou. `enabled = true` global na flag live continua ignorado:
+live só para org listada explicitamente. Nunca ligue a flag live com `enabled = true`.
+
+### O que é escrito
+
+Uma única escrita fora do log, condicional:
+
+```sql
+UPDATE calls
+SET sdr_disposition = 'voicemail',
+    metadata = <metadata atual> || {"crm_auto_update": {...}},
+    updated_at = now()
+WHERE id = :call_id AND org_id = :org_id AND sdr_disposition IS NULL;
+```
+
+Não cria `scheduled_activities` (a cadência segue sozinha), não muda `leads.status`, não escreve em
+`interactions`, não toca `call_transcripts_v2` nem `call_qualifications`. Se o UPDATE pega 0 linhas (o SDR
+chegou na frente), nada é forçado: o log vira `skip` com `already_dispositioned` e `input_snapshot.live_write_conflict = true`.
+
+O log nasce com `applied = true` e `applied_at` (mesmo valor do marcador). `applied` só pode ser true com
+`mode = 'live'` e `verdict = 'would_apply'` (CHECK). Linhas antigas ficam `applied = false`.
+
+### Idempotência e recuperação
+
+O marcador `calls.metadata.crm_auto_update = {applied, disposition, applied_at, qualification_id, rules_version, source}`
+vai no MESMO UPDATE. Ele é diferente de `metadata.ai_outcome` (fluxo antigo do Power Dialer).
+
+- Log já existe: `already_logged`, nada é escrito (o log é append-only).
+- UPDATE falhou com erro de banco: nada é gravado, nem o log (`crm_write_failed`), para o retry decidir de novo.
+- UPDATE passou e o INSERT do log falhou: na próxima execução, sem log e com `sdr_disposition = 'voicemail'` +
+  marcador, o worker NÃO escreve no CRM de novo e grava só o log com `applied = true`, `applied_at` do marcador
+  e `input_snapshot.recovered_from_marker = true` (`applied_recovered`).
+- `sdr_disposition` preenchido sem o nosso marcador: `skip already_dispositioned`, como antes.
+
+### Medição
+
+A view de comparação lê `calls.sdr_disposition` ao vivo. Depois da nossa escrita, esse valor é o nosso, não o
+do SDR. Por isso `auto_applied` vem antes de `agree`/`disagree` nas três comparações e essas linhas ficam
+fora de `compared`, `agreed`, `diverged` e das taxas. A view diária conta essas linhas em `applied_live`
+(última coluna).
+
+```sql
+-- Escritas live
+SELECT call_id, decided_at, ai_outcome, ai_confidence, auto_applied_at, sdr_disposition
+FROM public.crm_auto_update_shadow_comparison
+WHERE auto_applied
+ORDER BY decided_at DESC;
+```
+
+### Ordem de aplicação
+
+Migration `20261112200000` PRIMEIRO, depois o deploy do código. Se o código subir antes, o INSERT com
+`applied`/`applied_at` falha (`log_failed`); se isso acontecer depois de um UPDATE em calls, o marcador permite
+gravar o log na próxima execução. Esta versão não liga nenhuma org: incluir uma org no live é decisão separada.

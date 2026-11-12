@@ -3981,6 +3981,8 @@ export type Database = {
       };
       crm_auto_update_shadow_log: {
         Row: {
+          applied: boolean;
+          applied_at: string | null;
           call_id: string;
           created_at: string;
           id: string;
@@ -3996,6 +3998,8 @@ export type Database = {
           verdict: string;
         };
         Insert: {
+          applied?: boolean;
+          applied_at?: string | null;
           call_id: string;
           created_at?: string;
           id?: string;
@@ -4011,6 +4015,8 @@ export type Database = {
           verdict: string;
         };
         Update: {
+          applied?: boolean;
+          applied_at?: string | null;
           call_id?: string;
           created_at?: string;
           id?: string;
@@ -8354,6 +8360,7 @@ export type Database = {
         Row: {
           agreed: number | null;
           agreement_rate: number | null;
+          applied_live: number | null;
           compared: number | null;
           day: string | null;
           diverged: number | null;
@@ -8386,6 +8393,8 @@ export type Database = {
         Row: {
           ai_confidence: number | null;
           ai_outcome: string | null;
+          auto_applied: boolean | null;
+          auto_applied_at: string | null;
           call_id: string | null;
           call_started_at: string | null;
           decided_at: string | null;
