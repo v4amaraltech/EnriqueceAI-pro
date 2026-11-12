@@ -10,6 +10,9 @@ import { shouldTapRemoteAudio, watchRemoteTrack } from './remote-audio-log';
 import { summarizeRtcStats } from './webphone-audio-stats';
 import { toggleSessionAudio } from './webphone-audio-mute';
 import { claimWebphoneDial } from './webphone-dial-correlation';
+import { getWebphoneInstanceId, newInstanceUUID } from './webphone-instance-id';
+import { acquireMicrophonePermission, type MicPermission } from './webphone-mic';
+import { broadcastLockBus, browserLockClock, createWebphoneTabLock, type WebphoneTabLock } from './webphone-tab-lock';
 import {
   INTEGRATED_CALL_HEADER,
   initialWebphoneState,
@@ -57,6 +60,14 @@ let liveListenEnabled = false;
 let stopRemoteTap: (() => void) | null = null;
 let remoteTrack: MediaStreamTrack | null = null;
 const remoteTrackListeners = new Set<() => void>();
+// Última config recebida no start: "Usar nesta aba" e "Reconectar" registram
+// de novo com ela, sem recarregar a página nem buscar a senha outra vez.
+let lastConfig: WebphoneSipConfig | null = null;
+// Trava entre abas (uma por ramal) e identificador volátil desta aba.
+let tabLock: WebphoneTabLock | null = null;
+const tabId = newInstanceUUID();
+let pageHideBound = false;
+let micRequest: Promise<MicPermission> | null = null;
 
 function publishRemoteTrack(track: MediaStreamTrack | null): void {
   remoteTrack = track;
@@ -117,17 +128,46 @@ function attachRemoteStream(stream: MediaStream): void {
   el.play().catch((err: unknown) => console.warn('[webphone] remote audio play failed:', err));
 }
 
-async function requestMicrophone(): Promise<boolean> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    for (const t of stream.getTracks()) t.stop();
-    dispatch({ type: 'mic', granted: true });
-    return true;
-  } catch (err) {
-    console.warn('[webphone] microphone permission denied:', err);
-    dispatch({ type: 'mic', granted: false });
-    return false;
+/**
+ * Pede o microfone. Chamar SÓ a partir de um clique do SDR (botão "Ativar
+ * microfone" / "Tentar de novo" do painel): nunca no mount. Não mexe no UA,
+ * na sessão nem no registro, então pode ser repetido depois de um bloqueio
+ * sem derrubar o ramal. Dois cliques seguidos compartilham o mesmo pedido.
+ */
+export function requestWebphoneMicrophone(): Promise<MicPermission> {
+  if (micRequest) return micRequest;
+  const mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+  micRequest = acquireMicrophonePermission(mediaDevices)
+    .then((permission) => {
+      dispatch({ type: 'mic', permission });
+      return permission;
+    })
+    .finally(() => {
+      micRequest = null;
+    });
+  return micRequest;
+}
+
+function ensureTabLock(ramal: string): WebphoneTabLock {
+  if (tabLock && tabLock.ramal === ramal) return tabLock;
+  tabLock?.dispose();
+  tabLock = createWebphoneTabLock({
+    ramal,
+    tabId,
+    bus: broadcastLockBus(),
+    clock: browserLockClock,
+    // Outra aba clicou em "Usar nesta aba": para o UA daqui de forma limpa
+    // (sem reload) e mostra que o ramal está em uso lá.
+    onLost: () => {
+      stopWebphone();
+      dispatch({ type: 'session_conflict', conflict: 'other_tab' });
+    },
+  });
+  if (!pageHideBound) {
+    pageHideBound = true;
+    window.addEventListener('pagehide', () => tabLock?.release());
   }
+  return tabLock;
 }
 
 function clearEndedCallLater(id: string): void {
@@ -221,25 +261,44 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   session.on('ended', onEnd);
   session.on('failed', onEnd);
 
-  // Chamada originada pela API (POST /calls): atende sozinha. Inbound "de
-  // verdade" fica tocando até o SDR clicar em Atender.
-  if (integrated && state.mic !== 'denied') {
+  // Chamada originada pela API (POST /calls): atende sozinha, mas só com o
+  // microfone concedido (senão a perna ficaria sem áudio; o discador já
+  // deveria ter sido barrado por `dialingBlockReason`). Inbound "de verdade"
+  // fica tocando até o SDR clicar em Atender.
+  if (integrated && state.mic === 'granted') {
     answerCall();
   }
 }
 
-/** Registra o ramal. Chamar de novo com outra config derruba a instância anterior (singleton). */
-export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
+/**
+ * Registra o ramal. Chamar de novo com outra config derruba a instância
+ * anterior (singleton). NÃO pede o microfone: isso só acontece no clique
+ * (`requestWebphoneMicrophone`). Antes do `UA.start()` consulta as outras abas;
+ * se uma delas já segura o ramal, não registra e publica o conflito.
+ * `takeover: true` é o "Usar nesta aba": tira o ramal da outra aba primeiro.
+ */
+export async function startWebphone(config: WebphoneSipConfig, options: { takeover?: boolean } = {}): Promise<void> {
   if (typeof window === 'undefined') return;
   stopWebphone();
+  lastConfig = config;
   liveListenEnabled = config.liveListen === true;
   const generation = ++startGeneration;
 
+  const lock = ensureTabLock(config.ramal);
+  if (options.takeover) {
+    const ok = await lock.takeover();
+    if (generation !== startGeneration || !ok) return;
+  } else {
+    const result = await lock.acquire();
+    if (generation !== startGeneration || result === 'cancelled') return;
+    if (result === 'held_elsewhere') {
+      dispatch({ type: 'session_conflict', conflict: 'other_tab' });
+      return;
+    }
+  }
+
   const JsSIP = await import('jssip');
   if (generation !== startGeneration) return;
-  // O pedido de microfone roda em paralelo: o registro SIP não pode esperar o
-  // SDR responder ao prompt do navegador (senão "user not registered" ao ligar).
-  void requestMicrophone();
 
   const domain = config.sipDomain.trim().toLowerCase();
   const socket = new JsSIP.WebSocketInterface(`wss://${domain}:${SIP_WSS_PORT}`);
@@ -255,14 +314,24 @@ export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
     user_agent: 'enriqueceai-webphone',
     connection_recovery_min_interval: 2,
     connection_recovery_max_interval: 30,
+    // UUID por navegador (`+sip.instance` no Contact); ver webphone-instance-id.ts.
+    instance_id: getWebphoneInstanceId(),
   });
   ua = instance;
 
-  instance.on('connecting', () => dispatch({ type: 'connecting' }));
-  instance.on('registered', () => dispatch({ type: 'registered' }));
-  instance.on('unregistered', () => dispatch({ type: 'unregistered' }));
-  instance.on('disconnected', (e: { reason?: string }) => dispatch({ type: 'disconnected', error: e.reason }));
-  instance.on('registrationFailed', (e: { cause?: string }) => dispatch({ type: 'registration_failed', cause: String(e.cause ?? 'desconhecida') }));
+  // Eventos de um UA já parado (stop/remount) não mexem mais no estado: o
+  // `unregistered` do nosso próprio `ua.stop()` não pode virar "perdido para
+  // outra instância".
+  const emit = (event: WebphoneEvent) => {
+    if (ua === instance) dispatch(event);
+  };
+  instance.on('connecting', () => emit({ type: 'connecting' }));
+  instance.on('registered', () => emit({ type: 'registered' }));
+  instance.on('unregistered', () => emit({ type: 'unregistered' }));
+  instance.on('disconnected', (e: { reason?: string }) => emit({ type: 'disconnected', error: e.reason }));
+  instance.on('registrationFailed', (e: { cause?: string }) =>
+    emit({ type: 'registration_failed', cause: String(e.cause ?? 'desconhecida') }),
+  );
   instance.on('newRTCSession', (e: { session: RTCSession; request: IncomingRequest | OutgoingRequest }) => handleNewSession(e.session, e.request));
 
   instance.start();
@@ -271,6 +340,7 @@ export async function startWebphone(config: WebphoneSipConfig): Promise<void> {
 export function stopWebphone(): void {
   startGeneration++;
   liveListenEnabled = false;
+  tabLock?.release();
   stopRemoteTapNow();
   publishRemoteTrack(null);
   stopStatsSampling();
@@ -293,6 +363,32 @@ export function stopWebphone(): void {
     ua = null;
   }
   dispatch({ type: 'disabled' });
+}
+
+/**
+ * "Usar nesta aba": tira o ramal da outra aba (ela para o UA dela, sem
+ * reload) e registra aqui. Derruba a ligação que estiver na outra aba.
+ */
+export function takeOverWebphone(): Promise<void> {
+  if (!lastConfig) return Promise.resolve();
+  return startWebphone(lastConfig, { takeover: true });
+}
+
+/**
+ * "Reconectar" depois que o ramal caiu sem ter sido pedido aqui (outro
+ * navegador ou a extensão). Com o UA vivo, só manda um novo REGISTER; sem
+ * ele, refaz o start assumindo o ramal.
+ */
+export function reconnectWebphone(): Promise<void> {
+  if (ua && tabLock?.isHolding()) {
+    try {
+      ua.register();
+      return Promise.resolve();
+    } catch (err) {
+      console.error('[webphone] re-register failed:', err);
+    }
+  }
+  return takeOverWebphone();
 }
 
 export function answerCall(): void {

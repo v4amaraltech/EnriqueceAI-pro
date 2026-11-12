@@ -8,6 +8,8 @@ import {
   isIntegratedCallHeader,
   reduceWebphone,
   remoteNumberFromUri,
+  webphoneIdleNeedsAction,
+  webphoneIdleProblem,
   type WebphoneEvent,
   type WebphoneState,
 } from './webphone-state';
@@ -33,7 +35,7 @@ describe('reduceWebphone — registro', () => {
   });
 
   it('disabled volta ao inicial mas lembra a permissão do microfone', () => {
-    const s = run([{ type: 'mic', granted: true }, { type: 'registered' }, { type: 'disabled' }]);
+    const s = run([{ type: 'mic', permission: 'granted' }, { type: 'registered' }, { type: 'disabled' }]);
     expect(s).toEqual({ ...initialWebphoneState, mic: 'granted' });
   });
 });
@@ -127,22 +129,28 @@ describe('helpers', () => {
     expect(remoteNumberFromUri('anonymous')).toBe('');
   });
 
-  it('canReceiveCalls exige registro e microfone não negado', () => {
-    expect(canReceiveCalls(run([{ type: 'registered' }]))).toBe(true);
-    expect(canReceiveCalls(run([{ type: 'registered' }, { type: 'mic', granted: false }]))).toBe(false);
-    expect(canReceiveCalls(run([{ type: 'connecting' }]))).toBe(false);
+  it('canReceiveCalls exige registro, microfone CONCEDIDO e nenhum conflito', () => {
+    expect(canReceiveCalls(run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }]))).toBe(true);
+    // Microfone ainda não ativado: o INVITE não seria atendido.
+    expect(canReceiveCalls(run([{ type: 'registered' }]))).toBe(false);
+    expect(canReceiveCalls(run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]))).toBe(false);
+    expect(canReceiveCalls(run([{ type: 'registered' }, { type: 'mic', permission: 'unavailable' }]))).toBe(false);
+    expect(canReceiveCalls(run([{ type: 'connecting' }, { type: 'mic', permission: 'granted' }]))).toBe(false);
+    expect(
+      canReceiveCalls(run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }, { type: 'session_conflict', conflict: 'other_tab' }])),
+    ).toBe(false);
   });
 });
 
 describe('dialingBlockReason', () => {
   it('não bloqueia com o webphone desligado (fluxo da extensão) nem registrado e livre', () => {
     expect(dialingBlockReason(initialWebphoneState)).toBeNull();
-    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', granted: true }]))).toBeNull();
+    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }]))).toBeNull();
   });
 
   it('bloqueia enquanto conecta, sem microfone, com erro, desconectado e em ligação', () => {
     expect(dialingBlockReason(run([{ type: 'connecting' }]))).toMatch(/conectando/);
-    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', granted: false }]))).toMatch(/microfone/);
+    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]))).toMatch(/bloqueou o microfone/);
     expect(dialingBlockReason(run([{ type: 'registration_failed', cause: 'Unauthorized' }]))).toMatch(/Unauthorized/);
     expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'disconnected' }]))).toMatch(/perdeu a conexão/);
     const inCall = run([
@@ -151,6 +159,102 @@ describe('dialingBlockReason', () => {
     ]);
     expect(dialingBlockReason(inCall)).toMatch(/em andamento/);
     const ended = reduceWebphone(inCall, { type: 'call_ended', id: 'c1', at: 50, cause: 'Terminated' });
-    expect(dialingBlockReason(ended)).toBeNull();
+    // Encerrada, mas o microfone nunca foi ativado nesta aba: continua barrado.
+    expect(dialingBlockReason(ended)).toMatch(/Ative o microfone/);
+    expect(dialingBlockReason(reduceWebphone(ended, { type: 'mic', permission: 'granted' }))).toBeNull();
+  });
+
+  it('com ligação em andamento bloqueia pela ligação mesmo com o microfone concedido', () => {
+    const s = run([
+      { type: 'registered' },
+      { type: 'mic', permission: 'granted' },
+      { type: 'call_new', id: 'c1', remoteNumber: '1', direction: 'incoming', integrated: true, at: 1 },
+    ]);
+    expect(dialingBlockReason(s)).toMatch(/em andamento/);
+  });
+
+  it('microfone: unknown pede para ativar, denied orienta liberar, unavailable fala do dispositivo', () => {
+    expect(dialingBlockReason(run([{ type: 'registered' }]))).toMatch(/Ative o microfone/);
+    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]))).toMatch(/Libere a permissão/);
+    expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', permission: 'unavailable' }]))).toMatch(
+      /microfone conectado/,
+    );
+  });
+
+  it('conflito de sessão bloqueia mesmo com disabled (não cai no fluxo da extensão)', () => {
+    const otherTab = run([{ type: 'mic', permission: 'granted' }, { type: 'session_conflict', conflict: 'other_tab' }]);
+    expect(otherTab.registration).toBe('disabled');
+    expect(dialingBlockReason(otherTab)).toMatch(/em uso em outra aba.*Usar nesta aba/);
+    const lost = run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }, { type: 'unregistered' }]);
+    expect(dialingBlockReason(lost)).toMatch(/extensão da API4COM.*Reconectar/);
+  });
+});
+
+describe('reduceWebphone: microfone', () => {
+  it('guarda os quatro estados e permite retry depois de negado', () => {
+    expect(initialWebphoneState.mic).toBe('unknown');
+    expect(run([{ type: 'mic', permission: 'unavailable' }]).mic).toBe('unavailable');
+    const denied = run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]);
+    expect(denied.mic).toBe('denied');
+    const retried = reduceWebphone(denied, { type: 'mic', permission: 'granted' });
+    expect(retried).toMatchObject({ mic: 'granted', registration: 'registered' });
+  });
+
+  it('mesmo estado de microfone não gera novo objeto', () => {
+    const s = run([{ type: 'mic', permission: 'granted' }]);
+    expect(reduceWebphone(s, { type: 'mic', permission: 'granted' })).toBe(s);
+  });
+});
+
+describe('reduceWebphone: conflito de sessão', () => {
+  const ready = run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }]);
+
+  it('unregistered direto de registered é perda para outra instância', () => {
+    const s = reduceWebphone(ready, { type: 'unregistered' });
+    expect(s).toMatchObject({ registration: 'disconnected', sessionConflict: 'lost_to_other' });
+  });
+
+  it('queda de WebSocket (disconnected antes do unregistered) NÃO é perda para outra instância', () => {
+    const s = run([{ type: 'disconnected', error: 'ws' }, { type: 'unregistered' }, { type: 'connecting' }], ready);
+    expect(s.sessionConflict).toBeNull();
+    expect(reduceWebphone(s, { type: 'registered' })).toMatchObject({ registration: 'registered', sessionConflict: null });
+  });
+
+  it('registrationFailed depois de registrado: perda se não for causa de rede', () => {
+    expect(reduceWebphone(ready, { type: 'registration_failed', cause: 'Rejected' }).sessionConflict).toBe('lost_to_other');
+    expect(reduceWebphone(ready, { type: 'registration_failed', cause: 'Connection Error' }).sessionConflict).toBeNull();
+    expect(reduceWebphone(ready, { type: 'registration_failed', cause: 'Request Timeout' }).sessionConflict).toBeNull();
+    // Falha no primeiro registro (nunca esteve registrado) é erro, não conflito.
+    expect(run([{ type: 'registration_failed', cause: 'Unauthorized' }]).sessionConflict).toBeNull();
+  });
+
+  it('conflito não some com unregistered/disconnected/connecting; só com registered ou disabled', () => {
+    const lost = reduceWebphone(ready, { type: 'unregistered' });
+    const later = run([{ type: 'unregistered' }, { type: 'disconnected' }, { type: 'connecting' }], lost);
+    expect(later.sessionConflict).toBe('lost_to_other');
+    expect(canReceiveCalls(later)).toBe(false);
+    expect(reduceWebphone(later, { type: 'registered' }).sessionConflict).toBeNull();
+
+    const otherTab = run([{ type: 'session_conflict', conflict: 'other_tab' }, { type: 'unregistered' }]);
+    expect(otherTab.sessionConflict).toBe('other_tab');
+    expect(dialingBlockReason(otherTab)).toMatch(/outra aba/);
+    expect(reduceWebphone(otherTab, { type: 'disabled' }).sessionConflict).toBeNull();
+  });
+});
+
+describe('pill parado (webphoneIdleProblem / webphoneIdleNeedsAction)', () => {
+  it('aparece com microfone não concedido no webphone ligado, conflito e erro', () => {
+    expect(webphoneIdleProblem(run([{ type: 'registered' }]))).toBe(true);
+    expect(webphoneIdleProblem(run([{ type: 'connecting' }]))).toBe(true);
+    expect(webphoneIdleProblem(run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]))).toBe(true);
+    expect(webphoneIdleProblem(run([{ type: 'registered' }, { type: 'mic', permission: 'unavailable' }]))).toBe(true);
+    expect(webphoneIdleProblem(run([{ type: 'session_conflict', conflict: 'other_tab' }]))).toBe(true);
+    expect(webphoneIdleProblem(run([{ type: 'registration_failed', cause: 'x' }, { type: 'mic', permission: 'granted' }]))).toBe(true);
+    expect(webphoneIdleNeedsAction(run([{ type: 'registration_failed', cause: 'x' }, { type: 'mic', permission: 'granted' }]))).toBe(false);
+  });
+
+  it('some com tudo pronto e com o webphone desligado sem conflito', () => {
+    expect(webphoneIdleProblem(run([{ type: 'registered' }, { type: 'mic', permission: 'granted' }]))).toBe(false);
+    expect(webphoneIdleProblem(initialWebphoneState)).toBe(false);
   });
 });

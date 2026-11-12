@@ -27,6 +27,9 @@ vi.mock('./webphone-client', () => ({
   hangupCall: vi.fn(() => Promise.resolve()),
   toggleMute: vi.fn(),
   getWebphoneState: () => phone.get(),
+  requestWebphoneMicrophone: vi.fn(() => Promise.resolve('granted')),
+  takeOverWebphone: vi.fn(() => Promise.resolve()),
+  reconnectWebphone: vi.fn(() => Promise.resolve()),
 }));
 
 const outcome = vi.hoisted(() => ({

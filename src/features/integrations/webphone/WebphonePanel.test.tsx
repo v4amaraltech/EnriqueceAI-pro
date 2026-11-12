@@ -28,6 +28,16 @@ vi.mock('./webphone-client', () => ({
   hangupCall: vi.fn(() => Promise.resolve()),
   toggleMute: vi.fn(),
   getWebphoneState: () => phone.get(),
+  requestWebphoneMicrophone: client.requestWebphoneMicrophone,
+  takeOverWebphone: client.takeOverWebphone,
+  reconnectWebphone: client.reconnectWebphone,
+  stopWebphone: client.stopWebphone,
+}));
+const client = vi.hoisted(() => ({
+  requestWebphoneMicrophone: vi.fn(() => Promise.resolve('granted')),
+  takeOverWebphone: vi.fn(() => Promise.resolve()),
+  reconnectWebphone: vi.fn(() => Promise.resolve()),
+  stopWebphone: vi.fn(),
 }));
 
 const answer = vi.hoisted(() => ({
@@ -673,5 +683,76 @@ describe('WebphonePanel — ligação nova substitui o resultado pendente', () =
     expect(screen.getByText(/Se recarregar a página/)).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Anotação sem ligação vinculada' })).toHaveValue('sobrevive ao reload!');
     setItem.mockRestore();
+  });
+});
+
+describe('WebphonePanel: pill do microfone e do ramal em outra aba', () => {
+  beforeEach(() => {
+    resetWebphoneCallContextForTests();
+    resetWebphoneDialCorrelation();
+    for (const fn of Object.values(client)) fn.mockClear();
+  });
+
+  it('microfone ainda não ativado: pill visível com "Ativar microfone"; o clique pede o microfone e não derruba o ramal', async () => {
+    phone.set({ ...ready, mic: 'unknown' });
+    render(<WebphonePanel />);
+    expect(screen.getByText(/microfone não ativado/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Ativar microfone' }));
+    });
+    expect(client.requestWebphoneMicrophone).toHaveBeenCalledTimes(1);
+    expect(client.stopWebphone).not.toHaveBeenCalled();
+    expect(client.takeOverWebphone).not.toHaveBeenCalled();
+
+    await act(async () => {
+      phone.set(ready);
+    });
+    expect(screen.queryByRole('button', { name: 'Ativar microfone' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Webphone' })).not.toBeInTheDocument();
+  });
+
+  it('negado: texto claro e "Tentar de novo" chama o pedido de novo', async () => {
+    phone.set({ ...ready, mic: 'denied' });
+    render(<WebphonePanel />);
+    expect(screen.getByText(/O navegador bloqueou o microfone/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    });
+    expect(client.requestWebphoneMicrophone).toHaveBeenCalledTimes(1);
+    expect(client.stopWebphone).not.toHaveBeenCalled();
+  });
+
+  it('indisponível: explica o dispositivo e oferece "Tentar de novo"', () => {
+    phone.set({ ...ready, mic: 'unavailable' });
+    render(<WebphonePanel />);
+    expect(screen.getByText(/microfone conectado/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+  });
+
+  it('ramal em uso em outra aba: aviso e "Usar nesta aba"', async () => {
+    phone.set({ ...initialWebphoneState, mic: 'granted', sessionConflict: 'other_tab' });
+    render(<WebphonePanel />);
+    expect(screen.getByText(/O ramal está em uso em outra aba/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Usar nesta aba' }));
+    });
+    expect(client.takeOverWebphone).toHaveBeenCalledTimes(1);
+    expect(client.requestWebphoneMicrophone).not.toHaveBeenCalled();
+  });
+
+  it('ramal perdido para outra instância: aviso e "Reconectar"', async () => {
+    phone.set({ ...ready, registration: 'disconnected', sessionConflict: 'lost_to_other' });
+    render(<WebphonePanel />);
+    expect(screen.getByText(/extensão da API4COM/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Reconectar' }));
+    });
+    expect(client.reconnectWebphone).toHaveBeenCalledTimes(1);
+  });
+
+  it('webphone desligado pelo gestor (disabled sem conflito): nada na tela', () => {
+    phone.set(initialWebphoneState);
+    render(<WebphonePanel />);
+    expect(screen.queryByRole('region', { name: 'Webphone' })).not.toBeInTheDocument();
   });
 });

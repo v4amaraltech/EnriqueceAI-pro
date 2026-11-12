@@ -497,7 +497,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     }
     const state = getWebphoneState();
     if (!canReceiveCalls(state)) {
-      dispatchAuto({ type: 'pause', reason: 'blocked', message: 'o webphone não está pronto nesta aba' });
+      // Motivo específico ("Ative o microfone", "O ramal está em uso em outra
+      // aba") quando houver; a frase genérica fica só de reserva.
+      dispatchAuto({ type: 'pause', reason: 'blocked', message: dialingBlockReason(state) ?? 'o webphone não está pronto nesta aba' });
       return;
     }
     const blocked = dialingBlockReason(state);
