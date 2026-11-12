@@ -4,6 +4,10 @@
  *
  * Ordem (o chamador para no primeiro candidato cuja duração bate):
  *  a) por id (`api4com_call_id` e `alt_api4com_ids`) com `filter={"where":{"id":...}}`;
+ *  a2) por `metadata.callRef` (o `calls.id` enviado no POST /calls), quando a
+ *     ligação tem callRef. Cobre o POST que estourou o timeout: a linha local
+ *     ainda não tem o id do provedor. Só aceita registro com o callRef exato
+ *     (defesa caso a API ignore o filtro);
  *  b) por janela de data em torno do início da ligação, paginando só dentro dela.
  *     Na janela, o ramal sozinho não basta: precisa do fone de destino ou de um
  *     candidato único (ver `selectWindowCandidates`).
@@ -14,6 +18,7 @@
  * Falha da API (limite esgotado, rede, erro HTTP) vira o evento `lookup_failed`:
  * a busca ficou incompleta e o chamador não deve concluir que não há gravação.
  */
+import { callRefWhere, readCallRef } from '@/features/integrations/services/api4com-call-ref';
 import { api4comNextPage } from '@/features/integrations/services/api4com-pagination';
 import {
   type CallsRateLimiter,
@@ -184,9 +189,11 @@ export type RecordingSearchEvent =
       kind: 'candidate';
       url: string;
       phase: 'id' | 'window';
-      /** provider_id: busca pelo id da própria ligação; destination: fone de destino bate;
+      /** provider_id: busca pelo id da própria ligação; call_ref: busca pelo callRef
+       *  (o calls.id enviado no POST /calls), tão determinística quanto provider_id;
+       *  destination: fone de destino bate;
        *  unique_in_window: único candidato do ramal na janela, sem fone que contradiga. */
-      match: 'provider_id' | 'destination' | 'unique_in_window';
+      match: 'provider_id' | 'call_ref' | 'destination' | 'unique_in_window';
     }
   | { kind: 'ambiguous_window'; candidates: number }
   /** A API não respondeu (limite esgotado, rede, erro HTTP): busca incompleta. */
@@ -234,16 +241,18 @@ function destinationMatch(record: Api4ComCallRecord, call: SearchCall): boolean 
  * - algum registro com o fone de destino batendo: só esses (ramal sozinho não basta);
  * - nenhum com o destino: aceita só se houver UM candidato e o fone dele não contradiz;
  * - vários candidatos só pelo ramal (ou um com fone de outro número): ambíguo, nada.
- * Registros com o id da própria ligação não contam como concorrentes.
+ * Registros com o id ou o callRef da própria ligação não contam como concorrentes.
  */
 export function selectWindowCandidates(
   records: Api4ComCallRecord[],
   call: SearchCall,
 ): RecordingSearchEvent[] {
   const ownIds = new Set(providerIds(call.metadata));
+  const ownRef = readCallRef(call.metadata);
   const consistent = new Map<string, Api4ComCallRecord>();
   for (const record of records) {
     if (ownIds.has(record.id) || !matchesCallHeuristic(record, call)) continue;
+    if (ownRef && readCallRef(record.metadata) === ownRef) continue;
     consistent.set(record.id || record.record_url || String(consistent.size), record);
   }
   const all = [...consistent.values()];
@@ -302,6 +311,24 @@ export async function* searchRecordingCandidates(
       if (record.id === id && record.record_url && !seen.has(record.record_url)) {
         seen.add(record.record_url);
         yield { kind: 'candidate', url: record.record_url, phase: 'id', match: 'provider_id' };
+      }
+    }
+  }
+
+  // a2) busca pontual pelo callRef (1 requisição), só para ligações que têm um.
+  const callRef = readCallRef(call.metadata);
+  if (callRef) {
+    if (requests >= SEARCH_MAX_REQUESTS) return;
+    requests++;
+    const page = await readPage(deps, buildCallsUrl(deps.baseUrl, callRefWhere(callRef), 1));
+    if (!page) {
+      yield { kind: 'lookup_failed', phase: 'id' };
+    } else {
+      for (const record of page.data ?? []) {
+        // A API pode ignorar o filtro e devolver outra página: só o callRef exato vale.
+        if (readCallRef(record.metadata) !== callRef || !record.record_url || seen.has(record.record_url)) continue;
+        seen.add(record.record_url);
+        yield { kind: 'candidate', url: record.record_url, phase: 'id', match: 'call_ref' };
       }
     }
   }

@@ -53,7 +53,7 @@ export interface RepairCallResult {
   /** ambiguous_shared_url: outras ligações com a mesma URL cuja duração também bate. */
   sharedWith?: string[];
   /** Como a cópia foi casada com a ligação (fonte api4com, ou URL liberada pelo id próprio). */
-  match?: 'provider_id' | 'destination' | 'unique_in_window';
+  match?: 'provider_id' | 'call_ref' | 'destination' | 'unique_in_window';
   /** ambiguous_window: quantos candidatos do ramal havia na janela. */
   windowCandidates?: number;
   /** unrepairable em apply: gravação marcada como escondida para o SDR. */
@@ -228,7 +228,8 @@ export async function repairCallRecording(
       lastSeconds = audio.seconds;
       return null;
     }
-    if (match !== 'provider_id') {
+    // provider_id e call_ref: a API4COM devolveu a URL pelo id da própria ligação.
+    if (match !== 'provider_id' && match !== 'call_ref') {
       // Mesma URL em outra ligação que também bate: dono ambíguo, segura (não grava).
       const sharedWith = await findSharedUrlMatches(supabase, call, url, audio.seconds);
       if (sharedWith.length > 0) {
@@ -296,8 +297,8 @@ export async function repairCallRecording(
     const { url, match } = event;
     // A busca pelo id da própria ligação devolveu a URL retida como compartilhada:
     // a gravação é desta ligação, não é ambígua para ela.
-    const held = match === 'provider_id' ? heldShared.get(url) : undefined;
-    if (held) return commit(held.audio, held.status, held.source, url, 'provider_id');
+    const held = match === 'provider_id' || match === 'call_ref' ? heldShared.get(url) : undefined;
+    if (held) return commit(held.audio, held.status, held.source, url, match);
     if (tried.has(url)) continue;
     const hit = await tryUrl(url, 'api4com', match);
     if (hit) return hit;

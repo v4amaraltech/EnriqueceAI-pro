@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   destinationSuffix,
   groupCallsForReconcile,
   isLinkedToApi4ComCall,
   pickFallbackCandidate,
+  reconcileInsertMetadata,
+  reconcileLinkMetadata,
+  resolveReconcileMatch,
   type FallbackCandidate,
+  type ReconcileLookups,
 } from './api4com-reconcile-matching';
 
 const row = (
@@ -128,5 +132,115 @@ describe('pickFallbackCandidate', () => {
     }
 
     expect(linked).toEqual(['r1', 'r2', 'r3']);
+  });
+});
+
+describe('resolveReconcileMatch (callRef)', () => {
+  const REF = '6f1c2a3e-1234-4abc-8def-0123456789ab';
+  const rest = (over: Record<string, unknown> = {}) => ({
+    id: 'chan-1',
+    from: '1025',
+    to: '5511998881124',
+    started_at: '2026-11-12T15:00:00.000Z',
+    hangup_cause: 'NORMAL_CLEARING',
+    metadata: { gateway: 'flux-org', callRef: REF } as Record<string, unknown>,
+    ...over,
+  });
+
+  function lookups(rows: {
+    byId?: FallbackCandidate | null;
+    byRefMeta?: FallbackCandidate | null;
+    primary?: FallbackCandidate | null;
+    alt?: FallbackCandidate | null;
+    window?: FallbackCandidate[];
+  }) {
+    return {
+      byId: vi.fn(async () => rows.byId ?? null),
+      byCallRefMetadata: vi.fn(async () => rows.byRefMeta ?? null),
+      byPrimaryId: vi.fn(async () => rows.primary ?? null),
+      byAltId: vi.fn(async () => rows.alt ?? null),
+      fallbackCandidates: vi.fn(async () => rows.window ?? []),
+    } satisfies ReconcileLookups<FallbackCandidate>;
+  }
+
+  it('callRef ganha de um candidato de janela, sem gate de hangup_cause', async () => {
+    const own = row(REF, '2026-11-12T14:52:00.000Z', {
+      hangup_cause: 'NO_ANSWER',
+      metadata: { callRef: REF, gateway: 'flux-org' },
+    });
+    const closer = row('closer', '2026-11-12T15:00:00.000Z');
+    const l = lookups({ byId: own, window: [closer] });
+
+    const match = await resolveReconcileMatch(rest(), l);
+
+    expect(match).toEqual({ row: own, via: 'call_ref' });
+    expect(l.byId).toHaveBeenCalledWith(REF);
+    expect(l.fallbackCandidates).not.toHaveBeenCalled();
+  });
+
+  it('cai no metadata->>callRef quando o id não acha', async () => {
+    const own = row('other-id', '2026-11-12T15:00:00.000Z', { metadata: { callRef: REF } });
+    const l = lookups({ byRefMeta: own });
+
+    expect((await resolveReconcileMatch(rest(), l))?.via).toBe('call_ref');
+  });
+
+  it('sem callRef o caminho atual permanece (id, alt com gate, janela)', async () => {
+    const closest = row('b', '2026-11-12T15:01:00.000Z');
+    const l = lookups({
+      alt: row('alt', '2026-11-12T15:00:00.000Z', { hangup_cause: 'NUMBER_CHANGED' }),
+      window: [row('a', '2026-11-12T14:52:00.000Z'), closest],
+    });
+
+    const match = await resolveReconcileMatch(rest({ metadata: { callRef: 'lixo' } }), l);
+
+    expect(l.byId).not.toHaveBeenCalled();
+    expect(match).toEqual({ row: closest, via: 'fallback' });
+    expect(l.fallbackCandidates).toHaveBeenCalledWith({
+      origin: '1025',
+      suffix: '98881124',
+      loIso: '2026-11-12T14:50:00.000Z',
+      hiIso: '2026-11-12T15:10:00.000Z',
+    });
+  });
+
+  it('id primário vem antes do alt e da janela', async () => {
+    const primary = row('p', '2026-11-12T15:00:00.000Z');
+    const l = lookups({ primary, window: [row('w', '2026-11-12T15:00:00.000Z')] });
+
+    expect(await resolveReconcileMatch(rest({ metadata: {} }), l)).toEqual({ row: primary, via: 'primary_id' });
+  });
+
+  it('merge pelo callRef grava o id e preserva callRef, gateway e o resto', () => {
+    expect(reconcileLinkMetadata({ callRef: REF, gateway: 'g', live_amd: { p: 1 } }, 'chan-1', 'call_ref')).toEqual({
+      callRef: REF,
+      gateway: 'g',
+      live_amd: { p: 1 },
+      api4com_call_id: 'chan-1',
+      webhook_linked: true,
+    });
+    expect(
+      reconcileLinkMetadata({ callRef: REF, api4com_call_id: 'chan-1', webhook_linked: true }, 'chan-1', 'call_ref'),
+    ).toBeNull();
+  });
+
+  it('merge pelo fallback mantém o comportamento de antes', () => {
+    expect(reconcileLinkMetadata({ api4com_call_id: 'req-1' }, 'chan-1', 'fallback')).toEqual({
+      api4com_call_id: 'req-1',
+      alt_api4com_ids: ['chan-1'],
+      webhook_linked: true,
+    });
+    expect(reconcileLinkMetadata({ api4com_call_id: 'chan-1' }, 'chan-1', 'primary_id')).toBeNull();
+  });
+
+  it('insert novo copia o callRef do registro REST', () => {
+    expect(reconcileInsertMetadata(rest({ call_type: 'outbound' }), 'chan-1')).toEqual({
+      api4com_call_id: 'chan-1',
+      source: 'reconcile_api4com',
+      hangup_cause: 'NORMAL_CLEARING',
+      call_type: 'outbound',
+      callRef: REF,
+    });
+    expect(reconcileInsertMetadata(rest({ metadata: {} }), 'chan-1')).not.toHaveProperty('callRef');
   });
 });

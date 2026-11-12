@@ -234,6 +234,119 @@ describe('searchRecordingCandidates', () => {
     expect(fetchFn).toHaveBeenCalledTimes(SEARCH_MAX_WINDOW_PAGES);
   });
 
+  describe('busca por callRef', () => {
+    const REF = '6f1c2a3e-1234-4abc-8def-0123456789ab';
+
+    it('monta o filtro metadata.callRef, aceita o registro certo e vem depois do id do provedor', async () => {
+      const urls: string[] = [];
+      const fetchFn = vi.fn((url: string | URL | Request) => {
+        urls.push(String(url));
+        const where = decodedWhere(String(url));
+        if (where['metadata.callRef'] === REF)
+          return Promise.resolve(
+            json(page([record({ id: 'chan-1', record_url: 'https://x/ref.mp3', metadata: { callRef: REF } })])),
+          );
+        return Promise.resolve(json(page([])));
+      });
+      const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+      const events: RecordingSearchEvent[] = [];
+      for await (const e of searchRecordingCandidates(
+        deps,
+        makeCall({ metadata: { api4com_call_id: 'A', callRef: REF } }),
+      ))
+        events.push(e);
+
+      expect(decodedWhere(urls[0]!)).toEqual({ id: 'A' });
+      expect(decodedWhere(urls[1]!)).toEqual({ 'metadata.callRef': REF });
+      expect(new URL(urls[1]!).searchParams.get('page')).toBe('1');
+      expect(decodedWhere(urls[2]!)).toHaveProperty('started_at');
+      expect(events[0]).toEqual({ kind: 'candidate', url: 'https://x/ref.mp3', phase: 'id', match: 'call_ref' });
+    });
+
+    it('timeout no POST: sem id do provedor, o callRef ainda acha a gravação', async () => {
+      const fetchFn = vi.fn((url: string | URL | Request) => {
+        const where = decodedWhere(String(url));
+        if (where['metadata.callRef'])
+          return Promise.resolve(
+            json(page([record({ id: 'chan-1', record_url: 'https://x/ref.mp3', metadata: { callRef: REF } })])),
+          );
+        return Promise.resolve(json(page([])));
+      });
+      const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+      const gen = searchRecordingCandidates(deps, makeCall({ metadata: { callRef: REF, gateway: 'g' } }));
+      const first = await gen.next();
+
+      expect(first.value).toEqual({ kind: 'candidate', url: 'https://x/ref.mp3', phase: 'id', match: 'call_ref' });
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('API ignorou o filtro: registro de outra ligação é recusado', async () => {
+      const fetchFn = vi.fn((url: string | URL | Request) => {
+        const where = decodedWhere(String(url));
+        if (where['metadata.callRef'])
+          return Promise.resolve(
+            json(
+              page([
+                record({ id: 'x1', record_url: 'https://x/outra.mp3', metadata: { callRef: '11111111-1111-4111-8111-111111111111' } }),
+                record({ id: 'x2', record_url: 'https://x/sem.mp3', metadata: {} }),
+              ]),
+            ),
+          );
+        return Promise.resolve(json(page([])));
+      });
+      const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+      const events: RecordingSearchEvent[] = [];
+      for await (const e of searchRecordingCandidates(deps, makeCall({ metadata: { callRef: REF } }))) events.push(e);
+
+      expect(events.some((e) => e.kind === 'candidate' && e.match === 'call_ref')).toBe(false);
+    });
+
+    it('sem callRef (ligação antiga) não faz requisição extra', async () => {
+      const urls: string[] = [];
+      const fetchFn = vi.fn((url: string | URL | Request) => {
+        urls.push(String(url));
+        return Promise.resolve(json(page([])));
+      });
+      const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+      await collect(searchRecordingCandidates(deps, makeCall({ metadata: { api4com_call_id: 'A', callRef: 'lixo' } })));
+
+      expect(urls).toHaveLength(2);
+      expect(urls.some((u) => 'metadata.callRef' in decodedWhere(u))).toBe(false);
+    });
+
+    it('falha na busca por callRef avisa lookup_failed na fase id e segue para a janela', async () => {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(null, { status: 500 }))
+        .mockResolvedValue(json(page([record()])));
+      const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
+
+      const events: RecordingSearchEvent[] = [];
+      for await (const e of searchRecordingCandidates(deps, makeCall({ metadata: { callRef: REF } }))) events.push(e);
+
+      expect(events.map((e) => e.kind)).toEqual(['lookup_failed', 'candidate']);
+      expect(events[0]).toEqual({ kind: 'lookup_failed', phase: 'id' });
+    });
+
+    it('registro com o callRef da própria ligação não conta como concorrente na janela', () => {
+      const call = makeCall({ destination: '', metadata: { callRef: REF } });
+      const events = selectWindowCandidates(
+        [
+          record({ id: 'own', to: '', metadata: { callRef: REF } }),
+          record({ id: 'other', to: '', record_url: 'https://x/other.mp3' }),
+        ] as never,
+        call,
+      );
+      expect(events).toEqual([
+        { kind: 'candidate', url: 'https://x/other.mp3', phase: 'window', match: 'unique_in_window' },
+      ]);
+    });
+  });
+
   it('só faz GET', async () => {
     const fetchFn = vi.fn(() => Promise.resolve(json(page([]))));
     const { deps } = makeDeps(fetchFn as unknown as typeof fetch);
