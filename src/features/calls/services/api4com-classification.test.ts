@@ -95,14 +95,26 @@ describe('classifyApi4ComCall', () => {
   // of hangup cause (V4 Amaral, jul/2026). The classifier must treat an
   // unparseable/empty answeredAt exactly like null.
   describe('empty-string answeredAt (unanswered — must NOT count as answered)', () => {
-    it('NUMBER_CHANGED with answeredAt="" and duration 0 → not connected + not_connected', () => {
+    // Guia oficial da API4COM: NUMBER_CHANGED = "caixa postal". Não chegou a
+    // um humano, mas também não é falha de discagem: balde no_contact.
+    it('NUMBER_CHANGED (caixa postal) with answeredAt="" and duration 0 → not connected + no_contact', () => {
       const out = classifyApi4ComCall({
         answeredAt: '',
         hangupCause: 'NUMBER_CHANGED',
         durationSeconds: 0,
         significantThresholdSeconds: threshold,
       });
-      expect(out).toEqual({ connected: false, status: 'not_connected' });
+      expect(out).toEqual({ connected: false, status: 'no_contact' });
+    });
+
+    it('ALLOTTED_TIMEOUT (tempo expirado) with answeredAt="" → not connected + no_contact', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: '',
+        hangupCause: 'ALLOTTED_TIMEOUT',
+        durationSeconds: 0,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'no_contact' });
     });
 
     it('ORIGINATOR_CANCEL with answeredAt="" and duration 1 → not connected + not_connected', () => {
@@ -142,7 +154,7 @@ describe('classifyApi4ComCall', () => {
         durationSeconds: 0,
         significantThresholdSeconds: threshold,
       });
-      expect(out).toEqual({ connected: false, status: 'not_connected' });
+      expect(out).toEqual({ connected: false, status: 'no_contact' });
     });
 
     it('empty answeredAt but genuine talk time on a broken-webhook ramal still connects via duration fallback', () => {

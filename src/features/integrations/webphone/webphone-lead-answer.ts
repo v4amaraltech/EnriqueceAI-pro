@@ -62,7 +62,10 @@ const HANGUP_REASON: Record<string, string> = {
   NETWORK_OUT_OF_ORDER: CARRIER_RETRY,
   EXCHANGE_ROUTING_ERROR: CARRIER_RETRY,
   RECOVERY_ON_TIMER_EXPIRE: 'A operadora não respondeu a tempo. Tente de novo.',
-  NUMBER_CHANGED: 'Número mudou ou foi desativado.',
+  // Guia oficial da API4COM (códigos de status): NUMBER_CHANGED = "Caixa
+  // postal". Vale o sentido de negócio, não o literal do FreeSWITCH.
+  NUMBER_CHANGED: 'Caiu na caixa postal.',
+  ALLOTTED_TIMEOUT: 'Tempo expirado.',
   UNALLOCATED_NUMBER: 'Este número não existe.',
   INVALID_NUMBER_FORMAT: 'Número em formato inválido.',
   USER_BUSY: 'Linha ocupada.',

@@ -17,6 +17,7 @@ import {
 import { isSafeApi4ComBaseUrl } from '@/lib/security/safe-url';
 
 import type { Api4ComExtension } from './api4com-extension-sync';
+import { retryWaitMs } from './api4com-rate-limit';
 
 export const API4COM_DEFAULT_BASE_URL = 'https://api.api4com.com/api/v1/';
 
@@ -134,6 +135,31 @@ interface FetchOptions {
   retries?: number;
 }
 
+// Cabeçalhos de espera que a API4COM manda em 429 (e às vezes em 503). Vão no
+// texto do erro como `[nome: valor]` para `describeOriginateError` saber quanto
+// o SDR deve esperar; sem isso o valor se perdia no `throw`.
+const WAIT_HEADERS = ['retry-after', 'ratelimit-reset', 'x-ratelimit-reset'] as const;
+const WAIT_HEADER_PATTERN = /\[(retry-after|ratelimit-reset|x-ratelimit-reset): ([^\]]+)\]/gi;
+
+function waitHeadersSuffix(headers: Headers | undefined): string {
+  if (!headers || typeof headers.get !== 'function') return '';
+  let suffix = '';
+  for (const name of WAIT_HEADERS) {
+    const value = headers.get(name)?.trim();
+    if (value) suffix += ` [${name}: ${value}]`;
+  }
+  return suffix;
+}
+
+/** Espera (ms) pedida pelo servidor, lida dos cabeçalhos anexados ao erro por `api4comFetch`. */
+export function waitMsFromErrorMessage(message: string, now = Date.now()): number | null {
+  const headers = new Headers();
+  for (const match of message.matchAll(WAIT_HEADER_PATTERN)) {
+    headers.set(match[1]!.toLowerCase(), match[2]!.trim());
+  }
+  return retryWaitMs(headers, now);
+}
+
 export async function api4comFetch<T>(
   creds: Api4ComApiCredentials,
   method: string,
@@ -162,7 +188,9 @@ export async function api4comFetch<T>(
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`API4COM ${method} ${path} failed (${response.status}): ${text}`);
+        throw new Error(
+          `API4COM ${method} ${path} failed (${response.status}): ${text}${waitHeadersSuffix(response.headers)}`,
+        );
       }
 
       return response.json() as Promise<T>;
@@ -197,10 +225,11 @@ export function toApi4ComCalled(phone: string): string {
   return `+${digits}`;
 }
 
-// `POST /calls` só responde depois que o ramal atende (doc API4COM), e o
-// `no_answer_timeout` padrão do ramal é 30 s. Sem retry: repetir um originate
-// que deu timeout poderia discar duas vezes.
-const ORIGINATE_TIMEOUT_MS = 40_000;
+// `POST /calls` só responde depois que o Webphone atende (`no_answer_timeout`
+// padrão do ramal é 30 s), e o guia da API4COM para o POST /calls pede 90 s de
+// timeout no cliente. Sem retry: o guia proíbe repetir quando a resposta HTTP
+// não chegou, porque a chamada pode ter nascido (discaria duas vezes).
+export const ORIGINATE_TIMEOUT_MS = 90_000;
 
 /**
  * A API4COM devolve 424 "call from {ramal} to {número} has been failed" quando a
@@ -216,15 +245,45 @@ export function isRamalLegFailure(message: string): boolean {
 
 export const RAMAL_LEG_RETRY_DELAY_MS = 3_000;
 
-/** Mensagem para o SDR a partir do erro cru do `POST /calls`. */
-export function describeOriginateError(message: string): string {
+/** Status HTTP do erro cru de `api4comFetch` (`... failed (429): ...`), ou null. */
+function originateErrorStatus(message: string): number | null {
+  const match = /^API4COM \S+ \S+ failed \((\d{3})\)/.exec(message);
+  return match ? Number(match[1]) : null;
+}
+
+function rateLimitMessage(message: string, now: number): string {
+  const waitMs = waitMsFromErrorMessage(message, now);
+  if (waitMs === null) {
+    return 'Muitas tentativas de ligação em pouco tempo. Aguarde um minuto e tente de novo.';
+  }
+  const seconds = Math.max(1, Math.ceil(waitMs / 1000));
+  const unit = seconds === 1 ? 'segundo' : 'segundos';
+  return `Muitas tentativas de ligação em pouco tempo. Tente de novo em ${seconds} ${unit}.`;
+}
+
+/**
+ * Mensagem para o SDR a partir do erro cru do `POST /calls`. Só traduz o texto:
+ * não repete a chamada (429 inclusive) e não marca o token como inválido.
+ */
+export function describeOriginateError(message: string, now = Date.now()): string {
   if (isRamalLegFailure(message)) {
     return 'A API4COM não conseguiu chamar o seu ramal. Se você acabou de desligar, aguarde alguns segundos e tente de novo; se persistir, confira se o webphone está verde.';
   }
   if (/\(424\)/.test(message) && /not registered/i.test(message)) {
     return 'Seu ramal não está registrado na API4COM. Aguarde o webphone ficar verde (ou abra a extensão) e tente de novo.';
   }
-  return message;
+  switch (originateErrorStatus(message)) {
+    case 401:
+      return 'O token da API4COM é inválido ou expirou. Peça ao administrador um novo token e que ele o salve em Integrações, no card da API4COM.';
+    case 429:
+      return rateLimitMessage(message, now);
+    case 404:
+      return 'Seu ramal não foi encontrado na API4COM. Peça ao administrador para clicar em "Sincronizar ramais" em Integrações e tente de novo.';
+    case 503:
+      return 'A API4COM está temporariamente indisponível. Tente de novo em alguns segundos.';
+    default:
+      return message;
+  }
 }
 
 /**

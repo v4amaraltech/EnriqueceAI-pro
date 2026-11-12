@@ -7,7 +7,16 @@ vi.mock('@/lib/security/encryption', () => ({
   encrypt: (v: string) => `enc:${v}`,
 }));
 
-import { describeOriginateError, getOrgApiCredentials, getUserCredentials, isRamalLegFailure, originateCall, toApi4ComCalled } from './api4com.service';
+import {
+  ORIGINATE_TIMEOUT_MS,
+  describeOriginateError,
+  getOrgApiCredentials,
+  getUserCredentials,
+  isRamalLegFailure,
+  originateCall,
+  toApi4ComCalled,
+  waitMsFromErrorMessage,
+} from './api4com.service';
 
 type Row = Record<string, unknown> | null;
 
@@ -206,5 +215,127 @@ describe('describeOriginateError', () => {
     expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"call from 1014 to +55 has been failed"}}')).toMatch(/não conseguiu chamar o seu ramal/);
     expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"user not registered"}}')).toMatch(/não está registrado/);
     expect(describeOriginateError('Telefone inválido')).toBe('Telefone inválido');
+  });
+});
+
+describe('ORIGINATE_TIMEOUT_MS', () => {
+  it('é 90 s, como pede o guia do POST /calls da API4COM', () => {
+    expect(ORIGINATE_TIMEOUT_MS).toBe(90_000);
+  });
+});
+
+describe('describeOriginateError: erros HTTP do POST /calls', () => {
+  const NOW = Date.parse('2026-11-12T12:00:00Z');
+
+  it('401: token inválido ou expirado, pede um novo token', () => {
+    const msg = describeOriginateError('API4COM POST /calls failed (401): {"error":{"message":"Unauthorized"}}');
+    expect(msg).toMatch(/token da API4COM é inválido ou expirou/);
+    expect(msg).toMatch(/novo token/);
+  });
+
+  it('429 com RateLimit-Reset em segundos: mostra a espera', () => {
+    const msg = describeOriginateError(
+      'API4COM POST /calls failed (429): Too Many Requests [ratelimit-reset: 12]',
+      NOW,
+    );
+    expect(msg).toMatch(/Muitas tentativas/);
+    expect(msg).toContain('Tente de novo em 12 segundos.');
+  });
+
+  it('429 com RateLimit-Reset em epoch e com Retry-After', () => {
+    const epoch = String(Math.floor(NOW / 1000) + 25);
+    expect(
+      describeOriginateError(`API4COM POST /calls failed (429): x [ratelimit-reset: ${epoch}]`, NOW),
+    ).toContain('Tente de novo em 25 segundos.');
+    expect(
+      describeOriginateError('API4COM POST /calls failed (429): x [retry-after: 1]', NOW),
+    ).toContain('Tente de novo em 1 segundo.');
+  });
+
+  it('429 sem cabeçalho: pede para aguardar um minuto', () => {
+    const msg = describeOriginateError('API4COM POST /calls failed (429): Too Many Requests', NOW);
+    expect(msg).toMatch(/Aguarde um minuto/);
+  });
+
+  it('404: ramal não encontrado, orienta sincronizar', () => {
+    const msg = describeOriginateError('API4COM POST /calls failed (404): {"error":{"code":"EXTENSION_NOT_FOUND"}}');
+    expect(msg).toMatch(/ramal não foi encontrado/);
+    expect(msg).toMatch(/Sincronizar ramais/);
+  });
+
+  it('503: API indisponível, tentar em alguns segundos', () => {
+    expect(describeOriginateError('API4COM POST /calls failed (503): Service Unavailable')).toMatch(
+      /temporariamente indisponível/,
+    );
+  });
+
+  it('os dois 424 continuam com as mesmas mensagens', () => {
+    expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"call from 1014 to +55 has been failed"}}')).toBe(
+      'A API4COM não conseguiu chamar o seu ramal. Se você acabou de desligar, aguarde alguns segundos e tente de novo; se persistir, confira se o webphone está verde.',
+    );
+    expect(describeOriginateError('API4COM POST /calls failed (424): {"error":{"message":"user not registered"}}')).toBe(
+      'Seu ramal não está registrado na API4COM. Aguarde o webphone ficar verde (ou abra a extensão) e tente de novo.',
+    );
+  });
+
+  it('outros erros seguem crus', () => {
+    const raw = 'API4COM POST /calls failed (500): boom';
+    expect(describeOriginateError(raw)).toBe(raw);
+    expect(describeOriginateError('Não foi possível conectar à API4COM. Tente novamente em instantes.')).toBe(
+      'Não foi possível conectar à API4COM. Tente novamente em instantes.',
+    );
+  });
+
+  it('nenhuma mensagem usa travessão', () => {
+    for (const status of [401, 404, 429, 503]) {
+      expect(describeOriginateError(`API4COM POST /calls failed (${status}): x`)).not.toContain('\u2014');
+    }
+  });
+});
+
+describe('originateCall: 429 leva os cabeçalhos de espera no erro e não repete', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    service.createServiceRoleClient.mockReturnValue(
+      makeClient({
+        api4com_connections: { org_id: 'org', api_key_encrypted: null, base_url: null, ramal: '1014' },
+        api4com_org_settings: { api_key_encrypted: 'enc:org-token', base_url: 'https://api.api4com.com/api/v1/' },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('anexa RateLimit-Reset e Retry-After ao erro, sem segunda tentativa', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'RateLimit-Reset': '12', 'Retry-After': '12' }),
+      text: async () => 'Too Many Requests',
+    });
+
+    const err = await originateCall('u1', '48988669122', {}, { ramalRetryDelayMs: 0 }).catch((e: Error) => e);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).toContain('(429)');
+    expect(message).toContain('[ratelimit-reset: 12]');
+    expect(message).toContain('[retry-after: 12]');
+    expect(waitMsFromErrorMessage(message)).toBe(12_000);
+    expect(describeOriginateError(message)).toContain('Tente de novo em 12 segundos.');
+  });
+
+  it('usa o timeout de 90 s no POST /calls', async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'c1', message: 'ok' }) });
+    await originateCall('u1', '48988669122');
+    expect(timeoutSpy).toHaveBeenCalledWith(90_000);
+    timeoutSpy.mockRestore();
   });
 });

@@ -22,6 +22,26 @@ export interface CallsRateLimiter {
   pauseFor(ms: number): void;
 }
 
+/**
+ * Espera pedida pelo servidor (`Retry-After` ou `RateLimit-Reset`), em ms.
+ * Aceita segundos até o reset, data HTTP ou epoch em segundos.
+ */
+export function retryWaitMs(headers: Headers, now = Date.now()): number | null {
+  for (const name of ['retry-after', 'ratelimit-reset', 'x-ratelimit-reset']) {
+    const raw = headers.get(name);
+    if (!raw) continue;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds)) {
+      // epoch em segundos (ex.: 1762862400) em vez de "segundos até o reset"
+      if (seconds > 1e9) return Math.max(0, seconds * 1000 - now);
+      return Math.max(0, seconds * 1000);
+    }
+    const date = Date.parse(raw);
+    if (!Number.isNaN(date)) return Math.max(0, date - now);
+  }
+  return null;
+}
+
 const realClock: RateLimiterClock = {
   now: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
