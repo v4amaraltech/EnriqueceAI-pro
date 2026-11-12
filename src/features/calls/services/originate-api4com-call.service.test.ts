@@ -17,9 +17,10 @@ function fakeSupabase(opts: {
   /** Simula o webhook escrevendo na linha entre o insert e a releitura. */
   onRead?: (row: Record<string, unknown>) => void;
   log: string[];
+  rows?: Map<string, Record<string, unknown>>;
 }) {
   const ops: Op[] = [];
-  const rows = new Map<string, Record<string, unknown>>();
+  const rows = opts.rows ?? new Map<string, Record<string, unknown>>();
   const client = {
     from: (table: string) => {
       let filterId: string | null = null;
@@ -65,14 +66,22 @@ function fakeSupabase(opts: {
           return upd;
         },
         delete: () => {
-          ops.push({ table, kind: 'delete' });
+          const filters: Record<string, string> = {};
+          const op: Op = { table, kind: 'delete', payload: filters };
+          ops.push(op);
           opts.log.push(`delete:${table}`);
-          return {
-            eq: (_c: string, id: string) => {
-              rows.delete(id);
-              return Promise.resolve({ error: null });
+          const chain = {
+            eq: (column: string, value: string) => {
+              filters[column] = value;
+              return chain;
+            },
+            then: (resolve: (v: { error: null }) => unknown, reject?: (e: unknown) => unknown) => {
+              const id = filters.id;
+              if (id) rows.delete(id);
+              return Promise.resolve({ error: null }).then(resolve, reject);
             },
           };
+          return chain;
         },
       };
       return chain;
@@ -162,6 +171,26 @@ describe('originateApi4ComCallWithRef', () => {
     expect(db.rows.has(REF)).toBe(false);
     expect(db.ops.some((o) => o.kind === 'delete' && o.table === 'calls')).toBe(true);
     expect(db.ops.some((o) => o.table === 'interactions')).toBe(false);
+  });
+
+  it('424 usa getDeleteClient (service role) e filtra por id, org e user', async () => {
+    const { deps, db } = setup({
+      originate: async () => {
+        throw new Error(RAMAL_424);
+      },
+    });
+    const admin = fakeSupabase({ log: [], rows: db.rows });
+    deps.getDeleteClient = () => admin.client as unknown as OriginateApi4ComDeps['supabase'];
+
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const result = await originateApi4ComCallWithRef(deps, input);
+    spy.mockRestore();
+
+    expect(result).toEqual({ success: false, error: 'ramal ocupado', code: 'ramal_busy' });
+    expect(db.rows.has(REF)).toBe(false);
+    expect(db.ops.some((o) => o.kind === 'delete')).toBe(false);
+    const del = admin.ops.find((o) => o.kind === 'delete' && o.table === 'calls');
+    expect(del?.payload).toEqual({ id: REF, org_id: 'org-1', user_id: 'user-1' });
   });
 
   it('timeout: a linha fica com callRef e sem api4com_call_id, e a interaction é registrada', async () => {

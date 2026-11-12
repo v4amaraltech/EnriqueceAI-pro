@@ -12,6 +12,7 @@ import {
   originateCall,
 } from '@/features/integrations/services/api4com.service';
 import { originateApi4ComCallWithRef } from '@/features/calls/services/originate-api4com-call.service';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 
 const initiateCallSchema = z.object({
   phone: z.string().min(8, 'Telefone inválido'),
@@ -58,6 +59,9 @@ export async function initiateApi4ComCall(
       randomUUID: () => crypto.randomUUID(),
       isRamalLegFailure,
       describeOriginateError: (message) => describeOriginateError(message),
+      // Só é chamado no 424. A policy calls_delete exige gestor; o service
+      // role apaga só o id desta tentativa (com org e user no filtro).
+      getDeleteClient: createServiceRoleClient,
     },
     input,
   );

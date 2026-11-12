@@ -60,6 +60,13 @@ export interface OriginateApi4ComDeps {
   randomUUID: () => string;
   isRamalLegFailure: (message: string) => boolean;
   describeOriginateError: (message: string) => string;
+  /**
+   * Cliente usado só para apagar a linha no 424. A policy `calls_delete`
+   * exige `is_manager()`, então o JWT do SDR não apaga. O chamador passa o
+   * client de service role (criado só neste caminho). Sem este campo, usa
+   * `supabase` (útil nos testes).
+   */
+  getDeleteClient?: () => SupabaseClient<Database>;
 }
 
 type QueryError = { message: string } | null;
@@ -131,10 +138,21 @@ export async function originateApi4ComCallWithRef(
     );
 
     if (deps.isRamalLegFailure(message)) {
-      // 424: nenhuma chamada nasceu. Apaga a linha para não deixar órfã na lista/timeline.
-      const { error: deleteError } = (await from(supabase, 'calls')
-        .delete()
-        .eq('id', callRef)) as { error: QueryError };
+      // 424: nenhuma chamada nasceu. Apaga a linha para não deixar órfã na
+      // lista/timeline. Usa getDeleteClient (service role) porque a policy
+      // calls_delete só autoriza gestor; restringe ao id que acabamos de criar.
+      let deleteError: QueryError = null;
+      try {
+        const deleter = deps.getDeleteClient?.() ?? supabase;
+        const result = (await from(deleter, 'calls')
+          .delete()
+          .eq('id', callRef)
+          .eq('org_id', orgId)
+          .eq('user_id', userId)) as { error: QueryError };
+        deleteError = result.error;
+      } catch (delErr) {
+        deleteError = { message: delErr instanceof Error ? delErr.message : String(delErr) };
+      }
       if (deleteError) {
         console.error('[api4com] Failed to delete call row after 424:', deleteError.message, { callId: callRef });
       }
