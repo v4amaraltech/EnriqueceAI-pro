@@ -2,13 +2,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { CRM_AUTO_UPDATE_MIN_CONFIDENCE } from './constants';
+import { CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE, CRM_AUTO_UPDATE_MIN_CONFIDENCE } from './constants';
 import {
   type CrmDecisionInput,
   decideCrmAutoUpdate,
   mapOutcomeToDisposition,
   proposeLeadStatus,
   resolveCrmAutoUpdateMode,
+  shouldApplyLiveVoicemail,
 } from './decision';
 
 const V4_AMARAL = 'c2727473-1df8-4faa-9264-a9fc1759fe3b';
@@ -388,5 +389,115 @@ describe('migration crm_auto_update_shadow_opt_out (v1.1)', () => {
     expect(sql).not.toMatch(/\bDROP\s+(TABLE|COLUMN|VIEW|TRIGGER)\b/i);
     expect(sql).not.toMatch(/\bALTER\s+TABLE\s+public\.(calls|leads|scheduled_activities|interactions|call_qualifications|call_transcripts_v2|app_flags)\b/i);
     expect(sql).not.toMatch(/app_flags/);
+  });
+});
+
+describe('shouldApplyLiveVoicemail', () => {
+  const live = (over: Partial<Parameters<typeof shouldApplyLiveVoicemail>[0]> = {}) =>
+    shouldApplyLiveVoicemail({
+      mode: 'live',
+      decision: { verdict: 'would_apply' },
+      outcome: 'voicemail',
+      confidence: 0.85,
+      ...over,
+    });
+
+  it('corte da escrita é 0,85 inclusive e não mexe no 0,75 do would_apply', () => {
+    expect(CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE).toBe(0.85);
+    expect(CRM_AUTO_UPDATE_MIN_CONFIDENCE).toBe(0.75);
+    expect(live({ confidence: 0.85 })).toBe(true);
+    expect(live({ confidence: 0.99 })).toBe(true);
+    expect(live({ confidence: 0.84 })).toBe(false);
+    expect(live({ confidence: 0.8499 })).toBe(false);
+    expect(live({ confidence: null })).toBe(false);
+    expect(live({ confidence: Number.NaN })).toBe(false);
+  });
+
+  it('só o outcome JEV exato voicemail: not_connected (que também propõe voicemail) fica de fora', () => {
+    expect(live({ outcome: 'not_connected', confidence: 0.99 })).toBe(false);
+    expect(live({ outcome: 'meeting_booked', confidence: 0.99 })).toBe(false);
+    expect(live({ outcome: 'callback', confidence: 0.99 })).toBe(false);
+    expect(live({ outcome: 'not_interested', confidence: 0.99 })).toBe(false);
+    expect(live({ outcome: 'Voicemail' })).toBe(false);
+    expect(live({ outcome: null })).toBe(false);
+  });
+
+  it('só em live e só com would_apply', () => {
+    expect(live({ mode: 'shadow', confidence: 0.99 })).toBe(false);
+    expect(live({ mode: 'off', confidence: 0.99 })).toBe(false);
+    expect(live({ decision: { verdict: 'skip' }, confidence: 0.99 })).toBe(false);
+  });
+
+  it('integra com a decisão: SDR já registrado, opt-out e needs_review nunca escrevem', () => {
+    const vm = { outcome: 'voicemail', next_step_suggestion: 'retry', confidence: 0.99 };
+    const cases = [
+      input({ mode: 'live', qualification: vm, call: { sdr_disposition: 'no_answer' } }),
+      input({ mode: 'live', qualification: { ...vm, needs_review: true } }),
+      input({ mode: 'live', qualification: vm, transcript_text: 'Tira meu telefone da lista.' }),
+      input({ mode: 'live', qualification: vm, call: { lead_id: null } }),
+    ];
+    for (const c of cases) {
+      const decision = decideCrmAutoUpdate(c);
+      expect(decision.verdict).toBe('skip');
+      expect(shouldApplyLiveVoicemail({ mode: 'live', decision, outcome: 'voicemail', confidence: 0.99 })).toBe(false);
+    }
+    const ok = decideCrmAutoUpdate(input({ mode: 'live', qualification: vm }));
+    expect(ok.verdict).toBe('would_apply');
+    expect(ok.proposed).toEqual({
+      disposition: 'voicemail',
+      next_activity: { type: 'retry', channel: 'phone' },
+      lead_status: null,
+    });
+  });
+});
+
+describe('migration crm_auto_update_live_voicemail', () => {
+  const sql = readFileSync(
+    join(process.cwd(), 'supabase/migrations/20261112200000_crm_auto_update_live_voicemail.sql'),
+    'utf8',
+  );
+
+  it('acrescenta applied/applied_at com CHECK amarrado a live + would_apply', () => {
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS applied boolean NOT NULL DEFAULT false');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS applied_at timestamptz');
+    expect(sql).toMatch(/\(applied = false AND applied_at IS NULL\)/);
+    expect(sql).toMatch(/applied = true AND applied_at IS NOT NULL AND mode = 'live' AND verdict = 'would_apply'/);
+  });
+
+  it('a nossa escrita vira auto_applied antes de agree/disagree nas três comparações', () => {
+    const body = sql.slice(sql.indexOf('CREATE OR REPLACE VIEW public.crm_auto_update_shadow_comparison'));
+    const cases = body.match(/CASE\s+WHEN g\.proposed_[a-z_]+ IS NULL THEN 'no_proposal'[\s\S]*?END AS [a-z_]+_comparison/g) ?? [];
+    expect(cases).toHaveLength(3);
+    for (const c of cases) {
+      expect(c.indexOf("'auto_applied'")).toBeGreaterThan(-1);
+      expect(c.indexOf("'auto_applied'")).toBeLessThan(c.indexOf("'pending_sdr'"));
+      expect(c.indexOf("'auto_applied'")).toBeLessThan(c.indexOf("'agree'"));
+      expect(c).toContain("'legacy_ai'");
+    }
+  });
+
+  it('colunas novas só no fim das views, preservando skipped_opt_out_requested', () => {
+    expect(sql).toMatch(/END AS next_activity_comparison,\s+g\.auto_applied,\s+g\.auto_applied_at\s+FROM grouped g/);
+    expect(sql).toMatch(/AS skipped_opt_out_requested,[\s\S]*AS applied_live\s+FROM public\.crm_auto_update_shadow_comparison/);
+    expect(sql).toContain('security_invoker = true');
+    expect(sql).toContain('GRANT SELECT ON public.crm_auto_update_shadow_comparison TO service_role');
+  });
+
+  it('não liga flag, não lista org e não mexe em dados do log nem do CRM', () => {
+    expect(sql).not.toContain(V4_AMARAL);
+    // Só o note muda: nenhuma cláusula SET/VALUES mexe em enabled ou allow_org_ids.
+    expect(sql).not.toMatch(/SET\s+(enabled|allow_org_ids)\b/i);
+    expect(sql).not.toMatch(/,\s*(enabled|allow_org_ids)\s*=/i);
+    expect(sql).not.toMatch(/INSERT\s+INTO\s+public\.app_flags/i);
+    expect(sql).not.toMatch(/\bDELETE\s+FROM\b/i);
+    expect(sql).not.toMatch(/\bDROP\s+(TABLE|COLUMN|VIEW|TRIGGER)\b/i);
+    expect(sql).not.toMatch(/\bUPDATE\s+public\.(?!app_flags\b)/i);
+    expect(sql).not.toMatch(/\bALTER\s+TABLE\s+public\.(calls|leads|scheduled_activities|interactions|call_qualifications|call_transcripts_v2|app_flags)\b/i);
+    expect(sql).not.toMatch(/GRANT[^;]*(UPDATE|DELETE)[^;]*crm_auto_update_shadow_log/);
+    expect(sql).toMatch(/UPDATE public\.app_flags\s+SET note = '[^']*'\s+WHERE key = 'crm_auto_update_v1_live';/);
+  });
+
+  it('sem travessão', () => {
+    expect(sql).not.toMatch(/[\u2013\u2014]/);
   });
 });

@@ -1,6 +1,6 @@
 // Decisão PURA (sem I/O) da atualização automática do CRM a partir da
 // qualificação JEV de uma ligação. Usada pelo modo shadow (só registra a
-// proposta) e, no futuro, pelo modo live.
+// proposta) e pelo modo live (shouldApplyLiveVoicemail decide o que é escrito).
 //
 // Regras fixas:
 //  - needs_review = true nunca aplica (vai para revisão humana);
@@ -12,7 +12,11 @@
 import type { CallDisposition } from '../../types';
 import { evaluateFlagRow, type FlagRow } from '@/features/contact-engine/services/flag-scope.service';
 
-import { CRM_AUTO_UPDATE_MIN_CONFIDENCE } from './constants';
+import {
+  CRM_AUTO_UPDATE_LIVE_OUTCOME,
+  CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE,
+  CRM_AUTO_UPDATE_MIN_CONFIDENCE,
+} from './constants';
 import { type OptOutSignal, detectOptOutRequest } from './opt-out';
 
 export type CrmAutoUpdateMode = 'off' | 'shadow' | 'live';
@@ -184,4 +188,25 @@ export function decideCrmAutoUpdate(input: CrmDecisionInput): CrmDecision {
   }
   if (!input.call.lead_id) return skip('no_lead');
   return { verdict: 'would_apply', proposed, skip_reason: null, opt_out };
+}
+
+/**
+ * A escrita live acontece? Só caixa postal, só em live, só com would_apply e só com
+ * confiança >= 0,85. Usa o outcome JEV exato (não o disposition mapeado) para que
+ * not_connected, que também propõe 'voicemail', fique só no log.
+ */
+export function shouldApplyLiveVoicemail(args: {
+  mode: CrmAutoUpdateMode;
+  decision: Pick<CrmDecision, 'verdict'>;
+  outcome: string | null;
+  confidence: number | null;
+}): boolean {
+  return (
+    args.mode === 'live' &&
+    args.decision.verdict === 'would_apply' &&
+    args.outcome === CRM_AUTO_UPDATE_LIVE_OUTCOME &&
+    typeof args.confidence === 'number' &&
+    Number.isFinite(args.confidence) &&
+    args.confidence >= CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE
+  );
 }
