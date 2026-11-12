@@ -61,7 +61,7 @@ function harness(current = invite()) {
 }
 
 describe('OAuth da agenda do closer', () => {
-  it('pede só horários livres e o e-mail, sem Gmail', () => {
+  it('pede horários livres, leitura dos títulos dos eventos e o e-mail, sem Gmail nem escrita na agenda', () => {
     const url = new URL(buildCloserCalendarAuthUrl({
       clientId: 'client',
       appUrl: 'https://app.example.com',
@@ -72,6 +72,14 @@ describe('OAuth da agenda do closer', () => {
     expect(scope.split(' ').sort()).toEqual([...CLOSER_CALENDAR_SCOPES].sort());
     expect(scope).not.toMatch(/gmail/i);
     expect(scope).not.toContain('/auth/calendar ');
+    expect(scope.split(' ')).not.toContain('https://www.googleapis.com/auth/calendar');
+    expect(scope.split(' ')).not.toContain('https://www.googleapis.com/auth/calendar.events');
+    expect(scope.split(' ')).toEqual(expect.arrayContaining([
+      'https://www.googleapis.com/auth/calendar.freebusy',
+      'https://www.googleapis.com/auth/calendar.events.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ]));
+    expect(scope.split(' ')).toHaveLength(3);
     expect(url.searchParams.get('access_type')).toBe('offline');
     expect(url.searchParams.get('redirect_uri')).toBe('https://app.example.com/api/auth/callback/closer-calendar');
     expect(url.searchParams.get('prompt')).toBe('consent');

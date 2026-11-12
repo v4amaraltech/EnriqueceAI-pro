@@ -78,5 +78,10 @@ describe('texto do e-mail e da tela', () => {
     expect(email.html).toContain('Não pedimos acesso ao Gmail');
     expect(email.html).toContain('Ana &lt;script&gt;');
     expect(email.html).not.toContain('<script>');
+    expect(email.html).toContain('título dos seus compromissos');
+    expect(email.html).toContain('privados');
+    expect(CLOSER_CALENDAR_COPY.pageIntro).toContain('título dos seus compromissos');
+    expect(CLOSER_CALENDAR_COPY.pageScope).toContain('Não pedimos acesso ao Gmail');
+    expect(CLOSER_CALENDAR_COPY.successBody).toContain('exceto os privados');
   });
 });

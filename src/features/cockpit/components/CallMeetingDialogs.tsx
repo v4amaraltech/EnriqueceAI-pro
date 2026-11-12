@@ -12,6 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, Di
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 import { checkWhatsAppConnected } from '@/features/activities/actions/check-whatsapp-status';
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
@@ -30,6 +31,7 @@ import {
   formatBrtMeetingWhen,
   formatBrtWallClock,
   formatWeekRange,
+  slotNeedsOverlapConfirm,
   slotSelectable,
   startOfWorkWeek,
   weekdayLabel,
@@ -48,6 +50,10 @@ export interface MeetingChoice {
   start: Date;
   end: Date;
   closer: MeetingCloser;
+  /** O SDR confirmou marcar por cima de um compromisso do Google deste closer. */
+  allowOverlap?: boolean;
+  /** Título do compromisso do Google que fica por baixo, para o lembrete. */
+  overlapTitle?: string;
 }
 
 export interface SchedulingPreview {
@@ -60,6 +66,8 @@ export interface SchedulingPreview {
   sdrBusy?: BusyInterval[];
   /** Quando true, a fixture mostra a grade sem dados, nunca como livre. */
   unknownAll?: boolean;
+  /** Fixture: simula conexão antiga do closer, sem escopo de títulos. */
+  needsReconnectForTitles?: boolean;
   now: Date;
   organizerEmail: string;
   /** Fixture: não cria evento, convite nem reunião. */
@@ -83,6 +91,11 @@ const UNKNOWN_GRID: CloserGrid = {
 };
 
 const CHOOSE_CLOSER_NOTE = 'Escolha um closer para ver a agenda dele. Sem closer, nenhum horário fica livre.';
+export const RECONNECT_FOR_TITLES_NOTE = 'Reconectar para ver títulos: a agenda deste closer foi conectada antes da leitura dos compromissos. Peça ao gestor para reenviar o convite de conexão.';
+
+export function overlapConfirmText(slot: Pick<WeekSlot, 'title'>): string {
+  return `Closer ocupado: ${slot.title?.trim() || 'Ocupado'}. Marcar mesmo assim?`;
+}
 
 interface WeekDialogProps {
   open: boolean;
@@ -121,8 +134,11 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
   const [weekStart, setWeekStart] = useState(() => startOfWorkWeek(preview?.now ?? new Date()));
   const [liveAll, setLiveAll] = useState<MeetingCloser[]>([]);
   const [liveSchedulable, setLiveSchedulable] = useState<MeetingCloser[]>([]);
-  const [liveView, setLiveView] = useState<{ key: string; grid: CloserGrid; note: string | null } | null>(null);
+  const [liveView, setLiveView] = useState<{ key: string; grid: CloserGrid; note: string | null; needsReconnectForTitles: boolean } | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  /** Horário ocupado no Google que o SDR já confirmou marcar por cima. */
+  const [overlapConfirmedId, setOverlapConfirmedId] = useState<string | null>(null);
+  const [pendingOverlap, setPendingOverlap] = useState<WeekSlot | null>(null);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
 
@@ -146,7 +162,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
     void getCloserAvailability(selectedCloserId, weekStart.toISOString(), addDays(weekStart, 5).toISOString()).then((result) => {
       if (cancelled) return;
       if (!result.success) {
-        setLiveView({ key, grid: UNKNOWN_GRID, note: result.error });
+        setLiveView({ key, grid: UNKNOWN_GRID, note: result.error, needsReconnectForTitles: false });
         return;
       }
       setLiveView({
@@ -159,6 +175,7 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
           sdrBusy: result.data.sdrBusy,
         },
         note: result.data.notice,
+        needsReconnectForTitles: result.data.needsReconnectForTitles === true,
       });
     });
     return () => {
@@ -189,12 +206,19 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
       : liveView?.key === requestKey
         ? liveView.note
         : 'Consultando a agenda deste closer. Enquanto isso, nenhum horário fica livre.';
+  const needsReconnectForTitles = preview
+    ? preview.needsReconnectForTitles === true
+    : !!selectedCloserId && liveView?.key === requestKey && liveView.needsReconnectForTitles;
   const slots = useMemo(
     () => buildCloserWeekSlots(weekStart, { ...grid, now: clock }),
     [weekStart, grid, clock],
   );
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? null;
-  const chosenSlot = selectedSlot && slotSelectable(selectedSlot) ? selectedSlot : null;
+  const chosenSlot = selectedSlot
+    && slotSelectable(selectedSlot)
+    && (!slotNeedsOverlapConfirm(selectedSlot) || overlapConfirmedId === selectedSlot.id)
+    ? selectedSlot
+    : null;
   const selectedCloser = closers.find((closer) => closer.id === selectedCloserId)
     ?? allClosers.find((closer) => closer.id === selectedCloserId)
     ?? null;
@@ -212,12 +236,36 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
 
   function clearSelection() {
     setSelectedSlotId(null);
+    setOverlapConfirmedId(null);
     setSelectedCloserId(null);
+  }
+
+  function selectSlot(slot: WeekSlot) {
+    if (!slotSelectable(slot)) return;
+    if (slotNeedsOverlapConfirm(slot)) {
+      setPendingOverlap(slot);
+      return;
+    }
+    setSelectedSlotId(slot.id);
+    setOverlapConfirmedId(null);
+  }
+
+  function confirmOverlap() {
+    if (!pendingOverlap) return;
+    setSelectedSlotId(pendingOverlap.id);
+    setOverlapConfirmedId(pendingOverlap.id);
+    setPendingOverlap(null);
   }
 
   function choose() {
     if (!chosenSlot || !selectedCloser) return;
-    onChoose({ start: chosenSlot.start, end: chosenSlot.end, closer: selectedCloser });
+    const overlap = slotNeedsOverlapConfirm(chosenSlot) && overlapConfirmedId === chosenSlot.id;
+    onChoose({
+      start: chosenSlot.start,
+      end: chosenSlot.end,
+      closer: selectedCloser,
+      ...(overlap ? { allowOverlap: true, overlapTitle: chosenSlot.title?.trim() || 'Ocupado' } : {}),
+    });
   }
 
   const whenLabel = chosenSlot
@@ -234,15 +282,15 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
         <DialogHeader className="sr-only">
           <DialogTitle>Agendar reunião</DialogTitle>
           <DialogDescription>
-            A grade mostra a agenda do closer selecionado. Ocupado e feriado não podem ser marcados. Sem dados significa que a agenda não foi confirmada e o horário não está livre.
+            A grade mostra a agenda do closer selecionado. Horário ocupado no Google mostra o compromisso e pode ser marcado depois de confirmar. Reunião já marcada no Enriquece, feriado e horário passado não podem ser marcados. Sem dados significa que a agenda não foi confirmada e o horário não está livre.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5 pb-3">
           <div className="flex min-w-0 items-center gap-2 text-sm">
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Semana anterior" onClick={() => { setWeekStart((current) => addDays(current, -7)); setSelectedSlotId(null); }}>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Semana anterior" onClick={() => { setWeekStart((current) => addDays(current, -7)); setSelectedSlotId(null); setOverlapConfirmedId(null); }}>
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Próxima semana" onClick={() => { setWeekStart((current) => addDays(current, 7)); setSelectedSlotId(null); }}>
+            <button type="button" className="text-muted-foreground hover:text-foreground rounded-md p-1" aria-label="Próxima semana" onClick={() => { setWeekStart((current) => addDays(current, 7)); setSelectedSlotId(null); setOverlapConfirmedId(null); }}>
               <ChevronRight className="h-4 w-4" />
             </button>
             <p className="truncate">{formatWeekRange(weekStart)}</p>
@@ -286,7 +334,12 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
                         role="option"
                         data-testid={`closer-${closer.id}`}
                         aria-selected={closer.id === selectedCloserId}
-                        onClick={() => { setSelectedCloserId(closer.id); setListOpen(false); }}
+                        onClick={() => {
+                          // A confirmação de sobreposição vale para o closer em que foi dada.
+                          if (closer.id !== selectedCloserId) setOverlapConfirmedId(null);
+                          setSelectedCloserId(closer.id);
+                          setListOpen(false);
+                        }}
                         className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
                       >
                         <Avatar id={closer.id} name={closer.name} />
@@ -309,7 +362,14 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
           </div>
         </div>
         {availabilityNote && <p className="px-6 pb-2 text-xs text-amber-700">{availabilityNote}</p>}
+        {needsReconnectForTitles && (
+          <p className="px-6 pb-2 text-xs text-amber-700" data-testid="reconnect-for-titles">{RECONNECT_FOR_TITLES_NOTE}</p>
+        )}
+        <p className="text-muted-foreground px-6 pb-2 text-[11px]">
+          Ocupado no Google mostra o compromisso e pode ser marcado com confirmação. Reunião já marcada no Enriquece, feriado e horário passado não podem. Sem dados: agenda não confirmada.
+        </p>
         <div className="min-h-0 flex-1 overflow-auto px-6 pb-4">
+          <TooltipProvider delayDuration={200}>
           <div className="grid h-full grid-cols-[3.25rem_repeat(5,minmax(0,1fr))] grid-rows-[auto_repeat(8,minmax(4.25rem,1fr))] gap-2">
             <div />
             {days.map((day) => (
@@ -324,10 +384,11 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
                 hour={hour}
                 slots={slots.filter((slot) => slot.hour === hour)}
                 selectedId={chosenSlot?.id ?? null}
-                onSelect={setSelectedSlotId}
+                onSelect={selectSlot}
               />
             ))}
           </div>
+          </TooltipProvider>
         </div>
         <div className="flex items-center justify-between gap-3 border-t px-6 py-4">
           <div className="flex min-w-0 items-center gap-3 text-sm">
@@ -353,6 +414,32 @@ export function CallMeetingWeekDialog({ open, onOpenChange, preview, onChoose }:
           </Button>
         </div>
       </DialogContent>
+      <Dialog open={!!pendingOverlap} onOpenChange={(next) => { if (!next) setPendingOverlap(null); }}>
+        <DialogContent className="w-full max-w-[420px] bg-background sm:max-w-[420px]" data-testid="overlap-confirm-dialog">
+          <DialogHeader className="text-left">
+            <DialogTitle className="text-base font-semibold">Horário ocupado no Google</DialogTitle>
+            <DialogDescription className="text-foreground text-sm">
+              {pendingOverlap ? overlapConfirmText(pendingOverlap) : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {pendingOverlap && (pendingOverlap.extraEventCount ?? 0) > 0 && (
+            <p className="text-muted-foreground text-xs">
+              Há mais {pendingOverlap.extraEventCount} {pendingOverlap.extraEventCount === 1 ? 'compromisso' : 'compromissos'} neste horário.
+            </p>
+          )}
+          <p className="text-muted-foreground text-xs">
+            A reunião entra na agenda do closer por cima deste compromisso. Combine com ele antes, se precisar.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setPendingOverlap(null)} data-testid="overlap-cancel">
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmOverlap} data-testid="overlap-confirm">
+              Marcar mesmo assim
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
@@ -365,7 +452,7 @@ function Avatar({ id, name }: { id: string; name: string }) {
   );
 }
 
-function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: WeekSlot[]; selectedId: string | null; onSelect: (id: string) => void }) {
+function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: WeekSlot[]; selectedId: string | null; onSelect: (slot: WeekSlot) => void }) {
   return (
     <>
       <div className="text-muted-foreground pt-2 text-right text-[11px] tabular-nums">{String(hour).padStart(2, '0')}:00</div>
@@ -373,27 +460,49 @@ function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: W
         const selectable = slotSelectable(slot);
         const selected = slot.id === selectedId;
         const time = formatBrtWallClock(slot.start).time;
+        const calendarBusy = slot.busy && slot.busySource === 'calendar' && !slot.holiday;
+        const overlapSelectable = selectable && slotNeedsOverlapConfirm(slot);
+        const blockedBusy = slot.busy && !slot.holiday && !overlapSelectable;
+        const title = slot.busy && !slot.holiday ? slot.title?.trim() : undefined;
+        const extra = slot.extraEventCount ?? 0;
         return (
           <button
             key={slot.id}
             type="button"
             disabled={!selectable}
             aria-pressed={selected}
+            aria-label={title ? `${time}, ocupado: ${title}${extra > 0 ? ` e mais ${extra}` : ''}` : undefined}
             data-testid={`slot-${slot.dayIndex}-${slot.hour}`}
-            onClick={() => onSelect(slot.id)}
+            data-busy-source={slot.busySource}
+            onClick={() => onSelect(slot)}
             className={cn(
-              'flex h-full min-h-16 flex-col items-start gap-1 rounded-md border px-2 py-1.5 text-left',
+              'flex h-full min-h-16 min-w-0 flex-col items-start gap-1 overflow-hidden rounded-md border px-2 py-1.5 text-left',
               slot.holiday && 'bg-muted text-muted-foreground border-transparent',
-              slot.busy && !slot.holiday && 'bg-muted text-muted-foreground border-transparent',
+              blockedBusy && 'bg-muted text-muted-foreground border-transparent',
+              overlapSelectable && !selected && 'border-amber-200 bg-amber-50 text-amber-950 hover:border-amber-400 hover:bg-amber-100',
               slot.state === 'unknown' && !slot.past && 'border-dashed border-amber-300 bg-amber-50 text-amber-950',
               slot.past && slot.state !== 'busy' && 'bg-muted/50 border-transparent opacity-60',
-              selectable && !selected && 'bg-background border-border hover:border-foreground/30',
+              selectable && !overlapSelectable && !selected && 'bg-background border-border hover:border-foreground/30',
               selected && 'bg-foreground text-background border-foreground',
             )}
           >
             <span className={cn('text-[11px] tabular-nums', selected ? 'text-background/70' : 'text-muted-foreground')}>{time}</span>
             {slot.holiday && <span className="text-xs">Feriado</span>}
-            {slot.busy && !slot.holiday && <span className="text-xs">Ocupado</span>}
+            {slot.busy && !slot.holiday && title && (
+              <span className="flex w-full min-w-0 items-baseline gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="min-w-0 flex-1 truncate text-xs" title={title} data-testid={`slot-title-${slot.dayIndex}-${slot.hour}`}>{title}</span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs break-words">{title}</TooltipContent>
+                </Tooltip>
+                {extra > 0 && <span className="shrink-0 text-[10px] tabular-nums">+{extra}</span>}
+              </span>
+            )}
+            {slot.busy && !slot.holiday && !title && <span className="text-xs">Ocupado</span>}
+            {calendarBusy && overlapSelectable && !selected && (
+              <span className="text-[10px] leading-tight text-amber-700">Marcar com confirmação</span>
+            )}
             {slot.state === 'unknown' && !slot.past && <span className="text-xs">Sem dados</span>}
             {slot.sdrBusy && selectable && (
               <span className={cn('text-[10px] leading-tight', selected ? 'text-background/80' : 'text-amber-700')}>Você ocupado</span>
@@ -495,7 +604,10 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
     }
     startTransition(async () => {
       try {
-        const result = await scheduleMeeting(leadId, eventInput, amount);
+        const overlap = choice.allowOverlap === true && closer.id === choice.closer.id;
+        const result = overlap
+          ? await scheduleMeeting(leadId, eventInput, amount, { allowOverlap: true })
+          : await scheduleMeeting(leadId, eventInput, amount);
         if (!result.success) {
           if (result.code === 'GCAL_TOKEN_EXPIRED') {
             const authResult = await getCalendarAuthUrl();
@@ -556,7 +668,17 @@ export function CallMeetingConfirmDialog({ open, choice, leadId, leadName, leadE
                   ))}
                 </select>
               </div>
-              <p className="text-muted-foreground text-xs">A confirmação consulta de novo a agenda deste closer e recusa horário ocupado, feriado ou sem dados.</p>
+              <p className="text-muted-foreground text-xs">A confirmação consulta de novo a agenda deste closer e recusa reunião já marcada no Enriquece, feriado ou sem dados.</p>
+              {choice.allowOverlap && closer.id === choice.closer.id && (
+                <p className="text-xs text-amber-700" data-testid="overlap-reminder">
+                  Você confirmou marcar por cima de um compromisso do closer no Google: {choice.overlapTitle || 'Ocupado'}.
+                </p>
+              )}
+              {choice.allowOverlap && closer.id !== choice.closer.id && (
+                <p className="text-xs text-amber-700">
+                  Trocar o closer desfaz a confirmação de horário ocupado. Se o novo closer estiver ocupado no Google, o agendamento será recusado.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="meeting-title" className="text-muted-foreground text-xs font-normal">Título do convite da reunião</Label>

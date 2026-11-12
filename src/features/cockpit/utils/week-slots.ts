@@ -13,9 +13,17 @@ export const SLOT_DURATION_MIN = MEETING_DURATION_MIN;
 export interface BusyInterval {
   start: string;
   end: string;
+  /** Título do evento do Google (já com a regra de "Privado"). */
+  title?: string;
 }
 
 export type SlotState = 'free' | 'busy' | 'unknown';
+
+/**
+ * Origem da ocupação. `app`: reunião já marcada no Enriquece ou trava, sempre
+ * bloqueada. `calendar`: só o Google, pode ser marcada com confirmação.
+ */
+export type SlotBusySource = 'calendar' | 'app' | 'holiday';
 
 export interface WeekSlot {
   id: string;
@@ -30,6 +38,11 @@ export interface WeekSlot {
   holiday: boolean;
   /** Aviso da agenda do SDR. Não torna o horário do closer indisponível. */
   sdrBusy: boolean;
+  busySource?: SlotBusySource;
+  /** Primeiro evento do Google que cruza o horário. */
+  title?: string;
+  /** Quantos outros eventos com título cruzam o horário (o "+N"). */
+  extraEventCount?: number;
 }
 
 function brtParts(d: Date) {
@@ -160,6 +173,17 @@ export function buildCloserWeekSlots(weekStart: Date, input: CloserWeekInput): W
         holiday: holidays.has(dateKey),
       });
       const state: SlotState = kind === 'unknown' ? 'unknown' : kind === 'free' ? 'free' : 'busy';
+      const titled = (input.calendarKnown ? input.calendarBusy : [])
+        .filter((interval) => !!interval.title && overlaps(start, end, interval))
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+      const first = titled[0];
+      const busySource: SlotBusySource | undefined = kind === 'holiday'
+        ? 'holiday'
+        : kind === 'busy'
+          ? 'app'
+          : kind === 'calendar_busy'
+            ? 'calendar'
+            : undefined;
       slots.push({
         id: start.toISOString(),
         start,
@@ -171,12 +195,25 @@ export function buildCloserWeekSlots(weekStart: Date, input: CloserWeekInput): W
         state,
         holiday: kind === 'holiday',
         sdrBusy: input.sdrBusy.some((interval) => overlaps(start, end, interval)),
+        busySource,
+        ...(first && kind !== 'holiday' ? { title: first.title, extraEventCount: titled.length - 1 } : {}),
       });
     }
   }
   return slots;
 }
 
+/** Ocupado só no Google: pode ser marcado depois que o SDR confirma. */
+export function slotNeedsOverlapConfirm(slot: WeekSlot): boolean {
+  return slot.state === 'busy' && slot.busySource === 'calendar' && !slot.holiday && !slot.past;
+}
+
+/**
+ * Livre, ou ocupado só no Google. Passado, feriado, sem dados e reunião do
+ * Enriquece nunca são selecionáveis.
+ */
 export function slotSelectable(slot: WeekSlot): boolean {
-  return slot.state === 'free' && !slot.past;
+  if (slot.past || slot.holiday || slot.state === 'unknown') return false;
+  if (slot.state === 'free') return true;
+  return slotNeedsOverlapConfirm(slot);
 }

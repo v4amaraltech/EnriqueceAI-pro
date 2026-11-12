@@ -8,10 +8,12 @@ import { BR_NATIONAL_HOLIDAYS } from '@/lib/utils/br-holidays';
 import { loadCloserOwnConnection } from '@/features/closer-calendar/db';
 import { isCloserCalendarConnectEnabled } from '@/features/closer-calendar/flag';
 import { calendarReadPlan } from '@/features/closer-calendar/plan';
-import { readCloserOwnFreeBusy } from '@/features/closer-calendar/read';
+import { parseCalendarEvents, titlesStatusFromError, type CalendarTitlesStatus } from '@/features/closer-calendar/events';
+import { readCloserOwnAgenda, type CalendarReadWithTitles } from '@/features/closer-calendar/read';
 import {
   getCalendarConnection,
   getCalendarConnectionWith,
+  listCalendarEvents,
   queryFreeBusy,
   type CalendarConnectionTokens,
 } from '@/features/integrations/services/calendar.service';
@@ -44,6 +46,12 @@ export interface CloserAvailabilityData {
   appBusy: BusyInterval[];
   holidays: string[];
   sdrBusy: BusyInterval[];
+  /**
+   * A conexão própria do closer é antiga (só freeBusy) e o Google recusou o
+   * events.list por escopo. A grade mostra "Ocupado" sem título e pede para
+   * o closer reconectar pelo convite do gestor.
+   */
+  needsReconnectForTitles?: boolean;
 }
 
 export type ReserveResult =
@@ -96,6 +104,72 @@ async function readCalendars(
     for (const id of calendarIds) failed[id] = { known: false, reason: 'freebusy_failed' };
     return failed;
   }
+}
+
+/**
+ * events.list com a conexão de plataforma ou do SDR. Se falhar (escopo,
+ * acesso, rede), cai no freeBusy de sempre, sem título.
+ */
+async function readCalendarWithTitles(
+  connection: CalendarConnectionTokens,
+  timeMin: string,
+  timeMax: string,
+  calendarId: string,
+  closerEmail: string,
+): Promise<CalendarReadWithTitles> {
+  let titles: CalendarTitlesStatus;
+  try {
+    const items = await listCalendarEvents(connection, calendarId, timeMin, timeMax);
+    return { calendar: { known: true, busy: parseCalendarEvents(items, { closerEmail }) }, titles: 'ok' };
+  } catch (err) {
+    titles = titlesStatusFromError(err);
+    if (titles === 'failed') {
+      console.error('[closer-availability] events.list falhou, usando freeBusy', err instanceof Error ? err.message : err);
+    }
+  }
+  const reads = await readCalendars(connection, timeMin, timeMax, [calendarId]);
+  return { calendar: reads[calendarId] ?? { known: false, reason: 'sem_resposta' }, titles };
+}
+
+/** Cache curto, em memória, da agenda do closer já interpretada. Nunca guarda token. */
+export const CLOSER_EVENTS_CACHE_TTL_MS = 45_000;
+const CLOSER_EVENTS_CACHE_MAX = 500;
+
+interface CachedCloserRead {
+  expiresAt: number;
+  calendar: CalendarRead;
+  source: AvailabilitySource;
+  ownTitles: CalendarTitlesStatus;
+}
+
+const closerEventsCache = new Map<string, CachedCloserRead>();
+
+export function clearCloserEventsCache(): void {
+  closerEventsCache.clear();
+}
+
+function readCache(key: string): CachedCloserRead | null {
+  const hit = closerEventsCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    closerEventsCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function writeCache(key: string, value: Omit<CachedCloserRead, 'expiresAt'>): void {
+  if (closerEventsCache.size >= CLOSER_EVENTS_CACHE_MAX) {
+    const now = Date.now();
+    for (const [entryKey, entry] of closerEventsCache) {
+      if (entry.expiresAt <= now) closerEventsCache.delete(entryKey);
+    }
+    if (closerEventsCache.size >= CLOSER_EVENTS_CACHE_MAX) {
+      const oldest = closerEventsCache.keys().next().value;
+      if (oldest !== undefined) closerEventsCache.delete(oldest);
+    }
+  }
+  closerEventsCache.set(key, { ...value, expiresAt: Date.now() + CLOSER_EVENTS_CACHE_TTL_MS });
 }
 
 async function loadHolidays(supabase: Db, fromDate: string, toDate: string): Promise<string[]> {
@@ -205,6 +279,8 @@ export async function loadCloserAvailability(args: {
   timeMin: string;
   timeMax: string;
   sdrConnection?: CalendarConnectionTokens | null;
+  /** Ignora o cache de 45s. A reserva no servidor sempre relê a agenda. */
+  fresh?: boolean;
 }): Promise<{ ok: true; data: CloserAvailabilityData } | { ok: false; error: string }> {
   const range = rangeInstants(args.timeMin, args.timeMax);
   if (!range) return { ok: false, error: 'Intervalo de agenda inválido.' };
@@ -247,33 +323,58 @@ export async function loadCloserAvailability(args: {
 
   const timeMinIso = range.start.toISOString();
   const timeMaxIso = range.end.toISOString();
+  const readerId = plan === 'own'
+    ? ownConnection?.id
+    : plan === 'platform'
+      ? closerConnection?.id
+      : plan === 'sdr'
+        ? sdrConnection?.id
+        : 'none';
+  const cacheKey = `${args.orgId}:${closer.id}:${plan}:${readerId ?? ''}:${sdrConnection?.id ?? ''}:${timeMinIso}:${timeMaxIso}`;
+  const cached = args.fresh ? null : readCache(cacheKey);
+
   let source: AvailabilitySource = plan === 'own' || plan === 'platform' ? 'closer_token' : plan === 'sdr' ? 'sdr_token' : 'none';
   let calendar: CalendarRead = { known: false, reason: 'sem_conexao' };
-  if (plan === 'own' && ownConnection) {
-    calendar = await readCloserOwnFreeBusy(ownConnection, timeMinIso, timeMaxIso);
-    if (!calendar.known && sdrConnection && closerEmail) {
-      const fallback = await readCalendars(sdrConnection, timeMinIso, timeMaxIso, [closerEmail]);
-      const second = fallback[closerEmail];
-      if (second?.known) {
-        calendar = second;
-        source = 'sdr_token';
+  let ownTitles: CalendarTitlesStatus = 'not_tried';
+  if (cached) {
+    calendar = cached.calendar;
+    source = cached.source;
+    ownTitles = cached.ownTitles;
+  } else {
+    if (plan === 'own' && ownConnection) {
+      const own = await readCloserOwnAgenda(ownConnection, timeMinIso, timeMaxIso);
+      calendar = own.calendar;
+      ownTitles = own.titles;
+      if (!calendar.known && sdrConnection && closerEmail) {
+        const second = await readCalendarWithTitles(sdrConnection, timeMinIso, timeMaxIso, closerEmail, closerEmail);
+        if (second.calendar.known) {
+          calendar = second.calendar;
+          source = 'sdr_token';
+        }
       }
-    }
-  } else if (source === 'closer_token' && closerConnection) {
-    const reads = await readCalendars(closerConnection, timeMinIso, timeMaxIso, [closerConnection.calendar_email]);
-    calendar = reads[closerConnection.calendar_email] ?? { known: false, reason: 'sem_resposta' };
-    if (!calendar.known && sdrConnection && closerEmail) {
-      const fallback = await readCalendars(sdrConnection, timeMinIso, timeMaxIso, [closerEmail]);
-      const second = fallback[closerEmail];
-      if (second?.known) {
-        calendar = second;
-        source = 'sdr_token';
+    } else if (source === 'closer_token' && closerConnection) {
+      const first = await readCalendarWithTitles(
+        closerConnection,
+        timeMinIso,
+        timeMaxIso,
+        closerConnection.calendar_email,
+        closerEmail || closerConnection.calendar_email,
+      );
+      calendar = first.calendar;
+      if (!calendar.known && sdrConnection && closerEmail) {
+        const second = await readCalendarWithTitles(sdrConnection, timeMinIso, timeMaxIso, closerEmail, closerEmail);
+        if (second.calendar.known) {
+          calendar = second.calendar;
+          source = 'sdr_token';
+        }
       }
+    } else if (source === 'sdr_token' && sdrConnection && closerEmail) {
+      const read = await readCalendarWithTitles(sdrConnection, timeMinIso, timeMaxIso, closerEmail, closerEmail);
+      calendar = read.calendar;
     }
-  } else if (source === 'sdr_token' && sdrConnection && closerEmail) {
-    const reads = await readCalendars(sdrConnection, timeMinIso, timeMaxIso, [closerEmail]);
-    calendar = reads[closerEmail] ?? { known: false, reason: 'sem_resposta' };
+    if (calendar.known) writeCache(cacheKey, { calendar, source, ownTitles });
   }
+  const needsReconnectForTitles = plan === 'own' && ownTitles === 'insufficient_scope';
 
   const fromDate = brtDateKeyFromInstant(range.start);
   const toDate = brtDateKeyFromInstant(new Date(range.end.getTime() - 1));
@@ -315,6 +416,7 @@ export async function loadCloserAvailability(args: {
       appBusy: app.meetings,
       holidays,
       sdrBusy,
+      needsReconnectForTitles,
     },
   };
 }
@@ -391,6 +493,11 @@ export async function reserveCloserSlot(args: {
   /** Remarcação: move a trava deste lead em vez de criar outra por cima dela. */
   retargetExisting?: boolean;
   sdrConnection?: CalendarConnectionTokens | null;
+  /**
+   * O SDR confirmou marcar por cima de um compromisso do Google. Não libera
+   * reunião do Enriquece, trava, feriado nem agenda desconhecida.
+   */
+  allowOverlap?: boolean;
 }): Promise<ReserveResult> {
   const start = meetingInstant(args.startTime);
   const end = meetingInstant(args.endTime);
@@ -406,6 +513,7 @@ export async function reserveCloserSlot(args: {
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     sdrConnection: args.sdrConnection,
+    fresh: true,
   });
   if (!loaded.ok) return { ok: false, error: loaded.error, code: 'CLOSER_UNKNOWN' };
 
@@ -420,7 +528,7 @@ export async function reserveCloserSlot(args: {
     appMeetings,
     holiday: loaded.data.holidays.includes(brtDateKeyFromInstant(start)),
   });
-  const decision = bookingDecision(kind);
+  const decision = bookingDecision(kind, { allowOverlap: args.allowOverlap === true });
   if (!decision.allow) return { ok: false, error: decision.error, code: decision.code };
 
   if (args.retargetExisting) {
