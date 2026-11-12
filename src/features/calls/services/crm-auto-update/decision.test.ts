@@ -19,6 +19,7 @@ function input(over: {
   call?: Partial<CrmDecisionInput['call']>;
   lead?: CrmDecisionInput['lead'];
   transcript_text?: string | null;
+  qualification_summary?: string | null;
 } = {}): CrmDecisionInput {
   return {
     mode: over.mode ?? 'shadow',
@@ -37,12 +38,13 @@ function input(over: {
       ...over.call,
     },
     lead: over.lead === undefined ? { status: 'new' } : over.lead,
-    transcript_text: over.transcript_text ?? 'Olá, pode me ligar amanhã?',
+    transcript_text: over.transcript_text === undefined ? 'Olá, pode me ligar amanhã?' : over.transcript_text,
+    qualification_summary: over.qualification_summary ?? null,
   };
 }
 
 describe('decideCrmAutoUpdate', () => {
-  it('not_connected sem caixa postal: atendeu sem avanço, nova tentativa, lead não muda', () => {
+  it('not_connected sem prompt de caixa postal: voicemail, nunca atendeu sem avanço', () => {
     const d = decideCrmAutoUpdate(
       input({
         qualification: { outcome: 'not_connected', next_step_suggestion: 'not_connected' },
@@ -51,7 +53,58 @@ describe('decideCrmAutoUpdate', () => {
     );
     expect(d.verdict).toBe('would_apply');
     expect(d.proposed).toEqual({
-      disposition: 'answered_no_progress',
+      disposition: 'voicemail',
+      next_activity: { type: 'retry', channel: 'phone' },
+      lead_status: null,
+    });
+  });
+
+  it('regressão 3e597c42: URA "essa pessoa não está disponível" vira voicemail', () => {
+    const transcript =
+      'Se você disser seu nome e o motivo da ligação, poderei ver se esta pessoa está disponível. ' +
+      'Oi, aqui é o Fulano da V4. Essa pessoa não está disponível.';
+    const d = decideCrmAutoUpdate(
+      input({
+        qualification: { outcome: 'not_connected', next_step_suggestion: 'not_connected', confidence: 0.84 },
+        transcript_text: transcript,
+      }),
+    );
+    expect(d.verdict).toBe('would_apply');
+    expect(d.proposed?.disposition).toBe('voicemail');
+    expect(d.proposed?.disposition).not.toBe('answered_no_progress');
+    expect(d.proposed?.next_activity).toEqual({ type: 'retry', channel: 'phone' });
+    expect(d.opt_out.requested).toBe(false);
+
+    // O caso real foi skip só por no_lead; a disposition continua certa.
+    const noLead = decideCrmAutoUpdate(
+      input({
+        qualification: { outcome: 'not_connected', next_step_suggestion: 'not_connected', confidence: 0.84 },
+        call: { lead_id: null },
+        lead: null,
+        transcript_text: transcript,
+      }),
+    );
+    expect(noLead.skip_reason).toBe('no_lead');
+    expect(noLead.proposed?.disposition).toBe('voicemail');
+  });
+
+  it('not_connected com transcrição vazia ou nula: nunca atendeu sem avanço', () => {
+    for (const transcript_text of [null, '', '   ']) {
+      const d = decideCrmAutoUpdate(
+        input({
+          qualification: { outcome: 'not_connected', next_step_suggestion: 'not_connected' },
+          transcript_text,
+        }),
+      );
+      expect(d.proposed?.disposition).toBe('voicemail');
+      expect(d.proposed?.next_activity.type).toBe('retry');
+    }
+  });
+
+  it('desfecho voicemail: voicemail e nova tentativa', () => {
+    const d = decideCrmAutoUpdate(input({ qualification: { outcome: 'voicemail', next_step_suggestion: 'none' } }));
+    expect(d.proposed).toEqual({
+      disposition: 'voicemail',
       next_activity: { type: 'retry', channel: 'phone' },
       lead_status: null,
     });
@@ -150,15 +203,81 @@ describe('decideCrmAutoUpdate', () => {
     expect(d.proposed?.lead_status).toBeNull();
   });
 
-  it('não interessado: atendeu sem avanço, sem próxima atividade, lead só vira contatado', () => {
+  it('não interessado sem opt-out: mapeamento de hoje e pode aplicar com confiança alta', () => {
     const d = decideCrmAutoUpdate(
-      input({ qualification: { outcome: 'not_interested', next_step_suggestion: 'none' } }),
+      input({
+        qualification: { outcome: 'not_interested', next_step_suggestion: 'none', confidence: 0.9 },
+        transcript_text: 'Não tenho interesse, obrigado. Agora não, estamos sem orçamento.',
+      }),
     );
+    expect(d.verdict).toBe('would_apply');
+    expect(d.skip_reason).toBeNull();
+    expect(d.opt_out.requested).toBe(false);
     expect(d.proposed).toEqual({
       disposition: 'answered_no_progress',
       next_activity: { type: 'none', channel: null },
       lead_status: { from: 'new', to: 'contacted' },
     });
+  });
+
+  it('opt-out 2482208d: "tira meu e-mail, elimina meu telefone" vira skip opt_out_requested', () => {
+    const d = decideCrmAutoUpdate(
+      input({
+        qualification: { outcome: 'not_interested', next_step_suggestion: 'none', confidence: 0.91 },
+        transcript_text:
+          'Não, não tenho interesse. Olha, faz um favor, tira meu e-mail, elimina meu telefone, não quero mais isso.',
+      }),
+    );
+    expect(d.verdict).toBe('skip');
+    expect(d.skip_reason).toBe('opt_out_requested');
+    expect(d.opt_out).toEqual({
+      requested: true,
+      channels: ['email', 'phone'],
+      patterns: ['remove_contact'],
+    });
+    // A proposta segue calculada para comparação, mas nunca é aplicada.
+    expect(d.proposed?.disposition).toBe('answered_no_progress');
+  });
+
+  it('opt-out edbbed96: pedido para apagar contato e WhatsApp vira skip opt_out_requested', () => {
+    const d = decideCrmAutoUpdate(
+      input({
+        qualification: { outcome: 'not_interested', next_step_suggestion: 'none', confidence: 0.85 },
+        transcript_text:
+          'Eu já falei que não. Pode apagar o meu contato aí, e me apaga do seu WhatsApp também, tá bom? Obrigado.',
+      }),
+    );
+    expect(d.verdict).toBe('skip');
+    expect(d.skip_reason).toBe('opt_out_requested');
+    expect(d.opt_out.requested).toBe(true);
+    expect(d.opt_out.channels).toEqual(['whatsapp', 'list']);
+  });
+
+  it('opt-out vence needs_review, SDR já registrado e ligação sem lead (para ser contado)', () => {
+    const text = 'Por favor me tira da lista de vocês.';
+    expect(decideCrmAutoUpdate(input({ qualification: { needs_review: true }, transcript_text: text })).skip_reason).toBe(
+      'opt_out_requested',
+    );
+    expect(decideCrmAutoUpdate(input({ call: { sdr_disposition: 'voicemail' }, transcript_text: text })).skip_reason).toBe(
+      'opt_out_requested',
+    );
+    expect(decideCrmAutoUpdate(input({ call: { lead_id: null }, lead: null, transcript_text: text })).skip_reason).toBe(
+      'opt_out_requested',
+    );
+    // org fora do shadow continua org_not_allowed.
+    expect(decideCrmAutoUpdate(input({ mode: 'off', transcript_text: text })).skip_reason).toBe('org_not_allowed');
+  });
+
+  it('opt-out também é lido no resumo da qualificação', () => {
+    const d = decideCrmAutoUpdate(
+      input({
+        qualification: { outcome: 'not_interested', next_step_suggestion: 'none' },
+        transcript_text: 'Não, obrigado.',
+        qualification_summary: 'Lead pediu para remover o telefone da base.',
+      }),
+    );
+    expect(d.skip_reason).toBe('opt_out_requested');
+    expect(d.opt_out.channels).toContain('phone');
   });
 });
 
@@ -176,9 +295,14 @@ describe('proposeLeadStatus', () => {
 
 describe('mapOutcomeToDisposition', () => {
   it('cobre os desfechos do JEV', () => {
-    expect(mapOutcomeToDisposition('interested_no_next_step', null)).toBe('relevant_conversation');
-    expect(mapOutcomeToDisposition('other', null)).toBeNull();
-    expect(mapOutcomeToDisposition(null, null)).toBeNull();
+    expect(mapOutcomeToDisposition('interested_no_next_step')).toBe('relevant_conversation');
+    expect(mapOutcomeToDisposition('other')).toBeNull();
+    expect(mapOutcomeToDisposition(null)).toBeNull();
+  });
+
+  it('not_connected e voicemail nunca viram answered_no_progress', () => {
+    expect(mapOutcomeToDisposition('not_connected')).toBe('voicemail');
+    expect(mapOutcomeToDisposition('voicemail')).toBe('voicemail');
   });
 });
 
@@ -228,5 +352,41 @@ describe('migration crm_auto_update_shadow', () => {
     expect(sql).toContain('ALTER TABLE public.crm_auto_update_shadow_log ENABLE ROW LEVEL SECURITY');
     expect(sql).toContain('public.user_org_id()');
     expect(sql).not.toMatch(/GRANT[^;]*(UPDATE|DELETE)[^;]*crm_auto_update_shadow_log/);
+  });
+});
+
+describe('migration crm_auto_update_shadow_opt_out (v1.1)', () => {
+  const sql = readFileSync(
+    join(process.cwd(), 'supabase/migrations/20261112120000_crm_auto_update_shadow_opt_out.sql'),
+    'utf8',
+  );
+
+  it('amplia o CHECK de skip_reason com opt_out_requested mantendo os motivos antigos', () => {
+    expect(sql).toContain("'opt_out_requested'");
+    for (const reason of [
+      'org_not_allowed',
+      'qualification_not_completed',
+      'needs_review',
+      'low_confidence',
+      'unmapped_outcome',
+      'already_dispositioned',
+      'no_lead',
+    ]) {
+      expect(sql).toContain(`'${reason}'`);
+    }
+    expect(sql).toContain("conname <> 'crm_auto_update_shadow_log_verdict_reason'");
+  });
+
+  it('acrescenta skipped_opt_out_requested no fim da view diária', () => {
+    expect(sql).toMatch(/AS next_activity_agreement_rate,[\s\S]*AS skipped_opt_out_requested\s+FROM public\.crm_auto_update_shadow_comparison/);
+    expect(sql).not.toMatch(/CREATE OR REPLACE VIEW public\.crm_auto_update_shadow_comparison/);
+  });
+
+  it('é aditiva e não mexe em dados nem em outras tabelas', () => {
+    expect(sql).not.toMatch(/\bUPDATE\s+public\./i);
+    expect(sql).not.toMatch(/\bDELETE\s+FROM\b/i);
+    expect(sql).not.toMatch(/\bDROP\s+(TABLE|COLUMN|VIEW|TRIGGER)\b/i);
+    expect(sql).not.toMatch(/\bALTER\s+TABLE\s+public\.(calls|leads|scheduled_activities|interactions|call_qualifications|call_transcripts_v2|app_flags)\b/i);
+    expect(sql).not.toMatch(/app_flags/);
   });
 });

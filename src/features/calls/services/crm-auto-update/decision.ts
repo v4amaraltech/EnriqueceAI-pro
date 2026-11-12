@@ -6,12 +6,14 @@
 //  - needs_review = true nunca aplica (vai para revisão humana);
 //  - o que o SDR já registrou nunca é sobrescrito (sdr_disposition preenchido);
 //  - status do lead só anda para frente (new → contacted → qualified);
-//  - a proposta é calculada mesmo quando o veredito é skip, para comparar com o SDR.
-import { hasMailboxPrompt } from '../transcription-engine/review';
+//  - a proposta é calculada mesmo quando o veredito é skip, para comparar com o SDR;
+//  - not_connected/voicemail nunca vira "atendeu sem avanço" (v1.1);
+//  - pedido de opt-out na ligação vira skip opt_out_requested: só sinaliza, nunca aplica (v1.1).
 import type { CallDisposition } from '../../types';
 import { evaluateFlagRow, type FlagRow } from '@/features/contact-engine/services/flag-scope.service';
 
 import { CRM_AUTO_UPDATE_MIN_CONFIDENCE } from './constants';
+import { type OptOutSignal, detectOptOutRequest } from './opt-out';
 
 export type CrmAutoUpdateMode = 'off' | 'shadow' | 'live';
 
@@ -22,7 +24,8 @@ export type CrmAutoUpdateSkipReason =
   | 'low_confidence'
   | 'unmapped_outcome'
   | 'already_dispositioned'
-  | 'no_lead';
+  | 'no_lead'
+  | 'opt_out_requested';
 
 export type NextActivityType = 'meeting' | 'callback' | 'retry' | 'cadence_advance' | 'none';
 
@@ -53,13 +56,24 @@ export interface CrmDecisionInput {
     legacy_ai_outcome_applied: boolean;
   };
   lead: { status: LeadStatus } | null;
-  /** Texto da transcrição (call_transcripts_v2.text), para separar caixa postal. */
+  /** Texto da transcrição (call_transcripts_v2.text), para detectar opt-out. */
   transcript_text: string | null;
+  /** Resumo da qualificação (call_qualifications.summary), também lido pelo detector de opt-out. */
+  qualification_summary?: string | null;
 }
 
+/**
+ * `opt_out` vem sempre preenchido (requested = false quando não há pedido).
+ * É só um sinal: a decisão nunca apaga nem reescreve contato, lead, e-mail ou telefone.
+ */
 export type CrmDecision =
-  | { verdict: 'would_apply'; proposed: ProposedChanges; skip_reason: null }
-  | { verdict: 'skip'; proposed: ProposedChanges | null; skip_reason: CrmAutoUpdateSkipReason };
+  | { verdict: 'would_apply'; proposed: ProposedChanges; skip_reason: null; opt_out: OptOutSignal }
+  | {
+      verdict: 'skip';
+      proposed: ProposedChanges | null;
+      skip_reason: CrmAutoUpdateSkipReason;
+      opt_out: OptOutSignal;
+    };
 
 /**
  * Modo da org a partir das duas linhas de app_flags.
@@ -81,10 +95,7 @@ export function resolveCrmAutoUpdateMode(
 const CONVERSATION_OUTCOMES = new Set(['meeting_booked', 'callback', 'not_interested', 'interested_no_next_step']);
 
 /** Desfecho JEV → disposition do CRM. null = sem mapeamento seguro. */
-export function mapOutcomeToDisposition(
-  outcome: string | null,
-  transcriptText: string | null,
-): CallDisposition | null {
+export function mapOutcomeToDisposition(outcome: string | null): CallDisposition | null {
   switch (outcome) {
     case 'meeting_booked':
     case 'interested_no_next_step':
@@ -94,9 +105,12 @@ export function mapOutcomeToDisposition(
     case 'not_interested':
       return 'answered_no_progress';
     case 'not_connected':
-      // A linha atendeu (o motor só roda em ligação atendida): caixa postal ou
-      // URA/secretária sem conversa real com o decisor.
-      return transcriptText && hasMailboxPrompt(transcriptText) ? 'voicemail' : 'answered_no_progress';
+    case 'voicemail':
+      // A linha atendeu (o motor só roda em ligação atendida), mas sem conversa com
+      // humano: caixa postal, URA ou "essa pessoa não está disponível". Nunca
+      // "atendeu sem avanço", com ou sem prompt de caixa postal reconhecido no texto
+      // (caso real 3e597c42: URA que o regex de caixa postal não pegava).
+      return 'voicemail';
     default:
       return null;
   }
@@ -109,6 +123,7 @@ export function mapOutcomeToNextActivity(outcome: string | null): ProposedChange
     case 'callback':
       return { type: 'callback', channel: 'phone' };
     case 'not_connected':
+    case 'voicemail':
       return { type: 'retry', channel: 'phone' };
     case 'interested_no_next_step':
       return { type: 'cadence_advance', channel: null };
@@ -134,7 +149,7 @@ export function proposeLeadStatus(
 
 export function buildProposedChanges(input: CrmDecisionInput): ProposedChanges | null {
   const { outcome } = input.qualification;
-  const disposition = mapOutcomeToDisposition(outcome, input.transcript_text);
+  const disposition = mapOutcomeToDisposition(outcome);
   if (!disposition) return null;
   return {
     disposition,
@@ -146,14 +161,19 @@ export function buildProposedChanges(input: CrmDecisionInput): ProposedChanges |
 export function decideCrmAutoUpdate(input: CrmDecisionInput): CrmDecision {
   const q = input.qualification;
   const proposed = q.status === 'completed' ? buildProposedChanges(input) : null;
+  const opt_out = detectOptOutRequest(input.transcript_text, input.qualification_summary);
   const skip = (skip_reason: CrmAutoUpdateSkipReason): CrmDecision => ({
     verdict: 'skip',
     proposed,
     skip_reason,
+    opt_out,
   });
 
   if (input.mode === 'off') return skip('org_not_allowed');
   if (q.status !== 'completed') return skip('qualification_not_completed');
+  // Antes de needs_review/confiança: todo pedido de opt-out é contado na medição e
+  // nunca vira would_apply ("atendeu, sem avanço, sem próxima atividade").
+  if (opt_out.requested) return skip('opt_out_requested');
   if (q.needs_review) return skip('needs_review');
   if (typeof q.confidence !== 'number' || q.confidence < CRM_AUTO_UPDATE_MIN_CONFIDENCE) {
     return skip('low_confidence');
@@ -163,5 +183,5 @@ export function decideCrmAutoUpdate(input: CrmDecisionInput): CrmDecision {
     return skip('already_dispositioned');
   }
   if (!input.call.lead_id) return skip('no_lead');
-  return { verdict: 'would_apply', proposed, skip_reason: null };
+  return { verdict: 'would_apply', proposed, skip_reason: null, opt_out };
 }

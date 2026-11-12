@@ -23,4 +23,4 @@ export const CRM_AUTO_UPDATE_QUALIFICATION_PROVIDER = 'jev';
 export const CRM_AUTO_UPDATE_MIN_CONFIDENCE = 0.75;
 
 /** Versão da regra de decisão gravada no log, para comparar regras diferentes no tempo. */
-export const CRM_AUTO_UPDATE_RULES_VERSION = 'v1';
+export const CRM_AUTO_UPDATE_RULES_VERSION = 'v1.1';
