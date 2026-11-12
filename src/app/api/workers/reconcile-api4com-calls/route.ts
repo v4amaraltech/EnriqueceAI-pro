@@ -13,9 +13,10 @@ import {
   toApi4ComFilterTimestamp,
 } from '@/features/integrations/services/api4com-time';
 import {
-  destinationSuffix,
   groupCallsForReconcile,
-  pickFallbackCandidate,
+  reconcileInsertMetadata,
+  reconcileLinkMetadata,
+  resolveReconcileMatch,
 } from '@/features/integrations/services/api4com-reconcile-matching';
 import { getOrgApiCredentials } from '@/features/integrations/services/api4com.service';
 import { getApi4ComCallsLimiter } from '@/features/integrations/services/api4com-rate-limit';
@@ -403,74 +404,36 @@ export async function POST(request: Request) {
         type CallLookupRow = { id: string; status: string; connected: boolean; duration_seconds: number; recording_url: string | null; started_at: string | null; hangup_cause: string | null; metadata: Record<string, unknown> | null };
         const SELECT_COLS = 'id, status, connected, duration_seconds, recording_url, started_at, hangup_cause, metadata';
 
-        // 1a) Primary id match
-        let { data: existing } = (await from(supabase, 'calls')
-          .select(SELECT_COLS)
-          .eq('org_id', orgId)
-          .filter('metadata->>api4com_call_id', 'eq', api4comId)
-          .limit(1)
-          .maybeSingle()) as { data: CallLookupRow | null };
+        const one = async (query: PromiseLike<unknown>) => ((await query) as { data: CallLookupRow | null }).data;
+        const byOrg = () => from(supabase, 'calls').select(SELECT_COLS).eq('org_id', orgId);
 
-        // Secondary lookups (alt-id, time fallback) must respect
-        // hangup_cause: a voicemail (NUMBER_CHANGED) and a connected call
-        // (NORMAL_CLEARING) to the same destination minutes apart are
-        // DIFFERENT events, even though Phase 2 introduced these heuristics
-        // to merge double-UUID dupes of the SAME call. Loopback filter
-        // (commit 6784c70) now enumerates voicemails exhaustively — without
-        // this gate the reconciler silently absorbed them into nearby
-        // NORMAL_CLEARING rows and the dashboard counted 155 fewer
-        // NUMBER_CHANGED than reality for V4 Amaral mai/2026.
-        const hangupCompatible = (existingHc: string | null): boolean => {
-          // Allow if either side is null (dialer row pending webhook, or
-          // legacy row without hangup) OR if both match.
-          if (existingHc === null || c.hangup_cause === null || c.hangup_cause === undefined) return true;
-          return existingHc === c.hangup_cause;
-        };
-
-        // 1b) Secondary id match — API4COM emits 2 different ids for the
-        // same call (channel_id vs request_id from /dialer). When the
-        // primary already holds id A and we receive id B, the row's
-        // metadata.alt_api4com_ids array remembers B so future events
-        // arriving with either id land on the same row. Only honour the
-        // match when hangup_cause is compatible.
-        if (!existing) {
-          const { data: altMatch } = (await from(supabase, 'calls')
-            .select(SELECT_COLS)
-            .eq('org_id', orgId)
-            .contains('metadata', { alt_api4com_ids: [api4comId] })
-            .limit(1)
-            .maybeSingle()) as { data: CallLookupRow | null };
-          if (altMatch && hangupCompatible(altMatch.hangup_cause)) {
-            existing = altMatch;
-          }
-        }
-
-        // 2) Fallback: origin (ramal) + destination suffix + started_at ±10min.
-        // Bumped from 5min after Phase 1 dedupe found 60 historical dupes whose
-        // started_at on the dialer-inserted row drifted past the 5min window
-        // (the /dialer initiated row's started_at is the request time, while
-        // REST's started_at is the channel-actually-rang time — can differ by
-        // 6-9min on long-rang scenarios). Hangup_cause gate prevents
-        // collapsing distinct voicemail vs connected-call events into one.
-        // Redials of the same number fall in the same window, so link to the
-        // CLOSEST row not linked to another API4COM call yet — see
-        // api4com-reconcile-matching.ts for the 2026-09-10 incident.
-        if (!existing && c.from && c.to && c.started_at) {
-          const suffix = destinationSuffix(c.to);
-          const startedMs = Date.parse(c.started_at);
-          const lo = new Date(startedMs - 10 * 60 * 1000).toISOString();
-          const hi = new Date(startedMs + 10 * 60 * 1000).toISOString();
-          const { data: candidates } = (await from(supabase, 'calls')
-            .select(SELECT_COLS)
-            .eq('org_id', orgId)
-            .eq('origin', c.from)
-            .like('destination', `%${suffix}`)
-            .gte('started_at', lo)
-            .lte('started_at', hi)
-            .order('started_at', { ascending: true })
-            .limit(FALLBACK_CANDIDATE_LIMIT)) as { data: CallLookupRow[] | null };
-          existing = pickFallbackCandidate(candidates ?? [], startedMs, c.hangup_cause);
-        }
+        // Ordem (ver resolveReconcileMatch em api4com-reconcile-matching.ts):
+        // 0) callRef do registro REST (o calls.id enviado no POST /calls),
+        //    sem gate de hangup_cause; 1a) api4com_call_id; 1b) alt_api4com_ids
+        //    com gate de hangup_cause; 2) ramal + destino + started_at ±10 min,
+        //    pegando a linha mais próxima ainda não casada. O gate de hangup_cause
+        //    evita juntar uma caixa postal (NUMBER_CHANGED) e uma ligação atendida
+        //    (NORMAL_CLEARING) ao mesmo número: sem ele o dashboard de V4 Amaral
+        //    contou 155 NUMBER_CHANGED a menos em mai/2026. O fallback ±10 min
+        //    (antes 5 min) cobre a deriva entre o started_at da linha do discador e
+        //    o do REST; ver o incidente de 2026-09-10 no módulo de matching.
+        const match = await resolveReconcileMatch<CallLookupRow>(c, {
+          byId: (id) => one(byOrg().eq('id', id).maybeSingle()),
+          byCallRefMetadata: (callRef) => one(byOrg().filter('metadata->>callRef', 'eq', callRef).limit(1).maybeSingle()),
+          byPrimaryId: (id) => one(byOrg().filter('metadata->>api4com_call_id', 'eq', id).limit(1).maybeSingle()),
+          byAltId: (id) => one(byOrg().contains('metadata', { alt_api4com_ids: [id] }).limit(1).maybeSingle()),
+          fallbackCandidates: async ({ origin, suffix, loIso, hiIso }) => {
+            const { data } = (await byOrg()
+              .eq('origin', origin)
+              .like('destination', `%${suffix}`)
+              .gte('started_at', loIso)
+              .lte('started_at', hiIso)
+              .order('started_at', { ascending: true })
+              .limit(FALLBACK_CANDIDATE_LIMIT)) as { data: CallLookupRow[] | null };
+            return data ?? [];
+          },
+        });
+        const existing = match?.row ?? null;
 
         const duration = Number(c.duration) || 0;
         const isOutbound = c.call_type !== 'inbound';
@@ -513,21 +476,12 @@ export async function POST(request: Request) {
             updates.connected = true;
           }
 
-          // When matched via fallback the row may already carry a different
-          // api4com_call_id (dialer's request_id vs REST's channel_id).
-          // Keep the existing primary stable and append the new id to
-          // alt_api4com_ids[] so future events on either id land here.
-          const existingMeta = (existing.metadata ?? {}) as Record<string, unknown>;
-          if (existingMeta.api4com_call_id !== api4comId) {
-            const altIds = Array.isArray(existingMeta.alt_api4com_ids) ? existingMeta.alt_api4com_ids as string[] : [];
-            if (!altIds.includes(api4comId)) {
-              updates.metadata = {
-                ...existingMeta,
-                alt_api4com_ids: [...altIds, api4comId],
-                webhook_linked: true,
-              };
-            }
-          }
+          // Pelo callRef: merge que grava o id do provedor (ou alt) e preserva
+          // callRef, gateway e webhook_linked. Pelo fallback a linha pode ter
+          // outro api4com_call_id (request_id do discador vs channel_id do REST):
+          // o primário fica e o novo id vai para alt_api4com_ids[].
+          const linkedMeta = reconcileLinkMetadata(existing.metadata, api4comId, match!.via);
+          if (linkedMeta) updates.metadata = linkedMeta;
 
           if (Object.keys(updates).length > 1) {
             await from(supabase, 'calls').update(updates).eq('id', existing.id);
@@ -548,15 +502,8 @@ export async function POST(request: Request) {
             hangup_cause: c.hangup_cause ?? null,
             type: isOutbound ? 'outbound' : 'inbound',
             recording_url: c.record_url ?? null,
-            metadata: {
-              api4com_call_id: api4comId,
-              source: 'reconcile_api4com',
-              hangup_cause: c.hangup_cause ?? null,
-              // Captured so future gap-analysis can filter API4COM call_type
-              // (internal/transfer/etc.) post-hoc — see briefing
-              // docs/briefings/2026-05-17-gap-enriquece-api4com.md.
-              call_type: c.call_type ?? null,
-            },
+            // Copia o callRef do registro REST quando existe.
+            metadata: reconcileInsertMetadata(c, api4comId),
           } as Record<string, unknown>);
           return { kind: 'inserted_new' };
         }

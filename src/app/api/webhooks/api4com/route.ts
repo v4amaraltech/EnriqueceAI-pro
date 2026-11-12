@@ -15,6 +15,8 @@ import {
 import type { Api4ComWebhookPayload } from '@/features/integrations/types/api4com';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 import { maskCalledForLog } from '@/features/integrations/services/api4com-log-mask';
+import { readCallRef } from '@/features/integrations/services/api4com-call-ref';
+import { findWebhookCall } from '@/features/integrations/services/api4com-webhook-matching';
 import type { CallStatus } from '@/features/calls/types';
 import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
 import { triggerTranscriptionEngine } from '@/features/calls/services/transcription-engine/trigger';
@@ -61,98 +63,55 @@ async function loadScopeConnections(
   return data ?? [];
 }
 
-/** Find a matching call record by api4com_call_id, alt_api4com_ids[], or
- *  caller+phone fallback. When matched via fallback or alt match, persists
- *  the new id in alt_api4com_ids[] so future lookups by either id hit.
- *  O fallback por ramal fica restrito a `orgScope` (orgs do `domain` do
- *  evento) — ramal se repete entre contas API4COM. Ver `api4com-org-scope.ts`. */
+const MATCH_COLS = 'id, org_id, status, recording_url, metadata';
+
+/** Casa o evento com a linha local: callRef (o `calls.id` que enviamos no
+ *  POST /calls), depois api4com_call_id, alt_api4com_ids e, por último, o
+ *  fallback ramal + telefone + 2 h restrito a `orgScope` (orgs do `domain` do
+ *  evento; ramal se repete entre contas API4COM, ver `api4com-org-scope.ts`).
+ *  A ordem e o merge do metadata ficam em `api4com-webhook-matching.ts`. */
 async function findMatchingCall(
   supabase: ReturnType<typeof createServiceRoleClient>,
   body: Api4ComWebhookPayload,
   orgScope: string[],
 ): Promise<MatchedCall | null> {
-  // 1a) Primary id match
-  const { data: call } = (await from(supabase, 'calls')
-    .select('id, org_id, status, recording_url, metadata')
-    .eq('metadata->>api4com_call_id', body.id)
-    .maybeSingle()) as { data: MatchedCall | null };
-
-  if (call) return call;
-
-  // 1b) Secondary id match — API4COM emits 2 different ids for the same
-  // call (channel_id vs request_id from /dialer). When the primary holds
-  // id A and this event carries id B, the row's metadata.alt_api4com_ids
-  // remembers B so future events on either id hit the same row.
-  const { data: altMatchCall } = (await from(supabase, 'calls')
-    .select('id, org_id, status, recording_url, metadata')
-    .contains('metadata', { alt_api4com_ids: [body.id] })
-    .maybeSingle()) as { data: MatchedCall | null };
-
-  if (altMatchCall) return altMatchCall;
-
-  // Domínio desconhecido com todas as orgs já mapeadas → não casar por ramal.
-  if (orgScope.length === 0) {
-    logger.warn('Fallback skipped: no org for event domain', { api4comId: body.id, domain: body.domain });
-    return null;
-  }
-
-  // 2) Fallback: caller (ramal) + called (phone) within last 2 hours.
-  //
-  // Important: only candidates that have NOT already been linked to a
-  // previous webhook event. Without this filter, every retry to the
-  // same number within 2h collapses onto the first row in the DB —
-  // the channel_id gets overwritten on each event and subsequent
-  // dialer-created rows for that number stay forever unmatched
-  // (we lost 12 calls on 2026-05-14 V4 Amaral this way).
-  //
-  // Order ASC so the oldest unlinked dialer row wins (first-come,
-  // first-served). The webhook_linked marker is set inside the same
-  // update below so concurrent webhooks fight over different rows.
-  const calledNormalized = body.called.replace(/\D/g, '');
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data: fallbackCall } = (await from(supabase, 'calls')
-    .select('id, org_id, status, recording_url, metadata')
-    .in('org_id', orgScope)
-    .eq('origin', body.caller)
-    .like('destination', `%${calledNormalized.slice(-8)}`)
-    .gte('created_at', twoHoursAgo)
-    .is('metadata->>webhook_linked', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()) as { data: MatchedCall | null };
-
-  // Persist via alt_api4com_ids (don't overwrite primary id). Keeps the
-  // primary stable so the dashboard CSV's id (when that's what landed
-  // first) remains the authoritative one.
-  if (fallbackCall) {
-    const existingMeta = (fallbackCall.metadata ?? {}) as Record<string, unknown>;
-    const primaryId = existingMeta.api4com_call_id;
-    if (primaryId !== body.id) {
-      const altIds = Array.isArray(existingMeta.alt_api4com_ids) ? existingMeta.alt_api4com_ids as string[] : [];
-      if (!altIds.includes(body.id)) {
-        await from(supabase, 'calls')
-          .update({
-            metadata: {
-              ...existingMeta,
-              alt_api4com_ids: [...altIds, body.id],
-              webhook_linked: true,
-            },
-          })
-          .eq('id', fallbackCall.id);
-        logger.info('Saved alt api4com_call_id via fallback match', { callId: fallbackCall.id, api4comId: body.id });
-      }
-    } else {
-      // Same primary id (rare with this path — only happens if metadata
-      // was wiped). Just flip webhook_linked.
-      await from(supabase, 'calls')
-        .update({
-          metadata: { ...existingMeta, webhook_linked: true },
-        })
-        .eq('id', fallbackCall.id);
-    }
-  }
-
-  return fallbackCall;
+  const one = async (query: PromiseLike<unknown>) => ((await query) as { data: MatchedCall | null }).data;
+  const match = await findWebhookCall<MatchedCall>(
+    {
+      findById: (id) => one(from(supabase, 'calls').select(MATCH_COLS).eq('id', id).maybeSingle()),
+      findByCallRefMetadata: (callRef) =>
+        one(from(supabase, 'calls').select(MATCH_COLS).eq('metadata->>callRef', callRef).limit(1).maybeSingle()),
+      findByPrimaryId: (api4comId) =>
+        one(from(supabase, 'calls').select(MATCH_COLS).eq('metadata->>api4com_call_id', api4comId).maybeSingle()),
+      findByAltId: (api4comId) =>
+        one(
+          from(supabase, 'calls')
+            .select(MATCH_COLS)
+            .contains('metadata', { alt_api4com_ids: [api4comId] })
+            .maybeSingle(),
+        ),
+      findFallback: ({ orgScope: scope, caller, calledSuffix, sinceIso }) =>
+        one(
+          from(supabase, 'calls')
+            .select(MATCH_COLS)
+            .in('org_id', scope)
+            .eq('origin', caller)
+            .like('destination', `%${calledSuffix}`)
+            .gte('created_at', sinceIso)
+            .is('metadata->>webhook_linked', null)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle(),
+        ),
+      updateMetadata: async (id, metadata) => {
+        await from(supabase, 'calls').update({ metadata }).eq('id', id);
+      },
+    },
+    body,
+    orgScope,
+    { logger },
+  );
+  return match?.call ?? null;
 }
 
 /** Auto-create a call record from webhook when no local match exists (e.g. calls from softphone/Kommo) */
@@ -200,6 +159,7 @@ async function createCallFromWebhook(
     significantThresholdSeconds: threshold,
   });
   const answeredAtIso = parseApi4ComTimestamp(body.answeredAt)?.toISOString() ?? null;
+  const callRef = readCallRef(body.metadata);
 
   const { data: newCall } = (await from(supabase, 'calls')
     .insert({
@@ -217,7 +177,14 @@ async function createCallFromWebhook(
       hangup_cause: body.hangupCause ?? null,
       type: isOutbound ? 'outbound' : 'inbound',
       recording_url: body.recordUrl || null,
-      metadata: { api4com_call_id: body.id, source: 'external_api4com', webhook_linked: true },
+      metadata: {
+        api4com_call_id: body.id,
+        source: 'external_api4com',
+        webhook_linked: true,
+        // callRef usável que não achou linha (insert nosso falhou, 424 apagou ou
+        // outro sistema): guarda para o reconcile e a busca de gravação.
+        ...(callRef ? { callRef } : {}),
+      },
     })
     .select('id')
     .single()) as { data: { id: string } | null };

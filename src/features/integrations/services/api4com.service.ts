@@ -297,9 +297,10 @@ export async function originateCall(
   userId: string,
   phone: string,
   metadata?: Record<string, string>,
-  options: { ramalRetryDelayMs?: number } = {},
+  options: { ramalRetryDelayMs?: number; credentials?: Api4ComCredentials } = {},
 ): Promise<{ data: Api4ComOriginateResponse; ramal: string }> {
-  const creds = await getUserCredentials(userId);
+  // `credentials`: o chamador já buscou (precisa do ramal antes do POST); evita outro fetch.
+  const creds = options.credentials ?? (await getUserCredentials(userId));
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
   const post = () =>
