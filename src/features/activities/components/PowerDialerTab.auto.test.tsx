@@ -527,7 +527,7 @@ describe('PowerDialerTab — discagem automática', () => {
     });
     await advance(10_000);
     expect(actions.initiateCall).not.toHaveBeenCalled();
-    expect(screen.getByText(/não está pronto nesta aba/)).toBeInTheDocument();
+    expect(screen.getByText(/perdeu a conexão com o ramal/)).toBeInTheDocument();
   });
 
   it('duplo clique com o pedido em voo faz um único POST', async () => {

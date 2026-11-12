@@ -49,7 +49,16 @@ import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-pan
 import { LiveAmdHint } from './LiveAmdHint';
 import { startLiveAmdBrowser } from './live-amd-browser';
 import type { LiveAmdView } from './live-amd-session';
-import { answerCall, getRemoteAudioTrack, hangupCall as hangupWebphoneLeg, subscribeRemoteAudioTrack, toggleMute } from './webphone-client';
+import {
+  answerCall,
+  getRemoteAudioTrack,
+  hangupCall as hangupWebphoneLeg,
+  reconnectWebphone,
+  requestWebphoneMicrophone,
+  subscribeRemoteAudioTrack,
+  takeOverWebphone,
+  toggleMute,
+} from './webphone-client';
 import {
   clampPanelPosition,
   loadPanelPosition,
@@ -57,7 +66,15 @@ import {
   savePanelPosition,
   type PanelPosition,
 } from './webphone-panel-position';
-import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webphone-state';
+import {
+  callTalkSeconds,
+  micBlockMessage,
+  SESSION_CONFLICT_MESSAGES,
+  webphoneIdleNeedsAction,
+  webphoneIdleProblem,
+  type WebphoneCall,
+  type WebphoneState,
+} from './webphone-state';
 
 /**
  * Painel flutuante do webphone (story api4com-embedded-webphone, bloco 3).
@@ -65,7 +82,9 @@ import { callTalkSeconds, type WebphoneCall, type WebphoneState } from './webpho
  * Vive no layout `(app)` e por isso continua na tela quando o SDR troca de
  * página no meio da ligação. Arrastável pelo cabeçalho (`@dnd-kit/core`), com a
  * posição lembrada em `localStorage`; sem ligação some da tela — só fica um
- * pill pequeno se o registro SIP deu erro ou o microfone está bloqueado.
+ * pill pequeno se algo impede ligar: erro no registro SIP, microfone ainda não
+ * ativado (o pedido só roda no clique do botão do pill), bloqueado ou
+ * indisponível, ou o ramal em uso em outra aba / outra instância.
  *
  * Quem iniciou a ligação (fila de atividades, Power Dialer) continua dono do
  * resultado: ao "Concluir" aqui, o painel só pede a esse discador para abrir o
@@ -376,10 +395,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   const orphanDraft = !liveCall && !showingDialing && stage.kind === 'idle' && Boolean(ctxState.notes.trim());
   const hasRecoverableNotes = ctxState.heldNotes.length > 0 || Boolean(ctxState.persistWarning) || Boolean(ctxState.saveNotice) || orphanDraft;
   const idle = !liveCall && !showingDialing && stage.kind === 'idle' && !hasRecoverableNotes;
-  const idleProblem = webphone.registration === 'error' || webphone.mic === 'denied';
+  const idleProblem = webphoneIdleProblem(webphone);
+  // Pill com botão (microfone ou ramal em outra aba) precisa de espaço para o texto.
+  const idleNeedsAction = webphoneIdleNeedsAction(webphone);
 
   const shell = (
-    <DraggableShell compact={idle}>
+    <DraggableShell compact={idle && !idleNeedsAction}>
       <LiveAmdHint view={liveAmd} />
       {liveCall ? (
         <LiveCallView
@@ -570,13 +591,50 @@ function DraggableBox({
 
 function IdlePill({ state }: { state: WebphoneState }) {
   const reg = REGISTRATION_LABEL[state.registration];
+  const [micPending, setMicPending] = useState(false);
+  const [sessionPending, setSessionPending] = useState(false);
+  const micMessage = state.mic === 'unknown' ? null : micBlockMessage(state.mic);
+  const showMic = state.mic !== 'granted' && webphoneIdleNeedsAction(state);
+
+  function activateMic() {
+    setMicPending(true);
+    void requestWebphoneMicrophone().finally(() => setMicPending(false));
+  }
+
+  function resolveConflict() {
+    setSessionPending(true);
+    const run = state.sessionConflict === 'lost_to_other' ? reconnectWebphone : takeOverWebphone;
+    void run()
+      .catch((err: unknown) => console.error('[webphone] reclaim failed:', err))
+      .finally(() => setSessionPending(false));
+  }
+
   return (
-    <span className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]" role="status" aria-live="polite">
-      <span className={cn('inline-block h-2.5 w-2.5 rounded-full', reg.dot)} aria-hidden />
-      {reg.text}
-      {state.mic === 'denied' && ' · microfone bloqueado'}
-      {state.error && state.registration === 'error' && ` · ${state.error}`}
-    </span>
+    <div className="space-y-2 text-xs text-[var(--muted-foreground)]">
+      <span className="flex items-center gap-2" role="status" aria-live="polite">
+        <span className={cn('inline-block h-2.5 w-2.5 rounded-full', reg.dot)} aria-hidden />
+        {state.sessionConflict === 'other_tab' ? 'Ramal em uso em outra aba' : reg.text}
+        {state.mic === 'unknown' && showMic && ' · microfone não ativado'}
+        {state.error && state.registration === 'error' && ` · ${state.error}`}
+      </span>
+      {state.sessionConflict && (
+        <div className="space-y-1.5">
+          <p className="text-[var(--foreground)]">{SESSION_CONFLICT_MESSAGES[state.sessionConflict]}</p>
+          <Button type="button" size="sm" variant="outline" onClick={resolveConflict} disabled={sessionPending}>
+            {state.sessionConflict === 'other_tab' ? 'Usar nesta aba' : 'Reconectar'}
+          </Button>
+        </div>
+      )}
+      {showMic && (
+        <div className="space-y-1.5">
+          {micMessage && <p className="text-[var(--foreground)]">{micMessage}</p>}
+          <Button type="button" size="sm" onClick={activateMic} disabled={micPending}>
+            <Mic className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {state.mic === 'unknown' ? 'Ativar microfone' : 'Tentar de novo'}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -4,10 +4,22 @@
 // `WebphoneEvent` e este reducer mantém um único estado observável pela UI.
 
 import type { WebphoneAudioStats } from './webphone-audio-stats';
+import { MIC_MESSAGES, type MicPermission } from './webphone-mic';
+
+export type { MicPermission } from './webphone-mic';
 
 export type WebphoneRegistration = 'disabled' | 'connecting' | 'registered' | 'disconnected' | 'error';
 export type WebphoneCallPhase = 'ringing' | 'in-call' | 'ended';
-export type MicPermission = 'unknown' | 'granted' | 'denied';
+/**
+ * Disputa do ramal com outra instância (a API4COM é singleton por ramal).
+ * - `other_tab`: outra aba deste navegador segura o ramal; esta não registrou.
+ * - `lost_to_other`: estava registrado e o registro caiu sem ter sido pedido
+ *   aqui (outro navegador ou a extensão da API4COM pode ter assumido).
+ *
+ * NÃO é representado por `registration: 'disabled'`: `disabled` libera a
+ * discagem pelo fluxo da extensão e o `POST /calls` desta aba tomaria 424.
+ */
+export type WebphoneSessionConflict = 'other_tab' | 'lost_to_other';
 
 export interface WebphoneCall {
   id: string;
@@ -31,6 +43,7 @@ export interface WebphoneState {
   registration: WebphoneRegistration;
   error: string | null;
   mic: MicPermission;
+  sessionConflict: WebphoneSessionConflict | null;
   call: WebphoneCall | null;
 }
 
@@ -41,7 +54,8 @@ export type WebphoneEvent =
   | { type: 'unregistered' }
   | { type: 'disconnected'; error?: string }
   | { type: 'registration_failed'; cause: string }
-  | { type: 'mic'; granted: boolean }
+  | { type: 'mic'; permission: MicPermission }
+  | { type: 'session_conflict'; conflict: WebphoneSessionConflict | null }
   | { type: 'call_new'; id: string; remoteNumber: string; direction: 'incoming' | 'outgoing'; integrated: boolean; at: number; dialToken?: string | null }
   | { type: 'call_accepted'; id: string; at: number }
   | { type: 'call_ended'; id: string; at: number; cause: string | null }
@@ -53,8 +67,13 @@ export const initialWebphoneState: WebphoneState = {
   registration: 'disabled',
   error: null,
   mic: 'unknown',
+  sessionConflict: null,
   call: null,
 };
+
+// Causas do JsSIP que são de rede (WebSocket caiu / sem resposta), e não de
+// outra instância assumindo o ramal. A recuperação do WebSocket cuida delas.
+const NETWORK_REGISTRATION_CAUSES = new Set(['Connection Error', 'Request Timeout']);
 
 export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): WebphoneState {
   switch (event.type) {
@@ -63,15 +82,33 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
     case 'connecting':
       return { ...state, registration: 'connecting', error: null };
     case 'registered':
-      return { ...state, registration: 'registered', error: null };
+      // Registrou de novo sozinho (ou pelo Reconectar): o ramal é desta aba.
+      return { ...state, registration: 'registered', error: null, sessionConflict: null };
     case 'unregistered':
-      return { ...state, registration: state.registration === 'error' ? 'error' : 'disconnected' };
+      // Queda de WebSocket chega como `disconnected` ANTES do `unregistered`,
+      // então só um `unregistered` vindo direto de `registered` é perda do
+      // ramal para outra instância. O conflito já marcado nunca é apagado aqui.
+      return {
+        ...state,
+        registration: state.registration === 'error' ? 'error' : 'disconnected',
+        sessionConflict: state.registration === 'registered' ? 'lost_to_other' : state.sessionConflict,
+      };
     case 'disconnected':
       return { ...state, registration: 'disconnected', error: event.error ?? state.error };
     case 'registration_failed':
-      return { ...state, registration: 'error', error: `Registro SIP recusado (${event.cause})` };
+      return {
+        ...state,
+        registration: 'error',
+        error: `Registro SIP recusado (${event.cause})`,
+        sessionConflict:
+          state.registration === 'registered' && !NETWORK_REGISTRATION_CAUSES.has(event.cause)
+            ? 'lost_to_other'
+            : state.sessionConflict,
+      };
     case 'mic':
-      return { ...state, mic: event.granted ? 'granted' : 'denied' };
+      return state.mic === event.permission ? state : { ...state, mic: event.permission };
+    case 'session_conflict':
+      return state.sessionConflict === event.conflict ? state : { ...state, sessionConflict: event.conflict };
     case 'call_new': {
       // Uma ligação por vez: a nova só entra se não houver outra em andamento.
       if (state.call && state.call.phase !== 'ended') return state;
@@ -132,9 +169,24 @@ export function callTalkSeconds(call: WebphoneCall | null, now: number): number 
   return Math.max(0, Math.floor((end - call.answeredAt) / 1000));
 }
 
-/** O webphone pode receber a perna do ramal agora? */
+/**
+ * O webphone pode receber a perna do ramal agora? Exige o microfone CONCEDIDO
+ * (não basta "não negado"): sem ele o INVITE não é atendido e a ligação do
+ * Power Dialer ficaria sem áudio.
+ */
 export function canReceiveCalls(state: WebphoneState): boolean {
-  return state.registration === 'registered' && state.mic !== 'denied';
+  return state.registration === 'registered' && state.mic === 'granted' && !state.sessionConflict;
+}
+
+export const SESSION_CONFLICT_MESSAGES: Record<WebphoneSessionConflict, string> = {
+  other_tab: 'O ramal está em uso em outra aba. Clique em Usar nesta aba para assumir.',
+  lost_to_other:
+    'O ramal foi desconectado. Outra aba, outro navegador ou a extensão da API4COM pode estar usando este ramal. Clique em Reconectar para usar aqui.',
+};
+
+/** Mensagem do microfone que impede ligar, ou null se está concedido. */
+export function micBlockMessage(mic: MicPermission): string | null {
+  return mic === 'granted' ? null : MIC_MESSAGES[mic];
 }
 
 /**
@@ -144,13 +196,15 @@ export function canReceiveCalls(state: WebphoneState): boolean {
  * 424 "user not registered" ou a chamada cairia por falta de microfone.
  */
 export function dialingBlockReason(state: WebphoneState): string | null {
+  // Antes do `disabled`: a aba que perdeu para outra fica sem UA, mas não pode
+  // cair no fluxo da extensão.
+  if (state.sessionConflict) return SESSION_CONFLICT_MESSAGES[state.sessionConflict];
   switch (state.registration) {
     case 'disabled':
       return null;
     case 'registered':
-      if (state.mic === 'denied') return 'Libere o microfone para o EnriqueceAI no navegador antes de ligar.';
       if (state.call && state.call.phase !== 'ended') return 'Já existe uma ligação em andamento nesta aba.';
-      return null;
+      return micBlockMessage(state.mic);
     case 'connecting':
       return 'O webphone ainda está conectando ao ramal. Aguarde o indicador ficar verde.';
     case 'disconnected':
@@ -160,4 +214,19 @@ export function dialingBlockReason(state: WebphoneState): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Algo impede ligar e o pill precisa ficar na tela (com o botão para resolver).
+ * O microfone só conta com o webphone ligado nesta aba: com `disabled` sem
+ * conflito o gestor não liberou o webphone e o fluxo é o da extensão.
+ */
+export function webphoneIdleProblem(state: WebphoneState): boolean {
+  return state.registration === 'error' || webphoneIdleNeedsAction(state);
+}
+
+/** O SDR precisa clicar em algo (ativar microfone, usar nesta aba, reconectar). */
+export function webphoneIdleNeedsAction(state: WebphoneState): boolean {
+  if (state.sessionConflict) return true;
+  return state.registration !== 'disabled' && state.mic !== 'granted';
 }
