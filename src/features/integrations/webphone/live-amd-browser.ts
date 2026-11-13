@@ -1,5 +1,6 @@
 import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
 
+import { setActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
 import { type AudioPump, createCapturePump } from './live-amd-pump';
 import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
 import { publishLiveAmdView } from './live-amd-view-store';
@@ -114,10 +115,18 @@ export function startLiveAmdBrowser(options: {
     });
   })();
 
-  return () => {
+  const stopSession = () => {
     if (stopped) return;
     stopped = true;
+    setActiveLiveAmdStop(null);
     stopPump();
     apply(session.onCallEnded());
   };
+
+  // Uma escuta anterior (ligação que não chegou a emitir ended) não pode ficar
+  // segurando o clone da faixa desta aba.
+  stopActiveLiveAmd();
+  setActiveLiveAmdStop(stopSession);
+
+  return stopSession;
 }

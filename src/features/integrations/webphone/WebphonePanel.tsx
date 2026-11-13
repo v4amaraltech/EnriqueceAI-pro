@@ -5,11 +5,11 @@ import { createPortal } from 'react-dom';
 
 import {
   DndContext,
+  type DragEndEvent,
   PointerSensor,
   useDraggable,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
@@ -17,22 +17,28 @@ import { toast } from 'sonner';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { CallResultModal } from '@/features/activities/components/CallResultModal';
-import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
 import { hangupCall as hangupProviderCall } from '@/features/calls/actions/initiate-call';
 import { saveWebphoneCallAudio } from '@/features/calls/actions/save-webphone-call-audio';
+import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import { LiveAmdHint } from './LiveAmdHint';
+import { useWebphonePanelHost } from './WebphonePanelHost';
+import { startLiveAmdBrowser } from './live-amd-browser';
+import type { LiveAmdView } from './live-amd-session';
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
 import { useWebphoneCallOutcome } from './useWebphoneLeadAnswer';
-import { useWebphonePanelHost } from './WebphonePanelHost';
 import type { WebphoneAudioStats } from './webphone-audio-stats';
-import { effectiveCallSeconds, hangupReasonLabel, leadConnected, type LeadAnswer } from './webphone-lead-answer';
 import {
+  type WebphoneCallContext,
+  type WebphoneNotesAnchor,
+  clearWebphoneCallContext,
+  contextMatchesCall,
   editHeldWebphoneNotes,
   notesRevisionForSubmit,
   parkWebphoneCallNotes,
@@ -41,15 +47,7 @@ import {
   requestWebphoneConclude,
   retryHeldWebphoneNotes,
   setWebphoneCallNotes,
-  clearWebphoneCallContext,
-  contextMatchesCall,
-  type WebphoneCallContext,
-  type WebphoneNotesAnchor,
 } from './webphone-call-context';
-import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-panel-follow';
-import { LiveAmdHint } from './LiveAmdHint';
-import { startLiveAmdBrowser } from './live-amd-browser';
-import type { LiveAmdView } from './live-amd-session';
 import {
   answerCall,
   getRemoteAudioTrack,
@@ -61,20 +59,27 @@ import {
   toggleMute,
 } from './webphone-client';
 import {
+  type LeadAnswer,
+  effectiveCallSeconds,
+  hangupReasonLabel,
+  leadConnected,
+} from './webphone-lead-answer';
+import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-panel-follow';
+import {
+  type PanelPosition,
   clampPanelPosition,
   loadPanelPosition,
   movePanelPosition,
   savePanelPosition,
-  type PanelPosition,
 } from './webphone-panel-position';
 import {
-  callTalkSeconds,
-  micBlockMessage,
   SESSION_CONFLICT_MESSAGES,
-  webphoneIdleNeedsAction,
-  webphoneIdleProblem,
   type WebphoneCall,
   type WebphoneState,
+  callTalkSeconds,
+  micBlockMessage,
+  webphoneIdleNeedsAction,
+  webphoneIdleProblem,
 } from './webphone-state';
 
 /**
@@ -132,7 +137,10 @@ type PanelStage =
   | { kind: 'finished'; call: FinishedCall }
   | { kind: 'result'; call: FinishedCall };
 
-function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext | null): FinishedCall {
+function snapshotFinishedCall(
+  call: WebphoneCall,
+  context: WebphoneCallContext | null,
+): FinishedCall {
   const endedAt = call.endedAt ?? Date.now();
   const draft: FinishedCall = {
     id: call.id,
@@ -145,10 +153,17 @@ function snapshotFinishedCall(call: WebphoneCall, context: WebphoneCallContext |
     dialToken: call.dialToken ?? null,
     context: null,
   };
-  return { ...draft, context: context && contextBelongsToFinished(context, draft) ? context : null };
+  return {
+    ...draft,
+    context: context && contextBelongsToFinished(context, draft) ? context : null,
+  };
 }
 
-function finishedFromContext(context: WebphoneCallContext, answered: boolean, talkSeconds: number): FinishedCall {
+function finishedFromContext(
+  context: WebphoneCallContext,
+  answered: boolean,
+  talkSeconds: number,
+): FinishedCall {
   const seconds = answered ? Math.max(0, talkSeconds) : 0;
   return {
     id: `server-${context.callId}`,
@@ -173,10 +188,15 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   useEffect(() => {
     rehydrateWebphonePendingNotes();
   }, []);
-  const [stage, setStage] = useState<PanelStage>({ kind: 'idle', doneCallId: null, doneContextId: null });
+  const [stage, setStage] = useState<PanelStage>({
+    kind: 'idle',
+    doneCallId: null,
+    doneContextId: null,
+  });
   const liveCall = webphone.call && webphone.call.phase !== 'ended' ? webphone.call : null;
   // Contexto que de fato pertence à ligação em andamento (um esquecido não conta).
-  const liveCallContext = liveCall && contextMatchesCall(ctxState.context, liveCall) ? ctxState.context : null;
+  const liveCallContext =
+    liveCall && contextMatchesCall(ctxState.context, liveCall) ? ctxState.context : null;
   const liveContextCallId = liveCallContext?.callId ?? null;
   const [liveAmd, setLiveAmd] = useState<LiveAmdView | null>(null);
   const [liveAmdCallId, setLiveAmdCallId] = useState<string | null>(null);
@@ -184,10 +204,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   const context = ctxState.context;
   const followNew = shouldFollowNewContext(
     context,
-    stage.kind === 'idle' ? { kind: 'idle', doneContextId: stage.doneContextId } : { kind: stage.kind, call: stage.call },
+    stage.kind === 'idle'
+      ? { kind: 'idle', doneContextId: stage.doneContextId }
+      : { kind: stage.kind, call: stage.call },
     liveCall,
   );
-  const finishedCallId = stage.kind === 'idle' ? null : stage.call.context?.callId ?? null;
+  const finishedCallId = stage.kind === 'idle' ? null : (stage.call.context?.callId ?? null);
   const amdCallId = (followNew && context?.callId) || liveContextCallId || null;
   if (liveAmdCallId !== amdCallId) {
     setLiveAmdCallId(amdCallId);
@@ -215,16 +237,29 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   }, [liveListen, amdCallId, webphone.call?.phase]);
   // O lead atendeu? (webhook da API4COM; "unknown" até ele chegar.) Na ligação
   // que o painel acompanha sem SIP, a consulta segue até o desligamento.
-  const outcome = useWebphoneCallOutcome(followNew && context ? context.callId : (liveContextCallId ?? finishedCallId), followNew);
+  const outcome = useWebphoneCallOutcome(
+    followNew && context ? context.callId : (liveContextCallId ?? finishedCallId),
+    followNew,
+  );
   const { leadAnswer, hangupCause } = outcome;
   const durationSeconds = outcome.durationSeconds ?? 0;
+
+  // Hangup já gravado no servidor e a sessão SIP ainda em curso: o BYE pode
+  // não ter chegado (a escuta segura o clone da faixa). Pede o desligamento
+  // daqui, que primeiro para a escuta.
+  useEffect(() => {
+    if (!hangupCause || !liveCall || liveCall.phase === 'ended') return;
+    void hangupWebphoneLeg();
+  }, [hangupCause, liveCall]);
 
   // A ligação acabou de encerrar: congela a fotografia dela até o SDR concluir.
   // Ajuste durante o render (padrão do React para derivar estado de uma prop)
   // em vez de useEffect, para não pintar um frame sem o estado "finalizada".
   // Um SIP encerrado antigo não pode reocupar a tela se o contexto já é outra ligação.
   const endedCall = webphone.call?.phase === 'ended' ? webphone.call : null;
-  const alreadyTracked = endedCall && (stage.kind === 'idle' ? stage.doneCallId === endedCall.id : stage.call.id === endedCall.id);
+  const alreadyTracked =
+    endedCall &&
+    (stage.kind === 'idle' ? stage.doneCallId === endedCall.id : stage.call.id === endedCall.id);
   if (endedCall && !alreadyTracked) {
     const snap = snapshotFinishedCall(endedCall, context);
     const stageAlreadyFollowsContext =
@@ -239,7 +274,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
 
   // HTTP do POST /calls chegou depois do fim: gruda o contexto nesta finalizada,
   // em vez de tratar a resposta atrasada como uma ligação nova.
-  if (stage.kind === 'finished' && !stage.call.context && context && contextBelongsToFinished(context, stage.call)) {
+  if (
+    stage.kind === 'finished' &&
+    !stage.call.context &&
+    context &&
+    contextBelongsToFinished(context, stage.call)
+  ) {
     setStage({ kind: 'finished', call: { ...stage.call, context } });
   }
 
@@ -276,7 +316,13 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     for (const item of heldNotes) {
       if (!item.callId || item.saveError) continue;
       if ((concludedRev[item.callId] ?? 0) >= item.rev) continue;
-      const sent = { holdId: item.holdId, callId: item.callId, rev: item.rev, notes: item.notes, leadId: item.leadId };
+      const sent = {
+        holdId: item.holdId,
+        callId: item.callId,
+        rev: item.rev,
+        notes: item.notes,
+        leadId: item.leadId,
+      };
       void classifyWebphoneCall({
         callId: sent.callId,
         clientDurationSeconds: 0,
@@ -295,7 +341,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
             );
             return;
           }
-          reportHeldWebphoneNotes(sent.holdId, sent.rev, r.success, r.success ? undefined : r.error);
+          reportHeldWebphoneNotes(
+            sent.holdId,
+            sent.rev,
+            r.success,
+            r.success ? undefined : r.error,
+          );
         })
         .catch(() => {
           if (!cancelled) reportHeldWebphoneNotes(sent.holdId, sent.rev, false);
@@ -313,20 +364,29 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   // não há mais nada a fazer aqui e o painel some (ajuste durante o render).
   // Não some se o contexto atual é uma ligação nova: essa passa a ocupar a tela.
   if (stage.kind === 'finished' && finishedCallId && !liveContext && !followNew) {
-    setStage({ kind: 'idle', doneCallId: endedCall?.id ?? stage.call.id, doneContextId: stage.call.context?.callId ?? null });
+    setStage({
+      kind: 'idle',
+      doneCallId: endedCall?.id ?? stage.call.id,
+      doneContextId: stage.call.context?.callId ?? null,
+    });
   }
 
   function finish(call: FinishedCall) {
     if (call.context) clearWebphoneCallContext(call.context.callId);
     else parkWebphoneCallNotes();
-    setStage({ kind: 'idle', doneCallId: endedCall?.id ?? call.id, doneContextId: call.context?.callId ?? null });
+    setStage({
+      kind: 'idle',
+      doneCallId: endedCall?.id ?? call.id,
+      doneContextId: call.context?.callId ?? null,
+    });
   }
 
   function handleHangup() {
     void hangupWebphoneLeg();
     // Garantia pelo servidor (mesma chamada que o painel de atividades faz no
     // botão dele): se a perna WebRTC já caiu, a API4COM só responde que acabou.
-    const providerCallId = liveCallContext?.providerCallId ?? (followNew ? context?.providerCallId : null);
+    const providerCallId =
+      liveCallContext?.providerCallId ?? (followNew ? context?.providerCallId : null);
     if (providerCallId) {
       hangupProviderCall('api4com', providerCallId)
         .then((r) => {
@@ -345,7 +405,11 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
         durationSeconds: effectiveCallSeconds(leadAnswer, call.talkSeconds),
         notes: ctxState.notes,
       });
-      setStage({ kind: 'idle', doneCallId: endedCall?.id ?? call.id, doneContextId: liveContext.callId });
+      setStage({
+        kind: 'idle',
+        doneCallId: endedCall?.id ?? call.id,
+        doneContextId: liveContext.callId,
+      });
       return;
     }
     if (liveContext) {
@@ -356,7 +420,18 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     finish(call);
   }
 
-  function handleOwnResult(call: FinishedCall, args: { notes: string; returnSchedule: { scheduledAt: string; channel: 'phone' | 'whatsapp' | 'email'; callProvider: 'whatsapp' | null } | null; outcome: Parameters<typeof classifyWebphoneCall>[0]['sdrOutcome'] }) {
+  function handleOwnResult(
+    call: FinishedCall,
+    args: {
+      notes: string;
+      returnSchedule: {
+        scheduledAt: string;
+        channel: 'phone' | 'whatsapp' | 'email';
+        callProvider: 'whatsapp' | null;
+      } | null;
+      outcome: Parameters<typeof classifyWebphoneCall>[0]['sdrOutcome'];
+    },
+  ) {
     const ctx = call.context;
     if (!ctx) return;
     const notesRev = notesRevisionForSubmit(ctx.callId, args.notes);
@@ -400,15 +475,20 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     enabled: Boolean(!showingDialing && resultCall?.context),
     localLiveAmd: liveAmdCallId === resultDbCallId ? liveAmd : null,
   });
-  const orphanDraft = !liveCall && !showingDialing && stage.kind === 'idle' && Boolean(ctxState.notes.trim());
-  const hasRecoverableNotes = ctxState.heldNotes.length > 0 || Boolean(ctxState.persistWarning) || Boolean(ctxState.saveNotice) || orphanDraft;
+  const orphanDraft =
+    !liveCall && !showingDialing && stage.kind === 'idle' && Boolean(ctxState.notes.trim());
+  const hasRecoverableNotes =
+    ctxState.heldNotes.length > 0 ||
+    Boolean(ctxState.persistWarning) ||
+    Boolean(ctxState.saveNotice) ||
+    orphanDraft;
   const idle = !liveCall && !showingDialing && stage.kind === 'idle' && !hasRecoverableNotes;
   const idleProblem = webphoneIdleProblem(webphone);
   // Pill com botão (microfone ou ramal em outra aba) precisa de espaço para o texto.
   const idleNeedsAction = webphoneIdleNeedsAction(webphone);
 
   const shell = (
-    <DraggableShell compact={idle && !idleNeedsAction}>
+    <DraggableShell compact={idle && !idleNeedsAction} elevate={Boolean(liveCall)}>
       <LiveAmdHint view={liveAmd} />
       {liveCall ? (
         <LiveCallView
@@ -416,7 +496,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
           context={liveCallContext}
           leadAnswer={leadAnswer}
           notes={ctxState.notes}
-          onNotesChange={(value) => setWebphoneCallNotes(value, anchorFrom(liveCallContext, liveCall.remoteNumber, liveCall.dialToken ?? null))}
+          onNotesChange={(value) =>
+            setWebphoneCallNotes(
+              value,
+              anchorFrom(liveCallContext, liveCall.remoteNumber, liveCall.dialToken ?? null),
+            )
+          }
           onHangup={handleHangup}
         />
       ) : showingDialing && context ? (
@@ -425,7 +510,9 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
           leadAnswer={leadAnswer}
           notes={ctxState.notes}
           noteStatus={noteStatus(ctxState.notes, context.callId)}
-          onNotesChange={(value) => setWebphoneCallNotes(value, anchorFrom(context, context.phone, context.dialToken))}
+          onNotesChange={(value) =>
+            setWebphoneCallNotes(value, anchorFrom(context, context.phone, context.dialToken))
+          }
           onHangup={handleHangup}
         />
       ) : stage.kind === 'finished' ? (
@@ -436,7 +523,14 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
           notes={ctxState.notes}
           noteStatus={noteStatus(ctxState.notes, stage.call.context?.callId ?? null)}
           onNotesChange={(value) =>
-            setWebphoneCallNotes(value, anchorFrom(stage.call.context, stage.call.context?.phone ?? stage.call.remoteNumber, stage.call.dialToken))
+            setWebphoneCallNotes(
+              value,
+              anchorFrom(
+                stage.call.context,
+                stage.call.context?.phone ?? stage.call.remoteNumber,
+                stage.call.dialToken,
+              ),
+            )
           }
           onConclude={handleConclude}
         />
@@ -444,7 +538,9 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
         <p className="text-xs text-[var(--muted-foreground)]">Registre o resultado da ligação…</p>
       ) : orphanDraft ? (
         <div className="space-y-2">
-          <p className="text-xs text-[var(--muted-foreground)]">{noteStatus(ctxState.notes, ctxState.notesAnchor?.callId ?? null)}</p>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            {noteStatus(ctxState.notes, ctxState.notesAnchor?.callId ?? null)}
+          </p>
           <NotesField
             notes={ctxState.notes}
             onChange={(value) => setWebphoneCallNotes(value, ctxState.notesAnchor)}
@@ -453,7 +549,11 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
       ) : (
         <IdlePill state={webphone} />
       )}
-      <RecoverableNotes holds={ctxState.heldNotes} warning={ctxState.persistWarning} notice={ctxState.saveNotice} />
+      <RecoverableNotes
+        holds={ctxState.heldNotes}
+        warning={ctxState.persistWarning}
+        notice={ctxState.saveNotice}
+      />
     </DraggableShell>
   );
 
@@ -486,7 +586,15 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
 // Casca arrastável
 // ---------------------------------------------------------------------------
 
-function DraggableShell({ compact, children }: { compact: boolean; children: React.ReactNode }) {
+function DraggableShell({
+  compact,
+  elevate = false,
+  children,
+}: {
+  compact: boolean;
+  elevate?: boolean;
+  children: React.ReactNode;
+}) {
   const [position, setPosition] = useState<PanelPosition | null>(() =>
     typeof window === 'undefined' ? null : loadPanelPosition(window.localStorage),
   );
@@ -501,7 +609,11 @@ function DraggableShell({ compact, children }: { compact: boolean; children: Rea
       const rect = node.getBoundingClientRect();
       setPosition((prev) => {
         if (!prev) return prev;
-        const next = clampPanelPosition(prev, { width: rect.width, height: rect.height }, viewportSize());
+        const next = clampPanelPosition(
+          prev,
+          { width: rect.width, height: rect.height },
+          viewportSize(),
+        );
         return next.x === prev.x && next.y === prev.y ? prev : next;
       });
     }
@@ -520,14 +632,19 @@ function DraggableShell({ compact, children }: { compact: boolean; children: Rea
     // retângulo SEM o deslocamento do arrasto.
     const rect = node.getBoundingClientRect();
     const base = position ?? { x: rect.left - event.delta.x, y: rect.top - event.delta.y };
-    const next = movePanelPosition(base, event.delta, { width: rect.width, height: rect.height }, viewportSize());
+    const next = movePanelPosition(
+      base,
+      event.delta,
+      { width: rect.width, height: rect.height },
+      viewportSize(),
+    );
     setPosition(next);
     savePanelPosition(window.localStorage, next);
   }
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <DraggableBox position={position} compact={compact} nodeRef={nodeRef}>
+      <DraggableBox position={position} compact={compact} elevate={elevate} nodeRef={nodeRef}>
         {children}
       </DraggableBox>
     </DndContext>
@@ -537,19 +654,24 @@ function DraggableShell({ compact, children }: { compact: boolean; children: Rea
 function DraggableBox({
   position,
   compact,
+  elevate,
   nodeRef,
   children,
 }: {
   position: PanelPosition | null;
   compact: boolean;
+  elevate?: boolean;
   nodeRef: React.MutableRefObject<HTMLDivElement | null>;
   children: React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: DRAGGABLE_ID });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
+    useDraggable({ id: DRAGGABLE_ID });
 
   const style: React.CSSProperties = {
     position: 'fixed',
-    zIndex: 50,
+    // Acima do overlay do Dialog (z-50): Mutar e Desligar continuam clicáveis
+    // mesmo se um Resultado da Ligação anterior ainda estiver aberto.
+    zIndex: elevate ? 80 : 50,
     transform: CSS.Translate.toString(transform),
     ...(position ? { left: position.x, top: position.y } : { left: 16, bottom: 16 }),
   };
@@ -572,7 +694,12 @@ function DraggableBox({
       )}
     >
       {compact ? (
-        <div ref={setActivatorNodeRef} {...listeners} {...attributes} className="flex cursor-grab select-none items-center gap-2 px-3 py-2 active:cursor-grabbing">
+        <div
+          ref={setActivatorNodeRef}
+          {...listeners}
+          {...attributes}
+          className="flex cursor-grab select-none items-center gap-2 px-3 py-2 active:cursor-grabbing"
+        >
           {children}
         </div>
       ) : (
@@ -604,7 +731,8 @@ function IdlePill({ state }: { state: WebphoneState }) {
   const [sessionPending, setSessionPending] = useState(false);
   // Só negado ou indisponível pedem ação aqui. Ainda não pedido (`unknown`)
   // não mostra aviso: o pedido sai no clique em Ligar.
-  const showMic = (state.mic === 'denied' || state.mic === 'unavailable') && webphoneIdleNeedsAction(state);
+  const showMic =
+    (state.mic === 'denied' || state.mic === 'unavailable') && webphoneIdleNeedsAction(state);
   const micMessage = showMic ? micBlockMessage(state.mic) : null;
 
   function activateMic() {
@@ -629,8 +757,16 @@ function IdlePill({ state }: { state: WebphoneState }) {
       </span>
       {state.sessionConflict && (
         <div className="space-y-1.5">
-          <p className="text-[var(--foreground)]">{SESSION_CONFLICT_MESSAGES[state.sessionConflict]}</p>
-          <Button type="button" size="sm" variant="outline" onClick={resolveConflict} disabled={sessionPending}>
+          <p className="text-[var(--foreground)]">
+            {SESSION_CONFLICT_MESSAGES[state.sessionConflict]}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={resolveConflict}
+            disabled={sessionPending}
+          >
             {state.sessionConflict === 'other_tab' ? 'Usar nesta aba' : 'Reconectar'}
           </Button>
         </div>
@@ -648,7 +784,11 @@ function IdlePill({ state }: { state: WebphoneState }) {
   );
 }
 
-function anchorFrom(context: WebphoneCallContext | null, phone: string | null, dialToken: string | null): WebphoneNotesAnchor {
+function anchorFrom(
+  context: WebphoneCallContext | null,
+  phone: string | null,
+  dialToken: string | null,
+): WebphoneNotesAnchor {
   return {
     callId: context?.callId ?? null,
     leadId: context?.leadId ?? null,
@@ -704,9 +844,13 @@ function LiveCallView({
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{title}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+            {title}
+          </p>
           <p className="truncate font-medium">{name ?? (number || 'Número desconhecido')}</p>
-          {name && number && <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>}
+          {name && number && (
+            <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>
+          )}
         </div>
         <p className="shrink-0 font-mono text-lg tabular-nums" aria-label="Tempo de ligação">
           {inCall ? formatDuration(callTalkSeconds(call, now)) : '00:00'}
@@ -719,7 +863,14 @@ function LiveCallView({
             <Phone className="h-4 w-4" /> Atender
           </Button>
         )}
-        <Button size="sm" variant="outline" className="flex-1" onClick={toggleMute} disabled={!inCall} aria-pressed={call.muted}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1"
+          onClick={toggleMute}
+          disabled={!inCall}
+          aria-pressed={call.muted}
+        >
           {call.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           {call.muted ? 'Mutado' : 'Mutar'}
         </Button>
@@ -772,7 +923,9 @@ function DialingView({
             {inTalk ? 'Em ligação' : 'Chamando…'}
           </p>
           <p className="truncate font-medium">{name ?? (number || 'Número desconhecido')}</p>
-          {name && number && <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>}
+          {name && number && (
+            <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>
+          )}
         </div>
         <p className="shrink-0 font-mono text-lg tabular-nums" aria-label="Tempo de ligação">
           {formatDuration(seconds)}
@@ -813,16 +966,28 @@ function FinishedView({
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">Ligação finalizada</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+            Ligação finalizada
+          </p>
           <p className="truncate font-medium">{name ?? (number || 'Número desconhecido')}</p>
-          {name && number && <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>}
+          {name && number && (
+            <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>
+          )}
         </div>
         <p className="shrink-0 text-right font-mono text-lg tabular-nums">
-          {leadConnected(leadAnswer, call.answered) ? formatDuration(call.talkSeconds) : <span className="text-sm text-amber-600">Não atendida</span>}
+          {leadConnected(leadAnswer, call.answered) ? (
+            formatDuration(call.talkSeconds)
+          ) : (
+            <span className="text-sm text-amber-600">Não atendida</span>
+          )}
         </p>
       </div>
       {reason && (
-        <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400" role="status" data-testid="webphone-hangup-reason">
+        <p
+          className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400"
+          role="status"
+          data-testid="webphone-hangup-reason"
+        >
           {reason}
         </p>
       )}
@@ -835,7 +1000,17 @@ function FinishedView({
   );
 }
 
-function NotesField({ notes, onChange, autoFocus, label = 'Anotações da ligação' }: { notes: string; onChange: (v: string) => void; autoFocus?: boolean; label?: string }) {
+function NotesField({
+  notes,
+  onChange,
+  autoFocus,
+  label = 'Anotações da ligação',
+}: {
+  notes: string;
+  onChange: (v: string) => void;
+  autoFocus?: boolean;
+  label?: string;
+}) {
   return (
     <Textarea
       value={notes}
@@ -853,7 +1028,14 @@ function RecoverableNotes({
   warning,
   notice,
 }: {
-  holds: Array<{ holdId: string; callId: string | null; phone: string | null; leadName: string | null; notes: string; saveError: string | null }>;
+  holds: Array<{
+    holdId: string;
+    callId: string | null;
+    phone: string | null;
+    leadName: string | null;
+    notes: string;
+    saveError: string | null;
+  }>;
   warning: string | null;
   notice: string | null;
 }) {
@@ -873,12 +1055,19 @@ function RecoverableNotes({
             </p>
             <NotesField
               notes={hold.notes}
-              label={linked ? 'Anotação pendente da ligação anterior' : 'Anotação sem ligação vinculada'}
+              label={
+                linked ? 'Anotação pendente da ligação anterior' : 'Anotação sem ligação vinculada'
+              }
               onChange={(value) => editHeldWebphoneNotes(hold.holdId, value)}
             />
             {hold.saveError && <p role="status">{hold.saveError}</p>}
             {linked && hold.saveError && (
-              <Button type="button" size="sm" variant="outline" onClick={() => retryHeldWebphoneNotes(hold.holdId)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => retryHeldWebphoneNotes(hold.holdId)}
+              >
                 Tentar gravar de novo
               </Button>
             )}

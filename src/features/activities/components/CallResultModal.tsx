@@ -49,6 +49,8 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import { resultModalScore, useExclusiveCallResultOpen } from './call-result-modal-exclusive';
+
 export interface CallReturnSchedule {
   scheduledAt: string;
   channel: 'phone' | 'whatsapp' | 'email';
@@ -262,6 +264,12 @@ export function CallResultModal({
   const [wasOpen, setWasOpen] = useState(open);
   const [wasConnected, setWasConnected] = useState(connected);
   const [wasSuggestion, setWasSuggestion] = useState(suggestionFingerprint(suggestion));
+
+  const shown = useExclusiveCallResultOpen(
+    open,
+    resultModalScore({ alreadyFilled: Boolean(suggestion?.alreadyFilled) }),
+  );
+
   if (open !== wasOpen) {
     setWasOpen(open);
     setWasConnected(connected);
@@ -319,7 +327,11 @@ export function CallResultModal({
   // A API4COM marca como atendida também quando a CAIXA POSTAL pega a linha —
   // não há sinal que separe as duas. Abaixo do piso de conversa (50s) o selo
   // avisa em vez de afirmar; o SDR diz o que foi no desfecho.
-  const maybeVoicemail = connected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS;
+  const maybeVoicemail =
+    (connected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS) ||
+    suggestion?.outcome === 'voicemail' ||
+    suggestion?.alreadyFilledDisposition === 'voicemail' ||
+    (connected && suggestion?.source === 'live_amd' && suggestion.outcome === 'no_answer');
 
   function buildReturnSchedule(): CallReturnSchedule | null {
     if (!needsReturn || !returnDate) return null;
@@ -336,7 +348,7 @@ export function CallResultModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={shown} onOpenChange={(o) => !o && onClose()}>
       {/* `grid-cols-[minmax(0,1fr)]`: o DialogContent é um grid de uma coluna
           `auto`, que cresce até o maior texto sem quebra (o nome do lead com
           `truncate`). Com razão social longa a coluna passava da largura do

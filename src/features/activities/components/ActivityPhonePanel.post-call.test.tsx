@@ -2,13 +2,18 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActivityPhonePanel } from './ActivityPhonePanel';
+
 const actions = vi.hoisted(() => ({
   initiateCall: vi.fn(),
   hangupCall: vi.fn(),
   classifyWebphoneCall: vi.fn(),
   scheduleActivity: vi.fn(),
 }));
-const leadAnswer = vi.hoisted(() => ({ value: 'not_answered' as 'answered' | 'not_answered' | 'unknown' }));
+const leadAnswer = vi.hoisted(() => ({
+  value: 'not_answered' as 'answered' | 'not_answered' | 'unknown',
+  durationSeconds: 0,
+}));
 
 vi.mock('@/features/calls/actions/initiate-call', () => ({
   initiateCall: actions.initiateCall,
@@ -19,7 +24,9 @@ vi.mock('@/features/calls/actions/classify-webphone-call', () => ({
 }));
 vi.mock('../actions/schedule-activity', () => ({ scheduleActivity: actions.scheduleActivity }));
 vi.mock('@/features/leads/actions/lead-noshow', () => ({ markMeetingNoShow: vi.fn() }));
-vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({ useCallHangupDetection: () => {} }));
+vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({
+  useCallHangupDetection: () => {},
+}));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({
   useApi4ComWebphone: () => ({ registration: 'disabled', error: null, mic: 'unknown', call: null }),
 }));
@@ -28,6 +35,11 @@ vi.mock('@/features/integrations/webphone/useWebphoneCallContext', () => ({
 }));
 vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: () => leadAnswer.value,
+  useWebphoneCallOutcome: () => ({
+    leadAnswer: leadAnswer.value,
+    hangupCause: leadAnswer.value === 'not_answered' ? 'NUMBER_CHANGED' : null,
+    durationSeconds: leadAnswer.durationSeconds,
+  }),
 }));
 vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({
   clearWebphoneCallContext: vi.fn(),
@@ -48,14 +60,16 @@ vi.mock('@/features/calls/use-post-call-suggestion', () => ({
     meetingPrefill: null,
   }),
 }));
-vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
-
-
-import { ActivityPhonePanel } from './ActivityPhonePanel';
+vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({
+  ScheduleMeetingModal: () => null,
+}));
 
 const CALL_ID = '7fe4ba31-280e-4fd1-ae07-a7de46f1675b';
 const LEAD_ID = '969ea854-1724-4f22-85a3-3633cd314553';
-const CADENCE = { enrollmentId: '11111111-1111-4111-8111-111111111111', stepId: '22222222-2222-4222-8222-222222222222' };
+const CADENCE = {
+  enrollmentId: '11111111-1111-4111-8111-111111111111',
+  stepId: '22222222-2222-4222-8222-222222222222',
+};
 
 function renderDock(opts?: { cadence?: boolean }) {
   const states: string[] = [];
@@ -66,7 +80,9 @@ function renderDock(opts?: { cadence?: boolean }) {
       leadName="Mercante Net"
       leadId={LEAD_ID}
       phoneNumber="11954958486"
-      phones={[{ formatted: '11954958486', raw: '11954958486', label: 'Celular', source: 'lead_telefone' }]}
+      phones={[
+        { formatted: '11954958486', raw: '11954958486', label: 'Celular', source: 'lead_telefone' },
+      ]}
       isSending={false}
       onMarkDone={onMarkDone}
       cadenceStep={opts?.cadence === false ? undefined : CADENCE}
@@ -86,11 +102,15 @@ async function finishCall(user: ReturnType<typeof userEvent.setup>) {
 describe('ActivityPhonePanel pós-ligação no cockpit', () => {
   beforeEach(() => {
     leadAnswer.value = 'not_answered';
+    leadAnswer.durationSeconds = 0;
     actions.initiateCall.mockReset();
     actions.hangupCall.mockReset();
     actions.classifyWebphoneCall.mockReset();
     actions.scheduleActivity.mockReset();
-    actions.initiateCall.mockResolvedValue({ success: true, data: { callId: CALL_ID, providerCallId: 'prov-1' } });
+    actions.initiateCall.mockResolvedValue({
+      success: true,
+      data: { callId: CALL_ID, providerCallId: 'prov-1' },
+    });
     actions.hangupCall.mockResolvedValue({ success: true });
     actions.classifyWebphoneCall.mockResolvedValue({ success: true, data: { callId: CALL_ID } });
     actions.scheduleActivity.mockResolvedValue({ success: true, data: {} });
@@ -108,7 +128,11 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
 
       await waitFor(() => expect(actions.classifyWebphoneCall).toHaveBeenCalled());
       expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(
-        expect.objectContaining({ callId: CALL_ID, sdrOutcome: 'technical_failure', leadId: LEAD_ID }),
+        expect.objectContaining({
+          callId: CALL_ID,
+          sdrOutcome: 'technical_failure',
+          leadId: LEAD_ID,
+        }),
       );
       expect(onMarkDone).not.toHaveBeenCalled();
       expect(actions.scheduleActivity).not.toHaveBeenCalled();
@@ -138,7 +162,9 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
     await finishCall(user);
     await user.click(screen.getByRole('button', { name: /Concluir atividade/ }));
     await waitFor(() => expect(onMarkDone).toHaveBeenCalledTimes(1));
-    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(expect.objectContaining({ sdrOutcome: 'no_answer' }));
+    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(
+      expect.objectContaining({ sdrOutcome: 'no_answer' }),
+    );
     expect(actions.scheduleActivity).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -164,14 +190,20 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
     const day = new Date().getDate();
     const today = screen.getAllByRole('button').find((button) => {
       const name = button.getAttribute('aria-label') ?? '';
-      return new RegExp(`\\b${day}\\b`).test(name) && name.includes(String(new Date().getFullYear())) && !button.hasAttribute('disabled');
+      return (
+        new RegExp(`\\b${day}\\b`).test(name) &&
+        name.includes(String(new Date().getFullYear())) &&
+        !button.hasAttribute('disabled')
+      );
     });
     if (!today) throw new Error('dia de hoje não encontrado no calendário');
     await user.click(today);
     await user.click(screen.getByRole('button', { name: /Concluir atividade/ }));
 
     await waitFor(() => expect(onMarkDone).toHaveBeenCalledTimes(1));
-    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(expect.objectContaining({ sdrOutcome: 'callback_requested' }));
+    expect(actions.classifyWebphoneCall).toHaveBeenCalledWith(
+      expect.objectContaining({ sdrOutcome: 'callback_requested' }),
+    );
     const scheduled = actions.scheduleActivity.mock.calls[0]?.[0];
     expect(scheduled).toMatchObject({
       leadId: LEAD_ID,

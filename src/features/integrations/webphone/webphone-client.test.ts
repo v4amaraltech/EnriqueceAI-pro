@@ -60,9 +60,14 @@ function setMicPermission(state: 'granted' | 'prompt' | 'denied' | 'throws' | nu
     return;
   }
   permissionQuery = vi.fn(() =>
-    state === 'throws' ? Promise.reject(new TypeError('microphone desconhecido')) : Promise.resolve({ state }),
+    state === 'throws'
+      ? Promise.reject(new TypeError('microphone desconhecido'))
+      : Promise.resolve({ state }),
   );
-  Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: permissionQuery } });
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: { query: permissionQuery },
+  });
 }
 
 /** Deixa as Promises pendentes do start (consulta da permissão, getUserMedia) resolverem. */
@@ -410,5 +415,58 @@ describe('outra aba segurando o ramal', () => {
       sessionConflict: 'other_tab',
     });
     expect(received.at(-1)?.kind).toBe('released');
+  });
+});
+
+describe('hangupCall e a escuta ao vivo', () => {
+  it('para a escuta antes do BYE e encerra a UI se o ended não chegar', async () => {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const { session, request } = fakeSession(true);
+    ua.emit('newRTCSession', { session, request });
+    const accepted = session.on.mock.calls.find((entry) => entry[0] === 'accepted')?.[1] as
+      | (() => void)
+      | undefined;
+    accepted?.();
+    expect(client.getWebphoneState().call?.phase).toBe('in-call');
+
+    const { setActiveLiveAmdStop } = await import('./live-amd-active');
+    const stopAmd = vi.fn();
+    setActiveLiveAmdStop(stopAmd);
+
+    vi.useFakeTimers();
+    try {
+      const hangup = client.hangupCall();
+      expect(stopAmd).toHaveBeenCalledTimes(1);
+      expect(session.terminate).toHaveBeenCalled();
+      expect(client.getWebphoneState().call?.phase).toBe('in-call');
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await hangup;
+      expect(client.getWebphoneState().call?.phase).toBe('ended');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('não espera a amostra de estatísticas para mandar o BYE', async () => {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const { session, request } = fakeSession(true);
+    ua.emit('newRTCSession', { session, request });
+    const accepted = session.on.mock.calls.find((entry) => entry[0] === 'accepted')?.[1] as
+      | (() => void)
+      | undefined;
+    accepted?.();
+    const started = Date.now();
+    void client.hangupCall();
+    expect(session.terminate).toHaveBeenCalled();
+    expect(Date.now() - started).toBeLessThan(50);
   });
 });

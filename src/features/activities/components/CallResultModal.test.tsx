@@ -467,4 +467,22 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
       );
     });
   });
+
+  it('caixa postal da escuta aparece mesmo com duração acima de 50s', () => {
+    renderModal({
+      connected: true,
+      durationSeconds: 147,
+      suggestion: {
+        outcome: 'no_answer',
+        nextActivity: null,
+        reason: null,
+        source: 'live_amd',
+        alreadyFilled: false,
+        alreadyFilledDisposition: null,
+        meetingPrefill: null,
+      },
+    });
+    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+    expect(screen.getByText('02:27')).toBeInTheDocument();
+  });
 });
