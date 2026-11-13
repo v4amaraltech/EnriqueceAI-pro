@@ -108,6 +108,54 @@ describe('recordLiveAmd', () => {
     expect(rpcCalls[0]?.args.p_patch.live_amd).toMatchObject({ reviewed: true, prediction: 'voicemail' });
   });
 
+  it('grava a telemetria da captura dentro de live_amd, sem outras chaves no patch', async () => {
+    const { client, rpcCalls } = supabaseWith({ id: CALL_ID, user_id: 'u1', metadata: { live_amd: { reviewed: true } } });
+    auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org-1', userId: 'u1', role: 'sdr', supabase: client } });
+    flag.isWebphoneLiveAmdEnabled.mockResolvedValue(true);
+    const telemetry = {
+      bytesSent: 64_000,
+      frames: 12,
+      rmsAvg: 0.0012,
+      rmsPeak: 0.004,
+      audioContextState: 'running',
+      beginReceived: false,
+      turnCount: 0,
+      messageCount: 0,
+      wsError: false,
+      emptyReason: 'no_begin',
+      trackCloned: true,
+      pump: 'worklet',
+    };
+    const result = await recordLiveAmd({ ...input, prediction: 'unknown', phrase: null, confidence: 0, transcript: '', requestNextActivity: false, telemetry });
+    expect(result.success).toBe(true);
+    const patch = rpcCalls[0]?.args.p_patch ?? {};
+    expect(Object.keys(patch)).toEqual(['live_amd']);
+    expect(patch.live_amd).toMatchObject({
+      reviewed: true,
+      prediction: 'unknown',
+      bytes_sent: 64_000,
+      frames: 12,
+      rms_avg: 0.0012,
+      rms_peak: 0.004,
+      audio_context_state: 'running',
+      begin_received: false,
+      turn_count: 0,
+      message_count: 0,
+      ws_error: false,
+      empty_reason: 'no_begin',
+      track_cloned: true,
+      pump: 'worklet',
+    });
+    expect(patch.live_amd).not.toHaveProperty('telemetry');
+    expect(patch.live_amd).not.toHaveProperty('emptyReason');
+  });
+
+  it('recusa telemetria fora do contrato', async () => {
+    const result = await recordLiveAmd({ ...input, telemetry: { emptyReason: 'inventado' } });
+    expect(result).toEqual({ success: false, error: 'Dados inválidos' });
+    expect(auth.getAuthOrgIdResult).not.toHaveBeenCalled();
+  });
+
   it('com a flag desligada não escreve na ligação', async () => {
     const { client, updates, rpcCalls } = supabaseWith({ id: CALL_ID, user_id: 'u1', metadata: {} });
     auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org-1', userId: 'u1', role: 'sdr', supabase: client } });

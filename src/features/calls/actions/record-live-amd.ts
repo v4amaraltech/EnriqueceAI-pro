@@ -20,6 +20,24 @@ const schema = z.object({
   predictedAt: z.string().min(1),
   transcript: z.string().max(20_000).optional(),
   requestNextActivity: z.boolean().optional(),
+  /** Telemetria da captura (diagnóstico de transcrição vazia). Não muda a previsão nem a sugestão. */
+  telemetry: z
+    .object({
+      bytesSent: z.number().int().min(0),
+      frames: z.number().int().min(0),
+      rmsAvg: z.number().min(0).max(1),
+      rmsPeak: z.number().min(0).max(1),
+      audioContextState: z.enum(['running', 'suspended', 'closed', 'interrupted', 'unknown']),
+      beginReceived: z.boolean(),
+      turnCount: z.number().int().min(0),
+      messageCount: z.number().int().min(0),
+      wsError: z.boolean(),
+      emptyReason: z.enum(['context_suspended', 'silent_input', 'ws_error', 'no_begin', 'no_socket', 'no_speech']).nullable(),
+      trackCloned: z.boolean().nullable(),
+      pump: z.enum(['worklet', 'script_processor', 'none', 'custom']).nullable(),
+    })
+    .partial()
+    .optional(),
 });
 
 export interface RecordLiveAmdResult {
