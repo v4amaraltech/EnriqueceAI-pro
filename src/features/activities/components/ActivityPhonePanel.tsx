@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
-import { Clock, Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
+import { Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 
-import { Button } from '@/shared/components/ui/button';
 import { Label } from '@/shared/components/ui/label';
 import {
   Select,
@@ -59,9 +58,6 @@ interface ActivityPhonePanelProps {
   phones: ResolvedPhone[];
   isSending: boolean;
   onMarkDone: (notes: string) => void;
-  onSkip: () => void;
-  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
-  skipLabel?: string;
   onLeadLost?: () => void;
   /** When true, shows a "No-show" button (lead has a scheduled meeting). */
   canMarkNoShow?: boolean;
@@ -91,8 +87,6 @@ export function ActivityPhonePanel({
   phones,
   isSending,
   onMarkDone,
-  onSkip,
-  skipLabel = 'Adiar p/ amanhã',
   onLeadLost,
   canMarkNoShow,
   activityName,
@@ -718,14 +712,6 @@ export function ActivityPhonePanel({
             Sem telefone cadastrado para este lead.
           </p>
         )}
-      </div>
-
-      {/* Actions — skip only (result is handled via modal) */}
-      <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-        <Button variant="outline" onClick={onSkip} disabled={isSending || isInCall}>
-          <Clock className="mr-2 h-4 w-4" />
-          {skipLabel}
-        </Button>
       </div>
 
       {resultModal}

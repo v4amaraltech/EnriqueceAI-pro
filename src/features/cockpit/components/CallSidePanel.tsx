@@ -56,7 +56,6 @@ interface CallSidePanelProps {
   onRestore: () => void;
   onClose: () => void;
   onMarkDone: (notes: string) => void;
-  onSkip: () => void;
   onLeadLost: () => void;
   onScheduled: () => void;
   onCallStateChange?: (state: CallState) => void;
@@ -81,7 +80,6 @@ export function CallSidePanel({
   onRestore,
   onClose,
   onMarkDone,
-  onSkip,
   onLeadLost,
   onScheduled,
   onCallStateChange,
@@ -174,7 +172,6 @@ export function CallSidePanel({
             phones={getAllLeadPhones(lead)}
             isSending={false}
             onMarkDone={onMarkDone}
-            onSkip={onSkip}
             onLeadLost={onLeadLost}
             canMarkNoShow={Boolean(lead.meeting_scheduled_at)}
             dialerProvider={dialerProvider}

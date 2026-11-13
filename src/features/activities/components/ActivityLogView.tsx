@@ -421,7 +421,6 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         onActivityDone={handleActivityDone}
         onActivityRestore={handleActivityRestore}
         onLeadLost={handleLeadLost}
-        onSwitchCadence={handleSwitchCadence}
       />
 
       <MarkLeadLostDialog

@@ -13,7 +13,6 @@ import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepar
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
 import { fetchEmailTemplates, type EmailTemplateOption } from '../actions/fetch-email-templates';
 import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
-import { snoozeButtonLabel } from '../constants/skip-reasons';
 import { resolveWhatsAppPhone, buildContactPhones } from '../utils/resolve-whatsapp-phone';
 import { isLimboFollowup, type PendingActivity } from '../types';
 
@@ -37,9 +36,6 @@ interface ActivityExecutionSheetContentProps {
   onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string, contactId?: string | null) => void;
   /** SDR já enviou por fora — registra como enviado sem disparar pela API. */
   onManualSend?: (subject: string, body: string, phone?: string, contactId?: string | null) => void;
-  onSkip: () => void;
-  /** Adiamentos restantes neste passo — vira "(1 restante)" no botão de adiar. */
-  snoozesLeft?: number;
   onMarkDone: (notes: string) => void;
   onLeadLost?: () => void;
   onReportWhatsAppInvalid?: () => void;
@@ -53,8 +49,6 @@ export function ActivityExecutionSheetContent({
   isSending,
   onSend,
   onManualSend,
-  onSkip,
-  snoozesLeft,
   onMarkDone,
   onLeadLost,
   onReportWhatsAppInvalid,
@@ -62,7 +56,6 @@ export function ActivityExecutionSheetContent({
   dialerProvider,
   quickMode = false,
 }: ActivityExecutionSheetContentProps) {
-  const skipLabel = snoozeButtonLabel(snoozesLeft);
   const [isLoading, setIsLoading] = useState(true);
   const [waConnected, setWaConnected] = useState<boolean | null>(null);
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
@@ -270,8 +263,6 @@ export function ActivityExecutionSheetContent({
         leadName={leadName}
         isSending={isSending}
         onMarkDone={onMarkDone}
-        onSkip={onSkip}
-        skipLabel={skipLabel}
       />
     );
   }
@@ -284,8 +275,6 @@ export function ActivityExecutionSheetContent({
         reason={activity.callScript}
         isSending={isSending}
         onMarkDone={onMarkDone}
-        onSkip={onSkip}
-        skipLabel={skipLabel}
       />
     );
   }
@@ -300,8 +289,6 @@ export function ActivityExecutionSheetContent({
         website={activity.lead.website}
         isSending={isSending}
         onMarkDone={onMarkDone}
-        onSkip={onSkip}
-        skipLabel={skipLabel}
       />
     );
   }
@@ -342,8 +329,6 @@ export function ActivityExecutionSheetContent({
         phones={phones}
         isSending={isSending}
         onMarkDone={onMarkDone}
-        onSkip={onSkip}
-        skipLabel={skipLabel}
         onLeadLost={onLeadLost}
         canMarkNoShow={!!activity.lead.meeting_scheduled_at}
         activityName={activity.activityName}
@@ -385,8 +370,6 @@ export function ActivityExecutionSheetContent({
         onManualSend={onManualSend
           ? () => onManualSend('', renderedPreview, to, phones.find((p) => p.formatted === to)?.contactId ?? null)
           : undefined}
-        onSkip={onSkip}
-        skipLabel={skipLabel}
         onReportInvalid={onReportWhatsAppInvalid ?? (() => undefined)}
       />
       </>
@@ -411,8 +394,6 @@ export function ActivityExecutionSheetContent({
       onBodyChange={setBody}
       onSend={() => onSend(renderedSubject, renderedPreview, aiPersonalized)}
       onManualSend={onManualSend ? () => onManualSend(renderedSubject, renderedPreview) : undefined}
-      onSkip={onSkip}
-      skipLabel={skipLabel}
     />
   );
 }

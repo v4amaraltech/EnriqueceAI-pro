@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { ChevronLeft, ChevronRight, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,14 +18,11 @@ import { WebphonePanelHost } from '@/features/integrations/webphone/WebphonePane
 import { executeActivity } from '../actions/execute-activity';
 import { executeScheduledActivity } from '../actions/execute-scheduled-activity';
 import { reportWhatsAppInvalid } from '../actions/report-whatsapp-invalid';
-import { skipActivity } from '../actions/skip-activity';
-import { SNOOZE_LIMIT, SNOOZE_LIMIT_CODE } from '../constants/skip-reasons';
 import type { PendingActivity } from '../types';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 
 import { ActivityLeadContext } from './ActivityLeadContext';
 import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
-import { SnoozeLimitDialog } from './SnoozeLimitDialog';
 
 interface ActivityExecutionSheetProps {
   activities: PendingActivity[];
@@ -35,8 +32,6 @@ interface ActivityExecutionSheetProps {
   onActivityDone: (enrollmentId: string, stepId: string) => void;
   onActivityRestore: (activity: PendingActivity) => void;
   onLeadLost?: (activity: PendingActivity) => void;
-  /** Abre o "Trocar cadência" para a atividade (saída do limite de adiamentos). */
-  onSwitchCadence?: (activity: PendingActivity) => void;
   dialerProvider?: DialerProvider;
   quickMode?: boolean;
   /** Abre o painel lateral e a gaveta fecha. Ausente, a gaveta segue sozinha. */
@@ -53,17 +48,10 @@ export function ActivityExecutionSheet({
   onActivityDone,
   onActivityRestore,
   onLeadLost,
-  onSwitchCadence,
   dialerProvider,
   quickMode = false,
   onOpenCallPanel,
 }: ActivityExecutionSheetProps) {
-  // Limite de adiamentos atingido: em vez de adiar, obriga uma saída.
-  const [snoozeLimitOpen, setSnoozeLimitOpen] = useState(false);
-  // Adiamentos feitos NESTA sessão do sheet (o server-side é a fonte da
-  // verdade; isto só evita mostrar "2 restantes" depois de adiar e voltar).
-  const [localSnoozes, setLocalSnoozes] = useState<Record<string, number>>({});
-
   const selectedIndex = selectedKey !== null
     ? activities.findIndex((a) => keyOf(a) === selectedKey)
     : -1;
@@ -317,49 +305,6 @@ export function ActivityExecutionSheet({
     );
   };
 
-  // Adiamentos já usados no passo atual (servidor + os desta sessão).
-  const snoozeCount = activity
-    ? Math.max(activity.snoozeCount, localSnoozes[keyOf(activity)] ?? 0)
-    : 0;
-  const snoozesLeft = isScheduled ? undefined : Math.max(0, SNOOZE_LIMIT - snoozeCount);
-
-  // "Adiar p/ amanhã": empurra o passo para 09:00 BRT do próximo dia útil.
-  // Limite de SNOOZE_LIMIT por passo — no seguinte abre o diálogo de saída em
-  // vez de adiar. Retorno agendado (isScheduled) mantém o adiamento próprio.
-  const handleSkip = () => {
-    if (!activity) return;
-    const act = activity;
-
-    if (!isScheduled && snoozeCount >= SNOOZE_LIMIT) {
-      setSnoozeLimitOpen(true);
-      return;
-    }
-
-    toast.success(isScheduled ? 'Retorno adiado' : 'Adiado para amanhã às 9h');
-    advanceOrClose(act.enrollmentId, act.stepId);
-
-    const persist = isScheduled
-      ? async () => {
-          const { postponeScheduledActivity } = await import('../actions/complete-scheduled-activity');
-          return postponeScheduledActivity(act.stepId);
-        }
-      : async () => {
-          const result = await skipActivity(act.enrollmentId);
-          if (!result.success && result.code === SNOOZE_LIMIT_CODE) {
-            // Corrida: outra aba já gastou o último adiamento. Devolve à fila
-            // e abre a saída obrigatória.
-            setLocalSnoozes((prev) => ({ ...prev, [keyOf(act)]: SNOOZE_LIMIT }));
-            setSnoozeLimitOpen(true);
-          }
-          if (result.success) {
-            setLocalSnoozes((prev) => ({ ...prev, [keyOf(act)]: result.data.snoozeCount }));
-          }
-          return result;
-        };
-
-    persistInBackground(act, persist);
-  };
-
   const hasPrev = selectedIndex > 0;
   const hasNext = selectedIndex >= 0 && selectedIndex < activities.length - 1;
   const prevActivity = hasPrev ? activities[selectedIndex - 1] : undefined;
@@ -471,8 +416,6 @@ export function ActivityExecutionSheet({
                 isSending={false}
                 onSend={handleSend}
                 onManualSend={handleManualSend}
-                onSkip={handleSkip}
-                snoozesLeft={snoozesLeft}
                 onMarkDone={handleMarkDone}
                 onLeadLost={onLeadLost ? () => onLeadLost(activity) : undefined}
                 onReportWhatsAppInvalid={handleReportWhatsAppInvalid}
@@ -485,22 +428,6 @@ export function ActivityExecutionSheet({
         )}
       </SheetContent>
 
-      {activity && (
-        <SnoozeLimitDialog
-          open={snoozeLimitOpen}
-          onOpenChange={setSnoozeLimitOpen}
-          leadName={activity.lead.nome_fantasia ?? activity.lead.razao_social ?? undefined}
-          onExecuteNow={() => setSnoozeLimitOpen(false)}
-          onLeadLost={() => {
-            setSnoozeLimitOpen(false);
-            onLeadLost?.(activity);
-          }}
-          onSwitchCadence={() => {
-            setSnoozeLimitOpen(false);
-            onSwitchCadence?.(activity);
-          }}
-        />
-      )}
     </Sheet>
   );
 }

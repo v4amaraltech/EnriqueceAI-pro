@@ -18,12 +18,9 @@ interface ActivityResearchPanelProps {
   website?: string | null;
   isSending: boolean;
   onMarkDone: (notes: string) => void;
-  onSkip: () => void;
-  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
-  skipLabel?: string;
 }
 
-export function ActivityResearchPanel({ leadName, leadId, cnpj, website, isSending, onMarkDone, onSkip, skipLabel = 'Adiar p/ amanhã' }: ActivityResearchPanelProps) {
+export function ActivityResearchPanel({ leadName, leadId, cnpj, website, isSending, onMarkDone }: ActivityResearchPanelProps) {
   const [notes, setNotes] = useState('');
   const [isResearching, startResearch] = useTransition();
 
@@ -83,9 +80,6 @@ export function ActivityResearchPanel({ leadName, leadId, cnpj, website, isSendi
 
       {/* Actions */}
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-        <Button variant="outline" onClick={onSkip} disabled={isSending}>
-          {skipLabel}
-        </Button>
         <Button onClick={() => onMarkDone(notes)} disabled={isSending}>
           {isSending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

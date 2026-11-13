@@ -235,39 +235,6 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
     });
   }, [callBusy, handleDone, handleRestore, previewOnly, selectedKey]);
 
-  const snoozeTask = useCallback((activity: PendingActivity) => {
-    if (previewOnly) {
-      toast.message('Fixture de teste: nada é registrado.');
-      return;
-    }
-    if (callBusy) {
-      toast.error('Encerre a ligação antes de adiar');
-      return;
-    }
-    const key = keyOf(activity);
-    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
-    handleDone(activity.enrollmentId, activity.stepId);
-    if (selectedKey === key) setSelectedKey(null);
-    const persist = isScheduled
-      ? import('@/features/activities/actions/complete-scheduled-activity').then(({ postponeScheduledActivity }) =>
-          postponeScheduledActivity(activity.stepId),
-        )
-      : import('@/features/activities/actions/skip-activity').then(({ skipActivity }) => skipActivity(activity.enrollmentId));
-    void persist.then((result) => {
-      if (!result.success) {
-        handleRestore(activity);
-        if (selectedKey === key) setSelectedKey(key);
-        toast.error(result.error ?? 'Não foi possível adiar');
-      } else {
-        toast.success(isScheduled ? 'Retorno adiado' : 'Adiado para amanhã às 9h');
-      }
-    }).catch(() => {
-      handleRestore(activity);
-      if (selectedKey === key) setSelectedKey(key);
-      toast.error('Não foi possível adiar');
-    });
-  }, [callBusy, handleDone, handleRestore, previewOnly, selectedKey]);
-
   const handleCallState = useCallback((state: CallState) => {
     setCallBusy(state === 'calling' || state === 'connected');
   }, []);
@@ -406,7 +373,6 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
           onRestore={() => setCallMinimized(false)}
           onClose={() => setSelectedKey(null)}
           onMarkDone={(notes) => completeTask(callActivity, notes)}
-          onSkip={() => snoozeTask(callActivity)}
           onLeadLost={() => setLostActivity(callActivity)}
           onScheduled={() => {
             handleDone(callActivity.enrollmentId, callActivity.stepId);
@@ -429,7 +395,6 @@ export function TasksTab({ initialActivities, progress, autoSend, isOwn, dialerP
         onActivityDone={handleDone}
         onActivityRestore={handleRestore}
         onLeadLost={setLostActivity}
-        onSwitchCadence={setSwitchActivity}
         dialerProvider={dialerProvider}
       />
       <SkipStepReasonDialog
