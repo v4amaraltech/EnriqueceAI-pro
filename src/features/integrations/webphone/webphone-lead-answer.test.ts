@@ -53,8 +53,8 @@ describe('hangupReasonLabel', () => {
     expect(hangupReasonLabel('VOICEMAIL')).toBe('Caiu na caixa postal.');
   });
 
-  it('NUMBER_CHANGED é caixa postal no guia da API4COM, e ALLOTTED_TIMEOUT é tempo expirado', () => {
-    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Caiu na caixa postal.');
+  it('NUMBER_CHANGED é não atendeu (decisão de 12/11), e ALLOTTED_TIMEOUT é tempo expirado', () => {
+    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Não atendeu.');
     expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).toBe('Tempo expirado.');
     expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).not.toBe('A operadora não completou a ligação.');
   });
