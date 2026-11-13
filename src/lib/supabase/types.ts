@@ -3992,7 +3992,7 @@ export type Database = {
           org_id: string;
           proposed_changes: Json | null;
           qualification_completed_at: string | null;
-          qualification_id: string;
+          qualification_id: string | null;
           rules_version: string;
           skip_reason: string | null;
           verdict: string;
@@ -4009,7 +4009,7 @@ export type Database = {
           org_id: string;
           proposed_changes?: Json | null;
           qualification_completed_at?: string | null;
-          qualification_id: string;
+          qualification_id?: string | null;
           rules_version: string;
           skip_reason?: string | null;
           verdict: string;
@@ -4026,7 +4026,7 @@ export type Database = {
           org_id?: string;
           proposed_changes?: Json | null;
           qualification_completed_at?: string | null;
-          qualification_id?: string;
+          qualification_id?: string | null;
           rules_version?: string;
           skip_reason?: string | null;
           verdict?: string;

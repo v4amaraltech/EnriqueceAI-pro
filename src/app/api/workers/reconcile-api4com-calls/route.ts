@@ -4,6 +4,7 @@ import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { triggerHangupCrmShadow } from '@/features/calls/services/crm-auto-update/hangup-shadow.service';
 import {
   classifyApi4ComCall,
   getSignificantThreshold,
@@ -484,13 +485,19 @@ export async function POST(request: Request) {
           if (linkedMeta) updates.metadata = linkedMeta;
 
           if (Object.keys(updates).length > 1) {
-            await from(supabase, 'calls').update(updates).eq('id', existing.id);
+            const { error: updateError } = (await from(supabase, 'calls').update(updates).eq('id', existing.id)) as {
+              error?: { message?: string } | null;
+            };
+            // Hangup conhecido e persistido: log sombra (só shadow, idempotente pelo UNIQUE do log).
+            if (!updateError && (updates.hangup_cause ?? existing.hangup_cause)) {
+              triggerHangupCrmShadow(supabase, existing.id);
+            }
             return { kind: 'upserted_existing' };
           }
           return { kind: 'matched_no_update' };
         } else {
           // Insert missing call (webhook never arrived).
-          await from(supabase, 'calls').insert({
+          const { data: inserted, error: insertError } = (await from(supabase, 'calls').insert({
             org_id: orgId,
             user_id: userId,
             origin: c.from ?? '',
@@ -504,7 +511,12 @@ export async function POST(request: Request) {
             recording_url: c.record_url ?? null,
             // Copia o callRef do registro REST quando existe.
             metadata: reconcileInsertMetadata(c, api4comId),
-          } as Record<string, unknown>);
+          } as Record<string, unknown>)
+            .select('id')
+            .single()) as { data: { id: string } | null; error?: { message?: string } | null };
+          if (!insertError && inserted?.id && c.hangup_cause) {
+            triggerHangupCrmShadow(supabase, inserted.id);
+          }
           return { kind: 'inserted_new' };
         }
       } catch (err) {
