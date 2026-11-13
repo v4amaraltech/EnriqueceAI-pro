@@ -147,7 +147,7 @@ Só depois do veredito da Fase 0.
 ## Riscos
 - **Licença com aviso periódico:** se falhar, o WhatsApp do Enriquece para. É o principal ponto do go/no-go.
 - **Projeto novo:** bugs e mudanças de API. Mitigação: adaptador único, para trocar de motor sem mexer no resto.
-- **Bloqueio de número:** igual ao de hoje (as duas soluções são não oficiais).
+- **Bloqueio de número:** igual ao de hoje (as duas soluções são não oficiais). **Aconteceu no teste de 13/11** (24 h, número de teste): aparelho novo, QRs vencidos e criação de grupos em sequência. Mitigação: carência após conectar, QR renovado antes de vencer e migração escalonada.
 - **Janela de migração:** mensagens que chegarem durante a troca podem não ser capturadas. Mitigação: migrar fora do horário de envio.
 - **Ligar a gravação muda o volume de escrita** em `lead_messages` (todas as mensagens de cada número, não só as de leads). As mensagens sem lead vão para `lead_message_unmatched`, então é preciso acompanhar o crescimento dessa tabela.
 
@@ -162,7 +162,7 @@ Ambiente: Evolution Go em `evolution.v4companyamaral.com` (servidor só do Enriq
 | 4 | Envio | ✅ `POST /send/text` (`number`, `text`) e `POST /send/media` (`number`, `type`, `url`, `caption`) com a senha da instância no cabeçalho `apikey`. **A chave global é recusada no envio (401)**. A mídia por URL precisa responder com `Content-Type` de imagem (URL com redirecionamento falhou). |
 | 5 | Grupos | ✅ `POST /group/create` (`groupName`, `participants` como `<número>@s.whatsapp.net`) já adiciona as pessoas. Com o número sem sufixo, a chamada não respondeu em 60 s. ✅ `POST /group/photo` com `image` = `data:image/jpeg;base64,…` (PNG é recusado). ❌ `POST /group/participant` responde "participants is required" mesmo com a lista preenchida (testado com e sem sufixo): defeito da Evolution Go. Não bloqueia, porque o Enriquece só usa esse comando como reserva para adicionar quem não entrou ao criar. ✅ `POST /group/leave`. |
 | 6 | Telemetria | ❓ Não visível pela API. O Vini confere nas variáveis do servidor se existe opção para desligar. |
-| 7 | 48 h conectado | ⏳ Em andamento desde 13/11 11h BRT. Conferir em 15/11 11h BRT. |
+| 7 | 48 h conectado | ❌ **Invalidado.** Por volta de 12h BRT de 13/11 o número de teste levou **bloqueio temporário de 24 h do WhatsApp**. No mesmo horário, o servidor passou a responder 404 em todos os endereços (causa a apurar). Refazer com um número aquecido (ver abaixo). |
 
 **Regras para a implementação (vindas do teste):**
 - **Telefone do contato:** mensagem recebida traz o telefone em `Info.Chat`/`Info.Sender` (`@s.whatsapp.net`) e o LID em `SenderAlt`. Mensagem enviada pelo celular (`IsFromMe`) traz `Chat` como `@lid` e o telefone em `Info.RecipientAlt`. Regra: usar o campo que termina em `@s.whatsapp.net`, nunca o `@lid`.
@@ -172,7 +172,16 @@ Ambiente: Evolution Go em `evolution.v4companyamaral.com` (servidor só do Enriq
 - **Eventos de conexão:** `QRCode`, `QRTimeout` (após 5 QR vencidos, a instância desloga sozinha), `PairSuccess`, `LoggedOut`. A tela de conexão precisa renovar o QR sem o SDR ver um QR vencido.
 - **Comandos (troca da Evolution API v2 → Go):** `connectionState` → `GET /instance/status` (`Connected`, `LoggedIn`); `connect` → `POST /instance/connect` + `GET /instance/qr`; `fetchInstances` → `GET /instance/all` (chave global); `delete` → `DELETE /instance/delete/{id}`; `logout` → `DELETE /instance/logout`; `restart` → `POST /instance/reconnect`; `sendText`/`sendMedia` → `/send/text`/`/send/media`; `group/create`, `updateParticipant`, `updateGroupPicture` → `/group/create`, `/group/participant`, `/group/photo`. Testados no teste: `status`, `connect`, `qr`, `all`, `send/text`, `send/media` e os de grupo. A partir da documentação (Swagger do servidor), a confirmar na Fase 1: `delete`, `logout` e `reconnect`.
 
-**Leitura parcial:** caminhando para **GO**. Nenhum ponto trava; os ⚠️ viram regras da Fase 1/2. Veredito final do Vini após o item 7.
+**Bloqueio do número de teste (13/11):** em menos de 1 hora, o aparelho recém-conectado passou por 5 QR vencidos e reconexões, recebeu o histórico (`HistorySync`), enviou mensagens pela API e **criou 2 grupos seguidos** com o mesmo contato, saindo em seguida. O mais provável é que o bloqueio venha desse padrão de uso, e não do motor em si: o risco é o mesmo na Evolution API, porque as duas são não oficiais. Mas ele vale para a migração, já que cada SDR que reconectar pelo QR vira um "aparelho novo" para o WhatsApp.
+
+**Novas regras (Fases 1 e 2):**
+- Número recém-conectado não cria grupo nem envia em volume nas primeiras horas. O envio cadenciado (`whatsapp-evolution-paced-sending`) e a criação do grupo da reunião precisam respeitar uma carência após a conexão. O tamanho dessa carência é decisão do Vini.
+- A tela de conexão renova o QR antes de vencer, para não acumular QRs vencidos (a instância desloga sozinha após 5).
+- A migração dos números da V4 é escalonada (não todos no mesmo dia) e fora do horário de envio.
+
+**Refazer o item 7:** usar um número **já aquecido** (uso normal há semanas), só conectado e recebendo mensagens, sem grupos e sem envios em sequência, por 48 h. Anotar também se o número bloqueado volta sozinho depois das 24 h.
+
+**Leitura parcial:** continua **GO** nos itens 1 a 5. O veredito final depende do item 7 refeito e da causa do 404 no servidor.
 
 ## Validação @po (13/11/2026)
 Checklist de 10 pontos:
@@ -208,3 +217,4 @@ _Pendente._
 - 13/11/2026: Story criada (Draft) a partir da conversa com o Vini. Flag `lead_messages_capture` ligada para a V4 no mesmo dia (texto das respostas de e-mail).
 - 13/11/2026: Validação @po — GO 9/10, Draft → Ready. Escopo da Fase 1 separado por veredito (GO/NO-GO).
 - 13/11/2026: Resultado parcial da Fase 0 registrado (itens 1–6; item 7 em andamento). Leitura parcial: GO.
+- 13/11/2026: Número de teste bloqueado por 24 h pelo WhatsApp; item 7 invalidado; servidor da Evolution Go respondendo 404. Risco de bloqueio na migração e novas regras (carência após conectar, QR renovado, migração escalonada) registrados.
