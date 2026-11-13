@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { peekActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
-import { startLiveAmdBrowser } from './live-amd-browser';
+import { LIVE_AMD_BROWSER_CAPTURE, startLiveAmdBrowser } from './live-amd-browser';
 import type { AudioPumpHooks } from './live-amd-pump';
 
 const record = vi.hoisted(() => ({ recordLiveAmd: vi.fn() }));
@@ -156,5 +156,11 @@ describe('stopActiveLiveAmd', () => {
     expect(second.stopPump).not.toHaveBeenCalled();
     stopActiveLiveAmd();
     expect(second.stopPump).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LIVE_AMD_BROWSER_CAPTURE', () => {
+  it('fica desligada no navegador enquanto o Desligar não estiver estável', () => {
+    expect(LIVE_AMD_BROWSER_CAPTURE).toBe(false);
   });
 });

@@ -28,7 +28,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { LiveAmdHint } from './LiveAmdHint';
 import { useWebphonePanelHost } from './WebphonePanelHost';
-import { startLiveAmdBrowser } from './live-amd-browser';
+import { LIVE_AMD_BROWSER_CAPTURE, startLiveAmdBrowser } from './live-amd-browser';
 import type { LiveAmdView } from './live-amd-session';
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
@@ -217,6 +217,8 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   }
 
   useEffect(() => {
+    // Captura desligada: depois do PR 616 o Desligar ainda travava com o clone da faixa.
+    if (!LIVE_AMD_BROWSER_CAPTURE) return;
     if (!liveListen || !amdCallId) return;
     if (webphone.call?.phase === 'ended') return;
     let stop = () => undefined as void;
@@ -557,9 +559,18 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     </DraggableShell>
   );
 
+  // Durante a ligação, o dock vai para document.body com pointer-events
+  // auto: um Resultado da Ligação (Radix Dialog) coloca pointer-events
+  // none no resto da página. Se o dock ficar no host da gaveta, Mutar e
+  // Desligar aparecem, mas o clique não chega.
+  const liveDockTarget =
+    typeof document !== 'undefined' && liveCall
+      ? document.body
+      : (host ?? (typeof document !== 'undefined' ? document.body : null));
+
   return (
     <>
-      {idle && !idleProblem ? null : host ? createPortal(shell, host) : shell}
+      {idle && !idleProblem ? null : liveDockTarget ? createPortal(shell, liveDockTarget) : shell}
 
       {!showingDialing && resultCall?.context && (
         <CallResultModal
@@ -669,9 +680,11 @@ function DraggableBox({
 
   const style: React.CSSProperties = {
     position: 'fixed',
-    // Acima do overlay do Dialog (z-50): Mutar e Desligar continuam clicáveis
-    // mesmo se um Resultado da Ligação anterior ainda estiver aberto.
-    zIndex: elevate ? 80 : 50,
+    // Acima do overlay do Dialog (z-50) e com pointer-events auto: o Radix
+    // Dialog trava cliques no resto da página, então o z-index sozinho não
+    // basta. 10000 fica acima de toasts e da gaveta.
+    zIndex: elevate ? 10_000 : 50,
+    pointerEvents: 'auto',
     transform: CSS.Translate.toString(transform),
     ...(position ? { left: position.x, top: position.y } : { left: 16, bottom: 16 }),
   };
@@ -874,7 +887,16 @@ function LiveCallView({
           {call.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           {call.muted ? 'Mutado' : 'Mutar'}
         </Button>
-        <Button size="sm" variant="destructive" className="flex-1" onClick={onHangup}>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="flex-1"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onHangup();
+          }}
+          onClick={onHangup}
+        >
           <PhoneOff className="h-4 w-4" /> Desligar
         </Button>
       </div>
@@ -932,7 +954,16 @@ function DialingView({
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="destructive" className="flex-1" onClick={onHangup}>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="flex-1"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onHangup();
+          }}
+          onClick={onHangup}
+        >
           <PhoneOff className="h-4 w-4" /> Desligar
         </Button>
       </div>

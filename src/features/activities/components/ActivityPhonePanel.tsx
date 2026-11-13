@@ -26,6 +26,7 @@ import {
 } from '@/features/integrations/webphone/webphone-call-context';
 import {
   getWebphoneState,
+  hangupCall as hangupWebphoneLeg,
   prepareWebphoneMicForDial,
 } from '@/features/integrations/webphone/webphone-client';
 import {
@@ -288,6 +289,9 @@ export function ActivityPhonePanel({
 
   function handleHangup() {
     setCallDuration(elapsed);
+    // A perna SIP precisa cair na hora. Só o hangup da API4COM deixava o
+    // dock em "Chamando o lead" se o clique viesse deste painel.
+    void hangupWebphoneLeg();
 
     if (!providerCallId) {
       setCallState('ended');
