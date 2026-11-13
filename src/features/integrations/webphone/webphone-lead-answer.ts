@@ -62,9 +62,11 @@ const HANGUP_REASON: Record<string, string> = {
   NETWORK_OUT_OF_ORDER: CARRIER_RETRY,
   EXCHANGE_ROUTING_ERROR: CARRIER_RETRY,
   RECOVERY_ON_TIMER_EXPIRE: 'A operadora não respondeu a tempo. Tente de novo.',
-  // Guia oficial da API4COM (códigos de status): NUMBER_CHANGED = "Caixa
-  // postal". Vale o sentido de negócio, não o literal do FreeSWITCH.
-  NUMBER_CHANGED: 'Caiu na caixa postal.',
+  // NUMBER_CHANGED é "não atendeu" (decisão do Vinicius, 12/11): quando o SDR
+  // registrou desfecho, foram 43 no_answer e nenhuma caixa postal. O guia
+  // oficial da API4COM ainda descreve a causa como caixa postal; o rótulo
+  // segue a prática do SDR. connected permanece false.
+  NUMBER_CHANGED: 'Não atendeu.',
   ALLOTTED_TIMEOUT: 'Tempo expirado.',
   UNALLOCATED_NUMBER: 'Este número não existe.',
   INVALID_NUMBER_FORMAT: 'Número em formato inválido.',

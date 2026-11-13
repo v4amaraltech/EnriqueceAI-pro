@@ -198,8 +198,9 @@ Idempotente pelo `UNIQUE (call_id)`: a segunda chamada vira `already_logged`.
 | `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE` | sem answered_at | technical_failure | technical_failure | retry phone |
 
 `NUMBER_CHANGED` é "não atendeu" (decisão de 12/11, alinhada ao que o SDR registrou: 43 no_answer e
-nenhuma caixa postal). O guia API4COM e o PR598 continuam tratando essa causa como caixa postal na
-telefonia (rótulo e status `no_contact`); este caminho do log sombra não muda isso. Confiança 1,
+nenhuma caixa postal). O guia API4COM ainda descreve a causa como caixa postal; o status de
+telefonia permanece `no_contact` com `connected=false`. O rótulo do webphone é "Não atendeu".
+Confiança 1,
 `lead_status` sempre nulo. Veredito: `already_dispositioned` (SDR ou fluxo antigo da IA), `no_lead`,
 ou `would_apply`, sempre com a proposta preenchida.
 
