@@ -475,10 +475,58 @@ export function answerCall(): void {
  * Se o `ended` não chegar em `HANGUP_FORCE_END_MS`, a UI encerra mesmo assim.
  */
 export async function hangupCall(): Promise<void> {
-  stopActiveLiveAmd();
   const session = activeSession;
   const call = state.call;
-  if (!session || !call || call.phase === 'ended') return;
+  if (!call || call.phase === 'ended') {
+    try {
+      stopActiveLiveAmd();
+    } catch (err) {
+      console.error('[webphone] stop live amd failed:', err);
+    }
+    return;
+  }
+
+  const id = call.id;
+
+  // Agenda o encerramento da UI ANTES de parar a escuta. Se o stop travar
+  // ou lançar, o Desligar ainda tira a tela de "Chamando o lead".
+  window.setTimeout(() => {
+    if (state.call?.id !== id || state.call?.phase === 'ended') return;
+    try {
+      stopActiveLiveAmd();
+    } catch {
+      /* ignore */
+    }
+    stopStatsSampling();
+    stopRemoteTapNow();
+    publishRemoteTrack(null);
+    dispatch({ type: 'call_ended', id, at: Date.now(), cause: 'forced' });
+    clearEndedCallLater(id);
+    if (session) {
+      try {
+        session.terminate();
+      } catch {
+        /* sessão já encerrada */
+      }
+    }
+  }, HANGUP_FORCE_END_MS);
+
+  try {
+    stopActiveLiveAmd();
+  } catch (err) {
+    console.error('[webphone] stop live amd failed:', err);
+  }
+
+  if (!session) {
+    // Sem sessão SIP, não há BYE para esperar: encerra a UI na hora.
+    stopStatsSampling();
+    stopRemoteTapNow();
+    publishRemoteTrack(null);
+    dispatch({ type: 'call_ended', id, at: Date.now(), cause: 'forced' });
+    clearEndedCallLater(id);
+    return;
+  }
+
   if (call.phase === 'in-call') {
     void Promise.race([
       sampleAudioStats(call.id),
@@ -490,20 +538,6 @@ export async function hangupCall(): Promise<void> {
   } catch (err) {
     console.error('[webphone] hangup failed:', err);
   }
-  const id = call.id;
-  window.setTimeout(() => {
-    if (activeSession !== session || state.call?.id !== id || state.call?.phase === 'ended') return;
-    stopStatsSampling();
-    stopRemoteTapNow();
-    publishRemoteTrack(null);
-    dispatch({ type: 'call_ended', id, at: Date.now(), cause: 'forced' });
-    clearEndedCallLater(id);
-    try {
-      session.terminate();
-    } catch {
-      /* sessão já encerrada */
-    }
-  }, HANGUP_FORCE_END_MS);
 }
 
 /**

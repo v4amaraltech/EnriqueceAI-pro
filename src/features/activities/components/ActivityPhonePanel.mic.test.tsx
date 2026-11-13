@@ -39,6 +39,7 @@ vi.mock('@/features/integrations/webphone/webphone-client', async () => {
   >('@/features/integrations/webphone/webphone-state');
   return {
     getWebphoneState: () => webphone.state,
+    hangupCall: vi.fn(),
     prepareWebphoneMicForDial: () => {
       const state = webphone.state as WebphoneState;
       if (!webphoneMicNeedsGesture(state)) return null;

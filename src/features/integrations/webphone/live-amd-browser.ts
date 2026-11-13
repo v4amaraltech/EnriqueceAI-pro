@@ -5,6 +5,15 @@ import { type AudioPump, createCapturePump } from './live-amd-pump';
 import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
 import { publishLiveAmdView } from './live-amd-view-store';
 
+/**
+ * Captura no navegador (clone da faixa + AudioWorklet). Desligada depois que
+ * o PR 616 ficou em produção e o Desligar continuou sem responder, com a
+ * escuta ainda clonando a faixa. O código da captura permanece, para religar
+ * quando o desligar estiver estável. Os testes chamam startLiveAmdBrowser
+ * direto e não passam por esta trava.
+ */
+export const LIVE_AMD_BROWSER_CAPTURE = false;
+
 interface TokenResponse {
   enabled?: boolean;
   websocketUrl?: string;

@@ -469,4 +469,35 @@ describe('hangupCall e a escuta ao vivo', () => {
     expect(session.terminate).toHaveBeenCalled();
     expect(Date.now() - started).toBeLessThan(50);
   });
+
+  it('se o stop da escuta lançar, o BYE e o encerramento forçado da UI ainda acontecem', async () => {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const { session, request } = fakeSession(true);
+    ua.emit('newRTCSession', { session, request });
+    const accepted = session.on.mock.calls.find((entry) => entry[0] === 'accepted')?.[1] as
+      | (() => void)
+      | undefined;
+    accepted?.();
+    expect(client.getWebphoneState().call?.phase).toBe('in-call');
+
+    const { setActiveLiveAmdStop } = await import('./live-amd-active');
+    setActiveLiveAmdStop(() => {
+      throw new Error('stop da escuta falhou');
+    });
+
+    vi.useFakeTimers();
+    try {
+      const hangup = client.hangupCall();
+      expect(session.terminate).toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await hangup;
+      expect(client.getWebphoneState().call?.phase).toBe('ended');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
