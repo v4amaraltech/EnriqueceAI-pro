@@ -7,11 +7,17 @@
 // e a página atende sozinha. Sem extensão do Chrome.
 
 import { shouldTapRemoteAudio, watchRemoteTrack } from './remote-audio-log';
+import { resumeWebphoneAudioContexts } from './webphone-audio-contexts';
 import { summarizeRtcStats } from './webphone-audio-stats';
 import { toggleSessionAudio } from './webphone-audio-mute';
 import { claimWebphoneDial } from './webphone-dial-correlation';
 import { getWebphoneInstanceId, newInstanceUUID } from './webphone-instance-id';
-import { acquireMicrophonePermission, type MicPermission } from './webphone-mic';
+import {
+  acquireMicrophonePermission,
+  isMicrophonePermissionGranted,
+  type MicPermission,
+  type MicPermissionsApi,
+} from './webphone-mic';
 import { broadcastLockBus, browserLockClock, createWebphoneTabLock, type WebphoneTabLock } from './webphone-tab-lock';
 import {
   INTEGRATED_CALL_HEADER,
@@ -19,6 +25,8 @@ import {
   isIntegratedCallHeader,
   reduceWebphone,
   remoteNumberFromUri,
+  resolveMicForDial,
+  webphoneMicNeedsGesture,
   type WebphoneEvent,
   type WebphoneState,
 } from './webphone-state';
@@ -129,12 +137,15 @@ function attachRemoteStream(stream: MediaStream): void {
 }
 
 /**
- * Pede o microfone. Chamar SÓ a partir de um clique do SDR (botão "Ativar
- * microfone" / "Tentar de novo" do painel): nunca no mount. Não mexe no UA,
- * na sessão nem no registro, então pode ser repetido depois de um bloqueio
- * sem derrubar o ramal. Dois cliques seguidos compartilham o mesmo pedido.
+ * Pede o microfone. Chamar SÓ a partir de um clique do SDR (Ligar, iniciar o
+ * Power Dialer, "Tentar de novo" do painel) ou no start quando a permissão já
+ * é `granted` (aí não abre prompt): nunca no mount sem essa checagem. Não mexe
+ * no UA, na sessão nem no registro, então pode ser repetido depois de um
+ * bloqueio sem derrubar o ramal. Dois cliques seguidos compartilham o mesmo
+ * pedido. No mesmo gesto acorda os AudioContext suspensos do webphone.
  */
 export function requestWebphoneMicrophone(): Promise<MicPermission> {
+  resumeWebphoneAudioContexts();
   if (micRequest) return micRequest;
   const mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
   micRequest = acquireMicrophonePermission(mediaDevices)
@@ -146,6 +157,38 @@ export function requestWebphoneMicrophone(): Promise<MicPermission> {
       micRequest = null;
     });
   return micRequest;
+}
+
+/**
+ * Chamar no clique de discagem (Ligar, iniciar ou retomar o Power Dialer),
+ * ANTES de armar a trava de clique duplo. Acorda os AudioContext no mesmo
+ * gesto. Se o microfone ainda não foi pedido nesta aba, pede agora e devolve a
+ * Promise com a mensagem para o toast (ou `null` se concedeu). Sem nada a
+ * pedir devolve `null` na hora, sem Promise: o clique segue síncrono como
+ * antes. Os outros bloqueios seguem com `dialingBlockReason`.
+ */
+export function prepareWebphoneMicForDial(): Promise<string | null> | null {
+  resumeWebphoneAudioContexts();
+  if (!webphoneMicNeedsGesture(state)) return null;
+  return resolveMicForDial(state, requestWebphoneMicrophone);
+}
+
+function browserPermissions(): MicPermissionsApi | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  return (navigator as Navigator & { permissions?: MicPermissionsApi }).permissions;
+}
+
+/**
+ * No start: se o navegador já liberou o microfone para o site, libera em
+ * silêncio (o `getUserMedia` não abre prompt) e o INVITE integrado volta a ser
+ * atendido sem clique. Com `prompt`/`denied`/sem a API, não chama
+ * `getUserMedia`: o pedido fica para o clique em Ligar.
+ */
+async function autoActivateMicIfGranted(generation: number): Promise<void> {
+  if (state.mic === 'granted') return;
+  const granted = await isMicrophonePermissionGranted(browserPermissions());
+  if (!granted || generation !== startGeneration) return;
+  await requestWebphoneMicrophone();
 }
 
 function ensureTabLock(ramal: string): WebphoneTabLock {
@@ -272,8 +315,9 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
 
 /**
  * Registra o ramal. Chamar de novo com outra config derruba a instância
- * anterior (singleton). NÃO pede o microfone: isso só acontece no clique
- * (`requestWebphoneMicrophone`). Antes do `UA.start()` consulta as outras abas;
+ * anterior (singleton). Só pede o microfone se a permissão já for `granted`
+ * (sem prompt); nos outros casos o pedido fica para o clique
+ * (`prepareWebphoneMicForDial` / `requestWebphoneMicrophone`). Antes do `UA.start()` consulta as outras abas;
  * se uma delas já segura o ramal, não registra e publica o conflito.
  * `takeover: true` é o "Usar nesta aba": tira o ramal da outra aba primeiro.
  */
@@ -335,6 +379,7 @@ export async function startWebphone(config: WebphoneSipConfig, options: { takeov
   instance.on('newRTCSession', (e: { session: RTCSession; request: IncomingRequest | OutgoingRequest }) => handleNewSession(e.session, e.request));
 
   instance.start();
+  void autoActivateMicIfGranted(generation);
 }
 
 export function stopWebphone(): void {

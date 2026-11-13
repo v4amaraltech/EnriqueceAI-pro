@@ -83,9 +83,9 @@ import {
  * Vive no layout `(app)` e por isso continua na tela quando o SDR troca de
  * página no meio da ligação. Arrastável pelo cabeçalho (`@dnd-kit/core`), com a
  * posição lembrada em `localStorage`; sem ligação some da tela — só fica um
- * pill pequeno se algo impede ligar: erro no registro SIP, microfone ainda não
- * ativado (o pedido só roda no clique do botão do pill), bloqueado ou
- * indisponível, ou o ramal em uso em outra aba / outra instância.
+ * pill pequeno se algo impede ligar: erro no registro SIP, microfone bloqueado
+ * ou indisponível, ou o ramal em uso em outra aba / outra instância. Microfone
+ * ainda não pedido não mostra aviso: o pedido sai no clique em Ligar.
  *
  * Quem iniciou a ligação (fila de atividades, Power Dialer) continua dono do
  * resultado: ao "Concluir" aqui, o painel só pede a esse discador para abrir o
@@ -602,8 +602,10 @@ function IdlePill({ state }: { state: WebphoneState }) {
   const reg = REGISTRATION_LABEL[state.registration];
   const [micPending, setMicPending] = useState(false);
   const [sessionPending, setSessionPending] = useState(false);
-  const micMessage = state.mic === 'unknown' ? null : micBlockMessage(state.mic);
-  const showMic = state.mic !== 'granted' && webphoneIdleNeedsAction(state);
+  // Só negado ou indisponível pedem ação aqui. Ainda não pedido (`unknown`)
+  // não mostra aviso: o pedido sai no clique em Ligar.
+  const showMic = (state.mic === 'denied' || state.mic === 'unavailable') && webphoneIdleNeedsAction(state);
+  const micMessage = showMic ? micBlockMessage(state.mic) : null;
 
   function activateMic() {
     setMicPending(true);
@@ -623,7 +625,6 @@ function IdlePill({ state }: { state: WebphoneState }) {
       <span className="flex items-center gap-2" role="status" aria-live="polite">
         <span className={cn('inline-block h-2.5 w-2.5 rounded-full', reg.dot)} aria-hidden />
         {state.sessionConflict === 'other_tab' ? 'Ramal em uso em outra aba' : reg.text}
-        {state.mic === 'unknown' && showMic && ' · microfone não ativado'}
         {state.error && state.registration === 'error' && ` · ${state.error}`}
       </span>
       {state.sessionConflict && (
@@ -639,7 +640,7 @@ function IdlePill({ state }: { state: WebphoneState }) {
           {micMessage && <p className="text-[var(--foreground)]">{micMessage}</p>}
           <Button type="button" size="sm" onClick={activateMic} disabled={micPending}>
             <Mic className="mr-1 h-3.5 w-3.5" aria-hidden />
-            {state.mic === 'unknown' ? 'Ativar microfone' : 'Tentar de novo'}
+            Tentar de novo
           </Button>
         </div>
       )}

@@ -3,6 +3,7 @@ import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
 import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
 import { publishLiveAmdView } from './live-amd-view-store';
 import { downsampleToPcm16 } from './live-amd-window';
+import { registerWebphoneAudioContext } from './webphone-audio-contexts';
 
 interface TokenResponse {
   enabled?: boolean;
@@ -112,6 +113,7 @@ function defaultPump(track: MediaStreamTrack): AudioPump {
       if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined')
         return () => undefined;
       const ctx = new window.AudioContext();
+      const unregister = registerWebphoneAudioContext(ctx);
       const source = ctx.createMediaStreamSource(new MediaStream([track]));
       const processor = (
         ctx as unknown as {
@@ -136,6 +138,7 @@ function defaultPump(track: MediaStreamTrack): AudioPump {
       return () => {
         processor.onaudioprocess = null;
         source.disconnect();
+        unregister();
         void ctx.close();
       };
     },

@@ -24,10 +24,24 @@ const phone = vi.hoisted(() => {
     },
   };
 });
-vi.mock('@/features/integrations/webphone/webphone-client', () => ({
-  getWebphoneState: () => phone.get(),
-  hangupCall: () => actions.localHangup(),
-}));
+// Pedido do microfone no clique: usa a decisão real (`resolveMicForDial`) sobre
+// o store falso e um `getUserMedia` controlado pelo teste.
+const mic = vi.hoisted(() => ({ request: vi.fn(), resume: vi.fn() }));
+vi.mock('@/features/integrations/webphone/webphone-client', async () => {
+  const { resolveMicForDial, webphoneMicNeedsGesture } = await vi.importActual<
+    typeof import('@/features/integrations/webphone/webphone-state')
+  >('@/features/integrations/webphone/webphone-state');
+  return {
+    getWebphoneState: () => phone.get(),
+    hangupCall: () => actions.localHangup(),
+    prepareWebphoneMicForDial: () => {
+      mic.resume();
+      const state = phone.get() as WebphoneState;
+      if (!webphoneMicNeedsGesture(state)) return null;
+      return resolveMicForDial(state, mic.request);
+    },
+  };
+});
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({
   useApi4ComWebphone: () => useSyncExternalStore(phone.subscribe, phone.get, phone.get),
 }));
@@ -580,5 +594,98 @@ describe('PowerDialerTab — discagem automática', () => {
     await endBrowserCall();
     expect(screen.getByText(/Chamada encerrada/)).toBeInTheDocument();
     expect(actions.completeDialerCall).not.toHaveBeenCalled();
+  });
+});
+
+describe('PowerDialerTab: microfone ainda não pedido (aba recém-carregada)', () => {
+  const pending: WebphoneState = { ...ready, mic: 'unknown' };
+
+  /** O `getUserMedia` do clique responde `permission` e o store passa a refletir isso. */
+  function micAnswers(permission: 'granted' | 'denied' | 'unavailable') {
+    mic.request.mockImplementation(async () => {
+      phone.set({ ...(phone.get() as WebphoneState), mic: permission });
+      return permission;
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    window.localStorage.setItem(AUTO_DIAL_STORAGE_KEY, '1');
+    resetWebphoneDialCorrelation();
+    clearWebphoneCallContext();
+    phone.set(pending);
+    answer.value = 'unknown';
+    dialSeq = 0;
+    mic.request.mockReset();
+    mic.resume.mockReset();
+    actions.initiateCall.mockReset().mockImplementation(async (input: { phone: string }) => {
+      dialSeq += 1;
+      attachThisSession(input.phone);
+      return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.localStorage.clear();
+  });
+
+  it('a chave do automático fica disponível e Iniciar pede o microfone no clique; concedido, a discagem segue', async () => {
+    micAnswers('granted');
+    renderDialer([lead('1', 'Maria Silva')]);
+    expect(screen.getByRole('switch', { name: 'Discagem automática' })).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    });
+    expect(mic.request).toHaveBeenCalledTimes(1);
+    expect(mic.resume).toHaveBeenCalled();
+    expect(screen.getByText(/Próxima ligação em 5 s . Maria Silva/)).toBeInTheDocument();
+    await advance(5000);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('negado no clique de Iniciar: não liga o automático e não chama a operadora', async () => {
+    micAnswers('denied');
+    renderDialer([lead('1', 'Maria Silva')]);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    });
+    expect(mic.request).toHaveBeenCalledTimes(1);
+    await advance(10_000);
+    expect(screen.queryByText(/Próxima ligação/)).not.toBeInTheDocument();
+    expect(actions.initiateCall).not.toHaveBeenCalled();
+  });
+
+  it('modo manual: Ligar pede o microfone no clique e só disca se conceder', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    micAnswers('unavailable');
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    expect(mic.request).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    });
+    expect(mic.request).toHaveBeenCalledTimes(1);
+    expect(actions.initiateCall).not.toHaveBeenCalled();
+
+    // Já indisponível: o Ligar não reabre o prompt (o SDR usa "Tentar de novo" no pill).
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    });
+    expect(mic.request).toHaveBeenCalledTimes(1);
+    expect(actions.initiateCall).not.toHaveBeenCalled();
+  });
+
+  it('modo manual: concedido no clique de Ligar, disca na hora', async () => {
+    window.localStorage.removeItem(AUTO_DIAL_STORAGE_KEY);
+    micAnswers('granted');
+    renderDialer([lead('1', 'Maria Silva')]);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Ligar via API4COM'));
+    });
+    expect(mic.request).toHaveBeenCalledTimes(1);
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,8 @@
 // Observa a faixa remota do JsSIP no navegador e registra só o instante em
 // que o áudio chegou. Não envia amostras, não abre socket e não chama a API.
 
+import { registerWebphoneAudioContext } from './webphone-audio-contexts';
+
 export interface RemoteAudioSnapshot {
   callId: string;
   startedAt: number;
@@ -112,6 +114,7 @@ export function watchRemoteTrack(
 ): () => void {
   if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') return () => undefined;
   const ctx = new window.AudioContext();
+  const unregister = registerWebphoneAudioContext(ctx);
   const source = ctx.createMediaStreamSource(new MediaStream([track]));
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
@@ -138,6 +141,7 @@ export function watchRemoteTrack(
   return () => {
     stop();
     source.disconnect();
+    unregister();
     void ctx.close();
   };
 }
