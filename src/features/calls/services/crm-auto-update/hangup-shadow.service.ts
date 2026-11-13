@@ -6,15 +6,17 @@ import {
   CRM_AUTO_UPDATE_HANGUP_RULES_VERSION,
   CRM_AUTO_UPDATE_HANGUP_SOURCE,
   CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION,
+  CRM_AUTO_UPDATE_LIVE_HANGUP_NOT_CONNECTED_DISPOSITION,
   CRM_AUTO_UPDATE_LIVE_SOURCE,
 } from './constants';
 import type { CrmAutoUpdateMode } from './decision';
 import {
   type HangupClassification,
   type HangupCrmDecision,
+  type LiveHangupDisposition,
   classifyHangupForCrm,
   decideHangupCrm,
-  shouldApplyLiveHangupNoAnswer,
+  liveHangupDispositionToApply,
 } from './hangup-decision';
 import {
   CRM_AUTO_UPDATE_METADATA_KEY,
@@ -31,7 +33,7 @@ export type HangupCrmShadowResult =
   | 'off'
   | 'already_logged'
   | 'logged'
-  /** Live: escreveu sdr_disposition = no_answer e gravou o log com applied = true. */
+  /** Live: escreveu sdr_disposition (no_answer ou technical_failure) e gravou o log com applied = true. */
   | 'applied'
   /** Live: o CRM já tinha o nosso marcador hangup_v1 e faltava o log. Só o log foi gravado. */
   | 'applied_recovered'
@@ -52,14 +54,19 @@ interface HangupCallState {
   metadata: Record<string, unknown> | null;
 }
 
-/** A ligação já tem a NOSSA escrita hangup_v1 (marcador + disposition no_answer)? */
+const LIVE_HANGUP_DISPOSITIONS: ReadonlySet<string> = new Set([
+  CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION,
+  CRM_AUTO_UPDATE_LIVE_HANGUP_NOT_CONNECTED_DISPOSITION,
+]);
+
+/** A ligação já tem a NOSSA escrita hangup_v1 (marcador + disposition no_answer ou technical_failure)? */
 function hasOwnHangupLiveWrite(
   call: Pick<HangupCallState, 'sdr_disposition' | 'metadata'>,
 ): Partial<CrmAutoUpdateMarker> | null {
-  if (call.sdr_disposition !== CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION) return null;
+  if (!call.sdr_disposition || !LIVE_HANGUP_DISPOSITIONS.has(call.sdr_disposition)) return null;
   const marker = readCrmAutoUpdateMarker(call.metadata);
   if (!marker) return null;
-  if (marker.disposition !== CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION) return null;
+  if (marker.disposition !== call.sdr_disposition) return null;
   if (marker.rules_version !== CRM_AUTO_UPDATE_HANGUP_RULES_VERSION) return null;
   return marker;
 }
@@ -112,12 +119,13 @@ export function buildHangupShadowLogRow(args: {
  *
  * Modo shadow: a linha vai com mode = 'shadow' e applied = false. Nenhuma escrita fora do log.
  *
- * Modo live: escreve no CRM SÓ quando shouldApplyLiveHangupNoAnswer aprova (sinal claro de
- * não atendimento: NUMBER_CHANGED, não atendeu, ocupado ou recusou; would_apply; org no
- * allowlist live). Única escrita fora do log: UPDATE condicional em calls (sdr_disposition
- * IS NULL) com sdr_disposition = 'no_answer' e o marcador metadata.crm_auto_update.
- * Falha técnica e número inválido, mesmo em live, ficam só no log (mode = 'live', applied = false).
- * Nunca cria atividade, nunca muda leads.status, nunca escreve em interactions.
+ * Modo live: escreve no CRM SÓ quando liveHangupDispositionToApply devolve um desfecho
+ * (não atendeu: no_answer; número inválido ou falha técnica: technical_failure;
+ * would_apply; org no allowlist live). Única escrita fora do log: UPDATE condicional
+ * em calls (sdr_disposition IS NULL) com o desfecho correspondente e o marcador
+ * metadata.crm_auto_update. ORIGINATOR_CANCEL e NORMAL_CLEARING atendida curta
+ * não classificam (nada é gravado). Nunca cria atividade, nunca muda leads.status,
+ * nunca escreve em interactions.
  *
  * Ordem: UPDATE em calls primeiro, depois o INSERT do log já com applied = true (o log é
  * append-only). Se o UPDATE falha, nada é gravado. Se o INSERT do log falha depois do UPDATE,
@@ -126,9 +134,14 @@ export function buildHangupShadowLogRow(args: {
  * Idempotente: UNIQUE (call_id) no log. Webhook e reconcile podem chamar de novo; a
  * segunda vez vira already_logged. Log append-only, sem UPDATE.
  */
-export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Promise<HangupCrmShadowResult> {
+export async function runHangupCrmShadow(
+  db: SupabaseClient,
+  callId: string,
+): Promise<HangupCrmShadowResult> {
   const { data: call } = (await from(db, 'calls')
-    .select('id, org_id, lead_id, sdr_disposition, hangup_cause, answered_at, duration_seconds, connected, status, metadata')
+    .select(
+      'id, org_id, lead_id, sdr_disposition, hangup_cause, answered_at, duration_seconds, connected, status, metadata',
+    )
     .eq('id', callId)
     .single()) as { data: HangupCallState | null };
   if (!call) return 'call_not_found';
@@ -157,10 +170,13 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
     };
     if (res.error) {
       const msg = res.error.message ?? '';
-      if (res.error.code === '23505' || /unique|duplicate/i.test(msg)) return 'already_logged' as const;
+      if (res.error.code === '23505' || /unique|duplicate/i.test(msg))
+        return 'already_logged' as const;
       console.error(
         `[crm-auto-update:hangup] falha ao gravar log da ligação ${call.id}: ${msg || 'unknown'}` +
-          (row.applied ? ' (CRM já escrito; o marcador em calls.metadata permite recuperar o log)' : ''),
+          (row.applied
+            ? ' (CRM já escrito; o marcador em calls.metadata permite recuperar o log)'
+            : ''),
       );
       return 'log_failed' as const;
     }
@@ -175,7 +191,11 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
   const logRecovered = (marker: Partial<CrmAutoUpdateMarker>) => {
     const before = decideHangupCrm({
       classification,
-      call: { lead_id: call.lead_id, sdr_disposition: null, legacy_ai_outcome_applied: legacyApplied },
+      call: {
+        lead_id: call.lead_id,
+        sdr_disposition: null,
+        legacy_ai_outcome_applied: legacyApplied,
+      },
     });
     const decision: HangupCrmDecision = {
       verdict: 'would_apply',
@@ -189,7 +209,8 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
       legacyApplied,
       mode: 'live',
       applied: true,
-      applied_at: typeof marker.applied_at === 'string' ? marker.applied_at : new Date().toISOString(),
+      applied_at:
+        typeof marker.applied_at === 'string' ? marker.applied_at : new Date().toISOString(),
       snapshotExtra: { recovered_from_marker: true },
     });
     return insertLog(row, 'applied_recovered');
@@ -200,10 +221,19 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
 
   const decision = decideHangupCrm({
     classification,
-    call: { lead_id: call.lead_id, sdr_disposition: call.sdr_disposition, legacy_ai_outcome_applied: legacyApplied },
+    call: {
+      lead_id: call.lead_id,
+      sdr_disposition: call.sdr_disposition,
+      legacy_ai_outcome_applied: legacyApplied,
+    },
   });
 
-  if (!shouldApplyLiveHangupNoAnswer({ mode, decision, classification })) {
+  const liveDisposition: LiveHangupDisposition | null = liveHangupDispositionToApply({
+    mode,
+    decision,
+    classification,
+  });
+  if (!liveDisposition) {
     return insertLog(
       buildHangupShadowLogRow({ call, classification, decision, legacyApplied, mode }),
       'logged',
@@ -214,14 +244,14 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
   const appliedAt = new Date().toISOString();
   const marker: CrmAutoUpdateMarker = {
     applied: true,
-    disposition: CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION,
+    disposition: liveDisposition,
     applied_at: appliedAt,
     rules_version: CRM_AUTO_UPDATE_HANGUP_RULES_VERSION,
     source: CRM_AUTO_UPDATE_LIVE_SOURCE,
   };
   const upd = (await from(db, 'calls')
     .update({
-      sdr_disposition: CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION,
+      sdr_disposition: liveDisposition,
       metadata: { ...(call.metadata ?? {}), [CRM_AUTO_UPDATE_METADATA_KEY]: marker },
       updated_at: appliedAt,
     })
@@ -240,7 +270,9 @@ export async function runHangupCrmShadow(db: SupabaseClient, callId: string): Pr
     // SDR (ou outra execução) chegou na frente. Nunca força. Se foi outra execução nossa,
     // o marcador está lá e o log precisa dizer applied = true.
     const { data: now } = (await from(db, 'calls')
-      .select('id, org_id, lead_id, sdr_disposition, hangup_cause, answered_at, duration_seconds, connected, status, metadata')
+      .select(
+        'id, org_id, lead_id, sdr_disposition, hangup_cause, answered_at, duration_seconds, connected, status, metadata',
+      )
       .eq('id', call.id)
       .single()) as { data: HangupCallState | null };
     const concurrent = now ? hasOwnHangupLiveWrite(now) : null;

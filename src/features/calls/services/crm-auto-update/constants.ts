@@ -11,7 +11,10 @@
  *            (1) desfecho JEV 'voicemail' com confiança >= CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE
  *            (shouldApplyLiveVoicemail); (2) classificação hangup_v1 de não atendimento
  *            (shouldApplyLiveHangupNoAnswer): NUMBER_CHANGED, não atendeu, ocupado ou recusou,
- *            sempre calls.sdr_disposition = 'no_answer'. O resto segue só no log.
+ *            calls.sdr_disposition = 'no_answer'; (3) classificação hangup_v1 de não conectou
+ *            (shouldApplyLiveHangupNotConnected): número inválido ou falha técnica,
+ *            calls.sdr_disposition = 'technical_failure'. ORIGINATOR_CANCEL e NORMAL_CLEARING
+ *            atendida curta continuam só de fora (não classificam). O resto segue só no log.
  */
 export const CRM_AUTO_UPDATE_FLAG_KEY = 'crm_auto_update_v1';
 export const CRM_AUTO_UPDATE_LIVE_FLAG_KEY = 'crm_auto_update_v1_live';
@@ -50,5 +53,13 @@ export const CRM_AUTO_UPDATE_HANGUP_RULES_VERSION = 'hangup_v1';
 /** input_snapshot.source das linhas do caminho hangup. */
 export const CRM_AUTO_UPDATE_HANGUP_SOURCE = 'hangup_deterministic';
 
-/** Desfecho escrito pelo live do hangup_v1. Valor do enum call_disposition ("Não atendeu"). */
+/** Desfecho escrito pelo live do hangup_v1 para não atendimento. Valor do enum call_disposition ("Não atendeu"). */
 export const CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION = 'no_answer';
+
+/**
+ * Desfecho escrito pelo live do hangup_v1 para não conectou (número inválido ou
+ * falha da operadora). Valor já existente do enum call_disposition ("Falha técnica").
+ * Não há `not_connected` em sdr_disposition; esse nome vive em call_status e no JEV
+ * (onde mapeia para voicemail, o que seria errado para número inexistente).
+ */
+export const CRM_AUTO_UPDATE_LIVE_HANGUP_NOT_CONNECTED_DISPOSITION = 'technical_failure';

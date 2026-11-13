@@ -64,6 +64,18 @@ vi.mock('@/features/calls/actions/save-webphone-call-audio', () => ({ saveWebpho
 vi.mock('@/features/calls/actions/initiate-call', () => ({ hangupCall: actions.hangupCall }));
 vi.mock('@/features/activities/actions/schedule-activity', () => ({ scheduleActivity: actions.scheduleActivity }));
 vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
+vi.mock('@/features/calls/use-post-call-suggestion', () => ({
+  usePostCallSuggestion: () => ({
+    outcome: null,
+    nextActivity: null,
+    reason: null,
+    source: null,
+    alreadyFilled: false,
+    alreadyFilledDisposition: null,
+    meetingPrefill: null,
+  }),
+}));
+
 
 import {
   clearWebphoneCallContext,

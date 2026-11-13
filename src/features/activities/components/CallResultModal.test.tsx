@@ -2,18 +2,40 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { PostCallSuggestion } from '@/features/calls/post-call-suggestion';
+
 import { CallResultModal, type CallResultModalProps } from './CallResultModal';
 
-// O modal de reunião abre um fluxo próprio (Google Calendar) irrelevante aqui.
+// O modal de reunião abre um fluxo próprio (Google Calendar). Nos testes
+// basta ver que foi montado com o pré-preenchimento, sem enviar convite.
 vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({
-  ScheduleMeetingModal: () => null,
+  ScheduleMeetingModal: (props: {
+    leadId?: string;
+    leadName?: string | null;
+    defaultCloserId?: string;
+    defaultDate?: string;
+    defaultTime?: string;
+  }) => (
+    <div data-testid="schedule-meeting-form">
+      <span data-testid="meeting-lead">{props.leadName}</span>
+      <span data-testid="meeting-lead-id">{props.leadId}</span>
+      <span data-testid="meeting-closer">{props.defaultCloserId ?? ''}</span>
+      <span data-testid="meeting-slot">
+        {[props.defaultDate, props.defaultTime].filter(Boolean).join(' ')}
+      </span>
+    </div>
+  ),
 }));
 
 function todayButton(): HTMLElement {
   const day = new Date().getDate();
   const match = screen.getAllByRole('button').find((button) => {
     const name = button.getAttribute('aria-label') ?? '';
-    return new RegExp(`\\b${day}\\b`).test(name) && name.includes(String(new Date().getFullYear())) && !button.hasAttribute('disabled');
+    return (
+      new RegExp(`\\b${day}\\b`).test(name) &&
+      name.includes(String(new Date().getFullYear())) &&
+      !button.hasAttribute('disabled')
+    );
   });
   if (!match) throw new Error('dia de hoje não encontrado no calendário');
   return match;
@@ -64,7 +86,10 @@ describe('CallResultModal', () => {
       const values = screen.getAllByRole('radio').map((r) => r.getAttribute('value'));
       expect(values).not.toContain('no_answer');
       expect(values).toContain('voicemail');
-      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toHaveAttribute('value', 'voicemail');
+      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toHaveAttribute(
+        'value',
+        'voicemail',
+      );
       expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
     });
 
@@ -74,7 +99,11 @@ describe('CallResultModal', () => {
       await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
       expect(screen.getByRole('radio', { name: /^Não atendeu/ })).toBeInTheDocument();
       expect(screen.getByRole('radio', { name: /Falha técnica/ })).toBeInTheDocument();
-      for (const forbidden of [/Conversa relevante/, /Atendeu, sem avanço/, /Pediu para ligar depois/]) {
+      for (const forbidden of [
+        /Conversa relevante/,
+        /Atendeu, sem avanço/,
+        /Pediu para ligar depois/,
+      ]) {
         expect(screen.queryByRole('radio', { name: forbidden })).not.toBeInTheDocument();
       }
     });
@@ -143,7 +172,11 @@ describe('CallResultModal', () => {
 
       await user.click(screen.getByRole('button', { name: 'Data' }));
       await user.click(todayButton());
-      expect(screen.getByText('A cadência fica pausada até o retorno e a atividade de retorno é criada.')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'A cadência fica pausada até o retorno e a atividade de retorno é criada.',
+        ),
+      ).toBeInTheDocument();
     });
 
     it('falha técnica troca o botão para voltar à fila e ainda entrega o desfecho', async () => {
@@ -153,7 +186,9 @@ describe('CallResultModal', () => {
       await user.click(screen.getByRole('radio', { name: /Falha técnica/ }));
       expect(screen.queryByRole('button', { name: /Concluir atividade/ })).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /Registrar e voltar à fila/ }));
-      expect(onConclude).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'technical_failure', returnSchedule: null }));
+      expect(onConclude).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'technical_failure', returnSchedule: null }),
+      );
     });
   });
 
@@ -276,5 +311,160 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
     // O webhook chega dizendo que atendeu: "Falha técnica" vale nos dois casos.
     rerender(<CallResultModal {...base} connected durationSeconds={12} />);
     expect(screen.getByRole('radio', { name: /Falha técnica/ })).toBeChecked();
+  });
+
+  describe('confirmação em um clique', () => {
+    const suggestion = (over: Partial<PostCallSuggestion> = {}): PostCallSuggestion => ({
+      outcome: 'relevant_conversation',
+      nextActivity: 'schedule_meeting',
+      reason: 'Aceitou amanhã às 10.',
+      source: 'live_amd',
+      alreadyFilled: false,
+      alreadyFilledDisposition: null,
+      meetingPrefill: { closerId: 'closer-1', date: '2026-11-14', time: '10:00' },
+      ...over,
+    });
+
+    it('atendida com sugestão de reunião: pré-seleciona conversa relevante e o concluir já está liberado', async () => {
+      const user = userEvent.setup();
+      const onConclude = vi.fn();
+      renderModal({
+        connected: true,
+        durationSeconds: 180,
+        suggestion: suggestion(),
+        onConclude,
+      });
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'relevant_conversation',
+      );
+      expect(screen.getByTestId('suggestion-banner')).toHaveTextContent(
+        'Sugestão: Conversa relevante',
+      );
+      expect(screen.getByTestId('suggestion-banner')).toHaveTextContent(
+        'Próxima atividade: Marcar reunião',
+      );
+      expect(screen.getByTestId('meeting-prefill')).toBeInTheDocument();
+      expect(screen.getByTestId('meeting-lead')).toHaveTextContent('Lead de Teste');
+      expect(screen.getByTestId('meeting-lead-id')).toHaveTextContent(
+        '11111111-1111-1111-1111-111111111111',
+      );
+      expect(screen.getByTestId('meeting-closer')).toHaveTextContent('closer-1');
+      expect(screen.getByTestId('meeting-slot')).toHaveTextContent('2026-11-14 10:00');
+      const conclude = screen.getByRole('button', { name: /Concluir atividade/ });
+      expect(conclude).toBeEnabled();
+      await user.click(conclude);
+      expect(onConclude).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'relevant_conversation' }),
+      );
+    });
+
+    it('atendida sem sugestão continua exigindo escolha (sem pré-seleção)', () => {
+      renderModal({ connected: true, durationSeconds: 257 });
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('suggestion-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('meeting-prefill')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeDisabled();
+    });
+
+    it('sugestão de retorno pré-seleciona o desfecho e o SDR ainda pode alterar', async () => {
+      const user = userEvent.setup();
+      const onConclude = vi.fn();
+      renderModal({
+        connected: true,
+        durationSeconds: 90,
+        suggestion: suggestion({
+          outcome: 'callback_requested',
+          nextActivity: 'schedule_callback',
+          reason: 'Pediu para ligar depois.',
+          meetingPrefill: { date: '2026-11-15', time: '14:00' },
+        }),
+        onConclude,
+      });
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'callback_requested',
+      );
+      expect(screen.getByTestId('suggestion-banner')).toHaveTextContent('Pediu para ligar depois');
+      expect(screen.queryByTestId('meeting-prefill')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('radio', { name: /Conversa relevante/ }));
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'relevant_conversation',
+      );
+    });
+
+    it('CRM já preenchido: mostra o desfecho e Continuar conclui com ele', async () => {
+      const user = userEvent.setup();
+      const onConclude = vi.fn();
+      renderModal({
+        connected: false,
+        durationSeconds: 0,
+        suggestion: suggestion({
+          outcome: 'technical_failure',
+          nextActivity: null,
+          reason: null,
+          source: 'auto_filled',
+          alreadyFilled: true,
+          alreadyFilledDisposition: 'technical_failure',
+          meetingPrefill: null,
+        }),
+        onConclude,
+      });
+      expect(screen.getByTestId('auto-filled-banner')).toHaveTextContent(
+        'O sistema já registrou: Falha técnica',
+      );
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'technical_failure',
+      );
+      await user.click(screen.getByRole('button', { name: /Continuar/ }));
+      expect(onConclude).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'technical_failure' }),
+      );
+    });
+
+    it('sugestão que chega com o modal aberto é aplicada se o SDR ainda não escolheu', () => {
+      const onConclude = vi.fn();
+      const base: CallResultModalProps = {
+        open: true,
+        onClose: vi.fn(),
+        leadName: 'Lead de Teste',
+        leadId: '11111111-1111-1111-1111-111111111111',
+        phoneLabel: '11954958486',
+        durationSeconds: 120,
+        connected: true,
+        onConclude,
+      };
+      const { rerender } = render(<CallResultModal {...base} />);
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+      rerender(<CallResultModal {...base} suggestion={suggestion()} />);
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'relevant_conversation',
+      );
+      expect(screen.getByTestId('meeting-prefill')).toBeInTheDocument();
+    });
+
+    it('sugestão tardia não sobrescreve a escolha do SDR', async () => {
+      const user = userEvent.setup();
+      const base: CallResultModalProps = {
+        open: true,
+        onClose: vi.fn(),
+        leadName: 'Lead de Teste',
+        leadId: '11111111-1111-1111-1111-111111111111',
+        phoneLabel: '11954958486',
+        durationSeconds: 120,
+        connected: true,
+        onConclude: vi.fn(),
+      };
+      const { rerender } = render(<CallResultModal {...base} />);
+      await user.click(screen.getByRole('radio', { name: /Atendeu, sem avanço/ }));
+      rerender(<CallResultModal {...base} suggestion={suggestion()} />);
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute(
+        'value',
+        'answered_no_progress',
+      );
+    });
   });
 });

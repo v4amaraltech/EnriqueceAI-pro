@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { CallResultModal } from '@/features/activities/components/CallResultModal';
+import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
 import { hangupCall as hangupProviderCall } from '@/features/calls/actions/initiate-call';
 import { saveWebphoneCallAudio } from '@/features/calls/actions/save-webphone-call-audio';
@@ -392,6 +393,13 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   // Sem ligação o painel some (como no CRM da matriz): só aparece quando o SDR
   // liga. O pill parado fica apenas para problema que impede ligar.
   const showingDialing = Boolean(followNew && context);
+  const resultDbCallId = resultCall?.context?.callId ?? null;
+  const suggestion = usePostCallSuggestion({
+    callId: resultDbCallId,
+    connected: resultCall ? leadConnected(leadAnswer, resultCall.answered) : false,
+    enabled: Boolean(!showingDialing && resultCall?.context),
+    localLiveAmd: liveAmdCallId === resultDbCallId ? liveAmd : null,
+  });
   const orphanDraft = !liveCall && !showingDialing && stage.kind === 'idle' && Boolean(ctxState.notes.trim());
   const hasRecoverableNotes = ctxState.heldNotes.length > 0 || Boolean(ctxState.persistWarning) || Boolean(ctxState.saveNotice) || orphanDraft;
   const idle = !liveCall && !showingDialing && stage.kind === 'idle' && !hasRecoverableNotes;
@@ -462,6 +470,7 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
           durationSeconds={effectiveCallSeconds(leadAnswer, resultCall.talkSeconds)}
           connected={leadConnected(leadAnswer, resultCall.answered)}
+          suggestion={suggestion}
           dismissible={false}
           initialNotes={ctxState.notes}
           returnReadyMessage="A atividade de retorno é criada."

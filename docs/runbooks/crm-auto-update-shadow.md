@@ -74,11 +74,11 @@ O log guarda só o sinal e uma proposta documental, sem copiar o texto da ligaç
 `suggested_actions` aponta os fluxos que já existem e que um humano usaria. NADA disso é executado pelo shadow,
 pelo worker ou pelo futuro live sem PR próprio:
 
-| Canal | Fluxo existente |
-|-------|-----------------|
-| e-mail | `email_suppressions` (reason `unsubscribe`), o mesmo do `/unsubscribe/[token]` |
+| Canal               | Fluxo existente                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| e-mail              | `email_suppressions` (reason `unsubscribe`), o mesmo do `/unsubscribe/[token]`             |
 | WhatsApp / telefone | `contact_consent_evidence` com `kind = 'opt_out'` (append-only, flag `consent_capture_v1`) |
-| todos | parar `cadence_enrollments` ativas do lead (status `unsubscribed`) |
+| todos               | parar `cadence_enrollments` ativas do lead (status `unsubscribed`)                         |
 
 `email_blacklist` NÃO serve: é por domínio e bloquearia a empresa inteira (ou gmail.com inteiro).
 Nunca apagar nem reescrever lead, contato, e-mail ou telefone por causa deste sinal.
@@ -190,14 +190,14 @@ vira `already_logged`.
 
 ### Mapeamento
 
-| Causa | Condição | outcome (snapshot) | disposition | próxima atividade |
-|-------|----------|--------------------|-------------|-------------------|
-| `NUMBER_CHANGED` | sempre | no_answer | no_answer | retry phone |
-| `NO_ANSWER`, `NO_USER_RESPONSE`, `ALLOTTED_TIMEOUT` | sem answered_at | no_answer | no_answer | retry phone |
-| `USER_BUSY` | sem answered_at | busy | no_answer | retry phone |
-| `CALL_REJECTED` | sem answered_at | rejected | no_answer | retry phone |
-| `UNALLOCATED_NUMBER`, `INVALID_NUMBER_FORMAT` | mesmo com answered_at | invalid_number | technical_failure | none |
-| `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE` | sem answered_at | technical_failure | technical_failure | retry phone |
+| Causa                                                  | Condição              | outcome (snapshot) | disposition       | próxima atividade |
+| ------------------------------------------------------ | --------------------- | ------------------ | ----------------- | ----------------- |
+| `NUMBER_CHANGED`                                       | sempre                | no_answer          | no_answer         | retry phone       |
+| `NO_ANSWER`, `NO_USER_RESPONSE`, `ALLOTTED_TIMEOUT`    | sem answered_at       | no_answer          | no_answer         | retry phone       |
+| `USER_BUSY`                                            | sem answered_at       | busy               | no_answer         | retry phone       |
+| `CALL_REJECTED`                                        | sem answered_at       | rejected           | no_answer         | retry phone       |
+| `UNALLOCATED_NUMBER`, `INVALID_NUMBER_FORMAT`          | mesmo com answered_at | invalid_number     | technical_failure | none              |
+| `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE` | sem answered_at       | technical_failure  | technical_failure | retry phone       |
 
 `NUMBER_CHANGED` é "não atendeu" (decisão de 12/11, alinhada ao que o SDR registrou: 43 no_answer e
 nenhuma caixa postal). O guia API4COM ainda descreve a causa como caixa postal; o status de
@@ -216,21 +216,27 @@ Medição desde o deploy do motor (11/11, 06:41, V4): 702 ligações com esses s
 - `ORIGINATOR_CANCEL` (344): o SDR desistiu e os desfechos registrados se dividem (sinal misto).
 - Causa de "não atendeu" com answered_at preenchido (contraditório), causa nula ou desconhecida.
 
-### Escrita live: só "não atendeu"
+### Escrita live: "não atendeu" e "não conectou" (falha técnica)
 
-Quando a org está em live, `shouldApplyLiveHangupNoAnswer` (`hangup-decision.ts`) escreve no CRM se, e
+Quando a org está em live, `liveHangupDispositionToApply` (`hangup-decision.ts`) escreve no CRM se, e
 somente se:
 
 - a org está em `allow_org_ids` de `crm_auto_update_v1` E de `crm_auto_update_v1_live` (modo `live`);
 - a fonte é `hangup_v1` (este caminho; não passa pelo JEV);
-- a classe é um sinal claro de não atendimento: `NUMBER_CHANGED`, `NO_ANSWER`, `NO_USER_RESPONSE`,
-  `ALLOTTED_TIMEOUT`, `USER_BUSY` ou `CALL_REJECTED` (outcomes `no_answer`, `busy` ou `rejected`);
-- o veredito é `would_apply` (sem `sdr_disposition`, sem desfecho do fluxo antigo da IA, com lead).
+- o veredito é `would_apply` (sem `sdr_disposition`, sem desfecho do fluxo antigo da IA, com lead);
+- e uma das duas portas aprova:
+  1. `shouldApplyLiveHangupNoAnswer`: sinal claro de não atendimento (`NUMBER_CHANGED`, `NO_ANSWER`,
+     `NO_USER_RESPONSE`, `ALLOTTED_TIMEOUT`, `USER_BUSY` ou `CALL_REJECTED`; outcomes `no_answer`,
+     `busy` ou `rejected`). Escreve `sdr_disposition = 'no_answer'` ("Não atendeu").
+  2. `shouldApplyLiveHangupNotConnected`: número inválido ou falha técnica (`UNALLOCATED_NUMBER`,
+     `INVALID_NUMBER_FORMAT`, `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE`; outcomes
+     `invalid_number` ou `technical_failure`). Escreve `sdr_disposition = 'technical_failure'`
+     ("Falha técnica"). Este é o valor já existente do enum `call_disposition` para "não conectou":
+     o enum não tem `not_connected` (esse nome vive em `call_status` e no desfecho JEV, onde mapeia
+     para caixa postal, o que seria errado para número inexistente). Não foi criado valor novo.
 
-Ficam de fora, mesmo em live (só o log, `mode = 'live'`, `applied = false`): falha técnica
-(`NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE`) e número inválido (`UNALLOCATED_NUMBER`,
-`INVALID_NUMBER_FORMAT`). Já não classificam, como antes: `ORIGINATOR_CANCEL`, `NORMAL_CLEARING`
-atendida curta, atendida com 30 s ou mais, causa nula ou desconhecida.
+Já não classificam, como antes (nada é gravado, nem o log deste caminho): `ORIGINATOR_CANCEL`,
+`NORMAL_CLEARING` atendida curta, atendida com 30 s ou mais, causa nula ou desconhecida.
 
 `enabled = true` global na flag live continua ignorado. Nenhuma migration nova: o CHECK de
 `applied` (`applied = true` só com `mode = 'live'` e `verdict = 'would_apply'`) e o
@@ -242,16 +248,18 @@ Uma única escrita fora do log, condicional, com o valor já existente do enum `
 
 ```sql
 UPDATE calls
-SET sdr_disposition = 'no_answer',
+SET sdr_disposition = :disposition,  -- 'no_answer' ou 'technical_failure'
     metadata = <metadata atual> || {"crm_auto_update": {...}},
     updated_at = now()
 WHERE id = :call_id AND org_id = :org_id AND sdr_disposition IS NULL;
 ```
 
-O marcador `calls.metadata.crm_auto_update = {applied, disposition: 'no_answer', applied_at,
-rules_version: 'hangup_v1', source: 'crm_auto_update_v1_live'}` vai no MESMO UPDATE (sem
+O marcador `calls.metadata.crm_auto_update = {applied, disposition: 'no_answer' | 'technical_failure',
+applied_at, rules_version: 'hangup_v1', source: 'crm_auto_update_v1_live'}` vai no MESMO UPDATE (sem
 `qualification_id`). Ele é distinto do marcador de caixa postal JEV (`disposition: 'voicemail'`,
-`rules_version: 'v1.1'`) e de `metadata.ai_outcome`.
+`rules_version: 'v1.1'`) e de `metadata.ai_outcome`. A recuperação pelo marcador aceita os dois
+desfechos do hangup, desde que `sdr_disposition`, `marker.disposition` e `rules_version = hangup_v1`
+coincidam.
 
 Não cria `scheduled_activities` (a cadência segue sozinha, `next_activity = retry phone`), não muda
 `leads.status`, não escreve em `interactions`. Se o UPDATE pega 0 linhas (o SDR chegou na frente),
@@ -268,10 +276,10 @@ em shadow continua com `mode = 'shadow'` e `applied = false`.
 - UPDATE falhou com erro de banco: nada é gravado, nem o log (`crm_write_failed`), para o retry
   decidir de novo.
 - UPDATE passou e o INSERT do log falhou: na próxima execução, sem log e com
-  `sdr_disposition = 'no_answer'` + marcador `hangup_v1`, o worker NÃO escreve no CRM de novo e
-  grava só o log com `applied = true`, `applied_at` do marcador e
-  `input_snapshot.recovered_from_marker = true` (`applied_recovered`). Um marcador JEV de
-  caixa postal não é tratado como escrita hangup.
+  `sdr_disposition` igual ao desfecho escrito (`no_answer` ou `technical_failure`) + marcador
+  `hangup_v1`, o worker NÃO escreve no CRM de novo e grava só o log com `applied = true`,
+  `applied_at` do marcador e `input_snapshot.recovered_from_marker = true` (`applied_recovered`).
+  Um marcador JEV de caixa postal não é tratado como escrita hangup.
 - `sdr_disposition` preenchido sem o nosso marcador hangup_v1: `skip already_dispositioned`.
 
 A view de comparação conta essas linhas em `auto_applied` / `applied_live`, fora das taxas de
@@ -289,6 +297,28 @@ GROUP BY 1, 2, 3 ORDER BY 4 DESC;
 Migration `20261112220000` PRIMEIRO, depois o código. Se o código subir antes, o INSERT com `qualification_id`
 nulo falha (`log_failed` no console) e o log não entra; o webhook e o reconcile seguem normais (o wrapper
 nunca lança).
+
+### Confirmação em um clique no modal de resultado
+
+Depois da ligação, o `CallResultModal` (fila de atividades e painel flutuante do webphone) usa
+`resolvePostCallSuggestion` (`src/features/calls/post-call-suggestion.ts`):
+
+- Se o CRM já foi preenchido (marcador `calls.metadata.crm_auto_update` com `applied = true`), o
+  modal mostra "O sistema já registrou: {desfecho}" e o SDR só confirma ou segue (botão Continuar).
+  O desfecho continua editável.
+- Se a ligação foi atendida e há sugestão da escuta ao vivo (`metadata.live_amd` ou a visão da
+  mesma aba) ou da qualificação JEV, o desfecho e a próxima atividade vêm pré-selecionados
+  (reunião → `relevant_conversation`, retorno → `callback_requested`, não conectou em linha
+  atendida → `voicemail`, número inexistente → `technical_failure`). O SDR confirma em um clique
+  e ainda pode alterar.
+- Sugestão de reunião abre o formulário de agendamento já preenchido com lead, closer e horário
+  só quando esses dados existem de forma estruturada. Os convites NUNCA são enviados sozinhos:
+  só quando o SDR agenda no formulário.
+- Sem sugestão, o comportamento anterior se mantém: atendida exige escolha; não atendida já vem
+  em "Não atendeu".
+
+A consulta `getWebphoneCallOutcome` também devolve o marcador e o `live_amd`, para a sugestão
+chegar mesmo alguns segundos depois de o modal abrir, e só é aplicada se o SDR ainda não escolheu.
 
 ### Plano do áudio (próximo PR)
 
