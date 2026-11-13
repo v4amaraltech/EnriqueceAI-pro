@@ -1,6 +1,7 @@
 /** Strip HTML tags, decode entities, and normalize whitespace for plain-text storage. */
 export function toPlainText(html: string): string {
   return html
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
     .replace(/<[^>]+>/g, '')

@@ -1,6 +1,6 @@
 import { locateGenuineReply } from '@/features/cadences/services/reply-detection.service';
-import { plainText } from '@/features/lead-channel-chat/model';
 
+import { resolveLeadMessageBodyText } from './body-text';
 import { isLeadMessagesCaptureEnabled } from './flag';
 import { recordLeadMessage } from './record';
 
@@ -15,15 +15,25 @@ function decodeBase64Url(value: string): string {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
-/** Texto da mensagem. Prefere text/plain. HTML vira texto, sem guardar o arquivo. */
-export function gmailPartText(part: GmailPart | null | undefined): string {
-  if (!part) return '';
-  const own = part.body?.data ? decodeBase64Url(part.body.data) : '';
-  if (part.mimeType === 'text/plain' && own.trim()) return own.trim();
-  const nested = (part.parts ?? []).map((child) => gmailPartText(child)).find((text) => text.trim());
-  if (nested) return nested;
-  if (part.mimeType === 'text/html' && own.trim()) return plainText(own);
-  return own.trim();
+/** Primeira parte text/plain e primeira text/html com conteúdo, em qualquer nível. */
+export function gmailBodies(part: GmailPart | null | undefined): { text: string | null; html: string | null } {
+  let text: string | null = null;
+  let html: string | null = null;
+  const walk = (node: GmailPart) => {
+    const own = node.body?.data ? decodeBase64Url(node.body.data) : '';
+    const mime = (node.mimeType ?? '').toLowerCase();
+    if (mime === 'text/plain' && own.trim() && text === null) text = own;
+    if (mime === 'text/html' && own.trim() && html === null) html = own;
+    for (const child of node.parts ?? []) walk(child);
+  };
+  if (part) walk(part);
+  return { text, html };
+}
+
+/** Texto da resposta do lead. Prefere text/plain. Só HTML vira texto. Corta citação e assinatura. */
+export function gmailReplyText(part: GmailPart | null | undefined): string | null {
+  const { text, html } = gmailBodies(part);
+  return resolveLeadMessageBodyText({ bodyText: text, bodyHtml: html, channel: 'email', direction: 'inbound' });
 }
 
 export async function captureGmailReply(input: {
@@ -44,7 +54,8 @@ export async function captureGmailReply(input: {
     );
     if (!response.ok) return;
     const data = (await response.json()) as { payload?: GmailPart };
-    const text = gmailPartText(data.payload);
+    const { html } = gmailBodies(data.payload);
+    const text = gmailReplyText(data.payload);
     await recordLeadMessage({
       orgId: input.orgId,
       leadId: input.leadId,
@@ -53,7 +64,8 @@ export async function captureGmailReply(input: {
       provider: 'gmail',
       ourAddress: input.ourAddress ?? null,
       leadAddress: reply.from,
-      bodyText: text || null,
+      bodyText: text,
+      bodyHtml: html,
       subject: reply.subject,
       providerMessageId: reply.messageId,
       threadId: input.threadId,
