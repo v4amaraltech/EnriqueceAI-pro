@@ -51,7 +51,7 @@ import { initiateCall } from '@/features/calls/actions/initiate-call';
 import { setWebphoneCallContext } from '@/features/integrations/webphone/webphone-call-context';
 import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { contextForSuccessfulLeadCall } from './lead-dial-context';
-import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
 import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 import { buildContactPhones, type ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 import { listLeadContacts } from '../actions/lead-contacts';
@@ -339,6 +339,17 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       return;
     }
     if (inFlightRef.current) return;
+    // Microfone ainda não pedido nesta aba: pede no mesmo clique, antes de
+    // armar a trava (um "não concedido" não deixa o botão preso).
+    const pendingMic = prepareWebphoneMicForDial();
+    if (pendingMic) {
+      const micBlock = await pendingMic;
+      if (micBlock) {
+        toast.error(micBlock, { duration: 6000 });
+        return;
+      }
+      if (inFlightRef.current) return;
+    }
     inFlightRef.current = true;
     setIsCalling(true);
     const reserved = reserveWebphoneDial(phone);

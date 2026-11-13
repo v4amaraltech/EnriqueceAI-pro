@@ -50,7 +50,29 @@ function domError(name: string): Error {
 }
 
 let getUserMedia: ReturnType<typeof vi.fn>;
+let permissionQuery: ReturnType<typeof vi.fn>;
 let client: Client;
+
+/** Estado de `navigator.permissions.query({ name: 'microphone' })`; null = sem a API. */
+function setMicPermission(state: 'granted' | 'prompt' | 'denied' | 'throws' | null): void {
+  if (state === null) {
+    Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
+    return;
+  }
+  permissionQuery = vi.fn(() =>
+    state === 'throws' ? Promise.reject(new TypeError('microphone desconhecido')) : Promise.resolve({ state }),
+  );
+  Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: permissionQuery } });
+}
+
+/** Deixa as Promises pendentes do start (consulta da permissão, getUserMedia) resolverem. */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
+function fakeAudioContext(state = 'suspended') {
+  return { state, resume: vi.fn(() => Promise.resolve()) };
+}
 
 async function loadClient(): Promise<Client> {
   vi.resetModules();
@@ -83,6 +105,7 @@ beforeEach(async () => {
   const track = { stop: vi.fn() };
   getUserMedia = vi.fn(() => Promise.resolve({ getTracks: () => [track] }));
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+  setMicPermission('prompt');
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   client = await loadClient();
 });
@@ -94,12 +117,51 @@ afterEach(() => {
 });
 
 describe('startWebphone', () => {
-  it('registra o ramal sem pedir o microfone', async () => {
+  it('permissão ainda em `prompt`: registra o ramal sem pedir o microfone', async () => {
     await client.startWebphone(CONFIG);
+    await flush();
     expect(sip.instances).toHaveLength(1);
     expect(lastUa().start).toHaveBeenCalledTimes(1);
+    expect(permissionQuery).toHaveBeenCalledWith({ name: 'microphone' });
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(client.getWebphoneState().mic).toBe('unknown');
+  });
+
+  it('permissão já `granted`: libera o microfone sozinho no start e acorda os AudioContext', async () => {
+    setMicPermission('granted');
+    const audio = await import('./webphone-audio-contexts');
+    const ctx = fakeAudioContext();
+    audio.registerWebphoneAudioContext(ctx);
+    ctx.resume.mockClear();
+
+    await client.startWebphone(CONFIG);
+    lastUa().emit('registered');
+    await flush();
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(client.getWebphoneState()).toMatchObject({ mic: 'granted', registration: 'registered' });
+    expect(ctx.resume).toHaveBeenCalled();
+    audio.resetWebphoneAudioContextsForTests();
+  });
+
+  it('permissão `denied`, consulta lançando ou sem `navigator.permissions`: não chama getUserMedia no start', async () => {
+    for (const state of ['denied', 'throws', null] as const) {
+      setMicPermission(state);
+      await client.startWebphone(CONFIG);
+      await flush();
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(client.getWebphoneState().mic).toBe('unknown');
+      client.stopWebphone();
+    }
+  });
+
+  it('stop antes da consulta responder não pede o microfone', async () => {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    client.stopWebphone();
+    await flush();
+    expect(getUserMedia).not.toHaveBeenCalled();
   });
 
   it('passa um instance_id UUID estável por navegador (sem urn:uuid)', async () => {
@@ -150,6 +212,57 @@ describe('requestWebphoneMicrophone', () => {
   });
 });
 
+describe('prepareWebphoneMicForDial (clique em Ligar)', () => {
+  it('microfone não pedido: pede no clique e libera quando concede', async () => {
+    await client.startWebphone(CONFIG);
+    lastUa().emit('registered');
+    await flush();
+    const pending = client.prepareWebphoneMicForDial();
+    expect(pending).not.toBeNull();
+    await expect(pending).resolves.toBeNull();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(client.getWebphoneState().mic).toBe('granted');
+  });
+
+  it('microfone não pedido e negado no clique: devolve a mensagem de bloqueio', async () => {
+    await client.startWebphone(CONFIG);
+    lastUa().emit('registered');
+    await flush();
+    getUserMedia.mockRejectedValueOnce(domError('NotAllowedError'));
+    await expect(client.prepareWebphoneMicForDial()).resolves.toMatch(/bloqueou o microfone/);
+    expect(client.getWebphoneState().mic).toBe('denied');
+  });
+
+  it('já concedido, já negado ou webphone desligado: nada a pedir (null na hora), mas acorda os AudioContext', async () => {
+    const audio = await import('./webphone-audio-contexts');
+    const ctx = fakeAudioContext();
+    audio.registerWebphoneAudioContext(ctx);
+    ctx.resume.mockClear();
+
+    expect(client.prepareWebphoneMicForDial()).toBeNull();
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+
+    await client.startWebphone(CONFIG);
+    lastUa().emit('registered');
+    getUserMedia.mockRejectedValueOnce(domError('NotAllowedError'));
+    await client.requestWebphoneMicrophone();
+    getUserMedia.mockClear();
+    expect(client.prepareWebphoneMicForDial()).toBeNull();
+    expect(getUserMedia).not.toHaveBeenCalled();
+    audio.resetWebphoneAudioContextsForTests();
+  });
+
+  it('"Tentar de novo" (requestWebphoneMicrophone) também acorda os AudioContext no clique', async () => {
+    const audio = await import('./webphone-audio-contexts');
+    const ctx = fakeAudioContext();
+    audio.registerWebphoneAudioContext(ctx);
+    ctx.resume.mockClear();
+    await client.requestWebphoneMicrophone();
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+    audio.resetWebphoneAudioContextsForTests();
+  });
+});
+
 describe('auto-atendimento do INVITE integrado', () => {
   it('não atende sem o microfone concedido', async () => {
     await client.startWebphone(CONFIG);
@@ -158,6 +271,17 @@ describe('auto-atendimento do INVITE integrado', () => {
     const { session, request } = fakeSession(true);
     ua.emit('newRTCSession', { session, request });
     expect(session.answer).not.toHaveBeenCalled();
+  });
+
+  it('atende sem clique quando a permissão já era `granted` no start', async () => {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const { session, request } = fakeSession(true);
+    ua.emit('newRTCSession', { session, request });
+    expect(session.answer).toHaveBeenCalledTimes(1);
   });
 
   it('atende com o microfone concedido', async () => {

@@ -184,6 +184,46 @@ export const SESSION_CONFLICT_MESSAGES: Record<WebphoneSessionConflict, string> 
     'O ramal foi desconectado. Outra aba, outro navegador ou a extensão da API4COM pode estar usando este ramal. Clique em Reconectar para usar aqui.',
 };
 
+/**
+ * Webphone ligado nesta aba e pronto para ligar, contando o microfone ainda
+ * não pedido (`unknown`) como pronto: o clique em Ligar (ou em iniciar o Power
+ * Dialer) pede o microfone no mesmo gesto. Serve para a UI (chave do
+ * automático, aviso "Webphone ativo") não tratar a aba recém-carregada como
+ * sem webphone. Para atender ou discar de fato vale `canReceiveCalls`.
+ */
+export function webphoneUsableAfterMicGesture(state: WebphoneState): boolean {
+  return (
+    state.registration === 'registered' &&
+    !state.sessionConflict &&
+    (state.mic === 'granted' || state.mic === 'unknown')
+  );
+}
+
+/**
+ * O microfone ainda não foi pedido com o webphone ligado nesta aba: o clique
+ * de discagem precisa pedi-lo antes do `POST /calls`. Com `disabled` (fluxo da
+ * extensão) ou com conflito de aba não há o que pedir.
+ */
+export function webphoneMicNeedsGesture(state: WebphoneState): boolean {
+  return state.registration !== 'disabled' && !state.sessionConflict && state.mic === 'unknown';
+}
+
+/**
+ * Resolve o microfone no clique de discagem. Se ainda não foi pedido, pede
+ * (`request`, no mesmo gesto) e devolve a mensagem de bloqueio quando o SDR
+ * ou o navegador não conceder. `null` quando o microfone não impede ligar (os
+ * outros bloqueios continuam com `dialingBlockReason`). Já negado ou
+ * indisponível NÃO pede de novo: o SDR usa "Tentar de novo" no pill.
+ */
+export async function resolveMicForDial(
+  state: WebphoneState,
+  request: () => Promise<MicPermission>,
+): Promise<string | null> {
+  if (!webphoneMicNeedsGesture(state)) return null;
+  const permission = await request();
+  return micBlockMessage(permission);
+}
+
 /** Mensagem do microfone que impede ligar, ou null se está concedido. */
 export function micBlockMessage(mic: MicPermission): string | null {
   return mic === 'granted' ? null : MIC_MESSAGES[mic];
@@ -225,8 +265,12 @@ export function webphoneIdleProblem(state: WebphoneState): boolean {
   return state.registration === 'error' || webphoneIdleNeedsAction(state);
 }
 
-/** O SDR precisa clicar em algo (ativar microfone, usar nesta aba, reconectar). */
+/**
+ * O SDR precisa clicar em algo (tentar o microfone de novo, usar nesta aba,
+ * reconectar). Microfone ainda não pedido (`unknown`) NÃO conta: o pedido sai
+ * no clique em Ligar e o aviso vermelho a cada recarga só assustava.
+ */
 export function webphoneIdleNeedsAction(state: WebphoneState): boolean {
   if (state.sessionConflict) return true;
-  return state.registration !== 'disabled' && state.mic !== 'granted';
+  return state.registration !== 'disabled' && (state.mic === 'denied' || state.mic === 'unavailable');
 }

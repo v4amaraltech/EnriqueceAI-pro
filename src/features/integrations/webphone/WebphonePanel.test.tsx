@@ -705,20 +705,19 @@ describe('WebphonePanel: pill do microfone e do ramal em outra aba', () => {
     for (const fn of Object.values(client)) fn.mockClear();
   });
 
-  it('microfone ainda não ativado: pill visível com "Ativar microfone"; o clique pede o microfone e não derruba o ramal', async () => {
+  it('microfone ainda não pedido (recarga): sem aviso vermelho, sem botão e sem pedir o microfone', () => {
     phone.set({ ...ready, mic: 'unknown' });
     render(<WebphonePanel />);
-    expect(screen.getByText(/microfone não ativado/)).toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Ativar microfone' }));
-    });
-    expect(client.requestWebphoneMicrophone).toHaveBeenCalledTimes(1);
-    expect(client.stopWebphone).not.toHaveBeenCalled();
-    expect(client.takeOverWebphone).not.toHaveBeenCalled();
+    expect(screen.queryByText(/microfone não ativado/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ativar microfone' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Webphone' })).not.toBeInTheDocument();
+    expect(client.requestWebphoneMicrophone).not.toHaveBeenCalled();
+  });
 
-    await act(async () => {
-      phone.set(ready);
-    });
+  it('microfone concedido sozinho no start: pill some', () => {
+    phone.set(ready);
+    render(<WebphonePanel />);
     expect(screen.queryByRole('button', { name: 'Ativar microfone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Webphone' })).not.toBeInTheDocument();
   });

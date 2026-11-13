@@ -8,7 +8,9 @@ import {
   shouldTapRemoteAudio,
   timeDomainHasSignal,
   watchRemoteAudio,
+  watchRemoteTrack,
 } from './remote-audio-log';
+import { resetWebphoneAudioContextsForTests, webphoneAudioContextCount } from './webphone-audio-contexts';
 
 function silence(length = 8): Uint8Array {
   return new Uint8Array(length).fill(128);
@@ -73,5 +75,48 @@ describe('remote audio log', () => {
     expect(source).not.toMatch(/fetch\s*\(/);
     expect(source).not.toMatch(/WebSocket|assemblyai|wss:\/\//i);
     expect(vi.isMockFunction(fetch)).toBe(false);
+  });
+});
+
+describe('watchRemoteTrack e o registro de AudioContext', () => {
+  it('registra o contexto, tenta o resume() na criação e retira do registro ao parar', () => {
+    resetWebphoneAudioContextsForTests();
+    const node = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+    const contexts: Array<{ resume: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = [];
+    class FakeAudioContext {
+      state = 'suspended';
+      destination = {};
+      resume = vi.fn(() => Promise.resolve());
+      close = vi.fn(() => Promise.resolve());
+      constructor() {
+        contexts.push(this);
+      }
+      createMediaStreamSource() {
+        return node();
+      }
+      createAnalyser() {
+        return { ...node(), fftSize: 0, getByteTimeDomainData: vi.fn() };
+      }
+      createGain() {
+        return { ...node(), gain: { value: 1 } };
+      }
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('MediaStream', class {});
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+
+    const stop = watchRemoteTrack({} as MediaStreamTrack, 'call-1', vi.fn());
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.resume).toHaveBeenCalledTimes(1);
+    expect(webphoneAudioContextCount()).toBe(1);
+
+    stop();
+    expect(webphoneAudioContextCount()).toBe(0);
+    expect(contexts[0]?.close).toHaveBeenCalledTimes(1);
+
+    raf.mockRestore();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });

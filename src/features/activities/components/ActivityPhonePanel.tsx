@@ -37,7 +37,12 @@ import {
 } from '@/features/integrations/webphone/webphone-call-context';
 import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
-import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
+import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
+import {
+  canReceiveCalls,
+  dialingBlockReason,
+  webphoneUsableAfterMicGesture,
+} from '@/features/integrations/webphone/webphone-state';
 import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
 import { DockMicControl } from './DockMicControl';
 
@@ -136,6 +141,9 @@ export function ActivityPhonePanel({
   // toca aqui e a extensão do Chrome não é necessária.
   const webphone = useApi4ComWebphone();
   const webphoneReady = canReceiveCalls(webphone);
+  // Para os avisos da tela: microfone ainda não pedido conta como webphone
+  // ativo (o clique em Ligar pede no mesmo gesto).
+  const webphoneUsable = webphoneUsableAfterMicGesture(webphone);
   // Anotações digitadas no painel flutuante do webphone (bloco 3): entram
   // pré-preenchidas no modal de resultado desta tarefa.
   const { notes: webphoneNotes } = useWebphoneCallContext();
@@ -184,14 +192,26 @@ export function ActivityPhonePanel({
     return () => window.removeEventListener('lead:updated', handleLeadUpdated);
   }, [leadId]);
 
-  function handleInitiateCall() {
+  async function handleInitiateCall() {
     if (callsDisabled) {
       toast.message('Fixture de teste: nenhuma ligação é originada.');
       return;
     }
     if (!selectedPhone) return;
     if (inFlightRef.current) return;
-    const blocked = dialingBlockReason(webphone);
+    // No mesmo gesto: acorda os AudioContext e, se o microfone ainda não foi
+    // pedido nesta aba, pede agora. A trava de clique duplo só é armada depois,
+    // para um "não concedido" não deixar o botão preso.
+    const pendingMic = prepareWebphoneMicForDial();
+    if (pendingMic) {
+      const micBlock = await pendingMic;
+      if (micBlock) {
+        toast.error(micBlock, { duration: 6000 });
+        return;
+      }
+      if (inFlightRef.current) return;
+    }
+    const blocked = dialingBlockReason(pendingMic ? getWebphoneState() : webphone);
     if (blocked) {
       toast.error(blocked, { duration: 6000 });
       return;
@@ -310,7 +330,7 @@ export function ActivityPhonePanel({
     // Re-disca na hora: o SDR liga várias vezes até conectar sem fechar o modal e
     // reclicar no botão. A tentativa anterior já foi persistida acima; a nova
     // discagem gera um callId novo, então cada tentativa vira um registro distinto.
-    handleInitiateCall();
+    void handleInitiateCall();
   }
 
   function handleSubmitResult(
@@ -497,7 +517,7 @@ export function ActivityPhonePanel({
           {callState === 'idle' && hasAnyPhone && (
             <button
               type="button"
-              onClick={handleInitiateCall}
+              onClick={() => void handleInitiateCall()}
               disabled={isPending}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm disabled:opacity-50"
               aria-label="Ligar"
@@ -531,7 +551,7 @@ export function ActivityPhonePanel({
             </SelectContent>
           </Select>
         )}
-        {!webphoneReady && dialerProvider === 'api4com' && callState === 'idle' && (
+        {!webphoneUsable && dialerProvider === 'api4com' && callState === 'idle' && (
           <p className="text-muted-foreground text-[11px]">
             A ligação segue pela API4COM. Se o webphone desta aba não estiver verde, a extensão atende o ramal.
           </p>
@@ -555,7 +575,7 @@ export function ActivityPhonePanel({
     <div className="flex h-full flex-col">
       {/* API4COM: webphone desta aba ou lembrete da extensão */}
       {dialerProvider === 'api4com' && callState === 'idle' && (
-        webphoneReady ? (
+        webphoneUsable ? (
           <div className="mb-3 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2.5">
             <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
             <p className="text-xs text-green-700 dark:text-green-400">
@@ -663,7 +683,7 @@ export function ActivityPhonePanel({
             <div className="mt-3 flex items-center gap-4">
               {callState === 'idle' && (
                 <button
-                  onClick={handleInitiateCall}
+                  onClick={() => void handleInitiateCall()}
                   disabled={isPending}
                   className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-green-600 text-white hover:bg-green-500'}`}
                   title="Ligar via API4COM"

@@ -28,8 +28,16 @@ import {
   setWebphoneCallContext,
 } from '@/features/integrations/webphone/webphone-call-context';
 import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
-import { getWebphoneState, hangupCall as hangupWebphoneLeg } from '@/features/integrations/webphone/webphone-client';
-import { canReceiveCalls, dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
+import {
+  getWebphoneState,
+  hangupCall as hangupWebphoneLeg,
+  prepareWebphoneMicForDial,
+} from '@/features/integrations/webphone/webphone-client';
+import {
+  canReceiveCalls,
+  dialingBlockReason,
+  webphoneUsableAfterMicGesture,
+} from '@/features/integrations/webphone/webphone-state';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
@@ -112,7 +120,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
 
   // Discagem automática (story power-dialer-auto-dial).
   const webphone = useApi4ComWebphone();
-  const webphoneReady = canReceiveCalls(webphone);
+  // Microfone ainda não pedido conta como pronto para a chave do automático:
+  // o clique em iniciar (ou em Ligar) pede o microfone no mesmo gesto.
+  const webphoneUsable = webphoneUsableAfterMicGesture(webphone);
   const [autoEnabled, setAutoEnabled] = useState(() => loadAutoDialPreference(browserStorage()));
   const [auto, dispatchAuto] = useReducer(reduceAutoDial, initialAutoDialState);
   const autoOn = auto.phase !== 'off';
@@ -277,17 +287,28 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   // Discar e concluir (compartilhado entre o modo manual e o automático)
   // -------------------------------------------------------------------------
 
-  function dial(phone?: string): Promise<DialResult> {
+  async function dial(phone?: string): Promise<DialResult> {
     const item = currentItem;
     const phoneToCall = phone ?? item?.phone;
-    if (!phoneToCall || inFlightRef.current) return Promise.resolve({ ok: false, error: null });
+    if (!phoneToCall || inFlightRef.current) return { ok: false, error: null };
     if (callState === 'calling' || callState === 'connected' || callState === 'awaiting-session') {
-      return Promise.resolve({ ok: false, error: 'Já existe uma ligação em andamento nesta aba.' });
+      return { ok: false, error: 'Já existe uma ligação em andamento nesta aba.' };
+    }
+    // Microfone ainda não pedido: pede no mesmo clique, antes de armar a trava.
+    // Sem nada a pedir o caminho segue síncrono (sem await).
+    const pendingMic = prepareWebphoneMicForDial();
+    if (pendingMic) {
+      const micBlock = await pendingMic;
+      if (micBlock) {
+        toast.error(micBlock, { duration: 6000 });
+        return { ok: false, error: micBlock };
+      }
+      if (inFlightRef.current) return { ok: false, error: null };
     }
     const blocked = dialingBlockReason(getWebphoneState());
     if (blocked) {
       toast.error(blocked, { duration: 6000 });
-      return Promise.resolve({ ok: false, error: blocked });
+      return { ok: false, error: blocked };
     }
     inFlightRef.current = true;
     sessionMissedRef.current = false;
@@ -459,7 +480,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   }
 
   function startAuto() {
-    if (!webphoneReady) return;
+    // Estado atual (não o da renderização): quem chama acabou de resolver o
+    // microfone no clique.
+    if (!canReceiveCalls(getWebphoneState())) return;
     const ev = alignAuto();
     if (!ev) {
       toast.info('Nenhum lead na etapa de ligação com tentativas para hoje.');
@@ -476,7 +499,23 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
       dispatchAuto({ type: 'stop' });
       return;
     }
-    if (isActive && callState === 'idle' && !autoOn) startAuto();
+    if (isActive && callState === 'idle' && !autoOn) void startAutoWithMic();
+  }
+
+  /**
+   * Clique que liga o automático: pede o microfone no mesmo gesto e só então
+   * inicia. Com o microfone já resolvido inicia na hora (sem await). Devolve
+   * false quando o microfone não foi concedido.
+   */
+  async function startAutoWithMic(): Promise<boolean> {
+    const pendingMic = prepareWebphoneMicForDial();
+    const micBlock = pendingMic ? await pendingMic : null;
+    if (micBlock) {
+      toast.error(micBlock, { duration: 6000 });
+      return false;
+    }
+    startAuto();
+    return true;
   }
 
   // Contagem regressiva: um tique por segundo.
@@ -616,12 +655,10 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   // Ações da tela
   // -------------------------------------------------------------------------
 
-  function handleStart() {
+  async function handleStart() {
     setIsActive(true);
-    if (autoEnabled && webphoneReady) {
-      startAuto();
-      return;
-    }
+    // Microfone negado no clique: não inicia o automático e segue no manual.
+    if (autoEnabled && webphoneUsable && (await startAutoWithMic())) return;
     // If current is already done, find next pending
     if (currentItem && itemStatuses.has(currentItem.enrollmentId)) {
       const next = findNextPending(currentIndex - 1, itemStatuses);
@@ -747,11 +784,11 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         queue={queue}
         stats={initialStats}
         preferences={currentPreferences}
-        onStart={handleStart}
+        onStart={() => void handleStart()}
         dialerProvider={dialerProvider}
         autoDialToggle={
           dialerProvider === 'api4com' ? (
-            <AutoDialToggle enabled={autoEnabled} available={webphoneReady} onChange={handleAutoToggle} />
+            <AutoDialToggle enabled={autoEnabled} available={webphoneUsable} onChange={handleAutoToggle} />
           ) : null
         }
       />
@@ -773,7 +810,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         </div>
         <div className="flex items-center gap-4">
           {dialerProvider === 'api4com' && (
-            <AutoDialToggle enabled={autoEnabled} available={webphoneReady} onChange={handleAutoToggle} />
+            <AutoDialToggle enabled={autoEnabled} available={webphoneUsable} onChange={handleAutoToggle} />
           )}
           <div className="flex items-center gap-2">
             <Tooltip>
@@ -803,7 +840,14 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
           detail={attemptDetail}
           canResume={callState === 'idle'}
           onPause={() => dispatchAuto({ type: 'pause', reason: 'user' })}
-          onResume={() => {
+          onResume={async () => {
+            // Clique: acorda o áudio e pede o microfone se ainda não foi pedido.
+            const pendingMic = prepareWebphoneMicForDial();
+            const micBlock = pendingMic ? await pendingMic : null;
+            if (micBlock) {
+              toast.error(micBlock, { duration: 6000 });
+              return;
+            }
             const ev = alignAuto();
             if (!ev) {
               finishAuto();

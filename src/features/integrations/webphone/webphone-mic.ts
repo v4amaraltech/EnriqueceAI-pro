@@ -1,13 +1,15 @@
 // Permissão do microfone do webphone. Módulo PURO (sem JsSIP, sem estado).
 //
-// O `getUserMedia` só pode rodar a partir de um clique do SDR (botão "Ativar
-// microfone" do painel): pedir no mount dispara o prompt sem gesto, o Chrome
-// passa a ignorar ou bloquear e o SDR não tem como tentar de novo sem
-// recarregar. O pedido aqui serve só para obter a permissão: as faixas são
-// paradas na hora e o JsSIP pede o microfone de novo no `answer`.
+// O prompt do navegador só pode abrir a partir de um clique do SDR (Ligar,
+// iniciar o Power Dialer ou "Tentar de novo" no painel): pedir no mount
+// dispara o prompt sem gesto, o Chrome passa a ignorar ou bloquear e o SDR não
+// tem como tentar de novo sem recarregar. A exceção é a permissão JÁ concedida
+// (`navigator.permissions` diz `granted`): aí o `getUserMedia` não abre prompt
+// e pode rodar no start. O pedido aqui serve só para obter a permissão: as
+// faixas são paradas na hora e o JsSIP pede o microfone de novo no `answer`.
 
 /**
- * - `unknown`: ainda não pedimos nesta aba (o SDR precisa clicar).
+ * - `unknown`: ainda não pedimos nesta aba (o pedido sai no clique em Ligar).
  * - `granted`: liberado.
  * - `denied`: o navegador (ou o SDR) bloqueou.
  * - `unavailable`: permissão não é o problema; não há microfone ou outro app está usando.
@@ -15,7 +17,7 @@
 export type MicPermission = 'unknown' | 'granted' | 'denied' | 'unavailable';
 
 export const MIC_MESSAGES = {
-  unknown: 'Ative o microfone para ligar: clique em Ativar microfone no aviso do webphone.',
+  unknown: 'Ative o microfone para ligar: clique em Ligar e permita o microfone quando o navegador pedir.',
   denied:
     'O navegador bloqueou o microfone. Libere a permissão para o EnriqueceAI e clique em Tentar de novo.',
   unavailable:
@@ -67,5 +69,26 @@ export async function acquireMicrophonePermission(
     const permission = classifyMicError(err);
     console.warn(`[webphone] microphone ${permission}:`, errorName(err) || 'erro desconhecido');
     return permission;
+  }
+}
+
+/** Pedaço de `navigator.permissions` que usamos (injetável nos testes). */
+export interface MicPermissionsApi {
+  query(descriptor: { name: string }): Promise<{ state: string }>;
+}
+
+/**
+ * O navegador já liberou o microfone para este site? Só `granted` conta: com
+ * `prompt` ou `denied`, sem a API (Safari antigo) ou se a consulta lançar
+ * (Firefox antigo não conhece o nome `microphone`), a resposta é `false` e o
+ * pedido fica para o próximo clique. Nunca lança.
+ */
+export async function isMicrophonePermissionGranted(permissions: MicPermissionsApi | null | undefined): Promise<boolean> {
+  if (!permissions || typeof permissions.query !== 'function') return false;
+  try {
+    const status = await permissions.query({ name: 'microphone' });
+    return status?.state === 'granted';
+  } catch {
+    return false;
   }
 }

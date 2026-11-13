@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MIC_MESSAGES, acquireMicrophonePermission, classifyMicError } from './webphone-mic';
+import {
+  MIC_MESSAGES,
+  acquireMicrophonePermission,
+  classifyMicError,
+  isMicrophonePermissionGranted,
+} from './webphone-mic';
 
 function domError(name: string): Error {
   const err = new Error(name);
@@ -65,8 +70,38 @@ describe('acquireMicrophonePermission', () => {
   });
 
   it('mensagens em pt-BR orientam a clicar de novo', () => {
-    expect(MIC_MESSAGES.unknown).toMatch(/Ativar microfone/);
+    expect(MIC_MESSAGES.unknown).toMatch(/Ative o microfone para ligar.*clique em Ligar/);
     expect(MIC_MESSAGES.denied).toMatch(/Tentar de novo/);
     expect(MIC_MESSAGES.unavailable).toMatch(/Tentar de novo/);
+  });
+});
+
+describe('isMicrophonePermissionGranted', () => {
+  function permissions(state: string) {
+    return { query: vi.fn(() => Promise.resolve({ state })) };
+  }
+
+  it('só `granted` libera o pedido sem gesto, consultando o nome microphone', async () => {
+    const api = permissions('granted');
+    await expect(isMicrophonePermissionGranted(api)).resolves.toBe(true);
+    expect(api.query).toHaveBeenCalledWith({ name: 'microphone' });
+  });
+
+  it('prompt e denied não liberam', async () => {
+    await expect(isMicrophonePermissionGranted(permissions('prompt'))).resolves.toBe(false);
+    await expect(isMicrophonePermissionGranted(permissions('denied'))).resolves.toBe(false);
+  });
+
+  it('sem a API ou com a consulta lançando, não libera e não lança', async () => {
+    await expect(isMicrophonePermissionGranted(undefined)).resolves.toBe(false);
+    await expect(isMicrophonePermissionGranted(null)).resolves.toBe(false);
+    const rejects = { query: vi.fn(() => Promise.reject(new TypeError('microphone desconhecido'))) };
+    await expect(isMicrophonePermissionGranted(rejects)).resolves.toBe(false);
+    const throws = {
+      query: vi.fn((): Promise<{ state: string }> => {
+        throw new TypeError('sync');
+      }),
+    };
+    await expect(isMicrophonePermissionGranted(throws)).resolves.toBe(false);
   });
 });
