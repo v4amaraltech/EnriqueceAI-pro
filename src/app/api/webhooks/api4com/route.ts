@@ -484,8 +484,12 @@ async function updateCallFromWebhook(
   });
 
   // Log sombra do desfecho pela causa do hangup, só depois do UPDATE persistido
-  // (o service lê hangup_cause e answered_at do banco). Só shadow, nunca lança.
-  if (!updateError) triggerHangupCrmShadow(supabase, callId);
+  // e só no channel-hangup (este helper também roda no channel-answer, quando a
+  // causa ainda não chegou; o service devolveria unmapped, mas evitamos a leitura).
+  // Só shadow, nunca lança.
+  if (!updateError && payload.eventType === 'channel-hangup') {
+    triggerHangupCrmShadow(supabase, callId);
+  }
 }
 
 /** Fire-and-forget: download + persist the recording to our Storage bucket so
