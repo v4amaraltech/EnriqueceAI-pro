@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  type MergeCallsMetadataArgs,
+  applyMergeCallsMetadataRpc,
+} from '@tests/mocks/merge-calls-metadata';
+
 import { runHangupCrmShadow, triggerHangupCrmShadow } from './hangup-shadow.service';
 
 type Row = Record<string, unknown>;
@@ -19,6 +24,19 @@ function fakeDb(
   const tables: Record<string, Row[]> = { crm_auto_update_shadow_log: [], ...seed };
   const writes: Array<{ table: string; op: string; data: Row; affected?: number }> = [];
   const db = {
+    // RPC merge_calls_metadata: metadata || patch + guardas, como no banco.
+    async rpc(fn: string, args: MergeCallsMetadataArgs) {
+      if (fn !== 'merge_calls_metadata')
+        return { data: null, error: { message: `rpc desconhecida: ${fn}` } };
+      if (opts.failUpdate === 'calls')
+        return { data: null, error: { message: 'connection reset' } };
+      const rows = tables.calls ?? (tables.calls = []);
+      const r = applyMergeCallsMetadataRpc(rows, args);
+      const data: Row = { metadata: args.p_patch };
+      if (args.p_sdr_disposition !== undefined) data.sdr_disposition = args.p_sdr_disposition;
+      writes.push({ table: 'calls', op: 'update', data, affected: r.affected });
+      return { data: r.data, error: null };
+    },
     from(table: string) {
       const filters: Array<(r: Row) => boolean> = [];
       let mode: 'select' | 'update' | 'insert' | 'delete' = 'select';
@@ -284,6 +302,43 @@ describe('runHangupCrmShadow (live, não atendeu e não conectou)', () => {
     },
   );
 
+  it('corrida de 13/11: audio_stats gravado entre a leitura e o UPDATE do CRM não some, e o marcador fica', async () => {
+    const audio = { packetsReceived: 100, lossPercent: 0 };
+    const { db, tables, writes } = fakeDb(
+      seed({ flags: LIVE, call: { metadata: { api4com_call_id: 'x' } } }),
+    );
+    const rpc = (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc = (fn, a) => {
+      // saveWebphoneCallAudio grava no meio (merge da chave dele).
+      const row = tables.calls?.[0] as Row;
+      row.metadata = { ...(row.metadata as Row), audio_stats: audio };
+      return rpc(fn, a);
+    };
+    expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
+    const call = tables.calls?.[0] as Row & { metadata: Row };
+    expect(call.sdr_disposition).toBe('no_answer');
+    expect(call.metadata).toMatchObject({
+      api4com_call_id: 'x',
+      audio_stats: audio,
+      crm_auto_update: { applied: true, disposition: 'no_answer', rules_version: 'hangup_v1' },
+    });
+    // O patch do CRM leva só o marcador, nunca o metadata relido.
+    const upd = writes.find((w) => w.table === 'calls');
+    expect(Object.keys(upd?.data.metadata as Row)).toEqual(['crm_auto_update']);
+  });
+
+  it('audio_stats já gravado antes: o marcador do CRM entra sem apagar o áudio', async () => {
+    const audio = { packetsReceived: 100, lossPercent: 0 };
+    const { db, tables } = fakeDb(
+      seed({ flags: LIVE, call: { metadata: { audio_stats: audio } } }),
+    );
+    expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
+    expect((tables.calls?.[0] as Row).metadata).toMatchObject({
+      audio_stats: audio,
+      crm_auto_update: { applied: true },
+    });
+  });
+
   it('NUMBER_CHANGED com answered_at e duração 29s em live também escreve no_answer', async () => {
     const { db, tables } = fakeDb(
       seed({
@@ -539,16 +594,13 @@ describe('runHangupCrmShadow (live, não atendeu e não conectou)', () => {
     const original = (db as { from: (t: string) => Record<string, unknown> }).from;
     let callsReads = 0;
     (db as { from: (t: string) => unknown }).from = (t: string) => {
-      const b = original(t);
-      if (t === 'calls') {
-        const update = b.update as (d: Row) => unknown;
-        b.update = (d: Row) => {
-          (tables.calls?.[0] as Row).sdr_disposition = 'technical_failure';
-          return update(d);
-        };
-        callsReads += 1;
-      }
-      return b;
+      if (t === 'calls') callsReads += 1;
+      return original(t);
+    };
+    const rpc = (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc = (fn, a) => {
+      (tables.calls?.[0] as Row).sdr_disposition = 'technical_failure';
+      return rpc(fn, a);
     };
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(callsReads).toBeGreaterThan(1);
@@ -656,17 +708,10 @@ describe('runHangupCrmShadow (live, não atendeu e não conectou)', () => {
   it('corrida: SDR preenche no meio de um número inválido, UPDATE pega 0 linhas, skip sem sobrescrever', async () => {
     const s = seed({ flags: LIVE, call: { hangup_cause: 'UNALLOCATED_NUMBER' } });
     const { db, writes, tables } = fakeDb(s);
-    const original = (db as { from: (t: string) => Record<string, unknown> }).from;
-    (db as { from: (t: string) => unknown }).from = (t: string) => {
-      const b = original(t);
-      if (t === 'calls') {
-        const update = b.update as (d: Row) => unknown;
-        b.update = (d: Row) => {
-          (tables.calls?.[0] as Row).sdr_disposition = 'no_answer';
-          return update(d);
-        };
-      }
-      return b;
+    const rpc = (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc = (fn, a) => {
+      (tables.calls?.[0] as Row).sdr_disposition = 'no_answer';
+      return rpc(fn, a);
     };
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(writes.find((w) => w.table === 'calls')?.affected).toBe(0);

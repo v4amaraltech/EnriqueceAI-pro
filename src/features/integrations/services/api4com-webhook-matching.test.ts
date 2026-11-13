@@ -24,7 +24,7 @@ function store(rows: {
     findByPrimaryId: vi.fn(async () => rows.primary ?? null),
     findByAltId: vi.fn(async () => rows.alt ?? null),
     findFallback: vi.fn(async () => rows.fallback ?? null),
-    updateMetadata: vi.fn(async () => undefined),
+    mergeMetadata: vi.fn(async () => undefined),
   } satisfies WebhookCallStore<Row>;
   return s;
 }
@@ -68,7 +68,8 @@ describe('findWebhookCall', () => {
       api4com_call_id: 'prov-1',
       webhook_linked: true,
     };
-    expect(s.updateMetadata).toHaveBeenCalledWith(REF, expected);
+    // O merge no banco recebe só as chaves novas; o resto fica na linha.
+    expect(s.mergeMetadata).toHaveBeenCalledWith(REF, { api4com_call_id: 'prov-1', webhook_linked: true });
     expect(result?.call.metadata).toEqual(expected);
   });
 
@@ -78,9 +79,7 @@ describe('findWebhookCall', () => {
 
     await findWebhookCall(s, event(), ['org-1'], { now: NOW });
 
-    expect(s.updateMetadata).toHaveBeenCalledWith(REF, {
-      callRef: REF,
-      api4com_call_id: 'req-0',
+    expect(s.mergeMetadata).toHaveBeenCalledWith(REF, {
       alt_api4com_ids: ['prov-1'],
       webhook_linked: true,
     });
@@ -96,7 +95,7 @@ describe('findWebhookCall', () => {
 
     await findWebhookCall(s, event(), ['org-1'], { now: NOW });
 
-    expect(s.updateMetadata).not.toHaveBeenCalled();
+    expect(s.mergeMetadata).not.toHaveBeenCalled();
   });
 
   it('cai no metadata->>callRef quando a chave primária não acha', async () => {
@@ -150,9 +149,8 @@ describe('findWebhookCall', () => {
       calledSuffix: '99999999',
       sinceIso: '2026-11-12T13:00:00.000Z',
     });
-    expect(s.updateMetadata).toHaveBeenCalledWith('fb', {
-      api4com_call_id: 'req-0',
-      gateway: 'g',
+    // Patch sem api4com_call_id nem gateway: só o que o fallback grava.
+    expect(s.mergeMetadata).toHaveBeenCalledWith('fb', {
       alt_api4com_ids: ['prov-1'],
       webhook_linked: true,
     });

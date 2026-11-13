@@ -4,6 +4,7 @@ import { fetchPublicHttps } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 
 import { measureAudioSeconds } from './audio-duration';
+import { mergeCallsMetadata } from './merge-calls-metadata';
 import { lookupRecordingFromApi4Com } from './recover-recording.service';
 import {
   classifyRecordingDuration,
@@ -68,18 +69,17 @@ export interface PersistCallRow {
 export const PERSIST_CALL_COLUMNS =
   'id, org_id, recording_url, recording_storage_path, metadata, destination, started_at, created_at, user_id, origin, duration_seconds';
 
-/** Mescla `patch` em `calls.metadata` relendo a linha (evita sobrescrever escritas concorrentes). */
+/**
+ * Mescla `patch` em `calls.metadata` no banco (merge_calls_metadata, metadata || patch).
+ * Ler e regravar o objeto inteiro no JS apagava chaves gravadas em paralelo.
+ */
 export async function mergeCallMetadata(
   supabase: SupabaseClient,
   callId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  const { data } = (await from(supabase, 'calls').select('metadata').eq('id', callId).maybeSingle()) as {
-    data: { metadata: Record<string, unknown> | null } | null;
-  };
-  await from(supabase, 'calls')
-    .update({ metadata: { ...(data?.metadata ?? {}), ...patch } } as Record<string, unknown>)
-    .eq('id', callId);
+  const { error } = await mergeCallsMetadata(supabase, callId, patch);
+  if (error) console.error(`[recording-storage] falha ao mesclar metadata da ligação ${callId}: ${error}`);
 }
 
 /** Marca o resultado da validação na ligação (flag consultada pelo proxy e pelo reparo). */

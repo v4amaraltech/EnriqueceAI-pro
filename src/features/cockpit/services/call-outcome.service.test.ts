@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 import { armCockpitCallOutcome, fetchCockpitCallOutcome } from './call-outcome.service';
 
 type Row = Record<string, unknown>;
@@ -25,8 +27,17 @@ function fakeSupabase(tables: { calls: Row | null; leads?: Row | null }) {
       chain.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(ok);
       return chain;
     },
+    // RPC merge_calls_metadata: metadata || patch na linha, como no banco.
+    async rpc(fn: string, args: MergeCallsMetadataArgs) {
+      if (fn !== 'merge_calls_metadata') return { data: null, error: { message: `rpc desconhecida: ${fn}` } };
+      updates.push({ patch: args.p_patch, org_id: args.p_org_id });
+      if (args.p_org_id) filters.push(['calls', 'org_id', args.p_org_id]);
+      const rows = tables.calls ? [tables.calls] : [];
+      const r = applyMergeCallsMetadataRpc(rows, { ...args, p_org_id: undefined });
+      return { data: r.data, error: null };
+    },
   };
-  return { client: client as unknown as SupabaseClient, updates, filters };
+  return { client: client as unknown as SupabaseClient, updates, filters, tables };
 }
 
 const CALL_ID = 'call-1';
@@ -50,7 +61,9 @@ describe('armCockpitCallOutcome', () => {
     const f = fakeSupabase({ calls: baseCall() });
     const r = await armCockpitCallOutcome(f.client, sdr, CALL_ID, new Date('2026-11-07T12:01:00Z'));
     expect(r.status).toBe('armed');
-    expect(f.updates[0]?.metadata).toMatchObject({
+    // Patch só com ai_outcome; o merge no banco preserva o resto.
+    expect(Object.keys(f.updates[0]?.patch as Row)).toEqual(['ai_outcome']);
+    expect(f.tables.calls?.metadata).toMatchObject({
       api4com_call_id: 'x',
       ai_outcome: { status: 'pending', hold_low_confidence: true },
     });

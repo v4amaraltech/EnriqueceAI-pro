@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 import {
   type OriginateApi4ComDeps,
   originateApi4ComCallWithRef,
@@ -8,7 +10,7 @@ import {
 const REF = '6f1c2a3e-1234-4abc-8def-0123456789ab';
 const RAMAL_424 = 'API4COM POST /calls failed (424): call from 1001 to +5511999999999 has been failed';
 
-type Op = { table: string; kind: 'insert' | 'update' | 'delete' | 'select'; payload?: Record<string, unknown> };
+type Op = { table: string; kind: 'insert' | 'update' | 'delete' | 'select' | 'rpc'; payload?: Record<string, unknown> };
 
 /** Supabase falso: guarda a linha de `calls`, registra a ordem das operações. */
 function fakeSupabase(opts: {
@@ -16,12 +18,23 @@ function fakeSupabase(opts: {
   updateError?: { message: string };
   /** Simula o webhook escrevendo na linha entre o insert e a releitura. */
   onRead?: (row: Record<string, unknown>) => void;
+  /** Simula o webhook escrevendo na linha entre a releitura e o merge. */
+  beforeMerge?: (row: Record<string, unknown>) => void;
   log: string[];
   rows?: Map<string, Record<string, unknown>>;
 }) {
   const ops: Op[] = [];
   const rows = opts.rows ?? new Map<string, Record<string, unknown>>();
   const client = {
+    // RPC merge_calls_metadata: metadata || patch na linha, como no banco.
+    rpc: async (fn: string, args: MergeCallsMetadataArgs) => {
+      ops.push({ table: 'calls', kind: 'rpc', payload: args.p_patch });
+      opts.log.push(`rpc:${fn}`);
+      if (opts.updateError) return { data: null, error: opts.updateError };
+      const row = rows.get(args.p_id);
+      if (row) opts.beforeMerge?.(row);
+      return { data: applyMergeCallsMetadataRpc(row ? [row] : [], args).data, error: null };
+    },
     from: (table: string) => {
       let filterId: string | null = null;
       const chain: Record<string, unknown> = {
@@ -96,6 +109,7 @@ function setup(
     insertError?: { message: string };
     updateError?: { message: string };
     onRead?: (row: Record<string, unknown>) => void;
+    beforeMerge?: (row: Record<string, unknown>) => void;
   } = {},
 ) {
   const log: string[] = [];
@@ -246,9 +260,27 @@ describe('originateApi4ComCallWithRef', () => {
     expect(row.metadata).toEqual({ gateway: 'flux-org-1', callRef: REF, api4com_call_id: 'prov-1', webhook_linked: true });
     expect(row.status).toBe('significant');
     expect(row.duration_seconds).toBe(120);
-    for (const op of db.ops.filter((o) => o.kind === 'update' && o.table === 'calls')) {
-      expect(Object.keys(op.payload!)).toEqual(['metadata']);
-    }
+    expect(db.ops.filter((o) => o.kind === 'update' && o.table === 'calls')).toHaveLength(0);
+  });
+
+  it('webhook grava entre a releitura e o merge: o patch leva só o id do provedor e nada se perde', async () => {
+    const { deps, db } = setup({
+      beforeMerge: (row) => {
+        row.metadata = { ...(row.metadata as Record<string, unknown>), webhook_linked: true, audio_stats: { lossPercent: 0 } };
+      },
+    });
+
+    await originateApi4ComCallWithRef(deps, input);
+
+    const merges = db.ops.filter((o) => o.kind === 'rpc');
+    expect(merges.map((o) => o.payload)).toEqual([{ api4com_call_id: 'prov-1' }]);
+    expect(db.rows.get(REF)!.metadata).toEqual({
+      gateway: 'flux-org-1',
+      callRef: REF,
+      api4com_call_id: 'prov-1',
+      webhook_linked: true,
+      audio_stats: { lossPercent: 0 },
+    });
   });
 
   it('webhook gravou outro id: o do POST vai para alt_api4com_ids', async () => {

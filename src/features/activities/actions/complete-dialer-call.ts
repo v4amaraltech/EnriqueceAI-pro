@@ -13,6 +13,7 @@ import { from } from '@/lib/supabase/from';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { callDispositionSchema } from '@/features/calls/schemas/call.schemas';
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
+import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
 
 // callStatus is accepted for backwards compatibility (older UI versions in
 // the wild may still send it) but no longer used. Notes go in plain, and
@@ -198,10 +199,14 @@ async function markAiOutcomePending(supabase: SupabaseClient, orgId: string, cal
     const metadata = data?.metadata ?? {};
     const current = metadata.ai_outcome as { status?: string } | undefined;
     if (current?.status && current.status !== 'pending') return; // a IA já respondeu
-    await from(supabase, 'calls')
-      .update({ metadata: { ...metadata, ai_outcome: { status: 'pending', requested_at: new Date().toISOString() } } })
-      .eq('id', callId)
-      .eq('org_id', orgId);
+    // Merge atômico no banco: só a chave ai_outcome, nunca o metadata lido.
+    const { error } = await mergeCallsMetadata(
+      supabase,
+      callId,
+      { ai_outcome: { status: 'pending', requested_at: new Date().toISOString() } },
+      { orgId },
+    );
+    if (error) console.error('[completeDialerCall] markAiOutcomePending failed:', error);
   } catch (err) {
     console.error('[completeDialerCall] markAiOutcomePending failed:', err);
   }

@@ -2,6 +2,8 @@
  * Supabase em memória só para os testes de gravação. Cobre o subconjunto de
  * filtros usado por recording-storage/recording-repair. Sem rede, sem DB.
  */
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 export type Row = Record<string, unknown>;
 
 export interface FakeSupabase {
@@ -73,6 +75,13 @@ export function makeFakeSupabase(initialCalls: Row[], initialStorage: Record<str
 
   const client = {
     from: () => makeQuery(),
+    // RPC merge_calls_metadata: metadata || patch na linha, como no banco.
+    rpc: (fn: string, args: MergeCallsMetadataArgs) => {
+      if (fn !== 'merge_calls_metadata') return Promise.resolve({ data: null, error: { message: `rpc desconhecida: ${fn}` } });
+      const r = applyMergeCallsMetadataRpc(calls, args);
+      if (r.affected > 0) updates.push({ id: args.p_id, payload: { metadata: args.p_patch } });
+      return Promise.resolve({ data: r.data, error: null });
+    },
     storage: {
       from: () => ({
         upload: (path: string, buffer: Buffer) => {

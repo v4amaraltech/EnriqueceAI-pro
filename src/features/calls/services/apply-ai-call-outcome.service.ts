@@ -4,6 +4,7 @@ import { from } from '@/lib/supabase/from';
 
 import { AI_OUTCOME_REVIEW_CONFIDENCE, readAiOutcome, type AiOutcome } from '../ai-outcome';
 import { applySdrCallResult } from './apply-sdr-call-result';
+import { mergeCallsMetadata } from './merge-calls-metadata';
 import { classifyCallOutcome, type CallOutcomeClassification, type CallOutcomeInput } from './call-outcome-classifier';
 import { scheduleCallbackActivity } from './schedule-callback.service';
 
@@ -36,15 +37,10 @@ async function readCallState(supabase: SupabaseClient, callId: string): Promise<
   return data;
 }
 
-/** Grava `metadata.ai_outcome` sem perder o resto do metadata (lido na hora). */
+/** Grava `metadata.ai_outcome` por merge atômico no banco (só a chave ai_outcome). */
 async function writeAiOutcome(supabase: SupabaseClient, callId: string, outcome: AiOutcome): Promise<void> {
-  const state = await readCallState(supabase, callId);
-  await from(supabase, 'calls')
-    .update({
-      metadata: { ...(state?.metadata ?? {}), ai_outcome: outcome },
-      updated_at: new Date().toISOString(),
-    } as Record<string, unknown>)
-    .eq('id', callId);
+  const { error } = await mergeCallsMetadata(supabase, callId, { ai_outcome: outcome });
+  if (error) console.error(`[ai-outcome] falha ao gravar ai_outcome da ligação ${callId}: ${error}`);
 }
 
 /** Marca a classificação como falha (fica com o selo "Revisar"). */
@@ -91,14 +87,16 @@ export async function applyAiCallOutcome(
   const holdLowConfidence = pendingOutcome.hold_low_confidence === true;
 
   const startedAt = now().toISOString();
-  const { data: claimed } = (await from(supabase, 'calls')
-    .update({
-      metadata: { ...(state?.metadata ?? {}), ai_outcome: { status: 'processing', started_at: startedAt } },
-    } as Record<string, unknown>)
-    .eq('id', call.id)
-    .eq('metadata->ai_outcome->>status', 'pending')
-    .select('id')) as { data: { id: string }[] | null };
-  if (!claimed || claimed.length === 0) return null;
+  // Claim atômico: só quem mudar `pending` para `processing` segue. A guarda roda
+  // dentro do mesmo UPDATE do merge (merge_calls_metadata).
+  const claim = await mergeCallsMetadata(
+    supabase,
+    call.id,
+    { ai_outcome: { status: 'processing', started_at: startedAt } },
+    { onlyIfAiOutcomeStatus: 'pending' },
+  );
+  if (claim.error) console.error(`[ai-outcome] claim falhou para a ligação ${call.id}: ${claim.error}`);
+  if (!claim.updated) return null;
 
   let result: CallOutcomeClassification;
   try {

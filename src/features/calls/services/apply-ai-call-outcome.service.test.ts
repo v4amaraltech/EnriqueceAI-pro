@@ -4,6 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 vi.mock('./apply-sdr-call-result', () => ({ applySdrCallResult: vi.fn() }));
 vi.mock('./schedule-callback.service', () => ({ scheduleCallbackActivity: vi.fn() }));
 
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 import { applySdrCallResult } from './apply-sdr-call-result';
 import { applyAiCallOutcome, composeAiNotes } from './apply-ai-call-outcome.service';
 import type { CallOutcomeClassification } from './call-outcome-classifier';
@@ -19,39 +21,41 @@ const CALL = {
   created_at: '2026-11-05T17:00:00.000Z',
 };
 
-/** Fake de `calls`: guarda o metadata e simula a trava pending → processing. */
+/**
+ * Fake de `calls`: a linha mora em `state`; a RPC merge_calls_metadata aplica
+ * metadata || patch e a guarda de ai_outcome.status (trava pending → processing).
+ * `between` simula outro escritor gravando entre o claim e a gravação final.
+ */
 function fakeCalls(initial: { metadata: Record<string, unknown>; notes?: string | null; sdr_disposition?: string | null }) {
-  const state = { notes: null, sdr_disposition: null, ...initial };
+  const state: Record<string, unknown> & { metadata: Record<string, unknown> } = {
+    id: CALL.id,
+    org_id: CALL.org_id,
+    notes: null,
+    sdr_disposition: null,
+    ...initial,
+  };
   const updates: Array<Record<string, unknown>> = [];
+  const rpcCalls: MergeCallsMetadataArgs[] = [];
   const client = {
     from() {
-      const filters: Array<[string, unknown]> = [];
-      let pending: Record<string, unknown> | null = null;
       const chain: Record<string, unknown> = {};
       chain.select = () => chain;
-      chain.eq = (col: string, val: unknown) => {
-        filters.push([col, val]);
-        return chain;
-      };
+      chain.eq = () => chain;
       chain.single = () => Promise.resolve({ data: { ...state }, error: null });
       chain.update = (payload: Record<string, unknown>) => {
-        pending = payload;
+        updates.push(payload);
         return chain;
       };
-      const run = () => {
-        if (!pending) return { data: null, error: null };
-        const needsPending = filters.some(([c, v]) => c === 'metadata->ai_outcome->>status' && v === 'pending');
-        const current = (state.metadata.ai_outcome as { status?: string } | undefined)?.status;
-        if (needsPending && current !== 'pending') return { data: [], error: null };
-        updates.push(pending);
-        if (pending.metadata) state.metadata = pending.metadata as Record<string, unknown>;
-        return { data: [{ id: CALL.id }], error: null };
-      };
-      chain.then = (resolve: (v: unknown) => void) => resolve(run());
+      chain.then = (resolve: (v: unknown) => void) => resolve({ data: null, error: null });
       return chain;
     },
+    async rpc(fn: string, args: MergeCallsMetadataArgs) {
+      if (fn !== 'merge_calls_metadata') return { data: null, error: { message: `rpc desconhecida: ${fn}` } };
+      rpcCalls.push(args);
+      return { data: applyMergeCallsMetadataRpc([state], args).data, error: null };
+    },
   };
-  return { client: client as unknown as SupabaseClient, state, updates };
+  return { client: client as unknown as SupabaseClient, state, updates, rpcCalls };
 }
 
 function classification(over: Partial<CallOutcomeClassification> = {}): CallOutcomeClassification {
@@ -93,6 +97,50 @@ describe('applyAiCallOutcome', () => {
       notes: 'Resumo da IA: Falou com o dono, quer proposta.\n\nAnotação do SDR: ligar pro sócio',
     });
     expect(state.metadata).toMatchObject({ api4com_call_id: 'a', ai_outcome: { status: 'done', model: 'openai/gpt-4.1' } });
+  });
+
+  it('claim usa a guarda ai_outcome.status = pending no mesmo UPDATE e manda só ai_outcome', async () => {
+    const { client, rpcCalls, updates } = fakeCalls({ metadata: { api4com_call_id: 'a', ai_outcome: { status: 'pending' } } });
+    await applyAiCallOutcome(client, CALL, 'alô', { classify: async () => classification(), now: NOW });
+    expect(updates).toHaveLength(0);
+    expect(rpcCalls[0]).toEqual({
+      p_id: CALL.id,
+      p_patch: { ai_outcome: { status: 'processing', started_at: NOW().toISOString() } },
+      p_only_if_ai_outcome_status: 'pending',
+    });
+    for (const call of rpcCalls) expect(Object.keys(call.p_patch)).toEqual(['ai_outcome']);
+  });
+
+  it('claim perdido (outra execução já mudou para processing no meio): não classifica', async () => {
+    const { client, state, rpcCalls } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+    // A leitura vê pending; antes do claim outra execução pega a ligação.
+    const rpc = (client as unknown as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (client as unknown as { rpc: typeof rpc }).rpc = (fn, a) => {
+      state.metadata = { ...state.metadata, ai_outcome: { status: 'processing', started_at: 'outro' } };
+      return rpc(fn, a);
+    };
+    const classify = vi.fn();
+    expect(await applyAiCallOutcome(client, CALL, 'alô', { classify, now: NOW })).toBeNull();
+    expect(classify).not.toHaveBeenCalled();
+    expect(rpcCalls).toHaveLength(1);
+    expect(state.metadata.ai_outcome).toEqual({ status: 'processing', started_at: 'outro' });
+  });
+
+  it('marcador do CRM gravado durante a classificação não é apagado pelo ai_outcome final', async () => {
+    const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+    const marker = { applied: true, disposition: 'no_answer', rules_version: 'hangup_v1' };
+    await applyAiCallOutcome(client, CALL, 'alô', {
+      classify: async () => {
+        state.metadata = { ...state.metadata, crm_auto_update: marker, audio_stats: { lossPercent: 1 } };
+        return classification();
+      },
+      now: NOW,
+    });
+    expect(state.metadata).toMatchObject({
+      crm_auto_update: marker,
+      audio_stats: { lossPercent: 1 },
+      ai_outcome: { status: 'done' },
+    });
   });
 
   it('nunca sobrescreve o desfecho do SDR', async () => {

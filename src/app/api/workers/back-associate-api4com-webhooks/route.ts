@@ -9,6 +9,7 @@ import {
   resolveApi4ComOrgScope,
 } from '@/features/integrations/services/api4com-org-scope';
 import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
+import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
 
 export const maxDuration = 300;
 
@@ -196,11 +197,10 @@ async function handle(request: Request) {
     // classification)
     const durationSeconds = Number(p.duration ?? 0) || 0;
     const newStatus = deriveStatus(p, durationSeconds);
-    const meta = (call.metadata ?? {}) as Record<string, unknown>;
-    const newMeta = { ...meta, api4com_call_id: p.id, back_associated_at: new Date().toISOString() };
+    // Só as chaves deste worker; o merge no banco preserva o resto do metadata.
+    const metaPatch = { api4com_call_id: p.id, back_associated_at: new Date().toISOString() };
 
     const updates: Record<string, unknown> = {
-      metadata: newMeta,
       duration_seconds: durationSeconds,
     };
     if (p.recordUrl && !call.recording_url) {
@@ -214,6 +214,8 @@ async function handle(request: Request) {
 
     if (!dryRun) {
       await from(supabase, 'calls').update(updates).eq('id', call.id);
+      const merged = await mergeCallsMetadata(supabase, call.id, metaPatch);
+      if (merged.error) console.error(`[back-associate] falha ao mesclar metadata da ligação ${call.id}: ${merged.error}`);
     }
 
     orgRes.matched++;
