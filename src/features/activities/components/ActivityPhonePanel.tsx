@@ -16,6 +16,7 @@ import {
 } from '@/shared/components/ui/select';
 
 import { mapDispositionToAction } from '@/features/calls/disposition';
+import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
 import type { CallDisposition } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
@@ -117,6 +118,11 @@ export function ActivityPhonePanel({
   const leadAnswer = useWebphoneLeadAnswer(callState === 'ended' ? callId : null);
   const callConnected = leadConnected(leadAnswer, callDuration > 0);
   const resultSeconds = effectiveCallSeconds(leadAnswer, callDuration);
+  const suggestion = usePostCallSuggestion({
+    callId,
+    connected: callConnected,
+    enabled: callState === 'ended',
+  });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
   // Synchronous guard against double-clicks. useTransition's isPending only
@@ -449,6 +455,7 @@ export function ActivityPhonePanel({
       phoneLabel={selectedPhone}
       durationSeconds={resultSeconds}
       connected={callConnected}
+      suggestion={suggestion}
       initialNotes={resultNotes}
       isSending={isSending || isPending}
       onRetry={canRetry ? handleRetryAttempt : undefined}

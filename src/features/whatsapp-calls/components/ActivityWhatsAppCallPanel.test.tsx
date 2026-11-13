@@ -21,6 +21,7 @@ vi.mock('../voice-call-media', () => ({
 
 // Stub leve do modal compartilhado: expõe só os gatilhos de saída, pra isolar a
 // fiação de persistência do painel (o render do modal é testado à parte).
+vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
 vi.mock('@/features/activities/components/CallResultModal', () => ({
   CallResultModal: ({
     onClose,

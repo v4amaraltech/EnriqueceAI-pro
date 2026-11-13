@@ -28,9 +28,15 @@ function fakeDb(
       const result = (single = false) => {
         if (mode === 'insert') {
           if (table === 'crm_auto_update_shadow_log' && opts.failLogInsert) {
-            return { data: null, error: { code: '23502', message: 'null value in column "qualification_id"' } };
+            return {
+              data: null,
+              error: { code: '23502', message: 'null value in column "qualification_id"' },
+            };
           }
-          if (table === 'crm_auto_update_shadow_log' && rows().some((r) => r.call_id === payload.call_id)) {
+          if (
+            table === 'crm_auto_update_shadow_log' &&
+            rows().some((r) => r.call_id === payload.call_id)
+          ) {
             return opts.uniqueByMessage
               ? { data: null, error: { message: 'duplicate key value violates unique constraint' } }
               : { data: null, error: { code: '23505', message: 'duplicate' } };
@@ -40,7 +46,8 @@ function fakeDb(
           return { data: null, error: null };
         }
         if (mode === 'update') {
-          if (opts.failUpdate === table) return { data: null, error: { message: 'connection reset' } };
+          if (opts.failUpdate === table)
+            return { data: null, error: { message: 'connection reset' } };
           const hit = rows().filter(matches);
           for (const r of hit) Object.assign(r, payload);
           writes.push({ table, op: 'update', data: payload, affected: hit.length });
@@ -51,7 +58,9 @@ function fakeDb(
           return { data: null, error: null };
         }
         // Cópia rasa: no banco real o SELECT não compartilha referência com o UPDATE.
-        const hit = rows().filter(matches).map((r) => ({ ...r }));
+        const hit = rows()
+          .filter(matches)
+          .map((r) => ({ ...r }));
         return { data: single ? (hit[0] ?? null) : hit, error: null };
       };
       const b: Record<string, unknown> = {
@@ -63,7 +72,8 @@ function fakeDb(
         is: (k: string, v: null) => (filters.push((r) => (r[k] ?? null) === v), b),
         limit: () => b,
         single: () => Promise.resolve(result(true)),
-        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(result()).then(res, rej),
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve(result()).then(res, rej),
       };
       return b;
     },
@@ -141,7 +151,11 @@ describe('runHangupCrmShadow (shadow)', () => {
       verdict: 'would_apply',
       skip_reason: null,
       rules_version: 'hangup_v1',
-      proposed_changes: { disposition: 'no_answer', next_activity: { type: 'retry', channel: 'phone' }, lead_status: null },
+      proposed_changes: {
+        disposition: 'no_answer',
+        next_activity: { type: 'retry', channel: 'phone' },
+        lead_status: null,
+      },
       input_snapshot: {
         source: 'hangup_deterministic',
         hangup_cause: 'NUMBER_CHANGED',
@@ -183,12 +197,17 @@ describe('runHangupCrmShadow (shadow)', () => {
   });
 
   it('sem lead: skip no_lead com proposta', async () => {
-    const { db, tables } = fakeDb(seed({ call: { lead_id: null, hangup_cause: 'UNALLOCATED_NUMBER' } }));
+    const { db, tables } = fakeDb(
+      seed({ call: { lead_id: null, hangup_cause: 'UNALLOCATED_NUMBER' } }),
+    );
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
       verdict: 'skip',
       skip_reason: 'no_lead',
-      proposed_changes: { disposition: 'technical_failure', next_activity: { type: 'none', channel: null } },
+      proposed_changes: {
+        disposition: 'technical_failure',
+        next_activity: { type: 'none', channel: null },
+      },
     });
   });
 
@@ -214,7 +233,7 @@ describe('runHangupCrmShadow (shadow)', () => {
   });
 });
 
-describe('runHangupCrmShadow (live, não atendeu)', () => {
+describe('runHangupCrmShadow (live, não atendeu e não conectou)', () => {
   const APPLYING = [
     ['NUMBER_CHANGED', 'no_answer'],
     ['NO_ANSWER', 'no_answer'],
@@ -229,7 +248,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
     async (cause, outcome) => {
       const { db, writes, tables } = fakeDb(seed({ flags: LIVE, call: { hangup_cause: cause } }));
       expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
-      expect(writes.map((w) => `${w.op}:${w.table}`)).toEqual(['update:calls', 'insert:crm_auto_update_shadow_log']);
+      expect(writes.map((w) => `${w.op}:${w.table}`)).toEqual([
+        'update:calls',
+        'insert:crm_auto_update_shadow_log',
+      ]);
       const call = tables.calls?.[0] as Row & { metadata: { crm_auto_update: Row } };
       expect(call.sdr_disposition).toBe('no_answer');
       expect(call.metadata.crm_auto_update).toMatchObject({
@@ -250,7 +272,12 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
         qualification_id: null,
         rules_version: 'hangup_v1',
         proposed_changes: { disposition: 'no_answer', lead_status: null },
-        input_snapshot: { source: 'hangup_deterministic', hangup_cause: cause, outcome, sdr_disposition: null },
+        input_snapshot: {
+          source: 'hangup_deterministic',
+          hangup_cause: cause,
+          outcome,
+          sdr_disposition: null,
+        },
       });
       expect(log?.applied_at).toBe(call.metadata.crm_auto_update.applied_at);
       expect(writes.filter((w) => CRM_TABLES.includes(w.table))).toEqual([]);
@@ -261,7 +288,11 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
     const { db, tables } = fakeDb(
       seed({
         flags: LIVE,
-        call: { hangup_cause: 'NUMBER_CHANGED', answered_at: '2026-11-12T13:00:05.000Z', duration_seconds: 29 },
+        call: {
+          hangup_cause: 'NUMBER_CHANGED',
+          answered_at: '2026-11-12T13:00:05.000Z',
+          duration_seconds: 29,
+        },
       }),
     );
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
@@ -273,18 +304,79 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
     ['INVALID_NUMBER_FORMAT', 'invalid_number', 'technical_failure'],
     ['NORMAL_TEMPORARY_FAILURE', 'technical_failure', 'technical_failure'],
     ['RECOVERY_ON_TIMER_EXPIRE', 'technical_failure', 'technical_failure'],
-  ] as const)('%s em live: só o log (mode live, applied false), nada em calls', async (cause, outcome, disposition) => {
-    const { db, writes, tables } = fakeDb(seed({ flags: LIVE, call: { hangup_cause: cause } }));
+  ] as const)(
+    '%s em live: escreve sdr_disposition = technical_failure + marcador e loga applied',
+    async (cause, outcome, disposition) => {
+      const { db, writes, tables } = fakeDb(seed({ flags: LIVE, call: { hangup_cause: cause } }));
+      expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
+      expect(writes.map((w) => `${w.op}:${w.table}`)).toEqual([
+        'update:calls',
+        'insert:crm_auto_update_shadow_log',
+      ]);
+      const call = tables.calls?.[0] as Row & { metadata: { crm_auto_update: Row } };
+      expect(call.sdr_disposition).toBe('technical_failure');
+      expect(call.metadata.crm_auto_update).toMatchObject({
+        applied: true,
+        disposition: 'technical_failure',
+        rules_version: 'hangup_v1',
+        source: 'crm_auto_update_v1_live',
+        applied_at: expect.any(String),
+      });
+      expect(call.metadata.crm_auto_update).not.toHaveProperty('qualification_id');
+      const log = tables.crm_auto_update_shadow_log?.[0];
+      expect(log).toMatchObject({
+        mode: 'live',
+        verdict: 'would_apply',
+        skip_reason: null,
+        applied: true,
+        applied_at: expect.any(String),
+        qualification_id: null,
+        rules_version: 'hangup_v1',
+        proposed_changes: { disposition, lead_status: null },
+        input_snapshot: {
+          source: 'hangup_deterministic',
+          hangup_cause: cause,
+          outcome,
+          sdr_disposition: null,
+        },
+      });
+      expect(log?.applied_at).toBe(call.metadata.crm_auto_update.applied_at);
+      expect(writes.filter((w) => CRM_TABLES.includes(w.table))).toEqual([]);
+    },
+  );
+
+  it('UNALLOCATED_NUMBER atendida curta em live também escreve technical_failure', async () => {
+    const { db, tables } = fakeDb(
+      seed({
+        flags: LIVE,
+        call: {
+          hangup_cause: 'UNALLOCATED_NUMBER',
+          answered_at: '2026-11-12T13:00:05.000Z',
+          duration_seconds: 12,
+        },
+      }),
+    );
+    expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied');
+    expect(tables.calls?.[0]?.sdr_disposition).toBe('technical_failure');
+    expect(
+      (tables.calls?.[0]?.metadata as { crm_auto_update: { disposition: string } }).crm_auto_update
+        .disposition,
+    ).toBe('technical_failure');
+  });
+
+  it('número inválido em shadow: só o log, applied false, nada em calls', async () => {
+    const { db, writes, tables } = fakeDb(
+      seed({ flags: SHADOW_ONLY, call: { hangup_cause: 'UNALLOCATED_NUMBER' } }),
+    );
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(writes.map((w) => `${w.op}:${w.table}`)).toEqual(['insert:crm_auto_update_shadow_log']);
     expect(tables.calls?.[0]).toMatchObject({ sdr_disposition: null, metadata: null });
     expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
-      mode: 'live',
+      mode: 'shadow',
       applied: false,
       applied_at: null,
       verdict: 'would_apply',
-      proposed_changes: { disposition },
-      input_snapshot: { outcome, hangup_cause: cause },
+      proposed_changes: { disposition: 'technical_failure' },
     });
   });
 
@@ -311,7 +403,11 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
     const { db, writes, tables } = fakeDb(seed({ flags: SHADOW_ONLY }));
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(writes.map((w) => w.table)).toEqual(['crm_auto_update_shadow_log']);
-    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({ mode: 'shadow', verdict: 'would_apply', applied: false });
+    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
+      mode: 'shadow',
+      verdict: 'would_apply',
+      applied: false,
+    });
     expect(tables.calls?.[0]?.sdr_disposition).toBeNull();
   });
 
@@ -322,7 +418,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
     ];
     const { db, tables } = fakeDb(seed({ flags }));
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
-    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({ mode: 'shadow', applied: false });
+    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
+      mode: 'shadow',
+      applied: false,
+    });
     expect(tables.calls?.[0]?.sdr_disposition).toBeNull();
   });
 
@@ -384,7 +483,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
       source: 'crm_auto_update_v1_live',
     };
     const { db, writes, tables } = fakeDb(
-      seed({ flags: LIVE, call: { sdr_disposition: 'no_answer', metadata: { crm_auto_update: marker } } }),
+      seed({
+        flags: LIVE,
+        call: { sdr_disposition: 'no_answer', metadata: { crm_auto_update: marker } },
+      }),
     );
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied_recovered');
     expect(writes.map((w) => `${w.table}:${w.op}`)).toEqual(['crm_auto_update_shadow_log:insert']);
@@ -396,7 +498,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
       applied: true,
       applied_at: '2026-11-12T22:00:00.000Z',
       proposed_changes: { disposition: 'no_answer' },
-      input_snapshot: expect.objectContaining({ recovered_from_marker: true, sdr_disposition: null }),
+      input_snapshot: expect.objectContaining({
+        recovered_from_marker: true,
+        sdr_disposition: null,
+      }),
     });
   });
 
@@ -409,7 +514,9 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
 
     const second = fakeDb({ ...seed({ flags: LIVE }), calls: first.tables.calls as Row[] });
     expect(await runHangupCrmShadow(second.db, 'call-1')).toBe('applied_recovered');
-    expect(second.writes.map((w) => `${w.table}:${w.op}`)).toEqual(['crm_auto_update_shadow_log:insert']);
+    expect(second.writes.map((w) => `${w.table}:${w.op}`)).toEqual([
+      'crm_auto_update_shadow_log:insert',
+    ]);
     const marker = (first.tables.calls?.[0]?.metadata as Record<string, Row>).crm_auto_update;
     expect(second.tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
       applied: true,
@@ -452,7 +559,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
       skip_reason: 'already_dispositioned',
       applied: false,
       applied_at: null,
-      input_snapshot: expect.objectContaining({ sdr_disposition: 'technical_failure', live_write_conflict: true }),
+      input_snapshot: expect.objectContaining({
+        sdr_disposition: 'technical_failure',
+        live_write_conflict: true,
+      }),
     });
   });
 
@@ -466,7 +576,10 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
       source: 'crm_auto_update_v1_live',
     };
     const { db, writes, tables } = fakeDb(
-      seed({ flags: LIVE, call: { sdr_disposition: 'voicemail', metadata: { crm_auto_update: marker } } }),
+      seed({
+        flags: LIVE,
+        call: { sdr_disposition: 'voicemail', metadata: { crm_auto_update: marker } },
+      }),
     );
     expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
     expect(writes.map((w) => w.table)).toEqual(['crm_auto_update_shadow_log']);
@@ -475,6 +588,97 @@ describe('runHangupCrmShadow (live, não atendeu)', () => {
       verdict: 'skip',
       skip_reason: 'already_dispositioned',
       applied: false,
+    });
+  });
+
+  it('recuperação: marcador hangup_v1 de technical_failure e falta o log, grava só o log com applied = true', async () => {
+    const marker = {
+      applied: true,
+      disposition: 'technical_failure',
+      applied_at: '2026-11-13T08:00:00.000Z',
+      rules_version: 'hangup_v1',
+      source: 'crm_auto_update_v1_live',
+    };
+    const { db, writes, tables } = fakeDb(
+      seed({
+        flags: LIVE,
+        call: {
+          hangup_cause: 'UNALLOCATED_NUMBER',
+          sdr_disposition: 'technical_failure',
+          metadata: { crm_auto_update: marker },
+        },
+      }),
+    );
+    expect(await runHangupCrmShadow(db, 'call-1')).toBe('applied_recovered');
+    expect(writes.map((w) => `${w.table}:${w.op}`)).toEqual(['crm_auto_update_shadow_log:insert']);
+    expect(tables.calls?.[0]?.sdr_disposition).toBe('technical_failure');
+    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
+      mode: 'live',
+      verdict: 'would_apply',
+      skip_reason: null,
+      applied: true,
+      applied_at: '2026-11-13T08:00:00.000Z',
+      proposed_changes: { disposition: 'technical_failure' },
+      input_snapshot: expect.objectContaining({
+        recovered_from_marker: true,
+        sdr_disposition: null,
+        outcome: 'invalid_number',
+      }),
+    });
+  });
+
+  it('UPDATE ok e log falha em número inválido: a próxima execução recupera pelo marcador sem escrever de novo', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = fakeDb(seed({ flags: LIVE, call: { hangup_cause: 'INVALID_NUMBER_FORMAT' } }), {
+      failLogInsert: true,
+    });
+    expect(await runHangupCrmShadow(first.db, 'call-1')).toBe('log_failed');
+    expect(first.tables.calls?.[0]?.sdr_disposition).toBe('technical_failure');
+    expect(first.tables.crm_auto_update_shadow_log).toHaveLength(0);
+
+    const second = fakeDb({
+      ...seed({ flags: LIVE, call: { hangup_cause: 'INVALID_NUMBER_FORMAT' } }),
+      calls: first.tables.calls as Row[],
+    });
+    expect(await runHangupCrmShadow(second.db, 'call-1')).toBe('applied_recovered');
+    expect(second.writes.map((w) => `${w.table}:${w.op}`)).toEqual([
+      'crm_auto_update_shadow_log:insert',
+    ]);
+    const marker = (first.tables.calls?.[0]?.metadata as Record<string, Row>).crm_auto_update;
+    expect(second.tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
+      applied: true,
+      applied_at: marker?.applied_at,
+      proposed_changes: { disposition: 'technical_failure' },
+    });
+    expect(second.tables.calls?.[0]?.sdr_disposition).toBe('technical_failure');
+  });
+
+  it('corrida: SDR preenche no meio de um número inválido, UPDATE pega 0 linhas, skip sem sobrescrever', async () => {
+    const s = seed({ flags: LIVE, call: { hangup_cause: 'UNALLOCATED_NUMBER' } });
+    const { db, writes, tables } = fakeDb(s);
+    const original = (db as { from: (t: string) => Record<string, unknown> }).from;
+    (db as { from: (t: string) => unknown }).from = (t: string) => {
+      const b = original(t);
+      if (t === 'calls') {
+        const update = b.update as (d: Row) => unknown;
+        b.update = (d: Row) => {
+          (tables.calls?.[0] as Row).sdr_disposition = 'no_answer';
+          return update(d);
+        };
+      }
+      return b;
+    };
+    expect(await runHangupCrmShadow(db, 'call-1')).toBe('logged');
+    expect(writes.find((w) => w.table === 'calls')?.affected).toBe(0);
+    expect(tables.calls?.[0]?.sdr_disposition).toBe('no_answer');
+    expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
+      verdict: 'skip',
+      skip_reason: 'already_dispositioned',
+      applied: false,
+      input_snapshot: expect.objectContaining({
+        sdr_disposition: 'no_answer',
+        live_write_conflict: true,
+      }),
     });
   });
 
@@ -501,7 +705,11 @@ describe('triggerHangupCrmShadow', () => {
 
   it('não lança quando a Promise rejeita depois', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const db = { from: () => ({ select: () => ({ eq: () => ({ single: () => Promise.reject(new Error('timeout')) }) }) }) } as never;
+    const db = {
+      from: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.reject(new Error('timeout')) }) }),
+      }),
+    } as never;
     expect(() => triggerHangupCrmShadow(db, 'call-1')).not.toThrow();
     await new Promise((r) => setTimeout(r, 0));
     expect(err).toHaveBeenCalledWith(expect.stringContaining('timeout'));

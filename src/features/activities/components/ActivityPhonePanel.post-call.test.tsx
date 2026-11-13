@@ -37,6 +37,19 @@ vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({
   setWebphoneCallContext: vi.fn(),
 }));
 vi.mock('./DockMicControl', () => ({ DockMicControl: () => null }));
+vi.mock('@/features/calls/use-post-call-suggestion', () => ({
+  usePostCallSuggestion: () => ({
+    outcome: null,
+    nextActivity: null,
+    reason: null,
+    source: null,
+    alreadyFilled: false,
+    alreadyFilledDisposition: null,
+    meetingPrefill: null,
+  }),
+}));
+vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
+
 
 import { ActivityPhonePanel } from './ActivityPhonePanel';
 

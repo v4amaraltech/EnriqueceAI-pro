@@ -59,6 +59,18 @@ vi.mock('@/features/calls/actions/initiate-call', () => ({ hangupCall: hangup })
 vi.mock('@/features/activities/actions/schedule-activity', () => ({
   scheduleActivity: vi.fn(() => Promise.resolve({ success: true })),
 }));
+vi.mock('@/features/calls/use-post-call-suggestion', () => ({
+  usePostCallSuggestion: () => ({
+    outcome: null,
+    nextActivity: null,
+    reason: null,
+    source: null,
+    alreadyFilled: false,
+    alreadyFilledDisposition: null,
+    meetingPrefill: null,
+  }),
+}));
+
 vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
 
 import { resetWebphoneCallContextForTests, setWebphoneCallContext } from './webphone-call-context';

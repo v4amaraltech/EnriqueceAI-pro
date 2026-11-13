@@ -1,7 +1,8 @@
 import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
 
+import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
+import { publishLiveAmdView } from './live-amd-view-store';
 import { downsampleToPcm16 } from './live-amd-window';
-import { createLiveAmdSession, type LiveAmdView } from './live-amd-session';
 
 interface TokenResponse {
   enabled?: boolean;
@@ -32,7 +33,9 @@ export function startLiveAmdBrowser(options: {
   const openSocket = options.openSocket ?? ((url: string) => new WebSocket(url));
 
   const publish = (view: LiveAmdView | null) => {
-    if (view) options.onView(view);
+    if (!view) return;
+    options.onView(view);
+    publishLiveAmdView(options.callId, view);
   };
 
   const persist = (view: LiveAmdView, requestNextActivity: boolean) => {
@@ -47,7 +50,7 @@ export function startLiveAmdBrowser(options: {
       requestNextActivity,
     }).then((result) => {
       if (!result.success || !result.data.nextActivity) return;
-      options.onView({
+      publish({
         ...view,
         nextActivity: result.data.nextActivity,
         nextActivityReason: result.data.nextActivityReason,
@@ -58,7 +61,8 @@ export function startLiveAmdBrowser(options: {
   const apply = (effect: ReturnType<typeof session.onMessage>) => {
     if (effect.send && socket && socket.readyState === WebSocket.OPEN) socket.send(effect.send);
     publish(effect.view);
-    if (effect.view && (effect.record || effect.requestNextActivity)) persist(effect.view, effect.requestNextActivity);
+    if (effect.view && (effect.record || effect.requestNextActivity))
+      persist(effect.view, effect.requestNextActivity);
     if (effect.closeSocket && socket) {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'Terminate' }));
       socket.close();
@@ -105,12 +109,17 @@ export function startLiveAmdBrowser(options: {
 function defaultPump(track: MediaStreamTrack): AudioPump {
   return {
     start(onPcm) {
-      if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') return () => undefined;
+      if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined')
+        return () => undefined;
       const ctx = new window.AudioContext();
       const source = ctx.createMediaStreamSource(new MediaStream([track]));
       const processor = (
         ctx as unknown as {
-          createScriptProcessor(bufferSize: number, inputs: number, outputs: number): AudioNode & {
+          createScriptProcessor(
+            bufferSize: number,
+            inputs: number,
+            outputs: number,
+          ): AudioNode & {
             onaudioprocess: ((event: { inputBuffer: AudioBuffer }) => void) | null;
           };
         }

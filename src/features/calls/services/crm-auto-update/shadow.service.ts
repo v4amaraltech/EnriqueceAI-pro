@@ -46,8 +46,8 @@ export const CRM_AUTO_UPDATE_METADATA_KEY = 'crm_auto_update';
 /** Marcador gravado em calls.metadata.crm_auto_update no MESMO UPDATE que preenche sdr_disposition. */
 export interface CrmAutoUpdateMarker {
   applied: true;
-  /** Desfecho escrito: voicemail (JEV) ou no_answer (hangup_v1). */
-  disposition: 'voicemail' | 'no_answer';
+  /** Desfecho escrito: voicemail (JEV), no_answer ou technical_failure (hangup_v1). */
+  disposition: 'voicemail' | 'no_answer' | 'technical_failure';
   applied_at: string;
   /** Presente na escrita JEV. Ausente ou nulo no caminho hangup (sem qualificação). */
   qualification_id?: string | null;

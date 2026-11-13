@@ -56,6 +56,12 @@ interface ScheduleMeetingModalProps {
   defaultTitle?: string;
   /** Optional pre-filled notes for the meeting description */
   defaultDescription?: string;
+  /** Closer pré-selecionado (sugestão). O SDR ainda escolhe antes de agendar. */
+  defaultCloserId?: string;
+  /** Data pré-preenchida em YYYY-MM-DD, só quando o sistema já tem o horário. Nunca inventada. */
+  defaultDate?: string;
+  /** Horário pré-preenchido em HH:MM, mesma regra da data. */
+  defaultTime?: string;
   /** Called after a meeting is successfully scheduled (not on edit) */
   onScheduled?: () => void;
 }
@@ -79,6 +85,14 @@ function generateTimeSlots(): string[] {
 }
 
 const TIME_SLOTS = generateTimeSlots();
+
+function parseDefaultMeetingDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return undefined;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
 
 /** Parse "R$ 1.500.000,50" / "1500000" / "R$ 1.500" → 1500000.5 / 1500000 / 1500. Returns null se inválido. */
 function parseFaturamentoInput(input: string): number | null {
@@ -108,6 +122,9 @@ export function ScheduleMeetingModal({
   inline = false,
   defaultTitle,
   defaultDescription,
+  defaultCloserId,
+  defaultDate,
+  defaultTime,
   onScheduled,
 }: ScheduleMeetingModalProps) {
   const router = useRouter();
@@ -193,8 +210,9 @@ export function ScheduleMeetingModal({
       } else {
         setTitle(defaultTitle ?? `V4 Company + ${leadName ?? 'Lead'}`);
         setDescription(defaultDescription ?? DEFAULT_MEETING_INVITE_DESCRIPTION);
-        setSelectedDate(undefined);
-        setSelectedTime('09:00');
+        const prefillDate = parseDefaultMeetingDate(defaultDate);
+        setSelectedDate(prefillDate);
+        setSelectedTime(defaultTime && /^\d{2}:\d{2}$/.test(defaultTime) ? defaultTime : '09:00');
         setDuration(String(MEETING_DURATION_MIN));
         setShowCustomDuration(false);
         setGenerateMeetLink(true);
@@ -202,7 +220,7 @@ export function ScheduleMeetingModal({
           const email = r.success ? r.data : '';
           setSdrEmail(email);
           setAttendeeEmails(buildAttendees(undefined, email));
-          setSelectedCloserId('');
+          setSelectedCloserId(defaultCloserId ?? '');
         });
       }
     }

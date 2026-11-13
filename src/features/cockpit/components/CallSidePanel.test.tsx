@@ -33,6 +33,7 @@ vi.mock('@/features/meetings/closer-availability.action', () => ({ getCloserAvai
 vi.mock('@/features/leads/actions/get-missing-meeting-fields', () => ({ getMissingMeetingFields: vi.fn() }));
 vi.mock('@/features/activities/actions/check-whatsapp-status', () => ({ checkWhatsAppConnected: vi.fn() }));
 vi.mock('@/features/integrations/actions/manage-calendar', () => ({ getCalendarAuthUrl: vi.fn() }));
+vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
 
 import { getAvailability, scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 import { getCloserAvailability } from '@/features/meetings/closer-availability.action';

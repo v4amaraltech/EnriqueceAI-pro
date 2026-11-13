@@ -1,7 +1,8 @@
 // Classificação PURA (sem I/O) do desfecho de uma ligação pelo sinal determinístico
 // do hangup da API4COM (hangup_cause + answered_at + duração). Alimenta o log
 // sombra (crm_auto_update_shadow_log, rules_version 'hangup_v1') e, no modo live,
-// a porta da escrita de não atendeu (a escrita em si fica no service).
+// as portas da escrita de não atendeu e de não conectou / falha técnica
+// (a escrita em si fica no service).
 //
 // Cobre só o que o motor JEV não pega: ligação não atendida, ou atendida com menos de
 // ENGINE_MIN_DURATION_SECONDS. Atendida com 30 s ou mais é do JEV (UNIQUE (call_id) no log).
@@ -14,11 +15,16 @@
 //  - causa de "não atendeu" com answered_at preenchido (sinal contraditório).
 import type { CallDisposition } from '../../types';
 import { ENGINE_MIN_DURATION_SECONDS } from '../transcription-engine/constants';
-
 import type { CrmAutoUpdateMode, CrmAutoUpdateSkipReason, ProposedChanges } from './decision';
 
 /** Desfecho interno gravado no input_snapshot. Mais fino que a disposition (ex.: busy). */
-export type HangupOutcome = 'voicemail' | 'no_answer' | 'busy' | 'rejected' | 'invalid_number' | 'technical_failure';
+export type HangupOutcome =
+  | 'voicemail'
+  | 'no_answer'
+  | 'busy'
+  | 'rejected'
+  | 'invalid_number'
+  | 'technical_failure';
 
 export interface HangupClassificationInput {
   hangupCause: string | null | undefined;
@@ -84,7 +90,9 @@ export function isAnsweredTimestamp(answeredAt: string | null | undefined): bool
 }
 
 /** Classifica pelo hangup, ou null quando não há sinal claro (ou a ligação é do JEV). */
-export function classifyHangupForCrm(input: HangupClassificationInput): HangupClassification | null {
+export function classifyHangupForCrm(
+  input: HangupClassificationInput,
+): HangupClassification | null {
   const answered = isAnsweredTimestamp(input.answeredAt);
   const duration = Number(input.durationSeconds) || 0;
   // Elegível para o JEV: não compete pela linha única do log.
@@ -100,7 +108,11 @@ export function classifyHangupForCrm(input: HangupClassificationInput): HangupCl
     outcome: r.outcome,
     hangup_cause: cause,
     confidence: 1,
-    proposed: { disposition: r.disposition, next_activity: { ...r.next_activity }, lead_status: null },
+    proposed: {
+      disposition: r.disposition,
+      next_activity: { ...r.next_activity },
+      lead_status: null,
+    },
   };
 }
 
@@ -119,7 +131,11 @@ export type HangupCrmDecision =
  */
 export function decideHangupCrm(args: {
   classification: HangupClassification;
-  call: { lead_id: string | null; sdr_disposition: string | null; legacy_ai_outcome_applied: boolean };
+  call: {
+    lead_id: string | null;
+    sdr_disposition: string | null;
+    legacy_ai_outcome_applied: boolean;
+  };
 }): HangupCrmDecision {
   const { classification, call } = args;
   const proposed = classification.proposed;
@@ -131,14 +147,26 @@ export function decideHangupCrm(args: {
 }
 
 /** Outcomes cuja escrita live preenche sdr_disposition = no_answer. */
-const LIVE_NO_ANSWER_OUTCOMES: ReadonlySet<HangupOutcome> = new Set(['no_answer', 'busy', 'rejected']);
+const LIVE_NO_ANSWER_OUTCOMES: ReadonlySet<HangupOutcome> = new Set([
+  'no_answer',
+  'busy',
+  'rejected',
+]);
+
+/** Outcomes cuja escrita live preenche sdr_disposition = technical_failure ("Falha técnica"). */
+const LIVE_NOT_CONNECTED_OUTCOMES: ReadonlySet<HangupOutcome> = new Set([
+  'invalid_number',
+  'technical_failure',
+]);
+
+export type LiveHangupDisposition = 'no_answer' | 'technical_failure';
 
 /**
  * Porta da escrita live de "não atendeu". Pura. Só verdadeira quando:
  *  - modo live (org em crm_auto_update_v1_live.allow_org_ids, e também no shadow);
  *  - veredito would_apply (sem desfecho prévio, com lead);
  *  - o outcome é sinal claro de não atendimento (NUMBER_CHANGED, não atendeu,
- *    ocupado ou recusou). Falha técnica e número inválido ficam só no log.
+ *    ocupado ou recusou).
  * A disposition proposta é sempre no_answer (o enum call_disposition não tem busy).
  */
 export function shouldApplyLiveHangupNoAnswer(args: {
@@ -152,4 +180,40 @@ export function shouldApplyLiveHangupNoAnswer(args: {
     LIVE_NO_ANSWER_OUTCOMES.has(args.classification.outcome) &&
     args.decision.proposed.disposition === 'no_answer'
   );
+}
+
+/**
+ * Porta da escrita live de "não conectou" (falha técnica ou número inválido).
+ * Pura. Mesmas guardas de shouldApplyLiveHangupNoAnswer. Só verdadeira quando:
+ *  - modo live (org em crm_auto_update_v1_live.allow_org_ids, e também no shadow);
+ *  - veredito would_apply (sem desfecho prévio, com lead);
+ *  - o outcome é número inválido ou falha técnica (UNALLOCATED_NUMBER,
+ *    INVALID_NUMBER_FORMAT, NORMAL_TEMPORARY_FAILURE, RECOVERY_ON_TIMER_EXPIRE).
+ * A disposition proposta é sempre technical_failure: o enum call_disposition
+ * (sdr_disposition) não tem not_connected nem invalid_number; "Falha técnica"
+ * é o valor já usado pela classificação e pelo seletor do SDR. ORIGINATOR_CANCEL
+ * não classifica e portanto nunca chega aqui (continua só fora, sem log deste caminho).
+ */
+export function shouldApplyLiveHangupNotConnected(args: {
+  mode: CrmAutoUpdateMode;
+  decision: HangupCrmDecision;
+  classification: HangupClassification;
+}): boolean {
+  return (
+    args.mode === 'live' &&
+    args.decision.verdict === 'would_apply' &&
+    LIVE_NOT_CONNECTED_OUTCOMES.has(args.classification.outcome) &&
+    args.decision.proposed.disposition === 'technical_failure'
+  );
+}
+
+/** Desfecho a escrever no CRM, ou null quando esta execução fica só no log. */
+export function liveHangupDispositionToApply(args: {
+  mode: CrmAutoUpdateMode;
+  decision: HangupCrmDecision;
+  classification: HangupClassification;
+}): LiveHangupDisposition | null {
+  if (shouldApplyLiveHangupNoAnswer(args)) return 'no_answer';
+  if (shouldApplyLiveHangupNotConnected(args)) return 'technical_failure';
+  return null;
 }
