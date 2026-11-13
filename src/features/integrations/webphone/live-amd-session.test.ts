@@ -16,8 +16,9 @@ describe('janela dos últimos 15 segundos', () => {
   it('descarta o áudio que saiu da janela e só entrega os 15 segundos mais recentes', () => {
     let now = 1_000;
     const session = createLiveAmdSession(() => now);
-    for (let second = 0; second < 20; second++) session.onPcm(seconds(second));
-    const flushed = session.onSocketOpen();
+    for (let second = 0; second < 20; second++) expect(session.onPcm(seconds(second)).send).toBeNull();
+    session.onSocketOpen();
+    const flushed = session.onMessage(JSON.stringify({ type: 'Begin', id: 's1' })).send;
     expect(flushed).not.toBeNull();
     const sent = new Int16Array(flushed as ArrayBuffer);
     expect(sent.length).toBe(16_000 * 15);
@@ -96,6 +97,114 @@ describe('janela dos últimos 15 segundos', () => {
   });
 });
 
+const BEGIN = JSON.stringify({ type: 'Begin', id: 'sessao', expires_at: 0 });
+const loudSecond = () => new Int16Array(16_000).fill(8_000);
+
+describe('envio só depois do Begin', () => {
+  it('socket aberto sem Begin não envia; o Begin entrega a fila e libera o resto', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    expect(session.onPcm(seconds(1)).send).toBeNull();
+    expect(session.onPcm(seconds(2)).send).toBeNull();
+    const begin = session.onMessage(BEGIN);
+    expect(new Int16Array(begin.send as ArrayBuffer).length).toBe(32_000);
+    expect(begin.view).toBeNull();
+    expect(new Int16Array(session.onPcm(seconds(3)).send as ArrayBuffer)[0]).toBe(3);
+    expect(session.telemetry().beginReceived).toBe(true);
+  });
+
+  it('contexto suspenso segura o envio mesmo com Begin e solta ao voltar a rodar', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onAudioContextState('suspended');
+    session.onSocketOpen();
+    expect(session.onMessage(BEGIN).send).toBeNull();
+    expect(session.onPcm(seconds(4)).send).toBeNull();
+    const woke = session.onAudioContextState('running');
+    expect(new Int16Array(woke.send as ArrayBuffer)[0]).toBe(4);
+    expect(session.telemetry().audioContextState).toBe('running');
+  });
+
+  it('conta mensagens e Turns; mensagem que não é Turn não vira texto', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    session.onMessage(BEGIN);
+    session.onPcm(seconds(1, 8_000));
+    session.onMessage(JSON.stringify({ type: 'Termination', transcript: 'alô quem fala' }));
+    session.onMessage(JSON.stringify({ type: 'Turn', end_of_turn: false, transcript: '' }));
+    session.onMessage(JSON.stringify({ type: 'Turn', end_of_turn: true, transcript: 'bom dia', words: [{ text: 'bom', end: 100 }, { text: 'dia', end: 300 }] }));
+    session.onMessage('não é json');
+    const t = session.telemetry();
+    expect(t.messageCount).toBe(4);
+    expect(t.turnCount).toBe(2);
+    expect(t.emptyReason).toBeNull();
+    expect(session.onCallEnded().view?.transcript).toBe('bom dia');
+  });
+
+  it('fim sem texto e sem energia: silent_input', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    session.onMessage(BEGIN);
+    for (let i = 0; i < 3; i++) session.onPcm(seconds(0));
+    const ended = session.onCallEnded();
+    // Regra da previsão não muda: silêncio no fim continua no_answer.
+    expect(ended.view?.prediction).toBe('no_answer');
+    const t = session.telemetry();
+    expect(t.emptyReason).toBe('silent_input');
+    expect(t.frames).toBe(3);
+    expect(t.rmsPeak).toBe(0);
+  });
+
+  it('fim sem texto, com energia e socket aberto sem Begin: no_begin', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    for (let i = 0; i < 3; i++) session.onPcm(loudSecond());
+    session.onCallEnded();
+    const t = session.telemetry();
+    expect(t.emptyReason).toBe('no_begin');
+    expect(t.beginReceived).toBe(false);
+    expect(t.rmsAvg).toBeGreaterThan(0.2);
+    expect(t.rmsPeak).toBeLessThanOrEqual(1);
+  });
+
+  it('erro ou fechamento antecipado do socket: ws_error; depois do fim não conta', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    session.onPcm(loudSecond());
+    session.onSocketError();
+    session.onCallEnded();
+    expect(session.telemetry().emptyReason).toBe('ws_error');
+    expect(session.telemetry().wsError).toBe(true);
+
+    const clean = createLiveAmdSession(() => 1_000);
+    clean.onSocketOpen();
+    clean.onMessage(BEGIN);
+    clean.onPcm(loudSecond());
+    clean.onCallEnded();
+    clean.onSocketError();
+    expect(clean.telemetry().wsError).toBe(false);
+    expect(clean.telemetry().emptyReason).toBe('no_speech');
+  });
+
+  it('contexto que nunca rodou: context_suspended; socket que nunca abriu: no_socket', () => {
+    const suspended = createLiveAmdSession(() => 1_000);
+    suspended.onAudioContextState('suspended');
+    suspended.onCallEnded();
+    expect(suspended.telemetry().emptyReason).toBe('context_suspended');
+
+    const noSocket = createLiveAmdSession(() => 1_000);
+    noSocket.onPcm(loudSecond());
+    noSocket.onCallEnded();
+    expect(noSocket.telemetry().emptyReason).toBe('no_socket');
+  });
+
+  it('mensagem de erro da AssemblyAI marca ws_error', () => {
+    const session = createLiveAmdSession(() => 1_000);
+    session.onSocketOpen();
+    session.onMessage(JSON.stringify({ error: 'sessão expirou' }));
+    expect(session.telemetry().wsError).toBe(true);
+  });
+});
+
 describe('endereço do streaming', () => {
   it('usa o modelo multilíngue com português e PCM 16 kHz, com região opcional', () => {
     const url = new URL(assemblyAiWebsocketUrl(assemblyAiHosts(undefined).streamingWs, 'token-curto'));
@@ -116,6 +225,16 @@ describe('endereço do streaming', () => {
     expect(LIVE_AMD_LGPD_NOTICE).toContain('AssemblyAI');
     expect(LIVE_AMD_LGPD_NOTICE).toContain('modelo de linguagem');
     expect(LIVE_AMD_LGPD_NOTICE.toLowerCase()).not.toContain('primeiros 15');
+  });
+
+  it('a CSP libera o WebSocket de streaming da AssemblyAI e o worklet é servido de self', () => {
+    const config = readFileSync(resolve(process.cwd(), 'next.config.ts'), 'utf8');
+    const connect = config.split('\n').find((line) => line.includes('connect-src')) ?? '';
+    expect(connect).toContain('wss://streaming.assemblyai.com');
+    expect(connect).toContain('wss://streaming.eu.assemblyai.com');
+    expect(connect).toContain('wss://streaming.us.assemblyai.com');
+    const worklet = readFileSync(resolve(process.cwd(), 'public/worklets/live-amd-capture.js'), 'utf8');
+    expect(worklet).toContain("registerProcessor('live-amd-capture'");
   });
 
   it('o navegador não conhece a chave permanente', () => {

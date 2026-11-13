@@ -1,5 +1,49 @@
 import type { NextActivityResult } from './live-amd-next-activity';
 
+/**
+ * Telemetria da captura da escuta (camelCase aqui, snake_case no metadata).
+ * rmsAvg e rmsPeak na escala 0 a 1 (amostra int16 / 32768).
+ */
+export interface LiveAmdTelemetryPatch {
+  bytesSent?: number;
+  frames?: number;
+  rmsAvg?: number;
+  rmsPeak?: number;
+  audioContextState?: string;
+  beginReceived?: boolean;
+  turnCount?: number;
+  messageCount?: number;
+  wsError?: boolean;
+  emptyReason?: string | null;
+  trackCloned?: boolean | null;
+  pump?: string | null;
+}
+
+const TELEMETRY_KEYS: ReadonlyArray<[keyof LiveAmdTelemetryPatch, string]> = [
+  ['bytesSent', 'bytes_sent'],
+  ['frames', 'frames'],
+  ['rmsAvg', 'rms_avg'],
+  ['rmsPeak', 'rms_peak'],
+  ['audioContextState', 'audio_context_state'],
+  ['beginReceived', 'begin_received'],
+  ['turnCount', 'turn_count'],
+  ['messageCount', 'message_count'],
+  ['wsError', 'ws_error'],
+  ['emptyReason', 'empty_reason'],
+  ['trackCloned', 'track_cloned'],
+  ['pump', 'pump'],
+];
+
+function telemetryFields(telemetry: LiveAmdTelemetryPatch | undefined): Record<string, unknown> {
+  if (!telemetry) return {};
+  const out: Record<string, unknown> = {};
+  for (const [from, to] of TELEMETRY_KEYS) {
+    const value = telemetry[from];
+    if (value !== undefined) out[to] = value;
+  }
+  return out;
+}
+
 export interface LiveAmdPatch {
   prediction: string;
   phrase: string | null;
@@ -8,6 +52,7 @@ export interface LiveAmdPatch {
   predictedAt: string;
   transcript?: string;
   nextActivity?: NextActivityResult | null;
+  telemetry?: LiveAmdTelemetryPatch;
 }
 
 function isPlain(value: unknown): value is Record<string, unknown> {
@@ -31,6 +76,7 @@ export function mergeLiveAmdMetadata(existing: unknown, patch: LiveAmdPatch): Re
       latency_ms: patch.latencyMs,
       predicted_at: patch.predictedAt,
       ...(patch.transcript !== undefined ? { transcript: patch.transcript } : {}),
+      ...telemetryFields(patch.telemetry),
       ...(patch.nextActivity
         ? {
             next_activity_suggestion: patch.nextActivity.suggestion,

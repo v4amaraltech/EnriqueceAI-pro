@@ -1,17 +1,12 @@
 import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
 
+import { type AudioPump, createCapturePump } from './live-amd-pump';
 import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
 import { publishLiveAmdView } from './live-amd-view-store';
-import { downsampleToPcm16 } from './live-amd-window';
-import { registerWebphoneAudioContext } from './webphone-audio-contexts';
 
 interface TokenResponse {
   enabled?: boolean;
   websocketUrl?: string;
-}
-
-interface AudioPump {
-  start(onPcm: (pcm: Int16Array) => void): () => void;
 }
 
 /**
@@ -40,7 +35,9 @@ export function startLiveAmdBrowser(options: {
   };
 
   const persist = (view: LiveAmdView, requestNextActivity: boolean) => {
+    // Telemetria da captura vai junto de todo registro (o do fim da ligação inclusive).
     void recordLiveAmd({
+      telemetry: session.telemetry(),
       callId: options.callId,
       prediction: view.prediction,
       phrase: view.phrase,
@@ -60,7 +57,10 @@ export function startLiveAmdBrowser(options: {
   };
 
   const apply = (effect: ReturnType<typeof session.onMessage>) => {
-    if (effect.send && socket && socket.readyState === WebSocket.OPEN) socket.send(effect.send);
+    if (effect.send && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(effect.send);
+      session.onBytesSent(effect.send.byteLength);
+    }
     publish(effect.view);
     if (effect.view && (effect.record || effect.requestNextActivity))
       persist(effect.view, effect.requestNextActivity);
@@ -81,22 +81,37 @@ export function startLiveAmdBrowser(options: {
     }
     if (stopped) return;
     const body = (await response.json()) as TokenResponse;
-    if (!body.enabled || !body.websocketUrl) return;
+    if (stopped || !body.enabled || !body.websocketUrl) return;
 
-    const ws = openSocket(body.websocketUrl);
+    let ws: WebSocket;
+    try {
+      ws = openSocket(body.websocketUrl);
+    } catch (err) {
+      // CSP (connect-src) ou URL inválida. Fica na telemetria como ws_error.
+      console.error('[webphone-live-amd] socket não abriu:', err);
+      session.onSocketError();
+      return;
+    }
     socket = ws;
     ws.binaryType = 'arraybuffer';
-    ws.addEventListener('open', () => {
-      const pending = session.onSocketOpen();
-      if (pending && ws.readyState === WebSocket.OPEN) ws.send(pending);
-    });
+    // O open não libera o envio: o áudio fica na fila até o Begin.
+    ws.addEventListener('open', () => session.onSocketOpen());
     ws.addEventListener('message', (event) => {
       if (typeof event.data !== 'string') return;
       apply(session.onMessage(event.data));
     });
+    ws.addEventListener('error', () => session.onSocketError());
+    ws.addEventListener('close', () => {
+      // Fechamento antes do fim da ligação conta como ws_error (a sessão ignora depois do fim).
+      session.onSocketError();
+      if (socket === ws) socket = null;
+    });
 
-    const pump = options.pump ?? defaultPump;
-    stopPump = pump(options.track).start((pcm) => apply(session.onPcm(pcm)));
+    const pump = options.pump ?? ((track: MediaStreamTrack) => createCapturePump(track));
+    stopPump = pump(options.track).start((pcm) => apply(session.onPcm(pcm)), {
+      onInfo: (info) => session.onPumpInfo(info),
+      onContextState: (state) => apply(session.onAudioContextState(state)),
+    });
   })();
 
   return () => {
@@ -104,43 +119,5 @@ export function startLiveAmdBrowser(options: {
     stopped = true;
     stopPump();
     apply(session.onCallEnded());
-  };
-}
-
-function defaultPump(track: MediaStreamTrack): AudioPump {
-  return {
-    start(onPcm) {
-      if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined')
-        return () => undefined;
-      const ctx = new window.AudioContext();
-      const unregister = registerWebphoneAudioContext(ctx);
-      const source = ctx.createMediaStreamSource(new MediaStream([track]));
-      const processor = (
-        ctx as unknown as {
-          createScriptProcessor(
-            bufferSize: number,
-            inputs: number,
-            outputs: number,
-          ): AudioNode & {
-            onaudioprocess: ((event: { inputBuffer: AudioBuffer }) => void) | null;
-          };
-        }
-      ).createScriptProcessor(4096, 1, 1);
-      const silent = ctx.createGain();
-      silent.gain.value = 0;
-      processor.onaudioprocess = (event) => {
-        const channel = event.inputBuffer.getChannelData(0);
-        onPcm(downsampleToPcm16(channel, event.inputBuffer.sampleRate));
-      };
-      source.connect(processor);
-      processor.connect(silent);
-      silent.connect(ctx.destination);
-      return () => {
-        processor.onaudioprocess = null;
-        source.disconnect();
-        unregister();
-        void ctx.close();
-      };
-    },
   };
 }
