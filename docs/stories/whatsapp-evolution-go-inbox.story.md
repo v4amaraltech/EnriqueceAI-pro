@@ -151,6 +151,29 @@ Só depois do veredito da Fase 0.
 - **Janela de migração:** mensagens que chegarem durante a troca podem não ser capturadas. Mitigação: migrar fora do horário de envio.
 - **Ligar a gravação muda o volume de escrita** em `lead_messages` (todas as mensagens de cada número, não só as de leads). As mensagens sem lead vão para `lead_message_unmatched`, então é preciso acompanhar o crescimento dessa tabela.
 
+## Resultado da Fase 0 (13/11/2026, parcial — veredito após 48 h)
+Ambiente: Evolution Go em `evolution.v4companyamaral.com` (servidor só do Enriquece, chave própria). Instância de teste `enriquece-fase0` (id `45f8f355-…`), conectada às 11h BRT de 13/11. Eventos capturados pelo WebSocket da própria Evolution Go (`/ws`), sem passar por serviço de terceiros. Uma instância antiga, "Kaique", existe no servidor (desconectada, webhook para o n8n) e não foi tocada.
+
+| # | Pergunta | Resultado |
+|---|---|---|
+| 1 | Licença | ✅ `/license/status` = `active`. ⚠️ Não foi possível simular a falha do aviso periódico (servidor da licença fora do ar). Fica como risco aberto. |
+| 2 | Webhook | ✅ Por instância: `webhookUrl` + `subscribe` (lista de eventos ou `ALL`) no `POST /instance/connect`. ⚠️ Não há cabeçalho com senha. **Todo evento traz `instanceToken`**: o receptor confere esse campo contra a senha guardada da instância. A entrega real por webhook (tentativas e repetição) será conferida na Fase 1 com o endpoint de verdade. |
+| 3 | Formato | ✅ Texto, áudio (`audioMessage`, `ptt`, segundos) e imagem com legenda chegam completos. Evento `Message`, com `data.Info` (`Chat`, `Sender`, `SenderAlt`, `RecipientAlt`, `IsFromMe`, `IsGroup`, `Type`, `MediaType`, `ID`, `Timestamp`, `PushName`) e `data.Message` (formato whatsmeow). Ver as regras abaixo. |
+| 4 | Envio | ✅ `POST /send/text` (`number`, `text`) e `POST /send/media` (`number`, `type`, `url`, `caption`) com a senha da instância no cabeçalho `apikey`. **A chave global é recusada no envio (401)**. A mídia por URL precisa responder com `Content-Type` de imagem (URL com redirecionamento falhou). |
+| 5 | Grupos | ✅ `POST /group/create` (`groupName`, `participants` como `<número>@s.whatsapp.net`) já adiciona as pessoas. Com o número sem sufixo, a chamada não respondeu em 60 s. ✅ `POST /group/photo` com `image` = `data:image/jpeg;base64,…` (PNG é recusado). ❌ `POST /group/participant` responde "participants is required" mesmo com a lista preenchida (testado com e sem sufixo): defeito da Evolution Go. Não bloqueia, porque o Enriquece só usa esse comando como reserva para adicionar quem não entrou ao criar. ✅ `POST /group/leave`. |
+| 6 | Telemetria | ❓ Não visível pela API. O Vini confere nas variáveis do servidor se existe opção para desligar. |
+| 7 | 48 h conectado | ⏳ Em andamento desde 13/11 11h BRT. Conferir em 15/11 11h BRT. |
+
+**Regras para a implementação (vindas do teste):**
+- **Telefone do contato:** mensagem recebida traz o telefone em `Info.Chat`/`Info.Sender` (`@s.whatsapp.net`) e o LID em `SenderAlt`. Mensagem enviada pelo celular (`IsFromMe`) traz `Chat` como `@lid` e o telefone em `Info.RecipientAlt`. Regra: usar o campo que termina em `@s.whatsapp.net`, nunca o `@lid`.
+- **Grupos:** ignorar `IsGroup = true` (ou ligar `ignoreGroups` na instância).
+- **Mídia:** chega embutida em base64 dentro do evento. Salvar o arquivo no storage e não guardar o evento inteiro.
+- **Mensagens sem conteúdo útil:** chegaram `templateMessage` vazio e `Message` vazio. O processador ignora sem dar erro.
+- **Eventos de conexão:** `QRCode`, `QRTimeout` (após 5 QR vencidos, a instância desloga sozinha), `PairSuccess`, `LoggedOut`. A tela de conexão precisa renovar o QR sem o SDR ver um QR vencido.
+- **Comandos (troca da Evolution API v2 → Go):** `connectionState` → `GET /instance/status` (`Connected`, `LoggedIn`); `connect` → `POST /instance/connect` + `GET /instance/qr`; `fetchInstances` → `GET /instance/all` (chave global); `delete` → `DELETE /instance/delete/{id}`; `logout` → `DELETE /instance/logout`; `restart` → `POST /instance/reconnect`; `sendText`/`sendMedia` → `/send/text`/`/send/media`; `group/create`, `updateParticipant`, `updateGroupPicture` → `/group/create`, `/group/participant`, `/group/photo`. Testados no teste: `status`, `connect`, `qr`, `all`, `send/text`, `send/media` e os de grupo. A partir da documentação (Swagger do servidor), a confirmar na Fase 1: `delete`, `logout` e `reconnect`.
+
+**Leitura parcial:** caminhando para **GO**. Nenhum ponto trava; os ⚠️ viram regras da Fase 1/2. Veredito final do Vini após o item 7.
+
 ## Validação @po (13/11/2026)
 Checklist de 10 pontos:
 1. Título claro ✅
@@ -184,3 +207,4 @@ _Pendente._
 ## Change Log
 - 13/11/2026: Story criada (Draft) a partir da conversa com o Vini. Flag `lead_messages_capture` ligada para a V4 no mesmo dia (texto das respostas de e-mail).
 - 13/11/2026: Validação @po — GO 9/10, Draft → Ready. Escopo da Fase 1 separado por veredito (GO/NO-GO).
+- 13/11/2026: Resultado parcial da Fase 0 registrado (itens 1–6; item 7 em andamento). Leitura parcial: GO.
