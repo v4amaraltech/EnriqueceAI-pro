@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 
-import { CheckCircle2, Clock, Eye, Loader2, Send, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, Loader2, Send, Sparkles, XCircle } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -38,9 +38,6 @@ interface ActivityWhatsAppComposeProps {
   onSend: () => void;
   /** SDR já enviou a mensagem pelo próprio WhatsApp — só registra e avança. */
   onManualSend?: () => void;
-  onSkip: () => void;
-  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
-  skipLabel?: string;
   onReportInvalid: () => void;
 }
 
@@ -59,8 +56,6 @@ export function ActivityWhatsAppCompose({
   onTemplateChange,
   onSend,
   onManualSend,
-  onSkip,
-  skipLabel = 'Adiar p/ amanhã',
   onReportInvalid,
 }: ActivityWhatsAppComposeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -199,10 +194,6 @@ export function ActivityWhatsAppCompose({
               Não é WhatsApp
             </Button>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={onSkip} disabled={isSending}>
-                <Clock className="mr-2 h-4 w-4" />
-                {skipLabel}
-              </Button>
               {onManualSend && (
                 <Button
                   variant="outline"

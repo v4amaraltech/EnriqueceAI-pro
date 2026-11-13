@@ -14,8 +14,6 @@ interface LimboFollowupPanelProps {
   reason: string | null;
   isSending: boolean;
   onMarkDone: (notes: string) => void;
-  onSkip: () => void;
-  skipLabel?: string;
 }
 
 /**
@@ -28,8 +26,6 @@ export function LimboFollowupPanel({
   reason,
   isSending,
   onMarkDone,
-  onSkip,
-  skipLabel = 'Adiar p/ amanhã',
 }: LimboFollowupPanelProps) {
   const [notes, setNotes] = useState('');
   const reasonText = reason?.replace(/^Definir destino:\s*/, '') ?? null;
@@ -65,9 +61,6 @@ export function LimboFollowupPanel({
       </div>
 
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-        <Button variant="outline" onClick={onSkip} disabled={isSending}>
-          {skipLabel}
-        </Button>
         <Button onClick={() => onMarkDone(notes)} disabled={isSending}>
           {isSending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

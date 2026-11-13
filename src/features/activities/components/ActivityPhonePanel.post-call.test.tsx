@@ -56,7 +56,6 @@ function renderDock(opts?: { cadence?: boolean }) {
       phones={[{ formatted: '11954958486', raw: '11954958486', label: 'Celular', source: 'lead_telefone' }]}
       isSending={false}
       onMarkDone={onMarkDone}
-      onSkip={vi.fn()}
       cadenceStep={opts?.cadence === false ? undefined : CADENCE}
       onCallStateChange={(state) => states.push(state)}
     />,

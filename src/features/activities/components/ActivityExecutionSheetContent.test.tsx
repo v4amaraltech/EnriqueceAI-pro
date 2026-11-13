@@ -145,7 +145,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('email')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -159,7 +158,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('whatsapp')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -173,7 +171,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('linkedin')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -188,7 +185,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('research')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -208,7 +204,6 @@ describe('ActivityExecutionSheetContent', () => {
         })}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -225,7 +220,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('phone')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -240,7 +234,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('phone', { callProvider: 'whatsapp' })}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -254,7 +247,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('phone', { callProvider: 'whatsapp' })}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
         quickMode
       />,
@@ -272,7 +264,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('linkedin')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -287,7 +278,6 @@ describe('ActivityExecutionSheetContent', () => {
         isSending={false}
         onSend={noop}
         onManualSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -303,7 +293,6 @@ describe('ActivityExecutionSheetContent', () => {
         isSending={false}
         onSend={noop}
         onManualSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -317,7 +306,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('whatsapp')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );
@@ -332,7 +320,6 @@ describe('ActivityExecutionSheetContent', () => {
         activity={makeActivity('email')}
         isSending={false}
         onSend={noop}
-        onSkip={noop}
         onMarkDone={noop}
       />,
     );

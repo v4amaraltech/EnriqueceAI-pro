@@ -358,35 +358,6 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
     });
   };
 
-  const snoozePanelTask = (activity: PendingActivity) => {
-    if (callBusy) {
-      toast.error('Encerre a ligação antes de adiar');
-      return;
-    }
-    const key = keyOf(activity);
-    const isScheduled = activity.enrollmentId.startsWith('scheduled:');
-    handleActivityDone(activity.enrollmentId, activity.stepId);
-    if (callPanelKey === key) setCallPanelKey(null);
-    const persist = isScheduled
-      ? import('../actions/complete-scheduled-activity').then(({ postponeScheduledActivity }) =>
-          postponeScheduledActivity(activity.stepId),
-        )
-      : import('../actions/skip-activity').then(({ skipActivity }) => skipActivity(activity.enrollmentId));
-    void persist.then((result) => {
-      if (!result.success) {
-        handleActivityRestore(activity);
-        if (callPanelKey === key) setCallPanelKey(key);
-        toast.error(result.error ?? 'Não foi possível adiar');
-      } else {
-        toast.success(isScheduled ? 'Retorno adiado' : 'Adiado para amanhã às 9h');
-      }
-    }).catch(() => {
-      handleActivityRestore(activity);
-      if (callPanelKey === key) setCallPanelKey(key);
-      toast.error('Não foi possível adiar');
-    });
-  };
-
   const callPanelActivity = activities.find((activity) => keyOf(activity) === callPanelKey) ?? null;
   const selectedForPanel = activities.find((activity) => keyOf(activity) === selectedKey) ?? null;
 
@@ -801,7 +772,6 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onActivityDone={handleActivityDone}
             onActivityRestore={handleActivityRestore}
             onLeadLost={handleLeadLost}
-            onSwitchCadence={handleSwitchCadence}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
             onOpenCallPanel={leadCardEnabled && selectedForPanel ? () => openCallPanel(selectedForPanel) : undefined}
@@ -818,7 +788,6 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
           onRestore={() => setCallMinimized(false)}
           onClose={() => setCallPanelKey(null)}
           onMarkDone={(notes) => completePanelTask(callPanelActivity, notes)}
-          onSkip={() => snoozePanelTask(callPanelActivity)}
           onLeadLost={() => setLostDialogActivity(callPanelActivity)}
           onScheduled={() => {
             handleActivityDone(callPanelActivity.enrollmentId, callPanelActivity.stepId);
