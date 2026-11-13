@@ -7,6 +7,7 @@ import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, ty
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 import { isAiOutcomePending, transcriptionMinDurationFor } from '../ai-outcome';
 import { applyAiCallOutcome, markAiOutcomeFailed, type AiOutcomeCall } from './apply-ai-call-outcome.service';
+import { mergeCallsMetadata } from './merge-calls-metadata';
 import {
   ANALYSIS_MODEL,
   OPENROUTER_BASE_URL,
@@ -126,20 +127,12 @@ export async function processCallTranscription(callId: string): Promise<void> {
       const errMsg = bantErr instanceof Error ? bantErr.message : String(bantErr);
       console.error(`[transcription] BANT analysis failed for lead ${call.lead_id}: ${errMsg}`);
       // Persist error in call metadata for debugging (Vercel truncates logs).
-      // Merge com o metadata atual: substituir apagava api4com_call_id e ai_outcome.
-      const { data: fresh } = (await from(supabase, 'calls')
-        .select('metadata')
-        .eq('id', callId)
-        .single()) as { data: { metadata: Record<string, unknown> | null } | null };
-      await from(supabase, 'calls')
-        .update({
-          metadata: {
-            ...(fresh?.metadata ?? {}),
-            bant_error: errMsg.slice(0, 500),
-            bant_failed_at: new Date().toISOString(),
-          },
-        } as Record<string, unknown>)
-        .eq('id', callId);
+      // Merge atômico no banco (só as chaves bant_*): substituir apagava
+      // api4com_call_id, ai_outcome e o marcador do CRM automático.
+      await mergeCallsMetadata(supabase, callId, {
+        bant_error: errMsg.slice(0, 500),
+        bant_failed_at: new Date().toISOString(),
+      });
     }
   }
 

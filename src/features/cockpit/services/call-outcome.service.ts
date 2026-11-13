@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 
 import { readAiOutcome } from '@/features/calls/ai-outcome';
+import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
 
 import type { CockpitCallOutcomeResult } from '../types';
 import { buildCallOutcomeView, type CallOutcomeRow } from '../utils/call-outcome-view';
@@ -90,19 +91,16 @@ export async function armCockpitCallOutcome(
   // Resultado humano já registrado ou IA já respondeu/trabalhando: não rearmar.
   if (readAiOutcome(call.metadata) || call.sdr_disposition) return { status: 'already_armed' };
 
-  const { error } = (await from(supabase, 'calls')
-    .update({
-      metadata: {
-        ...(call.metadata ?? {}),
-        ai_outcome: { status: 'pending', requested_at: now.toISOString(), hold_low_confidence: true },
-      },
-      updated_at: now.toISOString(),
-    } as Record<string, unknown>)
-    .eq('id', callId)
-    .eq('org_id', actor.orgId)) as { error: { message: string } | null };
+  // Merge atômico no banco: só a chave ai_outcome, nunca o metadata lido.
+  const { error } = await mergeCallsMetadata(
+    supabase,
+    callId,
+    { ai_outcome: { status: 'pending', requested_at: now.toISOString(), hold_low_confidence: true } },
+    { orgId: actor.orgId },
+  );
 
   if (error) {
-    console.error('[cockpit-outcome] arm:', error.message);
+    console.error('[cockpit-outcome] arm:', error);
     return { status: 'error' };
   }
   return { status: 'armed' };

@@ -8,6 +8,7 @@ import { from } from '@/lib/supabase/from';
 import { isWebphoneLiveAmdEnabled } from '@/features/integrations/webphone/live-amd-flag';
 
 import { mergeLiveAmdMetadata } from '../live-amd-metadata';
+import { mergeCallsMetadata } from '../services/merge-calls-metadata';
 import { suggestNextActivity, type NextActivityResult } from '../live-amd-next-activity';
 
 const schema = z.object({
@@ -31,6 +32,9 @@ export interface RecordLiveAmdResult {
  * Grava calls.metadata.live_amd da ligação desta org. Não escreve
  * sdr_disposition, status nem connected. Não cria atividade e não agenda.
  * A sugestão de próxima atividade só entra no metadata e volta para a tela.
+ *
+ * Persistência por merge atômico no banco (`merge_calls_metadata`) com SÓ a chave
+ * live_amd. O metadata lido serve apenas para preservar subchaves do live_amd.
  */
 export async function recordLiveAmd(input: unknown): Promise<ActionResult<RecordLiveAmdResult>> {
   const parsed = schema.safeParse(input);
@@ -72,16 +76,19 @@ export async function recordLiveAmd(input: unknown): Promise<ActionResult<Record
     }
   }
 
-  const metadata = mergeLiveAmdMetadata(call.metadata, { ...parsed.data, nextActivity });
-  const { error: updateError } = (await from(supabase, 'calls')
-    .update({ metadata, updated_at: new Date().toISOString() })
-    .eq('id', callId)
-    .eq('org_id', orgId)) as { error: { message: string } | null };
+  const prevLiveAmd =
+    call.metadata && typeof call.metadata === 'object' && !Array.isArray(call.metadata)
+      ? (call.metadata as Record<string, unknown>).live_amd
+      : undefined;
+  // Base só com o live_amd lido: o patch sai com a chave live_amd e nada mais.
+  const patch = mergeLiveAmdMetadata({ live_amd: prevLiveAmd }, { ...parsed.data, nextActivity });
+  const { updated, error: updateError } = await mergeCallsMetadata(supabase, callId, patch, { orgId });
 
   if (updateError) {
-    console.error('[webphone-live-amd] update failed:', updateError.message);
+    console.error('[webphone-live-amd] update failed:', updateError);
     return { success: false, error: 'Erro ao gravar a sugestão' };
   }
+  if (!updated) return { success: false, error: 'Ligação não encontrada' };
 
   return {
     success: true,

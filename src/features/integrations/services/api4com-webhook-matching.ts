@@ -13,6 +13,8 @@
  *  2) Fallback ramal + telefone + 2 h, só dentro de `orgScope`. Fica para
  *     ligações antigas, sem callRef.
  */
+import { metadataPatchFrom } from '@/features/calls/services/merge-calls-metadata';
+
 import { findCallByCallRef, linkProviderIdToMetadata, readCallRef } from './api4com-call-ref';
 
 export interface WebhookMatchedCall {
@@ -37,7 +39,11 @@ export interface WebhookCallStore<T extends WebhookMatchedCall> {
   findByAltId: (api4comId: string) => Promise<T | null>;
   /** Linha mais antiga ainda não casada, do ramal + sufixo do telefone, desde `sinceIso`. */
   findFallback: (params: { orgScope: string[]; caller: string; calledSuffix: string; sinceIso: string }) => Promise<T | null>;
-  updateMetadata: (id: string, metadata: Record<string, unknown>) => Promise<void>;
+  /**
+   * Merge atômico de `patch` em calls.metadata (metadata || patch, no banco).
+   * O patch leva só as chaves que este módulo grava, nunca o metadata relido.
+   */
+  mergeMetadata: (id: string, patch: Record<string, unknown>) => Promise<void>;
 }
 
 export interface WebhookMatchLogger {
@@ -64,7 +70,7 @@ export async function findWebhookCall<T extends WebhookMatchedCall>(
   if (byRef) {
     const { metadata, changed } = linkProviderIdToMetadata(byRef.metadata, event.id, { webhookLinked: true });
     if (changed) {
-      await store.updateMetadata(byRef.id, metadata);
+      await store.mergeMetadata(byRef.id, metadataPatchFrom(byRef.metadata, metadata));
       logger?.info('Linked api4com id via callRef', { callId: byRef.id, api4comId: event.id });
     }
     return { call: { ...byRef, metadata }, via: 'call_ref' };
@@ -104,8 +110,7 @@ export async function findWebhookCall<T extends WebhookMatchedCall>(
   if (existingMeta.api4com_call_id !== event.id) {
     const altIds = Array.isArray(existingMeta.alt_api4com_ids) ? (existingMeta.alt_api4com_ids as string[]) : [];
     if (!altIds.includes(event.id)) {
-      await store.updateMetadata(fallback.id, {
-        ...existingMeta,
+      await store.mergeMetadata(fallback.id, {
         alt_api4com_ids: [...altIds, event.id],
         webhook_linked: true,
       });
@@ -113,7 +118,7 @@ export async function findWebhookCall<T extends WebhookMatchedCall>(
     }
   } else {
     // Same primary id (rare with this path, only if metadata was wiped).
-    await store.updateMetadata(fallback.id, { ...existingMeta, webhook_linked: true });
+    await store.mergeMetadata(fallback.id, { webhook_linked: true });
   }
 
   return { call: fallback, via: 'fallback' };

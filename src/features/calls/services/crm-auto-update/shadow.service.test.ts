@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 import { legacyAiOutcomeApplied, readCrmAutoUpdateMarker, runCrmAutoUpdate } from './shadow.service';
 
 type Row = Record<string, unknown>;
@@ -15,6 +17,17 @@ function fakeDb(seed: Record<string, Row[]>, opts: { failUpdate?: string; failLo
   const tables: Record<string, Row[]> = { crm_auto_update_shadow_log: [], ...seed };
   const writes: Array<{ table: string; op: string; data: Row; affected?: number }> = [];
   const db = {
+    // RPC merge_calls_metadata: metadata || patch + guardas, como no banco.
+    async rpc(fn: string, args: MergeCallsMetadataArgs) {
+      if (fn !== 'merge_calls_metadata') return { data: null, error: { message: `rpc desconhecida: ${fn}` } };
+      if (opts.failUpdate === 'calls') return { data: null, error: { message: 'connection reset' } };
+      const rows = tables.calls ?? (tables.calls = []);
+      const r = applyMergeCallsMetadataRpc(rows, args);
+      const data: Row = { metadata: args.p_patch };
+      if (args.p_sdr_disposition !== undefined) data.sdr_disposition = args.p_sdr_disposition;
+      writes.push({ table: 'calls', op: 'update', data, affected: r.affected });
+      return { data: r.data, error: null };
+    },
     from(table: string) {
       const filters: Array<(r: Row) => boolean> = [];
       let mode: 'select' | 'update' | 'insert' | 'delete' = 'select';
@@ -237,6 +250,22 @@ function voicemail(over: { confidence?: number; outcome?: string; call?: Partial
 const CRM_TABLES = ['calls', 'leads', 'scheduled_activities', 'interactions', 'call_transcripts_v2', 'call_qualifications'];
 
 describe('runCrmAutoUpdate (live, caixa postal)', () => {
+  it('corrida: live_amd gravado entre a leitura e o UPDATE do CRM não some, e o marcador fica', async () => {
+    const liveAmd = { prediction: 'voicemail', confidence: 0.9 };
+    const { db, tables, writes } = fakeDb(voicemail({ confidence: 0.9 }));
+    const rpc = (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc = (fn, a) => {
+      const row = tables.calls?.[0] as Row;
+      row.metadata = { ...(row.metadata as Row), live_amd: liveAmd };
+      return rpc(fn, a);
+    };
+    expect(await runCrmAutoUpdate(db, 'call-1')).toBe('applied');
+    const call = tables.calls?.[0] as Row & { metadata: Row };
+    expect(call.sdr_disposition).toBe('voicemail');
+    expect(call.metadata).toMatchObject({ callRef: 'abc', live_amd: liveAmd, crm_auto_update: { applied: true } });
+    expect(Object.keys(writes[0]?.data.metadata as Row)).toEqual(['crm_auto_update']);
+  });
+
   it('voicemail 0,85 com org no allowlist live: escreve só calls.sdr_disposition + marcador e loga applied', async () => {
     const { db, writes, tables } = fakeDb(voicemail({ confidence: 0.85 }));
     expect(await runCrmAutoUpdate(db, 'call-1')).toBe('applied');
@@ -426,16 +455,13 @@ describe('runCrmAutoUpdate (live, caixa postal)', () => {
     const original = (db as { from: (t: string) => Record<string, unknown> }).from;
     let callsReads = 0;
     (db as { from: (t: string) => unknown }).from = (t: string) => {
-      const b = original(t);
-      if (t === 'calls') {
-        const update = b.update as (d: Row) => unknown;
-        b.update = (d: Row) => {
-          (tables.calls?.[0] as Row).sdr_disposition = 'callback_requested';
-          return update(d);
-        };
-        callsReads += 1;
-      }
-      return b;
+      if (t === 'calls') callsReads += 1;
+      return original(t);
+    };
+    const rpc = (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc;
+    (db as { rpc: (fn: string, a: MergeCallsMetadataArgs) => Promise<unknown> }).rpc = (fn, a) => {
+      (tables.calls?.[0] as Row).sdr_disposition = 'callback_requested';
+      return rpc(fn, a);
     };
     expect(await runCrmAutoUpdate(db, 'call-1')).toBe('logged');
     expect(callsReads).toBeGreaterThan(1);

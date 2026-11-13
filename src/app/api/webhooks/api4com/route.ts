@@ -27,6 +27,7 @@ import {
   getSignificantThreshold,
 } from '@/features/calls/services/api4com-classification';
 import { computeCallCostBrl } from '@/features/calls/services/call-cost';
+import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
 import {
   type Api4ComConnectionScopeRow,
   pickApi4ComConnectionForRamal,
@@ -104,8 +105,11 @@ async function findMatchingCall(
             .limit(1)
             .maybeSingle(),
         ),
-      updateMetadata: async (id, metadata) => {
-        await from(supabase, 'calls').update({ metadata }).eq('id', id);
+      mergeMetadata: async (id, patch) => {
+        // Merge atômico no banco: regravar o metadata inteiro apagava chaves
+        // escritas em paralelo (audio_stats, live_amd, marcador do CRM).
+        const { error } = await mergeCallsMetadata(supabase, id, patch);
+        if (error) logger.warn('Failed to merge call metadata', { callId: id, error });
       },
     },
     body,

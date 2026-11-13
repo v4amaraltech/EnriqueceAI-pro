@@ -5,6 +5,7 @@ import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { triggerHangupCrmShadow } from '@/features/calls/services/crm-auto-update/hangup-shadow.service';
+import { mergeCallsMetadata, metadataPatchFrom } from '@/features/calls/services/merge-calls-metadata';
 import {
   classifyApi4ComCall,
   getSignificantThreshold,
@@ -481,13 +482,27 @@ export async function POST(request: Request) {
           // callRef, gateway e webhook_linked. Pelo fallback a linha pode ter
           // outro api4com_call_id (request_id do discador vs channel_id do REST):
           // o primário fica e o novo id vai para alt_api4com_ids[].
+          // O metadata vai por merge atômico no banco (merge_calls_metadata) com só as
+          // chaves que mudaram: regravar o objeto inteiro apagava chaves escritas em
+          // paralelo (audio_stats, live_amd, marcador do CRM automático).
           const linkedMeta = reconcileLinkMetadata(existing.metadata, api4comId, match!.via);
-          if (linkedMeta) updates.metadata = linkedMeta;
+          const hasColumnUpdates = Object.keys(updates).length > 1;
 
-          if (Object.keys(updates).length > 1) {
-            const { error: updateError } = (await from(supabase, 'calls').update(updates).eq('id', existing.id)) as {
-              error?: { message?: string } | null;
-            };
+          if (hasColumnUpdates || linkedMeta) {
+            let updateError: { message?: string } | null | undefined = null;
+            if (hasColumnUpdates) {
+              ({ error: updateError } = (await from(supabase, 'calls').update(updates).eq('id', existing.id)) as {
+                error?: { message?: string } | null;
+              });
+            }
+            if (linkedMeta) {
+              const merged = await mergeCallsMetadata(
+                supabase,
+                existing.id,
+                metadataPatchFrom(existing.metadata, linkedMeta),
+              );
+              if (merged.error) updateError = updateError ?? { message: merged.error };
+            }
             // Hangup conhecido e persistido: log sombra (só shadow, idempotente pelo UNIQUE do log).
             if (!updateError && (updates.hangup_cause ?? existing.hangup_cause)) {
               triggerHangupCrmShadow(supabase, existing.id);

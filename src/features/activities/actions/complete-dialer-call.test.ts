@@ -6,6 +6,8 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 const webhook = vi.hoisted(() => ({ dispatchWebhookEvent: vi.fn(() => Promise.resolve()) }));
 vi.mock('@/features/cadences/services/webhook-dispatch.service', () => webhook);
 
+import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
+
 import { completeDialerCall } from './complete-dialer-call';
 
 const CALL_ID = '6f1c2a3e-0000-4000-8000-000000000010';
@@ -14,7 +16,7 @@ const CADENCE = '6f1c2a3e-0000-4000-8000-000000000012';
 const STEP = '6f1c2a3e-0000-4000-8000-000000000013';
 const LEAD = '6f1c2a3e-0000-4000-8000-000000000014';
 
-type Op = { table: string; op: 'insert' | 'update'; payload: Record<string, unknown> };
+type Op = { table: string; op: 'insert' | 'update' | 'rpc'; payload: Record<string, unknown> };
 
 /** Supabase falso que registra inserts/updates por tabela. */
 function fakeSupabase(rows: {
@@ -57,6 +59,12 @@ function fakeSupabase(rows: {
       };
       return chain;
     },
+    // RPC merge_calls_metadata: metadata || patch na linha, como no banco.
+    async rpc(fn: string, args: MergeCallsMetadataArgs) {
+      ops.push({ table: 'calls', op: 'rpc', payload: args as unknown as Record<string, unknown> });
+      const r = applyMergeCallsMetadataRpc(rows.call ? [rows.call] : [], args);
+      return { data: r.data, error: fn === 'merge_calls_metadata' ? null : { message: 'rpc desconhecida' } };
+    },
   };
   return { client, ops };
 }
@@ -78,8 +86,9 @@ describe('completeDialerCall', () => {
   });
 
   it('atendida no automático: marca ai_outcome pendente sem apagar o metadata', async () => {
+    const call: Record<string, unknown> = { id: CALL_ID, duration_seconds: 42, lead_id: LEAD, org_id: 'org', hangup_cause: 'NORMAL_CLEARING', metadata: { audio_stats: { mos: 4 } } };
     const { client, ops } = fakeSupabase({
-      call: { id: CALL_ID, duration_seconds: 42, lead_id: LEAD, org_id: 'org', hangup_cause: 'NORMAL_CLEARING', metadata: { audio_stats: { mos: 4 } } },
+      call,
       interaction: { id: 'int-1', metadata: { callId: CALL_ID }, message_content: null },
     });
     auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org', userId: 'u1', supabase: client } });
@@ -87,8 +96,12 @@ describe('completeDialerCall', () => {
     const r = await completeDialerCall({ ...base, callId: CALL_ID, aiOutcomePending: true });
 
     expect(r.success).toBe(true);
-    const meta = ops.find((o) => o.table === 'calls' && o.op === 'update' && 'metadata' in o.payload);
-    expect(meta?.payload.metadata).toMatchObject({ audio_stats: { mos: 4 }, ai_outcome: { status: 'pending' } });
+    // Nenhum UPDATE regrava o metadata; o merge vai pela RPC só com ai_outcome.
+    expect(ops.some((o) => o.table === 'calls' && o.op === 'update' && 'metadata' in o.payload)).toBe(false);
+    const merge = ops.find((o) => o.op === 'rpc');
+    expect(merge?.payload).toMatchObject({ p_id: CALL_ID, p_org_id: 'org', p_patch: { ai_outcome: { status: 'pending' } } });
+    expect(Object.keys(merge?.payload.p_patch as Record<string, unknown>)).toEqual(['ai_outcome']);
+    expect(call.metadata).toMatchObject({ audio_stats: { mos: 4 }, ai_outcome: { status: 'pending' } });
   });
 
   it('com desfecho do SDR não marca a IA', async () => {
@@ -101,6 +114,7 @@ describe('completeDialerCall', () => {
     await completeDialerCall({ ...base, callId: CALL_ID, sdrOutcome: 'no_answer', aiOutcomePending: true });
 
     expect(ops.some((o) => o.table === 'calls' && 'metadata' in o.payload)).toBe(false);
+    expect(ops.some((o) => o.op === 'rpc')).toBe(false);
   });
 
   it('com callId: grava na linha existente — NENHUM insert em calls nem em interactions', async () => {

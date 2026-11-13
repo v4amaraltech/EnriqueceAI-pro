@@ -34,6 +34,8 @@ import { maskCalledForLog } from '@/features/integrations/services/api4com-log-m
 import type { Api4ComCredentials } from '@/features/integrations/services/api4com.service';
 import type { Api4ComOriginateResponse } from '@/features/integrations/types/api4com';
 
+import { mergeCallsMetadata, metadataPatchFrom } from './merge-calls-metadata';
+
 export interface OriginateApi4ComInput {
   phone: string;
   leadId?: string;
@@ -179,10 +181,14 @@ export async function originateApi4ComCallWithRef(
     const base = { [GATEWAY_KEY]: gateway, [CALL_REF_KEY]: callRef, ...(current?.metadata ?? {}) };
     const { metadata, changed } = linkProviderIdToMetadata(base, api4comId);
     if (changed || !current?.metadata) {
-      const { error: updateError } = (await from(supabase, 'calls')
-        .update({ metadata })
-        .eq('id', callRef)) as { error: QueryError };
-      if (updateError) throw new Error(updateError.message);
+      // Merge atômico no banco com SÓ as chaves que mudaram (id do provedor, e
+      // gateway/callRef se a linha veio sem metadata). Nunca o metadata relido.
+      const { error: updateError } = await mergeCallsMetadata(
+        supabase,
+        callRef,
+        metadataPatchFrom(current?.metadata ?? null, metadata),
+      );
+      if (updateError) throw new Error(updateError);
     }
   } catch (err) {
     console.error('[api4com] Failed to save api4com_call_id:', err instanceof Error ? err.message : String(err), {

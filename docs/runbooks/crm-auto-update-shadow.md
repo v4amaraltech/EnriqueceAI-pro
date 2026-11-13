@@ -325,3 +325,44 @@ chegar mesmo alguns segundos depois de o modal abrir, e só é aplicada se o SDR
 `NORMAL_CLEARING` atendida curta fica para o piloto de escuta ao vivo que já está na main (flag
 `webphone_live_amd`, `classifyLiveAmd`, resultado em `calls.metadata.live_amd`). Não há flag nova. A flag só
 é ligada com autorização; depois disso, o PR seguinte despeja o resultado nesse mesmo log sombra.
+
+## Merge atômico de `calls.metadata` (13/11/2026)
+
+### O bug
+
+Na conferência de 13/11/2026 o hangup_v1 gravou `sdr_disposition = no_answer` em 27 ligações
+NUMBER_CHANGED da V4. Em 2 delas (`6c5efe3c-...` e `9f038ff7-...`) o desfecho ficou, mas o marcador
+`calls.metadata.crm_auto_update` sumiu. Causa: `saveWebphoneCallAudio` lia o metadata, mesclava o
+`audio_stats` no JS e regravava o objeto inteiro. O CRM automático escreveu o marcador no meio e o
+UPDATE do áudio, que chegou depois, apagou o marcador. Sem o marcador, o modal não mostra "O sistema
+já registrou" e a recuperação pelo marcador não funciona para essas ligações.
+
+### A correção
+
+Todo UPDATE de `calls.metadata` passa pela RPC `merge_calls_metadata` (migration `20261113120000`),
+pelo helper `mergeCallsMetadata` (`src/features/calls/services/merge-calls-metadata.ts`):
+
+- `metadata = COALESCE(metadata, '{}') || patch` no banco. Merge raso de chave no topo.
+- Cada escritor manda SÓ as chaves que é dono (`audio_stats`, `live_amd`, `crm_auto_update`,
+  `ai_outcome`, `api4com_call_id`, `bant_error`, `recording_*`), nunca o metadata relido.
+- CRM automático: desfecho + marcador no MESMO UPDATE, com a guarda `sdr_disposition IS NULL`
+  (`p_sdr_disposition` + `p_only_if_disposition_null`). 0 linhas continua levando ao
+  `skip already_dispositioned` ou à recuperação pelo marcador, como antes.
+- Claim da IA: a guarda `metadata.ai_outcome.status = 'pending'` roda no mesmo UPDATE
+  (`p_only_if_ai_outcome_status`).
+- SECURITY INVOKER: o RLS de `calls` continua valendo para as actions do webphone.
+- INSERT de linha nova continua mandando o metadata inicial direto. Não use
+  `.update({ metadata })` em `calls`.
+
+### Ordem de aplicação
+
+Migration `20261113120000_merge_calls_metadata.sql` PRIMEIRO, aplicada junto com o deploy e ANTES do
+merge do código (o Coolify faz auto-deploy no merge). Se o código subir antes da RPC, todos os
+escritores de `calls.metadata` falham (áudio, escuta ao vivo, marcador do CRM, ai_outcome, ids da
+API4COM).
+
+### Reposição do marcador das 2 ligações
+
+`scripts/repair-crm-auto-update-marker.ts --call <uuid>` lê a linha e o log (`applied = true`) e
+mostra, em dry-run, o patch que repõe o marcador. Não grava nada (`--apply` é recusado) e nunca
+altera o log. A reposição, se aprovada, fica para depois do deploy da RPC.

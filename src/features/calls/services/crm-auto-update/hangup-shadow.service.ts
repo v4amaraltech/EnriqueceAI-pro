@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
 
+import { mergeCallsMetadata } from '../merge-calls-metadata';
 import {
   CRM_AUTO_UPDATE_HANGUP_RULES_VERSION,
   CRM_AUTO_UPDATE_HANGUP_SOURCE,
@@ -249,24 +250,22 @@ export async function runHangupCrmShadow(
     rules_version: CRM_AUTO_UPDATE_HANGUP_RULES_VERSION,
     source: CRM_AUTO_UPDATE_LIVE_SOURCE,
   };
-  const upd = (await from(db, 'calls')
-    .update({
-      sdr_disposition: liveDisposition,
-      metadata: { ...(call.metadata ?? {}), [CRM_AUTO_UPDATE_METADATA_KEY]: marker },
-      updated_at: appliedAt,
-    })
-    .eq('id', call.id)
-    .eq('org_id', call.org_id)
-    .is('sdr_disposition', null)
-    .select('id')) as { data: Array<{ id: string }> | null; error?: { message?: string } | null };
+  // Merge atômico no banco: desfecho + marcador no MESMO UPDATE, guarda
+  // sdr_disposition IS NULL, e o patch leva só o marcador (nunca o metadata lido).
+  const upd = await mergeCallsMetadata(
+    db,
+    call.id,
+    { [CRM_AUTO_UPDATE_METADATA_KEY]: marker },
+    { orgId: call.org_id, sdrDisposition: liveDisposition, onlyIfDispositionNull: true },
+  );
   if (upd.error) {
     console.error(
-      `[crm-auto-update:hangup] falha ao escrever desfecho da ligação ${call.id}: ${upd.error.message ?? 'unknown'}`,
+      `[crm-auto-update:hangup] falha ao escrever desfecho da ligação ${call.id}: ${upd.error}`,
     );
     return 'crm_write_failed';
   }
 
-  if (!upd.data || upd.data.length === 0) {
+  if (!upd.updated) {
     // SDR (ou outra execução) chegou na frente. Nunca força. Se foi outra execução nossa,
     // o marcador está lá e o log precisa dizer applied = true.
     const { data: now } = (await from(db, 'calls')
