@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { htmlToText } from '@/features/lead-messages/body-text';
 import { recordLeadMessage } from '@/features/lead-messages/record';
 import { decrypt, encrypt } from '@/lib/security/encryption';
 import { from } from '@/lib/supabase/from';
@@ -431,6 +432,7 @@ export class EmailService {
         connectionId: connection.id,
         ourAddress: connection.email_address,
         leadAddress: params.to,
+        bodyText: htmlToText(params.htmlBody) || null,
         bodyHtml: params.htmlBody,
         subject: params.subject,
         providerMessageId: result.id,

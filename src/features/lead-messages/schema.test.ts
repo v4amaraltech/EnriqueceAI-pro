@@ -7,6 +7,10 @@ const sql = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20261110210000_lead_messages.sql'),
   'utf8',
 );
+const fillSql = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20261113190000_lead_messages_fill_empty_body_text.sql'),
+  'utf8',
+);
 const phoneSql = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20261110213000_lead_message_phone_match.sql'),
   'utf8',
@@ -68,5 +72,24 @@ describe('tabela de conversas do lead', () => {
     expect(phoneSql).toContain('REVOKE ALL ON FUNCTION public.match_lead_contacts_by_phone(uuid, text[]) FROM PUBLIC, anon, authenticated');
     expect(phoneSql).toContain('GRANT EXECUTE ON FUNCTION public.match_lead_contacts_by_phone(uuid, text[]) TO service_role');
     expect(phoneSql).not.toMatch(/ALTER TABLE public\.interactions/i);
+  });
+
+  it('a folga de body_text só preenche texto vazio e mantém as recusas', () => {
+    const fn = fillSql.slice(
+      fillSql.indexOf('CREATE OR REPLACE FUNCTION public.reject_lead_message_body_mutation()'),
+      fillSql.indexOf('$$;'),
+    );
+    expect(fn).toContain("IF TG_OP = 'DELETE' THEN\n    RAISE EXCEPTION 'lead_messages body is append-only'");
+    expect(fn).toMatch(/IF NEW\.body_html IS DISTINCT FROM OLD\.body_html THEN\s+RAISE EXCEPTION 'lead_messages body is append-only'/);
+    expect(fn).toContain("OLD.body_text IS NULL OR OLD.body_text !~ '\\S'");
+    expect(fn).toContain('NEW.body_text IS NOT NULL');
+    expect(fn).toContain("NEW.body_text ~ '\\S'");
+    expect(fn.match(/RAISE EXCEPTION 'lead_messages body is append-only'/g)).toHaveLength(3);
+    expect(fillSql).toContain('GRANT UPDATE (body_text) ON public.lead_messages TO service_role');
+    expect(fillSql).not.toMatch(/GRANT UPDATE ON public\.lead_messages/);
+    expect(fillSql).not.toMatch(/GRANT (ALL|DELETE)/);
+    expect(fillSql).not.toMatch(/DROP TRIGGER|DELETE FROM|UPDATE public\.lead_messages/i);
+    expect(fillSql).not.toContain('lead_messages_capture');
+    expect(fillSql).not.toMatch(/[\u2014\u2013]/);
   });
 });

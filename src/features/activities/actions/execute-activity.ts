@@ -11,6 +11,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { EmailService } from '@/features/integrations/services/email.service';
+import { htmlToText } from '@/features/lead-messages/body-text';
 import { recordLeadMessage } from '@/features/lead-messages/record';
 import { EvolutionWhatsAppService } from '@/features/integrations/services/whatsapp-evolution.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
@@ -263,6 +264,7 @@ export async function executeActivity(
         direction: 'outbound',
         provider: 'gmail',
         leadAddress: to,
+        bodyText: body ? htmlToText(body) || null : null,
         bodyHtml: body,
         subject: subject || null,
         providerMessageId: emailResult.messageId,

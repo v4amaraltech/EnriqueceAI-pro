@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseEvolutionUpsert } from './evolution-parse';
-import { gmailPartText } from './gmail-reply';
+import { gmailReplyText } from './gmail-reply';
 import { metaCloudMedia } from './meta-media';
 
 describe('leitura da Evolution', () => {
@@ -37,9 +37,9 @@ describe('mídia e corpo', () => {
 
   it('o Gmail prefere o texto e não devolve HTML cru', () => {
     const html = Buffer.from('<p>Olá &amp; time</p>').toString('base64');
-    expect(gmailPartText({ mimeType: 'text/html', body: { data: html } })).toBe('Olá & time');
+    expect(gmailReplyText({ mimeType: 'text/html', body: { data: html } })).toBe('Olá & time');
     const plain = Buffer.from('resposta').toString('base64url');
-    expect(gmailPartText({
+    expect(gmailReplyText({
       mimeType: 'multipart/alternative',
       parts: [
         { mimeType: 'text/plain', body: { data: plain } },

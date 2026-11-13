@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import type { LEAD_MESSAGE_CHANNELS, LEAD_MESSAGE_DIRECTIONS, LEAD_MESSAGE_PROVIDERS, LEAD_MESSAGE_STATUSES } from './constants';
 import { isInternalChannelLog } from './audience';
+import { resolveLeadMessageBodyText } from './body-text';
 import { isLeadMessagesCaptureEnabled } from './flag';
 
 type Channel = (typeof LEAD_MESSAGE_CHANNELS)[number];
@@ -56,7 +57,14 @@ export function mediaMetadata(input: LeadMessageMedia | null | undefined): LeadM
 export async function recordLeadMessage(draft: LeadMessageDraft): Promise<void> {
   const providerMessageId = draft.providerMessageId.trim();
   if (!providerMessageId || !draft.leadId || !draft.orgId) return;
-  if (isInternalChannelLog(null, draft.bodyText) || isInternalChannelLog(null, draft.bodyHtml)) return;
+  // body_text sempre resolvido: texto do provedor ou HTML convertido. O HTML fica como veio.
+  const bodyText = resolveLeadMessageBodyText({
+    bodyText: draft.bodyText,
+    bodyHtml: draft.bodyHtml,
+    channel: draft.channel,
+    direction: draft.direction,
+  });
+  if (isInternalChannelLog(null, bodyText) || isInternalChannelLog(null, draft.bodyHtml)) return;
   try {
     if (!(await isLeadMessagesCaptureEnabled(draft.orgId))) return;
     const db = createServiceRoleClient();
@@ -80,7 +88,7 @@ export async function recordLeadMessage(draft: LeadMessageDraft): Promise<void> 
         connection_id: draft.connectionId ?? null,
         our_address: draft.ourAddress ?? null,
         lead_address: draft.leadAddress ?? null,
-        body_text: draft.bodyText ?? null,
+        body_text: bodyText,
         body_html: draft.bodyHtml ?? null,
         subject: draft.subject ?? null,
         media: mediaMetadata(draft.media),

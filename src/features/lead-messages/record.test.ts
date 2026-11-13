@@ -96,6 +96,53 @@ describe('captura da conversa', () => {
     expect(state.upserts).toEqual([]);
   });
 
+  it('e-mail só com HTML grava body_text convertido e mantém o HTML', async () => {
+    state.enabled = true;
+    const html = '<p>Olá Ana,</p><p>Tudo bem?<br>Segue a proposta.</p>';
+    await recordLeadMessage({
+      orgId: 'org-1',
+      leadId: 'lead-1',
+      channel: 'email',
+      direction: 'outbound',
+      provider: 'gmail',
+      providerMessageId: 'gmail-1',
+      bodyHtml: html,
+    });
+    expect(state.upserts[0]).toMatchObject({
+      table: 'lead_messages',
+      row: { body_text: 'Olá Ana,\n\nTudo bem?\nSegue a proposta.', body_html: html },
+    });
+  });
+
+  it('HTML sem texto nenhum grava body_text nulo, não o HTML cru', async () => {
+    state.enabled = true;
+    await recordLeadMessage({
+      orgId: 'org-1',
+      leadId: 'lead-1',
+      channel: 'email',
+      direction: 'outbound',
+      provider: 'gmail',
+      providerMessageId: 'gmail-2',
+      bodyHtml: '<p>&nbsp;</p>',
+    });
+    expect(state.upserts[0]?.row.body_text).toBeNull();
+    expect(state.upserts[0]?.row.body_html).toBe('<p>&nbsp;</p>');
+  });
+
+  it('aviso interno só em HTML também não é gravado', async () => {
+    state.enabled = true;
+    await recordLeadMessage({
+      orgId: 'org-1',
+      leadId: 'lead-1',
+      channel: 'email',
+      direction: 'outbound',
+      provider: 'gmail',
+      providerMessageId: 'gmail-3',
+      bodyHtml: '<p>E-mail de solicitação de feedback enviado para Vinicius Mercante</p>',
+    });
+    expect(state.upserts).toEqual([]);
+  });
+
   it('o metadado de mídia não aceita url nem base64', () => {
     expect(mediaMetadata({ type: 'image', provider_media_id: 'a', mime: 'image/png' })).toEqual({
       type: 'image',
