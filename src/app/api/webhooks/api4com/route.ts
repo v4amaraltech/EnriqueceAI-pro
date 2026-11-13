@@ -20,6 +20,7 @@ import { findWebhookCall } from '@/features/integrations/services/api4com-webhoo
 import type { CallStatus } from '@/features/calls/types';
 import { shouldTranscribeOnHangup } from '@/features/calls/ai-outcome';
 import { triggerTranscriptionEngine } from '@/features/calls/services/transcription-engine/trigger';
+import { triggerHangupCrmShadow } from '@/features/calls/services/crm-auto-update/hangup-shadow.service';
 import { shouldPersistRecordingOnEvent } from '@/features/calls/recording-trigger';
 import {
   classifyApi4ComCall,
@@ -221,6 +222,8 @@ async function processApi4ComEvent(
           appUrl: getAppUrl(),
           serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
         });
+        // Log sombra do desfecho pela causa do hangup (só shadow, sem escrita no CRM). Nunca lança.
+        triggerHangupCrmShadow(supabase, result.call.id);
         // createCallFromWebhook already applied the classifier — no need to
         // re-run updateCallFromWebhook (was a stale "fix up after default
         // insert" left over from the old not_connected default).
@@ -450,9 +453,9 @@ async function updateCallFromWebhook(
     updates.connected = classification.connected;
   }
 
-  await from(supabase, 'calls')
+  const { error: updateError } = (await from(supabase, 'calls')
     .update(updates)
-    .eq('id', callId);
+    .eq('id', callId)) as { error?: { message?: string } | null };
 
   // Persist the recording to our Storage (any duration) before the listener
   // link expires, independent of the transcription minimum below. Também quando
@@ -479,6 +482,14 @@ async function updateCallFromWebhook(
     appUrl: getAppUrl(),
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   });
+
+  // Log sombra do desfecho pela causa do hangup, só depois do UPDATE persistido
+  // e só no channel-hangup (este helper também roda no channel-answer, quando a
+  // causa ainda não chegou; o service devolveria unmapped, mas evitamos a leitura).
+  // Só shadow, nunca lança.
+  if (!updateError && payload.eventType === 'channel-hangup') {
+    triggerHangupCrmShadow(supabase, callId);
+  }
 }
 
 /** Fire-and-forget: download + persist the recording to our Storage bucket so

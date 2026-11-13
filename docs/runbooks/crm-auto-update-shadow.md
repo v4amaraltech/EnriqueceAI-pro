@@ -174,3 +174,66 @@ ORDER BY decided_at DESC;
 Migration `20261112200000` PRIMEIRO, depois o deploy do código. Se o código subir antes, o INSERT com
 `applied`/`applied_at` falha (`log_failed`); se isso acontecer depois de um UPDATE em calls, o marcador permite
 gravar o log na próxima execução. Esta versão não liga nenhuma org: incluir uma org no live é decisão separada.
+
+## Caminho hangup (sem JEV): só shadow
+
+Código: `hangup-decision.ts` (classificação pura) e `hangup-shadow.service.ts` (`runHangupCrmShadow` e o
+wrapper `triggerHangupCrmShadow`). Migration: `supabase/migrations/20261112220000_crm_auto_update_hangup_shadow.sql`.
+
+O motor JEV só pega ligação atendida com 30 s ou mais. As demais com causa de hangup clara passam a ter
+proposta no mesmo log, com `rules_version = 'hangup_v1'`, `qualification_id` nulo e
+`input_snapshot.source = 'hangup_deterministic'`. Disparo: webhook API4COM (os dois ramos de hangup, depois
+do UPDATE/INSERT) e reconcile (quando o hangup fica persistido). Portão de org: `crm_auto_update_v1` (shadow).
+Idempotente pelo `UNIQUE (call_id)`: a segunda chamada vira `already_logged`.
+
+### Mapeamento
+
+| Causa | Condição | outcome (snapshot) | disposition | próxima atividade |
+|-------|----------|--------------------|-------------|-------------------|
+| `NUMBER_CHANGED` | sempre | no_answer | no_answer | retry phone |
+| `NO_ANSWER`, `NO_USER_RESPONSE`, `ALLOTTED_TIMEOUT` | sem answered_at | no_answer | no_answer | retry phone |
+| `USER_BUSY` | sem answered_at | busy | no_answer | retry phone |
+| `CALL_REJECTED` | sem answered_at | rejected | no_answer | retry phone |
+| `UNALLOCATED_NUMBER`, `INVALID_NUMBER_FORMAT` | mesmo com answered_at | invalid_number | technical_failure | none |
+| `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE` | sem answered_at | technical_failure | technical_failure | retry phone |
+
+`NUMBER_CHANGED` é "não atendeu" (decisão de 12/11, alinhada ao que o SDR registrou: 43 no_answer e
+nenhuma caixa postal). O guia API4COM e o PR598 continuam tratando essa causa como caixa postal na
+telefonia (rótulo e status `no_contact`); este caminho do log sombra não muda isso. Confiança 1,
+`lead_status` sempre nulo. Veredito: `already_dispositioned` (SDR ou fluxo antigo da IA), `no_lead`,
+ou `would_apply`, sempre com a proposta preenchida.
+
+Medição desde o deploy do motor (11/11, 06:41, V4): 702 ligações com esses sinais, 478 com lead, 64 já com desfecho; 414 seriam
+`would_apply` e 224 `no_lead`.
+
+### O que NÃO classifica
+
+- Atendida com 30 s ou mais (é do JEV).
+- `NORMAL_CLEARING` atendida curta (390 no período): precisa de áudio.
+- `ORIGINATOR_CANCEL` (344): o SDR desistiu e os desfechos registrados se dividem (sinal misto).
+- Causa de "não atendeu" com answered_at preenchido (contraditório), causa nula ou desconhecida.
+
+### Sem escrita no CRM
+
+Sempre `mode = 'shadow'` e `applied = false`, mesmo com a org em live. Não escreve `calls.sdr_disposition`,
+`calls.metadata`, `leads`, `scheduled_activities` nem `interactions`, e não passa por `shouldApplyLiveVoicemail`.
+Sem backfill das ligações antigas.
+
+```sql
+SELECT input_snapshot->>'hangup_cause' AS causa, verdict, skip_reason, count(*)
+FROM public.crm_auto_update_shadow_log
+WHERE rules_version = 'hangup_v1'
+GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+```
+
+### Ordem de aplicação
+
+Migration `20261112220000` PRIMEIRO, depois o código. Se o código subir antes, o INSERT com `qualification_id`
+nulo falha (`log_failed` no console) e o log não entra; o webhook e o reconcile seguem normais (o wrapper
+nunca lança).
+
+### Plano do áudio (próximo PR)
+
+`NORMAL_CLEARING` atendida curta fica para o piloto de escuta ao vivo que já está na main (flag
+`webphone_live_amd`, `classifyLiveAmd`, resultado em `calls.metadata.live_amd`). Não há flag nova. A flag só
+é ligada com autorização; depois disso, o PR seguinte despeja o resultado nesse mesmo log sombra.

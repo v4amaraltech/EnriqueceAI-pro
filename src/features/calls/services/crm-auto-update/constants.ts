@@ -38,3 +38,12 @@ export const CRM_AUTO_UPDATE_LIVE_SOURCE = 'crm_auto_update_v1_live';
 
 /** Versão da regra de decisão gravada no log, para comparar regras diferentes no tempo. */
 export const CRM_AUTO_UPDATE_RULES_VERSION = 'v1.1';
+
+/**
+ * Versão gravada no log pelas propostas do hangup determinístico (sem JEV, sem qualificação).
+ * Separada de CRM_AUTO_UPDATE_RULES_VERSION para filtrar as duas fontes no tempo.
+ */
+export const CRM_AUTO_UPDATE_HANGUP_RULES_VERSION = 'hangup_v1';
+
+/** input_snapshot.source das linhas do caminho hangup. */
+export const CRM_AUTO_UPDATE_HANGUP_SOURCE = 'hangup_deterministic';
