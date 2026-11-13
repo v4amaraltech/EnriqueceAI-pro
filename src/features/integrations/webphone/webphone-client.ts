@@ -5,31 +5,40 @@
 // em `wss://{domínio}:6443`; o servidor origina a ligação por `POST /calls`;
 // a API4COM manda o INVITE para o ramal com `X-Api4comintegratedcall: true`
 // e a página atende sozinha. Sem extensão do Chrome.
+import type { RTCSession } from 'jssip/lib/RTCSession';
+import type { IncomingRequest, OutgoingRequest } from 'jssip/lib/SIPMessage';
+import type { UA } from 'jssip/lib/UA';
 
+import { stopActiveLiveAmd } from './live-amd-active';
 import { shouldTapRemoteAudio, watchRemoteTrack } from './remote-audio-log';
 import { resumeWebphoneAudioContexts } from './webphone-audio-contexts';
-import { summarizeRtcStats } from './webphone-audio-stats';
 import { toggleSessionAudio } from './webphone-audio-mute';
+import { summarizeRtcStats } from './webphone-audio-stats';
 import { claimWebphoneDial } from './webphone-dial-correlation';
 import { getWebphoneInstanceId, newInstanceUUID } from './webphone-instance-id';
 import {
-  acquireMicrophonePermission,
-  isMicrophonePermissionGranted,
   type MicPermission,
   type MicPermissionsApi,
+  acquireMicrophonePermission,
+  isMicrophonePermissionGranted,
 } from './webphone-mic';
-import { broadcastLockBus, browserLockClock, createWebphoneTabLock, type WebphoneTabLock } from './webphone-tab-lock';
 import {
   INTEGRATED_CALL_HEADER,
+  type WebphoneEvent,
+  type WebphoneState,
   initialWebphoneState,
   isIntegratedCallHeader,
   reduceWebphone,
   remoteNumberFromUri,
   resolveMicForDial,
   webphoneMicNeedsGesture,
-  type WebphoneEvent,
-  type WebphoneState,
 } from './webphone-state';
+import {
+  type WebphoneTabLock,
+  broadcastLockBus,
+  browserLockClock,
+  createWebphoneTabLock,
+} from './webphone-tab-lock';
 
 export interface WebphoneSipConfig {
   sipDomain: string;
@@ -39,10 +48,6 @@ export interface WebphoneSipConfig {
   liveListen?: boolean;
 }
 
-import type { RTCSession } from 'jssip/lib/RTCSession';
-import type { IncomingRequest, OutgoingRequest } from 'jssip/lib/SIPMessage';
-import type { UA } from 'jssip/lib/UA';
-
 const SIP_WSS_PORT = 6443;
 const ENDED_CALL_CLEAR_MS = 2500;
 // Amostra de `getStats()` a cada poucos segundos durante a conversa: quando o
@@ -51,6 +56,8 @@ const ENDED_CALL_CLEAR_MS = 2500;
 const STATS_SAMPLE_MS = 5000;
 // Ao desligar daqui, esperamos no máximo isto por uma amostra final antes do BYE.
 const STATS_FINAL_TIMEOUT_MS = 400;
+/** Se o BYE não emitir `ended` neste prazo, a UI encerra mesmo assim. */
+export const HANGUP_FORCE_END_MS = 1_000;
 
 let state: WebphoneState = initialWebphoneState;
 const listeners = new Set<() => void>();
@@ -289,7 +296,8 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   });
   session.on('accepted', () => dispatch({ type: 'call_accepted', id, at: Date.now() }));
   session.on('confirmed', () => {
-    if (state.call?.id === id && state.call.phase === 'ringing') dispatch({ type: 'call_accepted', id, at: Date.now() });
+    if (state.call?.id === id && state.call.phase === 'ringing')
+      dispatch({ type: 'call_accepted', id, at: Date.now() });
     startStatsSampling(id);
   });
   session.on('muted', () => dispatch({ type: 'call_muted', id, muted: true }));
@@ -321,7 +329,10 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
  * se uma delas já segura o ramal, não registra e publica o conflito.
  * `takeover: true` é o "Usar nesta aba": tira o ramal da outra aba primeiro.
  */
-export async function startWebphone(config: WebphoneSipConfig, options: { takeover?: boolean } = {}): Promise<void> {
+export async function startWebphone(
+  config: WebphoneSipConfig,
+  options: { takeover?: boolean } = {},
+): Promise<void> {
   if (typeof window === 'undefined') return;
   stopWebphone();
   lastConfig = config;
@@ -372,11 +383,17 @@ export async function startWebphone(config: WebphoneSipConfig, options: { takeov
   instance.on('connecting', () => emit({ type: 'connecting' }));
   instance.on('registered', () => emit({ type: 'registered' }));
   instance.on('unregistered', () => emit({ type: 'unregistered' }));
-  instance.on('disconnected', (e: { reason?: string }) => emit({ type: 'disconnected', error: e.reason }));
+  instance.on('disconnected', (e: { reason?: string }) =>
+    emit({ type: 'disconnected', error: e.reason }),
+  );
   instance.on('registrationFailed', (e: { cause?: string }) =>
     emit({ type: 'registration_failed', cause: String(e.cause ?? 'desconhecida') }),
   );
-  instance.on('newRTCSession', (e: { session: RTCSession; request: IncomingRequest | OutgoingRequest }) => handleNewSession(e.session, e.request));
+  instance.on(
+    'newRTCSession',
+    (e: { session: RTCSession; request: IncomingRequest | OutgoingRequest }) =>
+      handleNewSession(e.session, e.request),
+  );
 
   instance.start();
   void autoActivateMicIfGranted(generation);
@@ -385,6 +402,7 @@ export async function startWebphone(config: WebphoneSipConfig, options: { takeov
 export function stopWebphone(): void {
   startGeneration++;
   liveListenEnabled = false;
+  stopActiveLiveAmd();
   tabLock?.release();
   stopRemoteTapNow();
   publishRemoteTrack(null);
@@ -446,23 +464,46 @@ export function answerCall(): void {
 }
 
 /**
- * Desliga a perna do ramal. Antes do BYE tenta uma amostra final de
- * `getStats()` (até STATS_FINAL_TIMEOUT_MS): o `terminate()` fecha a
- * RTCPeerConnection na hora e depois disso não há mais estatísticas.
+ * Desliga a perna do ramal.
+ *
+ * A escuta ao vivo (clone da faixa + AudioContext) para ANTES do BYE. Se a
+ * limpeza ficar só depois do `ended`, e o clone impedir o evento, Mutar e
+ * Desligar ficam sem efeito e a UI permanece em "Chamando o lead".
+ *
+ * A amostra final de `getStats()` roda em paralelo, sem atrasar o BYE: o
+ * `terminate()` fecha a RTCPeerConnection na hora, e já há amostras periódicas.
+ * Se o `ended` não chegar em `HANGUP_FORCE_END_MS`, a UI encerra mesmo assim.
  */
 export async function hangupCall(): Promise<void> {
+  stopActiveLiveAmd();
   const session = activeSession;
   const call = state.call;
   if (!session || !call || call.phase === 'ended') return;
   if (call.phase === 'in-call') {
-    await Promise.race([sampleAudioStats(call.id), new Promise<void>((r) => window.setTimeout(r, STATS_FINAL_TIMEOUT_MS))]);
+    void Promise.race([
+      sampleAudioStats(call.id),
+      new Promise<void>((r) => window.setTimeout(r, STATS_FINAL_TIMEOUT_MS)),
+    ]);
   }
-  if (activeSession !== session || state.call?.phase === 'ended') return;
   try {
     session.terminate();
   } catch (err) {
     console.error('[webphone] hangup failed:', err);
   }
+  const id = call.id;
+  window.setTimeout(() => {
+    if (activeSession !== session || state.call?.id !== id || state.call?.phase === 'ended') return;
+    stopStatsSampling();
+    stopRemoteTapNow();
+    publishRemoteTrack(null);
+    dispatch({ type: 'call_ended', id, at: Date.now(), cause: 'forced' });
+    clearEndedCallLater(id);
+    try {
+      session.terminate();
+    } catch {
+      /* sessão já encerrada */
+    }
+  }, HANGUP_FORCE_END_MS);
 }
 
 /**

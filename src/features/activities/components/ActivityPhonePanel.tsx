@@ -2,10 +2,49 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
-import { Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
 import Image from 'next/image';
+
+import { Phone, PhoneCall, PhoneOff, User } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
+import { hangupCall, initiateCall } from '@/features/calls/actions/initiate-call';
+import { mapDispositionToAction } from '@/features/calls/disposition';
+import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
+import type { CallDisposition } from '@/features/calls/types';
+import type { DialerProvider } from '@/features/calls/types/dialer-provider';
+import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
+import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
+import { useWebphoneCallContext } from '@/features/integrations/webphone/useWebphoneCallContext';
+import { useWebphoneCallOutcome } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
+import {
+  clearWebphoneCallContext,
+  notesRevisionForSubmit,
+  onWebphoneConcludeRequested,
+  releaseWebphoneCallOwner,
+  setWebphoneCallContext,
+} from '@/features/integrations/webphone/webphone-call-context';
+import {
+  getWebphoneState,
+  prepareWebphoneMicForDial,
+} from '@/features/integrations/webphone/webphone-client';
+import {
+  cancelWebphoneDial,
+  publishWebphoneDial,
+  reserveWebphoneDial,
+} from '@/features/integrations/webphone/webphone-dial-correlation';
+import {
+  effectiveCallSeconds,
+  leadConnected,
+} from '@/features/integrations/webphone/webphone-lead-answer';
+import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
+import {
+  canReceiveCalls,
+  dialingBlockReason,
+  webphoneUsableAfterMicGesture,
+} from '@/features/integrations/webphone/webphone-state';
+import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
+import { formatDuration } from '@/lib/utils/format';
 import { Label } from '@/shared/components/ui/label';
 import {
   Select,
@@ -15,43 +54,13 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { mapDispositionToAction } from '@/features/calls/disposition';
-import { usePostCallSuggestion } from '@/features/calls/use-post-call-suggestion';
-import type { CallDisposition } from '@/features/calls/types';
-import type { DialerProvider } from '@/features/calls/types/dialer-provider';
-import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
-import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
-import { markMeetingNoShow } from '@/features/leads/actions/lead-noshow';
 import { scheduleActivity } from '../actions/schedule-activity';
-import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
-import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
-import { useWebphoneCallContext } from '@/features/integrations/webphone/useWebphoneCallContext';
-import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
-import { effectiveCallSeconds, leadConnected } from '@/features/integrations/webphone/webphone-lead-answer';
-import {
-  clearWebphoneCallContext,
-  notesRevisionForSubmit,
-  onWebphoneConcludeRequested,
-  releaseWebphoneCallOwner,
-  setWebphoneCallContext,
-} from '@/features/integrations/webphone/webphone-call-context';
-import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
-import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
-import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
-import {
-  canReceiveCalls,
-  dialingBlockReason,
-  webphoneUsableAfterMicGesture,
-} from '@/features/integrations/webphone/webphone-state';
-import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
-import { DockMicControl } from './DockMicControl';
-
 import type { CallAttempt } from '../types/call-attempt';
 import { MAX_CALL_ATTEMPTS, formatAggregatedNotes } from '../types/call-attempt';
-import { formatDuration } from '@/lib/utils/format';
-
 import { formatResumeDate } from '../utils/callback-resume';
 import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
+import { CallResultModal, type CallReturnSchedule } from './CallResultModal';
+import { DockMicControl } from './DockMicControl';
 
 export type CallState = 'idle' | 'calling' | 'connected' | 'ended';
 
@@ -120,9 +129,16 @@ export function ActivityPhonePanel({
   // O lead atendeu? Vem do webhook da API4COM (answered_at / hangup_cause). O
   // tempo medido na tela conta a perna do ramal — que o webphone atende na
   // hora —, então sozinho dizia "Atendida" até em número alterado/caixa postal.
-  const leadAnswer = useWebphoneLeadAnswer(callState === 'ended' ? callId : null);
+  // Com o modal aberto, acompanha o servidor: a duração da tela é a da perna
+  // do ramal (02:27 num correio de voz de 02:06), e o desfecho automático
+  // chega depois. Sem duração no servidor, vale a medida da tela.
+  const outcome = useWebphoneCallOutcome(callState === 'ended' ? callId : null);
+  const leadAnswer = outcome.leadAnswer;
   const callConnected = leadConnected(leadAnswer, callDuration > 0);
-  const resultSeconds = effectiveCallSeconds(leadAnswer, callDuration);
+  const resultSeconds = effectiveCallSeconds(
+    leadAnswer,
+    outcome.durationSeconds > 0 ? outcome.durationSeconds : callDuration,
+  );
   const suggestion = usePostCallSuggestion({
     callId,
     connected: callConnected,
@@ -153,7 +169,8 @@ export function ActivityPhonePanel({
   const hasAnyPhone = selectedPhone !== '';
   // Qual contato (lead_contacts) dono do número escolhido — para registrar na
   // ligação. null quando o número é de sócio/enriquecido (sem contato).
-  const selectedContactId = availablePhones.find((p) => p.formatted === selectedPhone)?.contactId ?? null;
+  const selectedContactId =
+    availablePhones.find((p) => p.formatted === selectedPhone)?.contactId ?? null;
 
   // Timer for call duration
   useEffect(() => {
@@ -235,7 +252,10 @@ export function ActivityPhonePanel({
         cancelWebphoneDial(reserved.token);
         // Show backend error if present, otherwise generic guidance
         const errorMsg =
-          result.error || (webphoneReady ? 'Não foi possível iniciar a ligação. Tente novamente.' : 'Verifique se a extensão API4COM está aberta e tente novamente.');
+          result.error ||
+          (webphoneReady
+            ? 'Não foi possível iniciar a ligação. Tente novamente.'
+            : 'Verifique se a extensão API4COM está aberta e tente novamente.');
         console.error('[ActivityPhonePanel] initiateCall failed:', result.error);
         toast.error(errorMsg, { duration: 8000 });
         setCallState('idle');
@@ -306,18 +326,22 @@ export function ActivityPhonePanel({
         notes: attemptNotes || undefined,
         notesRev: attemptNotes.trim() ? notesRev : undefined,
         leadId,
-      }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
+      }).catch((err: unknown) =>
+        console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err),
+      );
       clearWebphoneCallContext(callId);
     }
 
     // Re-fetch lead phones in case new ones were added during the call
-    import('@/features/leads/actions/fetch-lead-phones').then(({ fetchLeadPhones }) =>
-      fetchLeadPhones(leadId).then((result) => {
-        if (result.success && result.data.length > 0) {
-          setAvailablePhones(result.data);
-        }
-      }),
-    ).catch(() => {});
+    import('@/features/leads/actions/fetch-lead-phones')
+      .then(({ fetchLeadPhones }) =>
+        fetchLeadPhones(leadId).then((result) => {
+          if (result.success && result.data.length > 0) {
+            setAvailablePhones(result.data);
+          }
+        }),
+      )
+      .catch(() => {});
 
     setAttempts((prev) => [...prev, attempt]);
     setCallStatus('');
@@ -352,7 +376,9 @@ export function ActivityPhonePanel({
         notes: resultNotes || undefined,
         notesRev: resultNotes.trim() ? notesRev : undefined,
         leadId,
-      }).catch((err: unknown) => console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err));
+      }).catch((err: unknown) =>
+        console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err),
+      );
     }
 
     // "Pediu para ligar depois": agenda o retorno e pausa a cadência até o dia
@@ -496,12 +522,20 @@ export function ActivityPhonePanel({
 
   if (layout === 'dock') {
     const statusLabel =
-      callState === 'calling' ? 'Chamando' : callState === 'connected' ? 'Em chamada' : callState === 'ended' ? 'Encerrada' : 'Pronta para ligar';
+      callState === 'calling'
+        ? 'Chamando'
+        : callState === 'connected'
+          ? 'Em chamada'
+          : callState === 'ended'
+            ? 'Encerrada'
+            : 'Pronta para ligar';
     return (
       <div data-testid="call-dock-controls" className="space-y-2">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold tabular-nums">{hasAnyPhone ? selectedPhone : 'Sem telefone'}</p>
+            <p className="truncate text-sm font-semibold tabular-nums">
+              {hasAnyPhone ? selectedPhone : 'Sem telefone'}
+            </p>
             <p className="text-muted-foreground text-xs" data-testid="call-status">
               {statusLabel}
               {dialerProvider === 'api4com' ? ' · API4COM' : ''}
@@ -509,11 +543,19 @@ export function ActivityPhonePanel({
             </p>
           </div>
           {isInCall && (
-            <p className="font-mono text-sm tabular-nums" aria-live="polite" data-testid="call-timer">
+            <p
+              className="font-mono text-sm tabular-nums"
+              aria-live="polite"
+              data-testid="call-timer"
+            >
               {formatDuration(elapsed)}
             </p>
           )}
-          <DockMicControl webphoneReady={webphoneReady} sipCall={webphone.call} dockInCall={isInCall} />
+          <DockMicControl
+            webphoneReady={webphoneReady}
+            sipCall={webphone.call}
+            dockInCall={isInCall}
+          />
           {callState === 'idle' && hasAnyPhone && (
             <button
               type="button"
@@ -553,7 +595,8 @@ export function ActivityPhonePanel({
         )}
         {!webphoneUsable && dialerProvider === 'api4com' && callState === 'idle' && (
           <p className="text-muted-foreground text-[11px]">
-            A ligação segue pela API4COM. Se o webphone desta aba não estiver verde, a extensão atende o ramal.
+            A ligação segue pela API4COM. Se o webphone desta aba não estiver verde, a extensão
+            atende o ramal.
           </p>
         )}
         {attempts.length > 0 && (
@@ -574,23 +617,37 @@ export function ActivityPhonePanel({
   return (
     <div className="flex h-full flex-col">
       {/* API4COM: webphone desta aba ou lembrete da extensão */}
-      {dialerProvider === 'api4com' && callState === 'idle' && (
-        webphoneUsable ? (
+      {dialerProvider === 'api4com' &&
+        callState === 'idle' &&
+        (webphoneUsable ? (
           <div className="mb-3 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2.5">
-            <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
+            <Image
+              src="/logos/api4com-logo.png"
+              alt="API4COM"
+              width={24}
+              height={24}
+              className="shrink-0 rounded"
+            />
             <p className="text-xs text-green-700 dark:text-green-400">
-              <strong>Webphone ativo nesta aba.</strong> A ligação toca e é atendida aqui mesmo — mantenha a extensão do Chrome fechada.
+              <strong>Webphone ativo nesta aba.</strong> A ligação toca e é atendida aqui mesmo —
+              mantenha a extensão do Chrome fechada.
             </p>
           </div>
         ) : (
           <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-            <Image src="/logos/api4com-logo.png" alt="API4COM" width={24} height={24} className="shrink-0 rounded" />
+            <Image
+              src="/logos/api4com-logo.png"
+              alt="API4COM"
+              width={24}
+              height={24}
+              className="shrink-0 rounded"
+            />
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Certifique-se de que a <strong>extensão API4COM (webphone)</strong> está aberta no navegador antes de ligar.
+              Certifique-se de que a <strong>extensão API4COM (webphone)</strong> está aberta no
+              navegador antes de ligar.
             </p>
           </div>
-        )
-      )}
+        ))}
 
       {/* Origem / Destino header */}
       <div className="flex items-start justify-between rounded-lg border border-[var(--border)] p-4">
@@ -599,13 +656,17 @@ export function ActivityPhonePanel({
             <User className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
           </div>
           <div>
-            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Origem</p>
+            <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Origem
+            </p>
             <p className="text-sm font-medium">Sua linha</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div>
-            <p className="text-right text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Destino</p>
+            <p className="text-right text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              Destino
+            </p>
             <p className="text-sm font-medium">{leadName}</p>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/10">
@@ -652,8 +713,12 @@ export function ActivityPhonePanel({
             Tentativas anteriores ({attempts.length})
           </p>
           {attempts.map((a) => (
-            <p key={a.attemptNumber} className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              #{a.attemptNumber} — {a.phone} — [{a.status}] {a.notes ? `${a.notes} ` : ''}({a.durationSeconds}s)
+            <p
+              key={a.attemptNumber}
+              className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]"
+            >
+              #{a.attemptNumber} — {a.phone} — [{a.status}] {a.notes ? `${a.notes} ` : ''}(
+              {a.durationSeconds}s)
             </p>
           ))}
         </div>
@@ -668,9 +733,7 @@ export function ActivityPhonePanel({
               Tentativa {currentAttemptNumber} de {MAX_CALL_ATTEMPTS}
             </p>
 
-            <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
-              {selectedPhone}
-            </p>
+            <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">{selectedPhone}</p>
 
             {/* Timer display during call */}
             {isInCall && (
@@ -689,7 +752,13 @@ export function ActivityPhonePanel({
                   title="Ligar via API4COM"
                 >
                   {dialerProvider === 'api4com' ? (
-                    <Image src="/logos/api4com-logo.png" alt="API4COM" width={40} height={40} className="rounded-full brightness-0 invert" />
+                    <Image
+                      src="/logos/api4com-logo.png"
+                      alt="API4COM"
+                      width={40}
+                      height={40}
+                      className="rounded-full brightness-0 invert"
+                    />
                   ) : (
                     <Phone className="h-7 w-7" />
                   )}
@@ -698,9 +767,17 @@ export function ActivityPhonePanel({
 
               {callState === 'calling' && (
                 <>
-                  <div className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-yellow-500 text-white'}`}>
+                  <div
+                    className={`flex h-16 w-16 animate-pulse items-center justify-center rounded-full shadow-lg ${dialerProvider === 'api4com' ? 'bg-gradient-to-br from-cyan-400 to-blue-600' : 'bg-yellow-500 text-white'}`}
+                  >
                     {dialerProvider === 'api4com' ? (
-                      <Image src="/logos/api4com-logo.png" alt="API4COM" width={40} height={40} className="rounded-full brightness-0 invert" />
+                      <Image
+                        src="/logos/api4com-logo.png"
+                        alt="API4COM"
+                        width={40}
+                        height={40}
+                        className="rounded-full brightness-0 invert"
+                      />
                     ) : (
                       <Phone className="h-7 w-7" />
                     )}
@@ -747,6 +824,8 @@ export function ActivityPhonePanel({
 }
 
 function mergeCallNotes(companion?: string, webphone?: string): string {
-  const parts = [companion?.trim(), webphone?.trim()].filter((part): part is string => Boolean(part));
+  const parts = [companion?.trim(), webphone?.trim()].filter((part): part is string =>
+    Boolean(part),
+  );
   return [...new Set(parts)].join('\n');
 }

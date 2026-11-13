@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const record = vi.hoisted(() => ({ recordLiveAmd: vi.fn() }));
-vi.mock('@/features/calls/actions/record-live-amd', () => record);
-
+import { peekActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
 import { startLiveAmdBrowser } from './live-amd-browser';
 import type { AudioPumpHooks } from './live-amd-pump';
+
+const record = vi.hoisted(() => ({ recordLiveAmd: vi.fn() }));
+vi.mock('@/features/calls/actions/record-live-amd', () => record);
 
 type Listener = (event: { data?: unknown }) => void;
 
@@ -15,7 +16,8 @@ function fakeSocket() {
     binaryType: 'blob',
     send: vi.fn(),
     close: vi.fn(),
-    addEventListener: (type: string, fn: Listener) => listeners.set(type, [...(listeners.get(type) ?? []), fn]),
+    addEventListener: (type: string, fn: Listener) =>
+      listeners.set(type, [...(listeners.get(type) ?? []), fn]),
     emit(type: string, data?: unknown) {
       for (const fn of listeners.get(type) ?? []) fn({ data });
     },
@@ -32,7 +34,12 @@ function harness() {
     track: {} as MediaStreamTrack,
     callId: '6f1c2a3e-0000-4000-8000-000000000001',
     onView: () => undefined,
-    fetchImpl: (async () => ({ json: async () => ({ enabled: true, websocketUrl: 'wss://streaming.assemblyai.com/v3/ws?token=t' }) })) as unknown as typeof fetch,
+    fetchImpl: (async () => ({
+      json: async () => ({
+        enabled: true,
+        websocketUrl: 'wss://streaming.assemblyai.com/v3/ws?token=t',
+      }),
+    })) as unknown as typeof fetch,
     openSocket: () => socket as unknown as WebSocket,
     pump: () => ({
       start(cb, h) {
@@ -92,7 +99,9 @@ describe('startLiveAmdBrowser', () => {
     h.stop();
     expect(h.stopPump).toHaveBeenCalled();
     expect(h.socket.send).toHaveBeenLastCalledWith(JSON.stringify({ type: 'Terminate' }));
-    const last = record.recordLiveAmd.mock.calls.at(-1)?.[0] as { telemetry: Record<string, unknown> };
+    const last = record.recordLiveAmd.mock.calls.at(-1)?.[0] as {
+      telemetry: Record<string, unknown>;
+    };
     expect(last.telemetry).toMatchObject({
       bytesSent: 32_000,
       frames: 1,
@@ -112,7 +121,40 @@ describe('startLiveAmdBrowser', () => {
     h.socket.emit('close');
     h.pcm(loud());
     h.stop();
-    const last = record.recordLiveAmd.mock.calls.at(-1)?.[0] as { telemetry: Record<string, unknown> };
+    const last = record.recordLiveAmd.mock.calls.at(-1)?.[0] as {
+      telemetry: Record<string, unknown>;
+    };
     expect(last.telemetry).toMatchObject({ wsError: true, emptyReason: 'ws_error', bytesSent: 0 });
+  });
+});
+
+describe('stopActiveLiveAmd', () => {
+  beforeEach(() => {
+    record.recordLiveAmd.mockReset();
+    record.recordLiveAmd.mockResolvedValue({ success: false, error: 'x' });
+    stopActiveLiveAmd();
+  });
+
+  it('para a escuta em curso sem depender do efeito de phase ended', async () => {
+    const h = harness();
+    await flush();
+    expect(peekActiveLiveAmdStop()).not.toBeNull();
+    stopActiveLiveAmd();
+    expect(h.stopPump).toHaveBeenCalledTimes(1);
+    expect(peekActiveLiveAmdStop()).toBeNull();
+    // Segunda chamada não quebra e não para de novo.
+    stopActiveLiveAmd();
+    expect(h.stopPump).toHaveBeenCalledTimes(1);
+  });
+
+  it('uma escuta nova para a anterior, para não acumular clones da faixa', async () => {
+    const first = harness();
+    await flush();
+    const second = harness();
+    await flush();
+    expect(first.stopPump).toHaveBeenCalledTimes(1);
+    expect(second.stopPump).not.toHaveBeenCalled();
+    stopActiveLiveAmd();
+    expect(second.stopPump).toHaveBeenCalledTimes(1);
   });
 });

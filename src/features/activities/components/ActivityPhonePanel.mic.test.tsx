@@ -2,7 +2,13 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initialWebphoneState, type MicPermission, type WebphoneState } from '@/features/integrations/webphone/webphone-state';
+import {
+  type MicPermission,
+  type WebphoneState,
+  initialWebphoneState,
+} from '@/features/integrations/webphone/webphone-state';
+
+import { ActivityPhonePanel } from './ActivityPhonePanel';
 
 // Clique em Ligar com o microfone ainda não pedido (aba recém-carregada): o
 // pedido sai no mesmo gesto e só então o POST /calls é feito.
@@ -16,10 +22,14 @@ vi.mock('@/features/calls/actions/initiate-call', () => ({
   initiateCall: actions.initiateCall,
   hangupCall: actions.hangupCall,
 }));
-vi.mock('@/features/calls/actions/classify-webphone-call', () => ({ classifyWebphoneCall: vi.fn() }));
+vi.mock('@/features/calls/actions/classify-webphone-call', () => ({
+  classifyWebphoneCall: vi.fn(),
+}));
 vi.mock('../actions/schedule-activity', () => ({ scheduleActivity: vi.fn() }));
 vi.mock('@/features/leads/actions/lead-noshow', () => ({ markMeetingNoShow: vi.fn() }));
-vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({ useCallHangupDetection: () => {} }));
+vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({
+  useCallHangupDetection: () => {},
+}));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({
   useApi4ComWebphone: () => webphone.state,
 }));
@@ -45,6 +55,7 @@ vi.mock('@/features/integrations/webphone/useWebphoneCallContext', () => ({
 }));
 vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: () => 'unknown',
+  useWebphoneCallOutcome: () => ({ leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 }),
 }));
 vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({
   clearWebphoneCallContext: vi.fn(),
@@ -65,9 +76,9 @@ vi.mock('@/features/calls/use-post-call-suggestion', () => ({
     meetingPrefill: null,
   }),
 }));
-vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({ ScheduleMeetingModal: () => null }));
-
-import { ActivityPhonePanel } from './ActivityPhonePanel';
+vi.mock('@/features/integrations/components/ScheduleMeetingModal', () => ({
+  ScheduleMeetingModal: () => null,
+}));
 
 const registered: WebphoneState = { ...initialWebphoneState, registration: 'registered' };
 
@@ -80,7 +91,9 @@ function dock() {
       leadName="Mercante Net"
       leadId="969ea854-1724-4f22-85a3-3633cd314553"
       phoneNumber="11954958486"
-      phones={[{ formatted: '11954958486', raw: '11954958486', label: 'Celular', source: 'lead_telefone' }]}
+      phones={[
+        { formatted: '11954958486', raw: '11954958486', label: 'Celular', source: 'lead_telefone' },
+      ]}
       isSending={false}
       onMarkDone={onMarkDone}
     />
@@ -93,7 +106,9 @@ function renderDock() {
 
 describe('ActivityPhonePanel: microfone no clique em Ligar', () => {
   beforeEach(() => {
-    actions.initiateCall.mockReset().mockResolvedValue({ success: true, data: { callId: 'c-1', providerCallId: 'p-1' } });
+    actions.initiateCall
+      .mockReset()
+      .mockResolvedValue({ success: true, data: { callId: 'c-1', providerCallId: 'p-1' } });
     actions.hangupCall.mockReset().mockResolvedValue({ success: true });
     toasts.error.mockReset();
     webphone.request.mockReset();
@@ -118,7 +133,12 @@ describe('ActivityPhonePanel: microfone no clique em Ligar', () => {
     const user = userEvent.setup();
     const view = renderDock();
     await user.click(screen.getByRole('button', { name: 'Ligar' }));
-    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith(expect.stringMatching(/bloqueou o microfone/), expect.anything()));
+    await waitFor(() =>
+      expect(toasts.error).toHaveBeenCalledWith(
+        expect.stringMatching(/bloqueou o microfone/),
+        expect.anything(),
+      ),
+    );
     expect(actions.initiateCall).not.toHaveBeenCalled();
 
     // Liberou no navegador e clicou em "Tentar de novo" no pill: o Ligar volta a funcionar.
