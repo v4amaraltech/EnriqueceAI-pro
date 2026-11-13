@@ -9819,6 +9819,17 @@ export type Database = {
           lead_id: string;
         }[];
       };
+      merge_calls_metadata: {
+        Args: {
+          p_id: string;
+          p_patch: Json;
+          p_org_id?: string;
+          p_sdr_disposition?: Database['public']['Enums']['call_disposition'];
+          p_only_if_disposition_null?: boolean;
+          p_only_if_ai_outcome_status?: string;
+        };
+        Returns: boolean;
+      };
       merge_interactions_metadata: { Args: { p_items: Json }; Returns: number };
       normalizar_celular_br: { Args: { p_tel: string }; Returns: string };
       normalize_br_phone: { Args: { raw: string }; Returns: string };
