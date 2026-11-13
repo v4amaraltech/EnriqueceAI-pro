@@ -54,12 +54,14 @@ const rule = (
 ): CauseRule => ({ outcome, disposition, next_activity, requiresUnanswered });
 
 /**
- * NUMBER_CHANGED é caixa postal (guia oficial API4COM e PR598), mesmo que o SDR tenha
- * marcado historicamente "não atendeu". Número inválido não insiste (próxima atividade none).
- * USER_BUSY vira no_answer porque call_disposition não tem busy.
+ * NUMBER_CHANGED é "não atendeu" (decisão do Vinicius, 12/11): quando o SDR registrou
+ * desfecho, foram 43 no_answer e nenhuma caixa postal. O guia API4COM e o PR598
+ * continuam tratando a causa como caixa postal na telefonia (rótulo e status no_contact);
+ * este caminho do log sombra segue a prática do SDR. Número inválido não insiste
+ * (próxima atividade none). USER_BUSY vira no_answer porque call_disposition não tem busy.
  */
 const CAUSE_RULES: Readonly<Record<string, CauseRule>> = {
-  NUMBER_CHANGED: rule('voicemail', 'voicemail', RETRY_PHONE, false),
+  NUMBER_CHANGED: rule('no_answer', 'no_answer', RETRY_PHONE, false),
   NO_ANSWER: rule('no_answer', 'no_answer', RETRY_PHONE, true),
   NO_USER_RESPONSE: rule('no_answer', 'no_answer', RETRY_PHONE, true),
   ALLOTTED_TIMEOUT: rule('no_answer', 'no_answer', RETRY_PHONE, true),

@@ -190,16 +190,18 @@ Idempotente pelo `UNIQUE (call_id)`: a segunda chamada vira `already_logged`.
 
 | Causa | Condição | outcome (snapshot) | disposition | próxima atividade |
 |-------|----------|--------------------|-------------|-------------------|
-| `NUMBER_CHANGED` | sempre | voicemail | voicemail | retry phone |
+| `NUMBER_CHANGED` | sempre | no_answer | no_answer | retry phone |
 | `NO_ANSWER`, `NO_USER_RESPONSE`, `ALLOTTED_TIMEOUT` | sem answered_at | no_answer | no_answer | retry phone |
 | `USER_BUSY` | sem answered_at | busy | no_answer | retry phone |
 | `CALL_REJECTED` | sem answered_at | rejected | no_answer | retry phone |
 | `UNALLOCATED_NUMBER`, `INVALID_NUMBER_FORMAT` | mesmo com answered_at | invalid_number | technical_failure | none |
 | `NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE` | sem answered_at | technical_failure | technical_failure | retry phone |
 
-`NUMBER_CHANGED` é caixa postal (guia API4COM e PR598), mesmo que o SDR tenha marcado historicamente
-"não atendeu". Confiança 1, `lead_status` sempre nulo. Veredito: `already_dispositioned` (SDR ou fluxo antigo
-da IA), `no_lead`, ou `would_apply`, sempre com a proposta preenchida.
+`NUMBER_CHANGED` é "não atendeu" (decisão de 12/11, alinhada ao que o SDR registrou: 43 no_answer e
+nenhuma caixa postal). O guia API4COM e o PR598 continuam tratando essa causa como caixa postal na
+telefonia (rótulo e status `no_contact`); este caminho do log sombra não muda isso. Confiança 1,
+`lead_status` sempre nulo. Veredito: `already_dispositioned` (SDR ou fluxo antigo da IA), `no_lead`,
+ou `would_apply`, sempre com a proposta preenchida.
 
 Medição desde o deploy do motor (11/11, 06:41, V4): 702 ligações com esses sinais, 478 com lead, 64 já com desfecho; 414 seriam
 `would_apply` e 224 `no_lead`.

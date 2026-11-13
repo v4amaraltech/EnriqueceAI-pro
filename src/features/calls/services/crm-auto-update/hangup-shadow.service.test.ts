@@ -121,7 +121,7 @@ describe('runHangupCrmShadow', () => {
       verdict: 'would_apply',
       skip_reason: null,
       rules_version: 'hangup_v1',
-      proposed_changes: { disposition: 'voicemail', next_activity: { type: 'retry', channel: 'phone' }, lead_status: null },
+      proposed_changes: { disposition: 'no_answer', next_activity: { type: 'retry', channel: 'phone' }, lead_status: null },
       input_snapshot: {
         source: 'hangup_deterministic',
         hangup_cause: 'NUMBER_CHANGED',
@@ -130,7 +130,7 @@ describe('runHangupCrmShadow', () => {
         connected: false,
         status: 'no_contact',
         sdr_disposition: null,
-        outcome: 'voicemail',
+        outcome: 'no_answer',
         confidence: 1,
         legacy_ai_outcome_applied: false,
       },
@@ -151,7 +151,7 @@ describe('runHangupCrmShadow', () => {
     expect(tables.crm_auto_update_shadow_log?.[0]).toMatchObject({
       verdict: 'skip',
       skip_reason: 'already_dispositioned',
-      proposed_changes: { disposition: 'voicemail' },
+      proposed_changes: { disposition: 'no_answer' },
       input_snapshot: { sdr_disposition: 'no_answer' },
     });
   });

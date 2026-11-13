@@ -8,7 +8,7 @@ const NONE = { type: 'none', channel: null };
 
 describe('classifyHangupForCrm', () => {
   it.each([
-    ['NUMBER_CHANGED', 'voicemail', 'voicemail', RETRY],
+    ['NUMBER_CHANGED', 'no_answer', 'no_answer', RETRY],
     ['NO_ANSWER', 'no_answer', 'no_answer', RETRY],
     ['NO_USER_RESPONSE', 'no_answer', 'no_answer', RETRY],
     ['ALLOTTED_TIMEOUT', 'no_answer', 'no_answer', RETRY],
@@ -27,11 +27,11 @@ describe('classifyHangupForCrm', () => {
     });
   });
 
-  it('NUMBER_CHANGED com e sem answered_at vira caixa postal', () => {
+  it('NUMBER_CHANGED com e sem answered_at vira não atendeu', () => {
     for (const answeredAt of [null, '', ANSWERED]) {
       const r = classifyHangupForCrm({ hangupCause: 'NUMBER_CHANGED', answeredAt, durationSeconds: 8 });
-      expect(r?.outcome).toBe('voicemail');
-      expect(r?.proposed.disposition).toBe('voicemail');
+      expect(r?.outcome).toBe('no_answer');
+      expect(r?.proposed.disposition).toBe('no_answer');
     }
   });
 
@@ -72,7 +72,7 @@ describe('classifyHangupForCrm', () => {
   it('atendida com 29 s e NUMBER_CHANGED classifica', () => {
     expect(
       classifyHangupForCrm({ hangupCause: 'NUMBER_CHANGED', answeredAt: ANSWERED, durationSeconds: 29 })?.outcome,
-    ).toBe('voicemail');
+    ).toBe('no_answer');
   });
 
   it('não atendida longa ainda classifica (o JEV não pega)', () => {
