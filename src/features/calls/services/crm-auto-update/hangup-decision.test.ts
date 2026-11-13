@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyHangupForCrm, decideHangupCrm, isAnsweredTimestamp } from './hangup-decision';
+import { classifyHangupForCrm, decideHangupCrm, isAnsweredTimestamp, shouldApplyLiveHangupNoAnswer } from './hangup-decision';
 
 const ANSWERED = '2026-11-12T13:00:05.000Z';
 const RETRY = { type: 'retry', channel: 'phone' };
@@ -137,5 +137,70 @@ describe('decideHangupCrm', () => {
       proposed: classification.proposed,
       skip_reason: 'no_lead',
     });
+  });
+});
+
+describe('shouldApplyLiveHangupNoAnswer', () => {
+  const call = { lead_id: 'lead-1', sdr_disposition: null, legacy_ai_outcome_applied: false };
+  const classify = (hangupCause: string, answeredAt: string | null = null, durationSeconds = 0) =>
+    classifyHangupForCrm({ hangupCause, answeredAt, durationSeconds })!;
+  const would = (c = classify('NUMBER_CHANGED')) => decideHangupCrm({ classification: c, call });
+
+  it.each([
+    ['NUMBER_CHANGED', null, 0],
+    ['NUMBER_CHANGED', ANSWERED, 29],
+    ['NO_ANSWER', null, 0],
+    ['NO_USER_RESPONSE', null, 0],
+    ['ALLOTTED_TIMEOUT', null, 0],
+    ['USER_BUSY', null, 5],
+    ['CALL_REJECTED', null, 0],
+  ] as const)('%s (answered_at=%s, %ss): live + would_apply escreve no_answer', (cause, answeredAt, duration) => {
+    const classification = classify(cause, answeredAt, duration);
+    const decision = decideHangupCrm({ classification, call });
+    expect(decision.verdict).toBe('would_apply');
+    expect(decision.proposed.disposition).toBe('no_answer');
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'live', decision, classification })).toBe(true);
+  });
+
+  it.each([
+    ['UNALLOCATED_NUMBER', null, 0],
+    ['INVALID_NUMBER_FORMAT', null, 0],
+    ['UNALLOCATED_NUMBER', ANSWERED, 12],
+    ['NORMAL_TEMPORARY_FAILURE', null, 0],
+    ['RECOVERY_ON_TIMER_EXPIRE', null, 0],
+  ] as const)('%s (answered_at=%s): would_apply no shadow, mas live NÃO escreve', (cause, answeredAt, duration) => {
+    const classification = classify(cause, answeredAt, duration);
+    const decision = decideHangupCrm({ classification, call });
+    expect(decision.verdict).toBe('would_apply');
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'live', decision, classification })).toBe(false);
+  });
+
+  it('ORIGINATOR_CANCEL, NORMAL_CLEARING curta e atendida longa não classificam (helper nem é chamado com null)', () => {
+    expect(classifyHangupForCrm({ hangupCause: 'ORIGINATOR_CANCEL', answeredAt: null, durationSeconds: 0 })).toBeNull();
+    expect(classifyHangupForCrm({ hangupCause: 'NORMAL_CLEARING', answeredAt: ANSWERED, durationSeconds: 15 })).toBeNull();
+    expect(classifyHangupForCrm({ hangupCause: 'NUMBER_CHANGED', answeredAt: ANSWERED, durationSeconds: 30 })).toBeNull();
+    expect(classifyHangupForCrm({ hangupCause: 'NO_ANSWER', answeredAt: ANSWERED, durationSeconds: 5 })).toBeNull();
+  });
+
+  it('modo shadow ou off: não escreve, mesmo com NUMBER_CHANGED would_apply', () => {
+    const classification = classify('NUMBER_CHANGED');
+    const decision = would(classification);
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'shadow', decision, classification })).toBe(false);
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'off', decision, classification })).toBe(false);
+  });
+
+  it('SDR já registrou ou fluxo antigo da IA: não escreve', () => {
+    const classification = classify('NUMBER_CHANGED');
+    const already = decideHangupCrm({ classification, call: { ...call, sdr_disposition: 'no_answer' } });
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'live', decision: already, classification })).toBe(false);
+    const legacy = decideHangupCrm({ classification, call: { ...call, legacy_ai_outcome_applied: true } });
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'live', decision: legacy, classification })).toBe(false);
+  });
+
+  it('sem lead: não escreve', () => {
+    const classification = classify('USER_BUSY');
+    const decision = decideHangupCrm({ classification, call: { ...call, lead_id: null } });
+    expect(decision.verdict).toBe('skip');
+    expect(shouldApplyLiveHangupNoAnswer({ mode: 'live', decision, classification })).toBe(false);
   });
 });

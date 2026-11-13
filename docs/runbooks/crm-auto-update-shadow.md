@@ -106,10 +106,11 @@ propondo `not_interested → answered_no_progress`, próxima atividade `none`. N
 transcrição não diz QUEM falou cada frase: "daqui uns dias eu te ligo" do SDR viraria retorno para quem
 recusou. Revisar quando houver atribuição de speaker.
 
-## Escrita live: só caixa postal
+## Escrita live: caixa postal (JEV) e não atendeu (hangup)
 
-Desde a migration `20261112200000`, o modo live escreve no CRM, com escopo estreito. Todo o resto segue
-só no log, igual ao shadow.
+Desde a migration `20261112200000`, o modo live escreve no CRM, com escopo estreito. Esta seção cobre
+a escrita a partir da qualificação JEV (caixa postal). A escrita de "não atendeu" pelo hangup
+determinístico está em "Caminho hangup" abaixo. Todo o resto segue só no log, igual ao shadow.
 
 ### Escopo
 
@@ -175,7 +176,7 @@ Migration `20261112200000` PRIMEIRO, depois o deploy do código. Se o código su
 `applied`/`applied_at` falha (`log_failed`); se isso acontecer depois de um UPDATE em calls, o marcador permite
 gravar o log na próxima execução. Esta versão não liga nenhuma org: incluir uma org no live é decisão separada.
 
-## Caminho hangup (sem JEV): só shadow
+## Caminho hangup (sem JEV)
 
 Código: `hangup-decision.ts` (classificação pura) e `hangup-shadow.service.ts` (`runHangupCrmShadow` e o
 wrapper `triggerHangupCrmShadow`). Migration: `supabase/migrations/20261112220000_crm_auto_update_hangup_shadow.sql`.
@@ -183,8 +184,9 @@ wrapper `triggerHangupCrmShadow`). Migration: `supabase/migrations/2026111222000
 O motor JEV só pega ligação atendida com 30 s ou mais. As demais com causa de hangup clara passam a ter
 proposta no mesmo log, com `rules_version = 'hangup_v1'`, `qualification_id` nulo e
 `input_snapshot.source = 'hangup_deterministic'`. Disparo: webhook API4COM (os dois ramos de hangup, depois
-do UPDATE/INSERT) e reconcile (quando o hangup fica persistido). Portão de org: `crm_auto_update_v1` (shadow).
-Idempotente pelo `UNIQUE (call_id)`: a segunda chamada vira `already_logged`.
+do UPDATE/INSERT) e reconcile (quando o hangup fica persistido). Portão de org: `crm_auto_update_v1` (shadow) para o log; a escrita live exige também a org em
+`crm_auto_update_v1_live.allow_org_ids`. Idempotente pelo `UNIQUE (call_id)`: a segunda chamada
+vira `already_logged`.
 
 ### Mapeamento
 
@@ -214,11 +216,66 @@ Medição desde o deploy do motor (11/11, 06:41, V4): 702 ligações com esses s
 - `ORIGINATOR_CANCEL` (344): o SDR desistiu e os desfechos registrados se dividem (sinal misto).
 - Causa de "não atendeu" com answered_at preenchido (contraditório), causa nula ou desconhecida.
 
-### Sem escrita no CRM
+### Escrita live: só "não atendeu"
 
-Sempre `mode = 'shadow'` e `applied = false`, mesmo com a org em live. Não escreve `calls.sdr_disposition`,
-`calls.metadata`, `leads`, `scheduled_activities` nem `interactions`, e não passa por `shouldApplyLiveVoicemail`.
-Sem backfill das ligações antigas.
+Quando a org está em live, `shouldApplyLiveHangupNoAnswer` (`hangup-decision.ts`) escreve no CRM se, e
+somente se:
+
+- a org está em `allow_org_ids` de `crm_auto_update_v1` E de `crm_auto_update_v1_live` (modo `live`);
+- a fonte é `hangup_v1` (este caminho; não passa pelo JEV);
+- a classe é um sinal claro de não atendimento: `NUMBER_CHANGED`, `NO_ANSWER`, `NO_USER_RESPONSE`,
+  `ALLOTTED_TIMEOUT`, `USER_BUSY` ou `CALL_REJECTED` (outcomes `no_answer`, `busy` ou `rejected`);
+- o veredito é `would_apply` (sem `sdr_disposition`, sem desfecho do fluxo antigo da IA, com lead).
+
+Ficam de fora, mesmo em live (só o log, `mode = 'live'`, `applied = false`): falha técnica
+(`NORMAL_TEMPORARY_FAILURE`, `RECOVERY_ON_TIMER_EXPIRE`) e número inválido (`UNALLOCATED_NUMBER`,
+`INVALID_NUMBER_FORMAT`). Já não classificam, como antes: `ORIGINATOR_CANCEL`, `NORMAL_CLEARING`
+atendida curta, atendida com 30 s ou mais, causa nula ou desconhecida.
+
+`enabled = true` global na flag live continua ignorado. Nenhuma migration nova: o CHECK de
+`applied` (`applied = true` só com `mode = 'live'` e `verdict = 'would_apply'`) e o
+`qualification_id` anulável (`20261112220000`) já cobrem esta escrita. Sem backfill das ligações antigas.
+
+### O que é escrito
+
+Uma única escrita fora do log, condicional, com o valor já existente do enum `call_disposition`:
+
+```sql
+UPDATE calls
+SET sdr_disposition = 'no_answer',
+    metadata = <metadata atual> || {"crm_auto_update": {...}},
+    updated_at = now()
+WHERE id = :call_id AND org_id = :org_id AND sdr_disposition IS NULL;
+```
+
+O marcador `calls.metadata.crm_auto_update = {applied, disposition: 'no_answer', applied_at,
+rules_version: 'hangup_v1', source: 'crm_auto_update_v1_live'}` vai no MESMO UPDATE (sem
+`qualification_id`). Ele é distinto do marcador de caixa postal JEV (`disposition: 'voicemail'`,
+`rules_version: 'v1.1'`) e de `metadata.ai_outcome`.
+
+Não cria `scheduled_activities` (a cadência segue sozinha, `next_activity = retry phone`), não muda
+`leads.status`, não escreve em `interactions`. Se o UPDATE pega 0 linhas (o SDR chegou na frente),
+nada é forçado: o log vira `skip` com `already_dispositioned` e
+`input_snapshot.live_write_conflict = true`.
+
+O log nasce com `mode = 'live'`, `applied = true` e `applied_at` (mesmo valor do marcador). Org só
+em shadow continua com `mode = 'shadow'` e `applied = false`.
+
+### Idempotência e recuperação
+
+- Log já existe: `already_logged`, nada é escrito (o log é append-only; ligações já logadas no
+  shadow não ganham escrita live depois).
+- UPDATE falhou com erro de banco: nada é gravado, nem o log (`crm_write_failed`), para o retry
+  decidir de novo.
+- UPDATE passou e o INSERT do log falhou: na próxima execução, sem log e com
+  `sdr_disposition = 'no_answer'` + marcador `hangup_v1`, o worker NÃO escreve no CRM de novo e
+  grava só o log com `applied = true`, `applied_at` do marcador e
+  `input_snapshot.recovered_from_marker = true` (`applied_recovered`). Um marcador JEV de
+  caixa postal não é tratado como escrita hangup.
+- `sdr_disposition` preenchido sem o nosso marcador hangup_v1: `skip already_dispositioned`.
+
+A view de comparação conta essas linhas em `auto_applied` / `applied_live`, fora das taxas de
+concordância com o SDR, igual à escrita de caixa postal.
 
 ```sql
 SELECT input_snapshot->>'hangup_cause' AS causa, verdict, skip_reason, count(*)

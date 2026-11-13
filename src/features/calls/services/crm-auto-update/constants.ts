@@ -7,9 +7,11 @@
  *            Calcula o que mudaria e grava só em crm_auto_update_shadow_log.
  *  - live:   exige shadow ligado E a org listada EXPLICITAMENTE em allow_org_ids de
  *            CRM_AUTO_UPDATE_LIVE_FLAG_KEY. `enabled = true` global na flag live não liga
- *            nenhuma org. Nesta versão o live escreve no CRM SÓ o desfecho de caixa postal
- *            (outcome JEV 'voicemail') com confiança >= CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE.
- *            O resto segue só no log, como no shadow (ver shouldApplyLiveVoicemail e o service).
+ *            nenhuma org. O live escreve no CRM em dois caminhos estreitos:
+ *            (1) desfecho JEV 'voicemail' com confiança >= CRM_AUTO_UPDATE_LIVE_VOICEMAIL_MIN_CONFIDENCE
+ *            (shouldApplyLiveVoicemail); (2) classificação hangup_v1 de não atendimento
+ *            (shouldApplyLiveHangupNoAnswer): NUMBER_CHANGED, não atendeu, ocupado ou recusou,
+ *            sempre calls.sdr_disposition = 'no_answer'. O resto segue só no log.
  */
 export const CRM_AUTO_UPDATE_FLAG_KEY = 'crm_auto_update_v1';
 export const CRM_AUTO_UPDATE_LIVE_FLAG_KEY = 'crm_auto_update_v1_live';
@@ -47,3 +49,6 @@ export const CRM_AUTO_UPDATE_HANGUP_RULES_VERSION = 'hangup_v1';
 
 /** input_snapshot.source das linhas do caminho hangup. */
 export const CRM_AUTO_UPDATE_HANGUP_SOURCE = 'hangup_deterministic';
+
+/** Desfecho escrito pelo live do hangup_v1. Valor do enum call_disposition ("Não atendeu"). */
+export const CRM_AUTO_UPDATE_LIVE_HANGUP_DISPOSITION = 'no_answer';
