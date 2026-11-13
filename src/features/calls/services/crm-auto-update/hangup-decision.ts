@@ -1,6 +1,7 @@
 // Classificação PURA (sem I/O) do desfecho de uma ligação pelo sinal determinístico
-// do hangup da API4COM (hangup_cause + answered_at + duração). Só alimenta o log
-// sombra (crm_auto_update_shadow_log, rules_version 'hangup_v1'). Nunca escreve no CRM.
+// do hangup da API4COM (hangup_cause + answered_at + duração). Alimenta o log
+// sombra (crm_auto_update_shadow_log, rules_version 'hangup_v1') e, no modo live,
+// a porta da escrita de não atendeu (a escrita em si fica no service).
 //
 // Cobre só o que o motor JEV não pega: ligação não atendida, ou atendida com menos de
 // ENGINE_MIN_DURATION_SECONDS. Atendida com 30 s ou mais é do JEV (UNIQUE (call_id) no log).
@@ -14,7 +15,7 @@
 import type { CallDisposition } from '../../types';
 import { ENGINE_MIN_DURATION_SECONDS } from '../transcription-engine/constants';
 
-import type { CrmAutoUpdateSkipReason, ProposedChanges } from './decision';
+import type { CrmAutoUpdateMode, CrmAutoUpdateSkipReason, ProposedChanges } from './decision';
 
 /** Desfecho interno gravado no input_snapshot. Mais fino que a disposition (ex.: busy). */
 export type HangupOutcome = 'voicemail' | 'no_answer' | 'busy' | 'rejected' | 'invalid_number' | 'technical_failure';
@@ -127,4 +128,28 @@ export function decideHangupCrm(args: {
   }
   if (!call.lead_id) return { verdict: 'skip', proposed, skip_reason: 'no_lead' };
   return { verdict: 'would_apply', proposed, skip_reason: null };
+}
+
+/** Outcomes cuja escrita live preenche sdr_disposition = no_answer. */
+const LIVE_NO_ANSWER_OUTCOMES: ReadonlySet<HangupOutcome> = new Set(['no_answer', 'busy', 'rejected']);
+
+/**
+ * Porta da escrita live de "não atendeu". Pura. Só verdadeira quando:
+ *  - modo live (org em crm_auto_update_v1_live.allow_org_ids, e também no shadow);
+ *  - veredito would_apply (sem desfecho prévio, com lead);
+ *  - o outcome é sinal claro de não atendimento (NUMBER_CHANGED, não atendeu,
+ *    ocupado ou recusou). Falha técnica e número inválido ficam só no log.
+ * A disposition proposta é sempre no_answer (o enum call_disposition não tem busy).
+ */
+export function shouldApplyLiveHangupNoAnswer(args: {
+  mode: CrmAutoUpdateMode;
+  decision: HangupCrmDecision;
+  classification: HangupClassification;
+}): boolean {
+  return (
+    args.mode === 'live' &&
+    args.decision.verdict === 'would_apply' &&
+    LIVE_NO_ANSWER_OUTCOMES.has(args.classification.outcome) &&
+    args.decision.proposed.disposition === 'no_answer'
+  );
 }
