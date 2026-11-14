@@ -136,11 +136,17 @@ describe('CallResultModal', () => {
 
     it('abaixo de 50s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
       renderModal({ connected: true, durationSeconds: 43 });
-      expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+      expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
       expect(screen.queryByText('Atendida')).not.toBeInTheDocument();
       // O SDR continua escolhendo o desfecho.
       expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeInTheDocument();
       expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
+    });
+
+    it('atendida curta já vem com Caixa postal marcada, o SDR confirma', () => {
+      renderModal({ connected: true, durationSeconds: 11 });
+      expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeChecked();
     });
 
     it('a partir de 50s volta a ser "Atendida"', () => {
@@ -261,8 +267,9 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
       onConclude,
     };
     const { rerender } = render(<CallResultModal {...base} />);
-    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
+    // Atendida curta: Caixa postal já vem marcada, o SDR confirma.
+    expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeChecked();
 
     rerender(<CallResultModal {...base} connected={false} durationSeconds={0} />);
 
@@ -482,7 +489,7 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
         meetingPrefill: null,
       },
     });
-    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+    expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
     expect(screen.getByText('02:27')).toBeInTheDocument();
   });
 });

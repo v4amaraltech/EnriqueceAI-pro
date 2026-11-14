@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { effectiveCallSeconds, hangupReasonLabel, leadAnswerFromCallRow, leadConnected } from './webphone-lead-answer';
+import { effectiveCallSeconds, hangupReasonLabel, leadAnswerFromCallRow, leadAnsweredByServer, leadConnected } from './webphone-lead-answer';
 
 describe('leadAnswerFromCallRow', () => {
   it('answered_at presente → atendida (mesmo com hangup_cause normal)', () => {
@@ -68,5 +68,13 @@ describe('hangupReasonLabel', () => {
     expect(hangupReasonLabel(null)).toBeNull();
     expect(hangupReasonLabel(undefined)).toBeNull();
     expect(hangupReasonLabel('  ')).toBeNull();
+  });
+});
+
+describe('leadAnsweredByServer', () => {
+  it('só o answered_at do webhook vale: locução da operadora na perna do ramal não é Atendida', () => {
+    expect(leadAnsweredByServer('answered')).toBe(true);
+    expect(leadAnsweredByServer('unknown')).toBe(false);
+    expect(leadAnsweredByServer('not_answered')).toBe(false);
   });
 });

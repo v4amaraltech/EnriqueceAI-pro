@@ -62,6 +62,7 @@ import {
   type LeadAnswer,
   effectiveCallSeconds,
   hangupReasonLabel,
+  leadAnsweredByServer,
   leadConnected,
 } from './webphone-lead-answer';
 import { contextBelongsToFinished, shouldFollowNewContext } from './webphone-panel-follow';
@@ -473,7 +474,7 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   const resultDbCallId = resultCall?.context?.callId ?? null;
   const suggestion = usePostCallSuggestion({
     callId: resultDbCallId,
-    connected: resultCall ? leadConnected(leadAnswer, resultCall.answered) : false,
+    connected: resultCall ? leadAnsweredByServer(leadAnswer) : false,
     enabled: Boolean(!showingDialing && resultCall?.context),
     localLiveAmd: liveAmdCallId === resultDbCallId ? liveAmd : null,
   });
@@ -575,12 +576,13 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
       {!showingDialing && resultCall?.context && (
         <CallResultModal
           open
+          callId={resultCall.context.callId}
           onClose={() => finish(resultCall)}
           leadName={resultCall.context.leadName ?? resultCall.remoteNumber ?? 'Lead'}
           leadId={resultCall.context.leadId ?? undefined}
           phoneLabel={resultCall.context.phone ?? resultCall.remoteNumber}
           durationSeconds={effectiveCallSeconds(leadAnswer, resultCall.talkSeconds)}
-          connected={leadConnected(leadAnswer, resultCall.answered)}
+          connected={leadAnsweredByServer(leadAnswer)}
           suggestion={suggestion}
           dismissible={false}
           initialNotes={ctxState.notes}
@@ -1006,7 +1008,11 @@ function FinishedView({
           )}
         </div>
         <p className="shrink-0 text-right font-mono text-lg tabular-nums">
-          {leadConnected(leadAnswer, call.answered) ? (
+          {(
+            call.context
+              ? leadAnsweredByServer(leadAnswer)
+              : leadConnected(leadAnswer, call.answered)
+          ) ? (
             formatDuration(call.talkSeconds)
           ) : (
             <span className="text-sm text-amber-600">Não atendida</span>
