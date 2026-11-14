@@ -15,7 +15,7 @@ import { captureGmailReply } from '@/features/lead-messages/gmail-reply';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
-import { checkThreadForReplyOrBounce, mailboxCandidates } from '../services/reply-detection.service';
+import { inspectGmailThread, mailboxCandidates } from '../services/reply-detection.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 
 const REPLY_CHECK_DAYS = 30;
@@ -114,16 +114,20 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
   // rotation (Laza/Falcare, 26/10–07/11/2026: 143 replies + notifications each).
   // Nulls are stripped from the .in() array so they can't poison the filter.
   const alreadyProcessedMap = new Set<string>();
+  const alreadyReplyMessageIds = new Set<string>();
   const uniqueLeadIds = [...new Set(sentInteractions.map((i) => i.lead_id).filter((v): v is string => v != null))];
 
   if (uniqueLeadIds.length > 0) {
     const { data: processedInteractions } = (await from(supabase, 'interactions')
-      .select('cadence_id, lead_id')
+      .select('cadence_id, lead_id, external_id')
       .in('lead_id', uniqueLeadIds)
-      .in('type', ['replied', 'bounced'])) as { data: Array<{ cadence_id: string | null; lead_id: string }> | null };
+      .in('type', ['replied', 'bounced'])) as {
+      data: Array<{ cadence_id: string | null; lead_id: string; external_id: string | null }> | null;
+    };
 
     for (const pi of processedInteractions ?? []) {
       alreadyProcessedMap.add(pairKey(pi.cadence_id, pi.lead_id));
+      if (pi.external_id) alreadyReplyMessageIds.add(pi.external_id);
     }
   }
 
@@ -159,9 +163,9 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
       const threadId = await getThreadId(interaction, accessToken);
       if (!threadId) continue; // message not in this mailbox
 
-      const detection = await checkThreadForReplyOrBounce(threadId, accessToken, interaction.external_id);
-      if (detection === 'not_found') continue; // thread belongs to another mailbox
-      if (detection === 'error') {
+      const detection = await inspectGmailThread(threadId, accessToken, interaction.external_id);
+      if (detection.status === 'not_found') continue; // thread belongs to another mailbox
+      if (detection.status === 'error') {
         // Transient (or a 401/403 on this mailbox) — retried on the next rotation.
         console.warn(`[reply-check] Gmail error for interaction=${interaction.id} mailbox=${userId} — will retry`);
         return;
@@ -173,19 +177,23 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
         patch.thread_id = threadId;
       }
 
-      if (detection === 'none') return;
+      if (detection.status === 'none') return;
 
       const pair = pairKey(interaction.cadence_id, interaction.lead_id);
       if (recordedPairs.has(pair)) return;
-      recordedPairs.add(pair);
 
-      if (detection === 'bounce') {
+      if (detection.status === 'bounce') {
+        recordedPairs.add(pair);
         await recordBounce(supabase, interaction);
         await checkAndAutoBlacklistDomain(supabase, interaction);
         found++;
         console.warn(`[reply-check] Bounce detected: interaction=${interaction.id} lead=${interaction.lead_id} cadence=${interaction.cadence_id}`);
       } else {
-        await recordReply(supabase, interaction);
+        if (alreadyReplyMessageIds.has(detection.messageId)) return;
+        recordedPairs.add(pair);
+        alreadyReplyMessageIds.add(detection.messageId);
+        const recorded = await recordReply(supabase, interaction, detection.messageId);
+        if (!recorded) return;
         const orgId = leadOrg.get(interaction.lead_id);
         if (orgId) {
           await captureGmailReply({
@@ -194,6 +202,7 @@ export async function checkEmailReplies(): Promise<ActionResult<{ found: number 
             accessToken,
             threadId,
             sentMessageId: interaction.external_id,
+            replyMessageId: detection.messageId,
           });
         }
         found++;
@@ -303,7 +312,8 @@ async function getThreadId(
 async function recordReply(
   supabase: SupabaseClient,
   sentInteraction: SentInteraction,
-): Promise<void> {
+  replyMessageId?: string | null,
+): Promise<boolean> {
   // Get org_id + owner + name from the lead (owner/name used for the SDR notification)
   const { data: lead } = (await from(supabase, 'leads')
     .select('org_id, assigned_to, nome_fantasia, razao_social, cnpj')
@@ -318,7 +328,19 @@ async function recordReply(
       } | null;
     };
 
-  if (!lead) return;
+  if (!lead) return false;
+
+  // Dedupe pela mensagem do Gmail: o mesmo reply não vira outra linha
+  // se o par cadence/lead falhar de novo.
+  if (replyMessageId) {
+    const { data: existing } = (await from(supabase, 'interactions')
+      .select('id')
+      .eq('org_id', lead.org_id)
+      .eq('type', 'replied')
+      .eq('external_id', replyMessageId)
+      .maybeSingle()) as { data: { id: string } | null };
+    if (existing) return false;
+  }
 
   // Create replied interaction. H2: inherit step_id + ab_variant from the
   // originating 'sent' so the A/B panel (which filters by step_id and buckets by
@@ -333,10 +355,12 @@ async function recordReply(
       step_id: sentInteraction.step_id,
       channel: 'email',
       type: 'replied',
+      external_id: replyMessageId ?? null,
       message_content: null,
       metadata: {
         detected_by: 'gmail_thread_poll',
         sent_interaction_id: sentInteraction.id,
+        ...(replyMessageId ? { reply_gmail_message_id: replyMessageId } : {}),
         ...(replyAbVariant ? { ab_variant: replyAbVariant } : {}),
       },
     } as Record<string, unknown>);
@@ -382,6 +406,7 @@ async function recordReply(
       console.error(`[reply-check] Failed to notify reply for lead=${sentInteraction.lead_id}:`, notifErr);
     }
   }
+  return true;
 }
 
 /** Record a bounce: create bounced interaction, mark lead, stop the originating cadence, notify SDR */
