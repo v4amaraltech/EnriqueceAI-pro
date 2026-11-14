@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   CheckCircle2,
@@ -17,6 +17,12 @@ import Image from 'next/image';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import type { LeadAnswer } from '@/features/integrations/webphone/webphone-lead-answer';
+import { CallLeadCard } from '@/features/cockpit/components/CallLeadCard';
+import { useLeadHistory } from '@/features/cockpit/components/use-lead-history';
+import { buildLeadCard, type LeadCardModel } from '@/features/cockpit/utils/lead-card';
+import type { CallHistoryEntry } from '@/features/cockpit/utils/call-history';
+
+import { fetchDialerLeadCard } from '../actions/fetch-dialer-lead-card';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -46,6 +52,17 @@ interface DialerCallPanelProps {
   leadAnswer?: LeadAnswer;
   /** Discagem automática cuidando da vez: esconde o botão de ligar manual. */
   manualDialHidden?: boolean;
+  /**
+   * Flag `call_lead_card_v1`. Ligada, mostra o cartão e o histórico no painel
+   * do discador, sem abrir o Sheet do CallSidePanel.
+   */
+  leadCardEnabled?: boolean;
+  /** Fixture de teste: não busca o cartão no servidor. */
+  leadCard?: LeadCardModel;
+  /** Fixture de teste ou histórico já carregado. */
+  history?: CallHistoryEntry[];
+  /** Relógio do cartão (tempo de perda). Ausente = agora. */
+  cardNow?: Date;
   onComplete: (callStatus: string, notes: string, durationSeconds: number) => void;
   onSkip: () => void;
   onInitiateCall: (phone: string) => void;
@@ -60,6 +77,10 @@ export function DialerCallPanel({
   callState,
   leadAnswer = 'unknown',
   manualDialHidden = false,
+  leadCardEnabled = false,
+  leadCard,
+  history,
+  cardNow,
   onComplete,
   onSkip,
   onInitiateCall,
@@ -73,6 +94,11 @@ export function DialerCallPanel({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [attempts, setAttempts] = useState<CallAttempt[]>([]);
   const [selectedPhone, setSelectedPhone] = useState(item.phone ?? '');
+  const [fetchedCard, setFetchedCard] = useState<LeadCardModel | null>(null);
+  const [cardStatus, setCardStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const historyLeadId = leadCardEnabled ? item.leadId : '';
+  const timeline = useLeadHistory(historyLeadId, history);
+  const displayedCard = leadCard ?? fetchedCard;
 
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
@@ -87,6 +113,36 @@ export function DialerCallPanel({
     setAttempts([]);
     setElapsed(0);
   }, [item.enrollmentId, item.phone]);
+
+  useEffect(() => {
+    if (!leadCardEnabled || leadCard) {
+      setFetchedCard(null);
+      setCardStatus(leadCard ? 'ready' : 'idle');
+      return;
+    }
+    let cancelled = false;
+    setFetchedCard(null);
+    setCardStatus('loading');
+    void fetchDialerLeadCard({
+      leadId: item.leadId,
+      enrollmentId: item.enrollmentId,
+      stepOrder: item.stepOrder,
+      totalSteps: item.totalSteps,
+      callScript: item.callScript,
+    }).then((result) => {
+      if (cancelled) return;
+      if (result.success) {
+        setFetchedCard(result.data);
+        setCardStatus('ready');
+        return;
+      }
+      setFetchedCard(cardFromQueueItem(item, cardNow));
+      setCardStatus('error');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadCardEnabled, leadCard, item.leadId, item.enrollmentId, item.stepOrder, item.totalSteps, item.callScript, item, cardNow]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Timer for call duration — starts on calling/connected, resets on idle
@@ -175,6 +231,22 @@ export function DialerCallPanel({
           {item.activityName ? ` · ${item.activityName}` : ''}
         </span>
       </div>
+
+      {leadCardEnabled && (
+        <div className="mt-3 space-y-3">
+          {displayedCard ? (
+            <CallLeadCard model={displayedCard} />
+          ) : cardStatus === 'loading' ? (
+            <p className="text-muted-foreground text-xs">Carregando contexto...</p>
+          ) : cardStatus === 'error' ? (
+            <p className="text-xs text-amber-700">Não foi possível carregar o contexto do lead.</p>
+          ) : null}
+          <details data-testid="call-history-collapse" className="rounded-md border px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold">Histórico</summary>
+            <HistoryBody timeline={timeline} />
+          </details>
+        </div>
+      )}
 
       {/* Phone selector — show when multiple phones or retrying */}
       {(item.phones?.length ?? 0) > 0 && (hasMultiplePhones || attempts.length > 0) && (
@@ -380,5 +452,62 @@ export function DialerCallPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function cardFromQueueItem(item: DialerQueueItem, now?: Date): LeadCardModel {
+  return buildLeadCard({
+    firstName: item.firstName,
+    lastName: item.lastName,
+    nomeFantasia: item.leadName,
+    razaoSocial: item.companyName,
+    telefone: item.phone,
+    phones: item.phones.map((phone) => ({ numero: phone.raw })),
+    jobTitle: null,
+    segmento: null,
+    cnpj: null,
+    email: null,
+    leadSource: null,
+    canal: null,
+    lostAt: null,
+    lossReasonName: null,
+    lossNotes: null,
+    enrollmentLossNotes: null,
+    previousSdrName: null,
+    stepOrder: item.stepOrder,
+    totalSteps: item.totalSteps,
+    callScript: item.callScript,
+    now,
+  });
+}
+
+const timeFmt = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function HistoryBody({ timeline }: { timeline: ReturnType<typeof useLeadHistory> }): ReactNode {
+  return (
+    <>
+      {timeline.status === 'loading' && <p className="text-muted-foreground mt-1 text-xs">Carregando histórico...</p>}
+      {timeline.status === 'error' && <p className="mt-1 text-xs text-amber-700">Não foi possível carregar o histórico.</p>}
+      {timeline.status === 'ready' && timeline.entries.length === 0 && (
+        <p className="text-muted-foreground mt-1 text-xs">Nenhum contato registrado ainda.</p>
+      )}
+      {timeline.status === 'ready' && timeline.entries.length > 0 && (
+        <ol className="mt-2 space-y-2">
+          {timeline.entries.map((entry) => (
+            <li key={entry.id} className="border-l-2 border-primary/40 pl-2">
+              <p className="text-[11px] font-medium">{entry.title}</p>
+              <p className="text-muted-foreground text-[10px]">{timeFmt.format(new Date(entry.at))}</p>
+              {entry.detail && <p className="text-xs">{entry.detail}</p>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
   );
 }
