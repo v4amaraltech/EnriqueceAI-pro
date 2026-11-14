@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ getAuthOrgIdResult: vi.fn() }));
-const flag = vi.hoisted(() => ({ isWebphoneLiveAmdEnabled: vi.fn() }));
+const flag = vi.hoisted(() => ({ isWebphoneLiveAmdEnabled: vi.fn(), isWebphoneVoicemailAutoHangupEnabled: vi.fn() }));
 
 vi.mock('@/lib/auth/get-org-id', () => auth);
 vi.mock('@/features/integrations/webphone/live-amd-flag', () => flag);
@@ -12,6 +12,8 @@ describe('POST /api/webphone/live-amd/token', () => {
   beforeEach(() => {
     auth.getAuthOrgIdResult.mockReset();
     flag.isWebphoneLiveAmdEnabled.mockReset();
+    flag.isWebphoneVoicemailAutoHangupEnabled.mockReset();
+    flag.isWebphoneVoicemailAutoHangupEnabled.mockResolvedValue(true);
     delete process.env.ASSEMBLYAI_API_KEY;
     delete process.env.ASSEMBLYAI_STREAMING_REGION;
   });
@@ -34,7 +36,18 @@ describe('POST /api/webphone/live-amd/token', () => {
     vi.stubGlobal('fetch', fetchImpl);
     const response = await POST();
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ enabled: false });
+    expect(await response.json()).toEqual({ enabled: false, autoHangup: false });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('sem a flag do desligamento automático não emite token (captura fica desligada)', async () => {
+    process.env.ASSEMBLYAI_API_KEY = 'chave-permanente';
+    auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org', userId: 'u1', role: 'sdr', supabase: {} } });
+    flag.isWebphoneLiveAmdEnabled.mockResolvedValue(true);
+    flag.isWebphoneVoicemailAutoHangupEnabled.mockResolvedValue(false);
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+    expect(await POST().then((response) => response.json())).toEqual({ enabled: false, autoHangup: false });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -60,6 +73,7 @@ describe('POST /api/webphone/live-amd/token', () => {
 
     expect(response.status).toBe(200);
     expect(body.enabled).toBe(true);
+    expect(body.autoHangup).toBe(true);
     expect(body.token).toBe('token-curto');
     expect(body.websocketUrl).toContain('wss://streaming.eu.assemblyai.com/v3/ws');
     expect(body.websocketUrl).toContain('speech_model=universal-streaming-multilingual');

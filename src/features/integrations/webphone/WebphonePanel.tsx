@@ -28,7 +28,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import { LiveAmdHint } from './LiveAmdHint';
 import { useWebphonePanelHost } from './WebphonePanelHost';
-import { LIVE_AMD_BROWSER_CAPTURE, startLiveAmdBrowser } from './live-amd-browser';
+import { startLiveAmdBrowser } from './live-amd-browser';
 import type { LiveAmdView } from './live-amd-session';
 import { useApi4ComWebphone } from './useApi4ComWebphone';
 import { useWebphoneCallContext } from './useWebphoneCallContext';
@@ -219,9 +219,12 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     setLiveAmd(null);
   }
 
+  // Desligar pelo mesmo caminho do botão (SIP + API4COM), chamado pela escuta.
+  const hangupRef = useRef<() => void>(() => undefined);
+
   useEffect(() => {
-    // Captura desligada: depois do PR 616 o Desligar ainda travava com o clone da faixa.
-    if (!LIVE_AMD_BROWSER_CAPTURE) return;
+    // A captura só abre com a flag webphone_voicemail_autohangup (a rota do
+    // token responde autoHangup). Sem ela, nada é clonado nem enviado.
     if (!liveListen || !amdCallId) return;
     if (webphone.call?.phase === 'ended') return;
     let stop = () => undefined as void;
@@ -231,7 +234,13 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
       const track = getRemoteAudioTrack();
       if (!track) return;
       started = true;
-      stop = startLiveAmdBrowser({ track, callId: amdCallId, onView: setLiveAmd });
+      stop = startLiveAmdBrowser({
+        track,
+        callId: amdCallId,
+        onView: setLiveAmd,
+        // Caixa postal, fora de área ou número inexistente: desliga sozinho.
+        onCarrierHangup: () => hangupRef.current(),
+      });
     };
     arm();
     const unsubscribe = subscribeRemoteAudioTrack(arm);
@@ -400,6 +409,10 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
         .catch((err: unknown) => console.warn('[webphone] hangupApi4ComCall failed:', err));
     }
   }
+
+  useEffect(() => {
+    hangupRef.current = handleHangup;
+  });
 
   function handleConclude() {
     if (stage.kind !== 'finished') return;

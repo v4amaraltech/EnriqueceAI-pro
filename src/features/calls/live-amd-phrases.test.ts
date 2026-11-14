@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { classifyLiveAmd, LIVE_AMD_LISTEN_MS, normalizeLiveAmdText } from './live-amd-phrases';
+import { classifyLiveAmd, isCarrierAutoHangupDecision, LIVE_AMD_LISTEN_MS, normalizeLiveAmdText } from './live-amd-phrases';
 
 describe('classifyLiveAmd', () => {
   it('reconhece caixa postal mesmo com acento e pontuação', () => {
@@ -25,7 +25,24 @@ describe('classifyLiveAmd', () => {
       confidence: 0.92,
     });
     expect(classifyLiveAmd({ transcript: 'Não foi possível completar a sua chamada.' }).label).toBe('number_not_exist');
-    expect(classifyLiveAmd({ transcript: 'Este telefone está fora de área.' }).phrase).toBe('fora de area');
+  });
+
+  it('fora de área, fora do ar e fora de serviço viram no_answer (Fora de área), mesmo com "olá"', () => {
+    expect(classifyLiveAmd({ transcript: 'Este telefone está fora de área.' })).toMatchObject({ label: 'no_answer', phrase: 'fora de area' });
+    expect(classifyLiveAmd({ transcript: 'Olá, o número está fora de serviço ou indisponível.' })).toMatchObject({
+      label: 'no_answer',
+      phrase: 'fora de servico ou indisponivel',
+    });
+    expect(classifyLiveAmd({ transcript: 'O número fora de área ou indisponível' }).label).toBe('no_answer');
+    expect(classifyLiveAmd({ transcript: 'Número fora do ar ou indisponível' }).label).toBe('no_answer');
+  });
+
+  it('só frase de operadora com confiança alta desliga sozinho', () => {
+    expect(isCarrierAutoHangupDecision(classifyLiveAmd({ transcript: 'Encaminhada para a caixa postal' }))).toBe(true);
+    expect(isCarrierAutoHangupDecision(classifyLiveAmd({ transcript: 'Está fora de serviço ou indisponível' }))).toBe(true);
+    expect(isCarrierAutoHangupDecision(classifyLiveAmd({ transcript: 'O número chamado não existe' }))).toBe(true);
+    expect(isCarrierAutoHangupDecision(classifyLiveAmd({ transcript: 'Alô, bom dia, quem fala?' }))).toBe(false);
+    expect(isCarrierAutoHangupDecision(classifyLiveAmd({ transcript: '', elapsedMs: 20_000 }))).toBe(false);
   });
 
   it('guarda a frase mais específica quando há mais de um trecho', () => {

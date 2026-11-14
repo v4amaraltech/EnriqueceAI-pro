@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { peekActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
-import { LIVE_AMD_BROWSER_CAPTURE, startLiveAmdBrowser } from './live-amd-browser';
+import { startLiveAmdBrowser } from './live-amd-browser';
 import type { AudioPumpHooks } from './live-amd-pump';
 
 const record = vi.hoisted(() => ({ recordLiveAmd: vi.fn() }));
@@ -25,8 +25,10 @@ function fakeSocket() {
   return socket;
 }
 
-function harness() {
+function harness(opts: { autoHangup?: boolean; onCarrierHangup?: () => void } = {}) {
   const socket = fakeSocket();
+  const openSocket = vi.fn(() => socket as unknown as WebSocket);
+  const startPump = vi.fn();
   let onPcm: (pcm: Int16Array) => void = () => undefined;
   let hooks: AudioPumpHooks = {};
   const stopPump = vi.fn();
@@ -34,22 +36,25 @@ function harness() {
     track: {} as MediaStreamTrack,
     callId: '6f1c2a3e-0000-4000-8000-000000000001',
     onView: () => undefined,
+    onCarrierHangup: opts.onCarrierHangup,
     fetchImpl: (async () => ({
       json: async () => ({
         enabled: true,
         websocketUrl: 'wss://streaming.assemblyai.com/v3/ws?token=t',
+        autoHangup: opts.autoHangup ?? true,
       }),
     })) as unknown as typeof fetch,
-    openSocket: () => socket as unknown as WebSocket,
+    openSocket,
     pump: () => ({
       start(cb, h) {
+        startPump();
         onPcm = cb;
         hooks = h ?? {};
         return stopPump;
       },
     }),
   });
-  return { socket, stop, stopPump, pcm: (p: Int16Array) => onPcm(p), hooks: () => hooks };
+  return { socket, stop, stopPump, openSocket, startPump, pcm: (p: Int16Array) => onPcm(p), hooks: () => hooks };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -159,8 +164,54 @@ describe('stopActiveLiveAmd', () => {
   });
 });
 
-describe('LIVE_AMD_BROWSER_CAPTURE', () => {
-  it('fica desligada no navegador enquanto o Desligar não estiver estável', () => {
-    expect(LIVE_AMD_BROWSER_CAPTURE).toBe(false);
+describe('desligamento automático por frase de operadora', () => {
+  beforeEach(() => {
+    record.recordLiveAmd.mockReset();
+    record.recordLiveAmd.mockResolvedValue({ success: false, error: 'x' });
+    stopActiveLiveAmd();
+  });
+
+  const turn = (transcript: string) =>
+    JSON.stringify({ type: 'Turn', end_of_turn: true, transcript, words: [{ text: transcript, end: 2_000 }] });
+
+  async function open(onCarrierHangup: () => void) {
+    const h = harness({ onCarrierHangup });
+    await flush();
+    h.socket.readyState = WebSocket.OPEN;
+    h.socket.emit('open');
+    h.socket.emit('message', JSON.stringify({ type: 'Begin' }));
+    return h;
+  }
+
+  it('sem a flag (autoHangup ausente) não abre socket nem clona a faixa', async () => {
+    const h = harness({ autoHangup: false });
+    await flush();
+    expect(h.openSocket).not.toHaveBeenCalled();
+    expect(h.startPump).not.toHaveBeenCalled();
+  });
+
+  it('caixa postal desliga uma vez só', async () => {
+    const hangup = vi.fn();
+    const h = await open(hangup);
+    h.socket.emit('message', turn('Sua chamada está sendo encaminhada para a caixa postal'));
+    h.socket.emit('message', turn('grave sua mensagem após o sinal'));
+    expect(hangup).toHaveBeenCalledTimes(1);
+    h.stop();
+  });
+
+  it('fora de serviço ou indisponível desliga (era lido como pessoa pelo "olá")', async () => {
+    const hangup = vi.fn();
+    const h = await open(hangup);
+    h.socket.emit('message', turn('Olá, o número que você ligou está fora de serviço ou indisponível'));
+    expect(hangup).toHaveBeenCalledTimes(1);
+    h.stop();
+  });
+
+  it('pessoa atendendo não desliga', async () => {
+    const hangup = vi.fn();
+    const h = await open(hangup);
+    h.socket.emit('message', turn('Alô, quem fala? Pode falar, estou ouvindo'));
+    expect(hangup).not.toHaveBeenCalled();
+    h.stop();
   });
 });

@@ -14,3 +14,14 @@ export function webphoneLiveAmdEnabledFor(row: FlagRow | null | undefined, scope
 export function isWebphoneLiveAmdEnabled(scope: FlagScope): Promise<boolean> {
   return isScopedFlagEnabled(WEBPHONE_LIVE_AMD_FLAG_KEY, scope);
 }
+
+/**
+ * Encerrar a ligação sozinha quando a operadora fala caixa postal, fora de
+ * área ou número inexistente. Também é o que liga a captura no navegador
+ * (desligada desde o PR 617). Sem linha em app_flags, fica desligada.
+ */
+export const WEBPHONE_VOICEMAIL_AUTOHANGUP_FLAG_KEY = 'webphone_voicemail_autohangup';
+
+export function isWebphoneVoicemailAutoHangupEnabled(scope: FlagScope): Promise<boolean> {
+  return isScopedFlagEnabled(WEBPHONE_VOICEMAIL_AUTOHANGUP_FLAG_KEY, scope);
+}

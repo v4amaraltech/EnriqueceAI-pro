@@ -25,7 +25,9 @@ export interface LiveAmdInput {
 }
 
 interface PhraseRule {
-  label: Exclude<LiveAmdLabel, 'human' | 'no_answer'>;
+  // no_answer aqui é a locução de fora de área/fora do ar/fora de serviço:
+  // aparece como "Fora de área" e grava no_answer (decisão do Vinicius, 13/11).
+  label: Exclude<LiveAmdLabel, 'human'>;
   phrase: string;
 }
 
@@ -88,7 +90,15 @@ const CARRIER_PHRASES: readonly PhraseRule[] = [
   { label: 'voicemail', phrase: 'desligado ou fora da area' },
   { label: 'voicemail', phrase: 'esta fora da area de cobertura' },
   { label: 'voicemail', phrase: 'fora da area de cobertura' },
-  { label: 'number_not_exist', phrase: 'fora de area' },
+  { label: 'no_answer', phrase: 'fora de area' },
+  { label: 'no_answer', phrase: 'esta fora de area ou indisponivel' },
+  { label: 'no_answer', phrase: 'fora de area ou indisponivel' },
+  { label: 'no_answer', phrase: 'fora de servico ou indisponivel' },
+  { label: 'no_answer', phrase: 'fora do ar ou indisponivel' },
+  { label: 'no_answer', phrase: 'esta fora de servico' },
+  { label: 'no_answer', phrase: 'fora de servico' },
+  { label: 'no_answer', phrase: 'esta fora do ar' },
+  { label: 'no_answer', phrase: 'fora do ar' },
 ];
 
 /**
@@ -108,6 +118,8 @@ const CARRIER_FRAGMENTS: readonly { label: PhraseRule['label']; parts: readonly 
   { label: 'voicemail', parts: ['desligado', 'fora', 'area'], phrase: 'desligado ou fora da area' },
   { label: 'voicemail', parts: ['fora', 'area', 'cobertura'], phrase: 'fora da area de cobertura' },
   { label: 'number_not_exist', parts: ['numero', 'nao', 'existe'], phrase: 'numero nao existe' },
+  { label: 'no_answer', parts: ['fora', 'servico'], phrase: 'fora de servico' },
+  { label: 'no_answer', parts: ['fora', 'indisponivel'], phrase: 'fora ou indisponivel' },
 ];
 
 const GREETINGS = ['quem fala', 'pois nao', 'alo', 'ola', 'oi', 'pronto', 'diga', 'fala'] as const;
@@ -182,4 +194,25 @@ export function classifyLiveAmd(input: LiveAmdInput): LiveAmdDecision {
     return { label: 'no_answer', phrase: null, confidence: 0.7 };
   }
   return UNKNOWN;
+}
+
+/**
+ * Decisão que pode encerrar a ligação sozinha: só frase de operadora
+ * (caixa postal, fora de área, número inexistente) com confiança alta.
+ * Silêncio e "parece pessoa" nunca encerram.
+ */
+export const LIVE_AMD_AUTOHANGUP_MIN_CONFIDENCE = 0.84;
+
+export function isCarrierAutoHangupDecision(decision: {
+  label: LiveAmdLabel | 'unknown';
+  phrase: string | null;
+  confidence: number;
+}): boolean {
+  if (!decision.phrase) return false;
+  if (decision.confidence < LIVE_AMD_AUTOHANGUP_MIN_CONFIDENCE) return false;
+  return (
+    decision.label === 'voicemail' ||
+    decision.label === 'no_answer' ||
+    decision.label === 'number_not_exist'
+  );
 }

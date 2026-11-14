@@ -1,22 +1,16 @@
 import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
+import { isCarrierAutoHangupDecision } from '@/features/calls/live-amd-phrases';
 
 import { setActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
 import { type AudioPump, createCapturePump } from './live-amd-pump';
 import { type LiveAmdView, createLiveAmdSession } from './live-amd-session';
 import { publishLiveAmdView } from './live-amd-view-store';
 
-/**
- * Captura no navegador (clone da faixa + AudioWorklet). Desligada depois que
- * o PR 616 ficou em produção e o Desligar continuou sem responder, com a
- * escuta ainda clonando a faixa. O código da captura permanece, para religar
- * quando o desligar estiver estável. Os testes chamam startLiveAmdBrowser
- * direto e não passam por esta trava.
- */
-export const LIVE_AMD_BROWSER_CAPTURE = false;
-
 interface TokenResponse {
   enabled?: boolean;
   websocketUrl?: string;
+  /** Flag webphone_voicemail_autohangup. Sem ela, nada é clonado nem enviado. */
+  autoHangup?: boolean;
 }
 
 /**
@@ -30,7 +24,10 @@ export function startLiveAmdBrowser(options: {
   fetchImpl?: typeof fetch;
   openSocket?: (url: string) => WebSocket;
   pump?: (track: MediaStreamTrack) => AudioPump;
+  /** Frase de operadora reconhecida: encerra a ligação. Chamado uma vez só. */
+  onCarrierHangup?: (view: LiveAmdView) => void;
 }): () => void {
+  let hungUp = false;
   let stopped = false;
   let socket: WebSocket | null = null;
   let stopPump: () => void = () => undefined;
@@ -72,6 +69,14 @@ export function startLiveAmdBrowser(options: {
       session.onBytesSent(effect.send.byteLength);
     }
     publish(effect.view);
+    if (effect.view && !hungUp && options.onCarrierHangup && isCarrierAutoHangupDecision({
+        label: effect.view.prediction,
+        phrase: effect.view.phrase,
+        confidence: effect.view.confidence,
+      })) {
+      hungUp = true;
+      options.onCarrierHangup(effect.view);
+    }
     if (effect.view && (effect.record || effect.requestNextActivity))
       persist(effect.view, effect.requestNextActivity);
     if (effect.closeSocket && socket) {
@@ -91,7 +96,7 @@ export function startLiveAmdBrowser(options: {
     }
     if (stopped) return;
     const body = (await response.json()) as TokenResponse;
-    if (stopped || !body.enabled || !body.websocketUrl) return;
+    if (stopped || !body.enabled || !body.websocketUrl || !body.autoHangup) return;
 
     let ws: WebSocket;
     try {
