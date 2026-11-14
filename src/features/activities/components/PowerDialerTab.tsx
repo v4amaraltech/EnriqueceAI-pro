@@ -80,6 +80,8 @@ interface PowerDialerTabProps {
   stats: DialerStats;
   preferences: DialerPreferences;
   dialerProvider?: DialerProvider;
+  /** Flag `call_lead_card_v1`. Liga o cartão no painel direito. */
+  leadCardEnabled?: boolean;
 }
 
 type DialResult =
@@ -96,7 +98,7 @@ function browserStorage(): Storage | null {
   }
 }
 
-export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com' }: PowerDialerTabProps) {
+export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com', leadCardEnabled = false }: PowerDialerTabProps) {
   const [queue] = useState<DialerQueueItem[]>(initialQueue);
   const [currentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -889,6 +891,7 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
                 callState={callState}
                 leadAnswer={leadAnswer}
                 manualDialHidden={autoOn && auto.phase !== 'paused' && auto.phase !== 'awaiting-sdr'}
+                leadCardEnabled={leadCardEnabled}
                 onComplete={handleComplete}
                 onSkip={handleSkip}
                 onInitiateCall={handleInitiateCall}

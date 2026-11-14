@@ -639,6 +639,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
           stats={dialerStats ?? defaultStats}
           preferences={dialerPreferences ?? defaultPrefs}
           dialerProvider={dialerProvider}
+          leadCardEnabled={leadCardEnabled}
         />
       ) : (
         <>

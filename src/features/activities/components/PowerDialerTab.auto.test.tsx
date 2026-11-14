@@ -61,6 +61,8 @@ const actions = vi.hoisted(() => ({
 }));
 vi.mock('@/features/calls/actions/initiate-call', () => ({ initiateCall: actions.initiateCall, hangupCall: actions.hangupCall }));
 vi.mock('../actions/complete-dialer-call', () => ({ completeDialerCall: actions.completeDialerCall }));
+const leadCard = vi.hoisted(() => ({ fetch: vi.fn() }));
+vi.mock('../actions/fetch-dialer-lead-card', () => ({ fetchDialerLeadCard: leadCard.fetch }));
 const providerHangup = vi.hoisted(() => ({
   fire: null as null | ((durationSeconds: number) => void),
 }));
@@ -107,13 +109,14 @@ function lead(id: string, name: string, over: Partial<DialerQueueItem> = {}): Di
 const ready: WebphoneState = { ...initialWebphoneState, registration: 'registered', mic: 'granted' };
 let dialSeq = 0;
 
-function renderDialer(queue: DialerQueueItem[]) {
+function renderDialer(queue: DialerQueueItem[], leadCardEnabled = false) {
   return render(
     <TooltipProvider>
       <PowerDialerTab
         initialQueue={queue}
         stats={{ leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: queue.length }}
         preferences={{ simultaneous_phones: 2, daily_limit_per_lead: 3 }}
+        leadCardEnabled={leadCardEnabled}
       />
     </TooltipProvider>,
   );
@@ -183,6 +186,7 @@ describe('PowerDialerTab — discagem automática', () => {
       return { success: true, data: { callId: `00000000-0000-4000-8000-00000000000${dialSeq}`, providerCallId: `p${dialSeq}` } };
     });
     actions.completeDialerCall.mockReset().mockResolvedValue({ success: true, data: { callId: 'x' } });
+    leadCard.fetch.mockReset().mockResolvedValue({ success: false, error: 'nao usado' });
   });
 
   afterEach(() => {
@@ -211,6 +215,43 @@ describe('PowerDialerTab — discagem automática', () => {
     await advance(5000);
     expect(actions.initiateCall).toHaveBeenCalledTimes(2);
     expect(actions.initiateCall).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 'l-2' }));
+  });
+
+  it('com a flag ligada troca o cartão quando o automático passa para o próximo lead', async () => {
+    leadCard.fetch.mockImplementation(async (input: { leadId: string }) => ({
+      success: true,
+      data: {
+        attemptLabel: 'TENTATIVA 2/5',
+        name: input.leadId === 'l-2' ? 'Joao Santos' : 'Maria Silva',
+        company: input.leadId === 'l-2' ? 'Joao Santos' : 'Maria Silva',
+        fields: [{ id: 'temperatura', label: 'Temperatura', value: 'Sem dados' }],
+        opening: input.leadId === 'l-2' ? 'Abertura do Joao' : 'Abertura da Maria',
+      },
+    }));
+    renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')], true);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('call-lead-opening').textContent).toContain('Abertura da Maria');
+    expect(screen.getByTestId('call-history-collapse')).toBeTruthy();
+    expect(leadCard.fetch).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'l-1' }));
+
+    await advance(5000);
+    answer.value = 'not_answered';
+    await advance(10);
+    await endBrowserCall();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('call-lead-opening').textContent).toContain('Abertura do Joao');
+    expect(screen.queryByText('Abertura da Maria')).toBeNull();
+    expect(leadCard.fetch).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 'l-2' }));
+    expect(screen.getByText(/Próxima ligação em 5 s — Joao Santos/)).toBeInTheDocument();
   });
 
   it('última tentativa do dia sem atender → registra "no_answer" e segue', async () => {
