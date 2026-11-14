@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { checkThreadForReplyOrBounce, mailboxCandidates } from './reply-detection.service';
+import { checkThreadForReplyOrBounce, inspectGmailThread, mailboxCandidates } from './reply-detection.service';
 
 describe('mailboxCandidates', () => {
   it('usa só o remetente gravado pelo motor quando existe', () => {
@@ -180,5 +180,104 @@ describe('checkThreadForReplyOrBounce', () => {
       ),
     );
     expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('bounce');
+  });
+
+  it('Precedence auto_reply ou bulk não conta como resposta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'Subject', value: 'Re: Proposta' },
+            { name: 'Precedence', value: 'auto_reply' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('none');
+  });
+
+  it('Auto-Submitted: no não é auto-resposta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'Subject', value: 'Re: Proposta' },
+            { name: 'Auto-Submitted', value: 'no' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('reply');
+  });
+
+  it('Auto-Submitted: auto-generated não conta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'Auto-Submitted', value: 'auto-generated' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('none');
+  });
+
+  it('X-Autoreply marca auto-resposta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'X-Autoreply', value: 'yes' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('none');
+  });
+
+  it('X-Auto-Response-Suppress não é auto-resposta (pedido para não responder automático)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'Subject', value: 'Re: Proposta' },
+            { name: 'X-Auto-Response-Suppress', value: 'All' },
+          ],
+        ]),
+      ),
+    );
+    expect(await checkThreadForReplyOrBounce('t', 'tok')).toBe('reply');
+  });
+
+  it('inspectGmailThread devolve o id da primeira resposta genuína', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        threadResponse([
+          [{ name: 'From', value: 'sdr@v4.com' }],
+          [
+            { name: 'From', value: 'cliente@empresa.com' },
+            { name: 'Subject', value: 'Re: Proposta' },
+          ],
+        ]),
+      ),
+    );
+    expect(await inspectGmailThread('t', 'tok')).toEqual({ status: 'reply', messageId: 'm1' });
   });
 });

@@ -41,13 +41,26 @@ const AUTO_REPLY_SUBJECTS = [
   'ausencia',
 ];
 
-/** Auto-reply indicator headers */
-const AUTO_REPLY_HEADERS = ['x-autoreply', 'x-autorespond', 'auto-submitted'];
+/** Precedence values that mark mailing-list or automatic mail, not a person. */
+const AUTO_PRECEDENCE = new Set(['bulk', 'junk', 'list', 'auto_reply', 'autoreply']);
 
 /** Value of a header by name (case-insensitive), or undefined. */
 function headerValue(headers: Array<{ name: string; value: string }> | undefined, name: string): string | undefined {
   return headers?.find((h) => h.name.toLowerCase() === name)?.value;
 }
+
+/** Auto-resposta ou mala direta. `Auto-Submitted: no` não conta. */
+function isAutomaticMail(headers: Array<{ name: string; value: string }> | undefined): boolean {
+  const autoSubmitted = headerValue(headers, 'auto-submitted');
+  if (autoSubmitted && autoSubmitted.trim().toLowerCase() !== 'no') return true;
+  if (headerValue(headers, 'x-autoreply')) return true;
+  if (headerValue(headers, 'x-autorespond')) return true;
+  const precedence = (headerValue(headers, 'precedence') ?? headerValue(headers, 'x-precedence') ?? '')
+    .trim()
+    .toLowerCase();
+  return AUTO_PRECEDENCE.has(precedence);
+}
+
 
 function classifyThreadMessage(
   message: GmailThreadMessage | undefined,
@@ -59,14 +72,7 @@ function classifyThreadMessage(
   const fromAddress = extractAddress(fromHeader?.value);
   if (fromAddress && ourAddresses.has(fromAddress)) return 'skip';
   if (fromHeader && BOUNCE_SENDERS.some((sender) => fromHeader.value.toLowerCase().includes(sender))) return 'bounce';
-  const isAutoReplyHeader = headers.some((h) => {
-    const name = h.name.toLowerCase();
-    if (AUTO_REPLY_HEADERS.includes(name)) return true;
-    if (name === 'auto-submitted' && h.value.toLowerCase() !== 'no') return true;
-    if (name === 'x-auto-response-suppress') return true;
-    return false;
-  });
-  if (isAutoReplyHeader) return 'skip';
+  if (isAutomaticMail(headers)) return 'skip';
   if (subjectHeader && AUTO_REPLY_SUBJECTS.some((pattern) => subjectHeader.value.toLowerCase().includes(pattern))) {
     return 'skip';
   }
@@ -141,23 +147,42 @@ interface GmailThreadMessage {
  * and Falcare had already said "no" was re-recorded as a new reply on every
  * rotation (143 times each, plus an SDR notification each time).
  */
+export type GmailThreadInspection =
+  | { status: 'reply'; messageId: string }
+  | { status: 'bounce' }
+  | { status: 'none' }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
 export async function checkThreadForReplyOrBounce(
   threadId: string,
   accessToken: string,
   sentMessageId?: string | null,
 ): Promise<'reply' | 'bounce' | 'none' | 'not_found' | 'error'> {
+  return (await inspectGmailThread(threadId, accessToken, sentMessageId)).status;
+}
+
+/**
+ * Igual a `checkThreadForReplyOrBounce`, mas devolve o id Gmail da primeira
+ * resposta genuína para gravar `external_id` e não repetir a mesma mensagem.
+ */
+export async function inspectGmailThread(
+  threadId: string,
+  accessToken: string,
+  sentMessageId?: string | null,
+): Promise<GmailThreadInspection> {
   try {
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?fields=messages(id,payload(headers))`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
-    if (response.status === 404) return 'not_found';
-    if (!response.ok) return 'error';
+    if (response.status === 404) return { status: 'not_found' };
+    if (!response.ok) return { status: 'error' };
 
     const data = (await response.json()) as { messages?: GmailThreadMessage[] };
     const messages = data.messages ?? [];
-    if (messages.length <= 1) return 'none';
+    if (messages.length <= 1) return { status: 'none' };
 
     // The first message is ours (the cadence email). Later messages from the
     // same address are ours too: a follow-up step sent as "Re:" in the same
@@ -178,17 +203,18 @@ export async function checkThreadForReplyOrBounce(
     }
     const start = sentIndex >= 0 ? sentIndex + 1 : 1;
 
-    let hasGenuineReply = false;
+    let replyMessageId: string | undefined;
 
     // Check each message that came after ours
     for (let i = start; i < messages.length; i++) {
       const kind = classifyThreadMessage(messages[i], ourAddresses);
-      if (kind === 'bounce') return 'bounce';
-      if (kind === 'reply') hasGenuineReply = true;
+      if (kind === 'bounce') return { status: 'bounce' };
+      const messageId = messages[i]?.id;
+      if (kind === 'reply' && messageId && !replyMessageId) replyMessageId = messageId;
     }
 
-    return hasGenuineReply ? 'reply' : 'none';
+    return replyMessageId ? { status: 'reply', messageId: replyMessageId } : { status: 'none' };
   } catch {
-    return 'error';
+    return { status: 'error' };
   }
 }

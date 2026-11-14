@@ -31,7 +31,7 @@ interface Captured {
 
 let sentRows: Sent[];
 let leads: Array<{ id: string; assigned_to: string | null; email_bounced_at: string | null }>;
-let processed: Array<{ cadence_id: string | null; lead_id: string }>;
+let processed: Array<{ cadence_id: string | null; lead_id: string; external_id?: string | null }>;
 let captured: Captured[];
 let orders: string[];
 /** Filtros da consulta de pares já processados (replied/bounced). */
@@ -94,7 +94,7 @@ function makeChain(table: string) {
 
   chain.then = (resolve: (v: unknown) => unknown) => {
     let result: unknown = { data: null, error: null };
-    if (op === 'select' && table === 'interactions' && selectCols.includes('external_id')) {
+    if (op === 'select' && table === 'interactions' && selectCols.includes('performed_by')) {
       result = { data: sentRows, error: null };
     } else if (op === 'select' && table === 'interactions') {
       processedFilters = [...filters];
@@ -169,7 +169,7 @@ describe('checkEmailReplies', () => {
 
     expect(res).toEqual({ success: true, data: { found: 1 } });
     const replied = captured.find((c) => c.op === 'insert' && c.payload.type === 'replied');
-    expect(replied?.payload).toMatchObject({ lead_id: 'lead-1', cadence_id: 'cad-1', step_id: 'step-1' });
+    expect(replied?.payload).toMatchObject({ lead_id: 'lead-1', cadence_id: 'cad-1', step_id: 'step-1', external_id: 'b' });
     expect(metadataUpdateOf('int-1')).toMatchObject({ sender_user_id: 'dono', thread_id: 'th-1' });
   });
 
@@ -297,5 +297,16 @@ describe('checkEmailReplies', () => {
       expect.anything(),
       expect.objectContaining({ event: 'email_bounced', leadId: 'lead-1', userId: null }),
     );
+  });
+
+  it('não grava de novo a mesma mensagem do Gmail (dedupe por message-id)', async () => {
+    sentRows = [sent()];
+    processed = [{ cadence_id: 'cad-outra', lead_id: 'lead-1', external_id: 'b' }];
+    threads = { 'th-1': { mailbox: 'dono', reply: true } };
+
+    const res = await checkEmailReplies();
+
+    expect(res).toEqual({ success: true, data: { found: 0 } });
+    expect(captured.filter((c) => c.op === 'insert' && c.payload.type === 'replied')).toHaveLength(0);
   });
 });

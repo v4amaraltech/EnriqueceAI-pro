@@ -43,10 +43,14 @@ export async function captureGmailReply(input: {
   threadId: string;
   sentMessageId: string;
   ourAddress?: string | null;
+  /** Id Gmail ja localizado pelo poll; evita buscar o fio de novo. */
+  replyMessageId?: string | null;
 }): Promise<void> {
   try {
     if (!(await isLeadMessagesCaptureEnabled(input.orgId))) return;
-    const reply = await locateGenuineReply(input.threadId, input.accessToken, input.sentMessageId);
+    const reply = input.replyMessageId
+      ? { messageId: input.replyMessageId, from: null, subject: null }
+      : await locateGenuineReply(input.threadId, input.accessToken, input.sentMessageId);
     if (!reply) return;
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${reply.messageId}?format=full`,
