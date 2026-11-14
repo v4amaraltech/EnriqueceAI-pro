@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 
 import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
-import { CONNECTED_MIN_DURATION_SECONDS } from '@/features/calls/connection';
 import {
   DISPOSITION_REPORT_LABELS,
   dispositionOptionsForTelemetry,
@@ -26,6 +25,10 @@ import type { PostCallSuggestion } from '@/features/calls/post-call-suggestion';
 import type { CallDisposition } from '@/features/calls/types';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { nextActivityLabel } from '@/features/integrations/webphone/LiveAmdHint';
+import {
+  OUT_OF_AREA_LABEL,
+  isOutOfAreaCall,
+} from '@/features/integrations/webphone/webphone-lead-answer';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
 import { Button } from '@/shared/components/ui/button';
@@ -55,6 +58,12 @@ import {
   resultModalScore,
   useExclusiveCallResultOpen,
 } from './call-result-modal-exclusive';
+
+/**
+ * Atendida abaixo deste tempo: "Provável caixa postal", com Caixa postal já
+ * marcada (decisão do Vinicius, 13/11: corte de 30s).
+ */
+export const PROBABLE_VOICEMAIL_MAX_SECONDS = 30;
 
 export interface CallReturnSchedule {
   scheduledAt: string;
@@ -160,6 +169,8 @@ export interface CallResultModalProps {
    * depois que um dono conclui ou fecha, o outro não reabre.
    */
   callId?: string | null;
+  /** Causa do hangup (webhook). "Fora de área" troca o rótulo de "Não atendeu". */
+  hangupCause?: string | null;
   leadName: string;
   /**
    * Aceitos por compatibilidade — os discadores ainda os passam, mas o modal não
@@ -238,6 +249,7 @@ export function CallResultModal({
   open,
   onClose,
   callId = null,
+  hangupCause = null,
   leadName,
   leadId,
   leadEmail,
@@ -256,9 +268,10 @@ export function CallResultModal({
   onNotesChange,
   suggestion = null,
 }: CallResultModalProps) {
-  // Atendida abaixo do piso de conversa: provável caixa postal.
+  // Atendida curta (abaixo de 30s): provável caixa postal.
   const shortAnswer = (isConnected: boolean) =>
-    isConnected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS;
+    isConnected && durationSeconds < PROBABLE_VOICEMAIL_MAX_SECONDS;
+  const outOfArea = !connected && isOutOfAreaCall({ hangupCause });
   const [notes, setNotes] = useState(initialNotes);
   const [outcome, setOutcome] = useState<CallDisposition | null>(() =>
     initialOutcome(connected, suggestion, shortAnswer(connected)),
@@ -340,7 +353,9 @@ export function CallResultModal({
     }
   }
 
-  const outcomeOptions = dispositionOptionsForTelemetry(connected);
+  const outcomeOptions = dispositionOptionsForTelemetry(connected).map((o) =>
+    outOfArea && o.value === 'no_answer' ? { ...o, label: OUT_OF_AREA_LABEL } : o,
+  );
   const action = outcome ? mapDispositionToAction(outcome) : 'none';
   const needsReturn = showOutcome && action === 'reschedule';
   const missingReturnDate = needsReturn && !returnDate;
@@ -356,7 +371,7 @@ export function CallResultModal({
   // não há sinal que separe as duas. Abaixo do piso de conversa (50s) o selo
   // avisa em vez de afirmar; o SDR diz o que foi no desfecho.
   const maybeVoicemail =
-    (connected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS) ||
+    (connected && durationSeconds < PROBABLE_VOICEMAIL_MAX_SECONDS) ||
     suggestion?.outcome === 'voicemail' ||
     suggestion?.alreadyFilledDisposition === 'voicemail' ||
     (connected && suggestion?.source === 'live_amd' && suggestion.outcome === 'no_answer');
@@ -427,7 +442,13 @@ export function CallResultModal({
                 <PhoneMissed className="h-3.5 w-3.5" />
               )}
               <span>
-                {maybeVoicemail ? 'Provável caixa postal' : connected ? 'Atendida' : 'Não atendida'}
+                {maybeVoicemail
+                  ? 'Provável caixa postal'
+                  : connected
+                    ? 'Atendida'
+                    : outOfArea
+                      ? OUT_OF_AREA_LABEL
+                      : 'Não atendida'}
               </span>
               <span aria-hidden>·</span>
               <span className="font-mono tabular-nums">{formatDuration(durationSeconds)}</span>
@@ -469,7 +490,7 @@ export function CallResultModal({
             </p>
           )}
 
-          {suggestionBanner(suggestion)}
+          {suggestionBanner(suggestion, outOfArea)}
 
           {suggestion?.nextActivity === 'schedule_meeting' &&
           outcome === 'relevant_conversation' &&
@@ -675,10 +696,13 @@ export function CallResultModal({
   );
 }
 
-function suggestionBanner(suggestion: PostCallSuggestion | null | undefined) {
+function suggestionBanner(suggestion: PostCallSuggestion | null | undefined, outOfArea = false) {
   if (!suggestion?.source) return null;
   if (suggestion.alreadyFilled && suggestion.alreadyFilledDisposition) {
-    const label = DISPOSITION_REPORT_LABELS[suggestion.alreadyFilledDisposition];
+    const label =
+      outOfArea && suggestion.alreadyFilledDisposition === 'no_answer'
+        ? OUT_OF_AREA_LABEL
+        : DISPOSITION_REPORT_LABELS[suggestion.alreadyFilledDisposition];
     return (
       <p
         className="rounded-md bg-[var(--muted)] px-3 py-2 text-xs"

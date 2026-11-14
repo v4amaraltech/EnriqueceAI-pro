@@ -134,8 +134,8 @@ describe('CallResultModal', () => {
       expect(screen.getByText('04:17')).toBeInTheDocument();
     });
 
-    it('abaixo de 50s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
-      renderModal({ connected: true, durationSeconds: 43 });
+    it('abaixo de 30s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
+      renderModal({ connected: true, durationSeconds: 29 });
       expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
       expect(screen.queryByText('Atendida')).not.toBeInTheDocument();
       // O SDR continua escolhendo o desfecho.
@@ -149,9 +149,25 @@ describe('CallResultModal', () => {
       expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeChecked();
     });
 
-    it('a partir de 50s volta a ser "Atendida"', () => {
-      renderModal({ connected: true, durationSeconds: 50 });
+    it('a partir de 30s volta a ser "Atendida", sem pré-seleção', () => {
+      renderModal({ connected: true, durationSeconds: 30 });
       expect(screen.getByText('Atendida')).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    });
+
+    it('NUMBER_CHANGED aparece como Fora de área; o desfecho gravado continua no_answer', async () => {
+      const onConclude = vi.fn();
+      renderModal({ connected: false, durationSeconds: 0, hangupCause: 'NUMBER_CHANGED', onConclude });
+      expect(screen.getByText('Fora de área')).toBeInTheDocument();
+      expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole('button', { name: /Concluir atividade/ }));
+      expect(onConclude).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+    });
+
+    it('número inexistente não vira Fora de área', () => {
+      renderModal({ connected: false, durationSeconds: 0, hangupCause: 'UNALLOCATED_NUMBER' });
+      expect(screen.getByText('Não atendida')).toBeInTheDocument();
+      expect(screen.queryByText('Fora de área')).not.toBeInTheDocument();
     });
   });
 

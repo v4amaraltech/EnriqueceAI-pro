@@ -166,6 +166,8 @@ export type CockpitCallOutcome =
       summary: string | null;
       callbackAt: string | null;
       callbackScheduled: boolean;
+      /** Causa do hangup, para exibir "Fora de área" em vez de "Não atendeu". */
+      hangupCause?: string | null;
     }
   /** Resultado da IA que exige revisão humana e NÃO foi aplicado. */
   | {

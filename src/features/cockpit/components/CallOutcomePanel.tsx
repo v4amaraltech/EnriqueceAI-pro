@@ -7,7 +7,12 @@ import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 
-import { LEAD_ANSWER_MAX_POLLS, LEAD_ANSWER_POLL_INTERVAL_MS } from '@/features/integrations/webphone/webphone-lead-answer';
+import {
+  LEAD_ANSWER_MAX_POLLS,
+  LEAD_ANSWER_POLL_INTERVAL_MS,
+  OUT_OF_AREA_LABEL,
+  isOutOfAreaCall,
+} from '@/features/integrations/webphone/webphone-lead-answer';
 
 import { getCockpitCallOutcome } from '../actions/call-outcome';
 import type { CockpitCallOutcome } from '../types';
@@ -93,7 +98,7 @@ function OutcomeBody({ outcome, leadId, gaveUp }: { outcome: CockpitCallOutcome;
         </p>
       );
     case 'not_answered':
-      return <p className="text-xs" data-testid="outcome-not-answered">Não atendeu. Não há resumo para esta ligação.</p>;
+      return <p className="text-xs" data-testid="outcome-not-answered">{isOutOfAreaCall({ hangupCause: outcome.hangupCause }) ? OUT_OF_AREA_LABEL : 'Não atendeu'}. Não há resumo para esta ligação.</p>;
     case 'none':
       return <p className="text-muted-foreground text-xs">Esta ligação não tem resultado automático. Registre o resultado na linha do tempo do lead.</p>;
     case 'confirmed':
@@ -101,7 +106,7 @@ function OutcomeBody({ outcome, leadId, gaveUp }: { outcome: CockpitCallOutcome;
         <div className="space-y-1" data-testid="outcome-confirmed">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
-            {dispositionLabel(outcome.disposition)}
+            {dispositionLabel(outcome.disposition, outcome.hangupCause)}
             <span className="text-muted-foreground text-xs font-normal">({outcome.source === 'sdr' ? 'registrado por você' : 'classificado pela IA'})</span>
           </p>
           <p className="text-xs">{outcome.summary ?? 'Sem resumo.'}</p>

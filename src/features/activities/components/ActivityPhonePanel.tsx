@@ -504,6 +504,7 @@ export function ActivityPhonePanel({
     <CallResultModal
       open={callState === 'ended'}
       callId={callId}
+      hangupCause={outcome.hangupCause}
       onClose={handleDismissModal}
       leadName={leadName}
       leadId={leadId}

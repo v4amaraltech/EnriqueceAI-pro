@@ -62,6 +62,8 @@ import {
   type LeadAnswer,
   effectiveCallSeconds,
   hangupReasonLabel,
+  OUT_OF_AREA_LABEL,
+  isOutOfAreaCall,
   leadAnsweredByServer,
   leadConnected,
 } from './webphone-lead-answer';
@@ -577,6 +579,7 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
         <CallResultModal
           open
           callId={resultCall.context.callId}
+          hangupCause={hangupCause}
           onClose={() => finish(resultCall)}
           leadName={resultCall.context.leadName ?? resultCall.remoteNumber ?? 'Lead'}
           leadId={resultCall.context.leadId ?? undefined}
@@ -1015,7 +1018,9 @@ function FinishedView({
           ) ? (
             formatDuration(call.talkSeconds)
           ) : (
-            <span className="text-sm text-amber-600">Não atendida</span>
+            <span className="text-sm text-amber-600">
+              {isOutOfAreaCall({ hangupCause }) ? OUT_OF_AREA_LABEL : 'Não atendida'}
+            </span>
           )}
         </p>
       </div>

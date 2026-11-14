@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { effectiveCallSeconds, hangupReasonLabel, leadAnswerFromCallRow, leadAnsweredByServer, leadConnected } from './webphone-lead-answer';
+import { effectiveCallSeconds, hangupReasonLabel, isOutOfAreaCall, leadAnswerFromCallRow, leadAnsweredByServer, leadConnected } from './webphone-lead-answer';
 
 describe('leadAnswerFromCallRow', () => {
   it('answered_at presente → atendida (mesmo com hangup_cause normal)', () => {
@@ -53,8 +53,9 @@ describe('hangupReasonLabel', () => {
     expect(hangupReasonLabel('VOICEMAIL')).toBe('Caiu na caixa postal.');
   });
 
-  it('NUMBER_CHANGED é não atendeu (decisão de 12/11), e ALLOTTED_TIMEOUT é tempo expirado', () => {
-    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Não atendeu.');
+  it('NUMBER_CHANGED e SUBSCRIBER_ABSENT aparecem como Fora de área (13/11), e ALLOTTED_TIMEOUT é tempo expirado', () => {
+    expect(hangupReasonLabel('NUMBER_CHANGED')).toBe('Fora de área.');
+    expect(hangupReasonLabel('SUBSCRIBER_ABSENT')).toBe('Fora de área.');
     expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).toBe('Tempo expirado.');
     expect(hangupReasonLabel('ALLOTTED_TIMEOUT')).not.toBe('A operadora não completou a ligação.');
   });
@@ -76,5 +77,22 @@ describe('leadAnsweredByServer', () => {
     expect(leadAnsweredByServer('answered')).toBe(true);
     expect(leadAnsweredByServer('unknown')).toBe(false);
     expect(leadAnsweredByServer('not_answered')).toBe(false);
+  });
+});
+
+describe('isOutOfAreaCall', () => {
+  it('NUMBER_CHANGED, SUBSCRIBER_ABSENT e a locução de fora de área ou indisponível', () => {
+    expect(isOutOfAreaCall({ hangupCause: 'NUMBER_CHANGED' })).toBe(true);
+    expect(isOutOfAreaCall({ hangupCause: 'subscriber_absent' })).toBe(true);
+    expect(isOutOfAreaCall({ transcript: 'o número está fora de área ou indisponível' })).toBe(true);
+    expect(isOutOfAreaCall({ transcript: 'olá o número que você está fora de serviço ou indispon' })).toBe(true);
+    expect(isOutOfAreaCall({ transcript: 'número fora do ar ou indisponível' })).toBe(true);
+  });
+
+  it('número inexistente segue Falha técnica e caixa postal não é fora de área', () => {
+    expect(isOutOfAreaCall({ hangupCause: 'UNALLOCATED_NUMBER' })).toBe(false);
+    expect(isOutOfAreaCall({ hangupCause: 'NORMAL_CLEARING' })).toBe(false);
+    expect(isOutOfAreaCall({ transcript: 'sua chamada foi encaminhada para o correio de voz' })).toBe(false);
+    expect(isOutOfAreaCall({})).toBe(false);
   });
 });

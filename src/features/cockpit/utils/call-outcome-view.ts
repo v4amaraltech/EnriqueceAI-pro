@@ -1,5 +1,13 @@
-import { AI_DISPOSITION_LABELS, AI_OUTCOME_REVIEW_CONFIDENCE, readAiOutcome } from '@/features/calls/ai-outcome';
-import { leadAnswerFromCallRow } from '@/features/integrations/webphone/webphone-lead-answer';
+import {
+  AI_DISPOSITION_LABELS,
+  AI_OUTCOME_REVIEW_CONFIDENCE,
+  readAiOutcome,
+} from '@/features/calls/ai-outcome';
+import {
+  OUT_OF_AREA_LABEL,
+  isOutOfAreaCall,
+  leadAnswerFromCallRow,
+} from '@/features/integrations/webphone/webphone-lead-answer';
 
 import type { CockpitCallOutcome } from '../types';
 
@@ -15,9 +23,18 @@ export interface CallOutcomeRow {
 
 const SDR_ONLY_LABELS: Record<string, string> = { no_answer: 'Não atendeu' };
 
-export function dispositionLabel(disposition: string | null | undefined): string {
+export function dispositionLabel(
+  disposition: string | null | undefined,
+  hangupCause?: string | null,
+): string {
   if (!disposition) return 'Sem classificação';
-  return (AI_DISPOSITION_LABELS as Record<string, string>)[disposition] ?? SDR_ONLY_LABELS[disposition] ?? disposition;
+  // Só o rótulo muda: o desfecho gravado continua no_answer.
+  if (disposition === 'no_answer' && isOutOfAreaCall({ hangupCause })) return OUT_OF_AREA_LABEL;
+  return (
+    (AI_DISPOSITION_LABELS as Record<string, string>)[disposition] ??
+    SDR_ONLY_LABELS[disposition] ??
+    disposition
+  );
 }
 
 /**
@@ -41,6 +58,7 @@ export function buildCallOutcomeView(row: CallOutcomeRow): CockpitCallOutcome {
       summary: aiSummary ?? row.notes?.trim() ?? null,
       callbackAt: ai?.callback_at ?? null,
       callbackScheduled: Boolean(ai?.scheduled_activity_id),
+      hangupCause: row.hangup_cause,
     };
   }
 
@@ -60,7 +78,13 @@ export function buildCallOutcomeView(row: CallOutcomeRow): CockpitCallOutcome {
   if (ai.status === 'processing') return { state: 'pending', stage: 'classification' };
 
   if (ai.status === 'failed') {
-    return { state: 'exception', reason: 'failed', suggestedDisposition: null, confidence: null, summary: null };
+    return {
+      state: 'exception',
+      reason: 'failed',
+      suggestedDisposition: null,
+      confidence: null,
+      summary: null,
+    };
   }
 
   // status === 'done'
