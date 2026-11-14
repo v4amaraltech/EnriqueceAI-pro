@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCallOutcomeView, type CallOutcomeRow } from './call-outcome-view';
+import { buildCallOutcomeView, type CallOutcomeRow, dispositionLabel } from './call-outcome-view';
 
 const row = (over: Partial<CallOutcomeRow> = {}): CallOutcomeRow => ({
   answered_at: '2026-11-07T12:00:05Z',
@@ -75,5 +75,17 @@ describe('buildCallOutcomeView', () => {
   it('é pura: a mesma linha dá sempre o mesmo estado', () => {
     const r = row({ metadata: { ai_outcome: { status: 'done', disposition: 'voicemail', confidence: 0.95, summary: 'Caixa postal', needs_review: false } } });
     expect(buildCallOutcomeView(r)).toEqual(buildCallOutcomeView(r));
+  });
+});
+
+describe('dispositionLabel com Fora de área', () => {
+  it('no_answer com NUMBER_CHANGED ou SUBSCRIBER_ABSENT aparece como Fora de área', () => {
+    expect(dispositionLabel('no_answer', 'NUMBER_CHANGED')).toBe('Fora de área');
+    expect(dispositionLabel('no_answer', 'SUBSCRIBER_ABSENT')).toBe('Fora de área');
+  });
+  it('sem causa de fora de área continua Não atendeu; falha técnica não muda', () => {
+    expect(dispositionLabel('no_answer', 'NO_ANSWER')).toBe('Não atendeu');
+    expect(dispositionLabel('no_answer')).toBe('Não atendeu');
+    expect(dispositionLabel('technical_failure', 'UNALLOCATED_NUMBER')).not.toBe('Fora de área');
   });
 });

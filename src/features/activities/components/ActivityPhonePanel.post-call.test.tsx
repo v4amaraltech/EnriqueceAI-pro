@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetCallResultModalExclusive } from '@/features/activities/components/call-result-modal-exclusive';
+
 import { ActivityPhonePanel } from './ActivityPhonePanel';
 
 const actions = vi.hoisted(() => ({
@@ -140,6 +142,8 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
       expect(screen.getByRole('button', { name: 'Ligar' })).toBeEnabled();
       expect(states.at(-1)).toBe('idle');
       cleanup();
+      // Mesma CALL_ID nas duas voltas: a segunda é outra ligação no teste.
+      resetCallResultModalExclusive();
     }
   });
 
@@ -214,4 +218,8 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
     expect(scheduled.completeEnrollments).toBeUndefined();
     expect(typeof scheduled.scheduledAt).toBe('string');
   });
+});
+
+beforeEach(() => {
+  resetCallResultModalExclusive();
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 
 import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
-import { CONNECTED_MIN_DURATION_SECONDS } from '@/features/calls/connection';
 import {
   DISPOSITION_REPORT_LABELS,
   dispositionOptionsForTelemetry,
@@ -26,6 +25,10 @@ import type { PostCallSuggestion } from '@/features/calls/post-call-suggestion';
 import type { CallDisposition } from '@/features/calls/types';
 import { ScheduleMeetingModal } from '@/features/integrations/components/ScheduleMeetingModal';
 import { nextActivityLabel } from '@/features/integrations/webphone/LiveAmdHint';
+import {
+  OUT_OF_AREA_LABEL,
+  isOutOfAreaCall,
+} from '@/features/integrations/webphone/webphone-lead-answer';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
 import { Button } from '@/shared/components/ui/button';
@@ -49,7 +52,18 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
-import { resultModalScore, useExclusiveCallResultOpen } from './call-result-modal-exclusive';
+import {
+  isCallResultResolvedElsewhere,
+  markCallResultResolved,
+  resultModalScore,
+  useExclusiveCallResultOpen,
+} from './call-result-modal-exclusive';
+
+/**
+ * Atendida abaixo deste tempo: "Provável caixa postal", com Caixa postal já
+ * marcada (decisão do Vinicius, 13/11: corte de 30s).
+ */
+export const PROBABLE_VOICEMAIL_MAX_SECONDS = 30;
 
 export interface CallReturnSchedule {
   scheduledAt: string;
@@ -80,7 +94,10 @@ const RETURN_CHANNEL_MAP: Record<
  *    concluir. Sem default silencioso (era `significant` e o SDR aceitava sem
  *    pensar → preenchimento sem valor de métrica).
  */
-function defaultOutcome(connected: boolean): CallDisposition | null {
+function defaultOutcome(connected: boolean, probableVoicemail = false): CallDisposition | null {
+  // Atendida curta (abaixo do piso de conversa): quase sempre a caixa postal
+  // pegou a linha. Já vem "Caixa postal", o SDR confirma ou troca.
+  if (connected && probableVoicemail) return 'voicemail';
   return connected ? null : 'no_answer';
 }
 
@@ -98,12 +115,13 @@ function suggestionIsAllowed(
 function initialOutcome(
   connected: boolean,
   suggestion?: PostCallSuggestion | null,
+  probableVoicemail = false,
 ): CallDisposition | null {
   const filled = suggestion?.alreadyFilledDisposition ?? null;
   if (filled) return suggestionIsAllowed(connected, filled) ?? filled;
   const suggested = suggestionIsAllowed(connected, suggestion?.outcome ?? null);
   if (suggested) return suggested;
-  return defaultOutcome(connected);
+  return defaultOutcome(connected, probableVoicemail);
 }
 
 function initialShowOutcome(connected: boolean, suggestion?: PostCallSuggestion | null): boolean {
@@ -146,6 +164,13 @@ function suggestionFingerprint(suggestion?: PostCallSuggestion | null): string {
 export interface CallResultModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Linha de `calls` desta ligação. Com ela, só um Resultado por ligação:
+   * depois que um dono conclui ou fecha, o outro não reabre.
+   */
+  callId?: string | null;
+  /** Causa do hangup (webhook). "Fora de área" troca o rótulo de "Não atendeu". */
+  hangupCause?: string | null;
   leadName: string;
   /**
    * Aceitos por compatibilidade — os discadores ainda os passam, mas o modal não
@@ -223,6 +248,8 @@ export interface CallResultModalProps {
 export function CallResultModal({
   open,
   onClose,
+  callId = null,
+  hangupCause = null,
   leadName,
   leadId,
   leadEmail,
@@ -241,9 +268,13 @@ export function CallResultModal({
   onNotesChange,
   suggestion = null,
 }: CallResultModalProps) {
+  // Atendida curta (abaixo de 30s): provável caixa postal.
+  const shortAnswer = (isConnected: boolean) =>
+    isConnected && durationSeconds < PROBABLE_VOICEMAIL_MAX_SECONDS;
+  const outOfArea = !connected && isOutOfAreaCall({ hangupCause });
   const [notes, setNotes] = useState(initialNotes);
   const [outcome, setOutcome] = useState<CallDisposition | null>(() =>
-    initialOutcome(connected, suggestion),
+    initialOutcome(connected, suggestion, shortAnswer(connected)),
   );
   const [returnDate, setReturnDate] = useState<Date | undefined>(() =>
     initialReturnDate(suggestion),
@@ -265,8 +296,18 @@ export function CallResultModal({
   const [wasConnected, setWasConnected] = useState(connected);
   const [wasSuggestion, setWasSuggestion] = useState(suggestionFingerprint(suggestion));
 
+  // Já resolvida por outro dono nesta aba: não abre de novo e libera quem pediu.
+  const meRef = useRef(Symbol('call-result'));
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  const alreadyResolved = open && isCallResultResolvedElsewhere(callId, meRef.current);
+  useEffect(() => {
+    if (alreadyResolved) onCloseRef.current();
+  }, [alreadyResolved]);
   const shown = useExclusiveCallResultOpen(
-    open,
+    open && !alreadyResolved,
     resultModalScore({ alreadyFilled: Boolean(suggestion?.alreadyFilled) }),
   );
 
@@ -276,7 +317,7 @@ export function CallResultModal({
     setWasSuggestion(suggestionFingerprint(suggestion));
     if (open) {
       setNotes(initialNotes);
-      setOutcome(initialOutcome(connected, suggestion));
+      setOutcome(initialOutcome(connected, suggestion, shortAnswer(connected)));
       setReturnDate(initialReturnDate(suggestion));
       setReturnTime(initialReturnTime(suggestion));
       setReturnChannel('phone');
@@ -291,13 +332,13 @@ export function CallResultModal({
     setWasConnected(connected);
     const untouched =
       !outcomeTouched &&
-      outcome === initialOutcome(wasConnected, suggestion) &&
+      outcome === initialOutcome(wasConnected, suggestion, shortAnswer(wasConnected)) &&
       showOutcome === initialShowOutcome(wasConnected, suggestion);
     const stillValid =
       outcome !== null &&
       dispositionOptionsForTelemetry(connected).some((o) => o.value === outcome);
     if (untouched || !stillValid) {
-      setOutcome(initialOutcome(connected, suggestion));
+      setOutcome(initialOutcome(connected, suggestion, shortAnswer(connected)));
       setShowOutcome(initialShowOutcome(connected, suggestion));
     }
   } else if (open && suggestionFingerprint(suggestion) !== wasSuggestion) {
@@ -305,14 +346,16 @@ export function CallResultModal({
     // ainda não escolheu um desfecho.
     setWasSuggestion(suggestionFingerprint(suggestion));
     if (!outcomeTouched) {
-      setOutcome(initialOutcome(connected, suggestion));
+      setOutcome(initialOutcome(connected, suggestion, shortAnswer(connected)));
       setShowOutcome(initialShowOutcome(connected, suggestion));
       if (!returnDate) setReturnDate(initialReturnDate(suggestion));
       if (returnTime === '09:00') setReturnTime(initialReturnTime(suggestion));
     }
   }
 
-  const outcomeOptions = dispositionOptionsForTelemetry(connected);
+  const outcomeOptions = dispositionOptionsForTelemetry(connected).map((o) =>
+    outOfArea && o.value === 'no_answer' ? { ...o, label: OUT_OF_AREA_LABEL } : o,
+  );
   const action = outcome ? mapDispositionToAction(outcome) : 'none';
   const needsReturn = showOutcome && action === 'reschedule';
   const missingReturnDate = needsReturn && !returnDate;
@@ -328,7 +371,7 @@ export function CallResultModal({
   // não há sinal que separe as duas. Abaixo do piso de conversa (50s) o selo
   // avisa em vez de afirmar; o SDR diz o que foi no desfecho.
   const maybeVoicemail =
-    (connected && durationSeconds < CONNECTED_MIN_DURATION_SECONDS) ||
+    (connected && durationSeconds < PROBABLE_VOICEMAIL_MAX_SECONDS) ||
     suggestion?.outcome === 'voicemail' ||
     suggestion?.alreadyFilledDisposition === 'voicemail' ||
     (connected && suggestion?.source === 'live_amd' && suggestion.outcome === 'no_answer');
@@ -344,11 +387,19 @@ export function CallResultModal({
   function handleConclude() {
     // Guarda de tipo + trava de obrigatoriedade: sem desfecho não conclui.
     if (!outcome) return;
+    markCallResultResolved(callId, meRef.current);
     onConclude({ notes, returnSchedule: buildReturnSchedule(), outcome });
   }
 
   return (
-    <Dialog open={shown} onOpenChange={(o) => !o && onClose()}>
+    <Dialog
+      open={shown}
+      onOpenChange={(o) => {
+        if (o) return;
+        markCallResultResolved(callId, meRef.current);
+        onClose();
+      }}
+    >
       {/* `grid-cols-[minmax(0,1fr)]`: o DialogContent é um grid de uma coluna
           `auto`, que cresce até o maior texto sem quebra (o nome do lead com
           `truncate`). Com razão social longa a coluna passava da largura do
@@ -392,10 +443,12 @@ export function CallResultModal({
               )}
               <span>
                 {maybeVoicemail
-                  ? 'Atendida · pode ser caixa postal'
+                  ? 'Provável caixa postal'
                   : connected
                     ? 'Atendida'
-                    : 'Não atendida'}
+                    : outOfArea
+                      ? OUT_OF_AREA_LABEL
+                      : 'Não atendida'}
               </span>
               <span aria-hidden>·</span>
               <span className="font-mono tabular-nums">{formatDuration(durationSeconds)}</span>
@@ -437,7 +490,7 @@ export function CallResultModal({
             </p>
           )}
 
-          {suggestionBanner(suggestion)}
+          {suggestionBanner(suggestion, outOfArea)}
 
           {suggestion?.nextActivity === 'schedule_meeting' &&
           outcome === 'relevant_conversation' &&
@@ -573,7 +626,15 @@ export function CallResultModal({
               nem poluir o rodapé. */}
           <div className="flex flex-wrap gap-1">
             {onMarkNoShow && (
-              <Button variant="ghost" size="sm" onClick={onMarkNoShow} disabled={isSending}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  markCallResultResolved(callId, meRef.current);
+                  onMarkNoShow();
+                }}
+                disabled={isSending}
+              >
                 <CalendarX className="mr-1.5 h-3.5 w-3.5" />
                 No-show
               </Button>
@@ -582,7 +643,10 @@ export function CallResultModal({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onLeadLost}
+                onClick={() => {
+                  markCallResultResolved(callId, meRef.current);
+                  onLeadLost();
+                }}
                 disabled={isSending}
                 className="text-[var(--destructive)] hover:text-[var(--destructive)]"
               >
@@ -597,7 +661,10 @@ export function CallResultModal({
             {onRetry && (
               <Button
                 variant={retryPrimary ? 'default' : 'ghost'}
-                onClick={() => onRetry(notes)}
+                onClick={() => {
+                  markCallResultResolved(callId, meRef.current);
+                  onRetry(notes);
+                }}
                 disabled={isSending}
               >
                 <PhoneCall className="mr-2 h-4 w-4" />
@@ -629,10 +696,13 @@ export function CallResultModal({
   );
 }
 
-function suggestionBanner(suggestion: PostCallSuggestion | null | undefined) {
+function suggestionBanner(suggestion: PostCallSuggestion | null | undefined, outOfArea = false) {
   if (!suggestion?.source) return null;
   if (suggestion.alreadyFilled && suggestion.alreadyFilledDisposition) {
-    const label = DISPOSITION_REPORT_LABELS[suggestion.alreadyFilledDisposition];
+    const label =
+      outOfArea && suggestion.alreadyFilledDisposition === 'no_answer'
+        ? OUT_OF_AREA_LABEL
+        : DISPOSITION_REPORT_LABELS[suggestion.alreadyFilledDisposition];
     return (
       <p
         className="rounded-md bg-[var(--muted)] px-3 py-2 text-xs"

@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useSyncExternalStore } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetCallResultModalExclusive } from '@/features/activities/components/call-result-modal-exclusive';
+
 import { initialWebphoneState, type WebphoneCall, type WebphoneState } from './webphone-state';
 
 // --- store falso do webphone ------------------------------------------------
@@ -766,4 +768,8 @@ describe('WebphonePanel: pill do microfone e do ramal em outra aba', () => {
     render(<WebphonePanel />);
     expect(screen.queryByRole('region', { name: 'Webphone' })).not.toBeInTheDocument();
   });
+});
+
+beforeEach(() => {
+  resetCallResultModalExclusive();
 });

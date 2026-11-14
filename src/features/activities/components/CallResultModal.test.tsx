@@ -134,18 +134,40 @@ describe('CallResultModal', () => {
       expect(screen.getByText('04:17')).toBeInTheDocument();
     });
 
-    it('abaixo de 50s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
-      renderModal({ connected: true, durationSeconds: 43 });
-      expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+    it('abaixo de 30s avisa que pode ser caixa postal (a API4COM marca como atendida)', () => {
+      renderModal({ connected: true, durationSeconds: 29 });
+      expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
       expect(screen.queryByText('Atendida')).not.toBeInTheDocument();
       // O SDR continua escolhendo o desfecho.
       expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeInTheDocument();
       expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
     });
 
-    it('a partir de 50s volta a ser "Atendida"', () => {
-      renderModal({ connected: true, durationSeconds: 50 });
+    it('atendida curta já vem com Caixa postal marcada, o SDR confirma', () => {
+      renderModal({ connected: true, durationSeconds: 11 });
+      expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeChecked();
+    });
+
+    it('a partir de 30s volta a ser "Atendida", sem pré-seleção', () => {
+      renderModal({ connected: true, durationSeconds: 30 });
       expect(screen.getByText('Atendida')).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    });
+
+    it('NUMBER_CHANGED aparece como Fora de área; o desfecho gravado continua no_answer', async () => {
+      const onConclude = vi.fn();
+      renderModal({ connected: false, durationSeconds: 0, hangupCause: 'NUMBER_CHANGED', onConclude });
+      expect(screen.getByText('Fora de área')).toBeInTheDocument();
+      expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole('button', { name: /Concluir atividade/ }));
+      expect(onConclude).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+    });
+
+    it('número inexistente não vira Fora de área', () => {
+      renderModal({ connected: false, durationSeconds: 0, hangupCause: 'UNALLOCATED_NUMBER' });
+      expect(screen.getByText('Não atendida')).toBeInTheDocument();
+      expect(screen.queryByText('Fora de área')).not.toBeInTheDocument();
     });
   });
 
@@ -261,8 +283,9 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
       onConclude,
     };
     const { rerender } = render(<CallResultModal {...base} />);
-    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
+    // Atendida curta: Caixa postal já vem marcada, o SDR confirma.
+    expect(screen.getByRole('radio', { name: /Caixa postal/ })).toBeChecked();
 
     rerender(<CallResultModal {...base} connected={false} durationSeconds={0} />);
 
@@ -482,7 +505,7 @@ describe('sinal de atendimento chega com o modal aberto (webhook da API4COM)', (
         meetingPrefill: null,
       },
     });
-    expect(screen.getByText('Atendida · pode ser caixa postal')).toBeInTheDocument();
+    expect(screen.getByText('Provável caixa postal')).toBeInTheDocument();
     expect(screen.getByText('02:27')).toBeInTheDocument();
   });
 });

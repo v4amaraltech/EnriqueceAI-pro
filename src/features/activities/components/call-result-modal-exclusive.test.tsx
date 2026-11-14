@@ -1,8 +1,13 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CallResultModal } from './CallResultModal';
-import { resetCallResultModalExclusive, resultModalScore } from './call-result-modal-exclusive';
+import {
+  isCallResultResolvedElsewhere,
+  markCallResultResolved,
+  resetCallResultModalExclusive,
+  resultModalScore,
+} from './call-result-modal-exclusive';
 
 afterEach(() => {
   cleanup();
@@ -62,7 +67,38 @@ describe('um único Resultado da Ligação', () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText('Não atendida')).toBeInTheDocument();
-    expect(screen.queryByText('Atendida · pode ser caixa postal')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provável caixa postal')).not.toBeInTheDocument();
     expect(screen.getAllByText('Resultado da Ligação')).toHaveLength(1);
+  });
+});
+
+describe('um Resultado por ligação (callId)', () => {
+  it('depois que um dono resolve a ligação, o outro não reabre e é liberado', () => {
+    const dock = Symbol('dock');
+    markCallResultResolved('call-1', dock);
+    const onClose = vi.fn();
+    render(
+      <CallResultModal
+        open
+        callId="call-1"
+        onClose={onClose}
+        leadName="Mercante Net"
+        phoneLabel="11954958486"
+        durationSeconds={11}
+        connected
+        onConclude={() => undefined}
+      />,
+    );
+    expect(screen.queryByText('Mercante Net')).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('o mesmo modal que resolveu não se fecha sozinho; outra ligação abre normal', () => {
+    const me = Symbol('me');
+    markCallResultResolved('call-2', me);
+    expect(isCallResultResolvedElsewhere('call-2', me)).toBe(false);
+    expect(isCallResultResolvedElsewhere('call-2', Symbol('outro'))).toBe(true);
+    expect(isCallResultResolvedElsewhere('call-3', Symbol('outro'))).toBe(false);
+    expect(isCallResultResolvedElsewhere(null, Symbol('outro'))).toBe(false);
   });
 });

@@ -26,6 +26,34 @@ interface Claim {
 }
 
 let current: Claim | null = null;
+
+/**
+ * Ligações (callId) cujo Resultado já foi concluído ou fechado nesta aba, e
+ * por qual modal. O outro dono (dock ou painel de atividades) não abre um
+ * segundo Resultado para a mesma ligação depois que o primeiro fechou.
+ */
+const resolvedCallIds = new Map<string, symbol>();
+const RESOLVED_LIMIT = 200;
+
+/** Marca a ligação como resolvida por este modal (`by`). */
+export function markCallResultResolved(callId: string | null | undefined, by: symbol): void {
+  if (!callId || resolvedCallIds.has(callId)) return;
+  resolvedCallIds.set(callId, by);
+  if (resolvedCallIds.size > RESOLVED_LIMIT) {
+    const oldest = resolvedCallIds.keys().next().value;
+    if (oldest) resolvedCallIds.delete(oldest);
+  }
+}
+
+/** Resolvida por OUTRO modal: este não deve abrir. */
+export function isCallResultResolvedElsewhere(
+  callId: string | null | undefined,
+  me: symbol,
+): boolean {
+  if (!callId) return false;
+  const by = resolvedCallIds.get(callId);
+  return Boolean(by && by !== me);
+}
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -82,5 +110,6 @@ export function useExclusiveCallResultOpen(open: boolean, score: number): boolea
 /** Só para testes. */
 export function resetCallResultModalExclusive(): void {
   current = null;
+  resolvedCallIds.clear();
   listeners.clear();
 }

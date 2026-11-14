@@ -36,6 +36,7 @@ import {
 } from '@/features/integrations/webphone/webphone-dial-correlation';
 import {
   effectiveCallSeconds,
+  leadAnsweredByServer,
   leadConnected,
 } from '@/features/integrations/webphone/webphone-lead-answer';
 import { integratedSessionEndedThisDial } from '@/features/integrations/webphone/webphone-session-end';
@@ -135,7 +136,12 @@ export function ActivityPhonePanel({
   // chega depois. Sem duração no servidor, vale a medida da tela.
   const outcome = useWebphoneCallOutcome(callState === 'ended' ? callId : null);
   const leadAnswer = outcome.leadAnswer;
-  const callConnected = leadConnected(leadAnswer, callDuration > 0);
+  // API4COM: só o webhook diz que o lead atendeu (a locução da operadora toca
+  // na perna do ramal, que já está atendida).
+  const callConnected =
+    dialerProvider === 'api4com'
+      ? leadAnsweredByServer(leadAnswer)
+      : leadConnected(leadAnswer, callDuration > 0);
   const resultSeconds = effectiveCallSeconds(
     leadAnswer,
     outcome.durationSeconds > 0 ? outcome.durationSeconds : callDuration,
@@ -497,6 +503,8 @@ export function ActivityPhonePanel({
   const resultModal = (
     <CallResultModal
       open={callState === 'ended'}
+      callId={callId}
+      hangupCause={outcome.hangupCause}
       onClose={handleDismissModal}
       leadName={leadName}
       leadId={leadId}

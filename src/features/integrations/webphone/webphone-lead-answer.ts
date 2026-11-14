@@ -43,6 +43,16 @@ export function leadConnected(leadAnswer: LeadAnswer, fallback: boolean): boolea
 }
 
 /**
+ * Ligação com linha em `calls` (API4COM): só o webhook diz que o lead atendeu.
+ * O ramal atende o INVITE na hora e a operadora toca a locução ("número fora
+ * do ar ou indisponível") nessa perna, então o sinal do cliente não vale.
+ * Até o `answered_at` chegar, a tela mostra "Não atendida".
+ */
+export function leadAnsweredByServer(leadAnswer: LeadAnswer): boolean {
+  return leadAnswer === 'answered';
+}
+
+/**
  * Segundos de conversa a registrar: 0 quando o lead não atendeu (o tempo
  * medido na tela é da perna do ramal, não conversa); senão o medido.
  */
@@ -66,7 +76,9 @@ const HANGUP_REASON: Record<string, string> = {
   // registrou desfecho, foram 43 no_answer e nenhuma caixa postal. O guia
   // oficial da API4COM ainda descreve a causa como caixa postal; o rótulo
   // segue a prática do SDR. connected permanece false.
-  NUMBER_CHANGED: 'Não atendeu.',
+  // Exibição "Fora de área" (decisão do Vinicius, 13/11): no CRM segue no_answer.
+  NUMBER_CHANGED: 'Fora de área.',
+  SUBSCRIBER_ABSENT: 'Fora de área.',
   ALLOTTED_TIMEOUT: 'Tempo expirado.',
   UNALLOCATED_NUMBER: 'Este número não existe.',
   INVALID_NUMBER_FORMAT: 'Número em formato inválido.',
@@ -82,6 +94,26 @@ const HANGUP_REASON: Record<string, string> = {
 };
 
 const GENERIC_REASON = 'A operadora não completou a ligação.';
+
+/**
+ * "Fora de área": a operadora diz que o número está fora do ar, fora de área
+ * ou indisponível. Só muda o rótulo na tela; o desfecho gravado continua
+ * `no_answer` ("Não atendeu" no CRM). Número inexistente (UNALLOCATED_NUMBER)
+ * segue como Falha técnica.
+ */
+export const OUT_OF_AREA_LABEL = 'Fora de área';
+const OUT_OF_AREA_CAUSES = new Set(['NUMBER_CHANGED', 'SUBSCRIBER_ABSENT']);
+const OUT_OF_AREA_SPEECH =
+  /fora (de|da) (área|area)|fora (do ar|de serviço|de servico)|(desligado|indispon[ií]vel) ou fora|fora .{0,40}indispon/i;
+
+export function isOutOfAreaCall(input: {
+  hangupCause?: string | null;
+  transcript?: string | null;
+}): boolean {
+  const cause = input.hangupCause?.trim().toUpperCase();
+  if (cause && OUT_OF_AREA_CAUSES.has(cause)) return true;
+  return Boolean(input.transcript && OUT_OF_AREA_SPEECH.test(input.transcript));
+}
 
 /**
  * Texto do motivo para o SDR quando o lead não atendeu; `null` enquanto o
