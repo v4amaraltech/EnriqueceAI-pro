@@ -7,7 +7,7 @@ const tableData: Record<string, unknown> = {};
 function chainFor(table: string) {
   const result = () => ({ data: tableData[table] ?? null, error: null });
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'lte', 'in', 'order', 'limit']) {
+  for (const m of ['select', 'eq', 'lte', 'in', 'order', 'limit', 'gte', 'not', 'is']) {
     chain[m] = vi.fn(() => chain);
   }
   chain.single = vi.fn(() => Promise.resolve(result()));
@@ -29,6 +29,12 @@ vi.mock('@/lib/supabase/from', () => ({
 vi.mock('@/lib/supabase/chunked-in', () => ({
   chunkedIn: vi.fn(() => Promise.resolve(tableData.calls ?? [])),
 }));
+
+vi.mock('@/features/contact-engine/services/call-priority.service', () => ({
+  isCallPriorityV2Enabled: vi.fn(() => Promise.resolve(false)),
+}));
+
+import { isCallPriorityV2Enabled } from '@/features/contact-engine/services/call-priority.service';
 
 import { fetchDialerQueue, fetchDialerQueueWithStats } from './fetch-dialer-queue';
 
@@ -67,6 +73,7 @@ describe('fetchDialerQueueWithStats', () => {
       { id: 'step-1', cadence_id: 'cad-1', step_order: 1, channel: 'phone', activity_name: 'Ligar', instructions: null },
       { id: 'step-2', cadence_id: 'cad-1', step_order: 2, channel: 'email', activity_name: null, instructions: null },
     ];
+    vi.mocked(isCallPriorityV2Enabled).mockResolvedValue(false);
   });
 
   it('conta os leads fora da fila com a mesma regra que monta a fila', async () => {
@@ -128,7 +135,55 @@ describe('fetchDialerQueueWithStats', () => {
 
     expect(result).toEqual({
       success: true,
-      data: { items: [], stats: { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 } },
+      data: { items: [], stats: { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 }, priorityQueueEnabled: false },
     });
+  });
+
+  it('com a flag desligada, mantém a ordem por next_step_due mesmo com resposta', async () => {
+    const early = enrollment('e1', lead('l1', { telefone: '11999990001' }));
+    early.next_step_due = '2026-11-01T09:00:00Z';
+    const later = enrollment('e2', lead('l2', { telefone: '11999990002' }));
+    later.next_step_due = '2026-11-10T09:00:00Z';
+    tableData.cadence_enrollments = [early, later];
+    tableData.interactions = [{ lead_id: 'l2', type: 'replied', created_at: '2026-11-13T12:00:00Z' }];
+    tableData.leads = [
+      { id: 'l1', updated_at: '2026-11-01T00:00:00Z', meeting_no_show_at: null },
+      { id: 'l2', updated_at: '2026-11-13T00:00:00Z', meeting_no_show_at: null },
+    ];
+
+    const result = await fetchDialerQueueWithStats();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.priorityQueueEnabled).toBe(false);
+    expect(result.data.items.map((i) => i.leadId)).toEqual(['l1', 'l2']);
+  });
+
+  it('com a flag ligada, sobe resposta, no-show e abertura na frente da cadência atrasada', async () => {
+    vi.mocked(isCallPriorityV2Enabled).mockResolvedValue(true);
+    const overdue = enrollment('e1', lead('l1', { telefone: '11999990001' }));
+    overdue.next_step_due = '2026-11-01T09:00:00Z';
+    const opened = enrollment('e2', lead('l2', { telefone: '11999990002' }));
+    opened.next_step_due = '2026-11-12T09:00:00Z';
+    const noShow = enrollment('e3', lead('l3', { telefone: '11999990003' }));
+    noShow.next_step_due = '2026-11-12T12:00:00Z';
+    const replied = enrollment('e4', lead('l4', { telefone: '11999990004' }));
+    replied.next_step_due = '2026-11-13T09:00:00Z';
+    tableData.cadence_enrollments = [overdue, opened, noShow, replied];
+    tableData.interactions = [
+      { lead_id: 'l4', type: 'replied', created_at: '2026-11-13T18:00:00Z' },
+      { lead_id: 'l2', type: 'opened', created_at: '2026-11-13T18:00:00Z' },
+    ];
+    tableData.leads = [
+      { id: 'l1', updated_at: '2026-11-01T00:00:00Z', meeting_no_show_at: null },
+      { id: 'l2', updated_at: '2026-11-12T00:00:00Z', meeting_no_show_at: null },
+      { id: 'l3', updated_at: '2026-11-10T00:00:00Z', meeting_no_show_at: '2026-11-10T12:00:00Z' },
+      { id: 'l4', updated_at: '2026-11-13T00:00:00Z', meeting_no_show_at: null },
+    ];
+
+    const result = await fetchDialerQueueWithStats();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.priorityQueueEnabled).toBe(true);
+    expect(result.data.items.map((i) => i.leadId)).toEqual(['l4', 'l3', 'l2', 'l1']);
   });
 });
