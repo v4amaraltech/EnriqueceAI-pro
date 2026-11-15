@@ -6,6 +6,8 @@ vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/dashboard'),
 }));
 
+import { OrgContext } from '@/features/auth/components/OrganizationProvider';
+
 import { MobileNav } from './MobileNav';
 
 describe('MobileNav', () => {
@@ -81,4 +83,32 @@ describe('MobileNav', () => {
     expect(screen.getByText('Conversão')).toBeInTheDocument();
   });
 
+});
+
+describe('MobileNav — visão por papel', () => {
+  const ctx = (isManager: boolean) =>
+    ({ isManager }) as unknown as import('@/features/auth/components/OrganizationProvider').OrgContextValue;
+
+  async function openAs(isManager: boolean) {
+    const user = userEvent.setup();
+    render(
+      <OrgContext.Provider value={ctx(isManager)}>
+        <MobileNav />
+      </OrgContext.Provider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    await screen.findByText('Enriquece AI');
+  }
+
+  it('SDR não vê "Ligações" nem "Estatísticas" no menu do celular', async () => {
+    await openAs(false);
+    expect(screen.queryByText('Ligações')).not.toBeInTheDocument();
+    expect(screen.queryByText('Estatísticas')).not.toBeInTheDocument();
+  });
+
+  it('gestor vê "Ligações" e "Estatísticas" no menu do celular', async () => {
+    await openAs(true);
+    expect(screen.getByText('Ligações')).toBeInTheDocument();
+    expect(screen.getByText('Estatísticas')).toBeInTheDocument();
+  });
 });

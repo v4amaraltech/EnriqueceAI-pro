@@ -1,5 +1,7 @@
 'use client';
 
+import { useContext } from 'react';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -22,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { UserMenu } from '@/features/auth/components/UserMenu';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
@@ -50,6 +53,8 @@ export interface NavSection {
   items?: NavDropdownItem[];
   placeholder?: string;
   icon?: LucideIcon;
+  /** Só o gestor vê esta seção; o SDR não. */
+  managerOnly?: boolean;
 }
 
 export const navSections: NavSection[] = [
@@ -74,6 +79,7 @@ export const navSections: NavSection[] = [
   {
     label: 'Ligações',
     icon: Phone,
+    managerOnly: true,
     items: [
       { label: 'Painel', href: '/calls/dashboard', icon: TrendingUp },
       { label: 'Ligações', href: '/calls', icon: Phone },
@@ -84,6 +90,7 @@ export const navSections: NavSection[] = [
   {
     label: 'Estatísticas',
     icon: FileText,
+    managerOnly: true,
     items: [
       { label: 'Ligação', href: '/statistics/calls', icon: Phone },
       { label: 'Prospecção', href: '/statistics/prospecting', icon: TrendingUp },
@@ -92,6 +99,20 @@ export const navSections: NavSection[] = [
     ],
   },
 ];
+
+/** Seções que o papel atual pode ver (SDR não vê as `managerOnly`). */
+export function visibleNavSections(sections: NavSection[], isManager: boolean): NavSection[] {
+  return sections.filter((section) => !section.managerOnly || isManager);
+}
+
+/**
+ * Gestor? Lê do OrganizationProvider (que já aplica o "Ver como SDR" do localhost).
+ * Sem provider (testes isolados) não esconde nada.
+ */
+export function useIsManagerNav(): boolean {
+  const org = useContext(OrgContext);
+  return org ? org.isManager : true;
+}
 
 function NavDropdownMenu({ section }: { section: NavSection }) {
   const pathname = usePathname();
@@ -158,9 +179,10 @@ interface TopBarProps {
 
 export function TopBar({ pendingActivitiesCount }: TopBarProps) {
   const pathname = usePathname();
+  const isManager = useIsManagerNav();
 
   // Inject badge into Execução menu item
-  const sections = navSections.map((s) => {
+  const sections = visibleNavSections(navSections, isManager).map((s) => {
     if (s.items) {
       return {
         ...s,
